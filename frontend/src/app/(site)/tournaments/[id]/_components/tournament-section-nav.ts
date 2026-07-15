@@ -132,8 +132,12 @@ export type TournamentRailScrollState = {
   canScrollNext: boolean;
 };
 
+export type TournamentRailMeasurementContainer = {
+  readonly clientWidth: number;
+};
+
 type RailResizeObserver = {
-  observe(target: TournamentRailElement): void;
+  observe(target: TournamentRailElement | TournamentRailMeasurementContainer): void;
   disconnect(): void;
 };
 
@@ -144,6 +148,7 @@ type WindowResizeTarget = {
 
 type ObserveTournamentRailOptions = {
   createResizeObserver?: ((callback: () => void) => RailResizeObserver) | null;
+  measurementContainer?: TournamentRailMeasurementContainer;
   windowTarget?: WindowResizeTarget;
   requestAnimationFrame?: (callback: FrameRequestCallback) => number;
   cancelAnimationFrame?: (id: number) => void;
@@ -152,10 +157,11 @@ type ObserveTournamentRailOptions = {
 const SCROLL_EDGE_TOLERANCE = 2;
 
 export function getTournamentRailScrollState(
-  rail: Pick<TournamentRailElement, "scrollWidth" | "clientWidth" | "scrollLeft">
+  rail: Pick<TournamentRailElement, "scrollWidth" | "clientWidth" | "scrollLeft">,
+  availableWidth = rail.clientWidth
 ): TournamentRailScrollState {
   const maxScrollLeft = Math.max(0, rail.scrollWidth - rail.clientWidth);
-  const hasOverflow = maxScrollLeft > SCROLL_EDGE_TOLERANCE;
+  const hasOverflow = rail.scrollWidth - availableWidth > SCROLL_EDGE_TOLERANCE;
 
   return {
     hasOverflow,
@@ -207,14 +213,25 @@ export function observeTournamentRail(
     if (frameId !== null) return;
     frameId = requestFrame(() => {
       frameId = null;
-      if (!disposed) onChange(getTournamentRailScrollState(rail));
+      if (!disposed) {
+        onChange(
+          getTournamentRailScrollState(
+            rail,
+            options.measurementContainer?.clientWidth ?? rail.clientWidth
+          )
+        );
+      }
     });
   };
 
   rail.addEventListener("scroll", refresh, { passive: true });
   const resizeObserver = createResizeObserver?.(refresh) ?? null;
-  if (resizeObserver) resizeObserver.observe(rail);
-  else windowTarget?.addEventListener("resize", refresh);
+  if (resizeObserver) {
+    resizeObserver.observe(rail);
+    if (options.measurementContainer) {
+      resizeObserver.observe(options.measurementContainer);
+    }
+  } else windowTarget?.addEventListener("resize", refresh);
   refresh();
 
   return {

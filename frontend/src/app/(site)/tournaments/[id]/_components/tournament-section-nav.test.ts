@@ -323,4 +323,52 @@ describe("tournament rail overflow behavior", () => {
 
     expect(removed).toBe(true);
   });
+
+  it("does not let reserved control columns create borderline overflow hysteresis", () => {
+    const rail = new FakeRail();
+    const container = { clientWidth: 520 };
+    const contentWidth = 500;
+    const scheduler = createFrameScheduler();
+    const states: ReturnType<typeof getTournamentRailScrollState>[] = [];
+    let resizeCallback: (() => void) | undefined;
+    const applyLayout = (withControls: boolean) => {
+      rail.clientWidth = container.clientWidth - (withControls ? 64 : 0);
+      rail.scrollWidth = Math.max(contentWidth, rail.clientWidth);
+    };
+
+    applyLayout(false);
+    const observer = observeTournamentRail(rail, (state) => states.push(state), {
+      measurementContainer: container,
+      createResizeObserver(callback) {
+        resizeCallback = callback;
+        return { observe() {}, disconnect() {} };
+      },
+      ...scheduler
+    });
+    scheduler.flush();
+    expect(states.at(-1)?.hasOverflow).toBe(false);
+
+    container.clientWidth = 450;
+    applyLayout(false);
+    resizeCallback?.();
+    scheduler.flush();
+    expect(states.at(-1)?.hasOverflow).toBe(true);
+
+    applyLayout(true);
+    resizeCallback?.();
+    scheduler.flush();
+    expect(states.at(-1)?.hasOverflow).toBe(true);
+
+    container.clientWidth = 520;
+    applyLayout(true);
+    resizeCallback?.();
+    scheduler.flush();
+    expect(states.at(-1)?.hasOverflow).toBe(false);
+
+    applyLayout(false);
+    resizeCallback?.();
+    scheduler.flush();
+    expect(states.at(-1)?.hasOverflow).toBe(false);
+    observer.cleanup();
+  });
 });

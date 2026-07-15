@@ -69,6 +69,7 @@ export default function TournamentSectionNav({
 }: TournamentSectionNavProps) {
   const t = useTranslations();
   const pathname = usePathname();
+  const frameRef = useRef<HTMLElement>(null);
   const railRef = useRef<HTMLDivElement>(null);
   const activeRef = useRef<HTMLElement>(null);
   const refreshRailRef = useRef<() => void>(() => undefined);
@@ -90,10 +91,13 @@ export default function TournamentSectionNav({
   };
 
   useEffect(() => {
+    const frame = frameRef.current;
     const rail = railRef.current;
-    if (!rail) return;
+    if (!frame || !rail) return;
 
-    const observer = observeTournamentRail(rail, setRailState);
+    const observer = observeTournamentRail(rail, setRailState, {
+      measurementContainer: frame
+    });
     refreshRailRef.current = observer.refresh;
 
     return () => {
@@ -124,13 +128,18 @@ export default function TournamentSectionNav({
         {t(phaseNoteKey)}
       </p>
       <nav
-        className={styles.railFrame}
+        ref={frameRef}
+        className={cn(styles.railFrame, railState.hasOverflow && styles.railFrameWithControls)}
         aria-label={t("tournamentDetail.sectionsNav")}
         aria-describedby="tournament-phase-note"
       >
         <button
           type="button"
-          className={cn(styles.scrollControl, !railState.hasOverflow && styles.scrollControlHidden)}
+          className={cn(
+            styles.scrollControl,
+            styles.scrollPrevious,
+            !railState.hasOverflow && styles.scrollControlHidden
+          )}
           onClick={() => scrollRail(-1)}
           aria-label={t("tournamentDetail.nav.scrollPrevious")}
           aria-hidden={!railState.hasOverflow || undefined}
@@ -205,7 +214,11 @@ export default function TournamentSectionNav({
 
         <button
           type="button"
-          className={cn(styles.scrollControl, !railState.hasOverflow && styles.scrollControlHidden)}
+          className={cn(
+            styles.scrollControl,
+            styles.scrollNext,
+            !railState.hasOverflow && styles.scrollControlHidden
+          )}
           onClick={() => scrollRail(1)}
           aria-label={t("tournamentDetail.nav.scrollNext")}
           aria-hidden={!railState.hasOverflow || undefined}

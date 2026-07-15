@@ -21,7 +21,7 @@
 
 .railFrame {
   display: grid;
-  grid-template-columns: 2rem minmax(0, 1fr) 2rem;
+  grid-template-columns: 0 minmax(0, 1fr) 0;
   align-items: stretch;
   width: 100%;
   min-width: 0;
@@ -30,7 +30,12 @@
   background: hsl(220 21% 5% / 0.96);
 }
 
+.railFrameWithControls {
+  grid-template-columns: 2rem minmax(0, 1fr) 2rem;
+}
+
 .railViewport {
+  grid-column: 2;
   position: relative;
   min-width: 0;
   max-width: 100%;
@@ -85,8 +90,15 @@
 }
 
 .scrollControlHidden {
-  visibility: hidden;
-  pointer-events: none;
+  display: none;
+}
+
+.scrollPrevious {
+  grid-column: 1;
+}
+
+.scrollNext {
+  grid-column: 3;
 }
 
 .navItem {

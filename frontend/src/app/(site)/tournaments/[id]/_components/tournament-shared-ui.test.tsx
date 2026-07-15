@@ -103,6 +103,8 @@ describe("tournament navigation and loading source contracts", () => {
     expect(source).toContain("disabled={!railState.hasOverflow || !railState.canScrollPrevious}");
     expect(source).toContain("disabled={!railState.hasOverflow || !railState.canScrollNext}");
     expect(source).toContain("styles.scrollControlHidden");
+    expect(source).toContain("measurementContainer: frame");
+    expect(source).toContain("styles.railFrameWithControls");
     expect(source).toContain('inline: "center"');
     expect(source).toContain("scrollIntoView");
   });
@@ -113,6 +115,12 @@ describe("tournament navigation and loading source contracts", () => {
     expect(css).toMatch(/position:\s*sticky/);
     expect(css).toMatch(/overflow-x:\s*auto/);
     expect(css).toMatch(/max-width:\s*100%/);
+    expect(css).toMatch(
+      /\.railFrame\s*\{[\s\S]*?grid-template-columns:\s*0\s+minmax\(0,\s*1fr\)\s+0/
+    );
+    expect(css).toMatch(
+      /\.railFrameWithControls\s*\{[\s\S]*?grid-template-columns:\s*2rem\s+minmax\(0,\s*1fr\)\s+2rem/
+    );
     expect(css).toContain("@media (prefers-reduced-motion: reduce)");
     expect(css).toMatch(/animation:\s*none/);
   });
