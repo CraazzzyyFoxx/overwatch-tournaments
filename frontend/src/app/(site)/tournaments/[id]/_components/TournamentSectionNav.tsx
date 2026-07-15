@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import type { Stage, TournamentStatus } from "@/types/tournament.types";
+import type { StageSummary, TournamentStatus } from "@/types/tournament.types";
 
 import { useTranslations } from "next-intl";
 
@@ -47,7 +47,7 @@ function normalizeSegment(segment: string | null): TabId {
   return "teams";
 }
 
-function resolveBracketHref(tournamentId: string, stages: Stage[]): string {
+function resolveBracketHref(tournamentId: string, stages: StageSummary[]): string {
   const active = stages.find((stage) => stage.is_active);
   const elimination = stages.find(
     (stage) =>
@@ -66,7 +66,7 @@ function resolveBracketHref(tournamentId: string, stages: Stage[]): string {
 type TournamentSectionNavProps = {
   tournamentId: string;
   status: TournamentStatus;
-  stages?: Stage[];
+  stages?: StageSummary[];
   teamFormation?: string;
   // Retained for call-site compatibility; both variants render the tab bar.
   variant?: "desktop" | "mobile";

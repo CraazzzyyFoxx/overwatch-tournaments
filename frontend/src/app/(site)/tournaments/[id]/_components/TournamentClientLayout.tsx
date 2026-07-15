@@ -3,19 +3,16 @@
 import React from "react";
 import Link from "next/link";
 
-import { Skeleton } from "@/components/ui/skeleton";
 import TournamentRegisterButton from "./TournamentRegisterButton";
-import { TOURNAMENT_STATUS_META, isTournamentStatusEnded } from "@/lib/tournament-status";
+import { isTournamentStatusEnded } from "@/lib/tournament-status";
 import { cn, formatDateRange } from "@/lib/utils";
 import { useTournamentRealtime } from "@/hooks/useTournamentRealtime";
-import { useTournamentQuery, useTournamentStagesQuery } from "../_hooks/useTournamentClientData";
-import { useQuery } from "@tanstack/react-query";
-import teamService from "@/services/team.service";
-import { tournamentQueryKeys } from "@/lib/tournament-query-keys";
-import type { Stage } from "@/types/tournament.types";
+import { useTournamentQuery } from "../_hooks/useTournamentClientData";
+import type { StageSummary } from "@/types/tournament.types";
 
 import { useTranslations, useLocale } from "next-intl";
 import TournamentSectionNav from "./TournamentSectionNav";
+import { TournamentShellSkeleton } from "./TournamentSkeletons";
 import { PageHero, HeroCoord, HeroStat } from "@/components/site/PageHero";
 
 type TournamentClientLayoutProps = {
@@ -25,7 +22,7 @@ type TournamentClientLayoutProps = {
 
 type Translate = ReturnType<typeof useTranslations<never>>;
 
-function formatLabel(stages: Stage[], t: Translate): string {
+function formatLabel(stages: StageSummary[], t: Translate): string {
   const hasGroup = stages.some((s) => s.stage_type === "round_robin" || s.stage_type === "swiss");
   const hasElim = stages.some(
     (s) => s.stage_type === "single_elimination" || s.stage_type === "double_elimination"
@@ -36,17 +33,6 @@ function formatLabel(stages: Stage[], t: Translate): string {
   return stages[0]?.stage_type?.replace(/_/g, " ") ?? "—";
 }
 
-function TournamentLayoutSkeleton() {
-  return (
-    <div className="aqt-tn space-y-4">
-      <Skeleton className="h-4 w-64" />
-      <Skeleton className="h-[180px] w-full rounded-2xl" />
-      <Skeleton className="h-10 w-full max-w-xl rounded-lg" />
-      <Skeleton className="h-72 w-full rounded-xl" />
-    </div>
-  );
-}
-
 export default function TournamentClientLayout({
   tournamentId,
   children
@@ -54,24 +40,15 @@ export default function TournamentClientLayout({
   const t = useTranslations();
   const locale = useLocale();
   const tournamentQuery = useTournamentQuery(tournamentId);
-  const stagesQuery = useTournamentStagesQuery(tournamentId);
   const tournament = tournamentQuery.data;
-  const stages = stagesQuery.data ?? [];
-
-  const teamsQuery = useQuery({
-    queryKey: tournamentQueryKeys.teamsCount(tournamentId),
-    queryFn: () => teamService.getCount(tournamentId),
-    enabled: Boolean(tournamentId)
-  });
-  const teamsCount = teamsQuery.data ?? 0;
 
   useTournamentRealtime({
     tournamentId,
     workspaceId: tournament?.workspace_id
   });
 
-  if (tournamentQuery.isLoading || stagesQuery.isLoading) {
-    return <TournamentLayoutSkeleton />;
+  if (tournamentQuery.isPending) {
+    return <TournamentShellSkeleton />;
   }
 
   if (!tournament) {
@@ -86,6 +63,9 @@ export default function TournamentClientLayout({
       </div>
     );
   }
+
+  const stages = tournament.stages;
+  const teamsCount = tournament.teams_count ?? 0;
 
   const designClass =
     tournament.status === "live" || tournament.status === "playoffs"

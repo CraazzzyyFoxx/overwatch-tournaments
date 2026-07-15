@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 
 import type { TournamentStatus } from "@/types/tournament.types";
 
-import { getTournament, getTournamentStages } from "./_data";
+import { getTournamentOverview } from "./_data";
 
 type TournamentIndexPageProps = {
   params: Promise<{ id: string }>;
@@ -69,12 +69,11 @@ export default async function TournamentIndexPage({
     redirect(teamsPath);
   }
 
-  const tournament = await getTournament(tournamentId);
-  const stages = await getTournamentStages(tournamentId);
+  const tournament = await getTournamentOverview(tournamentId);
   const defaultPath = getDefaultTournamentPath({
     tournamentId,
     status: tournament.status,
-    hasStages: stages.length > 0,
+    hasStages: tournament.stages.length > 0,
   });
 
   if (defaultPath) {

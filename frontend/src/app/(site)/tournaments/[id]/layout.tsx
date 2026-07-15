@@ -1,9 +1,11 @@
-import React from "react";
+import React, { Suspense } from "react";
 import type { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 
 import TournamentClientLayout from "./_components/TournamentClientLayout";
-import { getTournament } from "./_data";
+import { TournamentShellSkeleton } from "./_components/TournamentSkeletons";
+import { getTournamentOverview } from "./_data";
+import TournamentOverviewBoundary from "./TournamentOverviewBoundary";
 import { resolveSiteMetadata } from "@/lib/site-metadata";
 
 export const dynamic = "force-dynamic";
@@ -18,7 +20,7 @@ export async function generateMetadata(props: {
   const t = await getTranslations();
 
   try {
-    const tournament = await getTournament(tournamentId);
+    const tournament = await getTournamentOverview(tournamentId);
     const title = `${t("tournamentDetail.metaTitle", { name: tournament.name })} | ${name}`;
     const description = t("tournamentDetail.metaDescription", {
       name: tournament.name,
@@ -57,8 +59,12 @@ export default async function TournamentLayout({
   const tournamentId = Number(resolvedParams.id);
 
   return (
-    <TournamentClientLayout tournamentId={tournamentId}>
-      {children}
-    </TournamentClientLayout>
+    <Suspense fallback={<TournamentShellSkeleton />}>
+      <TournamentOverviewBoundary tournamentId={tournamentId}>
+        <TournamentClientLayout tournamentId={tournamentId}>
+          {children}
+        </TournamentClientLayout>
+      </TournamentOverviewBoundary>
+    </Suspense>
   );
 }
