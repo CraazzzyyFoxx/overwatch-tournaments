@@ -23,7 +23,7 @@ import type { DivisionGrid } from "@/types/workspace.types";
 import type { useDraftMutations } from "../_hooks/useDraftData";
 
 import { CaptainShortlist } from "./CaptainShortlist";
-import { CurrentPick } from "./CurrentPick";
+import { DraftEventFeed } from "./DraftEventFeed";
 import { DraftOrder } from "./DraftOrder";
 import { PickCommandBar } from "./PickCommandBar";
 import { PlayerInspector } from "./PlayerInspector";
@@ -155,7 +155,6 @@ export function CaptainDraftWorkspace({
       picks={board.picks}
       teamSize={board.session.team_size}
       myTeamId={gating.myTeamId}
-      focusTeamOnly
       onClockTeamId={board.current_pick?.draft_team_id ?? null}
       divisionGrid={divisionGrid}
     />
@@ -172,14 +171,13 @@ export function CaptainDraftWorkspace({
 
   return (
     <div className="space-y-5">
-      <CurrentPick board={board} isMyPick={gating.isMyPick} myTeamId={gating.myTeamId} />
       {optionsLoading && gating.isMyPick && (
         <p className="border-l-2 border-[color:var(--aqt-teal)] pl-3 text-sm text-[color:var(--aqt-fg-muted)]" role="status">
           {t("checkingSafeOptions")}
         </p>
       )}
 
-      <div className="flex gap-1 rounded-xl bg-[color:var(--aqt-card-2)] p-1 md:hidden" role="tablist" aria-label={t("mobileViews")}>
+      <div className="flex gap-1 rounded-xl bg-[color:var(--aqt-card-2)] p-1 xl:hidden" role="tablist" aria-label={t("mobileViews")}>
         {MOBILE_VIEWS.map((view) => (
           <button
             key={view}
@@ -197,11 +195,10 @@ export function CaptainDraftWorkspace({
         ))}
       </div>
 
-      <div className="md:hidden">
+      <div className="xl:hidden">
         <div role="tabpanel">
           {viewParams.view === "pool" ? (
             <div className="space-y-6">
-              {pool}
               <PlayerInspector
                 player={selectedPlayer}
                 role={selectedRole}
@@ -216,19 +213,23 @@ export function CaptainDraftWorkspace({
                 divisionGrid={divisionGrid}
               />
               <CaptainShortlist
+                variant="chips"
                 players={shortlistPlayers}
                 onSelect={(player) => selectPlayer(player)}
                 onRemove={toggleShortlist}
               />
+              {pool}
             </div>
           ) : viewParams.view === "team" ? team : order}
         </div>
       </div>
 
-      <div className="hidden gap-6 md:grid md:grid-cols-[minmax(0,1fr)_300px] xl:grid-cols-[260px_minmax(0,1fr)_320px]">
-        <aside className="sticky top-4 hidden max-h-[calc(100svh-2rem)] self-start overflow-y-auto xl:block">{order}</aside>
-        <main className="min-w-0">{pool}</main>
-        <aside className="sticky top-4 max-h-[calc(100svh-2rem)] self-start space-y-6 overflow-y-auto border-l border-[color:var(--aqt-border)] pl-5">
+      <div className="hidden gap-4 xl:grid xl:grid-cols-[248px_minmax(0,1fr)_378px]">
+        <aside className="sticky top-4 max-h-[calc(100svh-2rem)] self-start space-y-4 overflow-y-auto">
+          {order}
+          <DraftEventFeed picks={board.picks} teams={board.teams} players={board.players} />
+        </aside>
+        <main className="flex min-w-0 flex-col gap-4">
           <PlayerInspector
             player={selectedPlayer}
             role={selectedRole}
@@ -243,18 +244,26 @@ export function CaptainDraftWorkspace({
             divisionGrid={divisionGrid}
           />
           <CaptainShortlist
+            variant="chips"
             players={shortlistPlayers}
             onSelect={(player) => selectPlayer(player)}
             onRemove={toggleShortlist}
           />
-          {team}
+          {pool}
+        </main>
+        <aside className="sticky top-4 max-h-[calc(100svh-2rem)] self-start overflow-y-auto">
+          <TeamRosters
+            teams={board.teams}
+            players={board.players}
+            picks={board.picks}
+            teamSize={board.session.team_size}
+            myTeamId={gating.myTeamId}
+            onClockTeamId={board.current_pick?.draft_team_id ?? null}
+            variant="column"
+            divisionGrid={divisionGrid}
+          />
         </aside>
       </div>
-
-      <details className="hidden rounded-xl border border-[color:var(--aqt-border)] p-4 md:block xl:hidden">
-        <summary className="min-h-11 cursor-pointer font-medium">{t("showDraftOrder")}</summary>
-        <div className="mt-4">{order}</div>
-      </details>
 
       <PickCommandBar
         player={selectedPlayer}
