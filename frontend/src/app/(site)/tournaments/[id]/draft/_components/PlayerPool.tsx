@@ -16,6 +16,7 @@ import {
 import { getRoleIconName } from "@/lib/roles";
 import { cn } from "@/lib/utils";
 import type { DraftPickOptionsResponse, DraftPlayer, DraftRole } from "@/types/draft.types";
+import type { DivisionGrid } from "@/types/workspace.types";
 
 import type { DraftPoolRoleFilter, DraftPoolSort } from "../_lib/draft-workspace-model";
 import { playerRoles } from "../_lib/draft-workspace-model";
@@ -34,6 +35,8 @@ interface PlayerPoolProps {
   onToggleShortlist: (playerId: number) => void;
   onFiltersChange: (patch: Partial<{ role: DraftPoolRoleFilter; sort: DraftPoolSort; query: string }>) => void;
   onResetFilters: () => void;
+  /** Accepted but not yet consumed here — Task 8 wires division icons into the pool. */
+  divisionGrid: DivisionGrid;
 }
 
 export function PlayerPool({

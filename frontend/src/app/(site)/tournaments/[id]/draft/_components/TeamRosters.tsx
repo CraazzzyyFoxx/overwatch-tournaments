@@ -12,6 +12,7 @@ import { getDivisionLabel, resolveDivisionFromRank } from "@/lib/division-grid";
 import { getRoleIconName } from "@/lib/roles";
 import { cn } from "@/lib/utils";
 import type { DraftPlayer, DraftRole, DraftTeam } from "@/types/draft.types";
+import type { DivisionGrid } from "@/types/workspace.types";
 
 import { buildRosterByTeam } from "../_lib/draft-workspace-model";
 
@@ -20,6 +21,8 @@ interface TeamRostersProps {
   players: DraftPlayer[];
   myTeamId?: number | null;
   focusTeamOnly?: boolean;
+  /** Accepted but not yet consumed here — Task 11 replaces useDivisionGrid() with this. */
+  divisionGrid: DivisionGrid;
 }
 
 export function TeamRosters({

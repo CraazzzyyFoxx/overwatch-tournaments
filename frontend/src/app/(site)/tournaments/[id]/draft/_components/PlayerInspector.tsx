@@ -13,6 +13,7 @@ import type {
   DraftPlayer,
   DraftRole
 } from "@/types/draft.types";
+import type { DivisionGrid } from "@/types/workspace.types";
 
 import { optionForSelection, playerRoles } from "../_lib/draft-workspace-model";
 
@@ -24,6 +25,8 @@ interface PlayerInspectorProps {
   headingId?: string;
   onRoleChange: (role: DraftRole) => void;
   onClose: () => void;
+  /** Accepted but not yet consumed here — Task 10 wires division icons into the inspector. */
+  divisionGrid: DivisionGrid;
 }
 
 export function PlayerInspector({

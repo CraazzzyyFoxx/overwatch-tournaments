@@ -19,6 +19,7 @@ import type {
   DraftRole
 } from "@/types/draft.types";
 import type { RealtimeConnectionState } from "@/types/realtime.types";
+import type { DivisionGrid } from "@/types/workspace.types";
 import type { useDraftMutations } from "../_hooks/useDraftData";
 
 import { CaptainShortlist } from "./CaptainShortlist";
@@ -38,6 +39,7 @@ interface CaptainDraftWorkspaceProps {
   viewParams: DraftViewParams;
   onViewParamsChange: (patch: Partial<DraftViewParams>) => void;
   mutations: ReturnType<typeof useDraftMutations>;
+  divisionGrid: DivisionGrid;
 }
 
 const MOBILE_VIEWS = ["pool", "team", "order"] as const;
@@ -50,7 +52,8 @@ export function CaptainDraftWorkspace({
   connectionState,
   viewParams,
   onViewParamsChange,
-  mutations
+  mutations,
+  divisionGrid
 }: CaptainDraftWorkspaceProps) {
   const t = useTranslations("draftRedesign");
   const [selectedPlayerId, setSelectedPlayerId] = useState<number | null>(null);
@@ -132,10 +135,27 @@ export function CaptainDraftWorkspace({
       onToggleShortlist={toggleShortlist}
       onFiltersChange={onViewParamsChange}
       onResetFilters={() => onViewParamsChange({ role: "all", sort: "rank", query: "" })}
+      divisionGrid={divisionGrid}
     />
   );
-  const team = <TeamRosters teams={board.teams} players={board.players} myTeamId={gating.myTeamId} focusTeamOnly />;
-  const order = <DraftOrder picks={board.picks} teams={board.teams} players={board.players} compact />;
+  const team = (
+    <TeamRosters
+      teams={board.teams}
+      players={board.players}
+      myTeamId={gating.myTeamId}
+      focusTeamOnly
+      divisionGrid={divisionGrid}
+    />
+  );
+  const order = (
+    <DraftOrder
+      picks={board.picks}
+      teams={board.teams}
+      players={board.players}
+      compact
+      divisionGrid={divisionGrid}
+    />
+  );
 
   return (
     <div className="space-y-5">
@@ -180,6 +200,7 @@ export function CaptainDraftWorkspace({
                   setSelectedPlayerId(null);
                   setSelectedRole(null);
                 }}
+                divisionGrid={divisionGrid}
               />
               <CaptainShortlist
                 players={shortlistPlayers}
@@ -206,6 +227,7 @@ export function CaptainDraftWorkspace({
               setSelectedPlayerId(null);
               setSelectedRole(null);
             }}
+            divisionGrid={divisionGrid}
           />
           <CaptainShortlist
             players={shortlistPlayers}

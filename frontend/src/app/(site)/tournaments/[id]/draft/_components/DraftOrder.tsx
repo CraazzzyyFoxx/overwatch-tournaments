@@ -6,12 +6,15 @@ import { useTranslations } from "next-intl";
 import { HeroCoord } from "@/components/site/PageHero";
 import { cn } from "@/lib/utils";
 import type { DraftPick, DraftPlayer, DraftTeam } from "@/types/draft.types";
+import type { DivisionGrid } from "@/types/workspace.types";
 
 interface DraftOrderProps {
   picks: DraftPick[];
   teams: DraftTeam[];
   players: DraftPlayer[];
   compact?: boolean;
+  /** Accepted but not yet consumed here — Task 12 wires division icons into the order list. */
+  divisionGrid: DivisionGrid;
 }
 
 export function DraftOrder({ picks, teams, players, compact = false }: DraftOrderProps) {

@@ -3,6 +3,7 @@
 import { useTranslations } from "next-intl";
 
 import type { DraftBoard } from "@/types/draft.types";
+import type { DivisionGrid } from "@/types/workspace.types";
 
 import { CurrentPick } from "./CurrentPick";
 import { DraftEventFeed } from "./DraftEventFeed";
@@ -11,9 +12,10 @@ import { TeamRosters } from "./TeamRosters";
 
 interface SpectatorDraftWorkspaceProps {
   board: DraftBoard;
+  divisionGrid: DivisionGrid;
 }
 
-export function SpectatorDraftWorkspace({ board }: SpectatorDraftWorkspaceProps) {
+export function SpectatorDraftWorkspace({ board, divisionGrid }: SpectatorDraftWorkspaceProps) {
   const t = useTranslations("draftRedesign");
   const showCurrentPick =
     board.current_pick != null ||
@@ -27,10 +29,16 @@ export function SpectatorDraftWorkspace({ board }: SpectatorDraftWorkspaceProps)
       </p>
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_320px]">
         <main className="min-w-0">
-          <TeamRosters teams={board.teams} players={board.players} />
+          <TeamRosters teams={board.teams} players={board.players} divisionGrid={divisionGrid} />
         </main>
         <aside className="space-y-8 border-t border-[color:var(--aqt-border)] pt-6 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
-          <DraftOrder picks={board.picks} teams={board.teams} players={board.players} compact />
+          <DraftOrder
+            picks={board.picks}
+            teams={board.teams}
+            players={board.players}
+            compact
+            divisionGrid={divisionGrid}
+          />
           <DraftEventFeed picks={board.picks} teams={board.teams} players={board.players} />
         </aside>
       </div>

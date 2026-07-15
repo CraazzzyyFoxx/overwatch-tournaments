@@ -9,7 +9,9 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { HeroFrame } from "@/components/site/PageHero";
 import { Button } from "@/components/ui/button";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
+import { getDefaultDivisionGrid } from "@/lib/division-grid";
 import type { Tournament } from "@/types/tournament.types";
+import type { DivisionGrid } from "@/types/workspace.types";
 
 import {
   useDraftBoardQuery,
@@ -59,6 +61,13 @@ export function DraftBoard({ tournament }: DraftBoardProps) {
   const viewParams = useMemo(
     () => parseDraftViewParams(new URLSearchParams(searchParams.toString())),
     [searchParams]
+  );
+  const divisionGrid: DivisionGrid = useMemo(
+    () =>
+      tournament.division_grid_version?.tiers
+        ? { tiers: tournament.division_grid_version.tiers }
+        : getDefaultDivisionGrid(),
+    [tournament.division_grid_version]
   );
 
   const updateViewParams = (patch: Partial<DraftViewParams>) => {
@@ -130,9 +139,10 @@ export function DraftBoard({ tournament }: DraftBoardProps) {
           viewParams={viewParams}
           onViewParamsChange={updateViewParams}
           mutations={mutations}
+          divisionGrid={divisionGrid}
         />
       ) : (
-        <SpectatorDraftWorkspace board={board} />
+        <SpectatorDraftWorkspace board={board} divisionGrid={divisionGrid} />
       )}
     </div>
   );
