@@ -1,22 +1,29 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
-import { Encounter } from "@/types/encounter.types";
+import { useQuery } from "@tanstack/react-query";
 import { Search } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
-import { useDebounce } from "use-debounce";
-import { useQuery } from "@tanstack/react-query";
+import { useTranslations } from "next-intl";
 
-import { PaginationControlled } from "@/components/ui/pagination-with-links";
-import { PaginatedResponse } from "@/types/pagination.types";
-import { cn } from "@/lib/utils";
-import encounterService from "@/services/encounter.service";
-import { tournamentQueryKeys } from "@/lib/tournament-query-keys";
+import styles from "@/app/(site)/tournaments/[id]/TournamentDetail.module.css";
+import {
+  getPublicPageQueryPresentation,
+  type PublicPageQueryState
+} from "@/app/(site)/tournaments/[id]/pages/publicPageQueryPresentation";
 import MatchLogIndicator from "@/components/match/MatchLogIndicator";
+import { PaginationControlled } from "@/components/ui/pagination-with-links";
+import { cn } from "@/lib/utils";
+import { tournamentQueryKeys } from "@/lib/tournament-query-keys";
+import encounterService from "@/services/encounter.service";
+import { Encounter } from "@/types/encounter.types";
+import { PaginatedResponse } from "@/types/pagination.types";
 
 const COMPLETED_STATUSES = new Set(["completed", "finished", "closed"]);
 const PER_PAGE = 15;
 
+export const getEncountersQueryPresentation = (state: PublicPageQueryState) =>
+  getPublicPageQueryPresentation(state);
 
 const getStageLabel = (encounter: Encounter) =>
   encounter.stage_item?.name ?? encounter.stage?.name ?? "Unassigned";
@@ -28,7 +35,7 @@ function getMatchMeta(encounter: Encounter) {
   if (isCompleted && encounter.score.home !== encounter.score.away) {
     winner = encounter.score.home > encounter.score.away ? "home" : "away";
   }
-  return { isCompleted, isLive, winner };
+  return { isLive, winner };
 }
 
 function formatAgo(value: Date | string): string {
@@ -39,8 +46,7 @@ function formatAgo(value: Date | string): string {
   if (minutes < 60) return `${minutes}m ago`;
   const hours = Math.round(minutes / 60);
   if (hours < 24) return `${hours}h ago`;
-  const days = Math.round(hours / 24);
-  return `${days}d ago`;
+  return `${Math.round(hours / 24)}d ago`;
 }
 
 function formatWhen(encounter: Encounter, isLive: boolean) {
@@ -52,281 +58,301 @@ function formatWhen(encounter: Encounter, isLive: boolean) {
   return {
     day: date.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
     time: formatAgo(source),
-    live: false,
+    live: false
   };
 }
 
-const EncountersTable = ({
+export function useEncountersTableController({
   data,
-  InitialPage,
+  initialPage,
   search,
-  hideTournament,
-  tournamentId = null,
-  workspaceId = null,
+  tournamentId,
+  workspaceId,
+  enabled = true
 }: {
   data?: PaginatedResponse<Encounter>;
-  InitialPage: number;
+  initialPage: number;
   search: string;
-  hideTournament?: boolean;
-  tournamentId?: number | null;
+  tournamentId: number;
   workspaceId?: number | null;
-}) => {
-  const router = useRouter();
+  enabled?: boolean;
+}) {
   const pathname = usePathname();
-  const [searchValue, setSearchValue] = useState<string>(search);
-  const [debouncedSearchValue] = useDebounce(searchValue, 300);
-  const [currentPage, setCurrentPage] = useState<number>(InitialPage);
-  const previousDebouncedSearchRef = useRef(search);
-  const previousUrlStateRef = useRef({ page: InitialPage, search });
-
-  useEffect(() => {
-    setSearchValue(search);
-  }, [search]);
-
-  useEffect(() => {
-    if (previousDebouncedSearchRef.current !== debouncedSearchValue) {
-      previousDebouncedSearchRef.current = debouncedSearchValue;
-      setCurrentPage(1);
-    }
-  }, [debouncedSearchValue]);
+  const [querySearch, setQuerySearch] = useState(search);
+  const [currentPage, setCurrentPage] = useState(initialPage);
+  const previousUrlStateRef = useRef({ page: initialPage, search });
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const encountersQuery = useQuery({
-    queryKey:
-      tournamentId != null
-        ? tournamentQueryKeys.encountersPage(
-            tournamentId,
-            workspaceId,
-            currentPage,
-            debouncedSearchValue,
-          )
-        : (["encounters", currentPage, debouncedSearchValue] as const),
+    queryKey: tournamentQueryKeys.encountersPage(
+      tournamentId,
+      workspaceId,
+      currentPage,
+      querySearch
+    ),
     queryFn: () =>
       encounterService.getAll(
         currentPage,
-        debouncedSearchValue,
+        querySearch,
         tournamentId,
         PER_PAGE,
         undefined,
         undefined,
-        workspaceId,
+        workspaceId
       ),
+    enabled,
     placeholderData: (previousData) => previousData,
-    initialData:
-      data && currentPage === InitialPage && debouncedSearchValue === search
-        ? data
-        : undefined,
+    initialData: data && currentPage === initialPage && querySearch === search ? data : undefined
   });
-
-  const encounters = encountersQuery.data ?? data ?? {
-    page: currentPage,
-    per_page: PER_PAGE,
-    total: 0,
-    results: [],
-  };
 
   useEffect(() => {
     const handlePopState = () => {
       const params = new URLSearchParams(window.location.search);
       const nextPage = Number.parseInt(params.get("page") ?? "1", 10) || 1;
-      previousUrlStateRef.current = { page: nextPage, search: debouncedSearchValue };
+      const nextSearch = params.get("search") ?? "";
+      if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+      previousUrlStateRef.current = { page: nextPage, search: nextSearch };
+      if (searchInputRef.current) searchInputRef.current.value = nextSearch;
+      setQuerySearch(nextSearch);
       setCurrentPage(nextPage);
     };
 
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
-  }, [debouncedSearchValue]);
+  }, []);
+
+  useEffect(
+    () => () => {
+      if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    },
+    []
+  );
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const currentSearch = params.get("search") ?? "";
     const currentPageParam = Number.parseInt(params.get("page") ?? "1", 10) || 1;
-
     const previousUrlState = previousUrlStateRef.current;
-    const searchChanged = previousUrlState.search !== debouncedSearchValue;
+    const searchChanged = previousUrlState.search !== querySearch;
     const pageChanged = previousUrlState.page !== currentPage;
 
     if (!searchChanged && !pageChanged) return;
-
-    if (currentSearch === debouncedSearchValue && currentPageParam === currentPage) {
-      previousUrlStateRef.current = { page: currentPage, search: debouncedSearchValue };
+    if (currentSearch === querySearch && currentPageParam === currentPage) {
+      previousUrlStateRef.current = { page: currentPage, search: querySearch };
       return;
     }
 
-    if (debouncedSearchValue) params.set("search", debouncedSearchValue);
+    if (querySearch) params.set("search", querySearch);
     else params.delete("search");
-
     if (currentPage > 1) params.set("page", String(currentPage));
     else params.delete("page");
 
     const query = params.toString();
     const nextUrl = query ? `${pathname}?${query}` : pathname;
-
     if (searchChanged) window.history.replaceState(null, "", nextUrl);
     else window.history.pushState(null, "", nextUrl);
+    previousUrlStateRef.current = { page: currentPage, search: querySearch };
+  }, [currentPage, pathname, querySearch]);
 
-    previousUrlStateRef.current = { page: currentPage, search: debouncedSearchValue };
-  }, [currentPage, debouncedSearchValue, pathname]);
+  const onSearchInput = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const nextSearch = event.target.value;
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    searchTimerRef.current = setTimeout(() => {
+      setQuerySearch(nextSearch);
+      setCurrentPage(1);
+    }, 300);
+  };
 
+  return {
+    encountersQuery,
+    currentPage,
+    setCurrentPage,
+    searchInputRef,
+    onSearchInput
+  };
+}
+
+const EncountersTable = ({
+  encounters,
+  currentPage,
+  onSetPage,
+  search,
+  searchInputRef,
+  onSearchInput,
+  hideTournament = false
+}: {
+  encounters: PaginatedResponse<Encounter>;
+  currentPage: number;
+  onSetPage: (page: number) => void;
+  search: string;
+  searchInputRef: React.RefObject<HTMLInputElement | null>;
+  onSearchInput: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  hideTournament?: boolean;
+}) => {
+  const router = useRouter();
+  const t = useTranslations();
   const rows = encounters.results ?? [];
-  const columnCount = hideTournament ? 7 : 8;
 
   return (
-    <div className="aqt-matches flex flex-col gap-4">
+    <div className="aqt-matches flex min-w-0 flex-col gap-4">
       <div className="m-search">
-        <Search width={14} height={14} />
+        <Search width={14} height={14} aria-hidden="true" />
         <input
-          placeholder="Search by name"
-          value={searchValue}
-          onChange={(event) => setSearchValue(event.target.value)}
+          ref={searchInputRef}
+          type="search"
+          aria-label={t("tournamentDetail.publicPages.matches.searchLabel")}
+          placeholder={t("tournamentDetail.publicPages.matches.searchPlaceholder")}
+          defaultValue={search}
+          onChange={onSearchInput}
         />
       </div>
 
-      <div className="matches-card">
-        <div className="m-scroll">
-          <table className="m">
+      <div className="matches-card min-w-0">
+        <div
+          className={cn("m-scroll", styles.tableViewport)}
+          role="region"
+          aria-label={t("tournamentDetail.publicPages.matches.tableLabel")}
+          tabIndex={0}
+        >
+          <table className={cn("m", styles.matchesTable)}>
             <thead>
               <tr>
-                <th>Matchup</th>
-                {!hideTournament && <th>Tournament</th>}
-                <th className="r">Score</th>
-                <th className="c">Format</th>
-                <th>Closeness</th>
-                <th>Stage</th>
-                <th className="r">When</th>
-                <th className="c">Logs</th>
+                <th scope="col">Matchup</th>
+                {!hideTournament && <th scope="col">Tournament</th>}
+                <th scope="col" className="r">
+                  Score
+                </th>
+                <th scope="col" className="c">
+                  Format
+                </th>
+                <th scope="col">Closeness</th>
+                <th scope="col">Stage</th>
+                <th scope="col" className="r">
+                  When
+                </th>
+                <th scope="col" className="c">
+                  Logs
+                </th>
               </tr>
             </thead>
             <tbody>
-              {encountersQuery.isLoading ? (
-                <tr>
-                  <td colSpan={columnCount} className="m-empty">
-                    Loading matches…
-                  </td>
-                </tr>
-              ) : rows.length === 0 ? (
-                <tr>
-                  <td colSpan={columnCount} className="m-empty">
-                    No matches found.
-                  </td>
-                </tr>
-              ) : (
-                rows.map((encounter) => {
-                  const meta = getMatchMeta(encounter);
-                  const when = formatWhen(encounter, meta.isLive);
-                  const closeness = encounter.closeness;
-                  const tournamentName = encounter.tournament?.is_league
-                    ? encounter.tournament.name
-                    : `Tournament ${encounter.tournament?.number ?? "—"}`;
+              {rows.map((encounter) => {
+                const meta = getMatchMeta(encounter);
+                const when = formatWhen(encounter, meta.isLive);
+                const closeness = encounter.closeness;
+                const tournamentName = encounter.tournament?.is_league
+                  ? encounter.tournament.name
+                  : `Tournament ${encounter.tournament?.number ?? "—"}`;
+                const openEncounter = () => router.push(`/encounters/${encounter.id}`);
 
-                  return (
-                    <tr
-                      key={encounter.id}
-                      className={cn(meta.isLive && "live")}
-                      onClick={() => router.push(`/encounters/${encounter.id}`)}
-                    >
-                      <td>
-                        <div className="m-up">
-                          <div
-                            className={cn(
-                              "row",
-                              meta.winner === "home" && "winner",
-                              meta.winner === "away" && "loser"
-                            )}
-                          >
-                            <span className="nm">{encounter.home_team?.name ?? "TBD"}</span>
-                          </div>
-                          <div
-                            className={cn(
-                              "row",
-                              meta.winner === "away" && "winner",
-                              meta.winner === "home" && "loser"
-                            )}
-                          >
-                            <span className="nm">{encounter.away_team?.name ?? "TBD"}</span>
-                          </div>
-                        </div>
-                      </td>
-
-                      {!hideTournament && (
-                        <td>
-                          <span className="m-round">{tournamentName}</span>
-                        </td>
-                      )}
-
-                      <td className="r">
-                        <div className="m-score">
-                          <span className={meta.winner === "home" ? "w" : "l"}>
-                            {encounter.score.home}
-                          </span>
-                          <span className="sep">–</span>
-                          <span className={meta.winner === "away" ? "w" : "l"}>
-                            {encounter.score.away}
-                          </span>
-                        </div>
-                      </td>
-
-                      <td className="c font-mono text-[var(--fg-dim)] text-[13px]">
-                        Bo{encounter.best_of}
-                      </td>
-
-                      <td>
-                        {closeness != null ? (
-                          <div className="m-close">
-                            <span className="track">
-                              <span
-                                className={cn("fill", closeness >= 0.8 && "hot")}
-                                style={{ width: `${Math.round(closeness * 100)}%` }}
-                              />
-                            </span>
-                            <span className="num">{Math.round(closeness * 100)}%</span>
-                          </div>
-                        ) : (
-                          <span className="num" style={{ color: "var(--fg-faint)" }}>
-                            —
-                          </span>
-                        )}
-                      </td>
-
-                      <td>
-                        <span className="m-round">
-                          {getStageLabel(encounter)}
-                          <span className="stage"> · R{encounter.round}</span>
-                        </span>
-                      </td>
-
-                      <td className="r">
-                        <div className="m-when" style={{ alignItems: "flex-end" }}>
-                          <span className="day">{when.day}</span>
-                          <span className={cn("time", when.live && "live")}>
-                            {when.live && <span className="m-live-dot" style={{ marginRight: 4 }} />}
-                            {when.time}
-                          </span>
-                        </div>
-                      </td>
-
-                      <td className="c">
+                return (
+                  <tr
+                    key={encounter.id}
+                    className={cn(meta.isLive && "live")}
+                    tabIndex={0}
+                    onClick={openEncounter}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") openEncounter();
+                    }}
+                  >
+                    <td>
+                      <div className="m-up">
                         <div
-                          className="m-media"
-                          style={{ justifyContent: "center" }}
-                          onClick={(e) => e.stopPropagation()}
+                          className={cn(
+                            "row",
+                            meta.winner === "home" && "winner",
+                            meta.winner === "away" && "loser"
+                          )}
                         >
-                          <MatchLogIndicator
-                            hasLogs={encounter.has_logs}
-                            logs={
-                              encounter.has_logs
-                                ? (encounter.matches ?? []).map((m, i) => ({
-                                    matchId: m.id,
-                                    label: m.map?.name ?? `Map ${i + 1}`
-                                  }))
-                                : undefined
-                            }
-                          />
+                          <span className="nm">{encounter.home_team?.name ?? "TBD"}</span>
                         </div>
+                        <div
+                          className={cn(
+                            "row",
+                            meta.winner === "away" && "winner",
+                            meta.winner === "home" && "loser"
+                          )}
+                        >
+                          <span className="nm">{encounter.away_team?.name ?? "TBD"}</span>
+                        </div>
+                      </div>
+                    </td>
+
+                    {!hideTournament && (
+                      <td>
+                        <span className="m-round">{tournamentName}</span>
                       </td>
-                    </tr>
-                  );
-                })
-              )}
+                    )}
+
+                    <td className="r">
+                      <div className="m-score">
+                        <span className={meta.winner === "home" ? "w" : "l"}>
+                          {encounter.score.home}
+                        </span>
+                        <span className="sep">–</span>
+                        <span className={meta.winner === "away" ? "w" : "l"}>
+                          {encounter.score.away}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="c font-mono text-[13px] text-[var(--fg-dim)]">
+                      Bo{encounter.best_of}
+                    </td>
+                    <td>
+                      {closeness != null ? (
+                        <div className="m-close">
+                          <span className="track">
+                            <span
+                              className={cn("fill", closeness >= 0.8 && "hot")}
+                              style={{ width: `${Math.round(closeness * 100)}%` }}
+                            />
+                          </span>
+                          <span className="num">{Math.round(closeness * 100)}%</span>
+                        </div>
+                      ) : (
+                        <span className="num" style={{ color: "var(--fg-faint)" }}>
+                          —
+                        </span>
+                      )}
+                    </td>
+                    <td>
+                      <span className="m-round">
+                        {getStageLabel(encounter)}
+                        <span className="stage"> · R{encounter.round}</span>
+                      </span>
+                    </td>
+                    <td className="r">
+                      <div className="m-when" style={{ alignItems: "flex-end" }}>
+                        <span className="day">{when.day}</span>
+                        <span className={cn("time", when.live && "live")}>
+                          {when.live && <span className="m-live-dot" style={{ marginRight: 4 }} />}
+                          {when.time}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="c">
+                      <div
+                        className="m-media"
+                        style={{ justifyContent: "center" }}
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        <MatchLogIndicator
+                          hasLogs={encounter.has_logs}
+                          logs={
+                            encounter.has_logs
+                              ? (encounter.matches ?? []).map((match, index) => ({
+                                  matchId: match.id,
+                                  label: match.map?.name ?? `Map ${index + 1}`
+                                }))
+                              : undefined
+                          }
+                        />
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -337,7 +363,7 @@ const EncountersTable = ({
           page={currentPage}
           totalCount={encounters.total ?? 0}
           pageSize={PER_PAGE}
-          onSetPage={setCurrentPage}
+          onSetPage={onSetPage}
         />
       </div>
     </div>

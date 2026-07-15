@@ -378,6 +378,183 @@
   text-transform: uppercase;
 }
 
+.publicDataPage {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  gap: 1rem;
+}
+
+.pageHeading {
+  display: flex;
+  min-width: 0;
+  align-items: end;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-bottom: 0.9rem;
+  border-bottom: 1px solid var(--aqt-border);
+}
+
+.pageHeadingCopy {
+  display: grid;
+  min-width: 0;
+  gap: 0.28rem;
+}
+
+.pageEyebrow {
+  color: var(--aqt-teal);
+  font-family: var(--aqt-mono);
+  font-size: 0.625rem;
+  font-weight: 750;
+  letter-spacing: 0.14em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.pageTitleRow {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.pageTitle {
+  margin: 0;
+  color: var(--aqt-fg);
+  font-family: var(--aqt-onest);
+  font-size: clamp(1.6rem, 4vw, 2.25rem);
+  font-weight: 780;
+  letter-spacing: -0.025em;
+  line-height: 1;
+}
+
+.pageCount {
+  display: inline-grid;
+  min-width: 2rem;
+  min-height: 1.35rem;
+  place-items: center;
+  padding-inline: 0.45rem;
+  border: 1px solid var(--aqt-border-2);
+  border-radius: 0.3rem;
+  background: hsl(172 70% 49% / 0.06);
+  color: var(--aqt-fg-dim);
+  font-family: var(--aqt-mono);
+  font-size: 0.6875rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.pageContext {
+  max-width: 44rem;
+  margin: 0;
+  color: var(--aqt-fg-muted);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.controlRail,
+.stageNavigation {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: thin;
+}
+
+.controlRail {
+  display: flex;
+  gap: 0.45rem;
+  padding-block: 0.1rem;
+}
+
+.controlRail > * {
+  flex: 0 0 auto;
+}
+
+.tableViewport,
+.standingsViewport {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: clip;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: thin;
+}
+
+.tableViewport {
+  overflow-x: auto;
+}
+
+.standingsViewport {
+  overflow-x: auto;
+}
+
+.tableViewport:focus-visible,
+.standingsViewport:focus-visible {
+  outline: 1px solid var(--aqt-teal);
+  outline-offset: -2px;
+}
+
+.matchesTable {
+  min-width: 58rem;
+}
+
+.heroList {
+  min-width: 0;
+  padding: 1.1rem;
+  overflow: hidden;
+}
+
+.heroRank {
+  flex: 0 0 auto;
+  color: var(--aqt-fg-faint);
+  font-family: var(--aqt-mono);
+  font-size: 0.625rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.heroBarFill {
+  background-color: var(--aqt-teal);
+  box-shadow: inset -1px 0 hsl(0 0% 100% / 0.22);
+}
+
+.zeroHeroBar {
+  min-width: 0 !important;
+}
+
+.standingsSections {
+  display: grid;
+  min-width: 0;
+  gap: 1rem;
+}
+
+.standingsViewport {
+  position: relative;
+}
+
+.standingsTable {
+  min-width: 46rem;
+}
+
+.stickyTeamColumn {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: var(--aqt-card, var(--card)) !important;
+  box-shadow: 1px 0 var(--aqt-border);
+}
+
+thead .stickyTeamColumn {
+  z-index: 3;
+  background: hsl(220 22% 10%) !important;
+}
+
+.stageEmpty {
+  min-width: 0;
+}
+
 .participantsTableViewport {
   width: 100%;
   min-width: 0;
@@ -600,6 +777,23 @@
   .skeletonHeader {
     align-items: start;
     flex-direction: column;
+  }
+
+  .pageHeading {
+    align-items: start;
+    flex-direction: column;
+  }
+
+  .pageContext {
+    max-width: 31rem;
+  }
+
+  .heroList {
+    padding: 0.85rem;
+  }
+
+  .matchesTable {
+    min-width: 52rem;
   }
 
   .skeletonGrid {

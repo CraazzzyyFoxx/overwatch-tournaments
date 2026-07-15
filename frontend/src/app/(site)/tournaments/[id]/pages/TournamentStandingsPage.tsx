@@ -2,42 +2,55 @@
 
 import React, { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { LayoutGrid, Circle, BarChart3 } from "lucide-react";
-
-import tournamentService from "@/services/tournament.service";
-import { Standings, Tournament } from "@/types/tournament.types";
-import { Skeleton } from "@/components/ui/skeleton";
-import StandingsTable from "@/components/StandingsTable";
-import { tournamentQueryKeys } from "@/lib/tournament-query-keys";
-import { isTournamentStatusEnded } from "@/lib/tournament-status";
-import { cn } from "@/lib/utils";
+import { BarChart3, Circle, LayoutGrid } from "lucide-react";
 import { useTranslations } from "next-intl";
 
+import StandingsTable from "@/components/StandingsTable";
+import { isTournamentStatusEnded } from "@/lib/tournament-status";
+import { tournamentQueryKeys } from "@/lib/tournament-query-keys";
+import { cn } from "@/lib/utils";
+import tournamentService from "@/services/tournament.service";
+import { Standings } from "@/types/tournament.types";
+
+import styles from "../TournamentDetail.module.css";
+import { TournamentPageState } from "../_components/TournamentPageState";
+import { TournamentStandingsSkeleton } from "../_components/TournamentSkeletons";
+import { useTournamentQuery } from "../_hooks/useTournamentClientData";
+import {
+  getPublicPageQueryPresentation,
+  type PublicPageQueryState
+} from "./publicPageQueryPresentation";
 
 type StageView = "playoff" | "groups" | "combined";
+
+export const getStandingsQueryPresentation = (state: PublicPageQueryState) =>
+  getPublicPageQueryPresentation(state);
 
 function groupLetter(name: string): string {
   const stripped = name.replace(/group/i, "").trim();
   return (stripped.slice(0, 1) || name.slice(0, 1) || "#").toUpperCase();
 }
 
-const TournamentStandingsPage = ({ tournament }: { tournament: Tournament }) => {
+const TournamentStandingsPage = ({ tournamentId }: { tournamentId: number }) => {
   const t = useTranslations();
+  const tournamentQuery = useTournamentQuery(tournamentId);
+  const tournament = tournamentQuery.data;
   const standingsQuery = useQuery({
-    queryKey: tournamentQueryKeys.standings(tournament.id, tournament.workspace_id),
-    queryFn: () => tournamentService.getStandings(tournament.id, tournament.workspace_id),
+    queryKey: tournamentQueryKeys.standings(tournamentId, tournament?.workspace_id),
+    queryFn: () => {
+      if (!tournament) throw new Error("Tournament overview is required");
+      return tournamentService.getStandings(tournament.id, tournament.workspace_id);
+    },
+    enabled: tournament !== undefined
   });
-
-  const standings = standingsQuery.data ?? [];
-  const isEnded = isTournamentStatusEnded(tournament.status);
   const [view, setView] = useState<StageView>("combined");
-
+  const standings = standingsQuery.data ? standingsQuery.data : [];
   const { groups, playoffStandings } = useMemo(() => {
     const stageStandings = new Map<number, { name: string; standings: Standings[] }>();
     const groupStandingsList = standings.filter((standing) =>
       ["round_robin", "swiss"].includes(standing.stage?.stage_type ?? "")
     );
-    const playoffStandings = standings.filter((standing) =>
+    const playoff = standings.filter((standing) =>
       ["single_elimination", "double_elimination"].includes(standing.stage?.stage_type ?? "")
     );
 
@@ -55,116 +68,196 @@ const TournamentStandingsPage = ({ tournament }: { tournament: Tournament }) => 
 
     return {
       groups: Array.from(stageStandings.entries()).sort((a, b) => a[0] - b[0]),
-      playoffStandings,
+      playoffStandings: playoff
     };
   }, [standings, t]);
+  const presentation = getStandingsQueryPresentation({
+    data: standingsQuery.data,
+    itemCount: standings.length,
+    isPending: standingsQuery.isPending,
+    isError: standingsQuery.isError,
+    isFetching: standingsQuery.isFetching
+  });
 
-  if (standingsQuery.isLoading) {
+  if (!tournament) {
+    if (tournamentQuery.isError) {
+      return (
+        <TournamentPageState state="initial-error" onRetry={() => void tournamentQuery.refetch()} />
+      );
+    }
+    return <TournamentStandingsSkeleton />;
+  }
+  if (presentation.initialState === "error") {
     return (
-      <div className="flex flex-col gap-4">
-        <Skeleton className="h-52 w-full rounded-xl" />
-        <Skeleton className="h-52 w-full rounded-xl" />
-      </div>
+      <TournamentPageState state="initial-error" onRetry={() => void standingsQuery.refetch()} />
     );
   }
+  if (presentation.initialState === "skeleton" || presentation.contentState === null) {
+    return <TournamentStandingsSkeleton />;
+  }
 
+  const isEnded = isTournamentStatusEnded(tournament.status);
   const hasPlayoff = playoffStandings.length > 0;
   const hasGroups = groups.length > 0;
   const groupTeams = groups.reduce((sum, [, bucket]) => sum + bucket.standings.length, 0);
-
-  if (!hasPlayoff && !hasGroups) {
-    return (
-      <div className="tn-card" style={{ padding: "48px 24px", textAlign: "center", color: "var(--fg-dim)" }}>
-        {t("common.noStandings")}
-      </div>
-    );
-  }
-
   const showTabs = hasPlayoff && hasGroups;
   const showPlayoff = hasPlayoff && (view === "playoff" || view === "combined");
   const showGroups = hasGroups && (view === "groups" || view === "combined");
+  const showStageEmpty = presentation.contentState === "content" && !showPlayoff && !showGroups;
 
-  return (
-    <div className="space-y-4">
-      {showTabs && (
-        <div className="section-head">
+  const content = (
+    <section className={styles.publicDataPage} aria-labelledby="tournament-standings-title">
+      <header className={styles.pageHeading}>
+        <div className={styles.pageHeadingCopy}>
+          <span className={styles.pageEyebrow}>
+            {t("tournamentDetail.publicPages.standings.eyebrow")}
+          </span>
+          <div className={styles.pageTitleRow}>
+            <h2 className={styles.pageTitle} id="tournament-standings-title">
+              {t("common.standings")}
+            </h2>
+            <span className={styles.pageCount}>{standings.length}</span>
+          </div>
+          <p className={styles.pageContext}>
+            {t("tournamentDetail.publicPages.standings.context")}
+          </p>
+        </div>
+        {presentation.showUpdating ? (
+          <span className={styles.updating} role="status" aria-live="polite">
+            {t("tournamentDetail.pageState.updating")}
+          </span>
+        ) : null}
+      </header>
+
+      {showTabs ? (
+        <div
+          className={styles.stageNavigation}
+          role="group"
+          aria-label={t("tournamentDetail.publicPages.standings.stageViewLabel")}
+        >
           <div className="stage-tabs">
             <button
               type="button"
               className={cn("stage-tab", view === "playoff" && "active")}
+              aria-pressed={view === "playoff"}
               onClick={() => setView("playoff")}
             >
-              <LayoutGrid className="h-3 w-3" />
+              <LayoutGrid className="h-3 w-3" aria-hidden="true" />
               {t("common.playoff")} <span className="count">{playoffStandings.length}</span>
             </button>
             <button
               type="button"
               className={cn("stage-tab", view === "groups" && "active")}
+              aria-pressed={view === "groups"}
               onClick={() => setView("groups")}
             >
-              <Circle className="h-3 w-3" />
+              <Circle className="h-3 w-3" aria-hidden="true" />
               {t("common.groupStage")} <span className="count">{groupTeams}</span>
             </button>
             <button
               type="button"
               className={cn("stage-tab", view === "combined" && "active")}
+              aria-pressed={view === "combined"}
               onClick={() => setView("combined")}
             >
-              <BarChart3 className="h-3 w-3" />
+              <BarChart3 className="h-3 w-3" aria-hidden="true" />
               {t("common.combined")}
             </button>
           </div>
         </div>
-      )}
+      ) : null}
 
-      {showPlayoff && (
-        <section className="standings-card">
-          <header className="head">
-            <div className="title">
-              <span className="gid playoff">P</span>
-              <div className="stack">
-                <span className="nm">{t("common.playoffStandings")}</span>
-                <span className="sub">{t("common.teamsCount", { count: playoffStandings.length })}</span>
-              </div>
-            </div>
-            <div className="right-info">
-              <div className="stat">
-                <span className="k">{t("common.teams")}</span>
-                <span className="v">{playoffStandings.length}</span>
-              </div>
-            </div>
-          </header>
-          <StandingsTable standings={playoffStandings} is_groups={false} crownTop={isEnded} />
-        </section>
-      )}
-
-      {showGroups && (
-        <div className="groups-layout">
-          {groups.map(([scopeId, bucket]) => (
-            <section className="standings-card" key={scopeId}>
+      {presentation.contentState === "empty" ? (
+        <TournamentPageState
+          state="empty"
+          title={t("tournamentDetail.publicPages.standings.emptyTitle")}
+          description={t("tournamentDetail.publicPages.standings.emptyDescription")}
+        />
+      ) : showStageEmpty ? (
+        <div className={styles.stageEmpty}>
+          <TournamentPageState
+            state="empty"
+            title={t("tournamentDetail.publicPages.standings.stageEmptyTitle")}
+            description={t("tournamentDetail.publicPages.standings.stageEmptyDescription")}
+          />
+        </div>
+      ) : (
+        <div className={styles.standingsSections}>
+          {showPlayoff ? (
+            <section className="standings-card" aria-labelledby="playoff-standings-title">
               <header className="head">
                 <div className="title">
-                  <span className="gid">{groupLetter(bucket.name)}</span>
+                  <span className="gid playoff" aria-hidden="true">
+                    P
+                  </span>
                   <div className="stack">
-                    <span className="nm">{bucket.name}</span>
+                    <h3 className="nm" id="playoff-standings-title">
+                      {t("common.playoffStandings")}
+                    </h3>
                     <span className="sub">
-                      {t("common.teamsCount", { count: bucket.standings.length })} · {
-                        bucket.standings[0]?.stage?.stage_type === "swiss"
-                          ? t("common.swiss")
-                          : t("common.roundRobin")
-                      }
+                      {t("common.teamsCount", { count: playoffStandings.length })}
                     </span>
                   </div>
                 </div>
+                <div className="right-info" aria-hidden="true">
+                  <div className="stat">
+                    <span className="k">{t("common.teams")}</span>
+                    <span className="v">{playoffStandings.length}</span>
+                  </div>
+                </div>
               </header>
-              <StandingsTable standings={bucket.standings} is_groups />
+              <StandingsTable standings={playoffStandings} is_groups={false} crownTop={isEnded} />
             </section>
-          ))}
+          ) : null}
+
+          {showGroups ? (
+            <div className="groups-layout">
+              {groups.map(([scopeId, bucket]) => {
+                const headingId = `standings-stage-${scopeId}`;
+                return (
+                  <section className="standings-card" key={scopeId} aria-labelledby={headingId}>
+                    <header className="head">
+                      <div className="title">
+                        <span className="gid" aria-hidden="true">
+                          {groupLetter(bucket.name)}
+                        </span>
+                        <div className="stack">
+                          <h3 className="nm" id={headingId}>
+                            {bucket.name}
+                          </h3>
+                          <span className="sub">
+                            {t("common.teamsCount", { count: bucket.standings.length })} ·{" "}
+                            {bucket.standings[0]?.stage?.stage_type === "swiss"
+                              ? t("common.swiss")
+                              : t("common.roundRobin")}
+                          </span>
+                        </div>
+                      </div>
+                    </header>
+                    <StandingsTable standings={bucket.standings} is_groups />
+                  </section>
+                );
+              })}
+            </div>
+          ) : null}
         </div>
       )}
-    </div>
+    </section>
   );
-};
 
+  if (presentation.showRefreshError) {
+    return (
+      <TournamentPageState
+        state="refresh-error"
+        onRetry={() => void standingsQuery.refetch()}
+        isUpdating={standingsQuery.isFetching}
+      >
+        {content}
+      </TournamentPageState>
+    );
+  }
+
+  return content;
+};
 
 export default TournamentStandingsPage;
