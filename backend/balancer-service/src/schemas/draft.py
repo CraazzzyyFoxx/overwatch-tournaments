@@ -26,14 +26,23 @@ from src.schemas.base import BaseRead
 
 __all__ = (
     "DraftBoardSnapshot",
+    "DraftFeasibilityResponse",
     "DraftOrderEntry",
     "DraftOrderRequest",
     "DraftPickAutopickRequest",
     "DraftPickOverrideRequest",
+    "DraftPickOptionRead",
+    "DraftPickOptionsResponse",
     "DraftPickRead",
     "DraftPickSelectRequest",
     "DraftPlayerRead",
+    "DraftRoleDeficitRead",
+    "DraftRoleEditRequest",
+    "DraftRoleEditResponse",
+    "DraftSlotRead",
     "DraftSeedRequest",
+    "DraftSeedDiff",
+    "DraftSeedResponse",
     "DraftSessionCreateRequest",
     "DraftSessionPatchRequest",
     "DraftSessionRead",
@@ -80,6 +89,12 @@ class DraftSessionCreateRequest(BaseModel):
             raise ValueError("team_size must be between 1 and 12")
         return v
 
+    @model_validator(mode="after")
+    def _rounds_match_roster_size(self) -> DraftSessionCreateRequest:
+        if self.rounds != self.team_size - 1:
+            raise ValueError("rounds must equal team_size - 1 because the captain already fills one roster slot")
+        return self
+
 
 class DraftManualCaptainInput(BaseModel):
     user_id: int | None = None
@@ -118,6 +133,8 @@ class DraftSeedRequest(BaseModel):
     # Manual seeding fallback.
     captains: list[DraftManualCaptainInput] = Field(default_factory=list)
     players: list[DraftManualPlayerInput] = Field(default_factory=list)
+    preview_only: bool = False
+    expected_version: int | None = None
 
 
 class DraftSessionPatchRequest(BaseModel):
@@ -173,6 +190,24 @@ class DraftPickOverrideRequest(BaseModel):
     note: str | None = None
 
 
+class DraftRoleEditRequest(BaseModel):
+    role: DraftRole
+    rank_value: int | None = None
+    rank_absence_confirmed: bool = False
+    reason: str
+    expected_version: int
+    preview_only: bool = False
+
+    @model_validator(mode="after")
+    def _validate_reason_and_rank(self) -> DraftRoleEditRequest:
+        self.reason = self.reason.strip()
+        if not self.reason:
+            raise ValueError("reason must not be empty")
+        if self.rank_value is None and not self.rank_absence_confirmed:
+            raise ValueError("rank_absence_confirmed is required when rank_value is absent")
+        return self
+
+
 # --------------------------------------------------------------------------- #
 # Reads
 # --------------------------------------------------------------------------- #
@@ -205,6 +240,7 @@ class DraftPlayerRead(BaseRead):
     role_ranks: dict[str, int] = Field(default_factory=dict)
     role_top_heroes: dict[str, list[dict[str, Any]]] = Field(default_factory=dict)
     additional_info: dict[str, Any] = Field(default_factory=dict)
+    version: int
 
 
 class DraftPickRead(BaseRead):
@@ -233,6 +269,7 @@ class DraftSessionRead(BaseRead):
     tournament_id: int
     workspace_id: int
     status: DraftStatus
+    blocked_reason: str | None
     format: DraftFormat
     rounds: int
     pick_time_seconds: int
@@ -245,6 +282,7 @@ class DraftSessionRead(BaseRead):
     exported_at: datetime | None
     export_status: str | None
     settings_json: dict[str, Any]
+    version: int
 
 
 class DraftBoardSnapshot(BaseModel):
@@ -270,3 +308,77 @@ class DraftSuggestionsResponse(BaseModel):
     pick_id: int
     draft_team_id: int
     suggestions: list[DraftSuggestion]
+
+
+class DraftSlotRead(BaseModel):
+    model_config = _ReadConfig
+
+    team_id: int
+    role: DraftRole
+    ordinal: int
+
+
+class DraftRoleDeficitRead(BaseModel):
+    model_config = _ReadConfig
+
+    role: DraftRole
+    unmatched_slots: int
+    eligible_players: int
+
+
+class DraftFeasibilityResponse(BaseModel):
+    model_config = _ReadConfig
+
+    is_feasible: bool
+    total_open_slots: int
+    matched_slots: int
+    unmatched_slots: list[DraftSlotRead]
+    role_deficits: list[DraftRoleDeficitRead]
+    blocking_player_ids: list[int]
+    reason_code: str | None = None
+
+
+class DraftPickOptionRead(BaseModel):
+    model_config = _ReadConfig
+
+    player_id: int
+    role: DraftRole
+    is_safe: bool
+    reason_code: str | None = None
+    unmatched_slots: list[DraftSlotRead] = Field(default_factory=list)
+    blocking_player_ids: list[int] = Field(default_factory=list)
+    suggestion_score: float | None = None
+
+
+class DraftPickOptionsResponse(BaseModel):
+    pick_id: int
+    pick_version: int
+    draft_team_id: int
+    options: list[DraftPickOptionRead]
+
+
+class DraftRoleEditResponse(BaseModel):
+    player_id: int
+    role: DraftRole
+    player_version: int
+    committed: bool
+    before: DraftFeasibilityResponse
+    after: DraftFeasibilityResponse
+
+
+class DraftSeedDiff(BaseModel):
+    teams_before: int
+    teams_after: int
+    players_before: int
+    players_after: int
+    picks_before: int
+    picks_after: int
+    session_version_before: int
+    session_version_after: int
+
+
+class DraftSeedResponse(BaseModel):
+    session: DraftSessionRead
+    preview_only: bool
+    diff: DraftSeedDiff
+    feasibility: DraftFeasibilityResponse

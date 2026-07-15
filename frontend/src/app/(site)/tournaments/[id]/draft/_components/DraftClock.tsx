@@ -46,7 +46,7 @@ export function DraftClock({ expiresAt, paused, compact = false }: DraftClockPro
   }
   const seconds = Math.ceil(ms / 1000);
   const className = isUrgent(ms)
-    ? "font-mono tabular-nums text-rose-500 animate-pulse"
+    ? "font-mono tabular-nums text-rose-500 animate-pulse motion-reduce:animate-none"
     : "font-mono tabular-nums text-[var(--aqt-teal)]";
   return <span className={className}>{seconds}s</span>;
 }

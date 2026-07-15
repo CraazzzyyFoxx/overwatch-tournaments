@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -9,12 +9,23 @@ import { tournamentQueryKeys } from "@/lib/tournament-query-keys";
 import draftService from "@/services/draft.service";
 import { realtimeClient } from "@/services/realtime.service";
 import { useRealtimeStore } from "@/stores/realtime.store";
-import type { DraftBoard, DraftEventData, DraftRole } from "@/types/draft.types";
-import type { RealtimeEventEnvelope } from "@/types/realtime.types";
+import type {
+  DraftBoard,
+  DraftEventData,
+  DraftPresenceState,
+  DraftRole,
+  DraftRoleEditRequest
+} from "@/types/draft.types";
+import type { RealtimeConnectionState, RealtimeEventEnvelope } from "@/types/realtime.types";
 
-import { applyDraftEvent } from "../_lib/draft-logic";
+import {
+  applyDraftEvent,
+  draftInvalidationTargets,
+  presenceFromEvent
+} from "../_lib/draft-logic";
 
 const MAX_PENDING_DRAFT_EVENTS = 100;
+const EMPTY_DRAFT_PRESENCE: DraftPresenceState = { users: {}, anonymous_viewer_count: 0 };
 
 function applyDraftEvents(
   board: DraftBoard,
@@ -47,7 +58,26 @@ export function useDraftBoardQuery(tournamentId: number) {
   });
 }
 
-export function useDraftRealtime(tournamentId: number, board: DraftBoard | null): void {
+export function useDraftFeasibilityQuery(sessionId: number | null, enabled = true) {
+  return useQuery({
+    queryKey: tournamentQueryKeys.draftFeasibility(sessionId ?? 0),
+    queryFn: () => draftService.getFeasibility(sessionId!),
+    enabled: enabled && sessionId != null && sessionId > 0
+  });
+}
+
+export function useDraftPickOptionsQuery(pickId: number | null, enabled = true) {
+  return useQuery({
+    queryKey: tournamentQueryKeys.draftPickOptions(pickId ?? 0),
+    queryFn: () => draftService.getPickOptions(pickId!),
+    enabled: enabled && pickId != null && pickId > 0
+  });
+}
+
+export function useDraftRealtime(
+  tournamentId: number,
+  board: DraftBoard | null
+): { presence: DraftPresenceState; connectionState: RealtimeConnectionState } {
   const queryClient = useQueryClient();
   const topic = tournamentId ? `tournament:${tournamentId}:draft` : null;
   const queryKey = useMemo(
@@ -56,6 +86,11 @@ export function useDraftRealtime(tournamentId: number, board: DraftBoard | null)
   );
   const pendingEventsRef = useRef<RealtimeEventEnvelope<DraftEventData>[]>([]);
   const resubscribedBaselineTopicRef = useRef<string | null>(null);
+  const [presenceState, setPresenceState] = useState<{
+    topic: string | null;
+    value: DraftPresenceState;
+  }>({ topic, value: EMPTY_DRAFT_PRESENCE });
+  const presence = presenceState.topic === topic ? presenceState.value : EMPTY_DRAFT_PRESENCE;
 
   useEffect(() => {
     pendingEventsRef.current = [];
@@ -65,13 +100,31 @@ export function useDraftRealtime(tournamentId: number, board: DraftBoard | null)
   useRealtimeTopic<DraftEventData>(
     topic,
     (event) => {
-      if (event.event_type === "draft.presence") return;
-      if (event.event_type === "draft.rollback" || event.event_type === "draft.session_updated") {
-        queryClient.invalidateQueries({ queryKey });
+      if (event.event_type === "draft.presence") {
+        setPresenceState({ topic, value: presenceFromEvent(event.data, event.occurred_at) });
         return;
       }
 
       const cachedBoard = queryClient.getQueryData<DraftBoard | null | undefined>(queryKey);
+      const targets = draftInvalidationTargets(event.event_type);
+      if (targets.includes("feasibility")) {
+        queryClient.invalidateQueries({
+          queryKey: tournamentQueryKeys.draftFeasibility(event.data.session_id)
+        });
+      }
+      if (targets.includes("options")) {
+        const affectedPickId = event.data.pick_id ?? cachedBoard?.current_pick?.id;
+        if (affectedPickId != null) {
+          queryClient.invalidateQueries({
+            queryKey: tournamentQueryKeys.draftPickOptions(affectedPickId)
+          });
+        }
+      }
+      if (targets.includes("board")) {
+        queryClient.invalidateQueries({ queryKey });
+        return;
+      }
+
       if (!cachedBoard) {
         const pending = pendingEventsRef.current;
         if (!pending.some((pendingEvent) => pendingEvent.event_id === event.event_id)) {
@@ -88,7 +141,7 @@ export function useDraftRealtime(tournamentId: number, board: DraftBoard | null)
         (currentBoard) => (currentBoard ? applyDraftEvents(currentBoard, [event]) : currentBoard)
       );
     },
-    [queryClient, queryKey]
+    [queryClient, queryKey, topic]
   );
 
   useEffect(() => {
@@ -126,6 +179,8 @@ export function useDraftRealtime(tournamentId: number, board: DraftBoard | null)
     }
     prev.current = connectionState;
   }, [connectionState, queryClient, tournamentId]);
+
+  return { presence, connectionState };
 }
 
 export type DraftLifecycleAction = "start" | "pause" | "resume" | "cancel" | "export" | "rollback";
@@ -154,8 +209,19 @@ export function useDraftMutations(tournamentId: number) {
   });
 
   const override = useMutation({
-    mutationFn: (v: { pickId: number; playerId: number; version: number }) =>
-      draftService.override(v.pickId, { player_id: v.playerId, expected_version: v.version }),
+    mutationFn: (v: {
+      pickId: number;
+      playerId: number;
+      version: number;
+      role: DraftRole;
+      note: string;
+    }) =>
+      draftService.override(v.pickId, {
+        player_id: v.playerId,
+        expected_version: v.version,
+        target_role: v.role,
+        note: v.note
+      }),
     onSettled: invalidate,
   });
 
@@ -165,5 +231,18 @@ export function useDraftMutations(tournamentId: number) {
     onSettled: invalidate,
   });
 
-  return { makePick, autopick, override, lifecycle };
+  const editPlayerRole = useMutation({
+    mutationFn: (v: { sessionId: number; playerId: number; request: DraftRoleEditRequest }) =>
+      draftService.editPlayerRole(v.sessionId, v.playerId, v.request),
+    onSuccess: (_result, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: tournamentQueryKeys.draftFeasibility(variables.sessionId)
+      });
+      queryClient.invalidateQueries({
+        queryKey: tournamentQueryKeys.draftBoard(tournamentId)
+      });
+    }
+  });
+
+  return { makePick, autopick, override, lifecycle, editPlayerRole };
 }

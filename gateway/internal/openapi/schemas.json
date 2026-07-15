@@ -1533,14 +1533,6 @@
     },
     "rpc.app.users.battletag_add": {
       "description": "Adds a BattleTag identity to a player; requires the global user.update permission.",
-      "request": {
-        "array": false,
-        "ref": "app.BattleTagIdentityCreate"
-      },
-      "response": {
-        "array": false,
-        "ref": "app.UserBattleTagRead"
-      },
       "summary": "Add BattleTag identity"
     },
     "rpc.app.users.battletag_delete": {
@@ -1549,14 +1541,6 @@
     },
     "rpc.app.users.battletag_update": {
       "description": "Updates a player's BattleTag identity by identity id; requires the global user.update permission.",
-      "request": {
-        "array": false,
-        "ref": "app.BattleTagIdentityUpdate"
-      },
-      "response": {
-        "array": false,
-        "ref": "app.UserBattleTagRead"
-      },
       "summary": "Update BattleTag identity"
     },
     "rpc.app.users.by_name": {
@@ -1861,14 +1845,6 @@
     },
     "rpc.app.users.discord_add": {
       "description": "Adds a Discord identity to a player; requires the global user.update permission.",
-      "request": {
-        "array": false,
-        "ref": "app.DiscordIdentityCreate"
-      },
-      "response": {
-        "array": false,
-        "ref": "app.UserDiscordRead"
-      },
       "summary": "Add Discord identity"
     },
     "rpc.app.users.discord_delete": {
@@ -1877,14 +1853,6 @@
     },
     "rpc.app.users.discord_update": {
       "description": "Updates a player's Discord identity by identity id; requires the global user.update permission.",
-      "request": {
-        "array": false,
-        "ref": "app.DiscordIdentityUpdate"
-      },
-      "response": {
-        "array": false,
-        "ref": "app.UserDiscordRead"
-      },
       "summary": "Update Discord identity"
     },
     "rpc.app.users.encounters": {
@@ -2758,6 +2726,48 @@
       },
       "summary": "Search users"
     },
+    "rpc.app.users.social_add": {
+      "request": {
+        "array": false,
+        "ref": "app.SocialAccountCreate"
+      },
+      "response": {
+        "array": false,
+        "ref": "app.UserRead"
+      }
+    },
+    "rpc.app.users.social_delete": {
+      "response": {
+        "array": false,
+        "ref": "app.UserRead"
+      }
+    },
+    "rpc.app.users.social_set_primary": {
+      "response": {
+        "array": false,
+        "ref": "app.UserRead"
+      }
+    },
+    "rpc.app.users.social_set_visibility": {
+      "request": {
+        "array": false,
+        "ref": "app.SocialVisibilityUpdate"
+      },
+      "response": {
+        "array": false,
+        "ref": "app.UserRead"
+      }
+    },
+    "rpc.app.users.social_update": {
+      "request": {
+        "array": false,
+        "ref": "app.SocialAccountUpdate"
+      },
+      "response": {
+        "array": false,
+        "ref": "app.UserRead"
+      }
+    },
     "rpc.app.users.teammates": {
       "description": "Returns a player's paginated, sortable best teammates by winrate and shared tournaments, optionally workspace-scoped (public).",
       "query_params": [
@@ -2840,6 +2850,23 @@
       },
       "summary": "User tournament stats"
     },
+    "rpc.app.users.tournament_leaderboard": {
+      "description": "Returns every player in a tournament ranked by a single stat \u2014 the full ranked list behind a user's per-stat rank/total on the tournament-stats page. Inverse stats like Deaths rank ascending. The `stat` must be one of the ranked tournament stats (public).",
+      "query_params": [
+        {
+          "name": "stat",
+          "required": false,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "response": {
+        "array": false,
+        "ref": "app.LobbyLeaderboard"
+      },
+      "summary": "Tournament stat leaderboard"
+    },
     "rpc.app.users.tournaments": {
       "description": "Returns the tournaments a player participated in, scoped to the workspace context and grid (public).",
       "response": {
@@ -2850,14 +2877,6 @@
     },
     "rpc.app.users.twitch_add": {
       "description": "Adds a Twitch identity to a player; requires the global user.update permission.",
-      "request": {
-        "array": false,
-        "ref": "app.TwitchIdentityCreate"
-      },
-      "response": {
-        "array": false,
-        "ref": "app.UserTwitchRead"
-      },
       "summary": "Add Twitch identity"
     },
     "rpc.app.users.twitch_delete": {
@@ -2866,15 +2885,15 @@
     },
     "rpc.app.users.twitch_update": {
       "description": "Updates a player's Twitch identity by identity id; requires the global user.update permission.",
-      "request": {
-        "array": false,
-        "ref": "app.TwitchIdentityUpdate"
-      },
+      "summary": "Update Twitch identity"
+    },
+    "rpc.app.workspaces.clear_custom_domain": {
+      "description": "Removes the custom domain, its verification token, and verified_at; requires workspace.update, 404 if workspace missing.",
       "response": {
         "array": false,
-        "ref": "app.UserTwitchRead"
+        "ref": "app.WorkspaceRead"
       },
-      "summary": "Update Twitch identity"
+      "summary": "Clear workspace custom domain"
     },
     "rpc.app.workspaces.create": {
       "description": "Creates a workspace (superuser only), provisions system roles, adds the creator as owner, and busts the RBAC cache; 400 on duplicate slug.",
@@ -2948,13 +2967,85 @@
       },
       "summary": "Update workspace member"
     },
-    "rpc.app.workspaces.members_list": {
-      "description": "Returns a workspace's members enriched with auth-user info and RBAC roles; requires workspace_member.read, 404 if workspace missing.",
+    "rpc.app.workspaces.members_autofill_roles": {
+      "description": "Grants the baseline 'member' role to every auth-linked member of the workspace that currently has no role; idempotent. Requires workspace_member.update, returns the count assigned.",
       "response": {
-        "array": true,
-        "ref": "app.WorkspaceMemberRead"
+        "array": false,
+        "ref": "app.WorkspaceMemberAutofillResult"
+      },
+      "summary": "Autofill member roles"
+    },
+    "rpc.app.workspaces.members_list": {
+      "description": "Paginated, searchable (username/email) list of a workspace's auth-linked members enriched with auth-user info and RBAC roles; requires workspace_member.read, 404 if workspace missing.",
+      "query_params": [
+        {
+          "name": "page",
+          "required": false,
+          "schema": {
+            "type": "integer"
+          }
+        },
+        {
+          "name": "per_page",
+          "required": false,
+          "schema": {
+            "type": "integer"
+          }
+        },
+        {
+          "name": "search",
+          "required": false,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "role_id",
+          "required": false,
+          "schema": {
+            "type": "integer"
+          }
+        },
+        {
+          "name": "sort",
+          "required": false,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "order",
+          "required": false,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "response": {
+        "array": false,
+        "ref": "app.Paginated_WorkspaceMemberRead_"
       },
       "summary": "List workspace members"
+    },
+    "rpc.app.workspaces.set_custom_domain": {
+      "description": "Normalizes and stores a custom domain plus a fresh DNS TXT verification token, resetting verification; requires workspace.update, 404 if workspace missing, 400 on an invalid domain.",
+      "request": {
+        "array": false,
+        "ref": "app.WorkspaceCustomDomainSet"
+      },
+      "response": {
+        "array": false,
+        "ref": "app.WorkspaceRead"
+      },
+      "summary": "Set workspace custom domain"
+    },
+    "rpc.app.workspaces.verify_custom_domain": {
+      "description": "Checks the `_owt-verify.<domain>` DNS TXT record against the stored token and stamps verified_at on a match; requires workspace.update, 404 if workspace missing, 400 if no domain is set or the record doesn't match yet.",
+      "response": {
+        "array": false,
+        "ref": "app.WorkspaceRead"
+      },
+      "summary": "Verify workspace custom domain"
     },
     "rpc.balancer.admin.balance_export": {
       "description": "Materializes a saved balance into tournament teams, returning removed/imported counts and emitting a teams-changed realtime event.",
@@ -3044,6 +3135,14 @@
       },
       "summary": "Export draft to teams"
     },
+    "rpc.balancer.draft.feasibility": {
+      "description": "Reports whether every remaining team-role slot can be filled. Requires workspace team-import permission.",
+      "response": {
+        "array": false,
+        "ref": "balancer.DraftFeasibilityResponse"
+      },
+      "summary": "Get draft feasibility"
+    },
     "rpc.balancer.draft.pause": {
       "description": "Pauses an in-progress draft (requires team-import) and publishes a draft-paused realtime event.",
       "response": {
@@ -3063,6 +3162,14 @@
         "ref": "balancer.DraftSessionRead"
       },
       "summary": "Autopick draft pick"
+    },
+    "rpc.balancer.draft.pick_options": {
+      "description": "Returns safe and blocked player-role choices for the current pick. Available only to the on-clock captain or a workspace admin.",
+      "response": {
+        "array": false,
+        "ref": "balancer.DraftPickOptionsResponse"
+      },
+      "summary": "Get safe draft pick options"
     },
     "rpc.balancer.draft.pick_override": {
       "description": "Admin-overrides a pick to an arbitrary player (requires team-import), bypassing captain/clock constraints, and broadcasts a pick-made event.",
@@ -3088,6 +3195,18 @@
       },
       "summary": "Select draft pick"
     },
+    "rpc.balancer.draft.player_role_edit": {
+      "description": "Previews or commits an emergency role addition to the draft snapshot with optimistic versioning and private audit reason. Requires workspace team-import permission.",
+      "request": {
+        "array": false,
+        "ref": "balancer.DraftRoleEditRequest"
+      },
+      "response": {
+        "array": false,
+        "ref": "balancer.DraftRoleEditResponse"
+      },
+      "summary": "Preview or add a draft player role"
+    },
     "rpc.balancer.draft.resume": {
       "description": "Resumes a paused draft (requires team-import) and publishes a draft-resumed realtime event.",
       "response": {
@@ -3112,7 +3231,7 @@
       },
       "response": {
         "array": false,
-        "ref": "balancer.DraftSessionRead"
+        "ref": "balancer.DraftSeedResponse"
       },
       "summary": "Seed draft session"
     },
@@ -3227,6 +3346,10 @@
     "rpc.identity.invalidate_session": {
       "description": "Service-token-authenticated call that revokes all sessions for the given user_id; returns 204 No Content.",
       "summary": "Invalidate user session"
+    },
+    "rpc.identity.link_complete": {
+      "description": "Redeems a pending-link ticket minted by rpc.identity.oauth_link and attaches the provider identity it carries to the bearer-authenticated caller; 400 if the ticket is invalid, expired, or already used.",
+      "summary": "Complete custom-domain OAuth link"
     },
     "rpc.identity.list_api_keys": {
       "description": "Returns the active user's API keys for the given workspace_id (422 if workspace_id is missing).",
@@ -3395,7 +3518,7 @@
       "summary": "List OAuth connections"
     },
     "rpc.identity.oauth_link": {
-      "description": "Links an OAuth provider connection to the active user via the provider code+state exchange.",
+      "description": "Exchanges the provider code+state and links the connection to the active user (platform apex/subdomain), or -- for a workspace custom domain, which has no live session here -- mints a single-use provider-identity ticket (mode='link_ticket') for rpc.identity.link_complete to redeem instead.",
       "summary": "Link OAuth provider"
     },
     "rpc.identity.oauth_providers": {
@@ -3775,6 +3898,22 @@
             ],
             "default": null,
             "title": "Provider"
+          }
+        },
+        {
+          "name": "auth_user_id",
+          "required": false,
+          "schema": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Auth User Id"
           }
         }
       ],
@@ -4607,6 +4746,26 @@
       },
       "summary": "Rank fetch log"
     },
+    "rpc.parser.rank.reenable_disabled": {
+      "description": "Requeues battle tags that were auto-disabled by a transient OverFast outage (status disabled -> pending, failure counter reset), spreading them across the collection interval; optionally limited to tags that previously succeeded. Returns the re-enabled count; requires the global admin role.",
+      "request": {
+        "array": false,
+        "ref": "parser.ReenableDisabledRequest"
+      },
+      "response": {
+        "array": false,
+        "ref": "parser.ReenableDisabledResponse"
+      },
+      "summary": "Re-enable disabled rank collection"
+    },
+    "rpc.parser.rank.stats": {
+      "description": "Aggregated OverFast rank-collection health: battle-tag state counts by status and priority tier, snapshot coverage over 24h/7d, last successful capture, last-24h fetch-outcome mix with error rate, and the active config; requires the global admin role.",
+      "response": {
+        "array": false,
+        "ref": "parser.RankCollectionStats"
+      },
+      "summary": "Rank collection health stats"
+    },
     "rpc.parser.rank.user_collection": {
       "description": "Returns the OverFast rank-collection status for each of a user's battle tags; requires the global admin role.",
       "response": {
@@ -4657,7 +4816,7 @@
           }
         },
         {
-          "name": "battle_tag_id",
+          "name": "social_account_id",
           "required": false,
           "schema": {
             "type": "integer"
@@ -8998,34 +9157,6 @@
       "title": "AchievementTournamentLink",
       "type": "object"
     },
-    "app.BattleTagIdentityCreate": {
-      "description": "Schema for creating a BattleTag identity",
-      "properties": {
-        "battle_tag": {
-          "title": "Battle Tag",
-          "type": "string"
-        }
-      },
-      "required": [
-        "battle_tag"
-      ],
-      "title": "BattleTagIdentityCreate",
-      "type": "object"
-    },
-    "app.BattleTagIdentityUpdate": {
-      "description": "Schema for updating a BattleTag identity",
-      "properties": {
-        "battle_tag": {
-          "title": "Battle Tag",
-          "type": "string"
-        }
-      },
-      "required": [
-        "battle_tag"
-      ],
-      "title": "BattleTagIdentityUpdate",
-      "type": "object"
-    },
     "app.DashboardActiveTournamentStats": {
       "properties": {
         "encounters_missing_logs": {
@@ -9143,34 +9274,6 @@
         "issues"
       ],
       "title": "DashboardStats",
-      "type": "object"
-    },
-    "app.DiscordIdentityCreate": {
-      "description": "Schema for creating a Discord identity",
-      "properties": {
-        "name": {
-          "title": "Name",
-          "type": "string"
-        }
-      },
-      "required": [
-        "name"
-      ],
-      "title": "DiscordIdentityCreate",
-      "type": "object"
-    },
-    "app.DiscordIdentityUpdate": {
-      "description": "Schema for updating a Discord identity",
-      "properties": {
-        "name": {
-          "title": "Name",
-          "type": "string"
-        }
-      },
-      "required": [
-        "name"
-      ],
-      "title": "DiscordIdentityUpdate",
       "type": "object"
     },
     "app.DivisionGridTierRead": {
@@ -9701,6 +9804,30 @@
             }
           ]
         },
+        "team": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Team"
+        },
+        "team_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Team Id"
+        },
         "user_id": {
           "title": "User Id",
           "type": "integer"
@@ -10071,6 +10198,61 @@
       "title": "HeroWithUserStats",
       "type": "object"
     },
+    "app.LobbyLeaderboard": {
+      "description": "Full ranked list of every player in a tournament for one stat.\n\nExposes the whole ranked population behind a single user's\n``UserTournamentWithStats.stats[stat].{rank,total}`` so the frontend can\nrender a per-stat \"lobby leaderboard\" modal.",
+      "properties": {
+        "entries": {
+          "items": {
+            "$ref": "#/components/schemas/app.LobbyLeaderboardEntry"
+          },
+          "title": "Entries",
+          "type": "array"
+        },
+        "stat": {
+          "$ref": "#/components/schemas/app.LogStatsName"
+        },
+        "total_players": {
+          "title": "Total Players",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "stat",
+        "total_players",
+        "entries"
+      ],
+      "title": "LobbyLeaderboard",
+      "type": "object"
+    },
+    "app.LobbyLeaderboardEntry": {
+      "description": "One player's ranked value for a single stat inside a tournament lobby.",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "player_id": {
+          "title": "Player Id",
+          "type": "integer"
+        },
+        "rank": {
+          "title": "Rank",
+          "type": "integer"
+        },
+        "value": {
+          "title": "Value",
+          "type": "number"
+        }
+      },
+      "required": [
+        "rank",
+        "player_id",
+        "name",
+        "value"
+      ],
+      "title": "LobbyLeaderboardEntry",
+      "type": "object"
+    },
     "app.LogStatsName": {
       "enum": [
         "eliminations",
@@ -10106,6 +10288,10 @@
         "scoped_shots_hit",
         "weapon_accuracy",
         "hero_time_played",
+        "first_picks",
+        "first_deaths",
+        "ultimate_kills",
+        "support_kills",
         "performance",
         "performance_points",
         "kd",
@@ -10113,7 +10299,10 @@
         "damage_delta",
         "fbe",
         "damage_fb",
-        "assists"
+        "assists",
+        "impact_points",
+        "impact_rank",
+        "overperformance_score"
       ],
       "title": "LogStatsName",
       "type": "string"
@@ -10279,6 +10468,30 @@
           "title": "Id",
           "type": "integer"
         },
+        "impact_points": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Impact Points"
+        },
+        "impact_rank": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Impact Rank"
+        },
         "log_name": {
           "title": "Log Name",
           "type": "string"
@@ -10297,6 +10510,23 @@
         "map_id": {
           "title": "Map Id",
           "type": "integer"
+        },
+        "overperformance_badge": {
+          "default": false,
+          "title": "Overperformance Badge",
+          "type": "boolean"
+        },
+        "overperformance_score": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Overperformance Score"
         },
         "performance": {
           "anyOf": [
@@ -10732,6 +10962,37 @@
       "title": "Paginated[UserOverviewRow]",
       "type": "object"
     },
+    "app.Paginated_WorkspaceMemberRead_": {
+      "properties": {
+        "page": {
+          "title": "Page",
+          "type": "integer"
+        },
+        "per_page": {
+          "title": "Per Page",
+          "type": "integer"
+        },
+        "results": {
+          "items": {
+            "$ref": "#/components/schemas/app.WorkspaceMemberRead"
+          },
+          "title": "Results",
+          "type": "array"
+        },
+        "total": {
+          "title": "Total",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "page",
+        "per_page",
+        "total",
+        "results"
+      ],
+      "title": "Paginated[WorkspaceMemberRead]",
+      "type": "object"
+    },
     "app.PaginationQueryParams": {
       "properties": {
         "entities": {
@@ -11115,6 +11376,155 @@
       "title": "Score",
       "type": "object"
     },
+    "app.SocialAccountCreate": {
+      "description": "Add a social identity to a user. ``username`` is the full handle\n(battletag ``Name#1234``, discord name, twitch login, etc.).",
+      "properties": {
+        "provider": {
+          "title": "Provider",
+          "type": "string"
+        },
+        "url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Url"
+        },
+        "username": {
+          "title": "Username",
+          "type": "string"
+        }
+      },
+      "required": [
+        "provider",
+        "username"
+      ],
+      "title": "SocialAccountCreate",
+      "type": "object"
+    },
+    "app.SocialAccountRead": {
+      "description": "Unified player social identity (battlenet/discord/twitch/boosty/vk/youtube/\u2026).",
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "integer"
+        },
+        "is_primary": {
+          "default": false,
+          "title": "Is Primary",
+          "type": "boolean"
+        },
+        "is_verified": {
+          "default": false,
+          "title": "Is Verified",
+          "type": "boolean"
+        },
+        "provider": {
+          "title": "Provider",
+          "type": "string"
+        },
+        "url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Url"
+        },
+        "user_id": {
+          "title": "User Id",
+          "type": "integer"
+        },
+        "username": {
+          "title": "Username",
+          "type": "string"
+        },
+        "visible_global": {
+          "default": true,
+          "title": "Visible Global",
+          "type": "boolean"
+        },
+        "visible_workspace_ids": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "Visible Workspace Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "user_id",
+        "provider",
+        "username"
+      ],
+      "title": "SocialAccountRead",
+      "type": "object"
+    },
+    "app.SocialAccountUpdate": {
+      "description": "Update a social identity's display handle and/or url.",
+      "properties": {
+        "url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Url"
+        },
+        "username": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Username"
+        }
+      },
+      "title": "SocialAccountUpdate",
+      "type": "object"
+    },
+    "app.SocialVisibilityUpdate": {
+      "description": "Toggle visibility of an account in a scope (``workspace_id`` None = global).",
+      "properties": {
+        "visible": {
+          "default": true,
+          "title": "Visible",
+          "type": "boolean"
+        },
+        "workspace_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Workspace Id"
+        }
+      },
+      "title": "SocialVisibilityUpdate",
+      "type": "object"
+    },
     "app.SortOrder": {
       "enum": [
         "asc",
@@ -11135,34 +11545,6 @@
       ],
       "title": "TournamentStatus",
       "type": "string"
-    },
-    "app.TwitchIdentityCreate": {
-      "description": "Schema for creating a Twitch identity",
-      "properties": {
-        "name": {
-          "title": "Name",
-          "type": "string"
-        }
-      },
-      "required": [
-        "name"
-      ],
-      "title": "TwitchIdentityCreate",
-      "type": "object"
-    },
-    "app.TwitchIdentityUpdate": {
-      "description": "Schema for updating a Twitch identity",
-      "properties": {
-        "name": {
-          "title": "Name",
-          "type": "string"
-        }
-      },
-      "required": [
-        "name"
-      ],
-      "title": "TwitchIdentityUpdate",
-      "type": "object"
     },
     "app.UserAchievementRead": {
       "properties": {
@@ -11309,39 +11691,6 @@
         "matches"
       ],
       "title": "UserAchievementRead",
-      "type": "object"
-    },
-    "app.UserBattleTagRead": {
-      "properties": {
-        "battle_tag": {
-          "title": "Battle Tag",
-          "type": "string"
-        },
-        "id": {
-          "title": "Id",
-          "type": "integer"
-        },
-        "name": {
-          "title": "Name",
-          "type": "string"
-        },
-        "tag": {
-          "title": "Tag",
-          "type": "integer"
-        },
-        "user_id": {
-          "title": "User Id",
-          "type": "integer"
-        }
-      },
-      "required": [
-        "id",
-        "user_id",
-        "name",
-        "tag",
-        "battle_tag"
-      ],
-      "title": "UserBattleTagRead",
       "type": "object"
     },
     "app.UserBestTeammate": {
@@ -11907,29 +12256,6 @@
         "name"
       ],
       "title": "UserCreate",
-      "type": "object"
-    },
-    "app.UserDiscordRead": {
-      "properties": {
-        "id": {
-          "title": "Id",
-          "type": "integer"
-        },
-        "name": {
-          "title": "Name",
-          "type": "string"
-        },
-        "user_id": {
-          "title": "User Id",
-          "type": "integer"
-        }
-      },
-      "required": [
-        "id",
-        "user_id",
-        "name"
-      ],
-      "title": "UserDiscordRead",
       "type": "object"
     },
     "app.UserEncounterStageItemSummary": {
@@ -12875,6 +13201,10 @@
           "title": "Id",
           "type": "integer"
         },
+        "provider": {
+          "title": "Provider",
+          "type": "string"
+        },
         "value": {
           "title": "Value",
           "type": "string"
@@ -12882,6 +13212,7 @@
       },
       "required": [
         "id",
+        "provider",
         "value"
       ],
       "title": "UserMergeIdentityOption",
@@ -12890,24 +13221,18 @@
     "app.UserMergeIdentityResult": {
       "properties": {
         "deduped": {
-          "additionalProperties": {
-            "items": {
-              "type": "integer"
-            },
-            "type": "array"
+          "items": {
+            "type": "integer"
           },
           "title": "Deduped",
-          "type": "object"
+          "type": "array"
         },
         "moved": {
-          "additionalProperties": {
-            "items": {
-              "type": "integer"
-            },
-            "type": "array"
+          "items": {
+            "type": "integer"
           },
           "title": "Moved",
-          "type": "object"
+          "type": "array"
         }
       },
       "required": [
@@ -12919,25 +13244,11 @@
     },
     "app.UserMergeIdentitySelection": {
       "properties": {
-        "battle_tag_ids": {
+        "social_account_ids": {
           "items": {
             "type": "integer"
           },
-          "title": "Battle Tag Ids",
-          "type": "array"
-        },
-        "discord_ids": {
-          "items": {
-            "type": "integer"
-          },
-          "title": "Discord Ids",
-          "type": "array"
-        },
-        "twitch_ids": {
-          "items": {
-            "type": "integer"
-          },
-          "title": "Twitch Ids",
+          "title": "Social Account Ids",
           "type": "array"
         }
       },
@@ -13020,20 +13331,6 @@
           "default": null,
           "title": "Avatar Url"
         },
-        "battle_tag": {
-          "items": {
-            "$ref": "#/components/schemas/app.UserMergeIdentityOption"
-          },
-          "title": "Battle Tag",
-          "type": "array"
-        },
-        "discord": {
-          "items": {
-            "$ref": "#/components/schemas/app.UserMergeIdentityOption"
-          },
-          "title": "Discord",
-          "type": "array"
-        },
         "id": {
           "title": "Id",
           "type": "integer"
@@ -13042,20 +13339,18 @@
           "title": "Name",
           "type": "string"
         },
-        "twitch": {
+        "social_accounts": {
           "items": {
             "$ref": "#/components/schemas/app.UserMergeIdentityOption"
           },
-          "title": "Twitch",
+          "title": "Social Accounts",
           "type": "array"
         }
       },
       "required": [
         "id",
         "name",
-        "discord",
-        "battle_tag",
-        "twitch"
+        "social_accounts"
       ],
       "title": "UserMergeUserSummary",
       "type": "object"
@@ -13587,19 +13882,17 @@
     },
     "app.UserRead": {
       "properties": {
-        "battle_tag": {
-          "items": {
-            "$ref": "#/components/schemas/app.UserBattleTagRead"
-          },
-          "title": "Battle Tag",
-          "type": "array"
-        },
-        "discord": {
-          "items": {
-            "$ref": "#/components/schemas/app.UserDiscordRead"
-          },
-          "title": "Discord",
-          "type": "array"
+        "avatar_url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Avatar Url"
         },
         "id": {
           "title": "Id",
@@ -13609,20 +13902,18 @@
           "title": "Name",
           "type": "string"
         },
-        "twitch": {
+        "social_accounts": {
+          "default": [],
           "items": {
-            "$ref": "#/components/schemas/app.UserTwitchRead"
+            "$ref": "#/components/schemas/app.SocialAccountRead"
           },
-          "title": "Twitch",
+          "title": "Social Accounts",
           "type": "array"
         }
       },
       "required": [
         "id",
-        "name",
-        "discord",
-        "battle_tag",
-        "twitch"
+        "name"
       ],
       "title": "UserRead",
       "type": "object"
@@ -13851,9 +14142,28 @@
     "app.UserTournamentPlayer": {
       "description": "Player card inside `UserTournament.players` (rendered by TournamentTeamTable).\n\nAlso populated inside `UserEncounterTeamSummary.players` when the\nencounter view needs to identify the viewer's row (via `user_id`).",
       "properties": {
+        "avg_mvp": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Avg Mvp"
+        },
         "division": {
           "title": "Division",
           "type": "integer"
+        },
+        "heroes": {
+          "items": {
+            "$ref": "#/components/schemas/app.HeroRead"
+          },
+          "title": "Heroes",
+          "type": "array"
         },
         "id": {
           "title": "Id",
@@ -14040,6 +14350,17 @@
           "title": "Division",
           "type": "integer"
         },
+        "division_grid_version": {
+          "anyOf": [
+            {
+              "$ref": "#/components/schemas/app.DivisionGridVersionRead"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "group_placement": {
           "anyOf": [
             {
@@ -14121,29 +14442,6 @@
       "title": "UserTournamentWithStats",
       "type": "object"
     },
-    "app.UserTwitchRead": {
-      "properties": {
-        "id": {
-          "title": "Id",
-          "type": "integer"
-        },
-        "name": {
-          "title": "Name",
-          "type": "string"
-        },
-        "user_id": {
-          "title": "User Id",
-          "type": "integer"
-        }
-      },
-      "required": [
-        "id",
-        "user_id",
-        "name"
-      ],
-      "title": "UserTwitchRead",
-      "type": "object"
-    },
     "app.UserUpdate": {
       "description": "Schema for updating a user",
       "properties": {
@@ -14220,6 +14518,36 @@
         "name"
       ],
       "title": "WorkspaceCreate",
+      "type": "object"
+    },
+    "app.WorkspaceCustomDomainSet": {
+      "description": "Body for ``set_custom_domain``. Normalization/validation of the domain\nitself (FQDN shape, platform-zone rejection) happens in the service layer\nvia ``normalize_custom_domain`` so both this RPC and any future caller share\none source of truth for what counts as a valid custom domain.",
+      "properties": {
+        "custom_domain": {
+          "maxLength": 255,
+          "minLength": 1,
+          "title": "Custom Domain",
+          "type": "string"
+        }
+      },
+      "required": [
+        "custom_domain"
+      ],
+      "title": "WorkspaceCustomDomainSet",
+      "type": "object"
+    },
+    "app.WorkspaceMemberAutofillResult": {
+      "description": "Result of the ``members_autofill_roles`` action: how many role-less\nmembers were granted the baseline ``member`` role.",
+      "properties": {
+        "assigned": {
+          "title": "Assigned",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "assigned"
+      ],
+      "title": "WorkspaceMemberAutofillResult",
       "type": "object"
     },
     "app.WorkspaceMemberCreate": {
@@ -14441,6 +14769,168 @@
     },
     "app.WorkspaceRead": {
       "properties": {
+        "brand_accent": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Brand Accent"
+        },
+        "brand_background": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Brand Background"
+        },
+        "brand_border": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Brand Border"
+        },
+        "brand_destructive": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Brand Destructive"
+        },
+        "brand_foreground": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Brand Foreground"
+        },
+        "brand_muted": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Brand Muted"
+        },
+        "brand_primary": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Brand Primary"
+        },
+        "brand_ring": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Brand Ring"
+        },
+        "brand_secondary": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Brand Secondary"
+        },
+        "brand_surface": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Brand Surface"
+        },
+        "branding_enabled": {
+          "default": false,
+          "title": "Branding Enabled",
+          "type": "boolean"
+        },
+        "custom_domain": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Custom Domain"
+        },
+        "custom_domain_verification_token": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Custom Domain Verification Token"
+        },
+        "custom_domain_verified_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Custom Domain Verified At"
+        },
         "default_division_grid_version": {
           "anyOf": [
             {
@@ -14497,9 +14987,45 @@
           "title": "Name",
           "type": "string"
         },
+        "seo_description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Seo Description"
+        },
+        "seo_title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Seo Title"
+        },
         "slug": {
           "title": "Slug",
           "type": "string"
+        },
+        "subdomain": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Subdomain"
         }
       },
       "required": [
@@ -14516,6 +15042,148 @@
     },
     "app.WorkspaceUpdate": {
       "properties": {
+        "brand_accent": {
+          "anyOf": [
+            {
+              "pattern": "^#[0-9a-fA-F]{6}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Brand Accent"
+        },
+        "brand_background": {
+          "anyOf": [
+            {
+              "pattern": "^#[0-9a-fA-F]{6}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Brand Background"
+        },
+        "brand_border": {
+          "anyOf": [
+            {
+              "pattern": "^#[0-9a-fA-F]{6}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Brand Border"
+        },
+        "brand_destructive": {
+          "anyOf": [
+            {
+              "pattern": "^#[0-9a-fA-F]{6}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Brand Destructive"
+        },
+        "brand_foreground": {
+          "anyOf": [
+            {
+              "pattern": "^#[0-9a-fA-F]{6}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Brand Foreground"
+        },
+        "brand_muted": {
+          "anyOf": [
+            {
+              "pattern": "^#[0-9a-fA-F]{6}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Brand Muted"
+        },
+        "brand_primary": {
+          "anyOf": [
+            {
+              "pattern": "^#[0-9a-fA-F]{6}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Brand Primary"
+        },
+        "brand_ring": {
+          "anyOf": [
+            {
+              "pattern": "^#[0-9a-fA-F]{6}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Brand Ring"
+        },
+        "brand_secondary": {
+          "anyOf": [
+            {
+              "pattern": "^#[0-9a-fA-F]{6}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Brand Secondary"
+        },
+        "brand_surface": {
+          "anyOf": [
+            {
+              "pattern": "^#[0-9a-fA-F]{6}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Brand Surface"
+        },
+        "branding_enabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Branding Enabled"
+        },
         "default_division_grid_version_id": {
           "anyOf": [
             {
@@ -14575,6 +15243,42 @@
           ],
           "default": null,
           "title": "Name"
+        },
+        "seo_description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Seo Description"
+        },
+        "seo_title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Seo Title"
+        },
+        "subdomain": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Subdomain"
         }
       },
       "title": "WorkspaceUpdate",
@@ -15030,6 +15734,65 @@
       "title": "DraftCaptainOrder",
       "type": "string"
     },
+    "balancer.DraftFeasibilityResponse": {
+      "properties": {
+        "blocking_player_ids": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "Blocking Player Ids",
+          "type": "array"
+        },
+        "is_feasible": {
+          "title": "Is Feasible",
+          "type": "boolean"
+        },
+        "matched_slots": {
+          "title": "Matched Slots",
+          "type": "integer"
+        },
+        "reason_code": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason Code"
+        },
+        "role_deficits": {
+          "items": {
+            "$ref": "#/components/schemas/balancer.DraftRoleDeficitRead"
+          },
+          "title": "Role Deficits",
+          "type": "array"
+        },
+        "total_open_slots": {
+          "title": "Total Open Slots",
+          "type": "integer"
+        },
+        "unmatched_slots": {
+          "items": {
+            "$ref": "#/components/schemas/balancer.DraftSlotRead"
+          },
+          "title": "Unmatched Slots",
+          "type": "array"
+        }
+      },
+      "required": [
+        "is_feasible",
+        "total_open_slots",
+        "matched_slots",
+        "unmatched_slots",
+        "role_deficits",
+        "blocking_player_ids"
+      ],
+      "title": "DraftFeasibilityResponse",
+      "type": "object"
+    },
     "balancer.DraftFormat": {
       "enum": [
         "snake",
@@ -15187,6 +15950,97 @@
       "title": "DraftPickAutopickRequest",
       "type": "object"
     },
+    "balancer.DraftPickOptionRead": {
+      "properties": {
+        "blocking_player_ids": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "Blocking Player Ids",
+          "type": "array"
+        },
+        "is_safe": {
+          "title": "Is Safe",
+          "type": "boolean"
+        },
+        "player_id": {
+          "title": "Player Id",
+          "type": "integer"
+        },
+        "reason_code": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason Code"
+        },
+        "role": {
+          "$ref": "#/components/schemas/balancer.DraftRole"
+        },
+        "suggestion_score": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Suggestion Score"
+        },
+        "unmatched_slots": {
+          "items": {
+            "$ref": "#/components/schemas/balancer.DraftSlotRead"
+          },
+          "title": "Unmatched Slots",
+          "type": "array"
+        }
+      },
+      "required": [
+        "player_id",
+        "role",
+        "is_safe"
+      ],
+      "title": "DraftPickOptionRead",
+      "type": "object"
+    },
+    "balancer.DraftPickOptionsResponse": {
+      "properties": {
+        "draft_team_id": {
+          "title": "Draft Team Id",
+          "type": "integer"
+        },
+        "options": {
+          "items": {
+            "$ref": "#/components/schemas/balancer.DraftPickOptionRead"
+          },
+          "title": "Options",
+          "type": "array"
+        },
+        "pick_id": {
+          "title": "Pick Id",
+          "type": "integer"
+        },
+        "pick_version": {
+          "title": "Pick Version",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "pick_id",
+        "pick_version",
+        "draft_team_id",
+        "options"
+      ],
+      "title": "DraftPickOptionsResponse",
+      "type": "object"
+    },
     "balancer.DraftPickOverrideRequest": {
       "properties": {
         "draft_team_id": {
@@ -15228,6 +16082,17 @@
           ],
           "default": null,
           "title": "Player Id"
+        },
+        "target_role": {
+          "anyOf": [
+            {
+              "$ref": "#/components/schemas/balancer.DraftRole"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "required": [
@@ -15319,6 +16184,17 @@
         "status": {
           "$ref": "#/components/schemas/balancer.DraftPickStatus"
         },
+        "target_rank_value": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Target Rank Value"
+        },
         "target_role": {
           "anyOf": [
             {
@@ -15343,6 +16219,7 @@
         "pick_in_round",
         "draft_team_id",
         "target_role",
+        "target_rank_value",
         "status",
         "picked_player_id",
         "picked_by_user_id",
@@ -15397,9 +16274,9 @@
     },
     "balancer.DraftPlayerRead": {
       "properties": {
-        "anomaly_flags": {
+        "additional_info": {
           "additionalProperties": true,
-          "title": "Anomaly Flags",
+          "title": "Additional Info",
           "type": "object"
         },
         "battle_tag": {
@@ -15462,6 +16339,24 @@
           ],
           "title": "Rank Value"
         },
+        "role_ranks": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "Role Ranks",
+          "type": "object"
+        },
+        "role_top_heroes": {
+          "additionalProperties": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "title": "Role Top Heroes",
+          "type": "object"
+        },
         "secondary_roles_json": {
           "anyOf": [
             {
@@ -15505,6 +16400,10 @@
             }
           ],
           "title": "User Id"
+        },
+        "version": {
+          "title": "Version",
+          "type": "integer"
         }
       },
       "required": [
@@ -15519,7 +16418,8 @@
         "rank_value",
         "status",
         "is_captain",
-        "drafted_by_team_id"
+        "drafted_by_team_id",
+        "version"
       ],
       "title": "DraftPlayerRead",
       "type": "object"
@@ -15576,6 +16476,155 @@
       "title": "DraftRole",
       "type": "string"
     },
+    "balancer.DraftRoleDeficitRead": {
+      "properties": {
+        "eligible_players": {
+          "title": "Eligible Players",
+          "type": "integer"
+        },
+        "role": {
+          "$ref": "#/components/schemas/balancer.DraftRole"
+        },
+        "unmatched_slots": {
+          "title": "Unmatched Slots",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "role",
+        "unmatched_slots",
+        "eligible_players"
+      ],
+      "title": "DraftRoleDeficitRead",
+      "type": "object"
+    },
+    "balancer.DraftRoleEditRequest": {
+      "properties": {
+        "expected_version": {
+          "title": "Expected Version",
+          "type": "integer"
+        },
+        "preview_only": {
+          "default": false,
+          "title": "Preview Only",
+          "type": "boolean"
+        },
+        "rank_absence_confirmed": {
+          "default": false,
+          "title": "Rank Absence Confirmed",
+          "type": "boolean"
+        },
+        "rank_value": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rank Value"
+        },
+        "reason": {
+          "title": "Reason",
+          "type": "string"
+        },
+        "role": {
+          "$ref": "#/components/schemas/balancer.DraftRole"
+        }
+      },
+      "required": [
+        "role",
+        "reason",
+        "expected_version"
+      ],
+      "title": "DraftRoleEditRequest",
+      "type": "object"
+    },
+    "balancer.DraftRoleEditResponse": {
+      "properties": {
+        "after": {
+          "$ref": "#/components/schemas/balancer.DraftFeasibilityResponse"
+        },
+        "before": {
+          "$ref": "#/components/schemas/balancer.DraftFeasibilityResponse"
+        },
+        "committed": {
+          "title": "Committed",
+          "type": "boolean"
+        },
+        "player_id": {
+          "title": "Player Id",
+          "type": "integer"
+        },
+        "player_version": {
+          "title": "Player Version",
+          "type": "integer"
+        },
+        "role": {
+          "$ref": "#/components/schemas/balancer.DraftRole"
+        }
+      },
+      "required": [
+        "player_id",
+        "role",
+        "player_version",
+        "committed",
+        "before",
+        "after"
+      ],
+      "title": "DraftRoleEditResponse",
+      "type": "object"
+    },
+    "balancer.DraftSeedDiff": {
+      "properties": {
+        "picks_after": {
+          "title": "Picks After",
+          "type": "integer"
+        },
+        "picks_before": {
+          "title": "Picks Before",
+          "type": "integer"
+        },
+        "players_after": {
+          "title": "Players After",
+          "type": "integer"
+        },
+        "players_before": {
+          "title": "Players Before",
+          "type": "integer"
+        },
+        "session_version_after": {
+          "title": "Session Version After",
+          "type": "integer"
+        },
+        "session_version_before": {
+          "title": "Session Version Before",
+          "type": "integer"
+        },
+        "teams_after": {
+          "title": "Teams After",
+          "type": "integer"
+        },
+        "teams_before": {
+          "title": "Teams Before",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "teams_before",
+        "teams_after",
+        "players_before",
+        "players_after",
+        "picks_before",
+        "picks_after",
+        "session_version_before",
+        "session_version_after"
+      ],
+      "title": "DraftSeedDiff",
+      "type": "object"
+    },
     "balancer.DraftSeedRequest": {
       "properties": {
         "captain_order": {
@@ -15588,6 +16637,18 @@
           },
           "title": "Captains",
           "type": "array"
+        },
+        "expected_version": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Expected Version"
         },
         "players": {
           "items": {
@@ -15602,6 +16663,11 @@
           },
           "title": "Pool Captains",
           "type": "array"
+        },
+        "preview_only": {
+          "default": false,
+          "title": "Preview Only",
+          "type": "boolean"
         },
         "seed": {
           "anyOf": [
@@ -15629,6 +16695,31 @@
         }
       },
       "title": "DraftSeedRequest",
+      "type": "object"
+    },
+    "balancer.DraftSeedResponse": {
+      "properties": {
+        "diff": {
+          "$ref": "#/components/schemas/balancer.DraftSeedDiff"
+        },
+        "feasibility": {
+          "$ref": "#/components/schemas/balancer.DraftFeasibilityResponse"
+        },
+        "preview_only": {
+          "title": "Preview Only",
+          "type": "boolean"
+        },
+        "session": {
+          "$ref": "#/components/schemas/balancer.DraftSessionRead"
+        }
+      },
+      "required": [
+        "session",
+        "preview_only",
+        "diff",
+        "feasibility"
+      ],
+      "title": "DraftSeedResponse",
       "type": "object"
     },
     "balancer.DraftSessionCreateRequest": {
@@ -15761,6 +16852,17 @@
         "autopick_strategy": {
           "$ref": "#/components/schemas/balancer.DraftAutopickStrategy"
         },
+        "blocked_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Blocked Reason"
+        },
         "current_pick_id": {
           "anyOf": [
             {
@@ -15840,6 +16942,10 @@
           "title": "Tournament Id",
           "type": "integer"
         },
+        "version": {
+          "title": "Version",
+          "type": "integer"
+        },
         "workspace_id": {
           "title": "Workspace Id",
           "type": "integer"
@@ -15850,6 +16956,7 @@
         "tournament_id",
         "workspace_id",
         "status",
+        "blocked_reason",
         "format",
         "rounds",
         "pick_time_seconds",
@@ -15861,9 +16968,32 @@
         "allow_admin_override",
         "exported_at",
         "export_status",
-        "settings_json"
+        "settings_json",
+        "version"
       ],
       "title": "DraftSessionRead",
+      "type": "object"
+    },
+    "balancer.DraftSlotRead": {
+      "properties": {
+        "ordinal": {
+          "title": "Ordinal",
+          "type": "integer"
+        },
+        "role": {
+          "$ref": "#/components/schemas/balancer.DraftRole"
+        },
+        "team_id": {
+          "title": "Team Id",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "team_id",
+        "role",
+        "ordinal"
+      ],
+      "title": "DraftSlotRead",
       "type": "object"
     },
     "balancer.DraftStatus": {
@@ -17028,6 +18158,13 @@
           "title": "Created At",
           "type": "string"
         },
+        "denies": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Denies",
+          "type": "array"
+        },
         "email": {
           "title": "Email",
           "type": "string"
@@ -17704,6 +18841,18 @@
     "identity.OAuthConnectionListQueryParams": {
       "description": "Query params for the admin OAuth-connections list (GET /rbac/oauth-connections).",
       "properties": {
+        "auth_user_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Auth User Id"
+        },
         "entities": {
           "items": {
             "type": "string"
@@ -18990,6 +20139,26 @@
           "title": "Credential Type",
           "type": "string"
         },
+        "denies": {
+          "items": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "object"
+          },
+          "title": "Denies",
+          "type": "array"
+        },
         "email": {
           "title": "Email",
           "type": "string"
@@ -20031,7 +21200,7 @@
     },
     "parser.CollectTriggerRequest": {
       "properties": {
-        "battle_tag_ids": {
+        "social_account_ids": {
           "anyOf": [
             {
               "items": {
@@ -20044,7 +21213,7 @@
             }
           ],
           "default": null,
-          "title": "Battle Tag Ids"
+          "title": "Social Account Ids"
         },
         "user_id": {
           "anyOf": [
@@ -20080,10 +21249,6 @@
         "battle_tag": {
           "title": "Battle Tag",
           "type": "string"
-        },
-        "battle_tag_id": {
-          "title": "Battle Tag Id",
-          "type": "integer"
         },
         "consecutive_failures": {
           "default": 0,
@@ -20146,6 +21311,10 @@
           "title": "Priority Tier",
           "type": "integer"
         },
+        "social_account_id": {
+          "title": "Social Account Id",
+          "type": "integer"
+        },
         "status": {
           "anyOf": [
             {
@@ -20160,7 +21329,7 @@
         }
       },
       "required": [
-        "battle_tag_id",
+        "social_account_id",
         "battle_tag"
       ],
       "title": "CollectionStatusRead",
@@ -20258,10 +21427,6 @@
           "title": "Battle Tag",
           "type": "string"
         },
-        "battle_tag_id": {
-          "title": "Battle Tag Id",
-          "type": "integer"
-        },
         "captured_at": {
           "format": "date-time",
           "title": "Captured At",
@@ -20312,6 +21477,10 @@
           ],
           "title": "Season"
         },
+        "social_account_id": {
+          "title": "Social Account Id",
+          "type": "integer"
+        },
         "tier": {
           "anyOf": [
             {
@@ -20325,7 +21494,7 @@
         }
       },
       "required": [
-        "battle_tag_id",
+        "social_account_id",
         "battle_tag",
         "role",
         "platform",
@@ -20705,17 +21874,6 @@
           "title": "Battle Tag",
           "type": "string"
         },
-        "battle_tag_id": {
-          "anyOf": [
-            {
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "title": "Battle Tag Id"
-        },
         "created_at": {
           "format": "date-time",
           "title": "Created At",
@@ -20740,6 +21898,17 @@
           "title": "Snapshots Written",
           "type": "integer"
         },
+        "social_account_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Social Account Id"
+        },
         "source": {
           "title": "Source",
           "type": "string"
@@ -20747,11 +21916,23 @@
         "status": {
           "title": "Status",
           "type": "string"
+        },
+        "user_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "User Id"
         }
       },
       "required": [
         "id",
-        "battle_tag_id",
+        "social_account_id",
         "battle_tag",
         "status",
         "source",
@@ -21140,6 +22321,101 @@
       "title": "QueueDepth",
       "type": "object"
     },
+    "parser.RankCollectionStats": {
+      "description": "Aggregated collection health for the admin dashboard.",
+      "properties": {
+        "by_status": {
+          "$ref": "#/components/schemas/parser.RankStatusCounts"
+        },
+        "coverage_24h": {
+          "title": "Coverage 24H",
+          "type": "integer"
+        },
+        "coverage_7d": {
+          "title": "Coverage 7D",
+          "type": "integer"
+        },
+        "enabled": {
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "error_rate_24h": {
+          "title": "Error Rate 24H",
+          "type": "number"
+        },
+        "fetch_24h": {
+          "$ref": "#/components/schemas/parser.RankStatusCounts"
+        },
+        "fetch_24h_total": {
+          "title": "Fetch 24H Total",
+          "type": "integer"
+        },
+        "interval_seconds": {
+          "title": "Interval Seconds",
+          "type": "integer"
+        },
+        "last_success_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Last Success At"
+        },
+        "never_checked": {
+          "title": "Never Checked",
+          "type": "integer"
+        },
+        "rate_limit_per_minute": {
+          "title": "Rate Limit Per Minute",
+          "type": "integer"
+        },
+        "scope": {
+          "title": "Scope",
+          "type": "string"
+        },
+        "tier0": {
+          "title": "Tier0",
+          "type": "integer"
+        },
+        "tier1": {
+          "title": "Tier1",
+          "type": "integer"
+        },
+        "tier2": {
+          "title": "Tier2",
+          "type": "integer"
+        },
+        "total": {
+          "title": "Total",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "total",
+        "never_checked",
+        "by_status",
+        "tier0",
+        "tier1",
+        "tier2",
+        "coverage_24h",
+        "coverage_7d",
+        "last_success_at",
+        "fetch_24h",
+        "fetch_24h_total",
+        "error_rate_24h",
+        "enabled",
+        "scope",
+        "interval_seconds",
+        "rate_limit_per_minute"
+      ],
+      "title": "RankCollectionStats",
+      "type": "object"
+    },
     "parser.RankHistoryPoint": {
       "properties": {
         "captured_at": {
@@ -21248,10 +22524,6 @@
           "title": "Battle Tag",
           "type": "string"
         },
-        "battle_tag_id": {
-          "title": "Battle Tag Id",
-          "type": "integer"
-        },
         "current": {
           "anyOf": [
             {
@@ -21299,10 +22571,14 @@
         "role": {
           "title": "Role",
           "type": "string"
+        },
+        "social_account_id": {
+          "title": "Social Account Id",
+          "type": "integer"
         }
       },
       "required": [
-        "battle_tag_id",
+        "social_account_id",
         "battle_tag",
         "role",
         "platform",
@@ -21312,6 +22588,72 @@
         "latest_captured_at"
       ],
       "title": "RankSeries",
+      "type": "object"
+    },
+    "parser.RankStatusCounts": {
+      "description": "Count per RankCollectionStatus. Statuses absent in a source read stay 0.\n\n``extra=\"ignore\"`` so an unexpected status string can never break the read.",
+      "properties": {
+        "disabled": {
+          "default": 0,
+          "title": "Disabled",
+          "type": "integer"
+        },
+        "error": {
+          "default": 0,
+          "title": "Error",
+          "type": "integer"
+        },
+        "not_found": {
+          "default": 0,
+          "title": "Not Found",
+          "type": "integer"
+        },
+        "ok": {
+          "default": 0,
+          "title": "Ok",
+          "type": "integer"
+        },
+        "pending": {
+          "default": 0,
+          "title": "Pending",
+          "type": "integer"
+        },
+        "private": {
+          "default": 0,
+          "title": "Private",
+          "type": "integer"
+        },
+        "rate_limited": {
+          "default": 0,
+          "title": "Rate Limited",
+          "type": "integer"
+        }
+      },
+      "title": "RankStatusCounts",
+      "type": "object"
+    },
+    "parser.ReenableDisabledRequest": {
+      "properties": {
+        "only_previously_succeeded": {
+          "default": false,
+          "title": "Only Previously Succeeded",
+          "type": "boolean"
+        }
+      },
+      "title": "ReenableDisabledRequest",
+      "type": "object"
+    },
+    "parser.ReenableDisabledResponse": {
+      "properties": {
+        "reenabled": {
+          "title": "Reenabled",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "reenabled"
+      ],
+      "title": "ReenableDisabledResponse",
       "type": "object"
     },
     "parser.SettingRead": {
@@ -22366,6 +23708,18 @@
           "default": null,
           "title": "Admin Notes"
         },
+        "auth_user_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Auth User Id"
+        },
         "battle_tag": {
           "anyOf": [
             {
@@ -22603,6 +23957,7 @@
               "items": {
                 "type": "integer"
               },
+              "maxItems": 500,
               "type": "array"
             },
             {
@@ -22976,18 +24331,6 @@
           ],
           "default": null,
           "title": "Admin Notes"
-        },
-        "auth_user_id": {
-          "anyOf": [
-            {
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Auth User Id"
         },
         "balancer_profile_overridden_at": {
           "anyOf": [
@@ -23659,6 +25002,18 @@
           "default": null,
           "title": "Admin Notes"
         },
+        "auth_user_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Auth User Id"
+        },
         "balancer_status": {
           "anyOf": [
             {
@@ -23807,6 +25162,11 @@
           ],
           "default": null,
           "title": "Max Heroes"
+        },
+        "require_verified": {
+          "default": false,
+          "title": "Require Verified",
+          "type": "boolean"
         },
         "required": {
           "default": false,
@@ -26713,6 +28073,10 @@
         "scoped_shots_hit",
         "weapon_accuracy",
         "hero_time_played",
+        "first_picks",
+        "first_deaths",
+        "ultimate_kills",
+        "support_kills",
         "performance",
         "performance_points",
         "kd",
@@ -26720,7 +28084,10 @@
         "damage_delta",
         "fbe",
         "damage_fb",
-        "assists"
+        "assists",
+        "impact_points",
+        "impact_rank",
+        "overperformance_score"
       ],
       "title": "LogStatsName",
       "type": "string"
@@ -28567,18 +29934,6 @@
     },
     "tournament.RegistrationRead": {
       "properties": {
-        "auth_user_id": {
-          "anyOf": [
-            {
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Auth User Id"
-        },
         "battle_tag": {
           "anyOf": [
             {
@@ -29036,6 +30391,57 @@
         "balancer_status"
       ],
       "title": "SetBalancerStatusRequest",
+      "type": "object"
+    },
+    "tournament.SocialAccountRead": {
+      "description": "Unified player social identity (battlenet/discord/twitch/boosty/vk/youtube/\u2026).",
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "integer"
+        },
+        "is_primary": {
+          "default": false,
+          "title": "Is Primary",
+          "type": "boolean"
+        },
+        "is_verified": {
+          "default": false,
+          "title": "Is Verified",
+          "type": "boolean"
+        },
+        "provider": {
+          "title": "Provider",
+          "type": "string"
+        },
+        "url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Url"
+        },
+        "user_id": {
+          "title": "User Id",
+          "type": "integer"
+        },
+        "username": {
+          "title": "Username",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "user_id",
+        "provider",
+        "username"
+      ],
+      "title": "SocialAccountRead",
       "type": "object"
     },
     "tournament.SortOrder": {
@@ -30883,6 +32289,11 @@
           "title": "End Date",
           "type": "string"
         },
+        "is_hidden": {
+          "default": false,
+          "title": "Is Hidden",
+          "type": "boolean"
+        },
         "is_league": {
           "default": false,
           "title": "Is League",
@@ -31212,6 +32623,11 @@
           "title": "Is Finished",
           "type": "boolean"
         },
+        "is_hidden": {
+          "default": false,
+          "title": "Is Hidden",
+          "type": "boolean"
+        },
         "is_league": {
           "title": "Is League",
           "type": "boolean"
@@ -31508,6 +32924,18 @@
           "default": null,
           "title": "Is Finished"
         },
+        "is_hidden": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Is Hidden"
+        },
         "is_league": {
           "anyOf": [
             {
@@ -31623,78 +33051,8 @@
       "title": "TournamentUpdate",
       "type": "object"
     },
-    "tournament.UserBattleTagRead": {
-      "properties": {
-        "battle_tag": {
-          "title": "Battle Tag",
-          "type": "string"
-        },
-        "id": {
-          "title": "Id",
-          "type": "integer"
-        },
-        "name": {
-          "title": "Name",
-          "type": "string"
-        },
-        "tag": {
-          "title": "Tag",
-          "type": "integer"
-        },
-        "user_id": {
-          "title": "User Id",
-          "type": "integer"
-        }
-      },
-      "required": [
-        "id",
-        "user_id",
-        "name",
-        "tag",
-        "battle_tag"
-      ],
-      "title": "UserBattleTagRead",
-      "type": "object"
-    },
-    "tournament.UserDiscordRead": {
-      "properties": {
-        "id": {
-          "title": "Id",
-          "type": "integer"
-        },
-        "name": {
-          "title": "Name",
-          "type": "string"
-        },
-        "user_id": {
-          "title": "User Id",
-          "type": "integer"
-        }
-      },
-      "required": [
-        "id",
-        "user_id",
-        "name"
-      ],
-      "title": "UserDiscordRead",
-      "type": "object"
-    },
     "tournament.UserRead": {
       "properties": {
-        "battle_tag": {
-          "items": {
-            "$ref": "#/components/schemas/tournament.UserBattleTagRead"
-          },
-          "title": "Battle Tag",
-          "type": "array"
-        },
-        "discord": {
-          "items": {
-            "$ref": "#/components/schemas/tournament.UserDiscordRead"
-          },
-          "title": "Discord",
-          "type": "array"
-        },
         "id": {
           "title": "Id",
           "type": "integer"
@@ -31703,45 +33061,20 @@
           "title": "Name",
           "type": "string"
         },
-        "twitch": {
+        "social_accounts": {
+          "default": [],
           "items": {
-            "$ref": "#/components/schemas/tournament.UserTwitchRead"
+            "$ref": "#/components/schemas/tournament.SocialAccountRead"
           },
-          "title": "Twitch",
+          "title": "Social Accounts",
           "type": "array"
         }
       },
       "required": [
         "id",
-        "name",
-        "discord",
-        "battle_tag",
-        "twitch"
-      ],
-      "title": "UserRead",
-      "type": "object"
-    },
-    "tournament.UserTwitchRead": {
-      "properties": {
-        "id": {
-          "title": "Id",
-          "type": "integer"
-        },
-        "name": {
-          "title": "Name",
-          "type": "string"
-        },
-        "user_id": {
-          "title": "User Id",
-          "type": "integer"
-        }
-      },
-      "required": [
-        "id",
-        "user_id",
         "name"
       ],
-      "title": "UserTwitchRead",
+      "title": "UserRead",
       "type": "object"
     },
     "tournament.WireFromGroupsRequest": {

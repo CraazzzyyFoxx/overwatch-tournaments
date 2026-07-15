@@ -20,6 +20,7 @@ from src.schemas.draft import (
 )
 from src.services.draft import loaders
 
+_PRIVATE_ADDITIONAL_INFO_KEYS = frozenset({"notes", "admin_notes", "audit_reason"})
 _ACTIVE = (
     DraftStatus.SETUP.value,
     DraftStatus.READY.value,
@@ -44,6 +45,16 @@ async def get_active_session(session: AsyncSession, tournament_id: int) -> Draft
         .order_by(DraftSession.id.desc())
         .limit(1)
     )
+
+
+def public_additional_info(additional_info: dict | None) -> dict:
+    """Remove organizer-only metadata from the public draft snapshot."""
+
+    return {
+        key: value
+        for key, value in (additional_info or {}).items()
+        if key not in _PRIVATE_ADDITIONAL_INFO_KEYS
+    }
 
 
 async def build_board(session: AsyncSession, draft_session: DraftSession) -> DraftBoardSnapshot:
@@ -75,42 +86,6 @@ async def build_board(session: AsyncSession, draft_session: DraftSession) -> Dra
         )
     ).all()
 
-    # Dynamically inject notes if not already snapshot in additional_info (supports existing drafts)
-    if players:
-        user_ids = [p.user_id for p in players if p.user_id is not None]
-        if user_ids:
-            from shared.models.registration.registration import BalancerRegistration
-            from shared.models.tenancy.workspace import WorkspaceMember
-
-            # Registrations are anchored on workspace_member (dbarch02 dropped
-            # user_id); the inner join naturally skips member-less rows — they
-            # have no player identity, same as user_id IS NULL before.
-            regs = (
-                await session.execute(
-                    sa.select(WorkspaceMember.player_id, BalancerRegistration.notes)
-                    # Explicit FROM anchor: the first select column is
-                    # WorkspaceMember, which would otherwise anchor the join
-                    # on the wrong side.
-                    .select_from(BalancerRegistration)
-                    .join(
-                        WorkspaceMember,
-                        WorkspaceMember.id == BalancerRegistration.workspace_member_id,
-                    )
-                    .where(
-                        BalancerRegistration.tournament_id == draft_session.tournament_id,
-                        WorkspaceMember.player_id.in_(user_ids),
-                        BalancerRegistration.deleted_at.is_(None),
-                    )
-                )
-            ).all()
-            user_notes = {r_user_id: r_notes for r_user_id, r_notes in regs if r_notes}
-            for p in players:
-                if p.user_id in user_notes:
-                    info = dict(p.additional_info) if p.additional_info else {}
-                    if "notes" not in info or not info["notes"]:
-                        info["notes"] = user_notes[p.user_id]
-                        p.additional_info = info
-
     # Already among `picks` (loaded with pick_options) when set; options guard the
     # cold-cache path so DraftPickRead.picked_by_user_id never lazy-loads.
     current = (
@@ -124,7 +99,12 @@ async def build_board(session: AsyncSession, draft_session: DraftSession) -> Dra
         session=DraftSessionRead.model_validate(draft_session),
         teams=[DraftTeamRead.model_validate(t) for t in teams],
         picks=[DraftPickRead.model_validate(p) for p in picks],
-        players=[DraftPlayerRead.model_validate(p) for p in players],
+        players=[
+            DraftPlayerRead.model_validate(p).model_copy(
+                update={"additional_info": public_additional_info(p.additional_info)}
+            )
+            for p in players
+        ],
         current_pick=DraftPickRead.model_validate(current) if current else None,
         server_time=datetime.now(UTC),
         last_event_id=last_event_id,

@@ -4,12 +4,14 @@ from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import (
     JSON,
+    BigInteger,
     Boolean,
     DateTime,
     ForeignKey,
     Index,
     Integer,
     String,
+    Text,
     UniqueConstraint,
     text,
 )
@@ -20,10 +22,12 @@ from shared.core import db
 if TYPE_CHECKING:
     from shared.models.balancer.balance import BalancerBalance
     from shared.models.catalog.hero import Hero
+    from shared.models.identity.auth_user import AuthUser
     from shared.models.tenancy.workspace import Workspace, WorkspaceMember
     from shared.models.tournament.tournament import Tournament
 
 __all__ = (
+    "DraftAuditEvent",
     "DraftPick",
     "DraftPlayer",
     "DraftPlayerRole",
@@ -60,6 +64,7 @@ class DraftSession(db.TimeStampIntegerMixin):
     tournament_id: Mapped[int] = mapped_column(ForeignKey("tournament.tournament.id", ondelete="CASCADE"))
     workspace_id: Mapped[int] = mapped_column(ForeignKey("workspace.id", ondelete="CASCADE"), index=True)
     status: Mapped[str] = mapped_column(String(16), nullable=False, server_default="setup", default="setup")
+    blocked_reason: Mapped[str | None] = mapped_column(String(64), nullable=True)
     format: Mapped[str] = mapped_column(String(16), nullable=False, server_default="snake", default="snake")
     rounds: Mapped[int] = mapped_column(Integer(), nullable=False, server_default="4", default=4)
     pick_time_seconds: Mapped[int] = mapped_column(Integer(), nullable=False, server_default="45", default=45)
@@ -82,6 +87,7 @@ class DraftSession(db.TimeStampIntegerMixin):
     exported_at: Mapped[db.DateTime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     export_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
     settings_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, server_default="{}", default=dict)
+    version: Mapped[int] = mapped_column(Integer(), nullable=False, server_default="0", default=0)
 
     tournament: Mapped[Tournament] = relationship()
     workspace: Mapped[Workspace] = relationship()
@@ -92,6 +98,11 @@ class DraftSession(db.TimeStampIntegerMixin):
         back_populates="session",
         cascade="all, delete-orphan",
         foreign_keys="DraftPick.session_id",
+    )
+    audit_events: Mapped[list[DraftAuditEvent]] = relationship(
+        back_populates="session",
+        cascade="all, delete-orphan",
+        foreign_keys="DraftAuditEvent.session_id",
     )
     current_pick: Mapped[DraftPick | None] = relationship(foreign_keys=[current_pick_id], post_update=True)
 
@@ -173,6 +184,7 @@ class DraftPlayer(db.TimeStampIntegerMixin):
     # (dbarch03 dropped the ``role_ranks``/``role_top_heroes``/
     # ``secondary_roles_json`` JSON bags); this catch-all is intentionally kept.
     additional_info: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, server_default="{}", default=dict)
+    version: Mapped[int] = mapped_column(Integer(), nullable=False, server_default="0", default=0)
 
     session: Mapped[DraftSession] = relationship(back_populates="players")
     member: Mapped[WorkspaceMember | None] = relationship()
@@ -282,6 +294,35 @@ class DraftPlayerRoleHero(db.TimeStampIntegerMixin):
 
     role_entry: Mapped[DraftPlayerRole] = relationship(back_populates="hero_entries")
     hero: Mapped[Hero] = relationship()
+
+
+class DraftAuditEvent(db.TimeStampIntegerMixin):
+    """Private organizer audit trail for exceptional draft mutations."""
+
+    __tablename__ = "draft_audit_event"
+    __table_args__ = (
+        Index("ix_draft_audit_session_created", "session_id", "created_at"),
+        {"schema": "balancer"},
+    )
+
+    session_id: Mapped[int] = mapped_column(
+        ForeignKey("balancer.draft_session.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    actor_auth_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("auth.user.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    action: Mapped[str] = mapped_column(String(64), nullable=False)
+    entity_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    entity_id: Mapped[int] = mapped_column(BigInteger(), nullable=False)
+    reason: Mapped[str] = mapped_column(Text(), nullable=False)
+    before_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    after_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+
+    session: Mapped[DraftSession] = relationship(back_populates="audit_events", foreign_keys=[session_id])
+    actor: Mapped[AuthUser | None] = relationship(foreign_keys=[actor_auth_user_id])
 
 
 class DraftPick(db.TimeStampIntegerMixin):

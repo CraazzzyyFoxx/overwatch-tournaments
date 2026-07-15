@@ -23,7 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.core.enums import DraftAutopickStrategy, DraftRole
 from shared.core.errors import BaseAPIException as HTTPException
-from shared.models.balancer.draft import DraftPick, DraftSession
+from shared.models.balancer.draft import DraftAuditEvent, DraftPick, DraftSession, DraftTeam
 from src import models
 from src.core import db
 from src.core.auth import (
@@ -34,10 +34,17 @@ from src.core.auth import (
 from src.core.config import config
 from src.rpc import _common as c
 from src.schemas.draft import (
+    DraftFeasibilityResponse,
     DraftPickAutopickRequest,
+    DraftPickOptionRead,
+    DraftPickOptionsResponse,
     DraftPickOverrideRequest,
     DraftPickSelectRequest,
+    DraftRoleEditRequest,
+    DraftRoleEditResponse,
+    DraftSeedDiff,
     DraftSeedRequest,
+    DraftSeedResponse,
     DraftSessionCreateRequest,
     DraftSessionPatchRequest,
     DraftSessionRead,
@@ -46,8 +53,9 @@ from src.schemas.draft import (
 )
 from src.services.draft import board as board_svc
 from src.services.draft import export as export_svc
-from src.services.draft import lifecycle, loaders, selection
+from src.services.draft import feasibility, lifecycle, loaders, selection
 from src.services.draft import realtime as draft_rt
+from src.services.draft import role_edit as role_edit_svc
 from src.services.draft import suggestions as sug
 
 _SF = db.async_session_maker
@@ -91,6 +99,20 @@ async def _load_pick(session: AsyncSession, pick_id: int) -> tuple[DraftSession,
     return draft, pick
 
 
+async def _seed_counts(session: AsyncSession, session_id: int) -> tuple[int, int, int]:
+    counts = []
+    for model in (models.DraftTeam, models.DraftPlayer, models.DraftPick):
+        counts.append(
+            int(
+                await session.scalar(
+                    sa.select(sa.func.count()).select_from(model).where(model.session_id == session_id)
+                )
+                or 0
+            )
+        )
+    return counts[0], counts[1], counts[2]
+
+
 def _pick_event_payload(draft: DraftSession, pick: DraftPick) -> dict:
     return {
         "session_id": draft.id,
@@ -98,9 +120,69 @@ def _pick_event_payload(draft: DraftSession, pick: DraftPick) -> dict:
         "overall_pick_no": pick.overall_no,
         "draft_team_id": pick.draft_team_id,
         "picked_player_id": pick.picked_player_id,
+        "target_role": pick.target_role,
+        "target_rank_value": pick.target_rank_value,
+        "pick_version": pick.version,
         "status": pick.status,
         "current_pick_index": draft.current_pick_id,
     }
+
+
+def _override_audit_event(
+    *,
+    session_id: int,
+    pick_id: int,
+    actor_auth_user_id: int,
+    reason: str | None,
+    before: dict[str, Any],
+    after: dict[str, Any],
+) -> DraftAuditEvent:
+    return DraftAuditEvent(
+        session_id=session_id,
+        actor_auth_user_id=actor_auth_user_id,
+        action="pick_overridden",
+        entity_type="draft_pick",
+        entity_id=pick_id,
+        reason=(reason or "").strip() or "Admin override",
+        before_json=before,
+        after_json=after,
+    )
+
+
+def _player_updated_payload(
+    *,
+    session_id: int,
+    player_id: int,
+    role: DraftRole,
+    player_version: int,
+    is_feasible: bool,
+) -> dict:
+    return {
+        "session_id": session_id,
+        "player_id": player_id,
+        "role": role.value,
+        "player_version": player_version,
+        "is_feasible": is_feasible,
+    }
+
+
+def _seed_diff(
+    *,
+    before: tuple[int, int, int],
+    after: tuple[int, int, int],
+    version_before: int,
+    version_after: int,
+) -> DraftSeedDiff:
+    return DraftSeedDiff(
+        teams_before=before[0],
+        teams_after=after[0],
+        players_before=before[1],
+        players_after=after[1],
+        picks_before=before[2],
+        picks_after=after[2],
+        session_version_before=version_before,
+        session_version_after=version_after,
+    )
 
 
 async def _publish_result(
@@ -112,6 +194,21 @@ async def _publish_result(
     made_event: str,
     actor_user_id: int | None,
 ) -> None:
+    if result.blocked_reason:
+        await draft_rt.publish_draft_event(
+            session,
+            redis,
+            draft_session=draft,
+            event_type="draft.blocked",
+            payload={
+                "session_id": draft.id,
+                "pick_id": result.pick.id,
+                "draft_team_id": result.pick.draft_team_id,
+                "reason": result.blocked_reason,
+            },
+            actor_user_id=actor_user_id,
+        )
+        return
     await draft_rt.publish_draft_event(
         session,
         redis,
@@ -190,6 +287,104 @@ def register(broker: Any, logger: Any) -> None:
 
         return await c.envelope(logger, "draft.session_board", op, session_factory=_SF)
 
+    @broker.subscriber("rpc.balancer.draft.feasibility")
+    async def _feasibility(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            user = c.active_actor(data)
+            session_id = c.require_id(data)
+            ws_id = await _get_draft_session_workspace_id(session, session_id)
+            c.require_workspace_permission(data, user, ws_id, "team", "import")
+            draft = await _load_session(session, session_id)
+            report = await feasibility.analyze_session(session, draft)
+            return DraftFeasibilityResponse.model_validate(report)
+
+        return await c.envelope(logger, "draft.feasibility", op, session_factory=_SF)
+
+    @broker.subscriber("rpc.balancer.draft.pick_options")
+    async def _pick_options(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            user = c.active_actor(data)
+            draft, pick = await _load_pick(session, c.require_id(data))
+            if draft.current_pick_id != pick.id:
+                raise HTTPException(status_code=409, detail="Options are available only for the current pick")
+            public_user_ids = list(
+                await session.scalars(sa.select(models.User.id).where(models.User.auth_user_id == user.id))
+            )
+            team = await session.get(
+                DraftTeam,
+                pick.draft_team_id,
+                options=loaders.team_options(),
+                populate_existing=True,
+            )
+            if not user.is_workspace_admin(draft.workspace_id) and not selection._is_on_clock_captain(
+                team,
+                actor_auth_user_id=user.id,
+                actor_player_ids=public_user_ids,
+            ):
+                raise HTTPException(status_code=403, detail="Only the on-clock captain or an admin may read options")
+            options = await feasibility.evaluate_session_pick_options(
+                session,
+                draft,
+                team_id=pick.draft_team_id,
+            )
+            return DraftPickOptionsResponse(
+                pick_id=pick.id,
+                pick_version=pick.version,
+                draft_team_id=pick.draft_team_id,
+                options=[DraftPickOptionRead.model_validate(option) for option in options],
+            )
+
+        return await c.envelope(logger, "draft.pick_options", op, session_factory=_SF)
+
+    @broker.subscriber("rpc.balancer.draft.player_role_edit")
+    async def _player_role_edit(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            user = c.active_actor(data)
+            player_id = c.require_id(data)
+            session_id = c.path_int(data, "session_id")
+            ws_id = await _get_draft_session_workspace_id(session, session_id)
+            c.require_workspace_permission(data, user, ws_id, "team", "import")
+            payload = DraftRoleEditRequest.model_validate(c.payload(data))
+            draft = await _load_session(session, session_id)
+            result = await role_edit_svc.edit_player_role(
+                session,
+                draft,
+                player_id=player_id,
+                role=payload.role,
+                rank_value=payload.rank_value,
+                rank_absence_confirmed=payload.rank_absence_confirmed,
+                reason=payload.reason,
+                expected_version=payload.expected_version,
+                actor_auth_user_id=user.id,
+                preview_only=payload.preview_only,
+            )
+            response = DraftRoleEditResponse(
+                player_id=result.player_id,
+                role=result.role,
+                player_version=result.player_version,
+                committed=result.committed,
+                before=DraftFeasibilityResponse.model_validate(result.preview.before),
+                after=DraftFeasibilityResponse.model_validate(result.preview.after),
+            )
+            if result.committed:
+                await draft_rt.publish_draft_event(
+                    session,
+                    _redis(logger),
+                    draft_session=draft,
+                    event_type="draft.player_updated",
+                    payload=_player_updated_payload(
+                        session_id=draft.id,
+                        player_id=result.player_id,
+                        role=result.role,
+                        player_version=result.player_version,
+                        is_feasible=result.preview.after.is_feasible,
+                    ),
+                )
+                await session.commit()
+            return response
+
+        return await c.envelope(logger, "draft.player_role_edit", op, session_factory=_SF)
+
     @broker.subscriber("rpc.balancer.draft.suggestions")
     async def _suggestions(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
@@ -218,7 +413,11 @@ def register(broker: Any, logger: Any) -> None:
                 sug.FitPlayer(
                     player_id=p.id,
                     rank_value=p.rank_value or 0,
-                    playable_roles=frozenset(DraftRole(r) for r in {p.primary_role, *(p.secondary_roles_json or [])}),
+                    playable_roles=(
+                        frozenset(DraftRole)
+                        if p.is_flex
+                        else frozenset(DraftRole(r) for r in {p.primary_role, *(p.secondary_roles_json or [])})
+                    ),
                     preference_order=(DraftRole(p.primary_role),),
                     is_flex=p.is_flex,
                     user_id=p.user_id,
@@ -226,12 +425,19 @@ def register(broker: Any, logger: Any) -> None:
                 )
                 for p in available
             ]
+            options = await feasibility.evaluate_session_pick_options(
+                session,
+                draft,
+                team_id=current.draft_team_id,
+            )
+            safe_options = {(option.player_id, option.role) for option in options if option.is_safe}
             ranked = sug.rank_suggestions(
                 fit_players,
                 capacity,
                 sug.FitConfig(),
                 strategy=DraftAutopickStrategy(draft.autopick_strategy),
                 limit=5,
+                allowed_options=safe_options,
             )
             return DraftSuggestionsResponse(
                 pick_id=current.id,
@@ -289,53 +495,87 @@ def register(broker: Any, logger: Any) -> None:
             ws_id = await _get_tournament_workspace_id(session, tournament_id)
             c.require_workspace_permission(data, user, ws_id, "team", "import")
             payload = DraftSeedRequest.model_validate(c.payload(data))
-            draft = await _load_session(session, session_id)
-            if payload.pool_captains:
-                await lifecycle.seed_from_pool(
-                    session,
-                    draft,
-                    captain_registration_ids=[c_.registration_id for c_ in payload.pool_captains],
-                    team_names={c_.registration_id: c_.name for c_ in payload.pool_captains if c_.name},
-                    captain_order=payload.captain_order,
-                    rng_seed=payload.seed,
-                )
-            elif payload.captains:
-                captains = [
-                    lifecycle.CaptainSeed(
-                        name=cap.name, draft_position=cap.draft_position, user_id=cap.user_id, battle_tag=cap.battle_tag
-                    )
-                    for cap in payload.captains
-                ]
-                players = [
-                    lifecycle.PlayerSeed(
-                        primary_role=p.primary_role,
-                        user_id=p.user_id,
-                        battle_tag=p.battle_tag,
-                        secondary_roles=p.secondary_roles,
-                        sub_role=p.sub_role,
-                        is_flex=p.is_flex,
-                        division_number=p.division_number,
-                        rank_value=p.rank_value,
-                        role_ranks=({p.primary_role.value: p.rank_value} if p.rank_value is not None else {}),
-                    )
-                    for p in payload.players
-                ]
-                await lifecycle.seed(session, draft, captains=captains, players=players)
-            else:
-                raise HTTPException(
-                    status_code=422,
-                    detail="Provide pool_captains (from the balancer pool) or manual captains",
-                )
-            await draft_rt.publish_draft_event(
-                session,
-                _redis(logger),
-                draft_session=draft,
-                event_type="draft.session_updated",
-                payload={"session_id": draft.id, "status": draft.status},
-                actor_user_id=user.id,
+            draft = await session.scalar(
+                sa.select(DraftSession).where(DraftSession.id == session_id).with_for_update()
             )
-            await session.commit()
-            return DraftSessionRead.model_validate(draft)
+            if draft is None:
+                raise HTTPException(status_code=404, detail="Draft session not found")
+            lifecycle.validate_seed_version(draft, expected_version=payload.expected_version)
+            before = await _seed_counts(session, draft.id)
+            version_before = draft.version
+            savepoint = await session.begin_nested() if payload.preview_only else None
+            try:
+                if payload.pool_captains:
+                    await lifecycle.seed_from_pool(
+                        session,
+                        draft,
+                        captain_registration_ids=[c_.registration_id for c_ in payload.pool_captains],
+                        team_names={c_.registration_id: c_.name for c_ in payload.pool_captains if c_.name},
+                        captain_order=payload.captain_order,
+                        rng_seed=payload.seed,
+                    )
+                elif payload.captains:
+                    captains = [
+                        lifecycle.CaptainSeed(
+                            name=cap.name,
+                            draft_position=cap.draft_position,
+                            user_id=cap.user_id,
+                            battle_tag=cap.battle_tag,
+                        )
+                        for cap in payload.captains
+                    ]
+                    players = [
+                        lifecycle.PlayerSeed(
+                            primary_role=p.primary_role,
+                            user_id=p.user_id,
+                            battle_tag=p.battle_tag,
+                            secondary_roles=p.secondary_roles,
+                            sub_role=p.sub_role,
+                            is_flex=p.is_flex,
+                            division_number=p.division_number,
+                            rank_value=p.rank_value,
+                            role_ranks=({p.primary_role.value: p.rank_value} if p.rank_value is not None else {}),
+                        )
+                        for p in payload.players
+                    ]
+                    await lifecycle.seed(session, draft, captains=captains, players=players)
+                else:
+                    raise HTTPException(
+                        status_code=422,
+                        detail="Provide pool_captains (from the balancer pool) or manual captains",
+                    )
+
+                after = await _seed_counts(session, draft.id)
+                report = await feasibility.analyze_session(session, draft)
+                response = DraftSeedResponse(
+                    session=DraftSessionRead.model_validate(draft),
+                    preview_only=payload.preview_only,
+                    diff=_seed_diff(
+                        before=before,
+                        after=after,
+                        version_before=version_before,
+                        version_after=draft.version,
+                    ),
+                    feasibility=DraftFeasibilityResponse.model_validate(report),
+                )
+                if savepoint is not None:
+                    await savepoint.rollback()
+                    return response
+
+                await draft_rt.publish_draft_event(
+                    session,
+                    _redis(logger),
+                    draft_session=draft,
+                    event_type="draft.session_updated",
+                    payload={"session_id": draft.id, "status": draft.status},
+                    actor_user_id=user.id,
+                )
+                await session.commit()
+                return response
+            except Exception:
+                if savepoint is not None and savepoint.is_active:
+                    await savepoint.rollback()
+                raise
 
         return await c.envelope(logger, "draft.seed", op, session_factory=_SF)
 
@@ -356,6 +596,7 @@ def register(broker: Any, logger: Any) -> None:
             if payload.allow_admin_override is not None:
                 draft.allow_admin_override = payload.allow_admin_override
             if payload.rounds is not None:
+                lifecycle.validate_roster_shape(rounds=payload.rounds, team_size=draft.team_size)
                 draft.rounds = payload.rounds
             if payload.settings is not None:
                 draft.settings_json = payload.settings
@@ -467,6 +708,13 @@ def register(broker: Any, logger: Any) -> None:
             c.require_workspace_permission(data, user, ws_id, "team", "import")
             payload = DraftPickOverrideRequest.model_validate(c.payload(data))
             draft, pick = await _load_pick(session, pick_id)
+            before = {
+                "player_id": pick.picked_player_id,
+                "team_id": pick.draft_team_id,
+                "role": pick.target_role,
+                "rank_value": pick.target_rank_value,
+                "version": pick.version,
+            }
             public_user_id = await session.scalar(sa.select(models.User.id).where(models.User.auth_user_id == user.id))
             result = await selection.override(
                 session,
@@ -476,6 +724,22 @@ def register(broker: Any, logger: Any) -> None:
                 expected_version=payload.expected_version,
                 actor_user_id=public_user_id,
                 target_role=payload.target_role,
+            )
+            session.add(
+                _override_audit_event(
+                    session_id=draft.id,
+                    pick_id=pick.id,
+                    actor_auth_user_id=user.id,
+                    reason=payload.note,
+                    before=before,
+                    after={
+                        "player_id": pick.picked_player_id,
+                        "team_id": pick.draft_team_id,
+                        "role": pick.target_role,
+                        "rank_value": pick.target_rank_value,
+                        "version": pick.version,
+                    },
+                )
             )
             await _publish_result(
                 session, _redis(logger), draft, result, made_event="draft.pick_made", actor_user_id=public_user_id

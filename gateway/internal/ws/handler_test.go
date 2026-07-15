@@ -239,14 +239,46 @@ func TestWS_FanoutAndPresence(t *testing.T) {
 	}
 }
 
+func TestWS_DraftPresenceIncludesAuthenticatedUsersAndAnonymousViewerCount(t *testing.T) {
+	url := newServer(t, allowAuthorizer{allow: true}, fakeReplayer{cursor: 0})
+	ctx := context.Background()
+	const topic = "tournament:1:draft"
+
+	authenticated := dial(t, ctx, url, mintToken(t, "7"))
+	writeJSON(t, ctx, authenticated, map[string]any{"op": "subscribe", "topic": topic})
+	readJSON(t, ctx, authenticated) // subscribed
+	first := readJSON(t, ctx, authenticated)
+	if ids := presenceIDsFor(t, first, "draft.presence"); !equalInts(ids, []int{7}) {
+		t.Fatalf("expected authenticated presence [7], got %v", ids)
+	}
+	if count := presenceAnonymousCount(t, first); count != 0 {
+		t.Fatalf("expected zero anonymous viewers, got %d", count)
+	}
+
+	anonymous := dial(t, ctx, url, "")
+	writeJSON(t, ctx, anonymous, map[string]any{"op": "subscribe", "topic": topic})
+	readJSON(t, ctx, anonymous) // subscribed
+	updated := readJSON(t, ctx, anonymous)
+	if ids := presenceIDsFor(t, updated, "draft.presence"); !equalInts(ids, []int{7}) {
+		t.Fatalf("expected authenticated presence [7], got %v", ids)
+	}
+	if count := presenceAnonymousCount(t, updated); count != 1 {
+		t.Fatalf("expected one anonymous viewer, got %d", count)
+	}
+}
+
 func presenceIDs(t *testing.T, m map[string]any) []int {
+	return presenceIDsFor(t, m, "balancer.presence")
+}
+
+func presenceIDsFor(t *testing.T, m map[string]any, eventType string) []int {
 	t.Helper()
 	if m["op"] != "event" {
 		t.Fatalf("expected event frame for presence, got %v", m)
 	}
 	ev := m["event"].(map[string]any)
-	if ev["event_type"] != "balancer.presence" {
-		t.Fatalf("expected balancer.presence, got %v", ev["event_type"])
+	if ev["event_type"] != eventType {
+		t.Fatalf("expected %s, got %v", eventType, ev["event_type"])
 	}
 	raw := ev["data"].(map[string]any)["user_ids"].([]any)
 	ids := make([]int, len(raw))
@@ -254,6 +286,12 @@ func presenceIDs(t *testing.T, m map[string]any) []int {
 		ids[i] = int(v.(float64))
 	}
 	return ids
+}
+
+func presenceAnonymousCount(t *testing.T, m map[string]any) int {
+	t.Helper()
+	ev := m["event"].(map[string]any)
+	return int(ev["data"].(map[string]any)["anonymous_viewer_count"].(float64))
 }
 
 func equalInts(a, b []int) bool {

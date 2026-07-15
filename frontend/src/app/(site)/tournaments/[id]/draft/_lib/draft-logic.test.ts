@@ -3,7 +3,15 @@ import { describe, expect, it } from "vitest";
 import type { RealtimeEventEnvelope } from "@/types/realtime.types";
 import type { DraftBoard, DraftEventData, DraftPick, DraftPlayer, DraftTeam } from "@/types/draft.types";
 
-import { applyDraftEvent, computeGating, isUrgent, remainingMs } from "./draft-logic";
+import {
+  applyDraftEvent,
+  canConfirmPick,
+  computeGating,
+  draftInvalidationTargets,
+  isUrgent,
+  presenceFromEvent,
+  remainingMs
+} from "./draft-logic";
 
 function team(
   id: number,
@@ -40,6 +48,7 @@ function player(id: number): DraftPlayer {
     role_ranks: {},
     role_top_heroes: {},
     additional_info: {},
+    version: 0,
   };
 }
 
@@ -83,6 +92,8 @@ function makeBoard(): DraftBoard {
       allow_admin_override: true,
       exported_at: null,
       export_status: null,
+      settings_json: {},
+      version: 0,
     },
     teams: [team(10, 100, 1), team(11, 101, 2)],
     picks: [p1, pick(2, 11, "upcoming")],
@@ -218,5 +229,81 @@ describe("computeGating", () => {
     expect(g.isAdmin).toBe(true);
     expect(g.isSpectator).toBe(false);
     expect(g.isMyPick).toBe(false);
+  });
+});
+
+describe("draft safety state", () => {
+  it("applies resolved role, rank, and authoritative pick version", () => {
+    const next = applyDraftEvent(
+      makeBoard(),
+      ev("draft.pick_made", {
+        pick_id: 1,
+        picked_player_id: 50,
+        target_role: "support",
+        target_rank_value: 2875,
+        pick_version: 4
+      })
+    );
+
+    const resolved = next.picks.find((p) => p.id === 1)!;
+    expect(resolved.target_role).toBe("support");
+    expect(resolved.target_rank_value).toBe(2875);
+    expect(resolved.version).toBe(4);
+  });
+
+  it("pauses on blocked while keeping the current pick unresolved", () => {
+    const next = applyDraftEvent(makeBoard(), ev("draft.blocked", { reason: "role_shortage" }));
+
+    expect(next.session.status).toBe("paused");
+    expect(next.session.blocked_reason).toBe("role_shortage");
+    expect(next.current_pick?.status).toBe("on_clock");
+  });
+
+  it("builds real presence from authenticated IDs and anonymous count", () => {
+    expect(
+      presenceFromEvent(
+        { session_id: 1, user_ids: [7, 9], anonymous_viewer_count: 3 },
+        "2026-07-14T12:00:00Z"
+      )
+    ).toEqual({
+      users: {
+        7: { last_active_at: "2026-07-14T12:00:00Z" },
+        9: { last_active_at: "2026-07-14T12:00:00Z" }
+      },
+      anonymous_viewer_count: 3
+    });
+  });
+
+  it("allows confirm only while connected with current safe options", () => {
+    const options = {
+      pick_id: 1,
+      pick_version: 4,
+      draft_team_id: 10,
+      options: [
+        {
+          player_id: 50,
+          role: "support" as const,
+          is_safe: true,
+          reason_code: null,
+          unmatched_slots: [],
+          blocking_player_ids: [],
+          suggestion_score: null
+        }
+      ]
+    };
+
+    expect(canConfirmPick("connected", 4, options, { playerId: 50, role: "support" })).toBe(true);
+    expect(canConfirmPick("reconnecting", 4, options, { playerId: 50, role: "support" })).toBe(false);
+    expect(canConfirmPick("connected", 5, options, { playerId: 50, role: "support" })).toBe(false);
+  });
+
+  it("returns narrow invalidation targets for realtime changes", () => {
+    expect(draftInvalidationTargets("draft.pick_made")).toEqual(["feasibility", "options"]);
+    expect(draftInvalidationTargets("draft.player_updated")).toEqual([
+      "board",
+      "feasibility",
+      "options"
+    ]);
+    expect(draftInvalidationTargets("draft.presence")).toEqual([]);
   });
 });

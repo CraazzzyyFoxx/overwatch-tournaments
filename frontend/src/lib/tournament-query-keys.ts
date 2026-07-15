@@ -37,4 +37,7 @@ export const tournamentQueryKeys = {
   draftSession: (sessionId: number) => ["draft", "session", sessionId] as const,
   draftSuggestions: (sessionId: number) =>
     ["draft", "session", sessionId, "suggestions"] as const,
+  draftFeasibility: (sessionId: number) =>
+    ["draft", "session", sessionId, "feasibility"] as const,
+  draftPickOptions: (pickId: number) => ["draft", "pick", pickId, "options"] as const,
 };

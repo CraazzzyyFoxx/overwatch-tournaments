@@ -137,10 +137,12 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
         ]
 
     def _players(self) -> list[lifecycle.PlayerSeed]:
-        roles = [DraftRole.TANK, DraftRole.DPS, DraftRole.SUPPORT]
+        # Captains default to TANK in this fixture. A 3-player roster therefore
+        # needs two DPS picks per team; keep enough DPS players for start preflight.
+        roles = [DraftRole.DPS] * 6 + [DraftRole.TANK, DraftRole.SUPPORT, DraftRole.SUPPORT]
         return [
-            lifecycle.PlayerSeed(primary_role=roles[i % 3], rank_value=3000 + i * 50, battle_tag=f"P{i}#1")
-            for i in range(9)
+            lifecycle.PlayerSeed(primary_role=role, rank_value=3000 + i * 50, battle_tag=f"P{i}#1")
+            for i, role in enumerate(roles)
         ]
 
     async def _new_session(self, s):

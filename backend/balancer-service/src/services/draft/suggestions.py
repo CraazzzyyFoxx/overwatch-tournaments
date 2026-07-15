@@ -106,12 +106,15 @@ def _candidates(
     role_capacity: Mapping[DraftRole, int],
     cfg: FitConfig,
     strategy: DraftAutopickStrategy,
+    allowed_options: set[tuple[int, DraftRole]] | None = None,
 ) -> list[FitResult]:
     open_roles = [role for role, cap in role_capacity.items() if cap > 0]
     results: list[FitResult] = []
     for player in available:
         for role in open_roles:
             if role not in player.playable_roles:
+                continue
+            if allowed_options is not None and (player.player_id, role) not in allowed_options:
                 continue
             results.append(
                 player_fit(
@@ -137,8 +140,10 @@ def best_fit(
     role_capacity: Mapping[DraftRole, int],
     strategy: DraftAutopickStrategy,
     cfg: FitConfig,
+    *,
+    allowed_options: set[tuple[int, DraftRole]] | None = None,
 ) -> FitResult | None:
-    results = _candidates(available, role_capacity, cfg, strategy)
+    results = _candidates(available, role_capacity, cfg, strategy, allowed_options)
     if not results:
         return None
     by_id = {p.player_id: p for p in available}
@@ -152,8 +157,9 @@ def rank_suggestions(
     *,
     strategy: DraftAutopickStrategy = DraftAutopickStrategy.BEST_FIT,
     limit: int = 5,
+    allowed_options: set[tuple[int, DraftRole]] | None = None,
 ) -> list[FitResult]:
-    results = _candidates(available, role_capacity, cfg, strategy)
+    results = _candidates(available, role_capacity, cfg, strategy, allowed_options)
     by_id = {p.player_id: p for p in available}
     # Best role per player, then top-N players by fit.
     best_per_player: dict[int, FitResult] = {}

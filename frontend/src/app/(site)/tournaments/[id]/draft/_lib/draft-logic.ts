@@ -1,9 +1,13 @@
 import type { RealtimeEventEnvelope } from "@/types/realtime.types";
+import type { RealtimeConnectionState } from "@/types/realtime.types";
 import type {
   DraftBoard,
   DraftEventData,
   DraftPick,
   DraftPickStatus,
+  DraftPickOptionsResponse,
+  DraftPresenceState,
+  DraftRole,
 } from "@/types/draft.types";
 
 export const URGENT_THRESHOLD_MS = 10_000;
@@ -53,6 +57,14 @@ export function applyDraftEvent(
         status,
         picked_player_id: data.picked_player_id ?? null,
         is_autopick: event.event_type === "draft.autopicked",
+        target_role:
+          data.target_role ?? board.picks.find((pick) => pick.id === data.pick_id)?.target_role ?? null,
+        target_rank_value:
+          data.target_rank_value !== undefined
+            ? data.target_rank_value
+            : board.picks.find((pick) => pick.id === data.pick_id)?.target_rank_value ?? null,
+        version:
+          data.pick_version ?? board.picks.find((pick) => pick.id === data.pick_id)?.version ?? 0,
       });
       // Mark the picked player as rostered (kept in the list, derived available
       // = status "available"); rosters group by drafted_by_team_id.
@@ -82,6 +94,16 @@ export function applyDraftEvent(
     case "draft.paused":
       return { ...board, session: { ...board.session, status: "paused" } };
 
+    case "draft.blocked":
+      return {
+        ...board,
+        session: {
+          ...board.session,
+          status: "paused",
+          blocked_reason: data.reason ?? "role_shortage"
+        }
+      };
+
     case "draft.resumed": {
       const picks =
         board.session.current_pick_id != null
@@ -90,14 +112,19 @@ export function applyDraftEvent(
             })
           : board.picks;
       const current = picks.find((p) => p.id === board.session.current_pick_id) ?? board.current_pick;
-      return { ...board, picks, current_pick: current, session: { ...board.session, status: "live" } };
+      return {
+        ...board,
+        picks,
+        current_pick: current,
+        session: { ...board.session, status: "live", blocked_reason: null }
+      };
     }
 
     case "draft.completed":
       return {
         ...board,
         current_pick: null,
-        session: { ...board.session, status: "completed", current_pick_id: null },
+        session: { ...board.session, status: "completed", current_pick_id: null, blocked_reason: null },
       };
 
     case "draft.cancelled":
@@ -106,6 +133,54 @@ export function applyDraftEvent(
     default:
       return board;
   }
+}
+
+export function presenceFromEvent(
+  data: DraftEventData,
+  occurredAt: string
+): DraftPresenceState {
+  return {
+    users: Object.fromEntries(
+      [...new Set(data.user_ids ?? [])].map((userId) => [userId, { last_active_at: occurredAt }])
+    ),
+    anonymous_viewer_count: Math.max(0, data.anonymous_viewer_count ?? 0)
+  };
+}
+
+export function canConfirmPick(
+  connectionState: RealtimeConnectionState,
+  currentPickVersion: number,
+  options: DraftPickOptionsResponse | null,
+  selection: { playerId: number; role: DraftRole } | null
+): boolean {
+  if (connectionState !== "connected" || !options || !selection) return false;
+  if (options.pick_version !== currentPickVersion) return false;
+  return options.options.some(
+    (option) =>
+      option.player_id === selection.playerId && option.role === selection.role && option.is_safe
+  );
+}
+
+export type DraftInvalidationTarget = "board" | "feasibility" | "options";
+
+export function draftInvalidationTargets(eventType: string): DraftInvalidationTarget[] {
+  if (eventType === "draft.presence") return [];
+  if (
+    eventType === "draft.player_updated" ||
+    eventType === "draft.blocked" ||
+    eventType === "draft.rollback" ||
+    eventType === "draft.session_updated"
+  ) {
+    return ["board", "feasibility", "options"];
+  }
+  if (
+    eventType === "draft.pick_made" ||
+    eventType === "draft.autopicked" ||
+    eventType === "draft.pick_started"
+  ) {
+    return ["feasibility", "options"];
+  }
+  return [];
 }
 
 export interface DraftGating {

@@ -1,12 +1,24 @@
 import { apiFetch } from "@/lib/api-fetch";
 import type {
   DraftBoard,
+  DraftFeasibility,
+  DraftPickOptionsResponse,
   DraftRole,
+  DraftRoleEditRequest,
+  DraftRoleEditResponse,
   DraftSeedRequest,
+  DraftSeedResponse,
   DraftSession,
   DraftSessionCreateRequest,
   DraftSuggestionsResponse
 } from "@/types/draft.types";
+
+export const draftEndpoints = {
+  feasibility: (sessionId: number) => `/api/balancer/draft/sessions/${sessionId}/feasibility`,
+  pickOptions: (pickId: number) => `/api/balancer/draft/picks/${pickId}/options`,
+  playerRole: (sessionId: number, playerId: number) =>
+    `/api/balancer/draft/sessions/${sessionId}/players/${playerId}/roles`
+};
 
 // All draft endpoints live on balancer-service under /api/balancer/draft/...
 // Reads are public (spectating); writes use apiFetch's automatic bearer token.
@@ -40,6 +52,28 @@ export default class draftService {
     return res.json();
   }
 
+  static async getFeasibility(sessionId: number): Promise<DraftFeasibility> {
+    const res = await apiFetch(draftEndpoints.feasibility(sessionId));
+    return res.json();
+  }
+
+  static async getPickOptions(pickId: number): Promise<DraftPickOptionsResponse> {
+    const res = await apiFetch(draftEndpoints.pickOptions(pickId));
+    return res.json();
+  }
+
+  static async editPlayerRole(
+    sessionId: number,
+    playerId: number,
+    body: DraftRoleEditRequest
+  ): Promise<DraftRoleEditResponse> {
+    const res = await apiFetch(draftEndpoints.playerRole(sessionId, playerId), {
+      method: "POST",
+      body
+    });
+    return res.json();
+  }
+
   // --- admin lifecycle (keyed by tournament_id) ---
   static async createSession(
     tournamentId: number,
@@ -56,7 +90,7 @@ export default class draftService {
     tournamentId: number,
     sessionId: number,
     body: DraftSeedRequest
-  ): Promise<DraftSession> {
+  ): Promise<DraftSeedResponse> {
     const res = await apiFetch(`/api/balancer/draft/tournaments/${tournamentId}/sessions/${sessionId}/seed`,
       { method: "POST", body }
     );
@@ -99,7 +133,12 @@ export default class draftService {
 
   static async override(
     pickId: number,
-    body: { expected_version: number; player_id?: number | null; note?: string | null }
+    body: {
+      expected_version: number;
+      player_id?: number | null;
+      target_role?: DraftRole | null;
+      note?: string | null;
+    }
   ): Promise<DraftSession> {
     const res = await apiFetch(`/api/balancer/draft/picks/${pickId}/override`, {
       method: "POST",

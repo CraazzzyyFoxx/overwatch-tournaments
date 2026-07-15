@@ -173,12 +173,12 @@ class DraftCustomRulesTests(IsolatedAsyncioTestCase):
 
     async def test_custom_format_dynamic_rules(self) -> None:
         async with self.Session() as s:
-            rules = ["linear", "team_avg_asc"]
+            rules = ["linear", "team_avg_asc", "linear", "linear"]
             draft = await lifecycle.create_session(
                 s,
                 tournament_id=self.tournament_id,
                 workspace_id=self.workspace_id,
-                rounds=2,
+                rounds=4,
                 team_size=5,
                 fmt=DraftFormat.CUSTOM,
                 settings={"round_rules": rules},

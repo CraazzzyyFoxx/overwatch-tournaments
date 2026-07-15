@@ -26,7 +26,7 @@ from shared.core.enums import (
 from shared.core.errors import ApiExc, ApiHTTPException
 from shared.models.balancer.draft import DraftPick, DraftPlayer, DraftSession, DraftTeam
 from shared.repository.workspace import get_or_create_workspace_member
-from src.services.draft import loaders, ranks
+from src.services.draft import feasibility, loaders, ranks
 from src.services.draft import suggestions as sug
 
 
@@ -35,6 +35,7 @@ class DraftResult:
     pick: DraftPick
     next_pick: DraftPick | None
     completed: bool
+    blocked_reason: str | None = None
 
 
 def _err(code: str, msg: str, status_code: int = 409) -> ApiHTTPException:
@@ -185,18 +186,7 @@ async def _apply_won(
 
 
 def role_targets(team_size: int) -> dict[DraftRole, int]:
-    if team_size >= 5:
-        return {
-            DraftRole.TANK: 1,
-            DraftRole.DPS: 2,
-            DraftRole.SUPPORT: max(2, team_size - 3),
-        }
-    if team_size <= 0:
-        return {DraftRole.TANK: 0, DraftRole.DPS: 0, DraftRole.SUPPORT: 0}
-    tank = min(1, team_size)
-    dps = min(2, max(team_size - tank, 0))
-    support = max(team_size - tank - dps, 0)
-    return {DraftRole.TANK: tank, DraftRole.DPS: dps, DraftRole.SUPPORT: support}
+    return feasibility.role_targets_for_team_size(team_size)
 
 
 async def _team_role_counts(session: AsyncSession, team_id: int) -> dict[DraftRole, int]:
@@ -307,6 +297,36 @@ def _role_is_legal(player: DraftPlayer, target_role: DraftRole | None) -> bool:
     return target_role.value in playable
 
 
+def _playable_roles(player: DraftPlayer) -> frozenset[DraftRole]:
+    if player.is_flex:
+        return frozenset(DraftRole)
+    return frozenset(DraftRole(role) for role in {player.primary_role, *(player.secondary_roles_json or [])})
+
+
+def _unsafe_pick_error(report: feasibility.DraftFeasibilityReport) -> ApiHTTPException:
+    details = feasibility.describe_role_deficits(report) or "unknown role deficit"
+    return _err(
+        "pick_makes_draft_infeasible",
+        f"This pick would leave unfillable role slots: {details}",
+        status_code=422,
+    )
+
+
+def mark_role_shortage_paused(draft_session: DraftSession, pick: DraftPick) -> DraftResult:
+    """Pause on the unresolved current pick when no globally safe option exists."""
+
+    draft_session.status = DraftStatus.PAUSED.value
+    draft_session.blocked_reason = "role_shortage"
+    pick.clock_expires_at = None
+    pick.clock_remaining_ms = 0
+    return DraftResult(
+        pick=pick,
+        next_pick=None,
+        completed=False,
+        blocked_reason="role_shortage",
+    )
+
+
 def _is_on_clock_captain(
     team: DraftTeam | None,
     *,
@@ -356,6 +376,18 @@ async def select(
     if counts.get(chosen_role, 0) >= targets.get(chosen_role, 0):
         raise _err("role_filled", f"Role {chosen_role.value} is already filled for this team", status_code=422)
 
+    feasibility_report = await feasibility.analyze_session(
+        session,
+        draft_session,
+        hypothetical=feasibility.DraftAssignment(
+            player_id=player.id,
+            team_id=pick.draft_team_id,
+            role=chosen_role,
+        ),
+    )
+    if not feasibility_report.is_feasible:
+        raise _unsafe_pick_error(feasibility_report)
+
     won = await _finalize(
         session,
         pick.id,
@@ -402,7 +434,7 @@ async def autopick(
         sug.FitPlayer(
             player_id=p.id,
             rank_value=p.rank_value or 0,
-            playable_roles=frozenset(DraftRole(r) for r in ({p.primary_role, *(p.secondary_roles_json or [])})),
+            playable_roles=_playable_roles(p),
             preference_order=(DraftRole(p.primary_role),),
             is_flex=p.is_flex,
             user_id=p.user_id,
@@ -410,20 +442,33 @@ async def autopick(
         )
         for p in available
     ]
+    options = await feasibility.evaluate_session_pick_options(
+        session,
+        draft_session,
+        team_id=pick.draft_team_id,
+    )
+    safe_options = {(option.player_id, option.role) for option in options if option.is_safe}
     choice = sug.best_fit(
         fit_players,
         capacity,
         DraftAutopickStrategy(draft_session.autopick_strategy),
         sug.FitConfig(),
+        allowed_options=safe_options,
     )
-    # Fallback: any available player if fit produced nothing (e.g. no capacity map).
-    chosen_id = choice.player_id if choice is not None else (available[0].id if available else None)
+    chosen_id = choice.player_id if choice is not None else None
     chosen_role = choice.role if choice is not None else None
+
+    if chosen_id is None:
+        result = mark_role_shortage_paused(draft_session, pick)
+        await session.flush()
+        await session.refresh(pick)
+        await session.refresh(draft_session)
+        return result
 
     won = await _finalize(
         session,
         pick.id,
-        status=DraftPickStatus.AUTOPICKED if chosen_id is not None else DraftPickStatus.SKIPPED,
+        status=DraftPickStatus.AUTOPICKED,
         player_id=chosen_id,
         picked_by_member_id=None,
         is_autopick=True,
@@ -432,11 +477,6 @@ async def autopick(
     )
     if not won:
         raise _err("pick_already_resolved", "Pick was already resolved")
-    if chosen_id is None:
-        await session.refresh(pick)
-        next_pick = await _advance(session, draft_session)
-        await session.refresh(draft_session)
-        return DraftResult(pick=pick, next_pick=next_pick, completed=next_pick is None)
     # ranks.role_rank(player, ...) reads role_ranks -> roles; the row is already in
     # the identity map from the eager-loaded `available` query, so get() returns it
     # with roles loaded. populate_existing guards the case it was cached unloaded.
@@ -465,6 +505,23 @@ async def override(
     player = await _load_available_player(session, draft_session.id, player_id)
     if not _role_is_legal(player, target_role):
         raise _err("illegal_role", "Player cannot play the requested role", status_code=422)
+    resolved_role = target_role or DraftRole(player.primary_role)
+    counts = await _team_role_counts(session, pick.draft_team_id)
+    targets = role_targets(draft_session.team_size)
+    if counts.get(resolved_role, 0) >= targets.get(resolved_role, 0):
+        raise _err("role_filled", f"Role {resolved_role.value} is already filled for this team", status_code=422)
+    feasibility_report = await feasibility.analyze_session(
+        session,
+        draft_session,
+        hypothetical=feasibility.DraftAssignment(
+            player_id=player.id,
+            team_id=pick.draft_team_id,
+            role=resolved_role,
+        ),
+    )
+    if not feasibility_report.is_feasible:
+        raise _unsafe_pick_error(feasibility_report)
+
     won = await _finalize(
         session,
         pick.id,
@@ -477,7 +534,6 @@ async def override(
     )
     if not won:
         raise _err("pick_already_resolved", "Pick was already resolved")
-    resolved_role = target_role or DraftRole(player.primary_role)
     pick.target_role = resolved_role.value
     pick.target_rank_value = ranks.role_rank(player, resolved_role)
     return await _apply_won(session, draft_session, pick, player)

@@ -24,6 +24,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass, field
 
 from src.services.balancer.algorithm.entities import Player
+from src.services.role_matching import maximum_bipartite_matching
 
 
 @dataclass(frozen=True)
@@ -138,24 +139,12 @@ def _max_no_off_role_matching(
             slot_indices.extend(slots_per_role[role])
         player_eligible.append(slot_indices)
 
-    slot_owner: list[int | None] = [None] * len(slots)
-
-    def try_match(player_idx: int, visited: set[int]) -> bool:
-        for slot_idx in player_eligible[player_idx]:
-            if slot_idx in visited:
-                continue
-            visited.add(slot_idx)
-            owner = slot_owner[slot_idx]
-            if owner is None or try_match(owner, visited):
-                slot_owner[slot_idx] = player_idx
-                return True
-        return False
-
-    matched_count = 0
-    for player_idx in range(len(players)):
-        if try_match(player_idx, set()):
-            matched_count += 1
-    return matched_count
+    result = maximum_bipartite_matching(
+        candidates=tuple(range(len(players))),
+        slots=tuple(range(len(slots))),
+        eligible_slots=dict(enumerate(player_eligible)),
+    )
+    return result.matched_count
 
 
 __all__ = ["FeasibilityReport", "RoleFeasibility", "analyze_feasibility"]

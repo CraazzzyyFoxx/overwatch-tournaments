@@ -122,6 +122,22 @@ def test_returns_none_when_no_players() -> None:
     assert sug.best_fit([], {T: 1}, DraftAutopickStrategy.BEST_FIT, sug.FitConfig()) is None
 
 
+def test_best_fit_considers_only_globally_safe_player_role_pairs() -> None:
+    unsafe_star = fp(1, 5000, {D, SUP}, prefs=(D, SUP))
+    safe_native = fp(2, 3000, {SUP}, prefs=(SUP,))
+
+    result = sug.best_fit(
+        [unsafe_star, safe_native],
+        {D: 1, SUP: 1},
+        DraftAutopickStrategy.BEST_AVAILABLE,
+        sug.FitConfig(),
+        allowed_options={(1, SUP), (2, SUP)},
+    )
+
+    assert result is not None
+    assert (result.player_id, result.role) == (1, SUP)
+
+
 # ---- determinism ----
 
 

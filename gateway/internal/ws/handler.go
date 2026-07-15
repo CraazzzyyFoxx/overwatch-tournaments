@@ -501,14 +501,17 @@ func (h *Handler) handlePublish(conn *Conn, op *protocol.ClientOp) {
 }
 
 func (h *Handler) broadcastPresence(topic string) {
-	ids := h.hub.presenceUserIDs(topic)
+	ids, anonymousViewerCount := h.hub.presenceStats(topic)
 	env := protocol.Envelope{
 		EventID:       0,
-		EventType:     BalancerPresence,
+		EventType:     presenceEventType(topic),
 		SchemaVersion: 1,
 		OccurredAt:    time.Now().UTC(),
 		ActorUserID:   nil,
-		Data:          map[string]any{"user_ids": ids},
+		Data: map[string]any{
+			"user_ids":              ids,
+			"anonymous_viewer_count": anonymousViewerCount,
+		},
 	}
 	h.hub.Route(topic, protocol.EventFrame(topic, env), nil)
 }

@@ -35,11 +35,17 @@ OPERATIONS: dict[str, Op] = {
     "rpc.balancer.draft.session_get": Op(response=draft_schemas.DraftSessionRead),
     "rpc.balancer.draft.session_board": Op(response=draft_schemas.DraftBoardSnapshot),
     "rpc.balancer.draft.suggestions": Op(response=draft_schemas.DraftSuggestionsResponse),
+    "rpc.balancer.draft.feasibility": Op(response=draft_schemas.DraftFeasibilityResponse),
+    "rpc.balancer.draft.pick_options": Op(response=draft_schemas.DraftPickOptionsResponse),
+    "rpc.balancer.draft.player_role_edit": Op(
+        request=draft_schemas.DraftRoleEditRequest,
+        response=draft_schemas.DraftRoleEditResponse,
+    ),
     # ── draft: admin lifecycle (all -> DraftSessionRead) ───────────────────
     "rpc.balancer.draft.session_create": Op(
         request=draft_schemas.DraftSessionCreateRequest, response=draft_schemas.DraftSessionRead
     ),
-    "rpc.balancer.draft.seed": Op(request=draft_schemas.DraftSeedRequest, response=draft_schemas.DraftSessionRead),
+    "rpc.balancer.draft.seed": Op(request=draft_schemas.DraftSeedRequest, response=draft_schemas.DraftSeedResponse),
     "rpc.balancer.draft.session_patch": Op(
         request=draft_schemas.DraftSessionPatchRequest, response=draft_schemas.DraftSessionRead
     ),

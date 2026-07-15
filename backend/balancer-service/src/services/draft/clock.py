@@ -80,19 +80,33 @@ async def fire_autopick_if_expired(
             await session.rollback()
             return False
 
-        await draft_rt.publish_draft_event(
-            session,
-            redis,
-            draft_session=draft,
-            event_type="draft.autopicked",
-            payload={
-                "session_id": draft.id,
-                "pick_id": result.pick.id,
-                "draft_team_id": result.pick.draft_team_id,
-                "picked_player_id": result.pick.picked_player_id,
-                "reason": "timeout",
-            },
-        )
+        if result.blocked_reason:
+            await draft_rt.publish_draft_event(
+                session,
+                redis,
+                draft_session=draft,
+                event_type="draft.blocked",
+                payload={
+                    "session_id": draft.id,
+                    "pick_id": result.pick.id,
+                    "draft_team_id": result.pick.draft_team_id,
+                    "reason": result.blocked_reason,
+                },
+            )
+        else:
+            await draft_rt.publish_draft_event(
+                session,
+                redis,
+                draft_session=draft,
+                event_type="draft.autopicked",
+                payload={
+                    "session_id": draft.id,
+                    "pick_id": result.pick.id,
+                    "draft_team_id": result.pick.draft_team_id,
+                    "picked_player_id": result.pick.picked_player_id,
+                    "reason": "timeout",
+                },
+            )
         if result.completed:
             await draft_rt.publish_draft_event(
                 session,

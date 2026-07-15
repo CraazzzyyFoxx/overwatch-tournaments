@@ -14,6 +14,7 @@ export interface DraftSession {
   tournament_id: number;
   workspace_id: number;
   status: DraftStatus;
+  blocked_reason: string | null;
   format: DraftFormat;
   rounds: number;
   pick_time_seconds: number;
@@ -26,6 +27,7 @@ export interface DraftSession {
   exported_at: string | null;
   export_status: string | null;
   settings_json: Record<string, any>;
+  version: number;
 }
 
 export interface DraftTeam {
@@ -55,6 +57,7 @@ export interface DraftPlayer {
   role_ranks: Record<string, number>;
   role_top_heroes: Record<string, Array<string | { slug: string; image_path: string | null }>>;
   additional_info: Record<string, unknown>;
+  version: number;
 }
 
 export interface DraftPick {
@@ -99,6 +102,50 @@ export interface DraftSuggestionsResponse {
   suggestions: DraftSuggestion[];
 }
 
+export interface DraftSlot {
+  team_id: number;
+  role: DraftRole;
+  ordinal: number;
+}
+
+export interface DraftRoleDeficit {
+  role: DraftRole;
+  unmatched_slots: number;
+  eligible_players: number;
+}
+
+export interface DraftFeasibility {
+  is_feasible: boolean;
+  total_open_slots: number;
+  matched_slots: number;
+  unmatched_slots: DraftSlot[];
+  role_deficits: DraftRoleDeficit[];
+  blocking_player_ids: number[];
+  reason_code: string | null;
+}
+
+export interface DraftPickOption {
+  player_id: number;
+  role: DraftRole;
+  is_safe: boolean;
+  reason_code: string | null;
+  unmatched_slots: DraftSlot[];
+  blocking_player_ids: number[];
+  suggestion_score: number | null;
+}
+
+export interface DraftPickOptionsResponse {
+  pick_id: number;
+  pick_version: number;
+  draft_team_id: number;
+  options: DraftPickOption[];
+}
+
+export interface DraftPresenceState {
+  users: Record<number, { last_active_at: string }>;
+  anonymous_viewer_count: number;
+}
+
 // Realtime event payloads (topic tournament:{id}:draft).
 export type DraftEventType =
   | "draft.session_updated"
@@ -110,6 +157,8 @@ export type DraftEventType =
   | "draft.completed"
   | "draft.cancelled"
   | "draft.presence"
+  | "draft.player_updated"
+  | "draft.blocked"
   | "draft.rollback";
 
 export interface DraftEventData {
@@ -124,6 +173,14 @@ export interface DraftEventData {
   remaining_ms?: number;
   count_bucket?: string;
   reason?: string;
+  target_role?: DraftRole | null;
+  target_rank_value?: number | null;
+  pick_version?: number;
+  player_id?: number;
+  player_version?: number;
+  is_feasible?: boolean;
+  user_ids?: number[];
+  anonymous_viewer_count?: number;
   [key: string]: unknown;
 }
 
@@ -175,4 +232,42 @@ export interface DraftSeedRequest {
   // Manual fallback.
   captains?: DraftSeedCaptainInput[];
   players?: DraftSeedPlayerInput[];
+  preview_only?: boolean;
+  expected_version?: number | null;
+}
+
+export interface DraftSeedDiff {
+  teams_before: number;
+  teams_after: number;
+  players_before: number;
+  players_after: number;
+  picks_before: number;
+  picks_after: number;
+  session_version_before: number;
+  session_version_after: number;
+}
+
+export interface DraftSeedResponse {
+  session: DraftSession;
+  preview_only: boolean;
+  diff: DraftSeedDiff;
+  feasibility: DraftFeasibility;
+}
+
+export interface DraftRoleEditRequest {
+  role: DraftRole;
+  rank_value: number | null;
+  rank_absence_confirmed: boolean;
+  reason: string;
+  expected_version: number;
+  preview_only?: boolean;
+}
+
+export interface DraftRoleEditResponse {
+  player_id: number;
+  role: DraftRole;
+  player_version: number;
+  committed: boolean;
+  before: DraftFeasibility;
+  after: DraftFeasibility;
 }
