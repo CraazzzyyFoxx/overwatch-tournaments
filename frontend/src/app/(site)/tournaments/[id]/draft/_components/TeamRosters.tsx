@@ -84,10 +84,10 @@ export function TeamRosters({
   if (variant === "column") {
     const columnTeams = [...teams].sort((left, right) => left.draft_position - right.draft_position);
     return (
-      <section aria-labelledby="team-rosters-heading">
+      <section aria-labelledby="team-rosters-column-heading">
         <div className="border-b border-[color:var(--aqt-border)] pb-3">
           <HeroCoord>{t("rosterCoordinate")}</HeroCoord>
-          <h2 id="team-rosters-heading" className="mt-1 font-onest text-lg font-semibold">
+          <h2 id="team-rosters-column-heading" className="mt-1 font-onest text-lg font-semibold">
             {t("teamRosters")}
           </h2>
         </div>

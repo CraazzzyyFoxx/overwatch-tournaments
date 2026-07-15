@@ -2885,7 +2885,6 @@
     }
   },
   "draftRedesign": {
-    "coordinate": "Tournament {tournament} / Draft {session}",
     "room": {
       "back": "Back to tournament",
       "backShort": "Back",
@@ -2893,10 +2892,6 @@
       "loadingName": "Loading tournament",
       "publicBoard": "Public board"
     },
-    "mode": { "captain": "Captain workspace", "spectator": "Live board" },
-    "draftAccent": "draft",
-    "captainLede": "Build your roster from server-verified options. Every available role is checked against the remaining draft before you confirm.",
-    "spectatorLede": "Follow the live order, completed selections and team rosters from one public, read-only board.",
     "status": { "setup": "Setup", "ready": "Ready", "live": "Live", "paused": "Paused", "completed": "Completed", "cancelled": "Cancelled" },
     "format": "Format",
     "rosterSize": "Roster",
@@ -2905,7 +2900,6 @@
     "onClock": "On the clock",
     "onClockLabel": "On the clock",
     "connection": { "idle": "Realtime idle", "connecting": "Connecting", "connected": "Live connection", "reconnecting": "Reconnecting" },
-    "captainsOnline": "Captains online: {online}/{total}",
     "anonymousViewers": "Viewers: {count}",
     "onlineCount": "{n} of {total} online",
     "you": "You",
@@ -2921,7 +2915,6 @@
     "organizerPaused": "The organizer paused the draft. Your selection is preserved until current data is available again.",
     "focalPickPrompt": "Select a player below to pick",
     "yourTurnInPicks": "You pick in {n, plural, one {# pick} other {# picks}}",
-    "sequence": "Sequence",
     "draftOrder": "Draft order",
     "round": "Round {n}",
     "pending": "Pending",
@@ -2983,7 +2976,6 @@
     "checkingSafeOptions": "Checking every player-role option against the remaining draft…",
     "mobileViews": "Draft workspace sections",
     "mobileView": { "pool": "Pool", "team": "My team", "order": "Order" },
-    "showDraftOrder": "Show draft order",
     "spectatorCompleted": "The draft is complete. These are the final rosters and recorded selections.",
     "spectatorReadOnly": "This public board updates live. Selection controls are shown only to registered captains.",
     "loadingTitle": "Loading the draft room",

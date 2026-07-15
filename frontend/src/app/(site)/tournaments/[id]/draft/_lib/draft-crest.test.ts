@@ -14,4 +14,10 @@ describe("teamCrest", () => {
     expect(a).toBeGreaterThanOrEqual(0);
     expect(a).toBeLessThan(360);
   });
+  it("wraps ids whose unrounded hue would hit exactly 360", () => {
+    const hue = teamCrest({ id: 610, name: "Wraparound" }).hue;
+    expect(hue).toBeGreaterThanOrEqual(0);
+    expect(hue).toBeLessThan(360);
+    expect(hue).toBe(0);
+  });
 });
