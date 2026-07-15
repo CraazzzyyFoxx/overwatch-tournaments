@@ -2919,6 +2919,7 @@
     "yourTurnInPicks": "You pick in {n, plural, one {# pick} other {# picks}}",
     "sequence": "Sequence",
     "draftOrder": "Draft order",
+    "round": "Round {n}",
     "pending": "Pending",
     "unknownTeam": "Unknown team",
     "rosterCoordinate": "Roster state",

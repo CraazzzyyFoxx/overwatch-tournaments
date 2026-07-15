@@ -2919,6 +2919,7 @@
     "yourTurnInPicks": "Твой ход через {n, plural, one {# пик} few {# пика} many {# пиков} other {# пика}}",
     "sequence": "Последовательность",
     "draftOrder": "Порядок драфта",
+    "round": "Раунд {n}",
     "pending": "Ожидает",
     "unknownTeam": "Неизвестная команда",
     "rosterCoordinate": "Состояние составов",
