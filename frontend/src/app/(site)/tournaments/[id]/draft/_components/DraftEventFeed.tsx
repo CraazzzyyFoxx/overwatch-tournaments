@@ -3,7 +3,6 @@
 import { Bot, CheckCircle2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import { HeroCoord } from "@/components/site/PageHero";
 import type { DraftPick, DraftPlayer, DraftTeam } from "@/types/draft.types";
 
 import { buildDraftEventFeed } from "../_lib/draft-workspace-model";
@@ -24,8 +23,7 @@ export function DraftEventFeed({ picks, teams, players }: DraftEventFeedProps) {
   return (
     <section aria-labelledby="event-feed-heading">
       <div className="border-b border-[color:var(--aqt-border)] pb-3">
-        <HeroCoord>{t("eventCoordinate")}</HeroCoord>
-        <h2 id="event-feed-heading" className="mt-1 font-onest text-lg font-semibold">{t("eventFeed")}</h2>
+        <h2 id="event-feed-heading" className="text-sm font-medium text-[color:var(--aqt-fg-muted)]">{t("eventFeed")}</h2>
       </div>
       <ol className="mt-2 divide-y divide-[color:var(--aqt-border)]">
         {feed.slice(0, 12).map((item) => (

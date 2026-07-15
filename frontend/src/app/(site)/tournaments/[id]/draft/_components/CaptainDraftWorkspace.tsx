@@ -226,9 +226,9 @@ export function CaptainDraftWorkspace({
       </div>
 
       <div className="hidden gap-6 md:grid md:grid-cols-[minmax(0,1fr)_300px] xl:grid-cols-[260px_minmax(0,1fr)_320px]">
-        <aside className="hidden xl:block">{order}</aside>
+        <aside className="sticky top-4 hidden max-h-[calc(100svh-2rem)] self-start overflow-y-auto xl:block">{order}</aside>
         <main className="min-w-0">{pool}</main>
-        <aside className="space-y-6 border-l border-[color:var(--aqt-border)] pl-5">
+        <aside className="sticky top-4 max-h-[calc(100svh-2rem)] self-start space-y-6 overflow-y-auto border-l border-[color:var(--aqt-border)] pl-5">
           <PlayerInspector
             player={selectedPlayer}
             role={selectedRole}

@@ -17,7 +17,7 @@ export function CaptainShortlist({ players, onSelect, onRemove }: CaptainShortli
   return (
     <section className="border-t border-[color:var(--aqt-border)] pt-5" aria-labelledby="shortlist-heading">
       <div className="flex items-center justify-between gap-3">
-        <h2 id="shortlist-heading" className="flex items-center gap-2 font-onest text-base font-semibold"><Bookmark className="h-4 w-4 text-[color:var(--aqt-teal)]" />{t("shortlist")}</h2>
+        <h2 id="shortlist-heading" className="flex items-center gap-2 text-sm font-medium text-[color:var(--aqt-fg-muted)]"><Bookmark className="h-4 w-4 text-[color:var(--aqt-teal)]" />{t("shortlist")}</h2>
         <span className="font-mono text-xs text-[color:var(--aqt-fg-muted)]">{players.length}</span>
       </div>
       {players.length === 0 ? (
