@@ -229,7 +229,7 @@ export function CaptainDraftWorkspace({
 
       <div className="hidden gap-4 xl:grid xl:grid-cols-[248px_minmax(0,1fr)_378px]">
         <aside className="sticky top-4 max-h-[calc(100svh-2rem)] self-start space-y-4 overflow-y-auto">
-          {order}
+          <DraftOrder picks={board.picks} teams={board.teams} players={board.players} divisionGrid={divisionGrid} />
           <DraftEventFeed picks={board.picks} teams={board.teams} players={board.players} />
         </aside>
         <main className="flex min-w-0 flex-col gap-4">

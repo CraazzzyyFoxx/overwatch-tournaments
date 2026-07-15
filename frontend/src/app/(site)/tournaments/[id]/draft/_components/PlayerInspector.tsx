@@ -49,7 +49,7 @@ export function PlayerInspector({
   const t = useTranslations("draftRedesign");
   if (!player) {
     return (
-      <section className="border-t border-[color:var(--aqt-border)] pt-5 text-sm text-[color:var(--aqt-fg-muted)]">
+      <section className="rounded-xl border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-card)] p-5 text-sm text-[color:var(--aqt-fg-muted)]">
         <p className="font-medium text-[color:var(--aqt-fg)]">{t("inspectorEmptyTitle")}</p>
         <p className="mt-1">{t("inspectorEmptyHint")}</p>
       </section>
@@ -70,7 +70,7 @@ export function PlayerInspector({
       ? player.additional_info.notes
       : null;
   return (
-    <section className="border-t border-[color:var(--aqt-border)] pt-5" aria-labelledby={headingId}>
+    <section className="rounded-xl border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-card)] p-5" aria-labelledby={headingId}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-[color:var(--aqt-fg-faint)]">{t("inspectorCoordinate")}</p>
@@ -145,9 +145,9 @@ export function PlayerInspector({
                     )}
                   </span>
                   {heroes.length > 0 && (
-                    <AvatarStack size={16} max={3} className="ml-auto">
+                    <AvatarStack size={24} max={3} className="ml-auto">
                       {heroes.map((hero) => (
-                        <Avatar key={hero.slug} className="h-4 w-4" title={hero.slug}>
+                        <Avatar key={hero.slug} className="h-6 w-6" title={hero.slug}>
                           <AvatarImage src={getHeroIconUrl(hero.slug, hero.imagePath)} alt={hero.slug} />
                         </Avatar>
                       ))}
