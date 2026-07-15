@@ -6,6 +6,7 @@ import Link from "next/link";
 
 import PlayerDivisionIcon from "@/components/PlayerDivisionIcon";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
+import { Avatar, AvatarImage, AvatarStack } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { getDivisionLabel, resolveDivisionFromRank } from "@/lib/division-grid";
@@ -18,9 +19,9 @@ import type {
   DraftRole
 } from "@/types/draft.types";
 import type { DivisionGrid } from "@/types/workspace.types";
-import { formatSubRoleLabel, getPlayerSlug } from "@/utils/player";
+import { formatSubRoleLabel, getHeroIconUrl, getPlayerSlug } from "@/utils/player";
 
-import { optionForSelection, playerRoles } from "../_lib/draft-workspace-model";
+import { optionForSelection, playerRoles, roleTopHeroes } from "../_lib/draft-workspace-model";
 
 const BADGE_CLASS =
   "rounded border border-[color:var(--aqt-border-2)] px-1 text-[10px] uppercase tracking-wide text-[color:var(--aqt-fg-muted)]";
@@ -119,42 +120,48 @@ export function PlayerInspector({
       <div className="mt-3">
         <p className="mb-2 text-xs text-[color:var(--aqt-fg-muted)]">{t("chooseRole")}</p>
         <div className="flex gap-2">
-          {roles.map((entry, index) => {
+          {roles.map((entry) => {
             const option = optionForSelection(options, player.id, entry);
             const blocked = safetyRequired && option?.is_safe !== true;
             const roleRank = player.role_ranks[entry] ?? player.rank_value ?? null;
             const roleDivision = resolveDivisionFromRank(divisionGrid, roleRank);
+            const heroes = roleTopHeroes(player, entry);
             const active = role === entry;
+            const isPrimary = entry === player.primary_role;
             return (
               <button
                 key={entry}
                 type="button"
                 disabled={blocked}
                 aria-pressed={active}
-                title={roleRank != null ? `${roleRank} SR` : undefined}
+                title={[isPrimary ? t("primaryRole") : null, roleRank != null ? `${roleRank} SR` : null].filter(Boolean).join(" · ") || undefined}
                 onClick={() => onRoleChange(entry)}
                 className={cn(
-                  "relative flex min-w-0 flex-1 flex-col items-center gap-1.5 rounded-lg border px-2 py-2.5 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)]",
-                  active
-                    ? "border-[color:var(--aqt-teal)] bg-[color:var(--aqt-teal)]/10"
-                    : "border-[color:var(--aqt-border-2)] hover:border-[color:var(--aqt-teal)]/50",
+                  "flex min-w-0 flex-1 flex-col items-center gap-1.5 rounded-lg border px-2 py-2.5 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)]",
+                  isPrimary ? "border-[color:var(--aqt-teal)]/60" : "border-[color:var(--aqt-border-2)]",
+                  active ? "bg-[color:var(--aqt-teal)]/15" : "hover:border-[color:var(--aqt-teal)]/50",
                   blocked && "cursor-not-allowed opacity-45"
                 )}
               >
-                <span
-                  className="absolute right-1.5 top-1.5 font-mono text-[10px] font-semibold text-[color:var(--aqt-fg-faint)]"
-                  aria-label={t("rolePriority", { n: index + 1 })}
-                >
-                  {index + 1}
-                </span>
                 <PlayerRoleIcon role={getRoleIconName(entry)} size={20} color={ROLE_ACCENT[entry]} />
-                <span className="max-w-full truncate text-[11px] font-medium uppercase tracking-wide">{t(`roles.${entry}`)}</span>
+                <span className={cn("max-w-full truncate text-[11px] font-medium uppercase tracking-wide", active && "text-[color:var(--aqt-teal)]")}>
+                  {t(`roles.${entry}`)}
+                </span>
                 {blocked ? (
                   <Ban className="h-[30px] w-[30px] text-[color:var(--aqt-live)]" aria-label={t("unsafeOption")} />
                 ) : roleDivision != null ? (
                   <PlayerDivisionIcon division={roleDivision} tournamentGrid={divisionGrid} width={30} height={30} className="h-[30px] w-[30px] object-contain" />
                 ) : (
                   <span className="flex h-[30px] items-center text-sm text-[color:var(--aqt-fg-faint)]">—</span>
+                )}
+                {heroes.length > 0 && (
+                  <AvatarStack size={18} max={3}>
+                    {heroes.map((hero) => (
+                      <Avatar key={hero.slug} className="h-[18px] w-[18px]" title={hero.slug}>
+                        <AvatarImage src={getHeroIconUrl(hero.slug, hero.imagePath)} alt={hero.slug} />
+                      </Avatar>
+                    ))}
+                  </AvatarStack>
                 )}
               </button>
             );
