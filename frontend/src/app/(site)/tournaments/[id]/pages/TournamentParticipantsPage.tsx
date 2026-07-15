@@ -45,13 +45,14 @@ import type { Registration, RegistrationStatus } from "@/types/registration.type
 import ColumnPicker from "./_components/ColumnPicker";
 import { buildParticipantColumns } from "./_components/participantsColumns";
 import {
-  normalizeParticipantSearch,
+  PARTICIPANT_SEARCH_MAX_LENGTH,
   participantResultsScrollTarget,
   readParticipantUrlState,
   shouldScrollParticipantResults,
   updateParticipantUrlState,
   type ParticipantUrlUpdate,
 } from "./_components/participants-url-state";
+import { useParticipantSearchInput } from "./_components/useParticipantSearchInput";
 import VirtualParticipantsList from "./_components/VirtualParticipantsList";
 import { useTranslations, useLocale } from "next-intl";
 import { useDivisionGrid } from "@/hooks/useCurrentWorkspace";
@@ -503,8 +504,6 @@ export default function TournamentParticipantsPage({
   const router = useRouter();
   const searchParams = useSearchParams();
   const searchParamsString = searchParams.toString();
-  const searchInputRef = useRef<HTMLInputElement>(null);
-  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const resultsHeadingRef = useRef<HTMLDivElement>(null);
   const previousResultsSignatureRef = useRef<string | null>(null);
   const [isWithdrawDialogOpen, setIsWithdrawDialogOpen] = useState(false);
@@ -700,6 +699,18 @@ export default function TournamentParticipantsPage({
     },
     [pathname, router],
   );
+  const commitSearch = useCallback(
+    (value: string) => navigateParticipantUrl({ type: "search", value }),
+    [navigateParticipantUrl],
+  );
+  const {
+    inputRef: participantSearchInputRef,
+    onChange: handleParticipantSearchChange,
+  } = useParticipantSearchInput({
+    canonicalSearch: searchQuery,
+    canonicalUrl: searchParamsString,
+    onCommit: commitSearch,
+  });
 
   useEffect(() => {
     if (!listQuery.isFetched || !formQuery.isFetched || !participantUrl.needsNormalization) {
@@ -717,28 +728,6 @@ export default function TournamentParticipantsPage({
     pathname,
     router,
   ]);
-
-  useEffect(
-    () => () => {
-      if (searchTimerRef.current !== null) clearTimeout(searchTimerRef.current);
-    },
-    [],
-  );
-
-  useEffect(() => {
-    const input = searchInputRef.current;
-    if (!input || normalizeParticipantSearch(input.value) === searchQuery) return;
-    const focused = document.activeElement === input;
-    const selectionStart = input.selectionStart;
-    const selectionEnd = input.selectionEnd;
-    input.value = searchQuery;
-    if (focused && selectionStart !== null && selectionEnd !== null) {
-      input.setSelectionRange(
-        Math.min(selectionStart, searchQuery.length),
-        Math.min(selectionEnd, searchQuery.length),
-      );
-    }
-  }, [searchQuery]);
 
   const toggleColumn = useCallback(
     (columnId: string) => {
@@ -965,17 +954,10 @@ export default function TournamentParticipantsPage({
             <input
               aria-label={t("common.searchParticipants")}
               defaultValue={searchQuery}
-              maxLength={160}
-              onChange={(event) => {
-                const value = event.currentTarget.value;
-                if (searchTimerRef.current !== null) clearTimeout(searchTimerRef.current);
-                searchTimerRef.current = setTimeout(() => {
-                  searchTimerRef.current = null;
-                  navigateParticipantUrl({ type: "search", value });
-                }, 250);
-              }}
+              maxLength={PARTICIPANT_SEARCH_MAX_LENGTH}
+              onChange={handleParticipantSearchChange}
               placeholder={t("common.searchParticipants")}
-              ref={searchInputRef}
+              ref={participantSearchInputRef}
             />
           </div>
           <ColumnPicker

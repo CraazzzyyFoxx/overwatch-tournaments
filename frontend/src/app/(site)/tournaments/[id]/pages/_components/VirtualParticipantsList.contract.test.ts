@@ -52,6 +52,10 @@ describe("virtual participants collection", () => {
     expect(pageSource).not.toContain("useColumnVisibility");
     expect(pageSource).not.toContain("filtered.map");
     expect(pageSource).not.toMatch(/pagination|pageSize|currentPage/i);
+    expect(pageSource).toContain("useParticipantSearchInput");
+    expect(pageSource).toContain("maxLength={PARTICIPANT_SEARCH_MAX_LENGTH}");
+    expect(pageSource).not.toContain("maxLength={160}");
+    expect(pageSource).not.toContain("searchTimerRef");
     expect(pageSource).toContain("allowedStatuses");
     expect(pageSource).toContain("displayedStatuses");
   });
@@ -64,12 +68,7 @@ describe("virtual participants collection", () => {
     expect(pageSource).toContain("listQuery.refetch()");
   });
 
-  it("bounds a 500-item collection by mapping virtual items rather than registrations", () => {
-    const generatedRegistrations = Array.from({ length: 500 }, (_, id) => ({ id }));
-    const auditedViewportItems = Math.ceil(900 / 68) + 8 * 2;
-
-    expect(generatedRegistrations).toHaveLength(500);
-    expect(auditedViewportItems).toBeLessThanOrEqual(40);
+  it("maps virtual items rather than the complete registration payload", () => {
     expect(source).toContain("const virtualItems = virtualizer.getVirtualItems()");
     expect(source).toMatch(/virtualItems\.map[\s\S]*column\.render/);
   });
