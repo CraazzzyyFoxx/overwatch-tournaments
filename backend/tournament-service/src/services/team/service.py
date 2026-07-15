@@ -364,6 +364,8 @@ async def get_team_count_by_tournament_bulk(session: AsyncSession, tournaments_i
     Returns:
         The total count of players associated with the specified tournament.
     """
+    if not tournaments_ids:
+        return {}
     query = (
         sa.select(models.Team.tournament_id, sa.func.count(models.Team.id))
         .where(models.Team.tournament_id.in_(tournaments_ids))
