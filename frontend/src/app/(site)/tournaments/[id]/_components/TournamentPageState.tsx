@@ -54,7 +54,7 @@ export function TournamentPageState(props: TournamentPageStateProps) {
     return (
       <div className={cn(styles.refreshState, props.className)}>
         {props.children}
-        <div className={styles.refreshMessage} role="alert" aria-live="polite">
+        <div className={styles.refreshMessage} role="status" aria-live="polite">
           <span>
             <strong>{title}</strong> — {description}
           </span>
@@ -63,9 +63,7 @@ export function TournamentPageState(props: TournamentPageStateProps) {
           </button>
         </div>
         {props.isUpdating ? (
-          <span className={styles.updating} role="status">
-            {t("tournamentDetail.pageState.updating")}
-          </span>
+          <span className={styles.updating}>{t("tournamentDetail.pageState.updating")}</span>
         ) : null}
       </div>
     );

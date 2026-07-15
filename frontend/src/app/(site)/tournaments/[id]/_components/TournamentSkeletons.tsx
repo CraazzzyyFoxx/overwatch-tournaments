@@ -190,7 +190,7 @@ export function TournamentTeamsSkeleton() {
       <TournamentPageSkeletonLayout>
         <PageHeadingSkeleton />
         <ControlRowSkeleton />
-        <div className={styles.skeletonGrid}>
+        <div className={styles.teamsSkeletonGrid}>
           {Array.from({ length: 6 }, (_, card) => (
             <div className={styles.skeletonCard} key={card}>
               <SkeletonBlock style={{ width: "72%", height: "1.15rem" }} />

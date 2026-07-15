@@ -65,7 +65,9 @@ describe("TournamentPageState", () => {
     expect(html).toContain("preserved result");
     expect(html).toContain("tournamentDetail.pageState.refreshError.title");
     expect(html).toContain("tournamentDetail.pageState.retry");
-    expect(html).toContain('role="status"');
+    expect(html.match(/role="status"/g)).toHaveLength(1);
+    expect(html).toContain('aria-live="polite"');
+    expect(html).not.toContain('role="alert"');
   });
 
   it("distinguishes initial error, true empty, and filtered empty actions", () => {
@@ -96,7 +98,11 @@ describe("tournament navigation and loading source contracts", () => {
     expect(source).toContain("aria-disabled={!item.available || undefined}");
     expect(source).toContain('type="button"');
     expect(source).not.toContain("disabled={!item.available}");
-    expect(source).toContain("scrollBy");
+    expect(source).toContain("observeTournamentRail");
+    expect(source).toContain("scrollTournamentRail");
+    expect(source).toContain("disabled={!railState.hasOverflow || !railState.canScrollPrevious}");
+    expect(source).toContain("disabled={!railState.hasOverflow || !railState.canScrollNext}");
+    expect(source).toContain("styles.scrollControlHidden");
     expect(source).toContain('inline: "center"');
     expect(source).toContain("scrollIntoView");
   });
@@ -109,6 +115,22 @@ describe("tournament navigation and loading source contracts", () => {
     expect(css).toMatch(/max-width:\s*100%/);
     expect(css).toContain("@media (prefers-reduced-motion: reduce)");
     expect(css).toMatch(/animation:\s*none/);
+  });
+
+  it("keeps the Teams skeleton at one mobile and two desktop columns", () => {
+    const skeletonSource = readFileSync(
+      resolve(tournamentRoot, "_components/TournamentSkeletons.tsx"),
+      "utf8"
+    );
+    const css = readFileSync(resolve(tournamentRoot, "TournamentDetail.module.css"), "utf8");
+
+    expect(skeletonSource).toContain("styles.teamsSkeletonGrid");
+    expect(css).toMatch(
+      /\.teamsSkeletonGrid\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\)/
+    );
+    expect(css).toMatch(
+      /@media \(min-width:\s*641px\)[\s\S]*?\.teamsSkeletonGrid\s*\{[\s\S]*?repeat\(2,\s*minmax\(0,\s*1fr\)\)/
+    );
   });
 });
 

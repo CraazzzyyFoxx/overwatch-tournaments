@@ -77,6 +77,18 @@
   outline-offset: -3px;
 }
 
+.scrollControl:disabled {
+  color: var(--aqt-fg-faint);
+  cursor: default;
+  opacity: 0.45;
+  outline: none;
+}
+
+.scrollControlHidden {
+  visibility: hidden;
+  pointer-events: none;
+}
+
 .navItem {
   position: relative;
   display: inline-flex;
@@ -245,6 +257,12 @@
   gap: 1rem;
 }
 
+.teamsSkeletonGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1rem;
+}
+
 .skeletonCard {
   display: grid;
   min-height: 9.5rem;
@@ -405,6 +423,12 @@
 
   .bracketFrame {
     grid-template-columns: repeat(3, 13rem);
+  }
+}
+
+@media (min-width: 641px) {
+  .teamsSkeletonGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 

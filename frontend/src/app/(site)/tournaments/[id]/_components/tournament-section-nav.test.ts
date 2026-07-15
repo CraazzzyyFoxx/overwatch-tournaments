@@ -2,7 +2,14 @@ import { describe, expect, it } from "vitest";
 
 import type { StageSummary, TournamentStatus } from "@/types/tournament.types";
 
-import { buildTournamentSectionNav, getTournamentPhaseNoteKey } from "./tournament-section-nav";
+import {
+  buildTournamentSectionNav,
+  getTournamentPhaseNoteKey,
+  getTournamentRailScrollState,
+  observeTournamentRail,
+  scrollTournamentRail,
+  type TournamentRailElement
+} from "./tournament-section-nav";
 
 const tournamentId = "72";
 
@@ -147,5 +154,173 @@ describe("getTournamentPhaseNoteKey", () => {
     expect(getTournamentPhaseNoteKey("live", false)).toBe(
       "tournamentDetail.nav.phase.awaitingStages"
     );
+  });
+});
+
+class FakeRail implements TournamentRailElement {
+  scrollWidth = 100;
+  clientWidth = 100;
+  scrollLeft = 0;
+  private scrollListeners = new Set<() => void>();
+
+  addEventListener(_type: "scroll", listener: () => void) {
+    this.scrollListeners.add(listener);
+  }
+
+  removeEventListener(_type: "scroll", listener: () => void) {
+    this.scrollListeners.delete(listener);
+  }
+
+  scrollBy(options: ScrollToOptions) {
+    const maxScrollLeft = Math.max(0, this.scrollWidth - this.clientWidth);
+    this.scrollLeft = Math.min(maxScrollLeft, Math.max(0, this.scrollLeft + (options.left ?? 0)));
+    this.emitScroll();
+  }
+
+  emitScroll() {
+    this.scrollListeners.forEach((listener) => listener());
+  }
+
+  get listenerCount() {
+    return this.scrollListeners.size;
+  }
+}
+
+function createFrameScheduler() {
+  let nextId = 1;
+  const frames = new Map<number, FrameRequestCallback>();
+  const cancelled: number[] = [];
+
+  return {
+    requestAnimationFrame(callback: FrameRequestCallback) {
+      const id = nextId++;
+      frames.set(id, callback);
+      return id;
+    },
+    cancelAnimationFrame(id: number) {
+      cancelled.push(id);
+      frames.delete(id);
+    },
+    flush() {
+      const pending = [...frames.entries()];
+      frames.clear();
+      pending.forEach(([, callback]) => callback(0));
+    },
+    cancelled
+  };
+}
+
+describe("tournament rail overflow behavior", () => {
+  it("derives no-overflow, left-edge, middle, and right-edge controls with tolerance", () => {
+    expect(
+      getTournamentRailScrollState({ scrollWidth: 100, clientWidth: 100, scrollLeft: 0 })
+    ).toEqual({ hasOverflow: false, canScrollPrevious: false, canScrollNext: false });
+    expect(
+      getTournamentRailScrollState({ scrollWidth: 300, clientWidth: 100, scrollLeft: 1 })
+    ).toEqual({ hasOverflow: true, canScrollPrevious: false, canScrollNext: true });
+    expect(
+      getTournamentRailScrollState({ scrollWidth: 300, clientWidth: 100, scrollLeft: 80 })
+    ).toEqual({ hasOverflow: true, canScrollPrevious: true, canScrollNext: true });
+    expect(
+      getTournamentRailScrollState({ scrollWidth: 300, clientWidth: 100, scrollLeft: 199 })
+    ).toEqual({ hasOverflow: true, canScrollPrevious: true, canScrollNext: false });
+  });
+
+  it("updates edge controls after explicit next/previous scrolling", () => {
+    const rail = new FakeRail();
+    rail.scrollWidth = 300;
+    const scheduler = createFrameScheduler();
+    const states: ReturnType<typeof getTournamentRailScrollState>[] = [];
+    const observer = observeTournamentRail(rail, (state) => states.push(state), {
+      createResizeObserver: null,
+      windowTarget: { addEventListener() {}, removeEventListener() {} },
+      ...scheduler
+    });
+    scheduler.flush();
+
+    scrollTournamentRail(rail, 1, "auto");
+    scheduler.flush();
+    expect(states.at(-1)).toEqual({
+      hasOverflow: true,
+      canScrollPrevious: true,
+      canScrollNext: true
+    });
+
+    scrollTournamentRail(rail, 1, "auto");
+    scheduler.flush();
+    expect(states.at(-1)).toEqual({
+      hasOverflow: true,
+      canScrollPrevious: true,
+      canScrollNext: false
+    });
+
+    scrollTournamentRail(rail, -1, "auto");
+    scheduler.flush();
+    expect(states.at(-1)?.canScrollNext).toBe(true);
+    observer.cleanup();
+  });
+
+  it("remeasures through ResizeObserver and disconnects listeners and queued frames", () => {
+    const rail = new FakeRail();
+    const scheduler = createFrameScheduler();
+    const states: ReturnType<typeof getTournamentRailScrollState>[] = [];
+    let resizeCallback: (() => void) | undefined;
+    let disconnected = false;
+
+    const observer = observeTournamentRail(rail, (state) => states.push(state), {
+      createResizeObserver(callback) {
+        resizeCallback = callback;
+        return {
+          observe() {},
+          disconnect() {
+            disconnected = true;
+          }
+        };
+      },
+      ...scheduler
+    });
+    scheduler.flush();
+    expect(states.at(-1)?.hasOverflow).toBe(false);
+    expect(rail.listenerCount).toBe(1);
+
+    rail.scrollWidth = 260;
+    resizeCallback?.();
+    scheduler.flush();
+    expect(states.at(-1)?.hasOverflow).toBe(true);
+
+    rail.emitScroll();
+    observer.cleanup();
+    expect(disconnected).toBe(true);
+    expect(rail.listenerCount).toBe(0);
+    expect(scheduler.cancelled).toHaveLength(1);
+  });
+
+  it("uses and removes a window resize fallback when ResizeObserver is unavailable", () => {
+    const rail = new FakeRail();
+    const scheduler = createFrameScheduler();
+    const states: ReturnType<typeof getTournamentRailScrollState>[] = [];
+    let resizeListener: (() => void) | undefined;
+    let removed = false;
+    const observer = observeTournamentRail(rail, (state) => states.push(state), {
+      createResizeObserver: null,
+      windowTarget: {
+        addEventListener(_type, listener) {
+          resizeListener = listener;
+        },
+        removeEventListener(_type, listener) {
+          removed = listener === resizeListener;
+        }
+      },
+      ...scheduler
+    });
+    scheduler.flush();
+
+    rail.scrollWidth = 220;
+    resizeListener?.();
+    scheduler.flush();
+    expect(states.at(-1)?.hasOverflow).toBe(true);
+    observer.cleanup();
+
+    expect(removed).toBe(true);
   });
 });

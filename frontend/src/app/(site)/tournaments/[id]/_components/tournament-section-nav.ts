@@ -116,3 +116,119 @@ export function getTournamentPhaseNoteKey(
 
   return `tournamentDetail.nav.phase.${status}`;
 }
+
+export type TournamentRailElement = {
+  readonly scrollWidth: number;
+  readonly clientWidth: number;
+  scrollLeft: number;
+  addEventListener(type: "scroll", listener: () => void, options?: AddEventListenerOptions): void;
+  removeEventListener(type: "scroll", listener: () => void): void;
+  scrollBy(options: ScrollToOptions): void;
+};
+
+export type TournamentRailScrollState = {
+  hasOverflow: boolean;
+  canScrollPrevious: boolean;
+  canScrollNext: boolean;
+};
+
+type RailResizeObserver = {
+  observe(target: TournamentRailElement): void;
+  disconnect(): void;
+};
+
+type WindowResizeTarget = {
+  addEventListener(type: "resize", listener: () => void): void;
+  removeEventListener(type: "resize", listener: () => void): void;
+};
+
+type ObserveTournamentRailOptions = {
+  createResizeObserver?: ((callback: () => void) => RailResizeObserver) | null;
+  windowTarget?: WindowResizeTarget;
+  requestAnimationFrame?: (callback: FrameRequestCallback) => number;
+  cancelAnimationFrame?: (id: number) => void;
+};
+
+const SCROLL_EDGE_TOLERANCE = 2;
+
+export function getTournamentRailScrollState(
+  rail: Pick<TournamentRailElement, "scrollWidth" | "clientWidth" | "scrollLeft">
+): TournamentRailScrollState {
+  const maxScrollLeft = Math.max(0, rail.scrollWidth - rail.clientWidth);
+  const hasOverflow = maxScrollLeft > SCROLL_EDGE_TOLERANCE;
+
+  return {
+    hasOverflow,
+    canScrollPrevious: hasOverflow && rail.scrollLeft > SCROLL_EDGE_TOLERANCE,
+    canScrollNext: hasOverflow && maxScrollLeft - rail.scrollLeft > SCROLL_EDGE_TOLERANCE
+  };
+}
+
+export function scrollTournamentRail(
+  rail: TournamentRailElement,
+  direction: -1 | 1,
+  behavior: ScrollBehavior
+) {
+  rail.scrollBy({
+    left: direction * Math.max(180, rail.clientWidth * 0.65),
+    behavior
+  });
+}
+
+export function observeTournamentRail(
+  rail: TournamentRailElement,
+  onChange: (state: TournamentRailScrollState) => void,
+  options: ObserveTournamentRailOptions = {}
+) {
+  const requestFrame = options.requestAnimationFrame ?? window.requestAnimationFrame.bind(window);
+  const cancelFrame = options.cancelAnimationFrame ?? window.cancelAnimationFrame.bind(window);
+  const windowTarget = options.windowTarget ?? (typeof window === "undefined" ? null : window);
+  const createResizeObserver =
+    options.createResizeObserver === undefined
+      ? typeof ResizeObserver === "undefined"
+        ? null
+        : (callback: () => void): RailResizeObserver => {
+            const observer = new ResizeObserver(callback);
+            return {
+              observe(target) {
+                observer.observe(target as Element);
+              },
+              disconnect() {
+                observer.disconnect();
+              }
+            };
+          }
+      : options.createResizeObserver;
+  let frameId: number | null = null;
+  let disposed = false;
+
+  const refresh = () => {
+    if (disposed) return;
+    if (frameId !== null) return;
+    frameId = requestFrame(() => {
+      frameId = null;
+      if (!disposed) onChange(getTournamentRailScrollState(rail));
+    });
+  };
+
+  rail.addEventListener("scroll", refresh, { passive: true });
+  const resizeObserver = createResizeObserver?.(refresh) ?? null;
+  if (resizeObserver) resizeObserver.observe(rail);
+  else windowTarget?.addEventListener("resize", refresh);
+  refresh();
+
+  return {
+    refresh,
+    cleanup() {
+      if (disposed) return;
+      disposed = true;
+      rail.removeEventListener("scroll", refresh);
+      if (resizeObserver) resizeObserver.disconnect();
+      else windowTarget?.removeEventListener("resize", refresh);
+      if (frameId !== null) {
+        cancelFrame(frameId);
+        frameId = null;
+      }
+    }
+  };
+}

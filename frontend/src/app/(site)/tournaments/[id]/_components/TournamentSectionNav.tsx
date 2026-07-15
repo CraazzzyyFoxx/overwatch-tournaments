@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -24,6 +24,9 @@ import styles from "../TournamentDetail.module.css";
 import {
   buildTournamentSectionNav,
   getTournamentPhaseNoteKey,
+  observeTournamentRail,
+  scrollTournamentRail,
+  type TournamentRailScrollState,
   type TournamentSectionId
 } from "./tournament-section-nav";
 
@@ -35,6 +38,12 @@ const icons: Record<TournamentSectionId, React.ComponentType<{ className?: strin
   heroes: Trophy,
   standings: BarChart3,
   draft: ListOrdered
+};
+
+const initialRailState: TournamentRailScrollState = {
+  hasOverflow: false,
+  canScrollPrevious: false,
+  canScrollNext: false
 };
 
 function preferredScrollBehavior(): ScrollBehavior {
@@ -62,6 +71,8 @@ export default function TournamentSectionNav({
   const pathname = usePathname();
   const railRef = useRef<HTMLDivElement>(null);
   const activeRef = useRef<HTMLElement>(null);
+  const refreshRailRef = useRef<() => void>(() => undefined);
+  const [railState, setRailState] = useState(initialRailState);
   const items = useMemo(
     () =>
       buildTournamentSectionNav({
@@ -79,21 +90,32 @@ export default function TournamentSectionNav({
   };
 
   useEffect(() => {
+    const rail = railRef.current;
+    if (!rail) return;
+
+    const observer = observeTournamentRail(rail, setRailState);
+    refreshRailRef.current = observer.refresh;
+
+    return () => {
+      refreshRailRef.current = () => undefined;
+      observer.cleanup();
+    };
+  }, []);
+
+  useEffect(() => {
     activeRef.current?.scrollIntoView({
       behavior: preferredScrollBehavior(),
       block: "nearest",
       inline: "center"
     });
-  }, [pathname]);
+    refreshRailRef.current();
+  }, [items, pathname]);
 
   const scrollRail = (direction: -1 | 1) => {
     const rail = railRef.current;
     if (!rail) return;
 
-    rail.scrollBy({
-      left: direction * Math.max(180, rail.clientWidth * 0.65),
-      behavior: preferredScrollBehavior()
-    });
+    scrollTournamentRail(rail, direction, preferredScrollBehavior());
   };
 
   return (
@@ -108,15 +130,19 @@ export default function TournamentSectionNav({
       >
         <button
           type="button"
-          className={styles.scrollControl}
+          className={cn(styles.scrollControl, !railState.hasOverflow && styles.scrollControlHidden)}
           onClick={() => scrollRail(-1)}
           aria-label={t("tournamentDetail.nav.scrollPrevious")}
+          aria-hidden={!railState.hasOverflow || undefined}
+          disabled={!railState.hasOverflow || !railState.canScrollPrevious}
         >
           <ArrowLeft aria-hidden="true" />
         </button>
 
         <div className={styles.railViewport}>
-          <span className={cn(styles.edgeFade, styles.edgeFadeStart)} aria-hidden="true" />
+          {railState.canScrollPrevious ? (
+            <span className={cn(styles.edgeFade, styles.edgeFadeStart)} aria-hidden="true" />
+          ) : null}
           <TooltipProvider delayDuration={180}>
             <div ref={railRef} className={styles.rail}>
               {items.map((item) => {
@@ -172,14 +198,18 @@ export default function TournamentSectionNav({
               })}
             </div>
           </TooltipProvider>
-          <span className={cn(styles.edgeFade, styles.edgeFadeEnd)} aria-hidden="true" />
+          {railState.canScrollNext ? (
+            <span className={cn(styles.edgeFade, styles.edgeFadeEnd)} aria-hidden="true" />
+          ) : null}
         </div>
 
         <button
           type="button"
-          className={styles.scrollControl}
+          className={cn(styles.scrollControl, !railState.hasOverflow && styles.scrollControlHidden)}
           onClick={() => scrollRail(1)}
           aria-label={t("tournamentDetail.nav.scrollNext")}
+          aria-hidden={!railState.hasOverflow || undefined}
+          disabled={!railState.hasOverflow || !railState.canScrollNext}
         >
           <ArrowRight aria-hidden="true" />
         </button>
