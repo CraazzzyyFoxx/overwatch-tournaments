@@ -24,7 +24,7 @@ export function SpectatorDraftWorkspace({ board, divisionGrid }: SpectatorDraftW
   return (
     <div className="space-y-6">
       {showCurrentPick ? <CurrentPick board={board} /> : null}
-      <p className="max-w-3xl border-l-2 border-[color:var(--aqt-teal)] pl-4 text-sm leading-relaxed text-[color:var(--aqt-fg-muted)]">
+      <p className="max-w-3xl text-sm text-[color:var(--aqt-fg-muted)]">
         {board.session.status === "completed" ? t("spectatorCompleted") : t("spectatorReadOnly")}
       </p>
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_320px]">
