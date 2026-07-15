@@ -11,6 +11,7 @@ import {
   Settings2,
   ShieldCheck,
   Sparkles,
+  XCircle,
   UsersRound
 } from "lucide-react";
 import { useTranslations } from "next-intl";
@@ -47,6 +48,7 @@ import { DraftPoolStep } from "./DraftPoolStep";
 import { DraftReadyStep } from "./DraftReadyStep";
 import { DraftReviewStep } from "./DraftReviewStep";
 import {
+  canCancelDraftSetup,
   canNavigateToSetupStep,
   derivePoolReadiness,
   orderCaptainIds,
@@ -83,6 +85,15 @@ function configFromSession(session: DraftSession | null): DraftSetupConfig {
   };
 }
 
+function createEmptyCaptainSetup(): DraftCaptainSetup {
+  return {
+    ids: [],
+    teamNames: {},
+    order: "weakest_first",
+    randomSeed: Math.floor(Math.random() * 2_147_483_647)
+  };
+}
+
 export function DraftSetupWizard({ tournamentId, board }: DraftSetupWizardProps) {
   const t = useTranslations("draftAdmin");
   const queryClient = useQueryClient();
@@ -99,17 +110,24 @@ export function DraftSetupWizard({ tournamentId, board }: DraftSetupWizardProps)
     initialSession?.status === "ready" ? "ready" : initialSession ? "pool" : "config"
   );
   const [config, setConfig] = useState<DraftSetupConfig>(() => configFromSession(initialSession));
-  const [captains, setCaptains] = useState<DraftCaptainSetup>(() => ({
-    ids: [],
-    teamNames: {},
-    order: "weakest_first",
-    randomSeed: Math.floor(Math.random() * 2_147_483_647)
-  }));
+  const [captains, setCaptains] = useState<DraftCaptainSetup>(createEmptyCaptainSetup);
   const [preview, setPreview] = useState<DraftSeedResponse | null>(null);
-  const [committedFeasibility, setCommittedFeasibility] = useState<DraftSeedResponse["feasibility"] | null>(
-    null
-  );
+  const [committedFeasibility, setCommittedFeasibility] = useState<
+    DraftSeedResponse["feasibility"] | null
+  >(null);
   const [reseedDialogOpen, setReseedDialogOpen] = useState(false);
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+
+  const resetSetupState = () => {
+    setLocalSession(null);
+    setConfig(configFromSession(null));
+    setCaptains(createEmptyCaptainSetup());
+    setPreview(null);
+    setCommittedFeasibility(null);
+    setReseedDialogOpen(false);
+    setCancelDialogOpen(false);
+    setStep("config");
+  };
 
   const poolQuery = useQuery({
     queryKey: ["balancer", "draft-setup-pool", tournamentId],
@@ -120,7 +138,9 @@ export function DraftSetupWizard({ tournamentId, board }: DraftSetupWizardProps)
 
   const hydrateCaptainsFromBoard = () => {
     if (!board || pool.length === 0 || board.teams.length === 0) return;
-    const orderedTeams = [...board.teams].sort((left, right) => left.draft_position - right.draft_position);
+    const orderedTeams = [...board.teams].sort(
+      (left, right) => left.draft_position - right.draft_position
+    );
     const ids = orderedTeams
       .map((team) => pool.find((registration) => registration.user_id === team.captain_user_id)?.id)
       .filter((id): id is number => id != null);
@@ -156,7 +176,10 @@ export function DraftSetupWizard({ tournamentId, board }: DraftSetupWizardProps)
     [candidates, config.teamCount, config.teamSize]
   );
   const ranks = useMemo(
-    () => new Map(pool.map((registration) => [registration.id, summarizeRegistration(registration).rank])),
+    () =>
+      new Map(
+        pool.map((registration) => [registration.id, summarizeRegistration(registration).rank])
+      ),
     [pool]
   );
   const orderedCaptainIds = useMemo(
@@ -165,7 +188,9 @@ export function DraftSetupWizard({ tournamentId, board }: DraftSetupWizardProps)
   );
 
   const feasibilityQuery = useQuery({
-    queryKey: session ? tournamentQueryKeys.draftFeasibility(session.id) : ["draft", "feasibility", "none"],
+    queryKey: session
+      ? tournamentQueryKeys.draftFeasibility(session.id)
+      : ["draft", "feasibility", "none"],
     queryFn: () => draftService.getFeasibility(session!.id),
     enabled: session?.status === "ready"
   });
@@ -249,6 +274,22 @@ export function DraftSetupWizard({ tournamentId, board }: DraftSetupWizardProps)
     onError: (error) => notify.apiError(error, { title: t("startFailed") })
   });
 
+  const cancelMutation = useMutation({
+    mutationFn: () => {
+      if (!session) throw new Error("Draft session is missing");
+      return draftService.lifecycle(tournamentId, session.id, "cancel");
+    },
+    onSuccess: async (result) => {
+      queryClient.setQueryData<DraftBoard | null>(boardKey, (current) =>
+        current ? { ...current, session: result } : null
+      );
+      resetSetupState();
+      notify.success(t("controlRoom.actionSuccess.cancel"));
+      await invalidate();
+    },
+    onError: (error) => notify.apiError(error, { title: t("controlRoom.confirm.cancel.title") })
+  });
+
   const isReseed =
     session?.status === "ready" ||
     (preview?.diff.teams_before ?? board?.teams.length ?? 0) > 0 ||
@@ -263,7 +304,12 @@ export function DraftSetupWizard({ tournamentId, board }: DraftSetupWizardProps)
     preview?.feasibility.is_feasible === true;
   const currentIndex = SETUP_STEPS.indexOf(step);
   const pending =
-    createMutation.isPending || previewMutation.isPending || commitMutation.isPending || startMutation.isPending;
+    createMutation.isPending ||
+    previewMutation.isPending ||
+    commitMutation.isPending ||
+    startMutation.isPending ||
+    cancelMutation.isPending;
+  const canCancelSetup = canCancelDraftSetup(step, session?.status ?? null);
 
   const validationState = {
     teamSize: config.teamSize,
@@ -275,7 +321,11 @@ export function DraftSetupWizard({ tournamentId, board }: DraftSetupWizardProps)
 
   const next = async () => {
     if (step === "config") {
-      if (validateSetupStep(step, validationState).length > 0 || config.teamCount < 2 || config.teamCount > 12) {
+      if (
+        validateSetupStep(step, validationState).length > 0 ||
+        config.teamCount < 2 ||
+        config.teamCount > 12
+      ) {
         notify.warning(t("fixStepErrors"));
         return;
       }
@@ -343,7 +393,8 @@ export function DraftSetupWizard({ tournamentId, board }: DraftSetupWizardProps)
                   aria-current={active ? "step" : undefined}
                   className={cn(
                     "flex min-w-0 flex-1 items-center gap-2 border-y border-[color:var(--aqt-border)] px-3 py-2.5 text-left transition-colors",
-                    active && "border-[color:var(--aqt-teal)] bg-[color:var(--aqt-teal)]/8 text-[color:var(--aqt-teal)]",
+                    active &&
+                      "border-[color:var(--aqt-teal)] bg-[color:var(--aqt-teal)]/8 text-[color:var(--aqt-teal)]",
                     complete && !active && "text-[color:var(--aqt-support)]",
                     !active && !complete && "text-[color:var(--aqt-fg-muted)]",
                     reachable && "hover:border-[color:var(--aqt-teal)]/50",
@@ -351,13 +402,19 @@ export function DraftSetupWizard({ tournamentId, board }: DraftSetupWizardProps)
                   )}
                 >
                   <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-[color:var(--aqt-card-2)]">
-                    {complete ? <Check className="h-4 w-4 text-[color:var(--aqt-support)]" /> : <Icon className="h-4 w-4" />}
+                    {complete ? (
+                      <Check className="h-4 w-4 text-[color:var(--aqt-support)]" />
+                    ) : (
+                      <Icon className="h-4 w-4" />
+                    )}
                   </span>
                   <span className="truncate text-xs font-medium">
                     {index + 1}. {t(`steps.${entry}`)}
                   </span>
                 </button>
-                {index < SETUP_STEPS.length - 1 && <ChevronRight className="h-4 w-4 shrink-0 text-[color:var(--aqt-fg-faint)]" />}
+                {index < SETUP_STEPS.length - 1 && (
+                  <ChevronRight className="h-4 w-4 shrink-0 text-[color:var(--aqt-fg-faint)]" />
+                )}
               </li>
             );
           })}
@@ -372,12 +429,31 @@ export function DraftSetupWizard({ tournamentId, board }: DraftSetupWizardProps)
                 {t("stepOf", { current: currentIndex + 1, total: SETUP_STEPS.length })}
               </p>
               <h2 className="mt-2 font-onest text-2xl font-semibold">{t(`stepTitles.${step}`)}</h2>
-              <p className="mt-1 max-w-3xl text-sm leading-relaxed text-[color:var(--aqt-fg-muted)]">{t(`stepDescriptions.${step}`)}</p>
+              <p className="mt-1 max-w-3xl text-sm leading-relaxed text-[color:var(--aqt-fg-muted)]">
+                {t(`stepDescriptions.${step}`)}
+              </p>
             </div>
-            {session && (
-              <Badge variant="outline">
-                {t("sessionNumber", { id: session.id })} · v{session.version}
-              </Badge>
+            {(session || canCancelSetup) && (
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                {session && (
+                  <Badge variant="outline">
+                    {t("sessionNumber", { id: session.id })} · v{session.version}
+                  </Badge>
+                )}
+                {canCancelSetup && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={pending}
+                    className="border-[color:var(--aqt-live)]/40 text-[color:var(--aqt-live)] hover:border-[color:var(--aqt-live)] hover:bg-[color:var(--aqt-live)]/10"
+                    onClick={() => setCancelDialogOpen(true)}
+                  >
+                    <XCircle className="mr-2 h-4 w-4" />
+                    {t("actions.cancel")}
+                  </Button>
+                )}
+              </div>
             )}
           </div>
         </div>
@@ -471,9 +547,15 @@ export function DraftSetupWizard({ tournamentId, board }: DraftSetupWizardProps)
           </AlertDialogHeader>
           {preview && (
             <div className="grid grid-cols-3 gap-2 rounded-xl bg-muted/50 p-3 text-center text-sm">
-              <div>{t("teams")}: {preview.diff.teams_before} → {preview.diff.teams_after}</div>
-              <div>{t("players")}: {preview.diff.players_before} → {preview.diff.players_after}</div>
-              <div>{t("picks")}: {preview.diff.picks_before} → {preview.diff.picks_after}</div>
+              <div>
+                {t("teams")}: {preview.diff.teams_before} → {preview.diff.teams_after}
+              </div>
+              <div>
+                {t("players")}: {preview.diff.players_before} → {preview.diff.players_after}
+              </div>
+              <div>
+                {t("picks")}: {preview.diff.picks_before} → {preview.diff.picks_after}
+              </div>
             </div>
           )}
           <AlertDialogFooter>
@@ -486,6 +568,37 @@ export function DraftSetupWizard({ tournamentId, board }: DraftSetupWizardProps)
               }}
             >
               {t("confirmReseed")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {session ? t("controlRoom.confirm.cancel.title") : t("cancelSetupTitle")}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {session
+                ? t("controlRoom.confirm.cancel.description")
+                : t("cancelSetupDescription")}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={cancelMutation.isPending}>
+              {t("controlRoom.dismiss")}
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={cancelMutation.isPending}
+              className="bg-[color:var(--aqt-live)] text-white hover:bg-[color:var(--aqt-live)]/90"
+              onClick={(event) => {
+                event.preventDefault();
+                if (session) cancelMutation.mutate();
+                else resetSetupState();
+              }}
+            >
+              {t("actions.cancel")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

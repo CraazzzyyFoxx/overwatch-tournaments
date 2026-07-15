@@ -40,7 +40,7 @@ export const TournamentTeamTable = ({
   youLabel,
   avgMvpLabel,
   heroesLabel,
-  signatureHeroesLabel,
+  signatureHeroesLabel
 }: {
   players: TeamRosterPlayer[];
   tournamentGrid?: DivisionGridVersion | null;
@@ -106,7 +106,7 @@ export const TournamentTeamTable = ({
                       style={{
                         background: "hsl(172 70% 49% / 0.12)",
                         border: "1px solid hsl(172 70% 49% / 0.3)",
-                        color: "var(--aqt-teal)",
+                        color: "var(--aqt-teal)"
                       }}
                     >
                       {youLabel}
@@ -136,7 +136,8 @@ export const TournamentTeamTable = ({
                     className="aqt-mono"
                     style={{
                       textAlign: "right",
-                      color: player.avg_mvp != null ? avgMvpColor(player.avg_mvp) : "var(--aqt-fg-dim)",
+                      color:
+                        player.avg_mvp != null ? avgMvpColor(player.avg_mvp) : "var(--aqt-fg-dim)"
                     }}
                   >
                     {player.avg_mvp != null ? player.avg_mvp.toFixed(1) : "—"}
@@ -180,40 +181,79 @@ function placementClass(placement: number): string {
   return "def";
 }
 
-export const TournamentTeamCard = ({ team }: { team: Team }) => {
-  return (
-    <article id={team.id.toString()} className="team-card">
-      <header className="tc-header">
-        <div className="tc-tags">
-          {team.group?.name ? (
-            <span className={cn("group-chip", groupChipClass(team.group.name))}>
-              Group {team.group.name}
-            </span>
-          ) : (
-            <span />
-          )}
-          {team.placement != null && (
-            <span className={cn("placement", placementClass(team.placement))}>
-              #{team.placement}
-            </span>
-          )}
-        </div>
+interface TournamentTeamCardFrameProps extends React.HTMLAttributes<HTMLElement> {
+  name: React.ReactNode;
+  leadingTag?: React.ReactNode;
+  positionTag?: React.ReactNode;
+  metricLabel?: React.ReactNode;
+  metricValue?: React.ReactNode;
+}
 
-        <div className="tc-name-row">
-          <h3 className="tc-name">{team.name}</h3>
-          <div className="tc-sr">
-            <div className="l">Avg. SR</div>
-            <div className="v">{team.avg_sr.toFixed(0)}</div>
+/** Shared team-card chrome used by tournament tables and live draft rosters. */
+export const TournamentTeamCardFrame = ({
+  name,
+  leadingTag,
+  positionTag,
+  metricLabel,
+  metricValue,
+  children,
+  className,
+  ...props
+}: TournamentTeamCardFrameProps) => {
+  const hasTags = leadingTag != null || positionTag != null;
+  const hasMetric = metricLabel != null || metricValue != null;
+
+  return (
+    <article className={cn("team-card", className)} {...props}>
+      <header className="tc-header">
+        {hasTags && (
+          <div className="tc-tags">
+            {leadingTag ?? <span />}
+            {positionTag}
           </div>
+        )}
+        <div className="tc-name-row">
+          <h3 className="tc-name">{name}</h3>
+          {hasMetric && (
+            <div className="tc-sr">
+              {metricLabel != null && <div className="l">{metricLabel}</div>}
+              {metricValue != null && <div className="v">{metricValue}</div>}
+            </div>
+          )}
         </div>
       </header>
-
       <div className="tc-divider" />
+      {children}
+    </article>
+  );
+};
 
+export const TournamentTeamCard = ({ team }: { team: Team }) => {
+  return (
+    <TournamentTeamCardFrame
+      id={team.id.toString()}
+      name={team.name}
+      leadingTag={
+        team.group?.name ? (
+          <span className={cn("group-chip", groupChipClass(team.group.name))}>
+            Group {team.group.name}
+          </span>
+        ) : (
+          <span />
+        )
+      }
+      positionTag={
+        team.placement != null ? (
+          <span className={cn("placement", placementClass(team.placement))}>#{team.placement}</span>
+        ) : null
+      }
+      metricLabel="Avg. SR"
+      metricValue={team.avg_sr.toFixed(0)}
+    >
       <TournamentTeamTable
         players={team.players}
         tournamentGrid={team.tournament?.division_grid_version}
       />
-    </article>
+    </TournamentTeamCardFrame>
   );
 };

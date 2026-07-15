@@ -1,4 +1,9 @@
-import type { DraftCaptainOrder, DraftFormat, DraftRole } from "@/types/draft.types";
+import type {
+  DraftCaptainOrder,
+  DraftFormat,
+  DraftRole,
+  DraftStatus
+} from "@/types/draft.types";
 
 export const SETUP_STEPS = [
   "config",
@@ -21,6 +26,14 @@ export function canNavigateToSetupStep(
 export function previousSetupStep(current: DraftSetupStep): DraftSetupStep {
   const currentIndex = SETUP_STEPS.indexOf(current);
   return SETUP_STEPS[Math.max(0, currentIndex - 1)];
+}
+
+export function canCancelDraftSetup(
+  current: DraftSetupStep,
+  sessionStatus: DraftStatus | null
+): boolean {
+  if (sessionStatus === "setup" || sessionStatus === "ready") return true;
+  return sessionStatus == null && current !== "config";
 }
 
 export interface DraftPoolCandidate {

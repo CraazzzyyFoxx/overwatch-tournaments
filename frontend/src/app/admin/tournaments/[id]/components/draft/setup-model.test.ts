@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildDraftSchedule,
+  canCancelDraftSetup,
   canNavigateToSetupStep,
   derivePoolReadiness,
   moveCaptain,
@@ -32,6 +33,14 @@ describe("draft setup model", () => {
     expect(canNavigateToSetupStep("ready", "config")).toBe(true);
     expect(canNavigateToSetupStep("captains", "order")).toBe(false);
     expect(canNavigateToSetupStep("ready", "ready")).toBe(false);
+  });
+
+  it("allows cancelling local and persisted unfinished setup", () => {
+    expect(canCancelDraftSetup("config", null)).toBe(false);
+    expect(canCancelDraftSetup("pool", null)).toBe(true);
+    expect(canCancelDraftSetup("config", "setup")).toBe(true);
+    expect(canCancelDraftSetup("ready", "ready")).toBe(true);
+    expect(canCancelDraftSetup("ready", "cancelled")).toBe(false);
   });
 
   it("reports pool blockers without hiding missing ranks or accounts", () => {
