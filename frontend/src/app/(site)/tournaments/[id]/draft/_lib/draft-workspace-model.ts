@@ -32,6 +32,12 @@ export function parseDraftViewParams(params: URLSearchParams): DraftViewParams {
   };
 }
 
+const ROLE_LABELS: Record<DraftRole, string[]> = {
+  tank: ["tank"],
+  dps: ["dps", "damage"],
+  support: ["support", "sup", "heal"],
+};
+
 export function filterDraftPlayers(
   players: DraftPlayer[],
   filters: Pick<DraftViewParams, "role" | "sort" | "query">
@@ -43,11 +49,13 @@ export function filterDraftPlayers(
         player.primary_role,
         ...((player.secondary_roles_json ?? []) as DraftRole[])
       ]);
-      const name = player.battle_tag ?? `#${player.id}`;
-      return (
-        (filters.role === "all" || roles.has(filters.role)) &&
-        (!query || name.toLocaleLowerCase().includes(query))
-      );
+      const haystack = [
+        player.battle_tag ?? `#${player.id}`,
+        player.sub_role ?? "",
+        ...[player.primary_role, ...((player.secondary_roles_json ?? []) as DraftRole[])]
+          .flatMap((r) => ROLE_LABELS[r] ?? [r]),
+      ].join(" ").toLocaleLowerCase();
+      return (filters.role === "all" || roles.has(filters.role)) && (!query || haystack.includes(query));
     })
     .sort((left, right) => {
       if (filters.sort === "name") {
@@ -116,4 +124,46 @@ export function buildDraftEventFeed(
       role: pick.target_role,
       autopick: pick.is_autopick
     }));
+}
+
+export function normalizeTopHeroes(
+  entries: DraftPlayer["role_top_heroes"][string] | undefined
+): { slug: string; imagePath: string | null }[] {
+  if (!entries) return [];
+  return entries.map((e) =>
+    typeof e === "string" ? { slug: e, imagePath: null } : { slug: e.slug, imagePath: e.image_path ?? null }
+  );
+}
+
+export function roleTopHeroes(player: DraftPlayer, role: DraftRole) {
+  return normalizeTopHeroes(player.role_top_heroes?.[role]);
+}
+
+export interface DraftRoundGroup {
+  round: number;
+  picks: DraftPick[];
+}
+
+export function groupPicksByRound(picks: DraftPick[]): DraftRoundGroup[] {
+  const byRound = new Map<number, DraftPick[]>();
+  for (const pick of picks) {
+    const list = byRound.get(pick.round_no) ?? [];
+    list.push(pick);
+    byRound.set(pick.round_no, list);
+  }
+  return [...byRound.entries()]
+    .sort(([a], [b]) => a - b)
+    .map(([round, list]) => ({
+      round,
+      picks: [...list].sort((l, r) => l.pick_in_round - r.pick_in_round || l.overall_no - r.overall_no),
+    }));
+}
+
+export function rosterRoleForPlayer(player: DraftPlayer, picks: DraftPick[]): DraftRole {
+  const pick = picks.find((p) => p.picked_player_id === player.id && p.target_role != null);
+  return (pick?.target_role as DraftRole | undefined) ?? player.primary_role;
+}
+
+export function rosterRankForPlayer(player: DraftPlayer, role: DraftRole): number | null {
+  return player.role_ranks?.[role] ?? player.rank_value ?? null;
 }

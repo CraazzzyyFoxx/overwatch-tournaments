@@ -1,11 +1,16 @@
 import { describe, expect, it } from "vitest";
 
-import type { DraftPickOptionsResponse, DraftPlayer } from "@/types/draft.types";
+import type { DraftPickOptionsResponse, DraftPick, DraftPlayer } from "@/types/draft.types";
 
 import {
   buildDraftEventFeed,
   buildRosterByTeam,
   filterDraftPlayers,
+  normalizeTopHeroes,
+  roleTopHeroes,
+  groupPicksByRound,
+  rosterRoleForPlayer,
+  rosterRankForPlayer,
   optionForSelection,
   playerRoles,
   parseDraftViewParams
@@ -63,5 +68,65 @@ describe("draft workspace model", () => {
     ] as DraftPlayer[]);
     expect(rosters.get(5)?.map((entry) => entry.id)).toEqual([1]);
     expect(rosters.has(0)).toBe(false);
+  });
+});
+
+const mkPlayer = (p: Partial<DraftPlayer>): DraftPlayer => ({
+  id: 1, session_id: 1, user_id: null, battle_tag: "Ana#1", primary_role: "support",
+  sub_role: null, is_flex: false, division_number: null, rank_value: 3000,
+  status: "available", is_captain: false, drafted_by_team_id: null,
+  secondary_roles_json: null, role_ranks: {}, role_top_heroes: {}, additional_info: {},
+  version: 1, ...p,
+});
+
+describe("extended filterDraftPlayers search", () => {
+  it("matches on sub_role", () => {
+    const players = [mkPlayer({ id: 1, battle_tag: "Zed", sub_role: "hitscan" }), mkPlayer({ id: 2, battle_tag: "Boo", sub_role: "flex" })];
+    const out = filterDraftPlayers(players, { role: "all", sort: "rank", query: "hitscan" });
+    expect(out.map((p) => p.id)).toEqual([1]);
+  });
+  it("matches on role label", () => {
+    const players = [mkPlayer({ id: 1, primary_role: "tank" }), mkPlayer({ id: 2, primary_role: "support" })];
+    const out = filterDraftPlayers(players, { role: "all", sort: "rank", query: "tank" });
+    expect(out.map((p) => p.id)).toEqual([1]);
+  });
+});
+
+describe("normalizeTopHeroes", () => {
+  it("normalizes string + object entries", () => {
+    expect(normalizeTopHeroes(["ana", { slug: "kiriko", image_path: "/k.png" }])).toEqual([
+      { slug: "ana", imagePath: null },
+      { slug: "kiriko", imagePath: "/k.png" },
+    ]);
+  });
+  it("handles undefined", () => {
+    expect(normalizeTopHeroes(undefined)).toEqual([]);
+  });
+});
+
+describe("groupPicksByRound", () => {
+  it("groups and sorts by round then pick_in_round", () => {
+    const picks = [
+      { id: 3, round_no: 2, pick_in_round: 1, overall_no: 3 },
+      { id: 1, round_no: 1, pick_in_round: 1, overall_no: 1 },
+      { id: 2, round_no: 1, pick_in_round: 2, overall_no: 2 },
+    ] as DraftPick[];
+    const groups = groupPicksByRound(picks);
+    expect(groups.map((g) => g.round)).toEqual([1, 2]);
+    expect(groups[0].picks.map((p) => p.id)).toEqual([1, 2]);
+  });
+});
+
+describe("roster role/rank", () => {
+  it("uses drafted target role over primary", () => {
+    const player = mkPlayer({ id: 5, primary_role: "support", role_ranks: { dps: 3500, support: 3000 } });
+    const picks = [{ id: 9, picked_player_id: 5, target_role: "dps" }] as DraftPick[];
+    expect(rosterRoleForPlayer(player, picks)).toBe("dps");
+    expect(rosterRankForPlayer(player, "dps")).toBe(3500);
+  });
+  it("falls back to primary role + rank_value", () => {
+    const player = mkPlayer({ id: 6, primary_role: "tank", rank_value: 2800, role_ranks: {} });
+    expect(rosterRoleForPlayer(player, [])).toBe("tank");
+    expect(rosterRankForPlayer(player, "tank")).toBe(2800);
   });
 });
