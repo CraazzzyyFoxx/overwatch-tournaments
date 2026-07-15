@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Loader2, Radio, ShieldAlert } from "lucide-react";
+import { ArrowLeft, Radio, ShieldAlert } from "lucide-react";
 import Link from "next/link";
 import { redirect, useParams } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -11,6 +11,7 @@ import { useTournamentQuery } from "@/app/(site)/tournaments/[id]/_hooks/useTour
 import { Button } from "@/components/ui/button";
 
 import styles from "./DraftRoom.module.css";
+import { DraftRoomSkeleton } from "./DraftRoomSkeleton";
 
 export default function PublicDraftRoomPage() {
   const t = useTranslations("draftRedesign");
@@ -22,6 +23,12 @@ export default function PublicDraftRoomPage() {
   if (tournament && tournament.team_formation !== "draft") {
     redirect(`/tournaments/${tournamentId}`);
   }
+
+  if (tournamentQuery.isPending && !tournament) {
+    return <DraftRoomSkeleton />;
+  }
+
+  const initialLoadError = tournamentQuery.isError && !tournament;
 
   return (
     <div className={`${styles.room} site-theme`}>
@@ -55,15 +62,10 @@ export default function PublicDraftRoomPage() {
         <span className={styles.rail} aria-hidden />
       </header>
 
-      <main className={`${styles.stage} mx-auto w-full max-w-[1600px] px-4 py-5 sm:px-6 sm:py-7 xl:px-10`}>
-        {tournamentQuery.isLoading ? (
-          <DraftRoomState
-            icon={<Loader2 className="h-6 w-6 animate-spin text-[color:var(--aqt-teal)] motion-reduce:animate-none" />}
-            title={t("loadingTitle")}
-            hint={t("loadingHint")}
-            live
-          />
-        ) : tournamentQuery.isError || !tournament ? (
+      <main
+        className={`${styles.stage} mx-auto w-full max-w-[1600px] px-4 py-5 sm:px-6 sm:py-7 xl:px-10`}
+      >
+        {initialLoadError || !tournament ? (
           <DraftRoomState
             icon={<ShieldAlert className="h-6 w-6 text-[color:var(--aqt-amber)]" />}
             title={t("loadErrorTitle")}
@@ -82,21 +84,15 @@ function DraftRoomState({
   icon,
   title,
   hint,
-  action,
-  live = false
+  action
 }: {
   icon: ReactNode;
   title: string;
   hint: string;
   action?: ReactNode;
-  live?: boolean;
 }) {
   return (
-    <section
-      className="flex min-h-[60svh] flex-col items-center justify-center gap-3 text-center"
-      role={live ? "status" : undefined}
-      aria-live={live ? "polite" : undefined}
-    >
+    <section className="flex min-h-[60svh] flex-col items-center justify-center gap-3 text-center">
       {icon}
       <h1 className="font-onest text-2xl font-semibold">{title}</h1>
       <p className="max-w-lg text-sm leading-relaxed text-[color:var(--aqt-fg-muted)]">{hint}</p>
