@@ -20,12 +20,18 @@ const C = 2 * Math.PI * R;
 
 export function DraftClockRing({ expiresAt, paused, totalSeconds, accent }: DraftClockRingProps) {
   const t = useTranslations();
-  const [now, setNow] = useState(() => Date.now());
+  const [now, setNow] = useState<number | null>(null);
 
   useEffect(() => {
-    if (paused || !expiresAt) return;
-    const id = window.setInterval(() => setNow(Date.now()), 250);
-    return () => window.clearInterval(id);
+    const initialId = window.setTimeout(() => setNow(Date.now()), 0);
+    const intervalId = !paused && expiresAt
+      ? window.setInterval(() => setNow(Date.now()), 250)
+      : null;
+
+    return () => {
+      window.clearTimeout(initialId);
+      if (intervalId != null) window.clearInterval(intervalId);
+    };
   }, [paused, expiresAt]);
 
   const ms = expiresAt && now != null ? remainingMs(expiresAt, now) : null;

@@ -64,7 +64,6 @@ export function CurrentPick({ board, isMyPick = false, myTeamId = null }: Curren
           )}
         </div>
         <DraftClockRing
-          key={current?.clock_expires_at ?? "no-clock"}
           expiresAt={current?.clock_expires_at ?? null}
           paused={paused}
           totalSeconds={board.session.pick_time_seconds}
