@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import cast
 from unittest import IsolatedAsyncioTestCase, TestCase
+from unittest.mock import AsyncMock, patch
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import make_transient_to_detached
@@ -24,8 +25,9 @@ os.environ.setdefault("POSTGRES_DB", "postgres")
 os.environ.setdefault("POSTGRES_HOST", "localhost")
 os.environ.setdefault("POSTGRES_PORT", "5432")
 
-from src import models  # noqa: E402
+from src import models, schemas  # noqa: E402
 from src.core import enums  # noqa: E402
+from src.services.team import service as team_service  # noqa: E402
 from src.services.tournament import flows, service  # noqa: E402
 
 
@@ -40,6 +42,7 @@ def _tournament() -> models.Tournament:
         description=None,
         is_league=False,
         is_finished=False,
+        is_hidden=False,
         status=enums.TournamentStatus.LIVE,
         start_date=datetime.now(UTC),
         end_date=datetime.now(UTC),
@@ -64,6 +67,60 @@ class TournamentSerializationTests(IsolatedAsyncioTestCase):
 
         self.assertEqual(5, read.division_grid_version_id)
         self.assertIsNone(read.division_grid_version)
+
+    async def test_to_pydantic_resolves_requested_teams_count(self) -> None:
+        tournament = _tournament()
+        make_transient_to_detached(tournament)
+        count_boundary = AsyncMock(return_value=20)
+
+        with patch.object(
+            team_service,
+            "get_team_count_by_tournament",
+            count_boundary,
+        ):
+            read = await flows.to_pydantic(
+                cast(AsyncSession, object()),
+                tournament,
+                ["teams_count"],
+            )
+
+        self.assertEqual(20, read.teams_count)
+
+    async def test_to_pydantic_leaves_unrequested_teams_count_unresolved(self) -> None:
+        tournament = _tournament()
+        make_transient_to_detached(tournament)
+        unexpected_count = AsyncMock(side_effect=AssertionError("unrequested count query"))
+
+        with patch.object(
+            team_service,
+            "get_team_count_by_tournament",
+            unexpected_count,
+        ):
+            read = await flows.to_pydantic(cast(AsyncSession, object()), tournament, [])
+
+        self.assertIsNone(read.teams_count)
+
+    async def test_get_all_uses_bulk_teams_counts_for_requested_entity(self) -> None:
+        tournament = _tournament()
+        make_transient_to_detached(tournament)
+        params = schemas.TournamentPaginationSortSearchParams(entities=["teams_count"])
+        bulk_count_boundary = AsyncMock(return_value={tournament.id: 20})
+        unexpected_singular_count = AsyncMock(side_effect=AssertionError("N+1 team count query"))
+
+        with (
+            patch.object(flows.service, "get_all", AsyncMock(return_value=([tournament], 1))),
+            patch.object(flows, "resolve_tournament_challonge", AsyncMock(return_value={})),
+            patch.object(team_service, "get_team_count_by_tournament_bulk", bulk_count_boundary),
+            patch.object(
+                team_service,
+                "get_team_count_by_tournament",
+                unexpected_singular_count,
+            ),
+        ):
+            page = await flows.get_all(cast(AsyncSession, object()), params)
+
+        self.assertEqual([20], [item.teams_count for item in page.results])
+        self.assertEqual(1, bulk_count_boundary.await_count)
 
 
 class TournamentLoadOptionTests(TestCase):

@@ -52,6 +52,7 @@ async def to_pydantic(
     *,
     participants_counts: typing.Mapping[int, int] | None = None,
     registrations_counts: typing.Mapping[int, int] | None = None,
+    teams_counts: typing.Mapping[int, int] | None = None,
     challonge_ref: ChallongeRef | None = None,
     stage_challonge_refs: typing.Mapping[int, ChallongeRef] | None = None,
 ) -> schemas.TournamentRead:
@@ -76,6 +77,7 @@ async def to_pydantic(
     stages: list[schemas.StageSummaryRead] = []
     participants_count: int | None = None
     registrations_count: int | None = None
+    teams_count: int | None = None
     if "stages" in entities:
         stage_models = _loaded_relationship(tournament, "stages") or []
         stages = [
@@ -98,6 +100,11 @@ async def to_pydantic(
             registrations_count = await registration_service.get_registration_count_by_tournament(
                 session, tournament.id
             )
+    if "teams_count" in entities:
+        if teams_counts is not None:
+            teams_count = teams_counts.get(tournament.id, 0)
+        else:
+            teams_count = await team_service.get_team_count_by_tournament(session, tournament.id)
     division_grid_version = None
     if _entity_requested(entities, "division_grid_version"):
         division_grid_version_model = _loaded_relationship(tournament, "division_grid_version")
@@ -134,6 +141,7 @@ async def to_pydantic(
         stages=stages,
         participants_count=participants_count,
         registrations_count=registrations_count,
+        teams_count=teams_count,
     )
 
 
@@ -335,6 +343,11 @@ async def get_all(
         if "registrations_count" in params.entities
         else None
     )
+    teams_counts = (
+        await team_service.get_team_count_by_tournament_bulk(session, tournament_ids)
+        if "teams_count" in params.entities
+        else None
+    )
     # Batched Challonge-ref derivation (no N+1): one query for every tournament id
     # on the page, plus one for every loaded stage id when stages are requested.
     challonge_refs = await resolve_tournament_challonge(session, tournament_ids)
@@ -350,6 +363,7 @@ async def get_all(
                 params.entities,
                 participants_counts=participants_counts,
                 registrations_counts=registrations_counts,
+                teams_counts=teams_counts,
                 challonge_ref=challonge_refs.get(result.id),
                 stage_challonge_refs=stage_challonge_refs,
             )

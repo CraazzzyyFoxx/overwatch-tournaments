@@ -346,6 +346,13 @@ async def get_player_count_by_tournament_bulk(session: AsyncSession, tournaments
     return {row[0]: row[1] for row in result.all()}
 
 
+async def get_team_count_by_tournament(session: AsyncSession, tournament_id: int) -> int:
+    """Return the number of teams assigned to one tournament."""
+    query = sa.select(sa.func.count(models.Team.id)).where(models.Team.tournament_id == tournament_id)
+    result = await session.execute(query)
+    return result.scalar_one()
+
+
 async def get_team_count_by_tournament_bulk(session: AsyncSession, tournaments_ids: list[int]) -> dict[int, int]:
     """
     Retrieves the total count of `Team` model instances associated with a specific tournament.
