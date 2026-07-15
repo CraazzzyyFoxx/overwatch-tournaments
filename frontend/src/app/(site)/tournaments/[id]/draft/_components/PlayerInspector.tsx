@@ -113,7 +113,6 @@ export function PlayerInspector({
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-1.5 empty:hidden">
-        {player.sub_role && <span className={BADGE_CLASS}>{formatSubRoleLabel(player.sub_role)}</span>}
         {player.is_flex && <span className={BADGE_CLASS}>{t("flex")}</span>}
       </div>
 
@@ -134,7 +133,7 @@ export function PlayerInspector({
                 type="button"
                 disabled={blocked}
                 aria-pressed={active}
-                title={[isPrimary ? t("primaryRole") : null, roleRank != null ? `${roleRank} SR` : null].filter(Boolean).join(" · ") || undefined}
+                title={[t(`roles.${entry}`), isPrimary ? t("primaryRole") : null, roleRank != null ? `${roleRank} SR` : null].filter(Boolean).join(" · ")}
                 onClick={() => onRoleChange(entry)}
                 className={cn(
                   "flex min-h-9 min-w-0 flex-1 items-center gap-2 rounded-lg border px-3 py-1.5 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)]",
@@ -144,9 +143,12 @@ export function PlayerInspector({
                 )}
               >
                 <PlayerRoleIcon role={getRoleIconName(entry)} size={18} color={ROLE_ACCENT[entry]} />
-                <span className={cn("min-w-0 truncate text-[11px] font-medium uppercase tracking-wide", active && "text-[color:var(--aqt-teal)]")}>
-                  {t(`roles.${entry}`)}
-                </span>
+                <span className="sr-only">{t(`roles.${entry}`)}</span>
+                {isPrimary && player.sub_role && (
+                  <span className="min-w-0 truncate text-[11px] font-medium uppercase tracking-wide text-[color:var(--aqt-fg-muted)]">
+                    {formatSubRoleLabel(player.sub_role)}
+                  </span>
+                )}
                 <span className="ml-auto flex shrink-0 items-center gap-1.5">
                   {heroes.length > 0 && (
                     <AvatarStack size={24} max={3}>

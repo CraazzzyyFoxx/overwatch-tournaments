@@ -284,15 +284,17 @@ export function PlayerPool({
                     </span>
                   </span>
                   <span className="mt-1 flex flex-wrap items-center gap-1.5">
-                    <PlayerRoleIcon role={getRoleIconName(player.primary_role)} size={18} color={ROLE_ACCENT[player.primary_role]} />
+                    <span className="inline-flex min-w-0 items-center gap-1" title={t(`roles.${player.primary_role}`)}>
+                      <PlayerRoleIcon role={getRoleIconName(player.primary_role)} size={18} color={ROLE_ACCENT[player.primary_role]} />
+                      {player.sub_role && (
+                        <span className="truncate text-[11px] uppercase tracking-wide text-[color:var(--aqt-fg-muted)]">
+                          {formatSubRoleLabel(player.sub_role)}
+                        </span>
+                      )}
+                    </span>
                     {secondaryRoles.map((entry) => (
                       <PlayerRoleIcon key={entry} role={getRoleIconName(entry)} size={12} color="var(--aqt-fg-faint)" />
                     ))}
-                    {player.sub_role && (
-                      <span className="rounded border border-[color:var(--aqt-border-2)] px-1 text-[10px] uppercase tracking-wide text-[color:var(--aqt-fg-muted)]">
-                        {formatSubRoleLabel(player.sub_role)}
-                      </span>
-                    )}
                     {player.is_flex && (
                       <span className="rounded border border-[color:var(--aqt-border-2)] px-1 text-[10px] uppercase tracking-wide text-[color:var(--aqt-fg-muted)]">
                         {t("flex")}
