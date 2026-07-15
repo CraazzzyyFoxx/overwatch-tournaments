@@ -175,6 +175,24 @@ func TestDispatch_RPCUnavailable(t *testing.T) {
 	}
 }
 
+// TestDispatch_ClientCanceled_NoTimeout is the regression for OWT-TOURNAMENTS-20K:
+// when the caller disconnects mid-RPC, rpc.Call returns context.Canceled. The
+// dispatcher must not treat that as a service fault — no 504 (the client is
+// gone) and no Error-level log (which would open a Sentry Issue). We can only
+// assert the response side here: it must not emit a gateway timeout.
+func TestDispatch_ClientCanceled_NoTimeout(t *testing.T) {
+	m := &mockCaller{err: fmt.Errorf("rpc to %q: %w", "q", context.Canceled)}
+	d := newTestDispatcher(m, nil)
+	spec := RouteSpec{Method: "GET", Pattern: "/x", Queue: "q", Auth: AuthNone}
+	w := serve(d, spec, "GET", "/x", "")
+	if w.Code == http.StatusGatewayTimeout {
+		t.Fatalf("client cancellation must not produce a 504")
+	}
+	if w.Body.Len() != 0 {
+		t.Fatalf("client cancellation must not write a body, got %q", w.Body.String())
+	}
+}
+
 func TestDispatch_QueryForwardedAsList(t *testing.T) {
 	m := &mockCaller{reply: []byte(`{"ok":true,"data":[]}`)}
 	d := newTestDispatcher(m, nil)

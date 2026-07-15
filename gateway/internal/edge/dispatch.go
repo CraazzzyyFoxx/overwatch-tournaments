@@ -222,6 +222,16 @@ func (d *Dispatcher) call(w http.ResponseWriter, r *http.Request, queue string, 
 			writeDetail(w, http.StatusServiceUnavailable, "service unavailable")
 			return
 		}
+		// The caller disconnected before the RPC completed: r.Context() was
+		// canceled and propagated through the timeout ctx as context.Canceled
+		// (our own 120s deadline surfaces as context.DeadlineExceeded instead).
+		// This is not a server fault — the client is gone, so no response can
+		// be delivered and there is nothing to fix. Log at info (stdout/Loki
+		// only, never a Sentry Issue) and skip the 504.
+		if errors.Is(err, context.Canceled) {
+			log.Info("rpc canceled by client", "queue", queue)
+			return
+		}
 		log.Error("rpc failed", "queue", queue, "err", err)
 		writeDetail(w, http.StatusGatewayTimeout, "service timeout")
 		return
