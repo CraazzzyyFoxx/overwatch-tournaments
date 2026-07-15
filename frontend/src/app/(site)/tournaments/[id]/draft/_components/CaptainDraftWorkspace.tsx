@@ -23,7 +23,6 @@ import type { DivisionGrid } from "@/types/workspace.types";
 import type { useDraftMutations } from "../_hooks/useDraftData";
 
 import { CaptainShortlist } from "./CaptainShortlist";
-import { DraftEventFeed } from "./DraftEventFeed";
 import { DraftOrder } from "./DraftOrder";
 import { PickCommandBar } from "./PickCommandBar";
 import { PlayerInspector } from "./PlayerInspector";
@@ -216,7 +215,6 @@ export function CaptainDraftWorkspace({
                 divisionGrid={divisionGrid}
               />
               <CaptainShortlist
-                variant="chips"
                 players={shortlistPlayers}
                 onSelect={(player) => selectPlayer(player)}
                 onRemove={toggleShortlist}
@@ -231,7 +229,6 @@ export function CaptainDraftWorkspace({
       <div className="hidden gap-4 xl:grid xl:grid-cols-[248px_minmax(0,1fr)_378px]">
         <aside className="sticky top-4 self-start space-y-4">
           <DraftOrder picks={board.picks} teams={board.teams} players={board.players} divisionGrid={divisionGrid} />
-          <DraftEventFeed picks={board.picks} teams={board.teams} players={board.players} />
         </aside>
         <main className="flex min-w-0 flex-col gap-4">
           <PlayerInspector
@@ -248,7 +245,6 @@ export function CaptainDraftWorkspace({
             divisionGrid={divisionGrid}
           />
           <CaptainShortlist
-            variant="chips"
             players={shortlistPlayers}
             onSelect={(player) => selectPlayer(player)}
             onRemove={toggleShortlist}

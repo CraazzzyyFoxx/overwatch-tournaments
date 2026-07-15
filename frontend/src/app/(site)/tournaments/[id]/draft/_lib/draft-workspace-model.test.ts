@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import type { DraftPickOptionsResponse, DraftPick, DraftPlayer } from "@/types/draft.types";
 
 import {
-  buildDraftEventFeed,
   buildRosterByTeam,
   filterDraftPlayers,
   normalizeTopHeroes,
@@ -46,18 +45,6 @@ describe("draft workspace model", () => {
       view: "team",
       query: "abc"
     });
-  });
-
-  it("builds a public event feed only from resolved picks", () => {
-    const feed = buildDraftEventFeed(
-      [
-        { id: 1, overall_no: 1, status: "completed", draft_team_id: 5, picked_player_id: 2, target_role: "tank", is_autopick: false },
-        { id: 2, overall_no: 2, status: "upcoming", draft_team_id: 6, picked_player_id: null, target_role: null, is_autopick: false }
-      ] as never,
-      new Map([[5, "Alpha"]]),
-      new Map([[2, "Player#2"]])
-    );
-    expect(feed).toEqual([{ pickId: 1, overallNo: 1, teamName: "Alpha", playerName: "Player#2", role: "tank", autopick: false }]);
   });
 
   it("derives role choices and rosters from the public board snapshot", () => {

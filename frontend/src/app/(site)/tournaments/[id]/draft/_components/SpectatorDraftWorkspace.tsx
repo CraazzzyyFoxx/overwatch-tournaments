@@ -6,7 +6,6 @@ import type { DraftBoard } from "@/types/draft.types";
 import type { DivisionGrid } from "@/types/workspace.types";
 
 import { CurrentPick } from "./CurrentPick";
-import { DraftEventFeed } from "./DraftEventFeed";
 import { DraftOrder } from "./DraftOrder";
 import { TeamRosters } from "./TeamRosters";
 
@@ -53,7 +52,6 @@ export function SpectatorDraftWorkspace({
             compact
             divisionGrid={divisionGrid}
           />
-          <DraftEventFeed picks={board.picks} teams={board.teams} players={board.players} />
         </aside>
       </div>
     </div>

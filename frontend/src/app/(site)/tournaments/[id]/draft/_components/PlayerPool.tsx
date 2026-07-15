@@ -36,6 +36,11 @@ import { formatSubRoleLabel, getHeroIconUrl, getPlayerSlug } from "@/utils/playe
 import type { DraftPoolRoleFilter, DraftPoolSort } from "../_lib/draft-workspace-model";
 import { allPlayerHeroes, playerRoles, roleTopHeroes } from "../_lib/draft-workspace-model";
 
+const POOL_ROLES: DraftRole[] = ["tank", "dps", "support"];
+const SEGMENT_CLASS =
+  "inline-flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-lg px-3 text-sm font-medium text-[color:var(--aqt-fg-muted)] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)]";
+const SEGMENT_ACTIVE = "bg-[color:var(--aqt-card)] text-[color:var(--aqt-fg)]";
+
 interface PlayerPoolProps {
   players: DraftPlayer[];
   totalPlayers: number;
@@ -101,14 +106,11 @@ export function PlayerPool({
   return (
     <section aria-labelledby="player-pool-heading">
       <div className="flex flex-wrap items-end justify-between gap-3 border-b border-[color:var(--aqt-border)] pb-3">
-        <div>
-          <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-[color:var(--aqt-fg-faint)]">{t("poolCoordinate")}</p>
-          <h2 id="player-pool-heading" className="mt-1 font-onest text-lg font-semibold">{t("availablePool")}</h2>
-        </div>
+        <h2 id="player-pool-heading" className="font-onest text-lg font-semibold">{t("availablePool")}</h2>
         <span className="font-mono text-xs text-[color:var(--aqt-fg-muted)]">{visiblePlayers.length}/{totalPlayers}</span>
       </div>
 
-      <div className="mt-4 grid gap-2 sm:grid-cols-[1fr_auto_auto]">
+      <div className="mt-4 grid gap-2 sm:grid-cols-[1fr_auto]">
         <label className="relative">
           <span className="sr-only">{t("searchPlayers")}</span>
           <Search className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-[color:var(--aqt-fg-faint)]" />
@@ -119,15 +121,6 @@ export function PlayerPool({
             placeholder={t("searchPlayers")}
           />
         </label>
-        <Select value={role} onValueChange={(value) => onFiltersChange({ role: value as DraftPoolRoleFilter })}>
-          <SelectTrigger className="min-h-11 w-full sm:w-40" aria-label={t("filterRole")}><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">{t("allRoles")}</SelectItem>
-            <SelectItem value="tank">{t("roles.tank")} ({roleCounts.tank})</SelectItem>
-            <SelectItem value="dps">{t("roles.dps")} ({roleCounts.dps})</SelectItem>
-            <SelectItem value="support">{t("roles.support")} ({roleCounts.support})</SelectItem>
-          </SelectContent>
-        </Select>
         <Select value={sort} onValueChange={(value) => onFiltersChange({ sort: value as DraftPoolSort })}>
           <SelectTrigger className="min-h-11 w-full sm:w-32" aria-label={t("sortPool")}><SelectValue /></SelectTrigger>
           <SelectContent>
@@ -137,7 +130,30 @@ export function PlayerPool({
         </Select>
       </div>
 
-      <div className="mt-2 flex justify-end">
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <div className="flex min-w-0 flex-1 flex-wrap gap-1 rounded-xl bg-[color:var(--aqt-card-2)] p-1" role="group" aria-label={t("filterRole")}>
+          <button
+            type="button"
+            aria-pressed={role === "all"}
+            onClick={() => onFiltersChange({ role: "all" })}
+            className={cn(SEGMENT_CLASS, role === "all" && SEGMENT_ACTIVE)}
+          >
+            {t("allRoles")}
+          </button>
+          {POOL_ROLES.map((entry) => (
+            <button
+              key={entry}
+              type="button"
+              aria-pressed={role === entry}
+              onClick={() => onFiltersChange({ role: entry })}
+              className={cn(SEGMENT_CLASS, role === entry && SEGMENT_ACTIVE)}
+            >
+              <PlayerRoleIcon role={getRoleIconName(entry)} size={16} color={ROLE_ACCENT[entry]} />
+              <span className="sr-only">{t(`roles.${entry}`)}</span>
+              <span className="tabular-nums">{roleCounts[entry]}</span>
+            </button>
+          ))}
+        </div>
         <Popover>
           <PopoverTrigger asChild>
             <Button
@@ -226,7 +242,7 @@ export function PlayerPool({
               <article
                 key={player.id}
                 className={cn(
-                  "group grid min-h-[76px] grid-cols-[1fr_auto] items-center gap-3 border-b border-l-2 border-[color:var(--aqt-border)] py-3 pl-3",
+                  "group grid min-h-[64px] grid-cols-[1fr_auto] items-center gap-3 border-b border-l-2 border-[color:var(--aqt-border)] py-2.5 pl-3",
                   isSelected && "bg-[color:var(--aqt-teal)]/10",
                   blocked && "opacity-55"
                 )}
@@ -261,7 +277,7 @@ export function PlayerPool({
                     {blocked ? <Ban className="h-4 w-4 shrink-0 text-[color:var(--aqt-live)]" aria-label={t("unsafeOption")} /> : safetyRequired ? <ShieldCheck className="h-4 w-4 shrink-0 text-[color:var(--aqt-support)]" aria-label={t("safeOption")} /> : null}
                     <span className="ml-auto shrink-0" title={divisionTitle}>
                       {division != null ? (
-                        <PlayerDivisionIcon division={division} tournamentGrid={divisionGrid} width={32} height={32} className="h-8 w-8 object-contain" />
+                        <PlayerDivisionIcon division={division} tournamentGrid={divisionGrid} width={28} height={28} className="h-7 w-7 object-contain" />
                       ) : (
                         <span className="text-[color:var(--aqt-fg-faint)]">—</span>
                       )}
@@ -283,9 +299,9 @@ export function PlayerPool({
                       </span>
                     )}
                     {heroes.length > 0 && (
-                      <AvatarStack size={30} max={4} className="ml-1">
+                      <AvatarStack size={24} max={4} className="ml-1">
                         {heroes.map((hero) => (
-                          <Avatar key={hero.slug} className="h-[30px] w-[30px]" title={hero.slug}>
+                          <Avatar key={hero.slug} className="h-6 w-6" title={hero.slug}>
                             <AvatarImage src={getHeroIconUrl(hero.slug, hero.imagePath)} alt={hero.slug} />
                           </Avatar>
                         ))}

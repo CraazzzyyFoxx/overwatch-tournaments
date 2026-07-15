@@ -178,7 +178,6 @@ export function DraftPageHero({
           </div>
 
           <div className="ml-auto flex items-center gap-6">
-            <HStat label={t("teams")} value={board.teams.length} />
             <HStat label={t("availablePool")} value={available} />
             <HStat label={t("progress")} value={`${completed}/${board.picks.length}`} />
             <HStat

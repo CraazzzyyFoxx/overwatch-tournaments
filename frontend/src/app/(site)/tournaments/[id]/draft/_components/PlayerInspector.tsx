@@ -6,6 +6,7 @@ import Link from "next/link";
 
 import PlayerDivisionIcon from "@/components/PlayerDivisionIcon";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
+import { HeroCoord } from "@/components/site/PageHero";
 import { Avatar, AvatarImage, AvatarStack } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -88,7 +89,7 @@ export function PlayerInspector({
     <section className="rounded-xl border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-card)] p-4" aria-labelledby={headingId}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-[color:var(--aqt-fg-faint)]">{t("inspectorCoordinate")}</p>
+          <HeroCoord>{t("inspectorCoordinate")}</HeroCoord>
           <h2 id={headingId} className="mt-1 flex items-center gap-2 font-onest text-lg font-semibold">
             {profileSlug ? (
               <Link href={`/users/${profileSlug}`} className="truncate hover:text-[color:var(--aqt-teal)] hover:underline">
@@ -119,7 +120,7 @@ export function PlayerInspector({
 
       <div className="mt-3">
         <p className="mb-2 text-xs text-[color:var(--aqt-fg-muted)]">{t("chooseRole")}</p>
-        <div className="flex gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row">
           {roles.map((entry) => {
             const option = optionForSelection(options, player.id, entry);
             const blocked = safetyRequired && option?.is_safe !== true;
@@ -137,32 +138,34 @@ export function PlayerInspector({
                 title={[isPrimary ? t("primaryRole") : null, roleRank != null ? `${roleRank} SR` : null].filter(Boolean).join(" · ") || undefined}
                 onClick={() => onRoleChange(entry)}
                 className={cn(
-                  "flex min-w-0 flex-1 flex-col items-center gap-1.5 rounded-lg border px-2 py-2.5 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)]",
+                  "flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-lg border px-3 py-2 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)]",
                   isPrimary ? "border-[color:var(--aqt-teal)]/60" : "border-[color:var(--aqt-border-2)]",
                   active ? "bg-[color:var(--aqt-teal)]/15" : "hover:border-[color:var(--aqt-teal)]/50",
                   blocked && "cursor-not-allowed opacity-45"
                 )}
               >
-                <PlayerRoleIcon role={getRoleIconName(entry)} size={20} color={ROLE_ACCENT[entry]} />
-                <span className={cn("max-w-full truncate text-[11px] font-medium uppercase tracking-wide", active && "text-[color:var(--aqt-teal)]")}>
+                <PlayerRoleIcon role={getRoleIconName(entry)} size={18} color={ROLE_ACCENT[entry]} />
+                <span className={cn("min-w-0 truncate text-[11px] font-medium uppercase tracking-wide", active && "text-[color:var(--aqt-teal)]")}>
                   {t(`roles.${entry}`)}
                 </span>
-                {blocked ? (
-                  <Ban className="h-[30px] w-[30px] text-[color:var(--aqt-live)]" aria-label={t("unsafeOption")} />
-                ) : roleDivision != null ? (
-                  <PlayerDivisionIcon division={roleDivision} tournamentGrid={divisionGrid} width={30} height={30} className="h-[30px] w-[30px] object-contain" />
-                ) : (
-                  <span className="flex h-[30px] items-center text-sm text-[color:var(--aqt-fg-faint)]">—</span>
-                )}
-                {heroes.length > 0 && (
-                  <AvatarStack size={18} max={3}>
-                    {heroes.map((hero) => (
-                      <Avatar key={hero.slug} className="h-[18px] w-[18px]" title={hero.slug}>
-                        <AvatarImage src={getHeroIconUrl(hero.slug, hero.imagePath)} alt={hero.slug} />
-                      </Avatar>
-                    ))}
-                  </AvatarStack>
-                )}
+                <span className="ml-auto flex shrink-0 items-center gap-1.5">
+                  {heroes.length > 0 && (
+                    <AvatarStack size={16} max={3}>
+                      {heroes.map((hero) => (
+                        <Avatar key={hero.slug} className="h-4 w-4" title={hero.slug}>
+                          <AvatarImage src={getHeroIconUrl(hero.slug, hero.imagePath)} alt={hero.slug} />
+                        </Avatar>
+                      ))}
+                    </AvatarStack>
+                  )}
+                  {blocked ? (
+                    <Ban className="h-4 w-4 text-[color:var(--aqt-live)]" aria-label={t("unsafeOption")} />
+                  ) : roleDivision != null ? (
+                    <PlayerDivisionIcon division={roleDivision} tournamentGrid={divisionGrid} width={24} height={24} className="h-6 w-6 object-contain" />
+                  ) : (
+                    <span className="text-sm text-[color:var(--aqt-fg-faint)]">—</span>
+                  )}
+                </span>
               </button>
             );
           })}

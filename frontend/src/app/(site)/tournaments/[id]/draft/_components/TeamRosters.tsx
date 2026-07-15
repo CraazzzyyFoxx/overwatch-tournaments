@@ -5,7 +5,6 @@ import { useTranslations } from "next-intl";
 
 import PlayerDivisionIcon from "@/components/PlayerDivisionIcon";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
-import { HeroCoord } from "@/components/site/PageHero";
 import { TournamentTeamCardFrame } from "@/components/TournamentTeamCard";
 import { getDivisionLabel, resolveDivisionFromRank } from "@/lib/division-grid";
 import { getRoleIconName, ROLE_ACCENT } from "@/lib/roles";
@@ -90,8 +89,7 @@ export function TeamRosters({
     return (
       <section aria-labelledby="team-rosters-column-heading">
         <div className="border-b border-[color:var(--aqt-border)] pb-3">
-          <HeroCoord>{t("rosterCoordinate")}</HeroCoord>
-          <h2 id="team-rosters-column-heading" className="mt-1 font-onest text-lg font-semibold">
+          <h2 id="team-rosters-column-heading" className="font-onest text-lg font-semibold">
             {t("teamRosters")}
           </h2>
         </div>
@@ -228,8 +226,7 @@ export function TeamRosters({
   return (
     <section aria-labelledby="team-rosters-heading">
       <div className="border-b border-[color:var(--aqt-border)] pb-3">
-        <HeroCoord>{t("rosterCoordinate")}</HeroCoord>
-        <h2 id="team-rosters-heading" className="mt-1 font-onest text-lg font-semibold">
+        <h2 id="team-rosters-heading" className="font-onest text-lg font-semibold">
           {focusTeamOnly ? t("myTeam") : t("teamRosters")}
         </h2>
       </div>

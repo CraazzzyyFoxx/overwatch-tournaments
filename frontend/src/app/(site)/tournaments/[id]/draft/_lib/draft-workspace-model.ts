@@ -95,37 +95,6 @@ export function buildRosterByTeam(players: DraftPlayer[]): Map<number, DraftPlay
   return rosters;
 }
 
-export interface DraftEventFeedItem {
-  pickId: number;
-  overallNo: number;
-  teamName: string;
-  playerName: string;
-  role: DraftRole | null;
-  autopick: boolean;
-}
-
-export function buildDraftEventFeed(
-  picks: DraftPick[],
-  teamNames: ReadonlyMap<number, string>,
-  playerNames: ReadonlyMap<number, string>
-): DraftEventFeedItem[] {
-  return picks
-    .filter(
-      (pick) =>
-        (pick.status === "completed" || pick.status === "autopicked") &&
-        pick.picked_player_id != null
-    )
-    .sort((left, right) => right.overall_no - left.overall_no)
-    .map((pick) => ({
-      pickId: pick.id,
-      overallNo: pick.overall_no,
-      teamName: teamNames.get(pick.draft_team_id) ?? `#${pick.draft_team_id}`,
-      playerName: playerNames.get(pick.picked_player_id!) ?? `#${pick.picked_player_id}`,
-      role: pick.target_role,
-      autopick: pick.is_autopick
-    }));
-}
-
 export function normalizeTopHeroes(
   entries: DraftPlayer["role_top_heroes"][string] | undefined
 ): { slug: string; imagePath: string | null }[] {
