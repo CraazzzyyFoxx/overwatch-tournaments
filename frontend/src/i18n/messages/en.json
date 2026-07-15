@@ -1503,6 +1503,13 @@
         "standings": "Loading tournament standings"
       }
     },
+    "participants": {
+      "resultCount": "{count, plural, one {# participant shown} other {# participants shown}}",
+      "empty": {
+        "title": "No registrations yet",
+        "description": "Participants will appear here when registrations are published."
+      }
+    },
     "pageState": {
       "retry": "Try again",
       "resetFilters": "Reset filters",

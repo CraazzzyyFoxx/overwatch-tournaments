@@ -378,6 +378,187 @@
   text-transform: uppercase;
 }
 
+.participantsTableViewport {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: clip;
+  overscroll-behavior-inline: contain;
+  border: 1px solid var(--aqt-border);
+  border-radius: var(--aqt-radius-sm);
+  background: var(--aqt-card);
+  scrollbar-width: thin;
+}
+
+.participantsTable {
+  width: 100%;
+  min-width: max(100%, var(--participant-table-min-width));
+}
+
+.participantHeaderRow,
+.participantSummaryRow {
+  display: grid;
+  grid-template-columns: var(--participant-grid-columns);
+  align-items: center;
+  width: 100%;
+}
+
+.participantHeaderRow {
+  min-height: 2.55rem;
+  border-bottom: 1px solid var(--aqt-border);
+  background: hsl(0 0% 100% / 0.015);
+}
+
+.participantHeaderCell {
+  min-width: 0;
+  padding: 0.7rem 0.85rem;
+  overflow: hidden;
+  color: var(--aqt-fg-faint);
+  font-family: var(--aqt-mono);
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.participantVirtualSpacer {
+  position: relative;
+  width: 100%;
+}
+
+.participantVirtualRow {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  border-bottom: 1px solid hsl(215 20% 10%);
+  background: var(--aqt-card);
+  contain: layout style;
+}
+
+.participantVirtualRow:hover {
+  background: hsl(0 0% 100% / 0.022);
+}
+
+.participantSummaryRow {
+  min-height: 4.25rem;
+}
+
+.participantCell,
+.participantExpanderCell {
+  min-width: 0;
+  padding: 0.75rem 0.85rem;
+  color: var(--aqt-fg-muted);
+  font-size: 0.8125rem;
+  overflow-wrap: anywhere;
+}
+
+.participantCellCenter {
+  text-align: center;
+}
+
+.participantCellValue {
+  min-width: 0;
+}
+
+.participantMobileCellLabel {
+  display: none;
+}
+
+.participantExpanderCell {
+  display: grid;
+  place-items: center;
+  padding-inline: 0.35rem;
+}
+
+.participantExpander {
+  display: inline-flex;
+  min-width: 2.25rem;
+  min-height: 2.25rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  border: 1px solid transparent;
+  border-radius: 0.35rem;
+  background: transparent;
+  color: var(--aqt-fg-dim);
+  cursor: pointer;
+}
+
+.participantExpander:hover,
+.participantExpander:focus-visible {
+  border-color: var(--aqt-border-2);
+  background: hsl(0 0% 100% / 0.04);
+  color: var(--aqt-teal);
+  outline: none;
+}
+
+.participantExpanderLabel {
+  display: none;
+}
+
+.participantExpandedRegion {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(12rem, 1fr);
+  gap: 1rem;
+  padding: 1rem;
+  border-top: 1px solid var(--aqt-border);
+  background: hsl(0 0% 0% / 0.1);
+}
+
+.participantExpandedRegion[hidden] {
+  display: none;
+}
+
+.participantRankHistory,
+.participantHiddenFields {
+  min-width: 0;
+}
+
+.participantRankHistory {
+  display: grid;
+  align-content: start;
+  gap: 0.5rem;
+}
+
+.participantHiddenFields {
+  display: grid;
+  align-content: start;
+  gap: 0.8rem;
+  padding: 0.85rem;
+  border: 1px solid var(--aqt-border);
+  border-radius: 0.5rem;
+  background: hsl(0 0% 100% / 0.015);
+}
+
+.participantHiddenField {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+  color: var(--aqt-fg);
+  font-size: 0.75rem;
+  overflow-wrap: anywhere;
+}
+
+.participantDetailLabel {
+  color: var(--aqt-fg-dim);
+  font-family: var(--aqt-mono);
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.participantMutedDetail {
+  margin: 0;
+  color: var(--aqt-fg-dim);
+  font-size: 0.75rem;
+  font-style: italic;
+}
+
 @keyframes skeletonSweep {
   from {
     background-position:
@@ -435,6 +616,124 @@
 
   .bracketFrame {
     grid-template-columns: repeat(3, 13rem);
+  }
+
+  .participantsTableViewport {
+    overflow-x: hidden;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+
+  .participantsTable {
+    min-width: 0;
+  }
+
+  .participantHeaderRow {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .participantVirtualRow {
+    border: 1px solid var(--aqt-border);
+    border-left: 2px solid hsl(172 70% 49% / 0.4);
+    border-radius: 0.55rem;
+    background: hsl(220 22% 9% / 0.96);
+  }
+
+  .participantSummaryRow {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+    min-height: 4.25rem;
+    padding: 0.7rem 0.75rem;
+  }
+
+  .participantCell,
+  .participantExpanderCell {
+    padding: 0.2rem 0;
+  }
+
+  .participantCell {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 0.55rem;
+    text-align: left;
+  }
+
+  .participantCell[data-participant-kind="identity"] {
+    grid-column: 1;
+    grid-row: 1;
+    color: var(--aqt-fg);
+    font-weight: 650;
+  }
+
+  .participantCell[data-participant-kind="status"] {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .participantDetailCell {
+    display: none;
+  }
+
+  .participantVirtualRow[data-expanded="true"] .participantDetailCell {
+    display: flex;
+    grid-column: 1 / -1;
+  }
+
+  .participantMobileCellLabel {
+    display: inline;
+    flex: 0 0 5.5rem;
+    color: var(--aqt-fg-dim);
+    font-family: var(--aqt-mono);
+    font-size: 0.58rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  .participantCell[data-participant-kind="identity"] .participantMobileCellLabel,
+  .participantCell[data-participant-kind="status"] .participantMobileCellLabel {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+  }
+
+  .participantExpanderCell {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    align-self: center;
+  }
+
+  .participantExpander {
+    min-width: 5.4rem;
+    border-color: var(--aqt-border-2);
+    background: hsl(0 0% 100% / 0.025);
+    color: var(--aqt-fg-muted);
+    font-family: var(--aqt-mono);
+    font-size: 0.625rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+
+  .participantExpanderLabel {
+    display: inline;
+  }
+
+  .participantExpandedRegion {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 0.85rem;
   }
 }
 

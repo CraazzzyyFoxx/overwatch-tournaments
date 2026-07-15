@@ -1,8 +1,15 @@
 "use client";
 
-import { Fragment, useMemo, useState, createElement } from "react";
-import Image from "next/image";
+import {
+  createElement,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -10,12 +17,10 @@ import {
   Loader2,
   Search,
   ShieldBan,
-  UserPlus,
   XCircle,
   Gamepad2,
   Tv,
   Twitch,
-  MessageSquare,
   ChevronDown,
   ChevronUp,
 } from "lucide-react";
@@ -32,8 +37,6 @@ import {
 } from "@/components/ui/alert-dialog";
 import { cn, hexToRgba } from "@/lib/utils";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
-import { useColumnVisibility } from "@/hooks/useColumnVisibility";
-import { useLocalStorageState } from "@/hooks/useLocalStorageState";
 import { tournamentQueryKeys } from "@/lib/tournament-query-keys";
 import registrationService from "@/services/registration.service";
 import type { Tournament } from "@/types/tournament.types";
@@ -41,28 +44,23 @@ import type { Registration, RegistrationStatus } from "@/types/registration.type
 
 import ColumnPicker from "./_components/ColumnPicker";
 import { buildParticipantColumns } from "./_components/participantsColumns";
+import {
+  normalizeParticipantSearch,
+  participantResultsScrollTarget,
+  readParticipantUrlState,
+  shouldScrollParticipantResults,
+  updateParticipantUrlState,
+  type ParticipantUrlUpdate,
+} from "./_components/participants-url-state";
+import VirtualParticipantsList from "./_components/VirtualParticipantsList";
 import { useTranslations, useLocale } from "next-intl";
 import { useDivisionGrid } from "@/hooks/useCurrentWorkspace";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
-import BattleTagRankHistory from "@/components/BattleTagRankHistory";
 import { getStatusIcon } from "@/lib/status-icons";
 import { formatSubroleSlug } from "@/lib/roles";
-
-// ---------------------------------------------------------------------------
-// Responsive class helper
-// ---------------------------------------------------------------------------
-
-const RESPONSIVE_CLASS: Record<string, string> = {
-  always: "",
-  sm: "hidden sm:table-cell",
-  md: "hidden md:table-cell",
-  lg: "hidden lg:table-cell",
-};
-
-const ALIGN_CLASS: Record<"left" | "center", string> = {
-  left: "text-left",
-  center: "text-center",
-};
+import { TournamentParticipantsSkeleton } from "../_components/TournamentSkeletons";
+import { TournamentPageState } from "../_components/TournamentPageState";
+import styles from "../TournamentDetail.module.css";
 
 // ---------------------------------------------------------------------------
 // My registration status bar / card configs
@@ -501,14 +499,14 @@ export default function TournamentParticipantsPage({
   const locale = useLocale();
   const { user, status: authStatus } = useAuthProfile();
   const queryClient = useQueryClient();
-  const [searchQuery, setSearchQuery] = useLocalStorageState<string>(
-    `tournament-participants-${tournament.id}-search`,
-    "",
-  );
-  const [statusFilter, setStatusFilter] = useLocalStorageState<StatusFilter>(
-    `tournament-participants-${tournament.id}-status`,
-    "all",
-  );
+  const pathname = usePathname();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const searchParamsString = searchParams.toString();
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const resultsHeadingRef = useRef<HTMLDivElement>(null);
+  const previousResultsSignatureRef = useRef<string | null>(null);
   const [isWithdrawDialogOpen, setIsWithdrawDialogOpen] = useState(false);
   const [isCheckInDialogOpen, setIsCheckInDialogOpen] = useState(false);
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
@@ -591,8 +589,6 @@ export default function TournamentParticipantsPage({
     () => buildParticipantColumns(form, t, locale, divisionGrid),
     [form, t, locale, divisionGrid],
   );
-  const { visibleColumns, visibility, toggleColumn, resetToDefaults } =
-    useColumnVisibility("participants-table-columns", allColumns);
 
   // Status counts + chips present in the data.
   const statusCounts = useMemo(() => {
@@ -622,6 +618,10 @@ export default function TournamentParticipantsPage({
       return a.localeCompare(b);
     });
   }, [registrations]);
+  const allowedStatuses = useMemo(
+    () => Array.from(new Set([...STATUS_FILTER_ORDER, ...presentStatuses])),
+    [presentStatuses],
+  );
 
   const statusMetaMap = useMemo(() => {
     const map: Record<string, { name: string; dot: string }> = {};
@@ -645,6 +645,133 @@ export default function TournamentParticipantsPage({
     return map;
   }, [registrations]);
 
+  const defaultColumnIds = useMemo(
+    () => allColumns.filter((column) => column.defaultVisible).map((column) => column.id),
+    [allColumns],
+  );
+  const participantUrl = useMemo(
+    () =>
+      readParticipantUrlState(
+        new URLSearchParams(searchParamsString),
+        allowedStatuses,
+        allColumns,
+      ),
+    [allColumns, allowedStatuses, searchParamsString],
+  );
+  const latestParamsRef = useRef(searchParamsString);
+  const searchQuery = participantUrl.state.search;
+  const statusFilter = participantUrl.state.status as StatusFilter;
+  const displayedStatuses = useMemo(
+    () =>
+      statusFilter !== "all" && !presentStatuses.includes(statusFilter)
+        ? [...presentStatuses, statusFilter]
+        : presentStatuses,
+    [presentStatuses, statusFilter],
+  );
+  const visibleColumnIds = participantUrl.state.visibleColumnIds;
+  const visibleColumnIdSet = useMemo(() => new Set(visibleColumnIds), [visibleColumnIds]);
+  const visibleColumns = useMemo(
+    () => allColumns.filter((column) => visibleColumnIdSet.has(column.id)),
+    [allColumns, visibleColumnIdSet],
+  );
+  const visibility = useMemo(
+    () =>
+      Object.fromEntries(
+        allColumns.map((column) => [column.id, visibleColumnIdSet.has(column.id)]),
+      ),
+    [allColumns, visibleColumnIdSet],
+  );
+
+  useEffect(() => {
+    latestParamsRef.current = searchParamsString;
+  }, [searchParamsString]);
+
+  const navigateParticipantUrl = useCallback(
+    (update: ParticipantUrlUpdate) => {
+      const result = updateParticipantUrlState(
+        new URLSearchParams(latestParamsRef.current),
+        update,
+      );
+      const query = result.params.toString();
+      const href = query ? `${pathname}?${query}` : pathname;
+      latestParamsRef.current = query;
+      if (result.history === "replace") router.replace(href, { scroll: false });
+      else router.push(href, { scroll: false });
+    },
+    [pathname, router],
+  );
+
+  useEffect(() => {
+    if (!listQuery.isFetched || !formQuery.isFetched || !participantUrl.needsNormalization) {
+      return;
+    }
+    const query = participantUrl.params.toString();
+    const href = query ? `${pathname}?${query}` : pathname;
+    latestParamsRef.current = query;
+    router.replace(href, { scroll: false });
+  }, [
+    formQuery.isFetched,
+    listQuery.isFetched,
+    participantUrl.needsNormalization,
+    participantUrl.params,
+    pathname,
+    router,
+  ]);
+
+  useEffect(
+    () => () => {
+      if (searchTimerRef.current !== null) clearTimeout(searchTimerRef.current);
+    },
+    [],
+  );
+
+  useEffect(() => {
+    const input = searchInputRef.current;
+    if (!input || normalizeParticipantSearch(input.value) === searchQuery) return;
+    const focused = document.activeElement === input;
+    const selectionStart = input.selectionStart;
+    const selectionEnd = input.selectionEnd;
+    input.value = searchQuery;
+    if (focused && selectionStart !== null && selectionEnd !== null) {
+      input.setSelectionRange(
+        Math.min(selectionStart, searchQuery.length),
+        Math.min(selectionEnd, searchQuery.length),
+      );
+    }
+  }, [searchQuery]);
+
+  const toggleColumn = useCallback(
+    (columnId: string) => {
+      const nextIds = visibleColumnIdSet.has(columnId)
+        ? visibleColumnIds.filter((id) => id !== columnId)
+        : allColumns
+            .filter((column) =>
+              column.id === columnId || visibleColumnIdSet.has(column.id),
+            )
+            .map((column) => column.id);
+      navigateParticipantUrl({
+        type: "columns",
+        value: nextIds,
+        defaultValue: defaultColumnIds,
+      });
+    }, [
+      allColumns,
+      defaultColumnIds,
+      navigateParticipantUrl,
+      visibleColumnIdSet,
+      visibleColumnIds,
+    ],
+  );
+  const resetToDefaults = useCallback(
+    () =>
+      navigateParticipantUrl({
+        type: "columns",
+        value: defaultColumnIds,
+        defaultValue: defaultColumnIds,
+      }),
+    [defaultColumnIds, navigateParticipantUrl],
+  );
+
   // Status filter + dynamic search across all searchable columns.
   const filtered = useMemo(() => {
     const byStatus =
@@ -662,6 +789,60 @@ export default function TournamentParticipantsPage({
       }),
     );
   }, [registrations, searchQuery, statusFilter, visibleColumns]);
+
+  const resultsSignature = useMemo(
+    () =>
+      `${statusFilter}|${searchQuery}|${visibleColumnIds.join(",")}|${filtered.reduce(
+        (ids, row) => `${ids},${row.id}`,
+        "",
+      )}`,
+    [filtered, searchQuery, statusFilter, visibleColumnIds],
+  );
+  useEffect(() => {
+    if (previousResultsSignatureRef.current === null) {
+      previousResultsSignatureRef.current = resultsSignature;
+      return;
+    }
+    if (previousResultsSignatureRef.current === resultsSignature) return;
+    previousResultsSignatureRef.current = resultsSignature;
+
+    const frame = window.requestAnimationFrame(() => {
+      const heading = resultsHeadingRef.current;
+      if (!heading) return;
+      const headingDocumentTop = heading.getBoundingClientRect().top + window.scrollY;
+      const stickyOffset = 112;
+      if (
+        shouldScrollParticipantResults({
+          scrollY: window.scrollY,
+          headingDocumentTop,
+          stickyOffset,
+        })
+      ) {
+        window.scrollTo({
+          top: participantResultsScrollTarget(headingDocumentTop, stickyOffset),
+          behavior: "auto",
+        });
+      }
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [resultsSignature]);
+
+  const trueEmpty = listQuery.data !== undefined && registrations.length === 0;
+  const filteredEmpty = !trueEmpty && filtered.length === 0;
+
+  if (listQuery.isPending && listQuery.data === undefined) {
+    return <TournamentParticipantsSkeleton />;
+  }
+
+  if (listQuery.isError && listQuery.data === undefined) {
+    return (
+      <TournamentPageState
+        state="initial-error"
+        onRetry={() => void listQuery.refetch()}
+      />
+    );
+  }
 
   return (
     <div className="space-y-5">
@@ -736,31 +917,42 @@ export default function TournamentParticipantsPage({
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Header */}
-      <div className="section-head">
+      <div className="section-head" ref={resultsHeadingRef}>
         <h2>
           {t("common.participants")} <span className="count-tag">{registrations.length}</span>
         </h2>
+        {listQuery.isFetching ? (
+          <span className={styles.updating}>{t("tournamentDetail.pageState.updating")}</span>
+        ) : null}
       </div>
 
+      <p aria-atomic="true" aria-live="polite" className="sr-only">
+        {t("tournamentDetail.participants.resultCount", { count: filtered.length })}
+      </p>
+
       {/* Status filter chips + search + column picker */}
-      {registrations.length > 0 && (
+      {!trueEmpty && (
         <div className="filters">
           <button
             type="button"
             className={cn("filter-chip", statusFilter === "all" && "active")}
-            onClick={() => setStatusFilter("all")}
+            onClick={() => navigateParticipantUrl({ type: "status", value: "all" })}
           >
             {t("common.all")} <span className="count">{registrations.length}</span>
           </button>
-          {presentStatuses.map((status) => {
+          {displayedStatuses.map((status) => {
             const meta = statusMetaMap[status];
             return (
               <button
                 key={status}
                 type="button"
                 className={cn("filter-chip", statusFilter === status && "active")}
-                onClick={() => setStatusFilter(statusFilter === status ? "all" : status)}
+                onClick={() =>
+                  navigateParticipantUrl({
+                    type: "status",
+                    value: statusFilter === status ? "all" : status,
+                  })
+                }
               >
                 <span className="dot" style={{ background: meta?.dot ?? "var(--aqt-fg-dim)" }} />
                 {meta?.name ?? status}{" "}
@@ -771,9 +963,19 @@ export default function TournamentParticipantsPage({
           <div className="filter-search">
             <Search size={13} />
             <input
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              aria-label={t("common.searchParticipants")}
+              defaultValue={searchQuery}
+              maxLength={160}
+              onChange={(event) => {
+                const value = event.currentTarget.value;
+                if (searchTimerRef.current !== null) clearTimeout(searchTimerRef.current);
+                searchTimerRef.current = setTimeout(() => {
+                  searchTimerRef.current = null;
+                  navigateParticipantUrl({ type: "search", value });
+                }, 250);
+              }}
               placeholder={t("common.searchParticipants")}
+              ref={searchInputRef}
             />
           </div>
           <ColumnPicker
@@ -786,126 +988,43 @@ export default function TournamentParticipantsPage({
       )}
 
       {/* Participants list */}
-      {listQuery.isLoading ? (
-        <div className="tn-card" style={{ padding: "48px 24px", textAlign: "center" }}>
-          <Loader2 className="mx-auto size-6 animate-spin text-[color:var(--aqt-fg-dim)]" />
-        </div>
-      ) : filtered.length > 0 ? (
-        <div className="tn-card">
-          <div className="data-scroll">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th className="w-10" aria-hidden />
-                  {visibleColumns.map((col) => (
-                    <th
-                      key={col.id}
-                      className={cn(
-                        RESPONSIVE_CLASS[col.responsive ?? "always"],
-                        ALIGN_CLASS[col.align ?? "left"],
-                        col.widthClass,
-                      )}
-                    >
-                      {col.label}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((reg, idx) => {
-                  const isExpanded = expandedIds.has(reg.id);
-                  const hiddenColumns = allColumns.filter(
-                    (col) => col.id !== "_index" && !visibleColumns.some((vc) => vc.id === col.id)
-                  );
-                  return (
-                    <Fragment key={reg.id}>
-                      <tr>
-                        <td className="align-middle">
-                          <button
-                            type="button"
-                            onClick={() => toggleExpanded(reg.id)}
-                            className="inline-flex size-6 items-center justify-center rounded text-[color:var(--aqt-fg-dim)] transition-colors hover:bg-white/5 hover:text-[color:var(--aqt-fg)]"
-                            aria-label={isExpanded ? t("common.collapse") : t("common.expand")}
-                            aria-expanded={isExpanded}
-                          >
-                            {isExpanded ? (
-                              <ChevronUp className="size-4" />
-                            ) : (
-                              <ChevronDown className="size-4" />
-                            )}
-                          </button>
-                        </td>
-                        {visibleColumns.map((col) => (
-                          <td
-                            key={col.id}
-                            className={cn(
-                              RESPONSIVE_CLASS[col.responsive ?? "always"],
-                              ALIGN_CLASS[col.align ?? "left"],
-                              col.widthClass,
-                            )}
-                          >
-                            {col.render(reg, idx)}
-                          </td>
-                        ))}
-                      </tr>
-                      {isExpanded && (
-                        <tr>
-                          <td
-                            colSpan={visibleColumns.length + 1}
-                            className="border-t border-[color:var(--aqt-border)] bg-white/[0.015] p-4"
-                          >
-                            <div className="grid gap-4 lg:grid-cols-4">
-                              <div className="space-y-2 lg:col-span-3">
-                                <div className="text-[11px] font-semibold uppercase tracking-wider text-[color:var(--aqt-fg-dim)]">
-                                  {t("tournamentDetail.rankHistory")}
-                                </div>
-                                <BattleTagRankHistory
-                                  userId={reg.user_id}
-                                  battleTag={reg.battle_tag}
-                                />
-                              </div>
-                              <div className="rounded-xl border border-[color:var(--aqt-border)] bg-black/10 p-4 space-y-3.5 text-xs lg:col-span-1">
-                                <div className="text-[11px] font-bold uppercase tracking-widest text-[color:var(--aqt-fg)] border-b border-[color:var(--aqt-border)] pb-1.5 mb-2">
-                                  {t("registration.myCard.details")}
-                                </div>
-                                {hiddenColumns.length === 0 ? (
-                                  <div className="text-[color:var(--aqt-fg-dim)] italic py-1 text-center">
-                                    {t("tournamentDetail.allFieldsVisible")}
-                                  </div>
-                                ) : (
-                                  <div className="grid grid-cols-2 gap-x-4 gap-y-3 lg:grid-cols-1">
-                                    {hiddenColumns.map((col) => (
-                                      <div key={col.id} className="space-y-1">
-                                        <div className="text-[10px] font-semibold uppercase tracking-wider text-[color:var(--aqt-fg-dim)]">
-                                          {col.label}
-                                        </div>
-                                        <div className="text-[color:var(--aqt-fg)]">
-                                          {col.render(reg, idx)}
-                                        </div>
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                    </Fragment>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
+      {filtered.length > 0 ? (
+        <VirtualParticipantsList
+          allColumns={allColumns}
+          expandedIds={expandedIds}
+          onToggleExpanded={toggleExpanded}
+          registrations={filtered}
+          visibleColumns={visibleColumns}
+        />
+      ) : filteredEmpty ? (
+        <TournamentPageState
+          state="filtered-empty"
+          onReset={() => navigateParticipantUrl({ type: "reset" })}
+        />
       ) : (
-        <div className="tn-card" style={{ padding: "56px 24px", textAlign: "center" }}>
-          <UserPlus className="mx-auto size-9 text-[color:var(--aqt-fg-faint)]" />
-          <p className="mt-3 text-sm" style={{ color: "var(--fg-dim)" }}>
-            {t("common.noParticipants")}
-          </p>
-        </div>
+        <TournamentPageState
+          state="empty"
+          title={t("tournamentDetail.participants.empty.title")}
+          description={t("tournamentDetail.participants.empty.description")}
+        />
       )}
+
+      {listQuery.isError && listQuery.data !== undefined ? (
+        <div className={styles.refreshMessage} role="alert">
+          <span>
+            <strong>{t("tournamentDetail.pageState.refreshError.title")}</strong>
+            {" — "}
+            {t("tournamentDetail.pageState.refreshError.description")}
+          </span>
+          <button
+            className={styles.stateAction}
+            onClick={() => void listQuery.refetch()}
+            type="button"
+          >
+            {t("tournamentDetail.pageState.retry")}
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }
