@@ -2,7 +2,7 @@
   position: relative;
   isolation: isolate;
   min-height: 100svh;
-  overflow-x: hidden;
+  overflow-x: clip;
   color: var(--aqt-fg);
   background:
     radial-gradient(circle at 78% -12%, color-mix(in srgb, var(--aqt-teal) 9%, transparent), transparent 34rem),
