@@ -124,7 +124,7 @@ export function DraftBoard({ tournament }: DraftBoardProps) {
     board.session.status === "live" || board.session.status === "paused";
 
   return (
-    <div className="mx-auto w-full max-w-[1400px] space-y-5 pb-[max(2rem,env(safe-area-inset-bottom))]">
+    <div className="mx-auto w-full max-w-[min(2000px,96vw)] space-y-5 pb-[max(2rem,env(safe-area-inset-bottom))]">
       <DraftPageHero tournament={tournament} board={board} mode={mode} />
       {showConnectionStatus ? (
         <DraftConnectionStatus

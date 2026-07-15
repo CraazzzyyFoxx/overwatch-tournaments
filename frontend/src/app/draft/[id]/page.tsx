@@ -28,10 +28,10 @@ export default function PublicDraftRoomPage() {
       <header
         className={`${styles.toolbar} sticky top-0 z-40 border-b border-[color:var(--aqt-border)] bg-[color:var(--aqt-bg)]/88 backdrop-blur-xl`}
       >
-        <div className="mx-auto flex min-h-16 w-full max-w-[1600px] items-center gap-4 px-4 sm:px-6 xl:px-10">
+        <div className="mx-auto flex min-h-16 w-full max-w-[min(2000px,96vw)] items-center gap-4 px-4 sm:px-6 xl:px-10">
           <Link
             href={`/tournaments/${tournamentId}`}
-            className={`${styles.backLink} inline-flex min-h-11 items-center gap-2 rounded-lg border border-[color:var(--aqt-border-2)] px-3 text-sm font-medium outline-none transition-colors hover:border-[color:var(--aqt-teal)]/60 hover:text-[color:var(--aqt-teal)] focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)]`}
+            className={`${styles.backLink} inline-flex min-h-11 items-center gap-2 rounded-lg px-2.5 text-sm font-medium text-[color:var(--aqt-fg-muted)] outline-none transition-colors hover:bg-[color:var(--aqt-card-2)] hover:text-[color:var(--aqt-fg)] focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)]`}
           >
             <ArrowLeft className={`${styles.backArrow} h-4 w-4`} />
             <span className="hidden sm:inline">{t("room.back")}</span>
@@ -55,7 +55,7 @@ export default function PublicDraftRoomPage() {
         <span className={styles.rail} aria-hidden />
       </header>
 
-      <main className={`${styles.stage} mx-auto w-full max-w-[1600px] px-4 py-5 sm:px-6 sm:py-7 xl:px-10`}>
+      <main className={`${styles.stage} mx-auto w-full max-w-[min(2000px,96vw)] px-4 py-5 sm:px-6 sm:py-7 xl:px-10`}>
         {tournamentQuery.isLoading ? (
           <DraftRoomState
             icon={<Loader2 className="h-6 w-6 animate-spin text-[color:var(--aqt-teal)] motion-reduce:animate-none" />}
