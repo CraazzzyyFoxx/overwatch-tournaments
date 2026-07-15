@@ -68,6 +68,15 @@ export function CaptainDraftWorkspace({
     () => filterDraftPlayers(availablePlayers, viewParams),
     [availablePlayers, viewParams]
   );
+  const roleCounts = useMemo<Record<DraftRole, number>>(() => {
+    const counts: Record<DraftRole, number> = { tank: 0, dps: 0, support: 0 };
+    for (const player of availablePlayers) {
+      for (const role of playerRoles(player)) {
+        counts[role] += 1;
+      }
+    }
+    return counts;
+  }, [availablePlayers]);
   const selectedPlayer =
     selectedPlayerId == null
       ? null
@@ -124,6 +133,7 @@ export function CaptainDraftWorkspace({
     <PlayerPool
       players={filteredPlayers}
       totalPlayers={availablePlayers.length}
+      roleCounts={roleCounts}
       selectedPlayerId={selectedPlayerId}
       shortlist={shortlist}
       role={viewParams.role}

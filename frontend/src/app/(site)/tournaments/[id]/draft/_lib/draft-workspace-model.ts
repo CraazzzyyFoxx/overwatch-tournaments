@@ -139,6 +139,17 @@ export function roleTopHeroes(player: DraftPlayer, role: DraftRole) {
   return normalizeTopHeroes(player.role_top_heroes?.[role]);
 }
 
+/** Deduped hero list for a player across every role bucket in `role_top_heroes`. */
+export function allPlayerHeroes(player: DraftPlayer): { slug: string; imagePath: string | null }[] {
+  const seen = new Map<string, string | null>();
+  for (const heroes of Object.values(player.role_top_heroes ?? {})) {
+    for (const hero of normalizeTopHeroes(heroes)) {
+      if (!seen.has(hero.slug)) seen.set(hero.slug, hero.imagePath);
+    }
+  }
+  return [...seen].map(([slug, imagePath]) => ({ slug, imagePath }));
+}
+
 export interface DraftRoundGroup {
   round: number;
   picks: DraftPick[];

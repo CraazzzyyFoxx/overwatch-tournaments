@@ -1,6 +1,7 @@
 "use client";
 
-import { Ban, Bookmark, BookmarkCheck, Search, ShieldCheck } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Ban, Bookmark, BookmarkCheck, Check, Search, ShieldCheck } from "lucide-react";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
 
@@ -8,7 +9,16 @@ import PlayerDivisionIcon from "@/components/PlayerDivisionIcon";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { Avatar, AvatarImage, AvatarStack } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList
+} from "@/components/ui/command";
 import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -24,7 +34,7 @@ import type { DivisionGrid } from "@/types/workspace.types";
 import { formatSubRoleLabel, getHeroIconUrl, getPlayerSlug } from "@/utils/player";
 
 import type { DraftPoolRoleFilter, DraftPoolSort } from "../_lib/draft-workspace-model";
-import { playerRoles, roleTopHeroes } from "../_lib/draft-workspace-model";
+import { allPlayerHeroes, playerRoles, roleTopHeroes } from "../_lib/draft-workspace-model";
 
 const ROLE_ACCENT: Record<DraftRole, string> = {
   tank: "var(--aqt-tank)",
@@ -35,6 +45,7 @@ const ROLE_ACCENT: Record<DraftRole, string> = {
 interface PlayerPoolProps {
   players: DraftPlayer[];
   totalPlayers: number;
+  roleCounts: Record<DraftRole, number>;
   selectedPlayerId: number | null;
   shortlist: ReadonlySet<number>;
   role: DraftPoolRoleFilter;
@@ -52,6 +63,7 @@ interface PlayerPoolProps {
 export function PlayerPool({
   players,
   totalPlayers,
+  roleCounts,
   selectedPlayerId,
   shortlist,
   role,
@@ -66,6 +78,32 @@ export function PlayerPool({
   divisionGrid
 }: PlayerPoolProps) {
   const t = useTranslations("draftRedesign");
+  const [heroFilter, setHeroFilter] = useState<Set<string>>(() => new Set());
+  const heroOptions = useMemo(() => {
+    const seen = new Map<string, string | null>();
+    for (const player of players) {
+      for (const hero of allPlayerHeroes(player)) {
+        if (!seen.has(hero.slug)) seen.set(hero.slug, hero.imagePath);
+      }
+    }
+    return [...seen]
+      .map(([slug, imagePath]) => ({ slug, imagePath }))
+      .sort((left, right) => left.slug.localeCompare(right.slug));
+  }, [players]);
+  const visiblePlayers = useMemo(() => {
+    if (heroFilter.size === 0) return players;
+    return players.filter((player) =>
+      allPlayerHeroes(player).some((hero) => heroFilter.has(hero.slug))
+    );
+  }, [players, heroFilter]);
+  const toggleHero = (slug: string) => {
+    setHeroFilter((current) => {
+      const next = new Set(current);
+      if (next.has(slug)) next.delete(slug);
+      else next.add(slug);
+      return next;
+    });
+  };
   return (
     <section aria-labelledby="player-pool-heading">
       <div className="flex flex-wrap items-end justify-between gap-3 border-b border-[color:var(--aqt-border)] pb-3">
@@ -73,7 +111,7 @@ export function PlayerPool({
           <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-[color:var(--aqt-fg-faint)]">{t("poolCoordinate")}</p>
           <h2 id="player-pool-heading" className="mt-1 font-onest text-lg font-semibold">{t("availablePool")}</h2>
         </div>
-        <span className="font-mono text-xs text-[color:var(--aqt-fg-muted)]">{players.length}/{totalPlayers}</span>
+        <span className="font-mono text-xs text-[color:var(--aqt-fg-muted)]">{visiblePlayers.length}/{totalPlayers}</span>
       </div>
 
       <div className="mt-4 grid gap-2 sm:grid-cols-[1fr_auto_auto]">
@@ -88,12 +126,12 @@ export function PlayerPool({
           />
         </label>
         <Select value={role} onValueChange={(value) => onFiltersChange({ role: value as DraftPoolRoleFilter })}>
-          <SelectTrigger className="min-h-11 w-full sm:w-36" aria-label={t("filterRole")}><SelectValue /></SelectTrigger>
+          <SelectTrigger className="min-h-11 w-full sm:w-40" aria-label={t("filterRole")}><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">{t("allRoles")}</SelectItem>
-            <SelectItem value="tank">{t("roles.tank")}</SelectItem>
-            <SelectItem value="dps">{t("roles.dps")}</SelectItem>
-            <SelectItem value="support">{t("roles.support")}</SelectItem>
+            <SelectItem value="tank">{t("roles.tank")} ({roleCounts.tank})</SelectItem>
+            <SelectItem value="dps">{t("roles.dps")} ({roleCounts.dps})</SelectItem>
+            <SelectItem value="support">{t("roles.support")} ({roleCounts.support})</SelectItem>
           </SelectContent>
         </Select>
         <Select value={sort} onValueChange={(value) => onFiltersChange({ sort: value as DraftPoolSort })}>
@@ -105,16 +143,76 @@ export function PlayerPool({
         </Select>
       </div>
 
-      {players.length === 0 ? (
+      <div className="mt-2 flex justify-end">
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="min-h-11 gap-1.5"
+              aria-label={t("heroFilterCount", { count: heroFilter.size })}
+            >
+              {t("heroFilter")} ({heroFilter.size})
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent align="end" className="w-72 p-0">
+            <Command>
+              <CommandInput placeholder={t("heroFilter")} />
+              <CommandList>
+                <CommandEmpty>{t("noFilterResults")}</CommandEmpty>
+                <CommandGroup>
+                  {heroOptions.map((hero) => {
+                    const checked = heroFilter.has(hero.slug);
+                    return (
+                      <CommandItem key={hero.slug} value={hero.slug} onSelect={() => toggleHero(hero.slug)}>
+                        <Avatar className="h-5 w-5" title={hero.slug}>
+                          <AvatarImage src={getHeroIconUrl(hero.slug, hero.imagePath)} alt={hero.slug} />
+                        </Avatar>
+                        <span className="truncate capitalize">{hero.slug.replace(/-/g, " ")}</span>
+                        <Check className={cn("ml-auto h-4 w-4", checked ? "opacity-100" : "opacity-0")} />
+                      </CommandItem>
+                    );
+                  })}
+                </CommandGroup>
+              </CommandList>
+              {heroFilter.size > 0 && (
+                <div className="border-t border-[color:var(--aqt-border)] p-1">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="min-h-9 w-full"
+                    onClick={() => setHeroFilter(new Set())}
+                  >
+                    {t("heroFilterClear")}
+                  </Button>
+                </div>
+              )}
+            </Command>
+          </PopoverContent>
+        </Popover>
+      </div>
+
+      {visiblePlayers.length === 0 ? (
         <div className="py-12 text-center">
           <Search className="mx-auto h-7 w-7 text-[color:var(--aqt-fg-faint)]" />
           <p className="mt-3 font-medium">{t("noFilterResults")}</p>
           <p className="mt-1 text-sm text-[color:var(--aqt-fg-muted)]">{t("noFilterResultsHint")}</p>
-          <Button variant="link" className="mt-2 min-h-11" onClick={onResetFilters}>{t("resetFilters")}</Button>
+          <Button
+            variant="link"
+            className="mt-2 min-h-11"
+            onClick={() => {
+              setHeroFilter(new Set());
+              onResetFilters();
+            }}
+          >
+            {t("resetFilters")}
+          </Button>
         </div>
       ) : (
         <div className="mt-4 grid gap-x-5 sm:grid-cols-2">
-          {players.map((player) => {
+          {visiblePlayers.map((player) => {
             const roles = playerRoles(player);
             const secondaryRoles = roles.filter((entry) => entry !== player.primary_role);
             const playerOptions = options?.options.filter((option) => option.player_id === player.id) ?? [];
