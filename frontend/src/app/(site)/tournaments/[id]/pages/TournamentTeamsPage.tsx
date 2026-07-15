@@ -6,24 +6,18 @@ import { useQuery } from "@tanstack/react-query";
 import { Tournament } from "@/types/tournament.types";
 import { Team } from "@/types/team.types";
 import teamService from "@/services/team.service";
-import { TournamentTeamCard, TournamentTeamCardSkeleton } from "@/components/TournamentTeamCard";
+import { TournamentTeamCard } from "@/components/TournamentTeamCard";
 import { tournamentQueryKeys } from "@/lib/tournament-query-keys";
 import { cn } from "@/lib/utils";
 
 import { useTranslations } from "next-intl";
+import { TournamentPageState } from "../_components/TournamentPageState";
+import { TournamentTeamsSkeleton } from "../_components/TournamentSkeletons";
 
 type SortBy = "placement" | "sr" | "name";
 
 export const TournamentTeamsPageSkeleton = () => {
-  return (
-    <div className="space-y-4">
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {Array.from({ length: 6 }).map((_, index) => (
-          <TournamentTeamCardSkeleton key={index} />
-        ))}
-      </div>
-    </div>
-  );
+  return <TournamentTeamsSkeleton />;
 };
 
 function sortTeams(teams: Team[], sortBy: SortBy): Team[] {
@@ -47,8 +41,12 @@ function sortTeams(teams: Team[], sortBy: SortBy): Team[] {
 const TournamentTeamsPage = ({ tournament }: { tournament: Tournament }) => {
   const t = useTranslations();
   const teamsQuery = useQuery({
-    queryKey: tournamentQueryKeys.teams(tournament.id),
-    queryFn: () => teamService.getAll(tournament.id),
+    queryKey: tournamentQueryKeys.teams(tournament.id, tournament.workspace_id),
+    queryFn: () =>
+      teamService.getAll({
+        tournamentId: tournament.id,
+        workspaceId: tournament.workspace_id
+      })
   });
 
   const [groupFilter, setGroupFilter] = useState<string>("all");
@@ -73,12 +71,29 @@ const TournamentTeamsPage = ({ tournament }: { tournament: Tournament }) => {
     return sortTeams(filtered, sortBy);
   }, [teams, groupFilter, sortBy]);
 
-  if (teamsQuery.isLoading) {
+  if (teamsQuery.isPending && !teamsQuery.data) {
     return <TournamentTeamsPageSkeleton />;
   }
 
-  return (
+  if (teamsQuery.isError && !teamsQuery.data) {
+    return <TournamentPageState state="initial-error" onRetry={() => void teamsQuery.refetch()} />;
+  }
+
+  if (teams.length === 0) {
+    return <TournamentPageState state="empty" />;
+  }
+
+  const content = (
     <div className="space-y-4">
+      {teamsQuery.isFetching && !teamsQuery.isError ? (
+        <p
+          className="text-right text-xs font-semibold uppercase tracking-[0.14em] text-[var(--aqt-teal)]"
+          role="status"
+          aria-live="polite"
+        >
+          {t("tournamentDetail.pageState.updating")}
+        </p>
+      ) : null}
       <div className="section-head">
         <h2>
           {t("common.teams")} <span className="count-tag">{teams.length}</span>
@@ -118,11 +133,9 @@ const TournamentTeamsPage = ({ tournament }: { tournament: Tournament }) => {
       </div>
 
       {visibleTeams.length === 0 ? (
-        <div className="tn-card" style={{ padding: "48px 24px", textAlign: "center", color: "var(--fg-dim)" }}>
-          {t("common.noTeams")}
-        </div>
+        <TournamentPageState state="filtered-empty" onReset={() => setGroupFilter("all")} />
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-2">
           {visibleTeams.map((team) => (
             <TournamentTeamCard key={team.id} team={team} />
           ))}
@@ -130,6 +143,20 @@ const TournamentTeamsPage = ({ tournament }: { tournament: Tournament }) => {
       )}
     </div>
   );
+
+  if (teamsQuery.isError) {
+    return (
+      <TournamentPageState
+        state="refresh-error"
+        onRetry={() => void teamsQuery.refetch()}
+        isUpdating={teamsQuery.isFetching}
+      >
+        {content}
+      </TournamentPageState>
+    );
+  }
+
+  return content;
 };
 
 export default TournamentTeamsPage;

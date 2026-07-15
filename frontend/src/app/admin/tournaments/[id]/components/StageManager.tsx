@@ -248,7 +248,7 @@ export function StageManager({ tournamentId }: StageManagerProps) {
 
   const { data: teamsData, isLoading: isTeamsLoading } = useQuery({
     queryKey: ["admin", "tournament", "teams", tournamentId],
-    queryFn: () => teamService.getAll(tournamentId, "name", "asc")
+    queryFn: () => teamService.getAll({ tournamentId, sort: "name", order: "asc" })
   });
 
   const { data: stageProgress = [] } = useQuery({
