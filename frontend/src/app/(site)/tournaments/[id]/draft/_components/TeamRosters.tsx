@@ -121,7 +121,7 @@ export function TeamRosters({
                   >
                     {crest.initial}
                   </span>
-                  <span className="min-w-0 truncate text-sm font-semibold tracking-tight">{team.name}</span>
+                  <span className="min-w-0 truncate text-[15px] font-semibold tracking-tight">{team.name}</span>
                   <span
                     className="h-[7px] w-[7px] shrink-0 rounded-full"
                     style={
@@ -138,22 +138,22 @@ export function TeamRosters({
                       >
                         <PlayerDivisionIcon
                           division={view.avgDivision}
-                          width={20}
-                          height={20}
-                          className="h-5 w-5 object-contain"
+                          width={24}
+                          height={24}
+                          className="h-6 w-6 object-contain"
                           tournamentGrid={divisionGrid}
                         />
                       </span>
                     )}
-                    <span className="font-mono text-[11px] text-[color:var(--aqt-fg-faint)]">
+                    <span className="font-mono text-xs text-[color:var(--aqt-fg-faint)]">
                       #{team.draft_position}
                     </span>
                   </span>
                 </div>
-                <div className="flex gap-4 border-b border-[color:var(--aqt-border)] px-3 py-2 font-mono text-[11px] text-[color:var(--aqt-fg-muted)]">
+                <div className="flex gap-4 border-b border-[color:var(--aqt-border)] px-3 py-2 font-mono text-xs text-[color:var(--aqt-fg-muted)]">
                   {ROSTER_ROLES.map((role) => (
                     <span key={role} className="inline-flex items-center gap-1" style={{ color: ROLE_ACCENT[role] }}>
-                      <PlayerRoleIcon role={getRoleIconName(role)} size={13} color={ROLE_ACCENT[role]} />
+                      <PlayerRoleIcon role={getRoleIconName(role)} size={14} color={ROLE_ACCENT[role]} />
                       {view.roleFillCounts[role]}/{view.roleTarget}
                     </span>
                   ))}
@@ -167,13 +167,13 @@ export function TeamRosters({
                     return (
                       <div
                         key={player.id}
-                        className="grid grid-cols-[22px_1fr_auto] items-center gap-2 px-3 py-1.5 text-[13px]"
+                        className="grid grid-cols-[24px_1fr_auto] items-center gap-2 px-3 py-2 text-sm"
                       >
-                        <span className="inline-flex h-[22px] w-[22px] items-center justify-center" title={t(`roles.${role}`)}>
+                        <span className="inline-flex h-6 w-6 items-center justify-center" title={t(`roles.${role}`)}>
                           {player.is_captain ? (
-                            <Crown className="h-3.5 w-3.5 text-[color:var(--aqt-warm)]" />
+                            <Crown className="h-4 w-4 text-[color:var(--aqt-warm)]" />
                           ) : (
-                            <PlayerRoleIcon role={getRoleIconName(role)} size={14} />
+                            <PlayerRoleIcon role={getRoleIconName(role)} size={16} />
                           )}
                         </span>
                         <span className="min-w-0 truncate font-medium">{player.battle_tag ?? `#${player.id}`}</span>
@@ -181,9 +181,9 @@ export function TeamRosters({
                           <span title={[divisionLabel, rank != null ? `${rank} SR` : null].filter(Boolean).join(" · ")}>
                             <PlayerDivisionIcon
                               division={division}
-                              width={20}
-                              height={20}
-                              className="h-5 w-5 object-contain"
+                              width={26}
+                              height={26}
+                              className="h-[26px] w-[26px] object-contain"
                               tournamentGrid={divisionGrid}
                             />
                           </span>
@@ -196,9 +196,9 @@ export function TeamRosters({
                   {Array.from({ length: view.openSlots }, (_, index) => (
                     <div
                       key={`open-${index}`}
-                      className="grid grid-cols-[22px_1fr_auto] items-center gap-2 px-3 py-1.5 text-[13px] opacity-40"
+                      className="grid grid-cols-[24px_1fr_auto] items-center gap-2 px-3 py-2 text-sm opacity-40"
                     >
-                      <span className="inline-flex h-[22px] w-[22px] items-center justify-center text-[color:var(--aqt-fg-faint)]">
+                      <span className="inline-flex h-6 w-6 items-center justify-center text-[color:var(--aqt-fg-faint)]">
                         ·
                       </span>
                       <span className="min-w-0 truncate italic text-[color:var(--aqt-fg-faint)]">

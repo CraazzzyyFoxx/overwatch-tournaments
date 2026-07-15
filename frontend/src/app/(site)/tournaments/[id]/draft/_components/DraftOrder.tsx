@@ -57,12 +57,12 @@ export function DraftOrder({ picks, teams, players, compact = false, divisionGri
                       <span className="flex items-center gap-1.5">
                         <span className="truncate text-sm font-medium">{player?.battle_tag ?? team?.name ?? t("pending")}</span>
                         {pick.target_role && (
-                          <span
-                            className="inline-flex shrink-0 items-center gap-1 rounded border border-[color:var(--aqt-border-2)] px-1 py-0.5 text-[10px] uppercase tracking-wide"
-                            style={{ color: ROLE_ACCENT[pick.target_role] }}
-                          >
-                            <PlayerRoleIcon role={getRoleIconName(pick.target_role)} size={10} color={ROLE_ACCENT[pick.target_role]} />
-                            {t(`roles.${pick.target_role}`)}
+                          <span className="shrink-0">
+                            <PlayerRoleIcon
+                              role={getRoleIconName(pick.target_role)}
+                              size={16}
+                              color={ROLE_ACCENT[pick.target_role]}
+                            />
                           </span>
                         )}
                       </span>
@@ -72,9 +72,9 @@ export function DraftOrder({ picks, teams, players, compact = false, divisionGri
                       <PlayerDivisionIcon
                         division={division}
                         tournamentGrid={divisionGrid}
-                        width={18}
-                        height={18}
-                        className="h-[18px] w-[18px] object-contain"
+                        width={24}
+                        height={24}
+                        className="h-6 w-6 object-contain"
                       />
                     ) : (
                       <span />

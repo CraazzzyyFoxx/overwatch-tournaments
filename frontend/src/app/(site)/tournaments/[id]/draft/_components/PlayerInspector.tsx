@@ -72,7 +72,6 @@ export function PlayerInspector({
     );
   }
   const roles = playerRoles(player);
-  const secondaryRoles = roles.filter((entry) => entry !== player.primary_role);
   const selectedOption = role ? optionForSelection(options, player.id, role) : null;
   const blockedOptions = safetyRequired
     ? roles
@@ -86,11 +85,11 @@ export function PlayerInspector({
       ? player.additional_info.notes
       : null;
   return (
-    <section className="rounded-xl border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-card)] p-5" aria-labelledby={headingId}>
+    <section className="rounded-xl border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-card)] p-4" aria-labelledby={headingId}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-[color:var(--aqt-fg-faint)]">{t("inspectorCoordinate")}</p>
-          <h2 id={headingId} className="mt-1 flex items-center gap-2 font-onest text-xl font-semibold">
+          <h2 id={headingId} className="mt-1 flex items-center gap-2 font-onest text-lg font-semibold">
             {profileSlug ? (
               <Link href={`/users/${profileSlug}`} className="truncate hover:text-[color:var(--aqt-teal)] hover:underline">
                 {player.battle_tag}
@@ -113,22 +112,14 @@ export function PlayerInspector({
         </div>
       </div>
 
-      <div className="mt-4 flex flex-wrap items-center gap-1.5">
+      <div className="mt-3 flex flex-wrap items-center gap-1.5 empty:hidden">
         {player.sub_role && <span className={BADGE_CLASS}>{formatSubRoleLabel(player.sub_role)}</span>}
         {player.is_flex && <span className={BADGE_CLASS}>{t("flex")}</span>}
-        {secondaryRoles.length > 0 && (
-          <span className="flex flex-wrap items-center gap-1.5 text-[10px] uppercase tracking-wide text-[color:var(--aqt-fg-muted)]">
-            {t("secondaryRoles")}:
-            {secondaryRoles.map((entry) => (
-              <span key={entry} className={BADGE_CLASS}>{t(`roles.${entry}`)}</span>
-            ))}
-          </span>
-        )}
       </div>
 
-      <div className="mt-4 space-y-2">
+      <div className="mt-3 space-y-1.5">
         <p className="text-xs text-[color:var(--aqt-fg-muted)]">{t("chooseRole")}</p>
-        <div className="space-y-2">
+        <div className="space-y-1.5">
           {roles.map((entry) => {
             const option = optionForSelection(options, player.id, entry);
             const blocked = safetyRequired && option?.is_safe !== true;
@@ -143,7 +134,7 @@ export function PlayerInspector({
                 aria-pressed={role === entry}
                 onClick={() => onRoleChange(entry)}
                 className={cn(
-                  "flex min-h-11 w-full flex-col gap-1.5 rounded-lg border px-3 py-2 text-left text-sm outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)]",
+                  "flex min-h-11 w-full flex-col gap-1 rounded-lg border px-3 py-1.5 text-left text-sm outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)]",
                   role === entry ? "border-[color:var(--aqt-teal)] bg-[color:var(--aqt-teal)]/10" : "border-[color:var(--aqt-border-2)]",
                   blocked && "cursor-not-allowed opacity-45"
                 )}
@@ -177,7 +168,7 @@ export function PlayerInspector({
       </div>
 
       {notes && (
-        <div className="mt-4 border-t border-[color:var(--aqt-border)] pt-4 text-sm">
+        <div className="mt-3 border-t border-[color:var(--aqt-border)] pt-3 text-sm">
           <p className="text-xs text-[color:var(--aqt-fg-muted)]">{t("note")}</p>
           <p className="mt-1 text-[color:var(--aqt-fg)]">{notes}</p>
         </div>

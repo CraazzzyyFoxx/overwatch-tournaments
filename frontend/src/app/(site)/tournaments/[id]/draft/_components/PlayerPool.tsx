@@ -261,7 +261,7 @@ export function PlayerPool({
                     {blocked ? <Ban className="h-4 w-4 shrink-0 text-[color:var(--aqt-live)]" aria-label={t("unsafeOption")} /> : safetyRequired ? <ShieldCheck className="h-4 w-4 shrink-0 text-[color:var(--aqt-support)]" aria-label={t("safeOption")} /> : null}
                     <span className="ml-auto shrink-0" title={divisionTitle}>
                       {division != null ? (
-                        <PlayerDivisionIcon division={division} tournamentGrid={divisionGrid} width={26} height={26} className="h-6 w-6 object-contain" />
+                        <PlayerDivisionIcon division={division} tournamentGrid={divisionGrid} width={32} height={32} className="h-8 w-8 object-contain" />
                       ) : (
                         <span className="text-[color:var(--aqt-fg-faint)]">—</span>
                       )}

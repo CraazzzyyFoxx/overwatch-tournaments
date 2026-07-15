@@ -14,7 +14,9 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import PlayerDivisionIcon from "@/components/PlayerDivisionIcon";
+import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { resolveDivisionFromRank } from "@/lib/division-grid";
+import { getRoleIconName, ROLE_ACCENT } from "@/lib/roles";
 import { cn } from "@/lib/utils";
 import type { DraftBoard, DraftPlayer, DraftRole } from "@/types/draft.types";
 import type { RealtimeConnectionState } from "@/types/realtime.types";
@@ -97,15 +99,17 @@ export function PickCommandBar({
           </div>
           <div className="min-w-0 flex-1">
             <p className="font-mono text-[11px] uppercase tracking-[0.12em] text-[color:var(--aqt-fg-faint)]">{t("selectionFor", { team: teamName })}</p>
-            <p className="mt-1 flex items-center gap-2 truncate text-sm font-medium">
-              <span className="truncate">{selection}</span>
-              {roleRank != null && (
-                <span className="flex shrink-0 items-center gap-1 font-mono text-xs text-[color:var(--aqt-fg-muted)]">
-                  {`${roleRank} SR`}
-                  {roleDivision != null && (
-                    <PlayerDivisionIcon division={roleDivision} tournamentGrid={divisionGrid} width={16} height={16} className="h-4 w-4 object-contain" />
-                  )}
+            <p className="mt-1 flex items-center gap-2 text-sm font-medium">
+              {player && role ? (
+                <span className="flex min-w-0 items-center gap-1.5 truncate">
+                  <span className="truncate">{player.battle_tag ?? `#${player.id}`}</span>
+                  <PlayerRoleIcon role={getRoleIconName(role)} size={18} color={ROLE_ACCENT[role]} />
                 </span>
+              ) : (
+                <span className="truncate">{t("noSelection")}</span>
+              )}
+              {roleDivision != null && (
+                <PlayerDivisionIcon division={roleDivision} tournamentGrid={divisionGrid} width={24} height={24} className="ml-auto h-6 w-6 shrink-0 object-contain" />
               )}
             </p>
           </div>

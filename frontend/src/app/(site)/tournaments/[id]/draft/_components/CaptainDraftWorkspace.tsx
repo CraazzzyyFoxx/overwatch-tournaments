@@ -220,6 +220,7 @@ export function CaptainDraftWorkspace({
                 players={shortlistPlayers}
                 onSelect={(player) => selectPlayer(player)}
                 onRemove={toggleShortlist}
+                divisionGrid={divisionGrid}
               />
               {pool}
             </div>
@@ -251,6 +252,7 @@ export function CaptainDraftWorkspace({
             players={shortlistPlayers}
             onSelect={(player) => selectPlayer(player)}
             onRemove={toggleShortlist}
+            divisionGrid={divisionGrid}
           />
           {pool}
         </main>
