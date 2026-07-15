@@ -2928,6 +2928,7 @@
     "eventCoordinate": "Public log",
     "eventFeed": "Recent picks",
     "roles": { "tank": "Tank", "dps": "Damage", "support": "Support" },
+    "flex": "Flex",
     "roleUnknown": "Role not recorded",
     "eventFeedEmpty": "Completed picks will appear here.",
     "poolCoordinate": "Available roster",

@@ -2928,6 +2928,7 @@
     "eventCoordinate": "Публичный журнал",
     "eventFeed": "Последние пики",
     "roles": { "tank": "Танк", "dps": "Урон", "support": "Поддержка" },
+    "flex": "Флекс",
     "roleUnknown": "Роль не указана",
     "eventFeedEmpty": "Завершённые пики появятся здесь.",
     "poolCoordinate": "Доступный состав",

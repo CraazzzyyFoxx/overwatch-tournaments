@@ -2,8 +2,11 @@
 
 import { Ban, Bookmark, BookmarkCheck, Search, ShieldCheck } from "lucide-react";
 import { useTranslations } from "next-intl";
+import Link from "next/link";
 
+import PlayerDivisionIcon from "@/components/PlayerDivisionIcon";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
+import { Avatar, AvatarImage, AvatarStack } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -13,13 +16,21 @@ import {
   SelectTrigger,
   SelectValue
 } from "@/components/ui/select";
+import { getDivisionLabel, resolveDivisionFromRank } from "@/lib/division-grid";
 import { getRoleIconName } from "@/lib/roles";
 import { cn } from "@/lib/utils";
 import type { DraftPickOptionsResponse, DraftPlayer, DraftRole } from "@/types/draft.types";
 import type { DivisionGrid } from "@/types/workspace.types";
+import { formatSubRoleLabel, getHeroIconUrl, getPlayerSlug } from "@/utils/player";
 
 import type { DraftPoolRoleFilter, DraftPoolSort } from "../_lib/draft-workspace-model";
-import { playerRoles } from "../_lib/draft-workspace-model";
+import { playerRoles, roleTopHeroes } from "../_lib/draft-workspace-model";
+
+const ROLE_ACCENT: Record<DraftRole, string> = {
+  tank: "var(--aqt-tank)",
+  dps: "var(--aqt-damage)",
+  support: "var(--aqt-support)"
+};
 
 interface PlayerPoolProps {
   players: DraftPlayer[];
@@ -35,7 +46,6 @@ interface PlayerPoolProps {
   onToggleShortlist: (playerId: number) => void;
   onFiltersChange: (patch: Partial<{ role: DraftPoolRoleFilter; sort: DraftPoolSort; query: string }>) => void;
   onResetFilters: () => void;
-  /** Accepted but not yet consumed here — Task 8 wires division icons into the pool. */
   divisionGrid: DivisionGrid;
 }
 
@@ -52,7 +62,8 @@ export function PlayerPool({
   onSelect,
   onToggleShortlist,
   onFiltersChange,
-  onResetFilters
+  onResetFilters,
+  divisionGrid
 }: PlayerPoolProps) {
   const t = useTranslations("draftRedesign");
   return (
@@ -105,37 +116,91 @@ export function PlayerPool({
         <div className="mt-4 grid gap-x-5 sm:grid-cols-2">
           {players.map((player) => {
             const roles = playerRoles(player);
+            const secondaryRoles = roles.filter((entry) => entry !== player.primary_role);
             const playerOptions = options?.options.filter((option) => option.player_id === player.id) ?? [];
             const safeOption = playerOptions.find((option) => option.is_safe) ?? null;
             const blocked = safetyRequired && safeOption == null;
             const bookmarked = shortlist.has(player.id);
+            const isSelected = selectedPlayerId === player.id;
+            const division = player.division_number ?? resolveDivisionFromRank(divisionGrid, player.rank_value);
+            const divisionTitle = [
+              getDivisionLabel(divisionGrid, division),
+              player.rank_value ? `${player.rank_value} SR` : null
+            ].filter(Boolean).join(" · ");
+            const heroes = roleTopHeroes(player, player.primary_role);
+            const profileSlug = player.battle_tag ? getPlayerSlug(player.battle_tag) : null;
+            const selectPlayer = () => onSelect(player, safeOption?.role ?? roles[0] ?? null);
             return (
               <article
                 key={player.id}
                 className={cn(
-                  "group grid min-h-[76px] grid-cols-[1fr_auto] items-center gap-3 border-b border-[color:var(--aqt-border)] py-3",
-                  selectedPlayerId === player.id && "border-l-2 border-l-[color:var(--aqt-teal)] pl-3",
+                  "group grid min-h-[76px] grid-cols-[1fr_auto] items-center gap-3 border-b border-l-2 border-[color:var(--aqt-border)] py-3 pl-3",
+                  isSelected && "bg-[color:var(--aqt-teal)]/10",
                   blocked && "opacity-55"
                 )}
+                style={{ borderLeftColor: isSelected ? ROLE_ACCENT[player.primary_role] : "transparent" }}
               >
-                <button
-                  type="button"
-                  onClick={() => onSelect(player, safeOption?.role ?? roles[0] ?? null)}
-                  className="min-h-11 min-w-0 rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)]"
-                  aria-pressed={selectedPlayerId === player.id}
+                <div
+                  role="button"
+                  tabIndex={0}
+                  onClick={selectPlayer}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      selectPlayer();
+                    }
+                  }}
+                  className="min-h-11 min-w-0 cursor-pointer rounded-md text-left outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)]"
+                  aria-pressed={isSelected}
                 >
                   <span className="flex items-center gap-2">
-                    <span className="truncate font-medium">{player.battle_tag ?? `#${player.id}`}</span>
+                    {profileSlug ? (
+                      <Link
+                        href={`/users/${profileSlug}`}
+                        onClick={(event) => event.stopPropagation()}
+                        className="truncate font-medium hover:text-[color:var(--aqt-teal)] hover:underline"
+                      >
+                        {player.battle_tag}
+                      </Link>
+                    ) : (
+                      <span className="truncate font-medium">{`#${player.id}`}</span>
+                    )}
                     {blocked ? <Ban className="h-4 w-4 shrink-0 text-[color:var(--aqt-live)]" aria-label={t("unsafeOption")} /> : safetyRequired ? <ShieldCheck className="h-4 w-4 shrink-0 text-[color:var(--aqt-support)]" aria-label={t("safeOption")} /> : null}
+                    <span className="ml-auto shrink-0" title={divisionTitle}>
+                      {division != null ? (
+                        <PlayerDivisionIcon division={division} width={26} height={26} className="h-6 w-6 object-contain" />
+                      ) : (
+                        <span className="text-[color:var(--aqt-fg-faint)]">—</span>
+                      )}
+                    </span>
                   </span>
-                  <span className="mt-1 flex items-center gap-2">
-                    {roles.map((entry) => (
-                      <PlayerRoleIcon key={entry} role={getRoleIconName(entry)} size={15} color="currentColor" />
+                  <span className="mt-1 flex flex-wrap items-center gap-1.5">
+                    <PlayerRoleIcon role={getRoleIconName(player.primary_role)} size={18} color={ROLE_ACCENT[player.primary_role]} />
+                    {secondaryRoles.map((entry) => (
+                      <PlayerRoleIcon key={entry} role={getRoleIconName(entry)} size={12} color="var(--aqt-fg-faint)" />
                     ))}
-                    <span className="font-mono text-xs text-[color:var(--aqt-fg-muted)]">{player.rank_value ?? "—"}</span>
+                    {player.sub_role && (
+                      <span className="rounded border border-[color:var(--aqt-border-2)] px-1 text-[10px] uppercase tracking-wide text-[color:var(--aqt-fg-muted)]">
+                        {formatSubRoleLabel(player.sub_role)}
+                      </span>
+                    )}
+                    {player.is_flex && (
+                      <span className="rounded border border-violet-400/50 px-1 text-[10px] uppercase tracking-wide text-violet-300">
+                        {t("flex")}
+                      </span>
+                    )}
+                    {heroes.length > 0 && (
+                      <AvatarStack size={18} max={4} className="ml-1">
+                        {heroes.map((hero) => (
+                          <Avatar key={hero.slug} className="h-[18px] w-[18px]" title={hero.slug}>
+                            <AvatarImage src={getHeroIconUrl(hero.slug, hero.imagePath)} alt={hero.slug} />
+                          </Avatar>
+                        ))}
+                      </AvatarStack>
+                    )}
                   </span>
                   {blocked && <span className="mt-1 block text-xs text-[color:var(--aqt-live)]">{t("unsafePlayerReason")}</span>}
-                </button>
+                </div>
                 <Button
                   type="button"
                   variant="ghost"
