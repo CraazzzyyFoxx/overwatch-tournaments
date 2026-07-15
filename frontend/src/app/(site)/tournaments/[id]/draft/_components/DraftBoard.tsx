@@ -127,7 +127,12 @@ export function DraftBoard({ tournament }: DraftBoardProps) {
     <div className="mx-auto w-full max-w-[1400px] space-y-5 pb-[max(2rem,env(safe-area-inset-bottom))]">
       <DraftPageHero tournament={tournament} board={board} mode={mode} />
       {showConnectionStatus ? (
-        <DraftConnectionStatus state={connectionState} presence={presence} teams={board.teams} />
+        <DraftConnectionStatus
+          state={connectionState}
+          presence={presence}
+          teams={board.teams}
+          currentUserId={user?.id ?? null}
+        />
       ) : null}
       {gating.isCaptain ? (
         <CaptainDraftWorkspace
