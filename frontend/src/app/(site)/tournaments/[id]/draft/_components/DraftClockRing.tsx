@@ -23,12 +23,16 @@ export function DraftClockRing({ expiresAt, paused, totalSeconds, accent }: Draf
   const [now, setNow] = useState<number | null>(null);
 
   useEffect(() => {
+    setNow(Date.now());
+  }, [expiresAt]);
+
+  useEffect(() => {
     if (paused || !expiresAt) return;
     const id = window.setInterval(() => setNow(Date.now()), 250);
     return () => window.clearInterval(id);
   }, [paused, expiresAt]);
 
-  const ms = expiresAt && now != null ? Math.max(0, remainingMs(expiresAt, now)) : null;
+  const ms = expiresAt && now != null ? remainingMs(expiresAt, now) : null;
   const seconds = ms == null ? null : Math.ceil(ms / 1000);
   const frac = ms == null || totalSeconds <= 0 ? 0 : Math.min(1, ms / (totalSeconds * 1000));
   const urgent = ms != null && isUrgent(ms);
