@@ -13,6 +13,8 @@ import { TeamRosters } from "./TeamRosters";
 interface SpectatorDraftWorkspaceProps {
   board: DraftBoard;
   divisionGrid: DivisionGrid;
+  /** Online captain auth ids — threaded through for the spectator TeamRosters captain dots (wired in a follow-up task). */
+  onlineCaptainIds?: Set<number>;
 }
 
 export function SpectatorDraftWorkspace({ board, divisionGrid }: SpectatorDraftWorkspaceProps) {

@@ -2907,6 +2907,7 @@
     "connection": { "idle": "Соединение не запущено", "connecting": "Подключение", "connected": "Онлайн", "reconnecting": "Переподключение" },
     "captainsOnline": "Капитаны онлайн: {online}/{total}",
     "anonymousViewers": "Зрители: {count}",
+    "onlineCount": "{n} из {total} онлайн",
     "you": "Вы",
     "captainOnline": "В сети",
     "captainOffline": "Не в сети",

@@ -25,7 +25,6 @@ import {
   type DraftViewParams
 } from "../_lib/draft-workspace-model";
 import { CaptainDraftWorkspace } from "./CaptainDraftWorkspace";
-import { DraftConnectionStatus } from "./DraftConnectionStatus";
 import { DraftPageHero } from "./DraftPageHero";
 import { SpectatorDraftWorkspace } from "./SpectatorDraftWorkspace";
 
@@ -120,20 +119,24 @@ export function DraftBoard({ tournament }: DraftBoardProps) {
   }
 
   const mode = gating.isCaptain ? "captain" : "spectator";
-  const showConnectionStatus =
-    board.session.status === "live" || board.session.status === "paused";
+  const onlineCaptainIds = new Set(
+    board.teams
+      .filter(
+        (team) => team.captain_auth_user_id != null && presence.users[team.captain_auth_user_id] != null
+      )
+      .map((team) => team.captain_auth_user_id as number)
+  );
 
   return (
     <div className="mx-auto w-full max-w-[min(2000px,96vw)] space-y-5 pb-[max(2rem,env(safe-area-inset-bottom))]">
-      <DraftPageHero tournament={tournament} board={board} mode={mode} />
-      {showConnectionStatus ? (
-        <DraftConnectionStatus
-          state={connectionState}
-          presence={presence}
-          teams={board.teams}
-          currentUserId={user?.id ?? null}
-        />
-      ) : null}
+      <DraftPageHero
+        tournament={tournament}
+        board={board}
+        mode={mode}
+        presence={presence}
+        connectionState={connectionState}
+        currentUserId={user?.id ?? null}
+      />
       {gating.isCaptain ? (
         <CaptainDraftWorkspace
           board={board}
@@ -145,9 +148,14 @@ export function DraftBoard({ tournament }: DraftBoardProps) {
           onViewParamsChange={updateViewParams}
           mutations={mutations}
           divisionGrid={divisionGrid}
+          onlineCaptainIds={onlineCaptainIds}
         />
       ) : (
-        <SpectatorDraftWorkspace board={board} divisionGrid={divisionGrid} />
+        <SpectatorDraftWorkspace
+          board={board}
+          divisionGrid={divisionGrid}
+          onlineCaptainIds={onlineCaptainIds}
+        />
       )}
     </div>
   );

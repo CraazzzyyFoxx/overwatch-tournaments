@@ -2907,6 +2907,7 @@
     "connection": { "idle": "Realtime idle", "connecting": "Connecting", "connected": "Live connection", "reconnecting": "Reconnecting" },
     "captainsOnline": "Captains online: {online}/{total}",
     "anonymousViewers": "Viewers: {count}",
+    "onlineCount": "{n} of {total} online",
     "you": "You",
     "captainOnline": "Online",
     "captainOffline": "Offline",

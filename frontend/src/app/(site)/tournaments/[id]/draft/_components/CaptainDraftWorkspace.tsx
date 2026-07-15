@@ -40,6 +40,7 @@ interface CaptainDraftWorkspaceProps {
   onViewParamsChange: (patch: Partial<DraftViewParams>) => void;
   mutations: ReturnType<typeof useDraftMutations>;
   divisionGrid: DivisionGrid;
+  onlineCaptainIds?: Set<number>;
 }
 
 const MOBILE_VIEWS = ["pool", "team", "order"] as const;
@@ -53,7 +54,8 @@ export function CaptainDraftWorkspace({
   viewParams,
   onViewParamsChange,
   mutations,
-  divisionGrid
+  divisionGrid,
+  onlineCaptainIds
 }: CaptainDraftWorkspaceProps) {
   const t = useTranslations("draftRedesign");
   const [selectedPlayerId, setSelectedPlayerId] = useState<number | null>(null);
@@ -157,6 +159,7 @@ export function CaptainDraftWorkspace({
       myTeamId={gating.myTeamId}
       onClockTeamId={board.current_pick?.draft_team_id ?? null}
       divisionGrid={divisionGrid}
+      onlineCaptainIds={onlineCaptainIds}
     />
   );
   const order = (
@@ -261,6 +264,7 @@ export function CaptainDraftWorkspace({
             onClockTeamId={board.current_pick?.draft_team_id ?? null}
             variant="column"
             divisionGrid={divisionGrid}
+            onlineCaptainIds={onlineCaptainIds}
           />
         </aside>
       </div>
