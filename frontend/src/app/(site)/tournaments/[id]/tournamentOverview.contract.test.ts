@@ -121,21 +121,19 @@ describe("tournament overview server contract", () => {
     const sourceFile = parsedSource("layout.tsx");
     const source = sourceFor("layout.tsx");
     const suspense = jsxElements(sourceFile, "Suspense");
-    const stateCall = nodesMatching(sourceFile, ts.isCallExpression).find(
-      (call) => call.expression.getText(sourceFile) === "getTournamentOverviewState"
+    const layoutFunction = nodesMatching(sourceFile, ts.isFunctionDeclaration).find(
+      (declaration) => declaration.name?.text === "TournamentLayout"
+    );
+    const validationCall = nodesMatching(sourceFile, ts.isCallExpression).find(
+      (call) => call.expression.getText(sourceFile) === "assertValidTournamentId"
     );
 
     expect(importedNames(sourceFile, "react")).toContain("Suspense");
-    expect(stateCall).toBeDefined();
-    expect(stateCall?.getStart(sourceFile) ?? Number.POSITIVE_INFINITY).toBeLessThan(
+    expect(validationCall).toBeDefined();
+    expect(validationCall?.getStart(sourceFile) ?? Number.POSITIVE_INFINITY).toBeLessThan(
       suspense[0].getStart(sourceFile)
     );
-    expect(source).toMatch(
-      /if\s*\(overviewState\.kind\s*===\s*["']not-found["']\)[\s\S]*?notFound\(\)/
-    );
-    expect(source).toMatch(
-      /if\s*\(overviewState\.kind\s*===\s*["']error["']\)[\s\S]*?<TournamentShellError\s*\/>/
-    );
+    expect(layoutFunction?.getText(sourceFile)).not.toContain("getTournamentOverviewState");
     expect(jsxElements(sourceFile, "TournamentOverviewBoundary")).toHaveLength(1);
     expect(suspense).toHaveLength(1);
     expect(
@@ -143,7 +141,7 @@ describe("tournament overview server contract", () => {
     ).toBe(true);
   });
 
-  it("hydrates the resolved overview with a request-local query client", () => {
+  it("owns streamed overview errors and hydrates with a request-local query client", () => {
     const sourceFile = parsedSource("TournamentOverviewBoundary.tsx");
     const source = sourceFor("TournamentOverviewBoundary.tsx");
     const queryClients = nodesMatching(sourceFile, ts.isNewExpression).filter(
@@ -156,20 +154,19 @@ describe("tournament overview server contract", () => {
     expect(importedNames(sourceFile, "./_queries/tournamentOverview")).toContain(
       "tournamentOverviewQueryOptions"
     );
-    expect(calledIdentifiers(sourceFile)).not.toContain("getTournamentOverview");
-    expect(calledIdentifiers(sourceFile)).not.toContain("isNotFoundError");
-    expect(calledIdentifiers(sourceFile)).not.toContain("notFound");
+    expect(calledIdentifiers(sourceFile)).toContain("getTournamentOverviewState");
+    expect(calledIdentifiers(sourceFile)).toContain("notFound");
+    expect(jsxElements(sourceFile, "TournamentShellError")).toHaveLength(1);
+    expect(source).toContain("streamed soft-404");
     expect(queryClients).toHaveLength(1);
     expect(isInsideFunction(queryClients[0])).toBe(true);
-    expect(source).toMatch(/overview:\s*Tournament/);
     expect(calledMethods(sourceFile)).toContain("setQueryData");
     expect(seedCall?.arguments.map((argument) => argument.getText(sourceFile))).toEqual([
       "overviewOptions.queryKey",
-      "overview"
+      "overviewState.overview"
     ]);
     expect(calledIdentifiers(sourceFile)).toContain("dehydrate");
     expect(jsxElements(sourceFile, "HydrationBoundary")).toHaveLength(1);
-    expect(jsxElements(sourceFile, "TournamentShellError")).toHaveLength(0);
     expect(source).not.toContain("prefetchQuery");
   });
 

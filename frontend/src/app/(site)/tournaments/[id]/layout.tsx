@@ -7,10 +7,15 @@ import TournamentClientLayout from "./_components/TournamentClientLayout";
 import { TournamentShellSkeleton } from "./_components/TournamentSkeletons";
 import { getTournamentOverviewState } from "./_data";
 import TournamentOverviewBoundary from "./TournamentOverviewBoundary";
-import TournamentShellError from "./TournamentShellError";
 import { resolveSiteMetadata } from "@/lib/site-metadata";
 
 export const dynamic = "force-dynamic";
+
+function assertValidTournamentId(tournamentId: number): void {
+  if (!Number.isSafeInteger(tournamentId) || tournamentId <= 0) {
+    notFound();
+  }
+}
 
 export async function generateMetadata(props: {
   params: Promise<{ id: string }>;
@@ -60,19 +65,11 @@ export default async function TournamentLayout({
 }>) {
   const resolvedParams = await params;
   const tournamentId = Number(resolvedParams.id);
-  const overviewState = await getTournamentOverviewState(tournamentId);
-
-  if (overviewState.kind === "not-found") {
-    notFound();
-  }
-
-  if (overviewState.kind === "error") {
-    return <TournamentShellError />;
-  }
+  assertValidTournamentId(tournamentId);
 
   return (
     <Suspense fallback={<TournamentShellSkeleton />}>
-      <TournamentOverviewBoundary tournamentId={tournamentId} overview={overviewState.overview}>
+      <TournamentOverviewBoundary tournamentId={tournamentId}>
         <TournamentClientLayout tournamentId={tournamentId}>{children}</TournamentClientLayout>
       </TournamentOverviewBoundary>
     </Suspense>

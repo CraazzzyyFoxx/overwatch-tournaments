@@ -1,12 +1,15 @@
 import { afterEach, describe, expect, it, spyOn } from "bun:test";
-import { isValidElement } from "react";
+import { HydrationBoundary } from "@tanstack/react-query";
+import { isValidElement, Suspense, type ReactElement } from "react";
 
 import { ApiError } from "@/lib/api-error";
 import tournamentService from "@/services/tournament.service";
 import type { Tournament } from "@/types/tournament.types";
 
 import TournamentLayout from "./layout";
+import TournamentOverviewBoundary from "./TournamentOverviewBoundary";
 import TournamentShellError from "./TournamentShellError";
+import { TournamentShellSkeleton } from "./_components/TournamentSkeletons";
 
 const overviewFixture: Tournament = {
   id: 72,
@@ -41,37 +44,83 @@ const overviewFixture: Tournament = {
 };
 
 const paramsFor = (id: string) => Promise.resolve({ id });
+const afterTurn = () => new Promise<void>((resolve) => setTimeout(resolve, 20));
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
+}
+
+async function captureThrown(operation: () => Promise<unknown>) {
+  try {
+    await operation();
+    return undefined;
+  } catch (error) {
+    return error;
+  }
+}
 
 afterEach(() => {
-  // Restores every service spy even if an assertion fails midway through a case.
   (tournamentService.getPublicOverview as { mockRestore?: () => void }).mockRestore?.();
 });
 
-describe("TournamentLayout overview classification", () => {
-  it("awaits one overview request before returning the successful shell", async () => {
-    const overviewSpy = spyOn(tournamentService, "getPublicOverview").mockResolvedValue({
-      ...overviewFixture,
-      id: 7201
-    });
+describe("TournamentLayout streaming overview", () => {
+  it("exposes the exact shell fallback while a valid tournament overview is unresolved", async () => {
+    const pendingOverview = deferred<Tournament>();
+    const overviewSpy = spyOn(tournamentService, "getPublicOverview").mockReturnValue(
+      pendingOverview.promise
+    );
+    const layoutPromise = TournamentLayout({ children: null, params: paramsFor("7301") });
 
-    const result = await TournamentLayout({ children: null, params: paramsFor("7201") });
+    const firstResult = await Promise.race([
+      layoutPromise.then((result) => ({ kind: "layout" as const, result })),
+      afterTurn().then(() => ({ kind: "waiting" as const }))
+    ]);
 
-    expect(isValidElement(result)).toBe(true);
+    if (firstResult.kind === "waiting") {
+      pendingOverview.resolve({ ...overviewFixture, id: 7301 });
+      await layoutPromise;
+    }
+
+    expect(firstResult.kind).toBe("layout");
+    if (firstResult.kind !== "layout") return;
+    expect(firstResult.result.type).toBe(Suspense);
+    const suspenseProps = firstResult.result.props as {
+      fallback: ReactElement;
+      children: ReactElement;
+    };
+    expect(suspenseProps.fallback.type).toBe(TournamentShellSkeleton);
+    expect(overviewSpy).not.toHaveBeenCalled();
+
+    const boundaryPromise = TournamentOverviewBoundary(
+      suspenseProps.children.props as Parameters<typeof TournamentOverviewBoundary>[0]
+    );
+    const boundaryBeforeOverview = await Promise.race([
+      boundaryPromise.then(() => "resolved" as const),
+      afterTurn().then(() => "waiting" as const)
+    ]);
+
     expect(overviewSpy).toHaveBeenCalledTimes(1);
-    expect(overviewSpy).toHaveBeenCalledWith(7201);
+    expect(boundaryBeforeOverview).toBe("waiting");
+
+    pendingOverview.resolve({ ...overviewFixture, id: 7301 });
+    const hydrated = await boundaryPromise;
+    expect(isValidElement(hydrated)).toBe(true);
+    if (!isValidElement(hydrated)) throw new Error("Expected hydrated overview element");
+    expect(hydrated.type).toBe(HydrationBoundary);
   });
 
-  it("turns an API not-found into Next's notFound control flow before returning JSX", async () => {
+  it("uses intentional streamed notFound control flow for an API 404", async () => {
     const overviewSpy = spyOn(tournamentService, "getPublicOverview").mockRejectedValue(
       new ApiError(404, [{ msg: "Tournament not found", code: "not_found" }])
     );
 
-    let thrown: unknown;
-    try {
-      await TournamentLayout({ children: null, params: paramsFor("7202") });
-    } catch (error) {
-      thrown = error;
-    }
+    const thrown = await captureThrown(() =>
+      Promise.resolve(TournamentOverviewBoundary({ tournamentId: 7302, children: null }))
+    );
 
     expect(overviewSpy).toHaveBeenCalledTimes(1);
     expect(thrown).toMatchObject({ digest: "NEXT_HTTP_ERROR_FALLBACK;404" });
@@ -82,7 +131,7 @@ describe("TournamentLayout overview classification", () => {
       new Error("upstream unavailable")
     );
 
-    const result = await TournamentLayout({ children: null, params: paramsFor("7203") });
+    const result = await TournamentOverviewBoundary({ tournamentId: 7303, children: null });
 
     expect(overviewSpy).toHaveBeenCalledTimes(1);
     expect(isValidElement(result)).toBe(true);
@@ -91,18 +140,29 @@ describe("TournamentLayout overview classification", () => {
     expect(result.props).toEqual({});
   });
 
+  it("hydrates a successful overview after the boundary resolves", async () => {
+    const overviewSpy = spyOn(tournamentService, "getPublicOverview").mockResolvedValue({
+      ...overviewFixture,
+      id: 7304
+    });
+
+    const result = await TournamentOverviewBoundary({ tournamentId: 7304, children: null });
+
+    expect(overviewSpy).toHaveBeenCalledTimes(1);
+    expect(isValidElement(result)).toBe(true);
+    if (!isValidElement(result)) throw new Error("Expected a React element");
+    expect(result.type).toBe(HydrationBoundary);
+  });
+
   for (const invalidId of ["not-a-number", "0", "-3", "2.5"]) {
-    it(`rejects invalid id ${invalidId} as not-found without an API request`, async () => {
+    it(`rejects invalid id ${invalidId} before streaming without an API request`, async () => {
       const overviewSpy = spyOn(tournamentService, "getPublicOverview").mockResolvedValue(
         overviewFixture
       );
 
-      let thrown: unknown;
-      try {
-        await TournamentLayout({ children: null, params: paramsFor(invalidId) });
-      } catch (error) {
-        thrown = error;
-      }
+      const thrown = await captureThrown(() =>
+        TournamentLayout({ children: null, params: paramsFor(invalidId) })
+      );
 
       expect(overviewSpy).not.toHaveBeenCalled();
       expect(thrown).toMatchObject({ digest: "NEXT_HTTP_ERROR_FALLBACK;404" });
