@@ -106,7 +106,7 @@ export function TeamRosters({
                 className={cn(
                   "min-w-0 overflow-hidden rounded-[14px] border border-[color:var(--aqt-border)] bg-[color:var(--aqt-card)]",
                   isMine && "border-[color:var(--aqt-teal)]/60",
-                  onClock && "ring-1 ring-[color:var(--aqt-teal)] shadow-[0_0_22px_hsl(172_72%_45%_/_0.2)]"
+                  onClock && "ring-1 ring-[color:var(--aqt-teal)] shadow-[0_0_22px_color-mix(in_srgb,var(--aqt-teal)_20%,transparent)]"
                 )}
               >
                 {onClock && (
