@@ -151,13 +151,21 @@ export function readParticipantUrlState(
   if (rawColumns === "none") {
     visibleColumnIds = mandatoryColumnIds;
   } else if (rawColumns !== null) {
+    const rawColumnIds = rawColumns.split(",").filter(Boolean);
     const requested = new Set(
-      rawColumns.split(",").filter((id) => allowedOptionalColumnIds.has(id)),
+      rawColumnIds.filter((id) => allowedOptionalColumnIds.has(id)),
     );
-    visibleColumnIds = [
-      ...mandatoryColumnIds,
-      ...optionalColumns.filter((column) => requested.has(column.id)).map((column) => column.id),
-    ];
+    const isLegacyCoreOnly =
+      rawColumnIds.length > 0 &&
+      rawColumnIds.every((id) => isMandatoryParticipantColumnId(id));
+    if (requested.size > 0 || isLegacyCoreOnly) {
+      visibleColumnIds = [
+        ...mandatoryColumnIds,
+        ...optionalColumns
+          .filter((column) => requested.has(column.id))
+          .map((column) => column.id),
+      ];
+    }
   }
 
   writeColumns(params, visibleColumnIds, defaultColumnIds);

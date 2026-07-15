@@ -23,7 +23,7 @@ describe("participant URL state", () => {
     );
   });
 
-  it("omits defaults and normalizes unsupported status and columns", () => {
+  it("falls back to defaults when invalid columns are mixed with legacy core ids", () => {
     const result = readParticipantUrlState(
       new URLSearchParams(
         "participantStatus=unknown&participantColumns=battle_tag,unknown&tab=rules",
@@ -35,10 +35,10 @@ describe("participant URL state", () => {
     expect(result.state).toEqual({
       search: "",
       status: "all",
-      visibleColumnIds: ["battle_tag", "_status"],
+      visibleColumnIds: ["battle_tag", "_status", "roles"],
     });
     expect(result.needsNormalization).toBe(true);
-    expect(result.params.toString()).toBe("participantColumns=none&tab=rules");
+    expect(result.params.toString()).toBe("tab=rules");
     expect(
       readParticipantUrlState(result.params, ["approved", "pending"], columns)
         .needsNormalization,
@@ -70,14 +70,14 @@ describe("participant URL state", () => {
     expect(restored.params.get("participantColumns")).toBe("notes");
   });
 
-  it("always restores mandatory identity and status before selected optional fields", () => {
+  it("distinguishes none, invalid, mixed, and legacy core-only column selections", () => {
     const none = readParticipantUrlState(
       new URLSearchParams("participantColumns=none"),
       ["approved"],
       columns,
     );
     const unsupported = readParticipantUrlState(
-      new URLSearchParams("participantColumns=unknown"),
+      new URLSearchParams("participantColumns=unknown,bogus"),
       ["approved"],
       columns,
     );
@@ -86,13 +86,25 @@ describe("participant URL state", () => {
       ["approved"],
       columns,
     );
+    const legacyCoreOnly = readParticipantUrlState(
+      new URLSearchParams("participantColumns=battle_tag,_status"),
+      ["approved"],
+      columns,
+    );
 
     expect(none.state.visibleColumnIds).toEqual(["battle_tag", "_status"]);
     expect(none.params.get("participantColumns")).toBe("none");
-    expect(unsupported.state.visibleColumnIds).toEqual(["battle_tag", "_status"]);
-    expect(unsupported.params.get("participantColumns")).toBe("none");
+    expect(unsupported.state.visibleColumnIds).toEqual([
+      "battle_tag",
+      "_status",
+      "roles",
+    ]);
+    expect(unsupported.params.get("participantColumns")).toBeNull();
     expect(custom.state.visibleColumnIds).toEqual(["battle_tag", "_status", "notes"]);
     expect(custom.params.get("participantColumns")).toBe("notes");
+    // Core ids were valid selectable columns in legacy URLs, so core-only means no optionals.
+    expect(legacyCoreOnly.state.visibleColumnIds).toEqual(["battle_tag", "_status"]);
+    expect(legacyCoreOnly.params.get("participantColumns")).toBe("none");
   });
 
   it("uses replace for search and push for discrete filters while preserving other params", () => {
