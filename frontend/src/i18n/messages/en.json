@@ -2977,6 +2977,7 @@
     "noSelection": "Select a player and an available role to review the pick.",
     "waitingFreshData": "Confirmation waits for a live connection and options matching the current pick version.",
     "reviewPick": "Review pick",
+    "enterHint": "Enter",
     "confirmPickTitle": "Confirm this pick?",
     "confirmPickDescription": "Add {player} to {team} as {role}. This immediately advances the draft.",
     "confirmPick": "Confirm pick",

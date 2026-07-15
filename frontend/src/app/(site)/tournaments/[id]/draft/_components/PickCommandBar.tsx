@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Check, Loader2, ShieldCheck, WifiOff } from "lucide-react";
 import { useTranslations } from "next-intl";
 
@@ -13,8 +13,12 @@ import {
   DialogTitle
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import PlayerDivisionIcon from "@/components/PlayerDivisionIcon";
+import { resolveDivisionFromRank } from "@/lib/division-grid";
+import { cn } from "@/lib/utils";
 import type { DraftPlayer, DraftRole } from "@/types/draft.types";
 import type { RealtimeConnectionState } from "@/types/realtime.types";
+import type { DivisionGrid } from "@/types/workspace.types";
 
 interface PickCommandBarProps {
   player: DraftPlayer | null;
@@ -25,23 +29,87 @@ interface PickCommandBarProps {
   connectionState: RealtimeConnectionState;
   announcement: string;
   onConfirm: () => void;
+  divisionGrid: DivisionGrid;
 }
 
-export function PickCommandBar({ player, role, teamName, canConfirm, pending, connectionState, announcement, onConfirm }: PickCommandBarProps) {
+export function PickCommandBar({
+  player,
+  role,
+  teamName,
+  canConfirm,
+  pending,
+  connectionState,
+  announcement,
+  onConfirm,
+  divisionGrid
+}: PickCommandBarProps) {
   const t = useTranslations("draftRedesign");
   const [reviewOpen, setReviewOpen] = useState(false);
+  const isConnected = connectionState === "connected";
+  const ready = canConfirm && !pending;
   const selection = player && role ? `${player.battle_tag ?? `#${player.id}`} · ${t(`roles.${role}`)}` : t("noSelection");
+  const roleRank = player && role ? player.role_ranks[role] ?? player.rank_value ?? null : null;
+  const roleDivision = roleRank != null ? resolveDivisionFromRank(divisionGrid, roleRank) : null;
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      const el = event.target as HTMLElement | null;
+      if (el && /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)) return;
+      if (el?.isContentEditable) return;
+      if (event.key === "Enter" && canConfirm && !pending) {
+        event.preventDefault();
+        setReviewOpen(true);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [canConfirm, pending]);
+
   return (
     <>
-      <section className="sticky bottom-2 z-20 mt-5 rounded-xl border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-card)]/95 p-3 shadow-xl backdrop-blur supports-[padding:max(0px)]:pb-[max(0.75rem,env(safe-area-inset-bottom))]" aria-label={t("pickCommand")}>
+      <section
+        className={cn(
+          "sticky bottom-2 z-20 mt-5 rounded-xl border bg-[color:var(--aqt-card)]/95 p-3 shadow-xl backdrop-blur transition-colors supports-[padding:max(0px)]:pb-[max(0.75rem,env(safe-area-inset-bottom))]",
+          !isConnected
+            ? "border-[color:var(--aqt-warm)]/60"
+            : ready
+              ? "border-[color:var(--aqt-teal)]/60"
+              : "border-[color:var(--aqt-border-2)]"
+        )}
+        aria-label={t("pickCommand")}
+      >
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <div className="min-w-0 flex-1">
             <p className="font-mono text-[11px] uppercase tracking-[0.12em] text-[color:var(--aqt-fg-faint)]">{t("selectionFor", { team: teamName })}</p>
-            <p className="mt-1 truncate text-sm font-medium">{selection}</p>
+            <p className="mt-1 flex items-center gap-2 truncate text-sm font-medium">
+              <span className="truncate">{selection}</span>
+              {roleRank != null && (
+                <span className="flex shrink-0 items-center gap-1 font-mono text-xs text-[color:var(--aqt-fg-muted)]">
+                  {`${roleRank} SR`}
+                  {roleDivision != null && (
+                    <PlayerDivisionIcon division={roleDivision} tournamentGrid={divisionGrid} width={16} height={16} className="h-4 w-4 object-contain" />
+                  )}
+                </span>
+              )}
+            </p>
           </div>
-          {connectionState !== "connected" && <span className="flex items-center gap-2 text-sm text-[color:var(--aqt-warm)]"><WifiOff className="h-4 w-4" />{t("waitingFreshData")}</span>}
-          <Button className="min-h-11" disabled={!canConfirm || pending} onClick={() => setReviewOpen(true)}>
-            <ShieldCheck className="mr-2 h-4 w-4" />{t("reviewPick")}
+          {!isConnected && <span className="flex items-center gap-2 text-sm text-[color:var(--aqt-warm)]"><WifiOff className="h-4 w-4" />{t("waitingFreshData")}</span>}
+          <Button
+            className={cn(
+              "min-h-11",
+              !isConnected && "bg-[color:var(--aqt-warm)] text-[color:var(--aqt-bg)] hover:bg-[color:var(--aqt-warm)]/90",
+              ready && "ring-2 ring-[color:var(--aqt-teal)]/40 ring-offset-2 ring-offset-[color:var(--aqt-card)]"
+            )}
+            disabled={!canConfirm || pending}
+            onClick={() => setReviewOpen(true)}
+          >
+            <ShieldCheck className="mr-2 h-4 w-4" />
+            {t("reviewPick")}
+            {ready && (
+              <span className="ml-1 hidden items-center rounded border border-current/40 px-1.5 py-0.5 font-mono text-[10px] font-normal opacity-80 sm:inline-flex">
+                {t("enterHint")}
+              </span>
+            )}
           </Button>
         </div>
         <p className="sr-only" aria-live="polite">{announcement}</p>

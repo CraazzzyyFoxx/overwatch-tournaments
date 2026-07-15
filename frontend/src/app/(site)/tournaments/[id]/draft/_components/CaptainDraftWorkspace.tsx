@@ -265,6 +265,7 @@ export function CaptainDraftWorkspace({
         connectionState={connectionState}
         announcement={announcement}
         onConfirm={confirm}
+        divisionGrid={divisionGrid}
       />
     </div>
   );
