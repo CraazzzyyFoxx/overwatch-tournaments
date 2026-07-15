@@ -3,6 +3,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 
 import {
+  applyTournamentRealtimeCatchUp,
   applyTournamentRealtimeUpdate,
   type TournamentChangedReason,
 } from "@/hooks/tournamentRealtime.helpers";
@@ -55,6 +56,13 @@ export function useTournamentRealtime({
         onStructureChanged?.();
       }
     },
-    [queryClient, tournamentId, workspaceId, onUpdate, onStructureChanged]
+    [],
+    () => {
+      if (!tournamentId) {
+        return;
+      }
+
+      applyTournamentRealtimeCatchUp(queryClient, tournamentId, workspaceId);
+    },
   );
 }

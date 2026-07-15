@@ -2,11 +2,13 @@
 
 import React from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 import TournamentRegisterButton from "./TournamentRegisterButton";
 import { isTournamentStatusEnded } from "@/lib/tournament-status";
 import { cn, formatDateRange } from "@/lib/utils";
 import { useTournamentRealtime } from "@/hooks/useTournamentRealtime";
+import { createTrailingCoalescer } from "@/hooks/tournamentRealtime.helpers";
 import { useTournamentQuery } from "../_hooks/useTournamentClientData";
 import type { StageSummary } from "@/types/tournament.types";
 
@@ -39,12 +41,20 @@ export default function TournamentClientLayout({
 }: TournamentClientLayoutProps) {
   const t = useTranslations();
   const locale = useLocale();
+  const router = useRouter();
   const tournamentQuery = useTournamentQuery(tournamentId);
   const tournament = tournamentQuery.data;
+  const routeRefresh = React.useMemo(
+    () => createTrailingCoalescer(() => router.refresh(), 500),
+    [router, tournamentId],
+  );
+
+  React.useEffect(() => () => routeRefresh.cancel(), [routeRefresh]);
 
   useTournamentRealtime({
     tournamentId,
-    workspaceId: tournament?.workspace_id
+    workspaceId: tournament?.workspace_id,
+    onStructureChanged: routeRefresh.schedule,
   });
 
   if (tournamentQuery.isPending) {

@@ -12,7 +12,12 @@ type RealtimeHandler<TData = Record<string, unknown>> = (
   event: RealtimeEventEnvelope<TData>
 ) => void;
 
-type TopicHandlers = Map<number, RealtimeHandler>;
+type RealtimeSubscription = {
+  onEvent: RealtimeHandler;
+  onSubscribed?: () => void;
+};
+
+type TopicHandlers = Map<number, RealtimeSubscription>;
 
 const HEARTBEAT_INTERVAL_MS = 25_000;
 const PONG_TIMEOUT_MS = 10_000;
@@ -47,7 +52,8 @@ class RealtimeClient {
 
   subscribe<TData>(
     topic: string,
-    handler: RealtimeHandler<TData>
+    handler: RealtimeHandler<TData>,
+    onSubscribed?: () => void
   ): () => void {
     if (typeof window === "undefined") {
       return () => undefined;
@@ -61,7 +67,10 @@ class RealtimeClient {
     }
 
     const handlerId = this.nextHandlerId++;
-    topicHandlers.set(handlerId, handler as RealtimeHandler);
+    topicHandlers.set(handlerId, {
+      onEvent: handler as RealtimeHandler,
+      onSubscribed,
+    });
 
     this.ensureSocket();
     if (isNewTopic && this.socket?.readyState === WebSocket.OPEN) {
@@ -183,6 +192,12 @@ class RealtimeClient {
       useRealtimeStore.getState().setLastEventId(frame.topic, frame.cursor);
       // A successful (re)subscribe clears any prior rejection for this topic.
       useRealtimeStore.getState().setTopicError(frame.topic, null);
+      const handlers = this.handlersByTopic.get(frame.topic);
+      if (handlers) {
+        for (const subscription of Array.from(handlers.values())) {
+          subscription.onSubscribed?.();
+        }
+      }
       return;
     }
 
@@ -200,8 +215,8 @@ class RealtimeClient {
       return;
     }
 
-    for (const handler of Array.from(handlers.values())) {
-      handler(frame.event);
+    for (const subscription of Array.from(handlers.values())) {
+      subscription.onEvent(frame.event);
     }
   }
 
