@@ -80,6 +80,75 @@ afterAll(async () => {
 });
 
 describe("participant search URL input", () => {
+  it("canonicalizes surrounding whitespace after a no-op URL commit", () => {
+    const commits: string[] = [];
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+
+    act(() => {
+      root.render(
+        <SearchHarness
+          canonicalSearch="foo"
+          canonicalUrl="participantSearch=foo"
+          onCommit={(value) => commits.push(value)}
+        />
+      );
+    });
+    const input = container.querySelector("input")!;
+    input.focus();
+
+    act(() => dispatchInput(input, " foo "));
+    expect(input.value).toBe(" foo ");
+    act(() => jest.advanceTimersByTime(250));
+
+    expect(commits).toEqual(["foo"]);
+    expect(input.value).toBe("foo");
+    expect(document.activeElement).toBe(input);
+    expect(input.selectionStart).toBe(3);
+    expect(input.selectionEnd).toBe(3);
+
+    act(() => root.unmount());
+  });
+
+  it("clears whitespace-only input but leaves ordinary internal spaces typable", () => {
+    const commits: string[] = [];
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+
+    act(() => {
+      root.render(
+        <SearchHarness
+          canonicalSearch=""
+          canonicalUrl=""
+          onCommit={(value) => commits.push(value)}
+        />
+      );
+    });
+    const input = container.querySelector("input")!;
+    input.focus();
+
+    act(() => dispatchInput(input, "   "));
+    expect(input.value).toBe("   ");
+    act(() => jest.advanceTimersByTime(250));
+    expect(commits).toEqual([""]);
+    expect(input.value).toBe("");
+    expect(document.activeElement).toBe(input);
+    expect(input.selectionStart).toBe(0);
+    expect(input.selectionEnd).toBe(0);
+
+    act(() => dispatchInput(input, "foo bar", 4));
+    expect(input.value).toBe("foo bar");
+    expect(input.selectionStart).toBe(4);
+    act(() => jest.advanceTimersByTime(250));
+    expect(commits).toEqual(["", "foo bar"]);
+    expect(input.value).toBe("foo bar");
+    expect(input.selectionStart).toBe(4);
+
+    act(() => root.unmount());
+  });
+
   it("cancels stale debounce on Back/Forward and permits later typing", () => {
     const commits: string[] = [];
     const container = document.createElement("div");

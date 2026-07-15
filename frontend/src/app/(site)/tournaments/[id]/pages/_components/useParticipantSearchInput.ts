@@ -2,12 +2,29 @@
 
 import { useCallback, useEffect, useRef, type ChangeEventHandler } from "react";
 
-import { PARTICIPANT_SEARCH_MAX_LENGTH } from "./participants-url-state";
+import {
+  normalizeParticipantSearch,
+  PARTICIPANT_SEARCH_MAX_LENGTH
+} from "./participants-url-state";
 
 const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f-\u009f]/g;
 
 function sanitizeVisibleSearch(value: string): string {
   return value.replace(CONTROL_CHARACTERS, "").slice(0, PARTICIPANT_SEARCH_MAX_LENGTH);
+}
+
+function syncVisibleSearch(input: HTMLInputElement | null, value: string): void {
+  if (!input || input.value === value) return;
+  const isFocused = document.activeElement === input;
+  const selectionStart = input.selectionStart;
+  const selectionEnd = input.selectionEnd;
+  input.value = value;
+  if (isFocused && selectionStart !== null && selectionEnd !== null) {
+    input.setSelectionRange(
+      Math.min(selectionStart, value.length),
+      Math.min(selectionEnd, value.length)
+    );
+  }
 }
 
 interface PendingSearch {
@@ -42,18 +59,7 @@ export function useParticipantSearchInput({
     const pending = pendingRef.current;
     if (pending && pending.baseUrl !== canonicalUrl) cancelPending();
 
-    const input = inputRef.current;
-    if (!input || input.value === canonicalSearch) return;
-    const isFocused = document.activeElement === input;
-    const selectionStart = input.selectionStart;
-    const selectionEnd = input.selectionEnd;
-    input.value = canonicalSearch;
-    if (isFocused && selectionStart !== null && selectionEnd !== null) {
-      input.setSelectionRange(
-        Math.min(selectionStart, canonicalSearch.length),
-        Math.min(selectionEnd, canonicalSearch.length)
-      );
-    }
+    syncVisibleSearch(inputRef.current, canonicalSearch);
   }, [cancelPending, canonicalSearch, canonicalUrl]);
 
   useEffect(() => cancelPending, [cancelPending]);
@@ -78,7 +84,11 @@ export function useParticipantSearchInput({
         const pending = pendingRef.current;
         timerRef.current = null;
         pendingRef.current = null;
-        if (pending) onCommit(pending.value);
+        if (pending) {
+          const normalizedValue = normalizeParticipantSearch(pending.value);
+          syncVisibleSearch(inputRef.current, normalizedValue);
+          onCommit(normalizedValue);
+        }
       }, delay);
     },
     [cancelPending, canonicalUrl, delay, onCommit]
