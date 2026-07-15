@@ -159,7 +159,7 @@ export function CaptainDraftWorkspace({
 
   return (
     <div className="space-y-5">
-      <CurrentPick board={board} isMyPick={gating.isMyPick} />
+      <CurrentPick board={board} isMyPick={gating.isMyPick} myTeamId={gating.myTeamId} />
       {optionsLoading && gating.isMyPick && (
         <p className="border-l-2 border-[color:var(--aqt-teal)] pl-3 text-sm text-[color:var(--aqt-fg-muted)]" role="status">
           {t("checkingSafeOptions")}

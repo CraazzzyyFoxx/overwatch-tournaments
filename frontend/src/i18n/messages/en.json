@@ -2915,6 +2915,8 @@
     "pickIdle": "Waiting for the next draft update.",
     "roleShortagePaused": "Draft paused: the remaining role requirements cannot be fulfilled. The organizer must resolve the player roles before play resumes.",
     "organizerPaused": "The organizer paused the draft. Your selection is preserved until current data is available again.",
+    "focalPickPrompt": "Select a player below to pick",
+    "yourTurnInPicks": "You pick in {n, plural, one {# pick} other {# picks}}",
     "sequence": "Sequence",
     "draftOrder": "Draft order",
     "pending": "Pending",
