@@ -2,6 +2,8 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "bun:test";
 
+import type { Stage, Standings, Tournament } from "@/types/tournament.types";
+
 type QueryPresentation = {
   initialState: "skeleton" | "error" | null;
   contentState: "empty" | "content" | null;
@@ -28,6 +30,24 @@ const heroesModule =
 const standingsModule =
   (await import("./TournamentStandingsPage")) as typeof import("./TournamentStandingsPage") & {
     getStandingsQueryPresentation?: GetQueryPresentation;
+    getPublicStandingsQueryPlan?: (
+      tournament: Tournament | undefined,
+      source: {
+        getStandings: (tournamentId: number, workspaceId: number | null) => Promise<Standings[]>;
+        getStages: (tournamentId: number) => Promise<Stage[]>;
+      }
+    ) => {
+      standings: { enabled: boolean; queryFn: () => Promise<Standings[]> };
+      stages: { enabled: boolean; queryFn: () => Promise<Stage[]> };
+    };
+  };
+const standingsTableModule =
+  (await import("../../../../../components/StandingsTable")) as typeof import("../../../../../components/StandingsTable") & {
+    getStandingsStagesQueryOptions?: (
+      tournamentId: number | undefined,
+      providedStages: Stage[] | undefined,
+      getStages: (id: number) => Promise<Stage[]>
+    ) => { enabled: boolean; queryFn: () => Promise<Stage[]> };
   };
 
 const pagesRoot = import.meta.dir;
@@ -134,6 +154,50 @@ describe("public tournament page query states", () => {
 });
 
 describe("public tournament data page contracts", () => {
+  it("starts rich standings and required full-stage metadata together", async () => {
+    let standingsStarted = 0;
+    let stagesStarted = 0;
+    let releaseStandings = () => undefined;
+    const standingsBlocked = new Promise<void>((resolve) => {
+      releaseStandings = resolve;
+    });
+    const tournament = { id: 72, workspace_id: 9 } as Tournament;
+    const plan = standingsModule.getPublicStandingsQueryPlan?.(tournament, {
+      getStandings: async () => {
+        standingsStarted += 1;
+        await standingsBlocked;
+        return [];
+      },
+      getStages: async () => {
+        stagesStarted += 1;
+        return [];
+      }
+    });
+
+    expect(plan?.standings.enabled).toBe(true);
+    expect(plan?.stages.enabled).toBe(true);
+    const standingsRequest = plan?.standings.queryFn();
+    const stagesRequest = plan?.stages.queryFn();
+    expect(standingsStarted).toBe(1);
+    expect(stagesStarted).toBe(1);
+
+    await stagesRequest;
+    releaseStandings();
+    await standingsRequest;
+  });
+
+  it("does not execute the table fallback stages request when stages are supplied", async () => {
+    let fallbackRequests = 0;
+    const options = standingsTableModule.getStandingsStagesQueryOptions?.(72, [], async () => {
+      fallbackRequests += 1;
+      return [];
+    });
+
+    expect(options?.enabled).toBe(false);
+    if (options?.enabled) await options.queryFn();
+    expect(fallbackRequests).toBe(0);
+  });
+
   it("gives every page the shared editorial heading and exact state components", () => {
     const contracts = [
       ["TournamentEncountersPage.tsx", "TournamentMatchesSkeleton"],
@@ -186,6 +250,7 @@ describe("public tournament data page contracts", () => {
     const table = readFileSync(join(componentsRoot, "StandingsTable.tsx"), "utf8");
 
     expect(page).toContain("tournamentService.getStandings(");
+    expect(page).toContain("tournamentService.getStages(");
     expect(page).toContain("tournament.workspace_id");
     expect(page).not.toContain("getBracketStandings");
     expect(table).toContain("matches_history");
@@ -194,6 +259,7 @@ describe("public tournament data page contracts", () => {
     expect(table).toContain("styles.stickyTeamColumn");
     expect(table).toContain('<th scope="col"');
     expect(page).toContain("styles.stageEmpty");
+    expect(page).toContain("stages={stages}");
   });
 
   it("keeps route files thin and free from generic loading gates", () => {

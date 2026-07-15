@@ -10,7 +10,7 @@ import { isTournamentStatusEnded } from "@/lib/tournament-status";
 import { tournamentQueryKeys } from "@/lib/tournament-query-keys";
 import { cn } from "@/lib/utils";
 import tournamentService from "@/services/tournament.service";
-import { Standings } from "@/types/tournament.types";
+import { Stage, Standings, Tournament } from "@/types/tournament.types";
 
 import styles from "../TournamentDetail.module.css";
 import { TournamentPageState } from "../_components/TournamentPageState";
@@ -26,6 +26,44 @@ type StageView = "playoff" | "groups" | "combined";
 export const getStandingsQueryPresentation = (state: PublicPageQueryState) =>
   getPublicPageQueryPresentation(state);
 
+type PublicStandingsSource = {
+  getStandings: (tournamentId: number, workspaceId: number | null) => Promise<Standings[]>;
+  getStages: (tournamentId: number) => Promise<Stage[]>;
+};
+
+const publicStandingsSource: PublicStandingsSource = {
+  getStandings: (tournamentId, workspaceId) =>
+    tournamentService.getStandings(tournamentId, workspaceId),
+  getStages: (tournamentId) => tournamentService.getStages(tournamentId)
+};
+
+export function getPublicStandingsQueryPlan(
+  tournament: Tournament | undefined,
+  source: PublicStandingsSource = publicStandingsSource
+) {
+  const enabled = tournament !== undefined;
+  const tournamentId = tournament?.id ?? 0;
+
+  return {
+    standings: {
+      queryKey: tournamentQueryKeys.standings(tournamentId, tournament?.workspace_id),
+      queryFn: () => {
+        if (!tournament) return Promise.resolve([]);
+        return source.getStandings(tournament.id, tournament.workspace_id);
+      },
+      enabled
+    },
+    stages: {
+      queryKey: tournamentQueryKeys.stages(tournamentId),
+      queryFn: () => {
+        if (!tournament) return Promise.resolve([]);
+        return source.getStages(tournament.id);
+      },
+      enabled
+    }
+  };
+}
+
 function groupLetter(name: string): string {
   const stripped = name.replace(/group/i, "").trim();
   return (stripped.slice(0, 1) || name.slice(0, 1) || "#").toUpperCase();
@@ -35,16 +73,12 @@ const TournamentStandingsPage = ({ tournamentId }: { tournamentId: number }) => 
   const t = useTranslations();
   const tournamentQuery = useTournamentQuery(tournamentId);
   const tournament = tournamentQuery.data;
-  const standingsQuery = useQuery({
-    queryKey: tournamentQueryKeys.standings(tournamentId, tournament?.workspace_id),
-    queryFn: () => {
-      if (!tournament) throw new Error("Tournament overview is required");
-      return tournamentService.getStandings(tournament.id, tournament.workspace_id);
-    },
-    enabled: tournament !== undefined
-  });
+  const queryPlan = getPublicStandingsQueryPlan(tournament);
+  const standingsQuery = useQuery(queryPlan.standings);
+  const stagesQuery = useQuery(queryPlan.stages);
   const [view, setView] = useState<StageView>("combined");
   const standings = standingsQuery.data ? standingsQuery.data : [];
+  const stages = stagesQuery.data ? stagesQuery.data : [];
   const { groups, playoffStandings } = useMemo(() => {
     const stageStandings = new Map<number, { name: string; standings: Standings[] }>();
     const groupStandingsList = standings.filter((standing) =>
@@ -71,12 +105,13 @@ const TournamentStandingsPage = ({ tournamentId }: { tournamentId: number }) => 
       playoffStandings: playoff
     };
   }, [standings, t]);
+  const hasPageData = standingsQuery.data !== undefined && stagesQuery.data !== undefined;
   const presentation = getStandingsQueryPresentation({
-    data: standingsQuery.data,
+    data: hasPageData ? { standings: standingsQuery.data, stages: stagesQuery.data } : undefined,
     itemCount: standings.length,
-    isPending: standingsQuery.isPending,
-    isError: standingsQuery.isError,
-    isFetching: standingsQuery.isFetching
+    isPending: standingsQuery.isPending || stagesQuery.isPending,
+    isError: standingsQuery.isError || stagesQuery.isError,
+    isFetching: standingsQuery.isFetching || stagesQuery.isFetching
   });
 
   if (!tournament) {
@@ -89,7 +124,10 @@ const TournamentStandingsPage = ({ tournamentId }: { tournamentId: number }) => 
   }
   if (presentation.initialState === "error") {
     return (
-      <TournamentPageState state="initial-error" onRetry={() => void standingsQuery.refetch()} />
+      <TournamentPageState
+        state="initial-error"
+        onRetry={() => void Promise.all([standingsQuery.refetch(), stagesQuery.refetch()])}
+      />
     );
   }
   if (presentation.initialState === "skeleton" || presentation.contentState === null) {
@@ -206,7 +244,12 @@ const TournamentStandingsPage = ({ tournamentId }: { tournamentId: number }) => 
                   </div>
                 </div>
               </header>
-              <StandingsTable standings={playoffStandings} is_groups={false} crownTop={isEnded} />
+              <StandingsTable
+                standings={playoffStandings}
+                stages={stages}
+                is_groups={false}
+                crownTop={isEnded}
+              />
             </section>
           ) : null}
 
@@ -234,7 +277,7 @@ const TournamentStandingsPage = ({ tournamentId }: { tournamentId: number }) => 
                         </div>
                       </div>
                     </header>
-                    <StandingsTable standings={bucket.standings} is_groups />
+                    <StandingsTable standings={bucket.standings} stages={stages} is_groups />
                   </section>
                 );
               })}
@@ -249,8 +292,8 @@ const TournamentStandingsPage = ({ tournamentId }: { tournamentId: number }) => 
     return (
       <TournamentPageState
         state="refresh-error"
-        onRetry={() => void standingsQuery.refetch()}
-        isUpdating={standingsQuery.isFetching}
+        onRetry={() => void Promise.all([standingsQuery.refetch(), stagesQuery.refetch()])}
+        isUpdating={standingsQuery.isFetching || stagesQuery.isFetching}
       >
         {content}
       </TournamentPageState>

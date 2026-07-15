@@ -2,7 +2,7 @@ import React from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { Encounter } from "@/types/encounter.types";
-import { Standings } from "@/types/tournament.types";
+import { Stage, Standings } from "@/types/tournament.types";
 import { cn } from "@/lib/utils";
 import { sortStandingsMatches } from "@/lib/tournament-match-order";
 import { useTranslations } from "next-intl";
@@ -14,10 +14,23 @@ import styles from "@/app/(site)/tournaments/[id]/TournamentDetail.module.css";
 export interface StandingTableProps {
   standings: Standings[];
   is_groups: boolean;
+  stages?: Stage[];
   // Groups: tint the top-N rows and draw a dashed "top N advance" cut-line.
   advanceCount?: number;
   // Playoff/overall: mark rank 1 as the crowned winner.
   crownTop?: boolean;
+}
+
+export function getStandingsStagesQueryOptions(
+  tournamentId: number | undefined,
+  providedStages: Stage[] | undefined,
+  getStages: (id: number) => Promise<Stage[]> = (id) => tournamentService.getStages(id)
+) {
+  return {
+    queryKey: tournamentQueryKeys.stages(tournamentId ?? 0),
+    queryFn: () => (tournamentId == null ? Promise.resolve([]) : getStages(tournamentId)),
+    enabled: tournamentId != null && providedStages === undefined
+  };
 }
 
 type ResultKind = "w" | "l" | "t";
@@ -82,18 +95,15 @@ function TeamCell({ standing, showGroup }: { standing: Standings; showGroup: boo
 const StandingsTable = ({
   standings,
   is_groups,
+  stages: providedStages,
   advanceCount = 2,
   crownTop = false
 }: StandingTableProps) => {
   const t = useTranslations();
 
   const tournamentId = standings[0]?.tournament_id;
-  const stagesQuery = useQuery({
-    queryKey: tournamentQueryKeys.stages(tournamentId),
-    queryFn: () => tournamentService.getStages(tournamentId),
-    enabled: !!tournamentId
-  });
-  const stages = stagesQuery.data ?? [];
+  const stagesQuery = useQuery(getStandingsStagesQueryOptions(tournamentId, providedStages));
+  const stages = providedStages ?? stagesQuery.data ?? [];
 
   const stage = standings[0]?.stage;
   const settings = stage?.settings_json ?? {};
