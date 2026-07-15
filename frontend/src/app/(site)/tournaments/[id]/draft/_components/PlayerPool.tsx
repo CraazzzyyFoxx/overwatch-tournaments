@@ -205,7 +205,7 @@ export function PlayerPool({
           </Button>
         </div>
       ) : (
-        <div className="mt-4 grid gap-x-5 sm:grid-cols-2">
+        <div className="mt-4 grid gap-x-6 grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3">
           {visiblePlayers.map((player) => {
             const roles = playerRoles(player);
             const secondaryRoles = roles.filter((entry) => entry !== player.primary_role);
@@ -283,9 +283,9 @@ export function PlayerPool({
                       </span>
                     )}
                     {heroes.length > 0 && (
-                      <AvatarStack size={18} max={4} className="ml-1">
+                      <AvatarStack size={30} max={4} className="ml-1">
                         {heroes.map((hero) => (
-                          <Avatar key={hero.slug} className="h-[18px] w-[18px]" title={hero.slug}>
+                          <Avatar key={hero.slug} className="h-[30px] w-[30px]" title={hero.slug}>
                             <AvatarImage src={getHeroIconUrl(hero.slug, hero.imagePath)} alt={hero.slug} />
                           </Avatar>
                         ))}
