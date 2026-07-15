@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/config"
+	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/httplog"
 )
 
 // captureHandler is a minimal slog.Handler that records the records it receives
@@ -53,6 +54,27 @@ func TestFanoutDeliversToAllHandlers(t *testing.T) {
 	}
 	if a.records[0].Message != "hello" {
 		t.Fatalf("handler a message = %q, want %q", a.records[0].Message, "hello")
+	}
+}
+
+func TestDropAccessLogsFiltersAccessLogRecords(t *testing.T) {
+	sink := &captureHandler{minLevel: slog.LevelDebug}
+	logger := slog.New(dropAccessLogs(sink))
+
+	// An access-log record (carries AccessLogAttr) must be dropped.
+	logger.LogAttrs(context.Background(), slog.LevelError, "request completed",
+		slog.Bool(httplog.AccessLogAttr, true))
+	if got := sink.count(); got != 0 {
+		t.Fatalf("access log reached sink: got %d records, want 0", got)
+	}
+
+	// A genuine application error (no AccessLogAttr) must pass through.
+	logger.Error("boom")
+	if got := sink.count(); got != 1 {
+		t.Fatalf("application error dropped: got %d records, want 1", got)
+	}
+	if sink.records[0].Message != "boom" {
+		t.Fatalf("passed message = %q, want %q", sink.records[0].Message, "boom")
 	}
 }
 

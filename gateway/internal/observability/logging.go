@@ -17,7 +17,8 @@ import (
 // NewLogger builds the gateway logger: structured JSON tagged service=gateway,
 // written to stdout and — when LOG_FILE is set and writable — a rotating file
 // that Promtail tails into Loki. When Sentry is enabled records additionally fan
-// out to it (Warn/Error -> Sentry Logs, Error/Fatal -> Issues).
+// out to it (Warn/Error -> Sentry Logs, Error/Fatal -> Issues), except the
+// per-request access log, which is dropped before Sentry (see dropAccessLogs).
 func NewLogger(cfg *config.Config) *slog.Logger {
 	opts := &slog.HandlerOptions{
 		Level:       parseLevel(cfg.Log.Level),
@@ -25,7 +26,7 @@ func NewLogger(cfg *config.Config) *slog.Logger {
 	}
 	var handler slog.Handler = slog.NewJSONHandler(logWriter(cfg.Log.File), opts)
 	if cfg.Sentry.DSN != "" {
-		handler = newFanout(handler, newSentryHandler())
+		handler = newFanout(handler, dropAccessLogs(newSentryHandler()))
 	}
 	return slog.New(handler).With(slog.String("service", "gateway"))
 }

@@ -25,6 +25,16 @@ const (
 	// frontend see the same id.
 	RequestIDHeader     = "X-Request-ID"
 	CorrelationIDHeader = "X-Correlation-ID"
+
+	// AccessLogAttr marks the single per-request access-log record ("request
+	// completed"). It separates that operational line from application logs in
+	// Loki, and the observability Sentry bridge keys off it to keep access logs
+	// out of Sentry: as Issues they are pure noise (every edge 5xx, including
+	// internet vuln-scanner probes against the public IP, would open one), and
+	// as Logs they flood ingest at edge throughput. Genuine faults are captured
+	// elsewhere (panics via sentryhttp, explicit .Error() calls) and carry no
+	// such attr, so they still reach Sentry.
+	AccessLogAttr = "access_log"
 )
 
 type ctxKey struct{}
@@ -97,6 +107,9 @@ func Middleware(next http.Handler, base *slog.Logger, authn *auth.Authenticator)
 		orig.Pattern = r.Pattern
 
 		attrs := []slog.Attr{
+			// Marks this as the access log so the Sentry bridge skips it; see
+			// AccessLogAttr. Kept first so it is present on every emitted record.
+			slog.Bool(AccessLogAttr, true),
 			slog.String("method", r.Method),
 			slog.String("route", routeLabel(r.Pattern)),
 			slog.Int("status", rec.status),
