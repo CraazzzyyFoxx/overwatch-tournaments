@@ -1,7 +1,10 @@
 export const tournamentQueryKeys = {
   detail: (tournamentId: number) => ["tournament", tournamentId] as const,
   stages: (tournamentId: number) => ["tournament", tournamentId, "stages"] as const,
-  teams: (tournamentId: number) => ["teams", tournamentId] as const,
+  teams: (tournamentId: number, workspaceId?: number | null) =>
+    workspaceId == null
+      ? (["teams", tournamentId] as const)
+      : (["teams", tournamentId, workspaceId] as const),
   teamsCount: (tournamentId: number) => ["teams", tournamentId, "count"] as const,
   heroPlaytime: (tournamentId: number) =>
     ["hero-playtime", "tournament", tournamentId] as const,
@@ -9,6 +12,10 @@ export const tournamentQueryKeys = {
     workspaceId == null
       ? (["standings", tournamentId] as const)
       : (["standings", tournamentId, workspaceId] as const),
+  bracketStandings: (tournamentId: number, workspaceId?: number | null) =>
+    workspaceId == null
+      ? (["standings", tournamentId, "bracket"] as const)
+      : (["standings", tournamentId, "bracket", workspaceId] as const),
   encounters: (tournamentId: number, workspaceId?: number | null) =>
     workspaceId == null
       ? (["encounters", "tournament", tournamentId] as const)

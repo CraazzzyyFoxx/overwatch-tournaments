@@ -89,6 +89,21 @@ export default class tournamentService {
       }
     }).then((response) => response.json());
   }
+
+  static async getPublicOverview(id: number): Promise<Tournament> {
+    return apiFetch(`/api/v1/tournaments/${id}`, {
+      skipWorkspace: true,
+      query: {
+        entities: [
+          "stages",
+          "participants_count",
+          "registrations_count",
+          "teams_count",
+        ],
+      },
+    }).then((response) => response.json());
+  }
+
   static async getStandings(
     id: number,
     workspaceIdOrOptions?: number | null | GetStandingsOptions
