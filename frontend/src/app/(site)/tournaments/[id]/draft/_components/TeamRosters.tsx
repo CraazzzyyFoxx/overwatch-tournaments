@@ -33,7 +33,7 @@ export function TeamRosters({ teams, players, myTeamId = null, focusTeamOnly = f
           {focusTeamOnly ? t("myTeam") : t("teamRosters")}
         </h2>
       </div>
-      <div className="mt-4 grid gap-x-8 gap-y-6 md:grid-cols-2">
+      <div className="mt-4 grid gap-x-8 gap-y-6 md:grid-cols-2 xl:grid-cols-3">
         {visibleTeams.map((team) => {
           const roster = rosters.get(team.id) ?? [];
           return (
@@ -59,4 +59,3 @@ export function TeamRosters({ teams, players, myTeamId = null, focusTeamOnly = f
     </section>
   );
 }
-

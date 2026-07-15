@@ -132,7 +132,7 @@ export default function TournamentSectionNav({
         return (
           <Link
             key={item.tab}
-            href={`/tournaments/${tournamentId}/${item.tab}`}
+            href={item.tab === "draft" ? `/draft/${tournamentId}` : `/tournaments/${tournamentId}/${item.tab}`}
             className={cn("tab", isActive && "active")}
             aria-current={isActive ? "page" : undefined}
           >

@@ -1549,6 +1549,8 @@
   --aqt-tank: hsl(209 82% 65%);
   --aqt-damage: hsl(337 81% 66%);
   --aqt-support: hsl(150 57% 52%);
+  --aqt-live: var(--aqt-rose);
+  --aqt-warm: var(--aqt-amber);
   /* Achievement rarity accent (HSL triplet so `hsl(var(--rar) / a)` alpha tints
      work). Global fallback = "common" grey; the `.aqt-rar-*` classes override
      it per tier. Kept as a triplet, not a full color, on purpose. */

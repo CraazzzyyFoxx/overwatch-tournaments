@@ -15,10 +15,14 @@ interface SpectatorDraftWorkspaceProps {
 
 export function SpectatorDraftWorkspace({ board }: SpectatorDraftWorkspaceProps) {
   const t = useTranslations("draftRedesign");
+  const showCurrentPick =
+    board.current_pick != null ||
+    board.session.status === "live" ||
+    board.session.status === "paused";
   return (
     <div className="space-y-6">
-      <CurrentPick board={board} />
-      <p className="max-w-3xl text-sm leading-relaxed text-[color:var(--aqt-fg-muted)]">
+      {showCurrentPick ? <CurrentPick board={board} /> : null}
+      <p className="max-w-3xl border-l-2 border-[color:var(--aqt-teal)] pl-4 text-sm leading-relaxed text-[color:var(--aqt-fg-muted)]">
         {board.session.status === "completed" ? t("spectatorCompleted") : t("spectatorReadOnly")}
       </p>
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_320px]">
@@ -33,4 +37,3 @@ export function SpectatorDraftWorkspace({ board }: SpectatorDraftWorkspaceProps)
     </div>
   );
 }
-

@@ -2863,6 +2863,13 @@
   },
   "draftRedesign": {
     "coordinate": "Tournament {tournament} / Draft {session}",
+    "room": {
+      "back": "Back to tournament",
+      "backShort": "Back",
+      "coordinate": "Draft room / public",
+      "loadingName": "Loading tournament",
+      "publicBoard": "Public board"
+    },
     "mode": { "captain": "Captain workspace", "spectator": "Live board" },
     "draftAccent": "draft",
     "captainLede": "Build your roster from server-verified options. Every available role is checked against the remaining draft before you confirm.",

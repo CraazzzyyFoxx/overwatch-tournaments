@@ -111,11 +111,15 @@ export function DraftBoard({ tournament }: DraftBoardProps) {
   }
 
   const mode = gating.isCaptain ? "captain" : "spectator";
+  const showConnectionStatus =
+    board.session.status === "live" || board.session.status === "paused";
 
   return (
     <div className="mx-auto w-full max-w-[1400px] space-y-5 pb-[max(2rem,env(safe-area-inset-bottom))]">
       <DraftPageHero tournament={tournament} board={board} mode={mode} />
-      <DraftConnectionStatus state={connectionState} presence={presence} teams={board.teams} />
+      {showConnectionStatus ? (
+        <DraftConnectionStatus state={connectionState} presence={presence} teams={board.teams} />
+      ) : null}
       {gating.isCaptain ? (
         <CaptainDraftWorkspace
           board={board}

@@ -117,7 +117,7 @@ export function AdminControlRoom({ tournamentId, board }: AdminControlRoomProps)
                 </p>
               </div>
               <Button asChild variant="outline">
-                <Link href={`/tournaments/${tournamentId}/draft`} target="_blank">
+                <Link href={`/draft/${tournamentId}`} target="_blank">
                   {t("openBoard")}<ArrowUpRight className="ml-2 h-4 w-4" />
                 </Link>
               </Button>

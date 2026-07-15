@@ -71,7 +71,7 @@ export function DraftReadyStep({
           {t("startDraft")}
         </Button>
         <Button asChild size="lg" variant="outline">
-          <Link href={`/tournaments/${tournamentId}/draft`} target="_blank">
+          <Link href={`/draft/${tournamentId}`} target="_blank">
             {t("openLiveBoard")}
             <ArrowUpRight className="ml-2 h-4 w-4" />
           </Link>
@@ -92,4 +92,3 @@ function ReadyMetric({ label, value }: { label: string; value: string | number }
     </div>
   );
 }
-

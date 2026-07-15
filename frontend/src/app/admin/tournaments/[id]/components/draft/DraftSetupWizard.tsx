@@ -47,8 +47,10 @@ import { DraftPoolStep } from "./DraftPoolStep";
 import { DraftReadyStep } from "./DraftReadyStep";
 import { DraftReviewStep } from "./DraftReviewStep";
 import {
+  canNavigateToSetupStep,
   derivePoolReadiness,
   orderCaptainIds,
+  previousSetupStep,
   roundsForTeamSize,
   SETUP_STEPS,
   type DraftSetupStep,
@@ -260,7 +262,6 @@ export function DraftSetupWizard({ tournamentId, board }: DraftSetupWizardProps)
     captainsHaveAccounts &&
     preview?.feasibility.is_feasible === true;
   const currentIndex = SETUP_STEPS.indexOf(step);
-  const minimumIndex = session ? 1 : 0;
   const pending =
     createMutation.isPending || previewMutation.isPending || commitMutation.isPending || startMutation.isPending;
 
@@ -278,12 +279,10 @@ export function DraftSetupWizard({ tournamentId, board }: DraftSetupWizardProps)
         notify.warning(t("fixStepErrors"));
         return;
       }
-      try {
-        await ensureSession();
-        setStep("pool");
-      } catch (error) {
-        notify.apiError(error, { title: t("createFailed") });
-      }
+      // Keep the early setup steps reversible. The server session is only
+      // required when generating the seed preview, so creating it here would
+      // unnecessarily lock the configuration as soon as the admin continues.
+      setStep("pool");
       return;
     }
     if (step === "pool") {
@@ -317,9 +316,8 @@ export function DraftSetupWizard({ tournamentId, board }: DraftSetupWizardProps)
   };
 
   const back = () => {
-    const nextIndex = Math.max(minimumIndex, currentIndex - 1);
     if (step === "review") setPreview(null);
-    setStep(SETUP_STEPS[nextIndex]);
+    setStep(previousSetupStep(step));
   };
 
   const setCaptainsAndReset = (nextValue: DraftCaptainSetup) => {
@@ -335,7 +333,7 @@ export function DraftSetupWizard({ tournamentId, board }: DraftSetupWizardProps)
             const Icon = STEP_ICONS[index];
             const complete = index < currentIndex;
             const active = entry === step;
-            const reachable = index <= currentIndex && index >= minimumIndex && entry !== "ready";
+            const reachable = canNavigateToSetupStep(step, entry);
             return (
               <li key={entry} className="flex min-w-0 flex-1 items-center gap-2">
                 <button
@@ -447,7 +445,7 @@ export function DraftSetupWizard({ tournamentId, board }: DraftSetupWizardProps)
             <Button
               type="button"
               variant="ghost"
-              disabled={pending || currentIndex <= minimumIndex}
+              disabled={pending || step === "config"}
               onClick={back}
             >
               <ChevronLeft className="mr-2 h-4 w-4" />

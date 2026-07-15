@@ -1,0 +1,98 @@
+.room {
+  position: relative;
+  isolation: isolate;
+  min-height: 100svh;
+  overflow-x: hidden;
+  color: var(--aqt-fg);
+  background:
+    radial-gradient(circle at 78% -12%, color-mix(in srgb, var(--aqt-teal) 9%, transparent), transparent 34rem),
+    var(--aqt-bg);
+}
+
+.room::before {
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+  content: "";
+  opacity: 0.22;
+  background-image:
+    linear-gradient(var(--aqt-border) 1px, transparent 1px),
+    linear-gradient(90deg, var(--aqt-border) 1px, transparent 1px);
+  background-size: 64px 64px;
+  -webkit-mask-image: linear-gradient(to bottom, black, transparent 70%);
+  mask-image: linear-gradient(to bottom, black, transparent 70%);
+}
+
+.toolbar {
+  animation: toolbar-in 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.rail {
+  position: absolute;
+  inset-inline: 0;
+  bottom: -1px;
+  height: 1px;
+  overflow: hidden;
+  background: var(--aqt-border);
+}
+
+.rail::after {
+  position: absolute;
+  inset-block: 0;
+  left: -24%;
+  width: 24%;
+  content: "";
+  background: linear-gradient(90deg, transparent, var(--aqt-teal), transparent);
+  animation: signal-scan 4.8s ease-in-out infinite;
+}
+
+.stage {
+  animation: stage-in 650ms 80ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.backArrow {
+  transition: transform 180ms ease;
+}
+
+.backLink:hover .backArrow,
+.backLink:focus-visible .backArrow {
+  transform: translateX(-3px);
+}
+
+@keyframes toolbar-in {
+  from {
+    opacity: 0;
+    transform: translateY(-12px);
+  }
+}
+
+@keyframes stage-in {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+}
+
+@keyframes signal-scan {
+  0%,
+  16% {
+    transform: translateX(0);
+  }
+  70%,
+  100% {
+    transform: translateX(520%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toolbar,
+  .stage,
+  .rail::after {
+    animation: none;
+  }
+
+  .backArrow {
+    transition: none;
+  }
+}

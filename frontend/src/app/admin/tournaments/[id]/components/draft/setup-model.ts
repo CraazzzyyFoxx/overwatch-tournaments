@@ -11,6 +11,18 @@ export const SETUP_STEPS = [
 
 export type DraftSetupStep = (typeof SETUP_STEPS)[number];
 
+export function canNavigateToSetupStep(
+  current: DraftSetupStep,
+  target: DraftSetupStep
+): boolean {
+  return target !== "ready" && SETUP_STEPS.indexOf(target) <= SETUP_STEPS.indexOf(current);
+}
+
+export function previousSetupStep(current: DraftSetupStep): DraftSetupStep {
+  const currentIndex = SETUP_STEPS.indexOf(current);
+  return SETUP_STEPS[Math.max(0, currentIndex - 1)];
+}
+
 export interface DraftPoolCandidate {
   id: number;
   roles: DraftRole[];

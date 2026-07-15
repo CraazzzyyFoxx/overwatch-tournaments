@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildDraftSchedule,
+  canNavigateToSetupStep,
   derivePoolReadiness,
   moveCaptain,
   orderCaptainIds,
+  previousSetupStep,
   roundsForTeamSize,
   SETUP_STEPS,
   validateSetupStep
@@ -22,6 +24,14 @@ describe("draft setup model", () => {
     ]);
     expect(roundsForTeamSize(5)).toBe(4);
     expect(roundsForTeamSize(3)).toBe(2);
+  });
+
+  it("allows the setup flow to move back to configuration", () => {
+    expect(previousSetupStep("pool")).toBe("config");
+    expect(canNavigateToSetupStep("pool", "config")).toBe(true);
+    expect(canNavigateToSetupStep("ready", "config")).toBe(true);
+    expect(canNavigateToSetupStep("captains", "order")).toBe(false);
+    expect(canNavigateToSetupStep("ready", "ready")).toBe(false);
   });
 
   it("reports pool blockers without hiding missing ranks or accounts", () => {

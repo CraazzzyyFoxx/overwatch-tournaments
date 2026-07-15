@@ -91,7 +91,7 @@ export function DraftSessionDashboard({ tournamentId, canManage }: DraftSessionD
               </div>
               <div className="flex gap-2">
                 <Button asChild variant="outline">
-                  <Link href={`/tournaments/${tournamentId}/draft`} target="_blank">
+                  <Link href={`/draft/${tournamentId}`} target="_blank">
                     {t("openBoard")}
                   </Link>
                 </Button>
