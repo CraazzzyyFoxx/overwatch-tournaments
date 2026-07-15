@@ -29,7 +29,14 @@ export function SpectatorDraftWorkspace({ board, divisionGrid }: SpectatorDraftW
       </p>
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_320px]">
         <main className="min-w-0">
-          <TeamRosters teams={board.teams} players={board.players} divisionGrid={divisionGrid} />
+          <TeamRosters
+            teams={board.teams}
+            players={board.players}
+            picks={board.picks}
+            teamSize={board.session.team_size}
+            onClockTeamId={board.current_pick?.draft_team_id ?? null}
+            divisionGrid={divisionGrid}
+          />
         </main>
         <aside className="space-y-8 border-t border-[color:var(--aqt-border)] pt-6 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
           <DraftOrder

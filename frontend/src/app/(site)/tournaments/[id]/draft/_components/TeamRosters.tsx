@@ -7,32 +7,38 @@ import PlayerDivisionIcon from "@/components/PlayerDivisionIcon";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { HeroCoord } from "@/components/site/PageHero";
 import { TournamentTeamCardFrame } from "@/components/TournamentTeamCard";
-import { useDivisionGrid } from "@/hooks/useCurrentWorkspace";
 import { getDivisionLabel, resolveDivisionFromRank } from "@/lib/division-grid";
 import { getRoleIconName } from "@/lib/roles";
 import { cn } from "@/lib/utils";
-import type { DraftPlayer, DraftRole, DraftTeam } from "@/types/draft.types";
+import type { DraftPick, DraftPlayer, DraftRole, DraftTeam } from "@/types/draft.types";
 import type { DivisionGrid } from "@/types/workspace.types";
 
-import { buildRosterByTeam } from "../_lib/draft-workspace-model";
+import { buildRosterByTeam, rosterRankForPlayer, rosterRoleForPlayer } from "../_lib/draft-workspace-model";
+
+const ROSTER_ROLES: DraftRole[] = ["tank", "dps", "support"];
 
 interface TeamRostersProps {
   teams: DraftTeam[];
   players: DraftPlayer[];
+  picks: DraftPick[];
+  teamSize: number;
   myTeamId?: number | null;
   focusTeamOnly?: boolean;
-  /** Accepted but not yet consumed here — Task 11 replaces useDivisionGrid() with this. */
+  onClockTeamId?: number | null;
   divisionGrid: DivisionGrid;
 }
 
 export function TeamRosters({
   teams,
   players,
+  picks,
+  teamSize,
   myTeamId = null,
-  focusTeamOnly = false
+  focusTeamOnly = false,
+  onClockTeamId = null,
+  divisionGrid
 }: TeamRostersProps) {
   const t = useTranslations("draftRedesign");
-  const divisionGrid = useDivisionGrid();
   const rosters = buildRosterByTeam(players);
   const visibleTeams =
     focusTeamOnly && myTeamId != null
@@ -55,15 +61,62 @@ export function TeamRosters({
       >
         {visibleTeams.map((team) => {
           const roster = rosters.get(team.id) ?? [];
+          const onClock = team.id === onClockTeamId;
+          const rosterRoles = roster.map((player) => rosterRoleForPlayer(player, picks));
+          // ponytail: role-target = ceil(team_size/3) default; upgrade to real targets if the session exposes them
+          const roleTarget = Math.ceil(teamSize / 3);
+          const rankValues = roster
+            .map((player) => player.rank_value)
+            .filter((value): value is number => value != null);
+          const avgRank =
+            rankValues.length > 0
+              ? rankValues.reduce((sum, value) => sum + value, 0) / rankValues.length
+              : null;
+          const avgDivision = avgRank == null ? null : resolveDivisionFromRank(divisionGrid, avgRank);
+          const openSlots = Math.max(0, teamSize - roster.length);
+
           return (
             <TournamentTeamCardFrame
               key={team.id}
               name={team.name}
               positionTag={<span className="placement def">#{team.draft_position}</span>}
-              className="min-w-0"
+              className={cn(
+                "min-w-0",
+                onClock && "ring-2 ring-[color:var(--aqt-teal)] ring-offset-2 ring-offset-[color:var(--aqt-bg)]"
+              )}
               style={team.id === myTeamId ? { borderColor: "var(--aqt-teal)" } : undefined}
+              metricLabel={avgDivision != null ? t("teamAverage") : undefined}
+              metricValue={
+                avgDivision != null ? (
+                  <span title={`${getDivisionLabel(divisionGrid, avgDivision)} · ${avgRank!.toFixed(0)} SR`}>
+                    <PlayerDivisionIcon
+                      division={avgDivision}
+                      width={24}
+                      height={24}
+                      className="h-6 w-6 object-contain"
+                      tournamentGrid={divisionGrid}
+                    />
+                  </span>
+                ) : undefined
+              }
             >
-              {roster.length > 0 ? (
+              {onClock && (
+                <p className="px-4 pt-2 text-xs font-semibold uppercase tracking-wide text-[color:var(--aqt-teal)]">
+                  {t("onTheClock")}
+                </p>
+              )}
+              <div className="flex flex-wrap gap-3 px-4 pt-2 text-xs text-[color:var(--aqt-fg-muted)]">
+                {ROSTER_ROLES.map((role) => {
+                  const filled = rosterRoles.filter((r) => r === role).length;
+                  return (
+                    <span key={role} className="inline-flex items-center gap-1">
+                      <PlayerRoleIcon role={getRoleIconName(role)} size={14} />
+                      {filled}/{roleTarget}
+                    </span>
+                  );
+                })}
+              </div>
+              {roster.length > 0 || openSlots > 0 ? (
                 <div className="roster-scroll">
                   <table className="roster">
                     <thead>
@@ -79,9 +132,9 @@ export function TeamRosters({
                     </thead>
                     <tbody>
                       {roster.map((player) => {
-                        const division =
-                          player.division_number ??
-                          resolveDivisionFromRank(divisionGrid, player.rank_value);
+                        const role = rosterRoleForPlayer(player, picks);
+                        const rank = rosterRankForPlayer(player, role);
+                        const division = player.division_number ?? resolveDivisionFromRank(divisionGrid, rank);
                         const divisionLabel =
                           division == null ? null : getDivisionLabel(divisionGrid, division);
                         return (
@@ -89,15 +142,12 @@ export function TeamRosters({
                             <td className="c">
                               <span
                                 className="inline-flex h-8 w-8 items-center justify-center"
-                                title={t(`roles.${player.primary_role}`)}
+                                title={t(`roles.${role}`)}
                               >
                                 {player.is_captain ? (
                                   <Crown className="h-4 w-4 text-[color:var(--aqt-warm)]" />
                                 ) : (
-                                  <PlayerRoleIcon
-                                    role={getRoleIconName(player.primary_role as DraftRole)}
-                                    size={16}
-                                  />
+                                  <PlayerRoleIcon role={getRoleIconName(role)} size={16} />
                                 )}
                               </span>
                             </td>
@@ -110,10 +160,7 @@ export function TeamRosters({
                               {division != null ? (
                                 <span
                                   className="inline-flex rounded-md px-1 py-0.5"
-                                  title={[
-                                    divisionLabel,
-                                    player.rank_value != null ? `${player.rank_value} SR` : null
-                                  ]
+                                  title={[divisionLabel, rank != null ? `${rank} SR` : null]
                                     .filter(Boolean)
                                     .join(" · ")}
                                 >
@@ -122,6 +169,7 @@ export function TeamRosters({
                                     width={32}
                                     height={32}
                                     className="h-8 w-8 object-contain drop-shadow-[0_3px_8px_rgba(0,0,0,0.35)]"
+                                    tournamentGrid={divisionGrid}
                                   />
                                 </span>
                               ) : (
@@ -131,6 +179,21 @@ export function TeamRosters({
                           </tr>
                         );
                       })}
+                      {Array.from({ length: openSlots }, (_, index) => (
+                        <tr key={`open-${index}`} className="opacity-50">
+                          <td className="c">
+                            <span className="inline-flex h-8 w-8 items-center justify-center">—</span>
+                          </td>
+                          <td>
+                            <span className="block max-w-[16rem] truncate text-[color:var(--aqt-fg-faint)]">
+                              {t("openSlot")} {roster.length + index + 1}
+                            </span>
+                          </td>
+                          <td className="c">
+                            <span className="text-[color:var(--aqt-fg-faint)]">—</span>
+                          </td>
+                        </tr>
+                      ))}
                     </tbody>
                   </table>
                 </div>

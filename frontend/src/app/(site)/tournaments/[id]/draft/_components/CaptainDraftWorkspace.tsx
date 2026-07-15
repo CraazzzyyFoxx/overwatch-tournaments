@@ -152,8 +152,11 @@ export function CaptainDraftWorkspace({
     <TeamRosters
       teams={board.teams}
       players={board.players}
+      picks={board.picks}
+      teamSize={board.session.team_size}
       myTeamId={gating.myTeamId}
       focusTeamOnly
+      onClockTeamId={board.current_pick?.draft_team_id ?? null}
       divisionGrid={divisionGrid}
     />
   );
