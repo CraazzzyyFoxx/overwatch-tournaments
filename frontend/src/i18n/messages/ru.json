@@ -2903,6 +2903,7 @@
     "teams": "Команды",
     "progress": "Прогресс",
     "onClock": "Сейчас выбирает",
+    "onClockLabel": "Ходит сейчас",
     "connection": { "idle": "Соединение не запущено", "connecting": "Подключение", "connected": "Онлайн", "reconnecting": "Переподключение" },
     "captainsOnline": "Капитаны онлайн: {online}/{total}",
     "anonymousViewers": "Зрители: {count}",

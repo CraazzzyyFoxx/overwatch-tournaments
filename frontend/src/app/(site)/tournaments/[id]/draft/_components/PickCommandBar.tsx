@@ -16,9 +16,12 @@ import { Button } from "@/components/ui/button";
 import PlayerDivisionIcon from "@/components/PlayerDivisionIcon";
 import { resolveDivisionFromRank } from "@/lib/division-grid";
 import { cn } from "@/lib/utils";
-import type { DraftPlayer, DraftRole } from "@/types/draft.types";
+import type { DraftBoard, DraftPlayer, DraftRole } from "@/types/draft.types";
 import type { RealtimeConnectionState } from "@/types/realtime.types";
 import type { DivisionGrid } from "@/types/workspace.types";
+
+import { DraftClockRing } from "./DraftClockRing";
+import { resolveDraftAccent } from "../_lib/draft-visual";
 
 interface PickCommandBarProps {
   player: DraftPlayer | null;
@@ -30,6 +33,9 @@ interface PickCommandBarProps {
   announcement: string;
   onConfirm: () => void;
   divisionGrid: DivisionGrid;
+  board: DraftBoard;
+  isMyPick: boolean;
+  myTeamId: number | null;
 }
 
 export function PickCommandBar({
@@ -41,7 +47,9 @@ export function PickCommandBar({
   connectionState,
   announcement,
   onConfirm,
-  divisionGrid
+  divisionGrid,
+  board,
+  isMyPick
 }: PickCommandBarProps) {
   const t = useTranslations("draftRedesign");
   const [reviewOpen, setReviewOpen] = useState(false);
@@ -50,6 +58,9 @@ export function PickCommandBar({
   const selection = player && role ? `${player.battle_tag ?? `#${player.id}`} · ${t(`roles.${role}`)}` : t("noSelection");
   const roleRank = player && role ? player.role_ranks[role] ?? player.rank_value ?? null : null;
   const roleDivision = roleRank != null ? resolveDivisionFromRank(divisionGrid, roleRank) : null;
+  const accent = resolveDraftAccent(board);
+  const current = board.current_pick;
+  const onClockTeamName = board.teams.find((tm) => tm.id === current?.draft_team_id)?.name ?? "—";
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -79,6 +90,11 @@ export function PickCommandBar({
         aria-label={t("pickCommand")}
       >
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <DraftClockRing expiresAt={current?.clock_expires_at ?? null} paused={board.session.status === "paused"} totalSeconds={board.session.pick_time_seconds} accent={accent} />
+          <div className="shrink-0 border-r border-[color:var(--aqt-border-2)] pr-4">
+            <p className="font-mono text-[10px] uppercase tracking-[0.15em] text-[color:var(--aqt-teal)]">{isMyPick ? t("yourTurn") : t("onClockLabel")}</p>
+            <p className="text-sm font-semibold">{onClockTeamName} <span className="font-normal text-[color:var(--aqt-fg-muted)]">· {t("pickMeta", { pick: current?.overall_no ?? 0, total: board.picks.length })}</span></p>
+          </div>
           <div className="min-w-0 flex-1">
             <p className="font-mono text-[11px] uppercase tracking-[0.12em] text-[color:var(--aqt-fg-faint)]">{t("selectionFor", { team: teamName })}</p>
             <p className="mt-1 flex items-center gap-2 truncate text-sm font-medium">

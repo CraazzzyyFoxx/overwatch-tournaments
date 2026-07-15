@@ -266,6 +266,9 @@ export function CaptainDraftWorkspace({
         announcement={announcement}
         onConfirm={confirm}
         divisionGrid={divisionGrid}
+        board={board}
+        isMyPick={gating.isMyPick}
+        myTeamId={gating.myTeamId}
       />
     </div>
   );

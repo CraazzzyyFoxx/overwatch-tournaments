@@ -2903,6 +2903,7 @@
     "teams": "Teams",
     "progress": "Progress",
     "onClock": "On the clock",
+    "onClockLabel": "On the clock",
     "connection": { "idle": "Realtime idle", "connecting": "Connecting", "connected": "Live connection", "reconnecting": "Reconnecting" },
     "captainsOnline": "Captains online: {online}/{total}",
     "anonymousViewers": "Viewers: {count}",
