@@ -2963,6 +2963,7 @@
     "optionReason": { "role_filled": "This roster slot is already filled.", "role_shortage": "Choosing this option would leave another required role impossible to fill." },
     "shortlist": "Shortlist",
     "shortlistEmpty": "Save players here while you compare options. This list is private to this browser.",
+    "howItWorks": "How it works?",
     "pickCommand": "Pick command",
     "selectionFor": "Selection for {team}",
     "noSelection": "Select a player and an available role to review the pick.",

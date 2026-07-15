@@ -1,9 +1,10 @@
 "use client";
 
-import { Bookmark, X } from "lucide-react";
+import { Bookmark, Flag, HelpCircle, X } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import type { DraftPlayer } from "@/types/draft.types";
 
 interface CaptainShortlistProps {
@@ -19,17 +20,33 @@ export function CaptainShortlist({ players, onSelect, onRemove, variant = "panel
   if (variant === "chips") {
     return (
       <div className="flex flex-wrap items-center gap-2" role="group" aria-label={t("shortlist")}>
-        <span className="font-mono text-[10px] uppercase tracking-[0.13em] text-[color:var(--aqt-fg-muted)]">★ {t("shortlist")}</span>
-        {players.length === 0 ? (
-          <span className="text-xs text-[color:var(--aqt-fg-muted)]">{t("shortlistEmpty")}</span>
-        ) : (
+        <span className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.13em] text-[color:var(--aqt-fg-muted)]">
+          <Flag className="h-3 w-3 text-[color:var(--aqt-teal)]" aria-hidden />
+          {t("shortlist")}
+          <TooltipProvider delayDuration={200}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  className="grid h-4 w-4 place-items-center rounded-full text-[color:var(--aqt-fg-faint)] outline-none transition-colors hover:text-[color:var(--aqt-teal)] focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)]"
+                  aria-label={t("howItWorks")}
+                >
+                  <HelpCircle className="h-3.5 w-3.5" aria-hidden />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="top" className="max-w-[16rem] font-sans text-xs normal-case tracking-normal">
+                {t("shortlistEmpty")}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </span>
+        {players.length > 0 &&
           players.map((player) => (
             <div key={player.id} className="inline-flex items-center gap-1.5 rounded-lg border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-card)] py-1 pl-2.5 pr-1 text-xs font-semibold transition-colors hover:border-[color:var(--aqt-teal)]">
               <button type="button" className="min-w-0 truncate rounded outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)]" onClick={() => onSelect(player)}>{player.battle_tag ?? `#${player.id}`}</button>
               <button type="button" className="grid h-5 w-5 shrink-0 place-items-center rounded text-[color:var(--aqt-fg-muted)] outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)]" onClick={() => onRemove(player.id)} aria-label={t("removeShortlist")}>×</button>
             </div>
-          ))
-        )}
+          ))}
       </div>
     );
   }
