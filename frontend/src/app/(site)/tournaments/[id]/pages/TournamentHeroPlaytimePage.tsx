@@ -27,6 +27,12 @@ const ROLE_ORDER: RoleKey[] = ["tank", "dps", "support"];
 export const getHeroesQueryPresentation = (state: PublicPageQueryState) =>
   getPublicPageQueryPresentation(state);
 
+export function getHeroPlaytimeMetric(playtime: number) {
+  const sharePercent = Number.isFinite(playtime) ? Math.min(100, Math.max(0, playtime * 100)) : 0;
+
+  return { sharePercent, barWidthPercent: sharePercent };
+}
+
 function heroRole(playtime: HeroPlaytime): RoleKey {
   const raw = (playtime.hero.type ?? playtime.hero.role ?? "").toLowerCase();
   if (raw.startsWith("tank")) return "tank";
@@ -60,7 +66,6 @@ const TournamentHeroPlaytimePage = ({ tournamentId }: { tournamentId: number }) 
     for (const hero of heroes) counts[heroRole(hero)] += 1;
     return counts;
   }, [heroes]);
-  const maxPlaytime = heroes.length ? Math.max(0, heroes[0].playtime) : 0;
   const visible =
     roleFilter === "all" ? heroes : heroes.filter((hero) => heroRole(hero) === roleFilter);
   const presentation = getHeroesQueryPresentation({
@@ -150,9 +155,7 @@ const TournamentHeroPlaytimePage = ({ tournamentId }: { tournamentId: number }) 
           <div className="hero-bars">
             {visible.map((hero, index) => {
               const role = heroRole(hero);
-              const sharePct = Math.max(0, hero.playtime * 100);
-              const barWidth =
-                maxPlaytime > 0 ? Math.min(100, (hero.playtime / maxPlaytime) * 100) : 0;
+              const { sharePercent, barWidthPercent } = getHeroPlaytimeMetric(hero.playtime);
               return (
                 <div className="hero-row" key={hero.hero.id} data-rank={index + 1}>
                   <div className="hero-name">
@@ -177,27 +180,27 @@ const TournamentHeroPlaytimePage = ({ tournamentId }: { tournamentId: number }) 
                   <div
                     className="hero-bar"
                     role="progressbar"
-                    aria-label={`${hero.hero.name}: ${sharePct.toFixed(1)} ${t("common.playtimeLabel")}`}
+                    aria-label={`${hero.hero.name}: ${sharePercent.toFixed(1)} ${t("common.playtimeLabel")}`}
                     aria-valuemin={0}
                     aria-valuemax={100}
-                    aria-valuenow={Number(Math.min(100, sharePct).toFixed(1))}
-                    aria-valuetext={`${sharePct.toFixed(1)} ${t("common.playtimeLabel")}`}
+                    aria-valuenow={sharePercent}
+                    aria-valuetext={`${sharePercent.toFixed(1)} ${t("common.playtimeLabel")}`}
                   >
                     <div
                       className={cn(
                         "fill",
                         styles.heroBarFill,
                         !hero.hero.color && role,
-                        barWidth === 0 && styles.zeroHeroBar
+                        barWidthPercent === 0 && styles.zeroHeroBar
                       )}
                       style={{
-                        width: `${barWidth}%`,
+                        width: `${barWidthPercent}%`,
                         backgroundColor: hero.hero.color || undefined
                       }}
                     />
                   </div>
                   <div className="hero-stats">
-                    <span className="val">{sharePct.toFixed(1)}</span>
+                    <span className="val">{sharePercent.toFixed(1)}</span>
                     <span className="pct">{t("common.playtimeLabel")}</span>
                   </div>
                 </div>

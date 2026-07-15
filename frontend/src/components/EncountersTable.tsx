@@ -25,6 +25,24 @@ const PER_PAGE = 15;
 export const getEncountersQueryPresentation = (state: PublicPageQueryState) =>
   getPublicPageQueryPresentation(state);
 
+type EncounterRowKeyEvent = {
+  key: string;
+  target: unknown;
+  currentTarget: unknown;
+  preventDefault: () => void;
+};
+
+export function activateEncounterRowFromKeyboard(
+  event: EncounterRowKeyEvent,
+  navigate: () => void
+): boolean {
+  if (event.target !== event.currentTarget || !["Enter", " "].includes(event.key)) return false;
+
+  event.preventDefault();
+  navigate();
+  return true;
+}
+
 const getStageLabel = (encounter: Encounter) =>
   encounter.stage_item?.name ?? encounter.stage?.name ?? "Unassigned";
 
@@ -253,7 +271,7 @@ const EncountersTable = ({
                     tabIndex={0}
                     onClick={openEncounter}
                     onKeyDown={(event) => {
-                      if (event.key === "Enter") openEncounter();
+                      activateEncounterRowFromKeyboard(event, openEncounter);
                     }}
                   >
                     <td>

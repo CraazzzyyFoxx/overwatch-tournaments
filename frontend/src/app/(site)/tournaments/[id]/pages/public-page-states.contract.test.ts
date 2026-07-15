@@ -22,10 +22,23 @@ type GetQueryPresentation = (input: {
 const encountersModule =
   (await import("../../../../../components/EncountersTable")) as typeof import("../../../../../components/EncountersTable") & {
     getEncountersQueryPresentation?: GetQueryPresentation;
+    activateEncounterRowFromKeyboard?: (
+      event: {
+        key: string;
+        target: object;
+        currentTarget: object;
+        preventDefault: () => void;
+      },
+      navigate: () => void
+    ) => boolean;
   };
 const heroesModule =
   (await import("./TournamentHeroPlaytimePage")) as typeof import("./TournamentHeroPlaytimePage") & {
     getHeroesQueryPresentation?: GetQueryPresentation;
+    getHeroPlaytimeMetric?: (playtime: number) => {
+      sharePercent: number;
+      barWidthPercent: number;
+    };
   };
 const standingsModule =
   (await import("./TournamentStandingsPage")) as typeof import("./TournamentStandingsPage") & {
@@ -40,6 +53,11 @@ const standingsModule =
       standings: { enabled: boolean; queryFn: () => Promise<Standings[]> };
       stages: { enabled: boolean; queryFn: () => Promise<Stage[]> };
     };
+    getEffectiveStandingsView?: (
+      selected: "playoff" | "groups" | "combined",
+      hasPlayoff: boolean,
+      hasGroups: boolean
+    ) => "playoff" | "groups" | "combined" | null;
   };
 const standingsTableModule =
   (await import("../../../../../components/StandingsTable")) as typeof import("../../../../../components/StandingsTable") & {
@@ -153,6 +171,97 @@ describe("public tournament page query states", () => {
   }
 });
 
+describe("public tournament data interactions", () => {
+  it("activates only the focused encounter row for Enter and Space", () => {
+    for (const key of ["Enter", " "]) {
+      const row = {};
+      let navigations = 0;
+      let prevented = 0;
+      const activated = encountersModule.activateEncounterRowFromKeyboard?.(
+        {
+          key,
+          target: row,
+          currentTarget: row,
+          preventDefault: () => {
+            prevented += 1;
+          }
+        },
+        () => {
+          navigations += 1;
+        }
+      );
+
+      expect(activated).toBe(true);
+      expect(navigations).toBe(1);
+      expect(prevented).toBe(1);
+    }
+  });
+
+  it("leaves nested log links and buttons in control of their keyboard action", () => {
+    for (const key of ["Enter", " "]) {
+      const row = {};
+      const nestedControl = {};
+      let navigations = 0;
+      let prevented = 0;
+      let nestedActions = 0;
+      const activated = encountersModule.activateEncounterRowFromKeyboard?.(
+        {
+          key,
+          target: nestedControl,
+          currentTarget: row,
+          preventDefault: () => {
+            prevented += 1;
+          }
+        },
+        () => {
+          navigations += 1;
+        }
+      );
+      nestedActions += 1;
+
+      expect(activated).toBe(false);
+      expect(navigations).toBe(0);
+      expect(prevented).toBe(0);
+      expect(nestedActions).toBe(1);
+    }
+
+    const table = readFileSync(join(componentsRoot, "EncountersTable.tsx"), "utf8");
+    expect(table).toContain("onClick={openEncounter}");
+    expect(table).toContain("event.stopPropagation()");
+  });
+
+  it("falls back to the only available standings stage without losing a valid selection", () => {
+    const effective = standingsModule.getEffectiveStandingsView;
+
+    expect(effective?.("groups", true, false)).toBe("playoff");
+    expect(effective?.("playoff", false, true)).toBe("groups");
+    expect(effective?.("groups", true, true)).toBe("groups");
+    expect(effective?.("playoff", true, true)).toBe("playoff");
+    expect(effective?.("combined", true, true)).toBe("combined");
+    expect(effective?.("combined", false, false)).toBeNull();
+  });
+
+  it("uses one finite absolute playtime scale for the bar and accessibility value", () => {
+    const metric = heroesModule.getHeroPlaytimeMetric;
+    const cases: Array<[number, number]> = [
+      [0.25, 25],
+      [0.125, 12.5],
+      [0, 0],
+      [-0.5, 0],
+      [Number.NaN, 0],
+      [Number.POSITIVE_INFINITY, 0],
+      [1.5, 100],
+      [101, 100]
+    ];
+
+    for (const [playtime, expected] of cases) {
+      const result = metric?.(playtime);
+      expect(result).toEqual({ sharePercent: expected, barWidthPercent: expected });
+      expect(Number.isFinite(result?.barWidthPercent)).toBe(true);
+    }
+  });
+});
+
 describe("public tournament data page contracts", () => {
   it("starts rich standings and required full-stage metadata together", async () => {
     let standingsStarted = 0;
@@ -242,7 +351,7 @@ describe("public tournament data page contracts", () => {
     expect(source).toContain('role="progressbar"');
     expect(source).toContain("aria-valuenow");
     expect(source).toContain("data-rank");
-    expect(source).toContain("maxPlaytime > 0");
+    expect(source).toContain("getHeroPlaytimeMetric");
   });
 
   it("keeps rich standings data and a contained, sticky semantic table", () => {

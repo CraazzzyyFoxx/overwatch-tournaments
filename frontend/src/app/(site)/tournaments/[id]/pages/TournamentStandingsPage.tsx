@@ -23,6 +23,17 @@ import {
 
 type StageView = "playoff" | "groups" | "combined";
 
+export function getEffectiveStandingsView(
+  selected: StageView,
+  hasPlayoff: boolean,
+  hasGroups: boolean
+): StageView | null {
+  if (!hasPlayoff && !hasGroups) return null;
+  if (hasPlayoff && !hasGroups) return "playoff";
+  if (!hasPlayoff && hasGroups) return "groups";
+  return selected;
+}
+
 export const getStandingsQueryPresentation = (state: PublicPageQueryState) =>
   getPublicPageQueryPresentation(state);
 
@@ -139,8 +150,9 @@ const TournamentStandingsPage = ({ tournamentId }: { tournamentId: number }) => 
   const hasGroups = groups.length > 0;
   const groupTeams = groups.reduce((sum, [, bucket]) => sum + bucket.standings.length, 0);
   const showTabs = hasPlayoff && hasGroups;
-  const showPlayoff = hasPlayoff && (view === "playoff" || view === "combined");
-  const showGroups = hasGroups && (view === "groups" || view === "combined");
+  const effectiveView = getEffectiveStandingsView(view, hasPlayoff, hasGroups);
+  const showPlayoff = hasPlayoff && (effectiveView === "playoff" || effectiveView === "combined");
+  const showGroups = hasGroups && (effectiveView === "groups" || effectiveView === "combined");
   const showStageEmpty = presentation.contentState === "content" && !showPlayoff && !showGroups;
 
   const content = (
@@ -176,8 +188,8 @@ const TournamentStandingsPage = ({ tournamentId }: { tournamentId: number }) => 
           <div className="stage-tabs">
             <button
               type="button"
-              className={cn("stage-tab", view === "playoff" && "active")}
-              aria-pressed={view === "playoff"}
+              className={cn("stage-tab", effectiveView === "playoff" && "active")}
+              aria-pressed={effectiveView === "playoff"}
               onClick={() => setView("playoff")}
             >
               <LayoutGrid className="h-3 w-3" aria-hidden="true" />
@@ -185,8 +197,8 @@ const TournamentStandingsPage = ({ tournamentId }: { tournamentId: number }) => 
             </button>
             <button
               type="button"
-              className={cn("stage-tab", view === "groups" && "active")}
-              aria-pressed={view === "groups"}
+              className={cn("stage-tab", effectiveView === "groups" && "active")}
+              aria-pressed={effectiveView === "groups"}
               onClick={() => setView("groups")}
             >
               <Circle className="h-3 w-3" aria-hidden="true" />
@@ -194,8 +206,8 @@ const TournamentStandingsPage = ({ tournamentId }: { tournamentId: number }) => 
             </button>
             <button
               type="button"
-              className={cn("stage-tab", view === "combined" && "active")}
-              aria-pressed={view === "combined"}
+              className={cn("stage-tab", effectiveView === "combined" && "active")}
+              aria-pressed={effectiveView === "combined"}
               onClick={() => setView("combined")}
             >
               <BarChart3 className="h-3 w-3" aria-hidden="true" />
