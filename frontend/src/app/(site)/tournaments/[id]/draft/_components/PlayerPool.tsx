@@ -27,7 +27,7 @@ import {
   SelectValue
 } from "@/components/ui/select";
 import { getDivisionLabel, resolveDivisionFromRank } from "@/lib/division-grid";
-import { getRoleIconName } from "@/lib/roles";
+import { getRoleIconName, ROLE_ACCENT } from "@/lib/roles";
 import { cn } from "@/lib/utils";
 import type { DraftPickOptionsResponse, DraftPlayer, DraftRole } from "@/types/draft.types";
 import type { DivisionGrid } from "@/types/workspace.types";
@@ -35,12 +35,6 @@ import { formatSubRoleLabel, getHeroIconUrl, getPlayerSlug } from "@/utils/playe
 
 import type { DraftPoolRoleFilter, DraftPoolSort } from "../_lib/draft-workspace-model";
 import { allPlayerHeroes, playerRoles, roleTopHeroes } from "../_lib/draft-workspace-model";
-
-const ROLE_ACCENT: Record<DraftRole, string> = {
-  tank: "var(--aqt-tank)",
-  dps: "var(--aqt-damage)",
-  support: "var(--aqt-support)"
-};
 
 interface PlayerPoolProps {
   players: DraftPlayer[];

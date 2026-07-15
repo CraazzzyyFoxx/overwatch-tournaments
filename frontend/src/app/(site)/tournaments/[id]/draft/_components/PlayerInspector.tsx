@@ -9,7 +9,7 @@ import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { Avatar, AvatarImage, AvatarStack } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { getDivisionLabel, resolveDivisionFromRank } from "@/lib/division-grid";
-import { getRoleIconName } from "@/lib/roles";
+import { getRoleIconName, ROLE_ACCENT } from "@/lib/roles";
 import { cn } from "@/lib/utils";
 import type {
   DraftPickOption,
@@ -21,12 +21,6 @@ import type { DivisionGrid } from "@/types/workspace.types";
 import { formatSubRoleLabel, getHeroIconUrl, getPlayerSlug } from "@/utils/player";
 
 import { optionForSelection, playerRoles, roleTopHeroes } from "../_lib/draft-workspace-model";
-
-const ROLE_ACCENT: Record<DraftRole, string> = {
-  tank: "var(--aqt-tank)",
-  dps: "var(--aqt-damage)",
-  support: "var(--aqt-support)"
-};
 
 const BADGE_CLASS =
   "rounded border border-[color:var(--aqt-border-2)] px-1 text-[10px] uppercase tracking-wide text-[color:var(--aqt-fg-muted)]";
@@ -141,7 +135,7 @@ export function PlayerInspector({
                 <span className="flex items-center gap-2">
                   <PlayerRoleIcon role={getRoleIconName(entry)} size={16} color={ROLE_ACCENT[entry]} />
                   <span className="flex-1 truncate">{t(`roles.${entry}`)}</span>
-                  {blocked ? <Ban className="h-3.5 w-3.5 shrink-0" /> : safetyRequired ? <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-[color:var(--aqt-support)]" /> : null}
+                  {blocked ? <Ban className="h-3.5 w-3.5 shrink-0" aria-label={t("unsafeOption")} /> : safetyRequired ? <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-[color:var(--aqt-support)]" aria-label={t("safeOption")} /> : null}
                 </span>
                 <span className="flex items-center gap-2 pl-6">
                   <span className="flex items-center gap-1 font-mono text-xs text-[color:var(--aqt-fg-muted)]">

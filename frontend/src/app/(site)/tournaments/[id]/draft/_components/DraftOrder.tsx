@@ -6,18 +6,12 @@ import { useTranslations } from "next-intl";
 import PlayerDivisionIcon from "@/components/PlayerDivisionIcon";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { resolveDivisionFromRank } from "@/lib/division-grid";
-import { getRoleIconName } from "@/lib/roles";
+import { getRoleIconName, ROLE_ACCENT } from "@/lib/roles";
 import { cn } from "@/lib/utils";
-import type { DraftPick, DraftPlayer, DraftRole, DraftTeam } from "@/types/draft.types";
+import type { DraftPick, DraftPlayer, DraftTeam } from "@/types/draft.types";
 import type { DivisionGrid } from "@/types/workspace.types";
 
 import { groupPicksByRound } from "../_lib/draft-workspace-model";
-
-const ROLE_ACCENT: Record<DraftRole, string> = {
-  tank: "var(--aqt-tank)",
-  dps: "var(--aqt-damage)",
-  support: "var(--aqt-support)"
-};
 
 interface DraftOrderProps {
   picks: DraftPick[];
