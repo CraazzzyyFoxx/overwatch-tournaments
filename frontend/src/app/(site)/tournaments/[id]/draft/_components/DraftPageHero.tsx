@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 
-import { Eye, Pause, Radio, ShieldAlert } from "lucide-react";
+import { ArrowLeft, Eye, Pause, Radio, ShieldAlert } from "lucide-react";
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 
@@ -64,7 +64,14 @@ export function DraftPageHero({
       <div className="flex flex-col gap-2.5 px-7 py-3.5">
         {/* Top row: breadcrumb + presence */}
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-          <div className="flex flex-wrap items-center gap-2 font-mono text-[11px] tracking-[0.05em] text-[color:var(--aqt-fg-faint)]">
+          <Link
+            href={`/tournaments/${tournament.id}`}
+            aria-label={t("room.back")}
+            className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[color:var(--aqt-fg-muted)] outline-none transition-colors hover:bg-[color:var(--aqt-card-2)] hover:text-[color:var(--aqt-fg)] focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)]"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </Link>
+          <div className="flex flex-wrap items-center gap-2 font-mono text-xs tracking-[0.05em] text-[color:var(--aqt-fg-faint)]">
             <Link href="/tournaments" className="transition-colors hover:text-[color:var(--aqt-teal)]">
               {tc("tournaments")}
             </Link>
@@ -141,13 +148,13 @@ export function DraftPageHero({
         {/* Main row: title + meta on the left, compact stats on the right */}
         <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
           <div className="flex min-w-0 flex-wrap items-center gap-x-3.5 gap-y-2">
-            <h1 className="aqt-hero-title min-w-0 font-onest text-[clamp(1.3rem,2.1vw,1.75rem)] font-semibold leading-[1.05] tracking-[-0.02em]">
+            <h1 className="aqt-hero-title min-w-0 font-onest text-[clamp(1.5rem,2.4vw,2.05rem)] font-semibold leading-[1.05] tracking-[-0.02em]">
               {tournament.name}
             </h1>
             <div className="flex flex-wrap gap-1.5">
               <span
                 className={cn(
-                  "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11.5px] font-semibold",
+                  "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em]",
                   isLive
                     ? "border-[color:var(--aqt-teal)]/35 bg-[color:var(--aqt-teal)]/12 text-[color:var(--aqt-teal)]"
                     : "border-[color:var(--aqt-border-2)] text-[color:var(--aqt-amber)]"
@@ -177,7 +184,7 @@ export function DraftPageHero({
             <HStat
               label={t("onClock")}
               value={onClockTeam?.name ?? "—"}
-              valueClassName="inline-block max-w-[9rem] truncate align-bottom text-[17px] text-[color:var(--aqt-teal)]"
+              valueClassName="inline-block max-w-[9rem] truncate align-bottom text-[19px] text-[color:var(--aqt-teal)]"
             />
           </div>
         </div>
@@ -232,8 +239,8 @@ function CaptainTile({
 
 function MetaPill({ label, value }: { label: ReactNode; value: ReactNode }) {
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-bg-2)] px-2.5 py-1 text-[11.5px]">
-      <span className="font-mono text-[9px] uppercase tracking-[0.12em] text-[color:var(--aqt-fg-faint)]">
+    <span className="inline-flex items-center gap-1.5 rounded-md border border-[color:var(--aqt-border-2)] bg-white/[0.03] px-2.5 py-1 text-[11.5px] text-[color:var(--aqt-fg-muted)]">
+      <span className="text-[9.5px] uppercase tracking-[0.08em] text-[color:var(--aqt-fg-faint)]">
         {label}
       </span>
       <span className="font-semibold text-[color:var(--aqt-fg)]">{value}</span>
@@ -252,12 +259,12 @@ function HStat({
 }) {
   return (
     <div className="flex flex-col gap-0.5">
-      <span className="text-[9px] font-bold uppercase tracking-[0.13em] text-[color:var(--aqt-fg-faint)]">
+      <span className="text-[10px] font-bold uppercase tracking-[0.13em] text-[color:var(--aqt-fg-faint)]">
         {label}
       </span>
       <span
         className={cn(
-          "text-[19px] font-semibold leading-none tabular-nums text-[color:var(--aqt-fg)]",
+          "text-[22px] font-semibold leading-none tabular-nums text-[color:var(--aqt-fg)]",
           valueClassName
         )}
       >

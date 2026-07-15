@@ -49,7 +49,11 @@ function computeTeamRosterView(
   teamSize: number,
   divisionGrid: DivisionGrid
 ): TeamRosterView {
-  const roster = rosters.get(team.id) ?? [];
+  const roster = [...(rosters.get(team.id) ?? [])].sort(
+    (a, b) =>
+      ROSTER_ROLES.indexOf(rosterRoleForPlayer(a, picks)) -
+      ROSTER_ROLES.indexOf(rosterRoleForPlayer(b, picks))
+  );
   const rosterRoles = roster.map((player) => rosterRoleForPlayer(player, picks));
   // ponytail: role-target = ceil(team_size/3) default; upgrade to real targets if the session exposes them
   const roleTarget = Math.ceil(teamSize / 3);
