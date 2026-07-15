@@ -195,7 +195,13 @@ class RealtimeClient {
       const handlers = this.handlersByTopic.get(frame.topic);
       if (handlers) {
         for (const subscription of Array.from(handlers.values())) {
-          subscription.onSubscribed?.();
+          if (subscription.onSubscribed) {
+            this.invokeSubscriber(
+              subscription.onSubscribed,
+              frame.topic,
+              "subscription confirmation",
+            );
+          }
         }
       }
       return;
@@ -216,7 +222,23 @@ class RealtimeClient {
     }
 
     for (const subscription of Array.from(handlers.values())) {
-      subscription.onEvent(frame.event);
+      this.invokeSubscriber(
+        () => subscription.onEvent(frame.event),
+        frame.topic,
+        "event",
+      );
+    }
+  }
+
+  private invokeSubscriber(
+    callback: () => void,
+    topic: string,
+    callbackType: string,
+  ): void {
+    try {
+      callback();
+    } catch (error) {
+      console.error(`Realtime ${callbackType} subscriber failed for ${topic}`, error);
     }
   }
 

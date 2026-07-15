@@ -156,4 +156,72 @@ describe("realtime subscribed confirmations", () => {
     expect(confirmations).toBe(0);
     unsubscribe();
   });
+
+  it("reports a failed confirmation callback and continues notifying subscribers", () => {
+    const topic = "tournament:42:bracket";
+    const reported: unknown[][] = [];
+    const originalError = console.error;
+    console.error = (...args: unknown[]) => reported.push(args);
+    let confirmations = 0;
+
+    try {
+      trackCleanup(realtimeClient.subscribe(topic, () => undefined, () => {
+        throw new Error("confirmation failed");
+      }));
+      trackCleanup(realtimeClient.subscribe(topic, () => undefined, () => {
+        confirmations += 1;
+      }));
+      const socket = currentSocket();
+      socket.open();
+
+      socket.receive({ op: "subscribed", topic, cursor: 31 });
+      socket.receive({ op: "subscribed", topic, cursor: 32 });
+
+      expect(confirmations).toBe(2);
+      expect(reported).toHaveLength(2);
+      expect(useRealtimeStore.getState().lastEventIdByTopic[topic]).toBe(32);
+    } finally {
+      console.error = originalError;
+    }
+  });
+
+  it("reports a failed event handler and continues dispatching events", () => {
+    const topic = "tournament:42:bracket";
+    const reported: unknown[][] = [];
+    const originalError = console.error;
+    console.error = (...args: unknown[]) => reported.push(args);
+    let events = 0;
+
+    try {
+      trackCleanup(realtimeClient.subscribe(topic, () => {
+        throw new Error("event failed");
+      }));
+      trackCleanup(realtimeClient.subscribe(topic, () => {
+        events += 1;
+      }));
+      const socket = currentSocket();
+      socket.open();
+
+      for (const eventId of [41, 42]) {
+        socket.receive({
+          op: "event",
+          topic,
+          event: {
+            event_id: eventId,
+            event_type: "tournament.updated",
+            schema_version: 1,
+            occurred_at: "2026-07-15T00:00:00Z",
+            actor_user_id: null,
+            data: { tournament_id: 42, reason: "results_changed" },
+          },
+        });
+      }
+
+      expect(events).toBe(2);
+      expect(reported).toHaveLength(2);
+      expect(useRealtimeStore.getState().lastEventIdByTopic[topic]).toBe(42);
+    } finally {
+      console.error = originalError;
+    }
+  });
 });

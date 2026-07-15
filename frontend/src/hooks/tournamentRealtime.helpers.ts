@@ -1,5 +1,6 @@
 import type { QueryClient } from "@tanstack/react-query";
 
+import { getTournamentWorkspaceQueryKeys } from "@/app/admin/tournaments/[id]/components/tournamentWorkspace.queryKeys";
 import { tournamentQueryKeys } from "@/lib/tournament-query-keys";
 
 export type TournamentChangedReason =
@@ -21,15 +22,51 @@ export type TournamentRealtimeUpdatePlan = {
   shouldRefreshRoute: boolean;
 };
 
-export type TrailingCoalescerClock<TTimer> = {
+export type CoalescerClock<TTimer> = {
   setTimeout: (callback: () => void, delayMs: number) => TTimer;
   clearTimeout: (timer: TTimer) => void;
 };
 
-export type TrailingCoalescer = {
+export type Coalescer = {
   schedule: () => void;
   cancel: () => void;
 };
+
+export function createLeadingCoalescer<TTimer = ReturnType<typeof setTimeout>>(
+  callback: () => void,
+  windowMs: number,
+  clock: CoalescerClock<TTimer> = {
+    setTimeout: (scheduledCallback, scheduledDelay) =>
+      setTimeout(scheduledCallback, scheduledDelay) as TTimer,
+    clearTimeout: (timer) => clearTimeout(timer as ReturnType<typeof setTimeout>),
+  },
+): Coalescer {
+  let cooldownTimer: TTimer | null = null;
+  let generation = 0;
+
+  return {
+    schedule: () => {
+      if (cooldownTimer !== null) {
+        return;
+      }
+
+      callback();
+      const scheduledGeneration = generation;
+      cooldownTimer = clock.setTimeout(() => {
+        if (generation === scheduledGeneration) {
+          cooldownTimer = null;
+        }
+      }, windowMs);
+    },
+    cancel: () => {
+      generation += 1;
+      if (cooldownTimer !== null) {
+        clock.clearTimeout(cooldownTimer);
+        cooldownTimer = null;
+      }
+    },
+  };
+}
 
 export function parseTournamentRealtimeMessage(
   rawData: string,
@@ -67,10 +104,8 @@ export function parseTournamentRealtimeMessage(
 function getResultQueryPrefixes(tournamentId: number): readonly (readonly unknown[])[] {
   return [
     tournamentQueryKeys.detail(tournamentId),
-    tournamentQueryKeys.stages(tournamentId),
     tournamentQueryKeys.heroPlaytime(tournamentId),
     tournamentQueryKeys.standings(tournamentId),
-    tournamentQueryKeys.bracketStandings(tournamentId),
     tournamentQueryKeys.encounters(tournamentId),
   ];
 }
@@ -129,11 +164,9 @@ export function getTournamentRealtimeCatchUpPlan(
 ): readonly (readonly unknown[])[] {
   return [
     tournamentQueryKeys.detail(tournamentId),
-    tournamentQueryKeys.stages(tournamentId),
     tournamentQueryKeys.teams(tournamentId),
     tournamentQueryKeys.heroPlaytime(tournamentId),
     tournamentQueryKeys.standings(tournamentId),
-    tournamentQueryKeys.bracketStandings(tournamentId),
     tournamentQueryKeys.encounters(tournamentId),
     ...getParticipantQueryPrefixes(tournamentId, workspaceId),
   ];
@@ -148,6 +181,34 @@ function invalidateQueryPrefixes(
   }
 }
 
+function invalidateAdminTournamentQueries(
+  queryClient: QueryClient,
+  tournamentId: number,
+  scope: TournamentRealtimeUpdatePlan["workspaceScope"],
+): void {
+  const keys = getTournamentWorkspaceQueryKeys(tournamentId);
+
+  if (scope === "bracket") {
+    void queryClient.invalidateQueries({ queryKey: keys.encounters });
+    return;
+  }
+
+  // The metadata key is a parent of the admin workspace collections. Keep it
+  // exact so each active child query is invalidated once through its own prefix.
+  void queryClient.invalidateQueries({ queryKey: keys.tournament, exact: true });
+  void queryClient.invalidateQueries({ queryKey: keys.stages });
+  void queryClient.invalidateQueries({ queryKey: keys.standings });
+  void queryClient.invalidateQueries({ queryKey: keys.encounters });
+  void queryClient.invalidateQueries({ queryKey: keys.standingsTable });
+
+  if (scope === "results") {
+    void queryClient.invalidateQueries({ queryKey: keys.logHistory });
+    return;
+  }
+
+  void queryClient.invalidateQueries({ queryKey: keys.teams });
+}
+
 export function applyTournamentRealtimeUpdate(
   queryClient: QueryClient,
   tournamentId: number,
@@ -157,6 +218,7 @@ export function applyTournamentRealtimeUpdate(
 ): void {
   const plan = getTournamentRealtimeUpdatePlan(tournamentId, workspaceId, reason);
   invalidateQueryPrefixes(queryClient, plan.queryKeys);
+  invalidateAdminTournamentQueries(queryClient, tournamentId, plan.workspaceScope);
 
   if (plan.shouldRefreshRoute) {
     onStructureChanged?.();
@@ -177,12 +239,12 @@ export function applyTournamentRealtimeCatchUp(
 export function createTrailingCoalescer<TTimer = ReturnType<typeof setTimeout>>(
   callback: () => void,
   delayMs: number,
-  clock: TrailingCoalescerClock<TTimer> = {
+  clock: CoalescerClock<TTimer> = {
     setTimeout: (scheduledCallback, scheduledDelay) =>
       setTimeout(scheduledCallback, scheduledDelay) as TTimer,
     clearTimeout: (timer) => clearTimeout(timer as ReturnType<typeof setTimeout>),
   },
-): TrailingCoalescer {
+): Coalescer {
   let timer: TTimer | null = null;
   let generation = 0;
 

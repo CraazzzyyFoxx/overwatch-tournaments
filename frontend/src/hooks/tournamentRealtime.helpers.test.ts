@@ -1,9 +1,10 @@
 import { describe, expect, it } from "bun:test";
-import { QueryClient } from "@tanstack/react-query";
+import { QueryClient, QueryObserver } from "@tanstack/react-query";
 
 import {
   applyTournamentRealtimeCatchUp,
   applyTournamentRealtimeUpdate,
+  createLeadingCoalescer,
   createTrailingCoalescer,
   getTournamentRealtimeCatchUpPlan,
   getTournamentRealtimeUpdatePlan,
@@ -60,10 +61,8 @@ describe("tournament realtime helpers", () => {
       workspaceScope: "results",
       queryKeys: [
         tournamentQueryKeys.detail(42),
-        tournamentQueryKeys.stages(42),
         tournamentQueryKeys.heroPlaytime(42),
         tournamentQueryKeys.standings(42),
-        tournamentQueryKeys.bracketStandings(42),
         tournamentQueryKeys.encounters(42),
       ],
       shouldRefreshRoute: false,
@@ -75,10 +74,8 @@ describe("tournament realtime helpers", () => {
       workspaceScope: "full",
       queryKeys: [
         tournamentQueryKeys.detail(42),
-        tournamentQueryKeys.stages(42),
         tournamentQueryKeys.heroPlaytime(42),
         tournamentQueryKeys.standings(42),
-        tournamentQueryKeys.bracketStandings(42),
         tournamentQueryKeys.encounters(42),
         tournamentQueryKeys.teams(42),
         tournamentQueryKeys.registration(7, 42),
@@ -94,10 +91,8 @@ describe("tournament realtime helpers", () => {
 
     expect(plan.queryKeys).toEqual([
       tournamentQueryKeys.detail(42),
-      tournamentQueryKeys.stages(42),
       tournamentQueryKeys.heroPlaytime(42),
       tournamentQueryKeys.standings(42),
-      tournamentQueryKeys.bracketStandings(42),
       tournamentQueryKeys.encounters(42),
       tournamentQueryKeys.teams(42),
     ]);
@@ -125,11 +120,9 @@ describe("tournament realtime helpers", () => {
   it("builds a catch-up plan covering every public tournament dataset", () => {
     expect(getTournamentRealtimeCatchUpPlan(42, 7)).toEqual([
       tournamentQueryKeys.detail(42),
-      tournamentQueryKeys.stages(42),
       tournamentQueryKeys.teams(42),
       tournamentQueryKeys.heroPlaytime(42),
       tournamentQueryKeys.standings(42),
-      tournamentQueryKeys.bracketStandings(42),
       tournamentQueryKeys.encounters(42),
       tournamentQueryKeys.registration(7, 42),
       tournamentQueryKeys.registrationsList(7, 42),
@@ -163,6 +156,160 @@ describe("tournament realtime helpers", () => {
       expectInvalidated(queryClient, queryKey, true);
     }
     expectInvalidated(queryClient, unrelated, false);
+  });
+
+  it("starts one active refetch per results event for nested stage and bracket queries", async () => {
+    const queryClient = createQueryClient();
+    const fetchStarts = { stages: 0, bracket: 0 };
+    const stageObserver = new QueryObserver(queryClient, {
+      queryKey: tournamentQueryKeys.stages(42),
+      queryFn: async () => {
+        fetchStarts.stages += 1;
+        return [];
+      },
+      initialData: [],
+      staleTime: Infinity,
+    });
+    const bracketObserver = new QueryObserver(queryClient, {
+      queryKey: tournamentQueryKeys.bracketStandings(42, 7),
+      queryFn: async () => {
+        fetchStarts.bracket += 1;
+        return [];
+      },
+      initialData: [],
+      staleTime: Infinity,
+    });
+    const unsubscribeStage = stageObserver.subscribe(() => undefined);
+    const unsubscribeBracket = bracketObserver.subscribe(() => undefined);
+
+    applyTournamentRealtimeUpdate(queryClient, 42, 7, "results_changed");
+    await Promise.resolve();
+
+    expect(fetchStarts).toEqual({ stages: 1, bracket: 1 });
+    unsubscribeStage();
+    unsubscribeBracket();
+  });
+
+  it("starts one active refetch per catch-up for nested stage and bracket queries", async () => {
+    const queryClient = createQueryClient();
+    const fetchStarts = { stages: 0, bracket: 0 };
+    const stageObserver = new QueryObserver(queryClient, {
+      queryKey: tournamentQueryKeys.stages(42),
+      queryFn: async () => {
+        fetchStarts.stages += 1;
+        return [];
+      },
+      initialData: [],
+      staleTime: Infinity,
+    });
+    const bracketObserver = new QueryObserver(queryClient, {
+      queryKey: tournamentQueryKeys.bracketStandings(42, 7),
+      queryFn: async () => {
+        fetchStarts.bracket += 1;
+        return [];
+      },
+      initialData: [],
+      staleTime: Infinity,
+    });
+    const unsubscribeStage = stageObserver.subscribe(() => undefined);
+    const unsubscribeBracket = bracketObserver.subscribe(() => undefined);
+
+    applyTournamentRealtimeCatchUp(queryClient, 42, 7);
+    await Promise.resolve();
+
+    expect(fetchStarts).toEqual({ stages: 1, bracket: 1 });
+    unsubscribeStage();
+    unsubscribeBracket();
+  });
+
+  it("preserves reason-specific admin tournament invalidations", () => {
+    const cases = [
+      {
+        reason: "bracket_changed" as const,
+        invalidated: [["admin", "tournament", 42, "encounters"]],
+        untouched: [
+          ["admin", "tournament", 42],
+          ["admin", "stages", 42],
+          ["admin", "tournament", 42, "teams"],
+          ["admin", "tournament", 42, "standings"],
+          ["standings-table", 42],
+        ],
+      },
+      {
+        reason: "results_changed" as const,
+        invalidated: [
+          ["admin", "tournament", 42],
+          ["admin", "stages", 42],
+          ["admin", "tournament", 42, "standings"],
+          ["admin", "tournament", 42, "encounters"],
+          ["admin", "tournament", 42, "log-history"],
+          ["standings-table", 42],
+        ],
+        untouched: [["admin", "tournament", 42, "teams"]],
+      },
+      {
+        reason: "structure_changed" as const,
+        invalidated: [
+          ["admin", "tournament", 42],
+          ["admin", "stages", 42],
+          ["admin", "tournament", 42, "teams"],
+          ["admin", "tournament", 42, "standings"],
+          ["admin", "tournament", 42, "encounters"],
+          ["standings-table", 42],
+        ],
+        untouched: [],
+      },
+    ];
+
+    for (const testCase of cases) {
+      const queryClient = createQueryClient();
+      const allKeys = [...testCase.invalidated, ...testCase.untouched];
+      for (const queryKey of allKeys) queryClient.setQueryData(queryKey, {});
+
+      applyTournamentRealtimeUpdate(queryClient, 42, 7, testCase.reason);
+
+      for (const queryKey of testCase.invalidated) {
+        expectInvalidated(queryClient, queryKey, true);
+      }
+      for (const queryKey of testCase.untouched) {
+        expectInvalidated(queryClient, queryKey, false);
+      }
+    }
+  });
+
+  it("coalesces catch-up confirmations promptly and resets after its leading window", () => {
+    type PendingTimer = { callback: () => void; delay: number; cancelled: boolean };
+    const timers: PendingTimer[] = [];
+    const clock = {
+      setTimeout(callback: () => void, delay: number): PendingTimer {
+        const timer = { callback, delay, cancelled: false };
+        timers.push(timer);
+        return timer;
+      },
+      clearTimeout(timer: PendingTimer): void {
+        timer.cancelled = true;
+      },
+    };
+    let catchUps = 0;
+    const coalescer = createLeadingCoalescer(() => {
+      catchUps += 1;
+    }, 100, clock);
+
+    coalescer.schedule();
+    coalescer.schedule();
+    coalescer.schedule();
+    expect(catchUps).toBe(1);
+    expect(timers).toHaveLength(1);
+    expect(timers[0].delay).toBe(100);
+
+    timers[0].callback();
+    coalescer.schedule();
+    expect(catchUps).toBe(2);
+
+    coalescer.cancel();
+    expect(timers[1].cancelled).toBe(true);
+    timers[1].callback();
+    expect(catchUps).toBe(2);
   });
 
   it("trails refresh bursts, starts a later burst, and cancels pending work", () => {
