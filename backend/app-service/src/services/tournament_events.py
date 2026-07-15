@@ -35,6 +35,8 @@ def tournament_standings_cache_patterns(tournament_id: int) -> tuple[str, ...]:
         # TTL is short (users_cache_ttl=60s) so the steady-state cost is low.
         "backend:user_profile:*",
         "backend:user_tournaments:*",
+        "backend:user_compare:v2:*",
+        "backend:user_hero_compare:v2:*",
         # Cached Users-Overview id order (H13) — a tournament change can reorder
         # the tournaments_count / achievements_count / avg_placement leaderboard.
         "backend:user_overview_order:*",

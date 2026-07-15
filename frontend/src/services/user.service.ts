@@ -372,7 +372,8 @@ export default class userService {
       role,
       divMin,
       divMax,
-      tournamentId
+      tournamentId,
+      signal
     }: {
       baseline?: UserCompareBaselineMode;
       targetUserId?: number;
@@ -380,9 +381,11 @@ export default class userService {
       divMin?: number;
       divMax?: number;
       tournamentId?: number;
+      signal?: AbortSignal;
     } = {}
   ): Promise<UserCompareResponse> {
     return apiFetch(`/api/v1/users/${userId}/compare`, {
+      signal,
       query: {
         baseline,
         target_user_id: targetUserId,
@@ -406,7 +409,8 @@ export default class userService {
       divMin,
       divMax,
       tournamentId,
-      stats
+      stats,
+      signal
     }: {
       baseline?: UserCompareBaselineMode;
       targetUserId?: number;
@@ -418,9 +422,11 @@ export default class userService {
       divMax?: number;
       tournamentId?: number;
       stats?: LogStatsName[];
+      signal?: AbortSignal;
     }
   ): Promise<UserHeroCompareResponse> {
     return apiFetch(`/api/v1/users/${userId}/compare/heroes`, {
+      signal,
       query: {
         baseline,
         target_user_id: targetUserId,

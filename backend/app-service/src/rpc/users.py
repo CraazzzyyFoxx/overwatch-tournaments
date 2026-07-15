@@ -111,7 +111,7 @@ def register(broker: Any, logger: Any) -> None:
             await c.gate_tournament(session, data, c.q1(data, "tournament_id", int))
             grid = await get_division_grid(session, None)
             qp = build_query_model(schemas.UserCompareQueryParams, data.get("query"))
-            return await user_flows.get_compare(
+            return await user_flows.get_compare_cached(
                 session, c.require_id(data), schemas.UserCompareParams.from_query_params(qp), grid=grid
             )
 
@@ -123,7 +123,7 @@ def register(broker: Any, logger: Any) -> None:
             await c.gate_tournament(session, data, c.q1(data, "tournament_id", int))
             grid = await get_division_grid(session, None)
             qp = build_query_model(schemas.UserHeroCompareQueryParams, data.get("query"))
-            return await user_flows.get_hero_compare(
+            return await user_flows.get_hero_compare_cached(
                 session, c.require_id(data), schemas.UserHeroCompareParams.from_query_params(qp), grid=grid
             )
 

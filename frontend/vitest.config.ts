@@ -13,6 +13,7 @@ export default defineConfig({
     include: [
       "src/app/**/tournaments/**/draft/**/*.test.ts",
       "src/app/admin/tournaments/**/components/draft/**/*.test.ts",
+      "src/app/**/users/compare/**/*.test.ts",
     ],
   },
 });

@@ -779,6 +779,10 @@ async def _invalidate_merge_caches(
 ) -> None:
     patterns = {
         "backend:get_statistics_by_heroes_all_values*",
+        # Global/cohort baselines can change even when the merged user is not
+        # the subject, so compare responses need broad short-TTL invalidation.
+        "backend:user_compare:v2:*",
+        "backend:user_hero_compare:v2:*",
     }
     for user_id in (source_user_id, target_user_id):
         patterns.update(

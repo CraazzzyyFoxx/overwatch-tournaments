@@ -1,5 +1,6 @@
 "use client";
 
+import { RefreshCw } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { CardSurface } from "@/app/(site)/users/components/shared/atoms";
 import HeroImage from "@/components/hero/HeroImage";
@@ -21,7 +22,9 @@ interface CompareUnifiedTableProps {
   baselineName: string;
   rows: CompareRow[];
   loading: boolean;
+  refreshing?: boolean;
   errorMessage?: string;
+  onRetry?: () => void;
   isHeroScope: boolean;
   isTargetBaseline: boolean;
   subjectHero?: HeroInfo;
@@ -74,13 +77,18 @@ const CompareMetricRow = ({ row }: { row: CompareRow }) => {
   const leftBarColor = winner === "left" ? WINNER_BAR : NEUTRAL_BAR;
   const rightBarColor = winner === "right" ? WINNER_BAR : NEUTRAL_BAR;
 
-  const leftValueStyle = winner === "left" ? { color: "var(--aqt-emerald)" } : { color: "var(--aqt-fg)" };
-  const rightValueStyle = winner === "right" ? { color: "var(--aqt-emerald)" } : { color: "var(--aqt-fg)" };
+  const leftValueStyle =
+    winner === "left" ? { color: "var(--aqt-emerald)" } : { color: "var(--aqt-fg)" };
+  const rightValueStyle =
+    winner === "right" ? { color: "var(--aqt-emerald)" } : { color: "var(--aqt-fg)" };
 
   return (
     <tr className="border-b border-[color:var(--aqt-border)] last:border-b-0 hover:bg-[hsl(0_0%_100%/0.02)]">
       {/* Metric name */}
-      <td className="px-3.5 py-2.5 text-[13.5px] font-medium text-[color:var(--aqt-fg)]" title={row.label}>
+      <td
+        className="px-3.5 py-2.5 text-[13.5px] font-medium text-[color:var(--aqt-fg)]"
+        title={row.label}
+      >
         {row.label}
       </td>
 
@@ -121,7 +129,11 @@ const CompareMetricRow = ({ row }: { row: CompareRow }) => {
 
       {/* Delta */}
       <td className="px-3.5 py-2.5 text-right whitespace-nowrap">
-        <TrendDelta delta={row.delta} deltaPercent={row.deltaPercent} betterWorse={row.betterWorse} />
+        <TrendDelta
+          delta={row.delta}
+          deltaPercent={row.deltaPercent}
+          betterWorse={row.betterWorse}
+        />
       </td>
     </tr>
   );
@@ -137,7 +149,10 @@ const UnifiedSkeleton = ({ isHeroScope }: { isHeroScope: boolean }) => {
   return (
     <tbody>
       {Array.from({ length: rowCount }).map((_, index) => (
-        <tr key={`skeleton-row-${index}`} className="border-b border-[color:var(--aqt-border)] last:border-b-0">
+        <tr
+          key={`skeleton-row-${index}`}
+          className="border-b border-[color:var(--aqt-border)] last:border-b-0"
+        >
           <td className="px-3.5 py-2.5">
             <Skeleton className="h-4 w-40" />
           </td>
@@ -167,7 +182,15 @@ const UnifiedSkeleton = ({ isHeroScope }: { isHeroScope: boolean }) => {
 /*  Identity band                                                      */
 /* ------------------------------------------------------------------ */
 
-const HeroBadge = ({ hero, label, align }: { hero: HeroInfo; label: string; align: "left" | "right" }) => {
+const HeroBadge = ({
+  hero,
+  label,
+  align
+}: {
+  hero: HeroInfo;
+  label: string;
+  align: "left" | "right";
+}) => {
   const t = useTranslations();
   const durationUnits = {
     h: t("users.compare.durationH"),
@@ -176,10 +199,16 @@ const HeroBadge = ({ hero, label, align }: { hero: HeroInfo; label: string; alig
   };
 
   return (
-    <div className={`flex items-center gap-3 ${align === "right" ? "flex-row-reverse text-right" : ""}`}>
+    <div
+      className={`flex items-center gap-3 ${align === "right" ? "flex-row-reverse text-right" : ""}`}
+    >
       {hero.imagePath ? (
         <HeroImage
-          hero={{ name: hero.name ?? t("users.compare.allHeroes"), image_path: hero.imagePath, role: "" }}
+          hero={{
+            name: hero.name ?? t("users.compare.allHeroes"),
+            image_path: hero.imagePath,
+            role: ""
+          }}
           size={44}
           rounded="lg"
           title={hero.name ?? t("users.compare.allHeroes")}
@@ -213,7 +242,9 @@ const CompareUnifiedTable = ({
   baselineName,
   rows,
   loading,
+  refreshing = false,
   errorMessage,
+  onRetry,
   isHeroScope,
   isTargetBaseline,
   subjectHero,
@@ -221,81 +252,111 @@ const CompareUnifiedTable = ({
 }: CompareUnifiedTableProps) => {
   const t = useTranslations();
   const rightLabel = isTargetBaseline ? baselineName : t("users.compare.baseline");
-  const hasRows = !loading && !errorMessage && rows.length > 0;
+  const hasRows = !loading && rows.length > 0;
+  const showError = Boolean(errorMessage) && !hasRows;
 
   return (
-    <CardSurface flush>
-      {/* Identity band: subject vs baseline */}
-      <div className="flex items-center gap-3 border-b border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.012)] px-[18px] py-4">
-        {isHeroScope ? (
-          <div className="flex w-full items-center justify-between gap-3">
-            <HeroBadge hero={subjectHero ?? {}} label={subjectName} align="left" />
-            <span className="aqt-mono shrink-0 text-[11px] font-bold uppercase tracking-[0.18em] text-[color:var(--aqt-fg-dim)]">
-              {t("common.vs")}
-            </span>
-            <HeroBadge hero={baselineHero ?? {}} label={baselineName} align="right" />
-          </div>
-        ) : (
-          <div className="flex w-full items-center justify-between gap-3">
-            <div className="flex flex-col gap-0.5">
-              <span className="text-sm font-semibold text-[color:var(--aqt-fg)]">{subjectName}</span>
-              <span className="aqt-mono text-[10px] uppercase tracking-[0.08em] text-[color:var(--aqt-fg-dim)]">
-                {t("users.compare.selectedUserColumn")}
+    <div
+      aria-busy={loading || refreshing}
+      className={refreshing ? "opacity-70 transition-opacity" : "transition-opacity"}
+    >
+      <CardSurface flush>
+        {/* Identity band: subject vs baseline */}
+        <div className="flex items-center gap-3 border-b border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.012)] px-[18px] py-4">
+          {isHeroScope ? (
+            <div className="flex w-full items-center justify-between gap-3">
+              <HeroBadge hero={subjectHero ?? {}} label={subjectName} align="left" />
+              <span className="aqt-mono shrink-0 text-[11px] font-bold uppercase tracking-[0.18em] text-[color:var(--aqt-fg-dim)]">
+                {t("common.vs")}
               </span>
+              <HeroBadge hero={baselineHero ?? {}} label={baselineName} align="right" />
             </div>
-            <span className="aqt-mono shrink-0 text-[11px] font-bold uppercase tracking-[0.18em] text-[color:var(--aqt-fg-dim)]">
-              {t("common.vs")}
-            </span>
-            <div className="flex flex-col items-end gap-0.5 text-right">
-              <span className="text-sm font-semibold text-[color:var(--aqt-fg)]">{baselineName}</span>
-              <span className="aqt-mono text-[10px] uppercase tracking-[0.08em] text-[color:var(--aqt-fg-dim)]">
-                {isTargetBaseline ? t("users.compare.compareAgainst") : t("users.compare.baseline")}
-              </span>
-            </div>
-          </div>
-        )}
-      </div>
-
-      <div className="overflow-x-auto">
-        <table className="aqt-tnum w-full border-collapse text-[13px]">
-          <thead>
-            <tr>
-              <th className={`${headBase} text-left`}>{t("users.compare.colMetric")}</th>
-              <th className={`${headBase} text-right`}>{subjectName}</th>
-              <th className={`${headBase} text-center`} aria-hidden />
-              <th className={`${headBase} text-left`}>{rightLabel}</th>
-              <th className={`${headBase} text-right`}>{t("users.compare.colDelta")}</th>
-            </tr>
-          </thead>
-
-          {loading ? (
-            <UnifiedSkeleton isHeroScope={isHeroScope} />
-          ) : errorMessage ? (
-            <tbody>
-              <tr>
-                <td colSpan={5} className="px-3.5 py-10 text-center text-sm text-[color:var(--aqt-rose)]">
-                  {errorMessage}
-                </td>
-              </tr>
-            </tbody>
-          ) : !hasRows ? (
-            <tbody>
-              <tr>
-                <td colSpan={5} className="px-3.5 py-10 text-center text-sm text-[color:var(--aqt-fg-muted)]">
-                  {t("users.compare.noMetrics")}
-                </td>
-              </tr>
-            </tbody>
           ) : (
-            <tbody>
-              {rows.map((row) => (
-                <CompareMetricRow key={row.key} row={row} />
-              ))}
-            </tbody>
+            <div className="flex w-full items-center justify-between gap-3">
+              <div className="flex flex-col gap-0.5">
+                <span className="text-sm font-semibold text-[color:var(--aqt-fg)]">
+                  {subjectName}
+                </span>
+                <span className="aqt-mono text-[10px] uppercase tracking-[0.08em] text-[color:var(--aqt-fg-dim)]">
+                  {t("users.compare.selectedUserColumn")}
+                </span>
+              </div>
+              <span className="aqt-mono shrink-0 text-[11px] font-bold uppercase tracking-[0.18em] text-[color:var(--aqt-fg-dim)]">
+                {t("common.vs")}
+              </span>
+              <div className="flex flex-col items-end gap-0.5 text-right">
+                <span className="text-sm font-semibold text-[color:var(--aqt-fg)]">
+                  {baselineName}
+                </span>
+                <span className="aqt-mono text-[10px] uppercase tracking-[0.08em] text-[color:var(--aqt-fg-dim)]">
+                  {isTargetBaseline
+                    ? t("users.compare.compareAgainst")
+                    : t("users.compare.baseline")}
+                </span>
+              </div>
+            </div>
           )}
-        </table>
-      </div>
-    </CardSurface>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="aqt-tnum w-full border-collapse text-[13px]">
+            <thead>
+              <tr>
+                <th className={`${headBase} text-left`}>{t("users.compare.colMetric")}</th>
+                <th className={`${headBase} text-right`}>{subjectName}</th>
+                <th className={`${headBase} text-center`} aria-hidden />
+                <th className={`${headBase} text-left`}>{rightLabel}</th>
+                <th className={`${headBase} text-right`}>{t("users.compare.colDelta")}</th>
+              </tr>
+            </thead>
+
+            {loading ? (
+              <UnifiedSkeleton isHeroScope={isHeroScope} />
+            ) : showError ? (
+              <tbody>
+                <tr>
+                  <td
+                    colSpan={5}
+                    className="px-3.5 py-10 text-center text-sm text-[color:var(--aqt-rose)]"
+                  >
+                    <div className="flex flex-col items-center gap-3">
+                      <span>{errorMessage}</span>
+                      {onRetry ? (
+                        <button
+                          type="button"
+                          onClick={onRetry}
+                          className="inline-flex h-8 cursor-pointer items-center gap-2 rounded-md border border-[color:var(--aqt-border)] px-3 text-xs font-semibold text-[color:var(--aqt-fg-muted)] transition-colors hover:text-[color:var(--aqt-fg)]"
+                        >
+                          <RefreshCw className="h-3.5 w-3.5" />
+                          {t("users.compare.retry")}
+                        </button>
+                      ) : null}
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            ) : !hasRows ? (
+              <tbody>
+                <tr>
+                  <td
+                    colSpan={5}
+                    className="px-3.5 py-10 text-center text-sm text-[color:var(--aqt-fg-muted)]"
+                  >
+                    {t("users.compare.noMetrics")}
+                  </td>
+                </tr>
+              </tbody>
+            ) : (
+              <tbody>
+                {rows.map((row) => (
+                  <CompareMetricRow key={row.key} row={row} />
+                ))}
+              </tbody>
+            )}
+          </table>
+        </div>
+      </CardSurface>
+    </div>
   );
 };
 
