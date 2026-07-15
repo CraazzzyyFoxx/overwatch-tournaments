@@ -13,16 +13,38 @@ function sanitizeVisibleSearch(value: string): string {
   return value.replace(CONTROL_CHARACTERS, "").slice(0, PARTICIPANT_SEARCH_MAX_LENGTH);
 }
 
+function isControlCharacter(character: string): boolean {
+  const code = character.charCodeAt(0);
+  return code <= 0x1f || (code >= 0x7f && code <= 0x9f);
+}
+
+function normalizedSelectionOffset(value: string, offset: number, nextLength: number): number {
+  const boundedOffset = Math.min(Math.max(offset, 0), value.length);
+  let controlFreeOffset = 0;
+  for (let index = 0; index < boundedOffset; index += 1) {
+    if (!isControlCharacter(value[index])) controlFreeOffset += 1;
+  }
+  const controlFreeValue = value.replace(CONTROL_CHARACTERS, "");
+  const leadingWhitespace = controlFreeValue.length - controlFreeValue.trimStart().length;
+  return Math.min(Math.max(controlFreeOffset - leadingWhitespace, 0), nextLength);
+}
+
 function syncVisibleSearch(input: HTMLInputElement | null, value: string): void {
   if (!input || input.value === value) return;
+  const currentValue = input.value;
   const isFocused = document.activeElement === input;
   const selectionStart = input.selectionStart;
   const selectionEnd = input.selectionEnd;
+  const mapsNormalizedValue = normalizeParticipantSearch(currentValue) === value;
   input.value = value;
   if (isFocused && selectionStart !== null && selectionEnd !== null) {
     input.setSelectionRange(
-      Math.min(selectionStart, value.length),
-      Math.min(selectionEnd, value.length)
+      mapsNormalizedValue
+        ? normalizedSelectionOffset(currentValue, selectionStart, value.length)
+        : Math.min(selectionStart, value.length),
+      mapsNormalizedValue
+        ? normalizedSelectionOffset(currentValue, selectionEnd, value.length)
+        : Math.min(selectionEnd, value.length)
     );
   }
 }

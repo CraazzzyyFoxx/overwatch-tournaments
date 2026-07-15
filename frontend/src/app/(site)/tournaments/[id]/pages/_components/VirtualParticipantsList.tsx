@@ -11,16 +11,21 @@ import type { Registration } from "@/types/registration.types";
 
 import styles from "../../TournamentDetail.module.css";
 import type { ColumnDefinition } from "./participantsColumns";
+import { isMandatoryParticipantColumnId } from "./participants-url-state";
 
 const ESTIMATED_ROW_HEIGHT = 68;
 
-function orderedColumns(columns: readonly ColumnDefinition[]): ColumnDefinition[] {
-  const identity = columns.find((column) => column.id === "battle_tag") ?? columns[0];
-  const status = columns.find((column) => column.id === "_status");
-  return [identity, status, ...columns].filter(
-    (column, index, ordered): column is ColumnDefinition =>
-      Boolean(column) && ordered.indexOf(column) === index,
+function orderedColumns(
+  visibleColumns: readonly ColumnDefinition[],
+  allColumns: readonly ColumnDefinition[],
+): ColumnDefinition[] {
+  const mandatoryColumns = allColumns.filter((column) =>
+    isMandatoryParticipantColumnId(column.id),
   );
+  const optionalColumns = visibleColumns.filter(
+    (column) => !isMandatoryParticipantColumnId(column.id),
+  );
+  return [...mandatoryColumns, ...optionalColumns];
 }
 
 function useDocumentScrollMargin() {
@@ -44,6 +49,8 @@ function useDocumentScrollMargin() {
     const observer = new ResizeObserver(scheduleMeasure);
     observer.observe(element);
     if (element.parentElement) observer.observe(element.parentElement);
+    const layoutBoundary = element.closest("[data-participant-layout]");
+    if (layoutBoundary) observer.observe(layoutBoundary);
     observer.observe(document.documentElement);
     window.addEventListener("resize", scheduleMeasure);
     scheduleMeasure();
@@ -75,14 +82,20 @@ export default function VirtualParticipantsList({
 }: VirtualParticipantsListProps) {
   const t = useTranslations();
   const { listStartRef, scrollMargin } = useDocumentScrollMargin();
-  const displayColumns = useMemo(() => orderedColumns(visibleColumns), [visibleColumns]);
+  const displayColumns = useMemo(
+    () => orderedColumns(visibleColumns, allColumns),
+    [allColumns, visibleColumns],
+  );
+  const displayColumnIds = useMemo(
+    () => new Set(displayColumns.map((column) => column.id)),
+    [displayColumns],
+  );
   const hiddenColumns = useMemo(
     () =>
       allColumns.filter(
-        (column) =>
-          column.id !== "_index" && !visibleColumns.some((visible) => visible.id === column.id),
+        (column) => column.id !== "_index" && !displayColumnIds.has(column.id),
       ),
-    [allColumns, visibleColumns],
+    [allColumns, displayColumnIds],
   );
   const virtualizer = useWindowVirtualizer({
     count: registrations.length,
@@ -205,40 +218,47 @@ export default function VirtualParticipantsList({
                   </div>
                 </div>
 
-                <div
-                  aria-labelledby={expanderId}
-                  className={styles.participantExpandedRegion}
-                  hidden={!expanded}
-                  id={detailsId}
-                  role="region"
-                >
-                  <div className={styles.participantRankHistory}>
-                    <div className={styles.participantDetailLabel}>
-                      {t("tournamentDetail.rankHistory")}
-                    </div>
-                    <BattleTagRankHistory
-                      battleTag={registration.battle_tag}
-                      userId={registration.user_id}
-                    />
-                  </div>
-                  <div className={styles.participantHiddenFields}>
-                    <div className={styles.participantDetailLabel}>
-                      {t("registration.myCard.details")}
-                    </div>
-                    {hiddenColumns.length === 0 ? (
-                      <p className={styles.participantMutedDetail}>
-                        {t("tournamentDetail.allFieldsVisible")}
-                      </p>
-                    ) : (
-                      hiddenColumns.map((column) => (
-                        <div className={styles.participantHiddenField} key={column.id}>
-                          <div className={styles.participantDetailLabel}>{column.label}</div>
-                          <div>{column.render(registration, item.index)}</div>
+                {expanded ? (
+                  <div
+                    aria-colspan={displayColumns.length + 1}
+                    className={styles.participantExpandedCell}
+                    role="cell"
+                  >
+                    <div
+                      aria-labelledby={expanderId}
+                      className={styles.participantExpandedRegion}
+                      id={detailsId}
+                      role="region"
+                    >
+                      <div className={styles.participantRankHistory}>
+                        <div className={styles.participantDetailLabel}>
+                          {t("tournamentDetail.rankHistory")}
                         </div>
-                      ))
-                    )}
+                        <BattleTagRankHistory
+                          battleTag={registration.battle_tag}
+                          userId={registration.user_id}
+                        />
+                      </div>
+                      <div className={styles.participantHiddenFields}>
+                        <div className={styles.participantDetailLabel}>
+                          {t("registration.myCard.details")}
+                        </div>
+                        {hiddenColumns.length === 0 ? (
+                          <p className={styles.participantMutedDetail}>
+                            {t("tournamentDetail.allFieldsVisible")}
+                          </p>
+                        ) : (
+                          hiddenColumns.map((column) => (
+                            <div className={styles.participantHiddenField} key={column.id}>
+                              <div className={styles.participantDetailLabel}>{column.label}</div>
+                              <div>{column.render(registration, item.index)}</div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
                   </div>
-                </div>
+                ) : null}
               </div>
             );
           })}

@@ -656,6 +656,19 @@ export function buildParticipantColumns(
     }
   }
 
+  if (!columns.some((column) => column.id === "battle_tag")) {
+    const identity = BUILT_IN_FIELD_DEFS.battle_tag;
+    columns.splice(1, 0, {
+      id: identity.id,
+      label: getLocalizedLabel("battle_tag", identity.label),
+      category: "built_in",
+      defaultVisible: true,
+      responsive: "always",
+      render: (reg) => identity.render(reg),
+      searchValue: identity.searchValue,
+    });
+  }
+
   // Custom fields from form config
   if (form?.custom_fields) {
     for (const field of form.custom_fields) {

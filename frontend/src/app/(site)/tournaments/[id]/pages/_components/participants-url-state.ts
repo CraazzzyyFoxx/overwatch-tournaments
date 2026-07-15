@@ -3,6 +3,15 @@ export const PARTICIPANT_STATUS_PARAM = "participantStatus";
 export const PARTICIPANT_COLUMNS_PARAM = "participantColumns";
 
 export const PARTICIPANT_SEARCH_MAX_LENGTH = 120;
+export const PARTICIPANT_MANDATORY_COLUMN_IDS = ["battle_tag", "_status"] as const;
+
+const PARTICIPANT_MANDATORY_COLUMN_ID_SET = new Set<string>(
+  PARTICIPANT_MANDATORY_COLUMN_IDS,
+);
+
+export function isMandatoryParticipantColumnId(columnId: string): boolean {
+  return PARTICIPANT_MANDATORY_COLUMN_ID_SET.has(columnId);
+}
 
 interface ParticipantColumnOption {
   id: string;
@@ -38,6 +47,12 @@ interface ParticipantResultsScrollContext {
   stickyOffset: number;
 }
 
+interface ParticipantResultsTransitionContext {
+  search: string;
+  status: string;
+  visibleColumnIds: readonly string[];
+}
+
 export function normalizeParticipantSearch(value: string): string {
   return value
     .replace(/[\u0000-\u001f\u007f-\u009f]/g, "")
@@ -58,6 +73,14 @@ export function participantResultsScrollTarget(
   stickyOffset: number,
 ): number {
   return Math.max(0, headingDocumentTop - stickyOffset - 12);
+}
+
+export function participantResultsTransitionSignature({
+  search,
+  status,
+  visibleColumnIds,
+}: ParticipantResultsTransitionContext): string {
+  return `${status}|${search}|${visibleColumnIds.join(",")}`;
 }
 
 function sameValues(left: readonly string[], right: readonly string[]): boolean {
@@ -82,12 +105,19 @@ function writeColumns(
   value: readonly string[],
   defaultValue: readonly string[],
 ): void {
-  if (sameValues(value, defaultValue)) {
+  const optionalValue = value.filter((id) => !isMandatoryParticipantColumnId(id));
+  const optionalDefaultValue = defaultValue.filter(
+    (id) => !isMandatoryParticipantColumnId(id),
+  );
+  if (sameValues(optionalValue, optionalDefaultValue)) {
     params.delete(PARTICIPANT_COLUMNS_PARAM);
     return;
   }
 
-  params.set(PARTICIPANT_COLUMNS_PARAM, value.length > 0 ? value.join(",") : "none");
+  params.set(
+    PARTICIPANT_COLUMNS_PARAM,
+    optionalValue.length > 0 ? optionalValue.join(",") : "none",
+  );
 }
 
 export function readParticipantUrlState(
@@ -104,17 +134,30 @@ export function readParticipantUrlState(
     rawStatus === "all" || allowedStatuses.includes(rawStatus) ? rawStatus : "all";
   writeStatus(params, status);
 
-  const defaultColumnIds = columns.filter((column) => column.defaultVisible).map((column) => column.id);
-  const allowedColumnIds = new Set(columns.map((column) => column.id));
+  const mandatoryColumnIds = columns
+    .filter((column) => isMandatoryParticipantColumnId(column.id))
+    .map((column) => column.id);
+  const optionalColumns = columns.filter(
+    (column) => !isMandatoryParticipantColumnId(column.id),
+  );
+  const defaultOptionalColumnIds = optionalColumns
+    .filter((column) => column.defaultVisible)
+    .map((column) => column.id);
+  const defaultColumnIds = [...mandatoryColumnIds, ...defaultOptionalColumnIds];
+  const allowedOptionalColumnIds = new Set(optionalColumns.map((column) => column.id));
   const rawColumns = source.get(PARTICIPANT_COLUMNS_PARAM);
   let visibleColumnIds = defaultColumnIds;
 
   if (rawColumns === "none") {
-    visibleColumnIds = [];
+    visibleColumnIds = mandatoryColumnIds;
   } else if (rawColumns !== null) {
-    const requested = new Set(rawColumns.split(",").filter((id) => allowedColumnIds.has(id)));
-    visibleColumnIds = columns.filter((column) => requested.has(column.id)).map((column) => column.id);
-    if (visibleColumnIds.length === 0) visibleColumnIds = defaultColumnIds;
+    const requested = new Set(
+      rawColumns.split(",").filter((id) => allowedOptionalColumnIds.has(id)),
+    );
+    visibleColumnIds = [
+      ...mandatoryColumnIds,
+      ...optionalColumns.filter((column) => requested.has(column.id)).map((column) => column.id),
+    ];
   }
 
   writeColumns(params, visibleColumnIds, defaultColumnIds);

@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 
 import {
   participantResultsScrollTarget,
+  participantResultsTransitionSignature,
   normalizeParticipantSearch,
   readParticipantUrlState,
   shouldScrollParticipantResults,
@@ -12,6 +13,7 @@ const columns = [
   { id: "battle_tag", defaultVisible: true },
   { id: "roles", defaultVisible: true },
   { id: "notes", defaultVisible: false },
+  { id: "_status", defaultVisible: true },
 ];
 
 describe("participant URL state", () => {
@@ -33,10 +35,10 @@ describe("participant URL state", () => {
     expect(result.state).toEqual({
       search: "",
       status: "all",
-      visibleColumnIds: ["battle_tag"],
+      visibleColumnIds: ["battle_tag", "_status"],
     });
     expect(result.needsNormalization).toBe(true);
-    expect(result.params.toString()).toBe("participantColumns=battle_tag&tab=rules");
+    expect(result.params.toString()).toBe("participantColumns=none&tab=rules");
     expect(
       readParticipantUrlState(result.params, ["approved", "pending"], columns)
         .needsNormalization,
@@ -46,7 +48,7 @@ describe("participant URL state", () => {
   it("removes explicit defaults and restores custom status/column state deterministically", () => {
     const defaults = readParticipantUrlState(
       new URLSearchParams(
-        "participantSearch=%20%00%20&participantStatus=all&participantColumns=battle_tag,roles",
+        "participantSearch=%20%00%20&participantStatus=all&participantColumns=battle_tag,roles,_status",
       ),
       ["approved", "custom_review"],
       columns,
@@ -63,9 +65,34 @@ describe("participant URL state", () => {
     expect(restored.state).toEqual({
       search: "",
       status: "custom_review",
-      visibleColumnIds: ["battle_tag", "notes"],
+      visibleColumnIds: ["battle_tag", "_status", "notes"],
     });
-    expect(restored.params.get("participantColumns")).toBe("battle_tag,notes");
+    expect(restored.params.get("participantColumns")).toBe("notes");
+  });
+
+  it("always restores mandatory identity and status before selected optional fields", () => {
+    const none = readParticipantUrlState(
+      new URLSearchParams("participantColumns=none"),
+      ["approved"],
+      columns,
+    );
+    const unsupported = readParticipantUrlState(
+      new URLSearchParams("participantColumns=unknown"),
+      ["approved"],
+      columns,
+    );
+    const custom = readParticipantUrlState(
+      new URLSearchParams("participantColumns=notes,unknown,battle_tag"),
+      ["approved"],
+      columns,
+    );
+
+    expect(none.state.visibleColumnIds).toEqual(["battle_tag", "_status"]);
+    expect(none.params.get("participantColumns")).toBe("none");
+    expect(unsupported.state.visibleColumnIds).toEqual(["battle_tag", "_status"]);
+    expect(unsupported.params.get("participantColumns")).toBe("none");
+    expect(custom.state.visibleColumnIds).toEqual(["battle_tag", "_status", "notes"]);
+    expect(custom.params.get("participantColumns")).toBe("notes");
   });
 
   it("uses replace for search and push for discrete filters while preserving other params", () => {
@@ -102,17 +129,17 @@ describe("participant URL state", () => {
   it("pushes column changes and omits the default column set", () => {
     const changed = updateParticipantUrlState(new URLSearchParams("tab=rules"), {
       type: "columns",
-      value: ["battle_tag", "notes"],
-      defaultValue: ["battle_tag", "roles"],
+      value: ["battle_tag", "_status", "notes"],
+      defaultValue: ["battle_tag", "_status", "roles"],
     });
     const reset = updateParticipantUrlState(changed.params, {
       type: "columns",
-      value: ["battle_tag", "roles"],
-      defaultValue: ["battle_tag", "roles"],
+      value: ["battle_tag", "_status", "roles"],
+      defaultValue: ["battle_tag", "_status", "roles"],
     });
 
     expect(changed.history).toBe("push");
-    expect(changed.params.get("participantColumns")).toBe("battle_tag,notes");
+    expect(changed.params.get("participantColumns")).toBe("notes");
     expect(reset.params.get("participantColumns")).toBeNull();
     expect(reset.params.get("tab")).toBe("rules");
   });
@@ -133,5 +160,32 @@ describe("participant URL state", () => {
       }),
     ).toBe(false);
     expect(participantResultsScrollTarget(620, 76)).toBe(532);
+  });
+
+  it("triggers result scrolling only for normalized URL-owned filter transitions", () => {
+    const baseUrlState = {
+      search: "ana",
+      status: "approved",
+      visibleColumnIds: ["battle_tag", "_status", "roles"],
+    };
+    const beforeResult = {
+      ...baseUrlState,
+      registrationIds: [1, 2, 3],
+    };
+    const realtimeResult = {
+      ...baseUrlState,
+      registrationIds: [4, 3, 2, 1],
+    };
+    const backForwardResult = {
+      ...baseUrlState,
+      status: "pending",
+      registrationIds: [4, 3, 2, 1],
+    };
+    const before = participantResultsTransitionSignature(beforeResult);
+    const realtimeReorder = participantResultsTransitionSignature(realtimeResult);
+    const backForwardFilter = participantResultsTransitionSignature(backForwardResult);
+
+    expect(realtimeReorder).toBe(before);
+    expect(backForwardFilter).not.toBe(before);
   });
 });

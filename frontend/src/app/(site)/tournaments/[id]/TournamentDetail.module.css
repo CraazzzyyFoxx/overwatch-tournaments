@@ -500,6 +500,10 @@
   display: none;
 }
 
+.participantExpandedCell {
+  min-width: 0;
+}
+
 .participantExpandedRegion {
   display: grid;
   grid-template-columns: minmax(0, 3fr) minmax(12rem, 1fr);
@@ -507,10 +511,6 @@
   padding: 1rem;
   border-top: 1px solid var(--aqt-border);
   background: hsl(0 0% 0% / 0.1);
-}
-
-.participantExpandedRegion[hidden] {
-  display: none;
 }
 
 .participantRankHistory,

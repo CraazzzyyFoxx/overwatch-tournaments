@@ -149,6 +149,51 @@ describe("participant search URL input", () => {
     act(() => root.unmount());
   });
 
+  it("maps the caret across trimmed prefixes, trailing whitespace, and the cap", () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+
+    act(() => {
+      root.render(
+        <SearchHarness canonicalSearch="" canonicalUrl="" onCommit={() => {}} />
+      );
+    });
+    const input = container.querySelector("input")!;
+    input.focus();
+
+    act(() => dispatchInput(input, "\u0000foo", 2));
+    expect(input.value).toBe("foo");
+    expect(input.selectionStart).toBe(1);
+    act(() => jest.advanceTimersByTime(250));
+    expect(input.selectionStart).toBe(1);
+
+    act(() => dispatchInput(input, "  foo  ", 1));
+    act(() => jest.advanceTimersByTime(250));
+    expect(input.value).toBe("foo");
+    expect(input.selectionStart).toBe(0);
+
+    act(() => dispatchInput(input, "  foo  ", 3));
+    act(() => jest.advanceTimersByTime(250));
+    expect(input.value).toBe("foo");
+    expect(input.selectionStart).toBe(1);
+
+    act(() => dispatchInput(input, "foo  ", 4));
+    act(() => jest.advanceTimersByTime(250));
+    expect(input.value).toBe("foo");
+    expect(input.selectionStart).toBe(3);
+
+    act(() => dispatchInput(input, "x".repeat(130), 125));
+    expect(input.value).toHaveLength(120);
+    expect(input.selectionStart).toBe(120);
+    act(() => jest.advanceTimersByTime(250));
+    expect(input.value).toHaveLength(120);
+    expect(input.selectionStart).toBe(120);
+    expect(document.activeElement).toBe(input);
+
+    act(() => root.unmount());
+  });
+
   it("cancels stale debounce on Back/Forward and permits later typing", () => {
     const commits: string[] = [];
     const container = document.createElement("div");

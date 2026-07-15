@@ -46,7 +46,9 @@ import ColumnPicker from "./_components/ColumnPicker";
 import { buildParticipantColumns } from "./_components/participantsColumns";
 import {
   PARTICIPANT_SEARCH_MAX_LENGTH,
+  isMandatoryParticipantColumnId,
   participantResultsScrollTarget,
+  participantResultsTransitionSignature,
   readParticipantUrlState,
   shouldScrollParticipantResults,
   updateParticipantUrlState,
@@ -473,6 +475,7 @@ function MyRegistrationCard({
   );
 }
 
+
 function isCheckInWindowActive(tournament: Tournament) {
   if (tournament.status !== "check_in") return false;
 
@@ -731,6 +734,7 @@ export default function TournamentParticipantsPage({
 
   const toggleColumn = useCallback(
     (columnId: string) => {
+      if (isMandatoryParticipantColumnId(columnId)) return;
       const nextIds = visibleColumnIdSet.has(columnId)
         ? visibleColumnIds.filter((id) => id !== columnId)
         : allColumns
@@ -781,11 +785,12 @@ export default function TournamentParticipantsPage({
 
   const resultsSignature = useMemo(
     () =>
-      `${statusFilter}|${searchQuery}|${visibleColumnIds.join(",")}|${filtered.reduce(
-        (ids, row) => `${ids},${row.id}`,
-        "",
-      )}`,
-    [filtered, searchQuery, statusFilter, visibleColumnIds],
+      participantResultsTransitionSignature({
+        search: searchQuery,
+        status: statusFilter,
+        visibleColumnIds,
+      }),
+    [searchQuery, statusFilter, visibleColumnIds],
   );
   useEffect(() => {
     if (previousResultsSignatureRef.current === null) {
@@ -834,7 +839,7 @@ export default function TournamentParticipantsPage({
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5" data-participant-layout="true">
       {/* My registration status */}
       {myRegistration && (
         <MyRegistrationCard
@@ -1010,4 +1015,3 @@ export default function TournamentParticipantsPage({
     </div>
   );
 }
-
