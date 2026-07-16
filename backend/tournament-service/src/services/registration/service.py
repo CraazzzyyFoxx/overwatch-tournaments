@@ -813,9 +813,8 @@ async def build_public_registration_list(
                 # admin-only). Notes and smurf tags stay public — see
                 # _reg_to_read.
                 include_private=False,
+                profiles_open=profiles_open_map.get(r.id),
             ).model_dump(),
-            # balancer_status(+meta) now come from _reg_to_read itself.
-            profiles_open=profiles_open_map.get(r.id),
             tournament_history=history_map.get(r.id, []),
             tournament_history_count=history_count_map.get(r.id, 0),
         )

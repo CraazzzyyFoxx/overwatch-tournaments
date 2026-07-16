@@ -291,12 +291,23 @@ def register(broker: Any, logger: Any) -> None:
                 return None
             form = await reg_service.get_registration_form(session, tournament_id)
             show_ranks = form.show_ranks if form is not None else False
+            profiles_open = (
+                (await resolve_profiles_open(session, [reg], scope=form.open_profile_scope)).get(reg.id)
+                if form is not None and form.require_open_profile
+                else None
+            )
             workspace_id = (
                 form.workspace_id if form is not None else await _resolve_tournament_workspace(session, tournament_id)
             )
             status_meta_map = await get_status_metas_map(session, workspace_id=workspace_id)
             return _dump(
-                _reg_to_read(reg, workspace_id=workspace_id, status_meta_map=status_meta_map, show_ranks=show_ranks)
+                _reg_to_read(
+                    reg,
+                    workspace_id=workspace_id,
+                    status_meta_map=status_meta_map,
+                    show_ranks=show_ranks,
+                    profiles_open=profiles_open,
+                )
             )
 
         return await _run(logger, op)

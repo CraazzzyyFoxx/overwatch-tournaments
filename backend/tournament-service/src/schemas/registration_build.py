@@ -118,6 +118,7 @@ def _reg_to_read(
     status_meta_map: dict[str, dict[str, dict[str, object]]] | None = None,
     show_ranks: bool = False,
     include_private: bool = True,
+    profiles_open: bool | None = None,
 ) -> RegistrationRead:
     """Serialize a registration for public API responses.
 
@@ -171,6 +172,7 @@ def _reg_to_read(
         )
         or build_unknown_status_meta("balancer", reg.balancer_status),
         checked_in=reg.checked_in,
+        profiles_open=profiles_open,
         submitted_at=reg.submitted_at,
         reviewed_at=reg.reviewed_at,
     )

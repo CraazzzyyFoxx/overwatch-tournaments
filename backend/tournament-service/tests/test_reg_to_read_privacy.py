@@ -55,3 +55,14 @@ def test_private_context_keeps_everything():
     assert read.smurf_tags_json == ["Alt#1111", "Alt#2222"]
     assert read.notes == "anything you'd like organizers to know"
     assert read.custom_fields_json == {"phone": "555-1234"}
+
+
+def test_private_read_payload_includes_profile_visibility():
+    read = _reg_to_read(
+        _reg_stub(),
+        workspace_id=1,
+        include_private=True,
+        profiles_open=True,
+    )
+
+    assert read.profiles_open is True
