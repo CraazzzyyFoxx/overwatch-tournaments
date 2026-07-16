@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 
 import styles from "./DraftRoom.module.css";
 import { DraftRoomSkeleton } from "./DraftRoomSkeleton";
+import { shouldShowInitialDraftSkeleton } from "./draft-loading-state";
 
 export default function PublicDraftRoomPage() {
   const t = useTranslations("draftRedesign");
@@ -24,7 +25,7 @@ export default function PublicDraftRoomPage() {
     redirect(`/tournaments/${tournamentId}`);
   }
 
-  if (tournamentQuery.isPending && !tournament) {
+  if (shouldShowInitialDraftSkeleton(tournamentQuery)) {
     return <DraftRoomSkeleton />;
   }
 

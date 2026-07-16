@@ -9,6 +9,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { HeroFrame } from "@/components/site/PageHero";
 import { Button } from "@/components/ui/button";
 import { DraftBoardSkeleton } from "@/app/draft/[id]/DraftRoomSkeleton";
+import { shouldShowInitialDraftSkeleton } from "@/app/draft/[id]/draft-loading-state";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
 import { getDefaultDivisionGrid } from "@/lib/division-grid";
 import type { Tournament } from "@/types/tournament.types";
@@ -78,7 +79,7 @@ export function DraftBoard({ tournament }: DraftBoardProps) {
     router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
   };
 
-  if (boardQuery.isPending && !board) {
+  if (shouldShowInitialDraftSkeleton(boardQuery)) {
     return <DraftBoardSkeleton />;
   }
 
