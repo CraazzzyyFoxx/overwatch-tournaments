@@ -269,15 +269,17 @@ const Header = ({ tenantMode, tenantWorkspace }: HeaderProps) => {
           </nav>
         </SheetContent>
       </Sheet>
-      <div className="flex w-full items-center md:ml-auto gap-4 lg:gap-4">
-        <ActiveEvents />
-        <div className="ml-auto flex-1 sm:flex-initial">
+      <div className="flex min-w-0 flex-1 items-center gap-1 md:ml-auto md:gap-4">
+        <div className="hidden min-[360px]:block">
+          <ActiveEvents />
+        </div>
+        <div className="hidden min-w-0 md:ml-auto md:block md:flex-initial">
           <UserSearch />
         </div>
         {username ? (
           <UserMenu username={username} avatarUrl={avatarUrl} profileHref={profileHref} />
         ) : (
-          <div className="flex items-center gap-3">
+          <div className="ml-auto flex min-w-0 items-center gap-1 sm:gap-3 md:ml-0">
             <LanguageSwitcher />
             <Button variant="outline" className="text-base" onClick={handleLoginClick}>
               <LogIn className="h-5 w-5" />
