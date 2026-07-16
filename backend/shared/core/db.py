@@ -30,12 +30,18 @@ class Base(DeclarativeBase):
 
     @classmethod
     def get_column(cls, column_name: str) -> ColumnCollection:
-        if column_name not in {c.name for c in cls.__table__.columns}:
-            raise errors.ApiHTTPException(
-                status_code=400,
-                detail=[errors.ApiExc(code="invalid_column", msg="Invalid column")],
-            )
-        return {c.name: c for c in cls.__table__.columns}[column_name]
+        columns = {c.name: c for c in cls.__table__.columns}
+        if column_name in columns:
+            return columns[column_name]
+        # Mapped SQL expressions (``column_property``, e.g. Team.avg_sr computed
+        # from the roster) are sortable too — they aren't in ``__table__.columns``.
+        column_attrs = cls.__mapper__.column_attrs
+        if column_name in column_attrs.keys():
+            return column_attrs[column_name].expression
+        raise errors.ApiHTTPException(
+            status_code=400,
+            detail=[errors.ApiExc(code="invalid_column", msg="Invalid column")],
+        )
 
     @classmethod
     def depth_get_column(cls, column_name: list[str]) -> ColumnCollection:
