@@ -23,7 +23,6 @@ import type { StageSummary, TournamentStatus } from "@/types/tournament.types";
 import styles from "../TournamentDetail.module.css";
 import {
   buildTournamentSectionNav,
-  getTournamentPhaseNoteKey,
   observeTournamentRail,
   scrollTournamentRail,
   type TournamentRailScrollState,
@@ -85,7 +84,6 @@ export default function TournamentSectionNav({
       }),
     [pathname, stages, status, teamFormation, tournamentId]
   );
-  const phaseNoteKey = getTournamentPhaseNoteKey(status, stages.length > 0);
   const setActiveRef = (node: HTMLElement | null) => {
     activeRef.current = node;
   };
@@ -124,14 +122,10 @@ export default function TournamentSectionNav({
 
   return (
     <div className={cn(styles.navRegion, className)}>
-      <p id="tournament-phase-note" className={styles.phaseNote}>
-        {t(phaseNoteKey)}
-      </p>
       <nav
         ref={frameRef}
         className={cn(styles.railFrame, railState.hasOverflow && styles.railFrameWithControls)}
         aria-label={t("tournamentDetail.sectionsNav")}
-        aria-describedby="tournament-phase-note"
       >
         <button
           type="button"

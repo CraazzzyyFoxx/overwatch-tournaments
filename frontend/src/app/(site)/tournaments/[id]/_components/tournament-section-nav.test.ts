@@ -4,7 +4,6 @@ import type { StageSummary, TournamentStatus } from "@/types/tournament.types";
 
 import {
   buildTournamentSectionNav,
-  getTournamentPhaseNoteKey,
   getTournamentRailScrollState,
   observeTournamentRail,
   scrollTournamentRail,
@@ -134,26 +133,6 @@ describe("buildTournamentSectionNav", () => {
     const items = model("playoffs", `/tournaments/${tournamentId}/standings/`);
 
     expect(items.filter((item) => item.active).map((item) => item.id)).toEqual(["standings"]);
-  });
-});
-
-describe("getTournamentPhaseNoteKey", () => {
-  it.each<TournamentStatus>([
-    "registration",
-    "draft",
-    "check_in",
-    "live",
-    "playoffs",
-    "completed",
-    "archived"
-  ])("returns a localized phase note key for %s", (status) => {
-    expect(getTournamentPhaseNoteKey(status, true)).toBe(`tournamentDetail.nav.phase.${status}`);
-  });
-
-  it("explains missing stage structure after the competition begins", () => {
-    expect(getTournamentPhaseNoteKey("live", false)).toBe(
-      "tournamentDetail.nav.phase.awaitingStages"
-    );
   });
 });
 

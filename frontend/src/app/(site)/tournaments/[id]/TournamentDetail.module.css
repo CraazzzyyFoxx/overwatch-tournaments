@@ -8,17 +8,6 @@
   background: linear-gradient(180deg, var(--aqt-bg) 78%, transparent);
 }
 
-.phaseNote {
-  margin: 0;
-  padding: 0.4rem 2.5rem 0.25rem;
-  color: var(--aqt-fg-dim);
-  font-family: var(--aqt-mono);
-  font-size: 0.625rem;
-  line-height: 1.4;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
 .railFrame {
   display: grid;
   grid-template-columns: 0 minmax(0, 1fr) 0;
@@ -767,10 +756,6 @@ thead .stickyTeamColumn {
 }
 
 @media (max-width: 640px) {
-  .phaseNote {
-    padding-inline: 2.25rem;
-  }
-
   .navItem {
     padding-inline: 0.7rem;
   }

@@ -1485,16 +1485,6 @@
       "reasons": {
         "competitionNotStarted": "Available when tournament play begins.",
         "noStages": "The organizer has not published tournament stages yet."
-      },
-      "phase": {
-        "registration": "Registration is open. Competition sections unlock when play begins.",
-        "draft": "Teams are being drafted. Competition sections unlock when play begins.",
-        "check_in": "Check-in is in progress. Competition sections unlock when play begins.",
-        "live": "Tournament play is live. Results update as matches are confirmed.",
-        "playoffs": "Playoffs are underway. Bracket and results remain live.",
-        "completed": "Tournament complete. Final results remain available.",
-        "archived": "Archived tournament. Published records remain available.",
-        "awaitingStages": "Tournament play has begun; bracket stages are awaiting publication."
       }
     },
     "loading": {

@@ -106,17 +106,6 @@ export function buildTournamentSectionNav({
   });
 }
 
-export function getTournamentPhaseNoteKey(
-  status: TournamentStatus,
-  hasStages: boolean
-): `tournamentDetail.nav.phase.${TournamentStatus | "awaitingStages"}` {
-  if (competitionStatuses.has(status) && !hasStages) {
-    return "tournamentDetail.nav.phase.awaitingStages";
-  }
-
-  return `tournamentDetail.nav.phase.${status}`;
-}
-
 export type TournamentRailElement = {
   readonly scrollWidth: number;
   readonly clientWidth: number;

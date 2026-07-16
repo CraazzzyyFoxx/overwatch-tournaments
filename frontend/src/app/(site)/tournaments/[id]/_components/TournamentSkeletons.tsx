@@ -124,9 +124,6 @@ export function TournamentShellSkeleton() {
         />
 
         <div className={styles.navRegion} data-shell-region="tabs">
-          <div className={styles.phaseNote}>
-            <SkeletonBlock style={{ width: "min(26rem, 74vw)", height: "0.55rem" }} />
-          </div>
           <div className={cn(styles.railFrame, styles.railFrameWithControls)}>
             <SkeletonBlock style={{ width: "2rem", height: "2.75rem" }} />
             <div className={styles.skeletonControls}>

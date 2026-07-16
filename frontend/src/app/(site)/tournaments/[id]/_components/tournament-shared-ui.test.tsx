@@ -183,9 +183,6 @@ describe("tournament detail locale parity", () => {
     expect(Object.keys(en.tournamentDetail.nav.reasons).sort()).toEqual(
       Object.keys(ru.tournamentDetail.nav.reasons).sort()
     );
-    expect(Object.keys(en.tournamentDetail.nav.phase).sort()).toEqual(
-      Object.keys(ru.tournamentDetail.nav.phase).sort()
-    );
     expect(Object.keys(en.tournamentDetail.loading.pages).sort()).toEqual(
       Object.keys(ru.tournamentDetail.loading.pages).sort()
     );
