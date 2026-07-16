@@ -8,6 +8,7 @@
     "submit": "Submit",
     "loading": "Loading...",
     "error": "Error",
+    "retry": "Retry",
     "registered": "registered",
     "players": "players",
     "inTeams": "in teams",
@@ -1473,6 +1474,94 @@
       "general": "General",
       "fields": "Fields",
       "customFields": "Custom Fields"
+    },
+    "nav": {
+      "scrollPrevious": "Scroll tournament sections backward",
+      "scrollNext": "Scroll tournament sections forward",
+      "reasons": {
+        "competitionNotStarted": "Available when tournament play begins.",
+        "noStages": "The organizer has not published tournament stages yet."
+      },
+      "phase": {
+        "registration": "Registration is open. Competition sections unlock when play begins.",
+        "draft": "Teams are being drafted. Competition sections unlock when play begins.",
+        "check_in": "Check-in is in progress. Competition sections unlock when play begins.",
+        "live": "Tournament play is live. Results update as matches are confirmed.",
+        "playoffs": "Playoffs are underway. Bracket and results remain live.",
+        "completed": "Tournament complete. Final results remain available.",
+        "archived": "Archived tournament. Published records remain available.",
+        "awaitingStages": "Tournament play has begun; bracket stages are awaiting publication."
+      }
+    },
+    "loading": {
+      "pages": {
+        "bracket": "Loading tournament bracket",
+        "teams": "Loading tournament teams",
+        "participants": "Loading tournament participants",
+        "matches": "Loading tournament matches",
+        "heroes": "Loading hero statistics",
+        "standings": "Loading tournament standings"
+      }
+    },
+    "participants": {
+      "resultCount": "{count, plural, one {# participant shown} other {# participants shown}}",
+      "empty": {
+        "title": "No registrations yet",
+        "description": "Participants will appear here when registrations are published."
+      }
+    },
+    "publicPages": {
+      "bracket": {
+        "eyebrow": "Tournament path",
+        "context": "Move between published stages, inspect standings and follow every route to the final."
+      },
+      "matches": {
+        "eyebrow": "Competition log",
+        "context": "Published match results, fifteen at a time. Search keeps its place in the URL.",
+        "searchLabel": "Search tournament matches",
+        "searchPlaceholder": "Search by name",
+        "tableLabel": "Tournament matches. Scroll horizontally for all result details.",
+        "emptyTitle": "No matches found",
+        "emptyDescription": "Matches will appear here after they are scheduled or published."
+      },
+      "heroes": {
+        "eyebrow": "Performance ledger",
+        "context": "Heroes ranked by their share of tournament play time.",
+        "roleLabel": "Filter heroes by role",
+        "emptyTitle": "No hero data yet",
+        "emptyDescription": "Hero play-time data will appear after match statistics are processed."
+      },
+      "standings": {
+        "eyebrow": "Competition table",
+        "context": "Full stage records, recent form and published tiebreak priorities.",
+        "stageViewLabel": "Choose standings stage view",
+        "tableLabel": "Tournament standings. Scroll horizontally for all ranking metrics.",
+        "emptyTitle": "No standings yet",
+        "emptyDescription": "Standings will appear when the organizer publishes stage results.",
+        "stageEmptyTitle": "No standings in this view",
+        "stageEmptyDescription": "Choose another stage view to see the available standings."
+      }
+    },
+    "pageState": {
+      "retry": "Try again",
+      "resetFilters": "Reset filters",
+      "updating": "Updating data",
+      "initialError": {
+        "title": "Could not load this section",
+        "description": "The tournament is still available. Try loading this section again."
+      },
+      "refreshError": {
+        "title": "Latest update was not received",
+        "description": "The last available data is still shown."
+      },
+      "empty": {
+        "title": "Nothing published yet",
+        "description": "Data for this section will appear when the organizer publishes it."
+      },
+      "filteredEmpty": {
+        "title": "No results match these filters",
+        "description": "Change or reset the current filters to see more results."
+      }
     }
   },
   "home": {

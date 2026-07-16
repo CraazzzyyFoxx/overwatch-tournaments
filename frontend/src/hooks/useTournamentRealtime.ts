@@ -1,9 +1,12 @@
 "use client";
 
 import { useQueryClient } from "@tanstack/react-query";
+import { useEffect, useMemo } from "react";
 
 import {
+  applyTournamentRealtimeCatchUp,
   applyTournamentRealtimeUpdate,
+  createLeadingCoalescer,
   type TournamentChangedReason,
 } from "@/hooks/tournamentRealtime.helpers";
 import { useRealtimeTopic } from "@/hooks/useRealtimeTopic";
@@ -20,6 +23,8 @@ type UseTournamentRealtimeOptions = {
   onStructureChanged?: () => void;
 };
 
+const CATCH_UP_COALESCE_MS = 100;
+
 export function useTournamentRealtime({
   tournamentId,
   workspaceId,
@@ -29,6 +34,17 @@ export function useTournamentRealtime({
   const queryClient = useQueryClient();
 
   const topic = tournamentId ? `tournament:${tournamentId}:bracket` : null;
+  const catchUp = useMemo(
+    () =>
+      createLeadingCoalescer(() => {
+        if (tournamentId) {
+          applyTournamentRealtimeCatchUp(queryClient, tournamentId, workspaceId);
+        }
+      }, CATCH_UP_COALESCE_MS),
+    [queryClient, tournamentId, workspaceId],
+  );
+
+  useEffect(() => () => catchUp.cancel(), [catchUp]);
 
   useRealtimeTopic<TournamentRealtimePayload>(
     topic,
@@ -55,6 +71,9 @@ export function useTournamentRealtime({
         onStructureChanged?.();
       }
     },
-    [queryClient, tournamentId, workspaceId, onUpdate, onStructureChanged]
+    [],
+    () => {
+      catchUp.schedule();
+    },
   );
 }

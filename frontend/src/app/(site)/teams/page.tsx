@@ -60,7 +60,8 @@ const TeamsPage = () => {
     isError: isErrorTeams
   } = useQuery({
     queryKey: ["teams", tournamentId, sortBy, sortOrder],
-    queryFn: () => teamService.getAll(tournamentId as number, sortBy, sortOrder),
+    queryFn: () =>
+      teamService.getAll({ tournamentId: tournamentId as number, sort: sortBy, order: sortOrder }),
     enabled: tournamentId != null
   });
 

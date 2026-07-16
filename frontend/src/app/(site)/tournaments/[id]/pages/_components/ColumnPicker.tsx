@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/popover";
 
 import type { ColumnDefinition } from "./participantsColumns";
+import { isMandatoryParticipantColumnId } from "./participants-url-state";
 
 interface ColumnPickerProps {
   columns: ColumnDefinition[];
@@ -69,18 +70,28 @@ export default function ColumnPicker({
                   {categoryLabel(category)}
                 </p>
                 <div className="space-y-1">
-                  {cols.map((col) => (
-                    <label
-                      key={col.id}
-                      className="flex cursor-pointer items-center gap-2 rounded px-1 py-0.5 text-xs text-[color:var(--aqt-fg-muted)] hover:bg-white/5 hover:text-[color:var(--aqt-fg)]"
-                    >
-                      <Checkbox
-                        checked={visibility[col.id] !== false}
-                        onCheckedChange={() => onToggle(col.id)}
-                      />
-                      {col.label}
-                    </label>
-                  ))}
+                  {cols.map((col) => {
+                    const mandatory = isMandatoryParticipantColumnId(col.id);
+                    return (
+                      <label
+                        key={col.id}
+                        className={
+                          mandatory
+                            ? "flex cursor-not-allowed items-center gap-2 rounded px-1 py-0.5 text-xs text-[color:var(--aqt-fg-dim)]"
+                            : "flex cursor-pointer items-center gap-2 rounded px-1 py-0.5 text-xs text-[color:var(--aqt-fg-muted)] hover:bg-white/5 hover:text-[color:var(--aqt-fg)]"
+                        }
+                      >
+                        <Checkbox
+                          checked={mandatory || visibility[col.id] !== false}
+                          disabled={mandatory}
+                          onCheckedChange={() => {
+                            if (!mandatory) onToggle(col.id);
+                          }}
+                        />
+                        {col.label}
+                      </label>
+                    );
+                  })}
                 </div>
               </div>
             );

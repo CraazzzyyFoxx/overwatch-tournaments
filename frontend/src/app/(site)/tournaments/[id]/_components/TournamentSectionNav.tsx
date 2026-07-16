@@ -1,74 +1,61 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { useSelectedLayoutSegment } from "next/navigation";
+import { usePathname } from "next/navigation";
 import {
+  ArrowLeft,
+  ArrowRight,
   BarChart3,
   Calendar,
   ClipboardList,
   LayoutGrid,
   ListOrdered,
   Trophy,
-  Users,
+  Users
 } from "lucide-react";
-
-import { cn } from "@/lib/utils";
-import type { Stage, TournamentStatus } from "@/types/tournament.types";
-
 import { useTranslations } from "next-intl";
 
-const baseItems = [
-  { title: "Teams", icon: Users, tab: "teams" },
-  { title: "Participants", icon: ClipboardList, tab: "participants" },
-  { title: "Matches", icon: Calendar, tab: "matches" },
-  { title: "Heroes", icon: Trophy, tab: "heroes" },
-  { title: "Standings", icon: BarChart3, tab: "standings" },
-  { title: "Draft", icon: ListOrdered, tab: "draft" },
-] as const;
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
+import type { StageSummary, TournamentStatus } from "@/types/tournament.types";
 
-const phaseLockedTabs = new Set<(typeof baseItems)[number]["tab"]>([
-  "teams",
-  "matches",
-  "heroes",
-  "standings",
-]);
-const unlockedStatuses = new Set<TournamentStatus>([
-  "live",
-  "playoffs",
-  "completed",
-]);
+import styles from "../TournamentDetail.module.css";
+import {
+  buildTournamentSectionNav,
+  getTournamentPhaseNoteKey,
+  observeTournamentRail,
+  scrollTournamentRail,
+  type TournamentRailScrollState,
+  type TournamentSectionId
+} from "./tournament-section-nav";
 
-type TabId = (typeof baseItems)[number]["tab"] | "bracket";
+const icons: Record<TournamentSectionId, React.ComponentType<{ className?: string }>> = {
+  bracket: LayoutGrid,
+  teams: Users,
+  participants: ClipboardList,
+  matches: Calendar,
+  heroes: Trophy,
+  standings: BarChart3,
+  draft: ListOrdered
+};
 
-function normalizeSegment(segment: string | null): TabId {
-  if (segment === "bracket") return "bracket";
-  if (baseItems.some((item) => item.tab === segment)) return segment as TabId;
-  return "teams";
-}
+const initialRailState: TournamentRailScrollState = {
+  hasOverflow: false,
+  canScrollPrevious: false,
+  canScrollNext: false
+};
 
-function resolveBracketHref(tournamentId: string, stages: Stage[]): string {
-  const active = stages.find((stage) => stage.is_active);
-  const elimination = stages.find(
-    (stage) =>
-      stage.stage_type === "single_elimination" ||
-      stage.stage_type === "double_elimination"
-  );
-  const group = stages.find(
-    (stage) => stage.stage_type === "round_robin" || stage.stage_type === "swiss"
-  );
-  const primary = active ?? elimination ?? group ?? stages[0];
-  return primary
-    ? `/tournaments/${tournamentId}/bracket?stage=${primary.id}`
-    : `/tournaments/${tournamentId}/bracket`;
+function preferredScrollBehavior(): ScrollBehavior {
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
 }
 
 type TournamentSectionNavProps = {
   tournamentId: string;
   status: TournamentStatus;
-  stages?: Stage[];
+  stages?: StageSummary[];
   teamFormation?: string;
-  // Retained for call-site compatibility; both variants render the tab bar.
+  // Retained for call-site compatibility; both variants render the same adaptive rail.
   variant?: "desktop" | "mobile";
   className?: string;
 };
@@ -78,68 +65,168 @@ export default function TournamentSectionNav({
   status,
   stages = [],
   teamFormation,
-  className,
+  className
 }: TournamentSectionNavProps) {
   const t = useTranslations();
-  const segment = useSelectedLayoutSegment();
-  const activeTab = normalizeSegment(segment);
-  const competitionEnabled = unlockedStatuses.has(status);
-  const isLive = status === "live" || status === "playoffs";
-  const bracketHref = resolveBracketHref(tournamentId, stages);
+  const pathname = usePathname();
+  const frameRef = useRef<HTMLElement>(null);
+  const railRef = useRef<HTMLDivElement>(null);
+  const activeRef = useRef<HTMLElement>(null);
+  const refreshRailRef = useRef<() => void>(() => undefined);
+  const [railState, setRailState] = useState(initialRailState);
+  const items = useMemo(
+    () =>
+      buildTournamentSectionNav({
+        tournamentId,
+        status,
+        stages,
+        teamFormation,
+        pathname
+      }),
+    [pathname, stages, status, teamFormation, tournamentId]
+  );
+  const phaseNoteKey = getTournamentPhaseNoteKey(status, stages.length > 0);
+  const setActiveRef = (node: HTMLElement | null) => {
+    activeRef.current = node;
+  };
+
+  useEffect(() => {
+    const frame = frameRef.current;
+    const rail = railRef.current;
+    if (!frame || !rail) return;
+
+    const observer = observeTournamentRail(rail, setRailState, {
+      measurementContainer: frame
+    });
+    refreshRailRef.current = observer.refresh;
+
+    return () => {
+      refreshRailRef.current = () => undefined;
+      observer.cleanup();
+    };
+  }, []);
+
+  useEffect(() => {
+    activeRef.current?.scrollIntoView({
+      behavior: preferredScrollBehavior(),
+      block: "nearest",
+      inline: "center"
+    });
+    refreshRailRef.current();
+  }, [items, pathname]);
+
+  const scrollRail = (direction: -1 | 1) => {
+    const rail = railRef.current;
+    if (!rail) return;
+
+    scrollTournamentRail(rail, direction, preferredScrollBehavior());
+  };
 
   return (
-    <nav className={cn("tabs", className)} aria-label={t("tournamentDetail.sectionsNav")}>
-      {!competitionEnabled ? (
-        <span className="tab disabled" aria-disabled="true">
-          <LayoutGrid className="h-3.5 w-3.5" />
-          {t("common.bracket")}
-        </span>
-      ) : (
-        <Link
-          href={bracketHref}
-          className={cn("tab", activeTab === "bracket" && "active")}
-          aria-current={activeTab === "bracket" ? "page" : undefined}
+    <div className={cn(styles.navRegion, className)}>
+      <p id="tournament-phase-note" className={styles.phaseNote}>
+        {t(phaseNoteKey)}
+      </p>
+      <nav
+        ref={frameRef}
+        className={cn(styles.railFrame, railState.hasOverflow && styles.railFrameWithControls)}
+        aria-label={t("tournamentDetail.sectionsNav")}
+        aria-describedby="tournament-phase-note"
+      >
+        <button
+          type="button"
+          className={cn(
+            styles.scrollControl,
+            styles.scrollPrevious,
+            !railState.hasOverflow && styles.scrollControlHidden
+          )}
+          onClick={() => scrollRail(-1)}
+          aria-label={t("tournamentDetail.nav.scrollPrevious")}
+          aria-hidden={!railState.hasOverflow || undefined}
+          disabled={!railState.hasOverflow || !railState.canScrollPrevious}
         >
-          <LayoutGrid className="h-3.5 w-3.5" />
-          {t("common.bracket")}
-          {isLive && <span className="live-tag" />}
-        </Link>
-      )}
+          <ArrowLeft aria-hidden="true" />
+        </button>
 
-      {baseItems.map((item) => {
-        if (item.tab === "draft" && teamFormation !== "draft") {
-          return null;
-        }
+        <div className={styles.railViewport}>
+          {railState.canScrollPrevious ? (
+            <span className={cn(styles.edgeFade, styles.edgeFadeStart)} aria-hidden="true" />
+          ) : null}
+          <TooltipProvider delayDuration={180}>
+            <div ref={railRef} className={styles.rail}>
+              {items.map((item) => {
+                const Icon = icons[item.id];
+                const content = (
+                  <>
+                    <Icon className={styles.itemIcon} aria-hidden="true" />
+                    <span>{t(item.labelKey)}</span>
+                    {item.id === "bracket" && (status === "live" || status === "playoffs") ? (
+                      <span className={styles.liveTag} aria-hidden="true" />
+                    ) : null}
+                  </>
+                );
 
-        const Icon = item.icon;
-        const isActive = item.tab === activeTab;
-        const disabled = phaseLockedTabs.has(item.tab) && !competitionEnabled;
-        const content = (
-          <>
-            <Icon className="h-3.5 w-3.5" />
-            {t(`common.${item.tab}`)}
-          </>
-        );
+                if (!item.available && item.reasonKey) {
+                  const reason = t(item.reasonKey);
+                  return (
+                    <Tooltip key={item.id}>
+                      <TooltipTrigger asChild>
+                        <button
+                          ref={item.active ? setActiveRef : undefined}
+                          type="button"
+                          className={cn(
+                            styles.navItem,
+                            styles.locked,
+                            item.active && styles.active
+                          )}
+                          aria-current={item.active ? "page" : undefined}
+                          aria-disabled={!item.available || undefined}
+                          title={reason}
+                          onClick={(event) => event.preventDefault()}
+                        >
+                          {content}
+                          <span className="sr-only"> — {reason}</span>
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom">{reason}</TooltipContent>
+                    </Tooltip>
+                  );
+                }
 
-        if (disabled) {
-          return (
-            <span key={item.tab} className="tab disabled" aria-disabled="true">
-              {content}
-            </span>
-          );
-        }
+                return (
+                  <Link
+                    key={item.id}
+                    ref={item.active ? setActiveRef : undefined}
+                    href={item.href}
+                    className={cn(styles.navItem, item.active && styles.active)}
+                    aria-current={item.active ? "page" : undefined}
+                  >
+                    {content}
+                  </Link>
+                );
+              })}
+            </div>
+          </TooltipProvider>
+          {railState.canScrollNext ? (
+            <span className={cn(styles.edgeFade, styles.edgeFadeEnd)} aria-hidden="true" />
+          ) : null}
+        </div>
 
-        return (
-          <Link
-            key={item.tab}
-            href={item.tab === "draft" ? `/draft/${tournamentId}` : `/tournaments/${tournamentId}/${item.tab}`}
-            className={cn("tab", isActive && "active")}
-            aria-current={isActive ? "page" : undefined}
-          >
-            {content}
-          </Link>
-        );
-      })}
-    </nav>
+        <button
+          type="button"
+          className={cn(
+            styles.scrollControl,
+            styles.scrollNext,
+            !railState.hasOverflow && styles.scrollControlHidden
+          )}
+          onClick={() => scrollRail(1)}
+          aria-label={t("tournamentDetail.nav.scrollNext")}
+          aria-hidden={!railState.hasOverflow || undefined}
+          disabled={!railState.hasOverflow || !railState.canScrollNext}
+        >
+          <ArrowRight aria-hidden="true" />
+        </button>
+      </nav>
+    </div>
   );
 }

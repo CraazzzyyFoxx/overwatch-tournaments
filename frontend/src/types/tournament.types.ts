@@ -73,7 +73,7 @@ export interface StageItem {
   inputs: StageItemInput[];
 }
 
-export interface Stage {
+export interface StageSummary {
   id: number;
   tournament_id: number;
   name: string;
@@ -88,6 +88,9 @@ export interface Stage {
   settings_json: Record<string, unknown> | null;
   challonge_id: number | null;
   challonge_slug: string | null;
+}
+
+export interface Stage extends StageSummary {
   items: StageItem[];
 }
 
@@ -118,10 +121,11 @@ export interface Tournament {
   draw_points: number;
   loss_points: number;
 
-  stages: Stage[];
+  stages: StageSummary[];
   groups?: TournamentGroup[];
   participants_count: number | null;
   registrations_count: number | null;
+  teams_count: number | null;
   division_grid_version_id: number | null;
   division_grid_version: DivisionGridVersion | null;
 }

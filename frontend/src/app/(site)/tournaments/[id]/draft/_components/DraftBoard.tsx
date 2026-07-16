@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, Loader2, ShieldCheck } from "lucide-react";
+import { AlertTriangle, ShieldCheck } from "lucide-react";
 import { useMemo } from "react";
 import type { ReactNode } from "react";
 import { useTranslations } from "next-intl";
@@ -8,6 +8,8 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { HeroFrame } from "@/components/site/PageHero";
 import { Button } from "@/components/ui/button";
+import { DraftBoardSkeleton } from "@/app/draft/[id]/DraftRoomSkeleton";
+import { shouldShowInitialDraftSkeleton } from "@/app/draft/[id]/draft-loading-state";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
 import { getDefaultDivisionGrid } from "@/lib/division-grid";
 import type { Tournament } from "@/types/tournament.types";
@@ -20,10 +22,7 @@ import {
   useDraftRealtime
 } from "../_hooks/useDraftData";
 import { computeGating } from "../_lib/draft-logic";
-import {
-  parseDraftViewParams,
-  type DraftViewParams
-} from "../_lib/draft-workspace-model";
+import { parseDraftViewParams, type DraftViewParams } from "../_lib/draft-workspace-model";
 import { CaptainDraftWorkspace } from "./CaptainDraftWorkspace";
 import { DraftPageHero } from "./DraftPageHero";
 import { SpectatorDraftWorkspace } from "./SpectatorDraftWorkspace";
@@ -47,10 +46,7 @@ export function DraftBoard({ tournament }: DraftBoardProps) {
     [user]
   );
   const gating = useMemo(
-    () =>
-      board
-        ? computeGating(board, myPlayerIds, user?.id ?? null, false)
-        : null,
+    () => (board ? computeGating(board, myPlayerIds, user?.id ?? null, false) : null),
     [board, myPlayerIds, user?.id]
   );
   const optionsQuery = useDraftPickOptionsQuery(
@@ -82,18 +78,11 @@ export function DraftBoard({ tournament }: DraftBoardProps) {
     router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
   };
 
-  if (boardQuery.isLoading) {
-    return (
-      <DraftStateFrame
-        icon={<Loader2 className="h-6 w-6 animate-spin motion-reduce:animate-none" />}
-        title={t("loadingTitle")}
-        hint={t("loadingHint")}
-        live
-      />
-    );
+  if (shouldShowInitialDraftSkeleton(boardQuery)) {
+    return <DraftBoardSkeleton />;
   }
 
-  if (boardQuery.isError) {
+  if (boardQuery.isError && !board) {
     return (
       <DraftStateFrame
         icon={<AlertTriangle className="h-6 w-6 text-[color:var(--aqt-warm)]" />}
@@ -175,22 +164,16 @@ function DraftStateFrame({
   icon,
   title,
   hint,
-  action,
-  live = false
+  action
 }: {
   icon: ReactNode;
   title: string;
   hint: string;
   action?: ReactNode;
-  live?: boolean;
 }) {
   return (
     <HeroFrame>
-      <div
-        className="flex min-h-64 flex-col items-start justify-center gap-3 px-6 py-12 md:px-10"
-        role={live ? "status" : undefined}
-        aria-live={live ? "polite" : undefined}
-      >
+      <div className="flex min-h-64 flex-col items-start justify-center gap-3 px-6 py-12 md:px-10">
         {icon}
         <h1 className="font-onest text-2xl font-semibold text-[color:var(--aqt-fg)]">{title}</h1>
         <p className="max-w-xl text-sm leading-relaxed text-[color:var(--aqt-fg-muted)]">{hint}</p>

@@ -55,6 +55,7 @@ class TournamentRead(BaseRead):
     stages: list[StageSummaryRead] = []
     participants_count: int | None
     registrations_count: int | None = None
+    teams_count: int | None = None
     division_grid_version_id: int | None
     division_grid_version: DivisionGridVersionRead | None = None
 

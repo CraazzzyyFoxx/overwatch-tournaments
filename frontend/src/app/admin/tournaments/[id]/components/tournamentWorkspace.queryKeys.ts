@@ -8,6 +8,7 @@ export function getTournamentWorkspaceQueryKeys(tournamentId: number) {
     teams: ["admin", "tournament", tournamentId, "teams"] as const,
     divisionGrids: ["admin", "tournament", tournamentId, "division-grids"] as const,
     standings: ["admin", "tournament", tournamentId, "standings"] as const,
+    standingsTable: ["standings-table", tournamentId] as const,
     encounters: ["admin", "tournament", tournamentId, "encounters"] as const,
     stages: ["admin", "stages", tournamentId] as const,
     discordChannel: ["admin", "tournament", tournamentId, "discord-channel"] as const,

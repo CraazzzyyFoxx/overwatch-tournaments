@@ -162,7 +162,7 @@ export default function EncountersPage() {
 
   const { data: teamsData } = useQuery({
     queryKey: ["teams", formTournamentId],
-    queryFn: () => teamService.getAll(formTournamentId)
+    queryFn: () => teamService.getAll({ tournamentId: formTournamentId })
   });
 
   const { data: stagesData = [] } = useQuery({

@@ -23,16 +23,15 @@ export function DraftClockRing({ expiresAt, paused, totalSeconds, accent }: Draf
   const [now, setNow] = useState<number | null>(null);
 
   useEffect(() => {
-    // Client-only clock seed: must run post-mount (Date.now() in render breaks SSR hydration);
-    // pause-independent so a mid-pause mount shows the frozen fraction, not an empty ring.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setNow(Date.now());
-  }, [expiresAt]);
+    const initialId = window.setTimeout(() => setNow(Date.now()), 0);
+    const intervalId = !paused && expiresAt
+      ? window.setInterval(() => setNow(Date.now()), 250)
+      : null;
 
-  useEffect(() => {
-    if (paused || !expiresAt) return;
-    const id = window.setInterval(() => setNow(Date.now()), 250);
-    return () => window.clearInterval(id);
+    return () => {
+      window.clearTimeout(initialId);
+      if (intervalId != null) window.clearInterval(intervalId);
+    };
   }, [paused, expiresAt]);
 
   const ms = expiresAt && now != null ? remainingMs(expiresAt, now) : null;

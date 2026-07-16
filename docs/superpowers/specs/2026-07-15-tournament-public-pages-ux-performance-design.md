@@ -1,7 +1,7 @@
 # Tournament Public Pages UX and Performance Design
 
-**Date:** 2026-07-15  
-**Status:** Approved  
+**Date:** 2026-07-15
+**Status:** Approved
 **Scope:** Public tournament routes under `/tournaments/[id]` and the linked draft experience at `/draft/[id]`
 
 ## Understanding Summary

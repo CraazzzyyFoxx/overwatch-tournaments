@@ -123,7 +123,7 @@ export default function AdminTournamentWorkspacePage() {
 
   const teamsQuery = useQuery({
     queryKey: ["admin", "tournament", tournamentId, "teams"],
-    queryFn: () => teamService.getAll(tournamentId),
+    queryFn: () => teamService.getAll({ tournamentId }),
     enabled: isValidTournamentId && shouldLoadTeams
   });
 

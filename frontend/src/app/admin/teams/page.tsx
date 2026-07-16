@@ -235,7 +235,7 @@ export default function TeamsPage() {
           sortDir
         ]}
         queryFn={async (page, search, pageSize, sortField, sortDir) => {
-          const data = await teamService.getAll(selectedTournamentId);
+          const data = await teamService.getAll({ tournamentId: selectedTournamentId });
           const filteredTeams = search
             ? data.results.filter((team) => team.name.toLowerCase().includes(search.toLowerCase()))
             : data.results;

@@ -5,7 +5,6 @@ import { useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 
 import { BracketView } from "@/components/BracketView";
-import StandingsTable from "@/components/StandingsTable";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { EncounterEditDialog } from "@/components/tournaments/EncounterEditDialog";
 import { MatchReportDialog } from "@/components/tournaments/MatchReportDialog";
@@ -13,21 +12,24 @@ import { notify } from "@/lib/notify";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
 import { usePermissions } from "@/hooks/usePermissions";
 import captainService from "@/services/captain.service";
-import encounterService from "@/services/encounter.service";
-import tournamentService from "@/services/tournament.service";
 import type { Encounter } from "@/types/encounter.types";
 import type { Standings, Tournament, Stage, StageItem } from "@/types/tournament.types";
 
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { useTranslations } from "next-intl";
+import { TournamentPageState } from "../_components/TournamentPageState";
+import { TournamentBracketSkeleton } from "../_components/TournamentSkeletons";
+import styles from "../TournamentDetail.module.css";
+import { BracketLeanStandings } from "./BracketLeanStandings";
+import { createBracketQueryPlan, deriveBracketLoadState } from "./bracketData";
 
 const ADMIN_ROLES = new Set(["admin", "superadmin", "tournament_admin"]);
-const BRACKET_REFRESH_INTERVAL_MS = 60_000;
+
+export { getBracketRefetchInterval } from "./bracketData";
 
 interface TournamentBracketPageProps {
   tournament: Tournament;
-  stages: Stage[];
 }
 
 function GroupStagePanel({
@@ -119,7 +121,7 @@ function GroupStagePanel({
       {hasStandings && (
         <TabsContent value="standings" className="mt-0">
           <div className="overflow-x-auto">
-            <StandingsTable standings={[...standings]} is_groups={true} />
+            <BracketLeanStandings standings={standings} isGroups />
           </div>
         </TabsContent>
       )}
@@ -138,11 +140,7 @@ function GroupStagePanel({
   );
 }
 
-function getGroupScopeCount(stages: Stage[]) {
-  return stages.reduce((count, stage) => count + Math.max(stage.items.length, 1), 0);
-}
-
-export default function TournamentBracketPage({ tournament, stages }: TournamentBracketPageProps) {
+export default function TournamentBracketPage({ tournament }: TournamentBracketPageProps) {
   const searchParams = useSearchParams();
   const selectedStageParam = searchParams.get("stage");
   const viewParam = searchParams.get("view");
@@ -159,6 +157,19 @@ export default function TournamentBracketPage({ tournament, stages }: Tournament
   const t = useTranslations();
   const [editEncounter, setEditEncounter] = useState<Encounter | null>(null);
   const [reportEncounter, setReportEncounter] = useState<Encounter | null>(null);
+
+  const initialQueryPlan = useMemo(
+    () => createBracketQueryPlan(tournament, selectedStageParam),
+    [selectedStageParam, tournament]
+  );
+  const stagesQuery = useQuery(initialQueryPlan.stages);
+  const queryPlan = useMemo(
+    () => createBracketQueryPlan(tournament, selectedStageParam, stagesQuery.data),
+    [selectedStageParam, stagesQuery.data, tournament]
+  );
+  const encountersQuery = useQuery(queryPlan.encounters);
+  const standingsQuery = useQuery(queryPlan.standings);
+  const stages = stagesQuery.data ?? [];
 
   const canEdit = isAdmin ? () => true : undefined;
   const canReport =
@@ -191,8 +202,7 @@ export default function TournamentBracketPage({ tournament, stages }: Tournament
 
   const activeStage = stages.find((stage) => stage.is_active);
   const fallbackStage = activeStage ?? eliminationStages[0] ?? stages[0];
-  const requestedStageId = selectedStageParam ? Number(selectedStageParam) : null;
-  const requestedStage = stages.find((stage) => stage.id === requestedStageId);
+  const requestedStage = stages.find((stage) => stage.id === queryPlan.initialStageId);
   const primaryStage = requestedStage ?? fallbackStage;
   const shouldShowGroupStage =
     viewParam === "groups" ||
@@ -223,7 +233,7 @@ export default function TournamentBracketPage({ tournament, stages }: Tournament
       0
     );
 
-    const activeStageId = selectedStageParam ? Number(selectedStageParam) : fallbackStage?.id;
+    const activeStageId = queryPlan.initialStageId ?? fallbackStage?.id;
 
     const isGroupViewActive =
       viewParam === "groups" ||
@@ -266,34 +276,14 @@ export default function TournamentBracketPage({ tournament, stages }: Tournament
     groupStages,
     eliminationStages,
     fallbackStage?.id,
-    selectedStageParam,
+    queryPlan.initialStageId,
     viewParam,
     tournament.id,
     t
   ]);
 
-  const { data: allEncounters } = useQuery({
-    queryKey: ["encounters", "tournament", tournament.id, tournament.workspace_id],
-    queryFn: () =>
-      encounterService.getAll(
-        1,
-        "",
-        tournament.id,
-        -1,
-        undefined,
-        undefined,
-        tournament.workspace_id
-      ),
-    refetchInterval: BRACKET_REFRESH_INTERVAL_MS,
-    refetchIntervalInBackground: true
-  });
-
-  const { data: allStandings = [] } = useQuery({
-    queryKey: ["standings", tournament.id, tournament.workspace_id],
-    queryFn: () => tournamentService.getStandings(tournament.id, tournament.workspace_id),
-    refetchInterval: BRACKET_REFRESH_INTERVAL_MS,
-    refetchIntervalInBackground: true
-  });
+  const allEncounters = encountersQuery.data;
+  const allStandings = standingsQuery.data ?? [];
 
   const groupStagePanels = useMemo(() => {
     const encounters = allEncounters?.results ?? [];
@@ -346,8 +336,68 @@ export default function TournamentBracketPage({ tournament, stages }: Tournament
     [allStandings]
   );
 
-  return (
-    <div className="space-y-5">
+  const retryQueries = () => {
+    const requests: Array<Promise<unknown>> = [stagesQuery.refetch()];
+    if (queryPlan.initialStageId != null) {
+      requests.push(encountersQuery.refetch(), standingsQuery.refetch());
+    }
+    void Promise.all(requests);
+  };
+  const loadState = deriveBracketLoadState({
+    hasStageId: queryPlan.initialStageId != null,
+    stages: {
+      hasData: stagesQuery.data !== undefined,
+      isPending: stagesQuery.isPending,
+      isError: stagesQuery.isError,
+      isFetching: stagesQuery.isFetching
+    },
+    encounters: {
+      hasData: encountersQuery.data !== undefined,
+      isPending: encountersQuery.isPending,
+      isError: encountersQuery.isError,
+      isFetching: encountersQuery.isFetching
+    },
+    standings: {
+      hasData: standingsQuery.data !== undefined,
+      isPending: standingsQuery.isPending,
+      isError: standingsQuery.isError,
+      isFetching: standingsQuery.isFetching
+    }
+  });
+
+  if (loadState.kind === "initial-error") {
+    return <TournamentPageState state="initial-error" onRetry={retryQueries} />;
+  }
+
+  if (loadState.kind === "initial-loading") {
+    return <TournamentBracketSkeleton />;
+  }
+
+  const content = (
+    <div className={styles.publicDataPage} data-page-section="bracket">
+      <header className={styles.pageHeading}>
+        <div className={styles.pageHeadingCopy}>
+          <p className={styles.pageEyebrow}>
+            {t("tournamentDetail.publicPages.bracket.eyebrow")}
+          </p>
+          <div className={styles.pageTitleRow}>
+            <h2 className={styles.pageTitle}>{t("common.bracket")}</h2>
+            <span className={styles.pageCount}>{stages.length}</span>
+          </div>
+          <p className={styles.pageContext}>
+            {t("tournamentDetail.publicPages.bracket.context")}
+          </p>
+        </div>
+      </header>
+      {loadState.isUpdating && loadState.kind !== "refresh-error" ? (
+        <p
+          className="text-right text-xs font-semibold uppercase tracking-[0.14em] text-[var(--aqt-teal)]"
+          role="status"
+          aria-live="polite"
+        >
+          {t("tournamentDetail.pageState.updating")}
+        </p>
+      ) : null}
       {activeStages.length > 0 ? (
         <div className="space-y-6">
           {shouldShowGroupStage
@@ -439,9 +489,9 @@ export default function TournamentBracketPage({ tournament, stages }: Tournament
                     {hasPlayoffStandings && (
                       <TabsContent value="standings" className="mt-0">
                         <div className="overflow-x-auto">
-                          <StandingsTable
-                            standings={[...stagePlayoffStandings]}
-                            is_groups={false}
+                          <BracketLeanStandings
+                            standings={stagePlayoffStandings}
+                            isGroups={false}
                           />
                         </div>
                       </TabsContent>
@@ -468,9 +518,7 @@ export default function TournamentBracketPage({ tournament, stages }: Tournament
               })}
         </div>
       ) : (
-        <div className="py-12 text-center text-muted-foreground">
-          {stages.length === 0 ? t("common.noStages") : t("common.noBracketMatches")}
-        </div>
+        <TournamentPageState state="empty" />
       )}
 
       {editEncounter && (
@@ -494,4 +542,18 @@ export default function TournamentBracketPage({ tournament, stages }: Tournament
       )}
     </div>
   );
+
+  if (loadState.kind === "refresh-error") {
+    return (
+      <TournamentPageState
+        state="refresh-error"
+        onRetry={retryQueries}
+        isUpdating={loadState.isUpdating}
+      >
+        {content}
+      </TournamentPageState>
+    );
+  }
+
+  return content;
 }
