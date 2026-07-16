@@ -31,6 +31,32 @@ describe("virtual participants collection", () => {
     expect(cssSource).not.toMatch(/\.participants[^}]*max-height/s);
   });
 
+  it("contains a wide desktop table locally while preserving the 360px card layout", () => {
+    const viewportRule = cssSource.match(/\.participantsTableViewport\s*\{([^}]*)\}/s)?.[1];
+    const tableRule = cssSource.match(/\.participantsTable\s*\{([^}]*)\}/s)?.[1];
+    const mobileSource = cssSource.slice(cssSource.indexOf("@media (max-width: 640px)"));
+    const mobileViewportRule = mobileSource.match(
+      /\.participantsTableViewport\s*\{([^}]*)\}/s,
+    )?.[1];
+    const mobileTableRule = mobileSource.match(/\.participantsTable\s*\{([^}]*)\}/s)?.[1];
+
+    // At a 1440px viewport the 1520px table must be clipped to this local
+    // horizontal scroll owner instead of increasing document.scrollWidth.
+    expect(viewportRule).toMatch(/contain:\s*paint/);
+    expect(viewportRule).toMatch(/width:\s*100%/);
+    expect(viewportRule).toMatch(/min-width:\s*0/);
+    expect(viewportRule).toMatch(/max-width:\s*100%/);
+    expect(viewportRule).toMatch(/overflow-x:\s*auto/);
+    expect(viewportRule).toMatch(/overflow-y:\s*clip/);
+    expect(tableRule).toMatch(/min-width:\s*max\(100%,\s*var\(--participant-table-min-width\)\)/);
+
+    // At 360px the same boundary remains in place, while the existing mobile
+    // card layout removes the desktop minimum width and keeps document scroll vertical.
+    expect(mobileViewportRule).toMatch(/overflow-x:\s*hidden/);
+    expect(mobileViewportRule).not.toMatch(/overflow-y:\s*(auto|scroll)/);
+    expect(mobileTableRule).toMatch(/min-width:\s*0/);
+  });
+
   it("exposes the full logical table and stable expandable row semantics", () => {
     expect(source).toContain('role="table"');
     expect(source).toContain("aria-rowcount={registrations.length + 1}");
