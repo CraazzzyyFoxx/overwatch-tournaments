@@ -15,8 +15,6 @@ class TeamCreate(BaseModel):
     balancer_name: str | None = None
     tournament_id: int
     captain_id: int
-    avg_sr: float = 0.0
-    total_sr: int = 0
 
 
 class TeamUpdate(BaseModel):
@@ -25,8 +23,6 @@ class TeamUpdate(BaseModel):
     name: str | None = None
     balancer_name: str | None = None
     captain_id: int | None = None
-    avg_sr: float | None = None
-    total_sr: int | None = None
 
 
 class PlayerCreate(BaseModel):

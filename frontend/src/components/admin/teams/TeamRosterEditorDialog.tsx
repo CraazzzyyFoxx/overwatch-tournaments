@@ -69,8 +69,6 @@ type TeamRosterEditorDialogProps = {
 type TeamFormState = {
   name: string;
   captain_id: number;
-  avg_sr: number;
-  total_sr: number;
 };
 
 type PlayerRoleOption = "Tank" | "Damage" | "Support";
@@ -121,18 +119,14 @@ const PLAYER_ROLE_OPTIONS: PlayerRoleOption[] = ["Tank", "Damage", "Support"];
 function getEmptyTeamForm(): TeamFormState {
   return {
     name: "",
-    captain_id: 0,
-    avg_sr: 0,
-    total_sr: 0
+    captain_id: 0
   };
 }
 
 function getTeamForm(team: Team): TeamFormState {
   return {
     name: team.name,
-    captain_id: team.captain_id,
-    avg_sr: team.avg_sr,
-    total_sr: team.total_sr
+    captain_id: team.captain_id
   };
 }
 
@@ -766,18 +760,14 @@ export function TeamRosterEditorDialog({
         savedTeam = await adminService.createTeam({
           name: teamData.name.trim(),
           tournament_id: tournamentId,
-          captain_id: teamData.captain_id,
-          avg_sr: teamData.avg_sr,
-          total_sr: teamData.total_sr
+          captain_id: teamData.captain_id
         });
       } else if (canPatchTeam) {
         const captainInExistingRoster = roster.some(
           (player) => player.state === "existing" && player.user_id === teamData.captain_id
         );
         const initialPatch: TeamUpdateInput = {
-          name: teamData.name.trim(),
-          avg_sr: teamData.avg_sr,
-          total_sr: teamData.total_sr
+          name: teamData.name.trim()
         };
 
         if (captainInExistingRoster) {
@@ -1164,44 +1154,6 @@ export function TeamRosterEditorDialog({
                 ? "Captain options update automatically from the active roster."
                 : "Add at least one player before choosing a captain."}
             </p>
-          </div>
-
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="workspace-team-avg-sr">Average SR</Label>
-              <TeamNumberInput
-                id="workspace-team-avg-sr"
-                value={teamFormData.avg_sr}
-                min={0}
-                step={50}
-                suffix="SR"
-                disabled={isEditing && !canUpdateTeam}
-                onChange={(value) =>
-                  setTeamFormData((current) => ({
-                    ...current,
-                    avg_sr: value
-                  }))
-                }
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="workspace-team-total-sr">Total SR</Label>
-              <TeamNumberInput
-                id="workspace-team-total-sr"
-                value={teamFormData.total_sr}
-                min={0}
-                step={250}
-                suffix="SR"
-                disabled={isEditing && !canUpdateTeam}
-                onChange={(value) =>
-                  setTeamFormData((current) => ({
-                    ...current,
-                    total_sr: value
-                  }))
-                }
-              />
-            </div>
           </div>
 
           <div className="space-y-3 rounded-lg border border-border/60 p-4">

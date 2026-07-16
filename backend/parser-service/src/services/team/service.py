@@ -306,30 +306,6 @@ async def get_player_by_user_and_role(
     return result.unique().scalars().all()
 
 
-async def create(
-    session: AsyncSession,
-    *,
-    name: str,
-    balancer_name: str,
-    avg_sr: float,
-    total_sr: int,
-    tournament: models.Tournament,
-    captain: models.User,
-) -> models.Team:
-    team = models.Team(
-        name=name,
-        balancer_name=balancer_name,
-        avg_sr=avg_sr,
-        total_sr=total_sr,
-        tournament_id=tournament.id,
-        captain_id=captain.id,
-    )
-
-    session.add(team)
-    await session.commit()
-    return team
-
-
 def construct_player(
     **kwargs,
 ) -> models.Player:

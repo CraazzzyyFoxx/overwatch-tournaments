@@ -31702,11 +31702,6 @@
     "tournament.TeamCreate": {
       "description": "Schema for creating a team",
       "properties": {
-        "avg_sr": {
-          "default": 0.0,
-          "title": "Avg Sr",
-          "type": "number"
-        },
         "balancer_name": {
           "anyOf": [
             {
@@ -31726,11 +31721,6 @@
         "name": {
           "title": "Name",
           "type": "string"
-        },
-        "total_sr": {
-          "default": 0,
-          "title": "Total Sr",
-          "type": "integer"
         },
         "tournament_id": {
           "title": "Tournament Id",
@@ -31898,18 +31888,6 @@
     "tournament.TeamUpdate": {
       "description": "Schema for updating a team",
       "properties": {
-        "avg_sr": {
-          "anyOf": [
-            {
-              "type": "number"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Avg Sr"
-        },
         "balancer_name": {
           "anyOf": [
             {
@@ -31945,18 +31923,6 @@
           ],
           "default": null,
           "title": "Name"
-        },
-        "total_sr": {
-          "anyOf": [
-            {
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Total Sr"
         }
       },
       "title": "TeamUpdate",

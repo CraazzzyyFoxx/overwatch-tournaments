@@ -142,8 +142,6 @@ async def bulk_create_from_balancer(
             team = models.Team(
                 name=name,
                 balancer_name=team_data.name,
-                avg_sr=team_data.avg_sr,
-                total_sr=team_data.total_sr,
                 tournament_id=tournament.id,
                 captain_id=captain.id if captain else None,
             )

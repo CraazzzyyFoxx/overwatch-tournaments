@@ -27,8 +27,6 @@ export type TournamentFormState = {
 export type TeamFormState = {
   name: string;
   captain_id: number;
-  avg_sr: number;
-  total_sr: number;
 };
 
 export type EncounterFormState = {
@@ -123,18 +121,14 @@ export function getTournamentForm(tournament: Tournament): TournamentFormState {
 export function getEmptyTeamForm(): TeamFormState {
   return {
     name: "",
-    captain_id: 0,
-    avg_sr: 0,
-    total_sr: 0
+    captain_id: 0
   };
 }
 
 export function getTeamForm(team: Team): TeamFormState {
   return {
     name: team.name,
-    captain_id: team.captain_id,
-    avg_sr: team.avg_sr,
-    total_sr: team.total_sr
+    captain_id: team.captain_id
   };
 }
 

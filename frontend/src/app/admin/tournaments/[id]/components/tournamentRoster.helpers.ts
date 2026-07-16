@@ -228,14 +228,10 @@ export function buildRosterInitialSnapshot(team: Team | null) {
       ? {
           name: team.name,
           captain_id: team.captain_id,
-          avg_sr: team.avg_sr,
-          total_sr: team.total_sr,
         }
       : {
           name: "",
           captain_id: 0,
-          avg_sr: 0,
-          total_sr: 0,
         },
     roster: team ? createRosterDraftFromTeam(team) : [],
   };

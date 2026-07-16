@@ -100,16 +100,12 @@ def _ensure_impact_badge_fixture(db: Session) -> dict[str, int]:
                 id=ids["team_home"],
                 balancer_name="impact-badge-home",
                 name="Impact Badge Home",
-                avg_sr=3000,
-                total_sr=3000,
                 tournament_id=ids["tournament"],
             ),
             models.Team(
                 id=ids["team_away"],
                 balancer_name="impact-badge-away",
                 name="Impact Badge Away",
-                avg_sr=3000,
-                total_sr=3000,
                 tournament_id=ids["tournament"],
             ),
             models.Player(

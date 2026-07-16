@@ -259,15 +259,11 @@ export interface TeamCreateInput {
   name: string;
   tournament_id: number;
   captain_id?: number;
-  avg_sr?: number;
-  total_sr?: number;
 }
 
 export interface TeamUpdateInput {
   name?: string;
   captain_id?: number;
-  avg_sr?: number;
-  total_sr?: number;
 }
 
 export interface ChallongeTeamMapping {
