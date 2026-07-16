@@ -31,7 +31,7 @@ from src.core.security.api_key_limiter import (
 )
 from src.core.security.api_key_policy import validate_api_key_config_policy
 from src.core.security.workspace_access import WorkspaceAccessPolicy
-from src.schemas.balancer import BalanceJobResult, CreateJobResponse, JobStatusResponse
+from src.schemas.balancer import CreateJobResponse, JobStatusResponse
 from src.services.balancer.config.provider import get_balancer_config_payload
 from src.services.balancer.config.public_contract import normalize_balance_job_result_payload
 from src.services.balancer.progress import (
@@ -204,7 +204,7 @@ async def get_job_status(*, job_id: str, user) -> JobStatusResponse:
     return JobStatusResponse.model_validate(meta)
 
 
-async def get_job_result(*, job_id: str, user) -> BalanceJobResult:
+async def get_job_result(*, job_id: str, user) -> dict[str, Any]:
     job_store = get_job_store()
     await get_api_key_limiter().check_request(user)
     meta = await job_store.get_job_meta(job_id)
@@ -232,7 +232,11 @@ async def get_job_result(*, job_id: str, user) -> BalanceJobResult:
     result = await job_store.get_job_result(job_id)
     if result is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Balancer job result not found")
-    return BalanceJobResult.model_validate(result)
+    # The worker stored this payload already normalized through
+    # ``normalize_balance_job_result_payload`` (validated ``BalanceJobResult``,
+    # exclude_none dump), so return the parsed dict as-is instead of
+    # re-validating and re-dumping the multi-MB payload on every read.
+    return result
 
 
 def _build_progress_callback(event_queue: asyncio.Queue, loop: asyncio.AbstractEventLoop):

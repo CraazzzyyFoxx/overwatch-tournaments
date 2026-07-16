@@ -93,6 +93,29 @@ async function runReportedStage<T>(
   }
 }
 
+/**
+ * Single-registration mutation responses are serialized without the per-role
+ * OW-rank snapshot join (and profile-visibility check) the list endpoint
+ * performs, so merge the fresh row into the cached list while preserving the
+ * list-only enrichment fields instead of dropping them until the next refetch.
+ */
+function mergeRegistrationForCache(
+  existing: AdminRegistration,
+  fresh: AdminRegistration
+): AdminRegistration {
+  const previousOwRankByRole = new Map(
+    existing.roles.map((role) => [role.role, role.ow_rank_value])
+  );
+  return {
+    ...fresh,
+    profiles_open: fresh.profiles_open ?? existing.profiles_open,
+    roles: fresh.roles.map((role) => ({
+      ...role,
+      ow_rank_value: role.ow_rank_value ?? previousOwRankByRole.get(role.role) ?? null
+    }))
+  };
+}
+
 export function useBalancerMutations({
   tournamentId,
   workspaceId,
@@ -115,6 +138,25 @@ export function useBalancerMutations({
   activeVariant,
   onJobCreated
 }: UseBalancerMutationsOptions) {
+  const invalidateRegistrations = () =>
+    queryClient.invalidateQueries({ queryKey: ["balancer-admin", "registrations", tournamentId] });
+
+  /**
+   * Merge a mutation response row into the cached registrations list instead
+   * of blocking on a refetch of the whole (expensive) list endpoint. The
+   * realtime `balancer.registrations_changed` echo still reconciles the list
+   * in the background for every viewer.
+   */
+  const patchRegistrationInCache = (fresh: AdminRegistration) => {
+    queryClient.setQueryData<AdminRegistration[]>(
+      ["balancer-admin", "registrations", tournamentId],
+      (current) =>
+        current?.map((existing) =>
+          existing.id === fresh.id ? mergeRegistrationForCache(existing, fresh) : existing
+        )
+    );
+  };
+
   const addPlayerMutation = useMutation({
     mutationFn: async (application: BalancerApplication) => {
       if (!tournamentId) throw new Error("Select a tournament first");
@@ -125,9 +167,7 @@ export function useBalancerMutations({
     },
     onSuccess: async (registration) => {
       setSelectedPlayerId(registration.id);
-      await queryClient.invalidateQueries({
-        queryKey: ["balancer-admin", "registrations", tournamentId]
-      });
+      patchRegistrationInCache(registration);
       notify.success("Registration included in balancer");
       // Autofill ranks for the just-included player using the balancer-first priority chain
       // (previous balances → analytics → OW), reusing the backend's autofill logic.
@@ -146,9 +186,6 @@ export function useBalancerMutations({
       }
     }
   });
-
-  const invalidateRegistrations = () =>
-    queryClient.invalidateQueries({ queryKey: ["balancer-admin", "registrations", tournamentId] });
 
   const updatePlayerMutation = useMutation({
     mutationFn: async ({
@@ -198,20 +235,24 @@ export function useBalancerMutations({
         registrationPatch.balancer_status = payload.registration_balancer_status;
       }
 
+      if (payload.is_in_pool !== undefined) {
+        registrationPatch.exclude_from_balancer = !(payload.is_in_pool ?? true);
+        registrationPatch.exclude_reason = payload.is_in_pool ? null : "manual_exclusion";
+      }
+
+      let updated: AdminRegistration | null = null;
       if (Object.keys(registrationPatch).length > 0) {
-        await balancerAdminService.updateRegistration(playerId, registrationPatch);
+        updated = await balancerAdminService.updateRegistration(playerId, registrationPatch);
       }
-      if (payload.is_in_pool === undefined) {
-        return null;
-      }
-      return balancerAdminService.setRegistrationExclusion(playerId, {
-        exclude_from_balancer: !(payload.is_in_pool ?? true),
-        exclude_reason: payload.is_in_pool ? null : "manual_exclusion"
-      });
+      return updated;
     },
-    onSuccess: async () => {
+    onSuccess: async (updated) => {
       setEditingPlayerId(null);
-      await invalidateRegistrations();
+      if (updated) {
+        patchRegistrationInCache(updated);
+      } else {
+        await invalidateRegistrations();
+      }
       notify.success("Registration updated");
     }
   });
@@ -222,8 +263,8 @@ export function useBalancerMutations({
         exclude_from_balancer: true,
         exclude_reason: "manual_exclusion"
       }),
-    onSuccess: async () => {
-      await invalidateRegistrations();
+    onSuccess: (registration) => {
+      patchRegistrationInCache(registration);
       setEditingPlayerId(null);
       notify.success("Registration excluded from balancer");
     }
@@ -235,8 +276,8 @@ export function useBalancerMutations({
         exclude_from_balancer: !isInPool,
         exclude_reason: isInPool ? null : "manual_exclusion"
       }),
-    onSuccess: async (_, variables) => {
-      await invalidateRegistrations();
+    onSuccess: (registration, variables) => {
+      patchRegistrationInCache(registration);
       notify.success(
         variables.isInPool
           ? "Registration included in balancer"
@@ -248,26 +289,26 @@ export function useBalancerMutations({
   const setBalancerStatusMutation = useMutation({
     mutationFn: ({ playerId, balancerStatus }: { playerId: number; balancerStatus: string }) =>
       balancerAdminService.setBalancerStatus(playerId, balancerStatus),
-    onSuccess: async () => {
-      await invalidateRegistrations();
+    onSuccess: (registration) => {
+      patchRegistrationInCache(registration);
       notify.success("Balancer status updated");
     }
   });
 
   const bulkPoolMembershipMutation = useMutation({
     mutationFn: async ({ playerIds, isInPool }: { playerIds: number[]; isInPool: boolean }) => {
-      await Promise.all(
-        playerIds.map((playerId) =>
-          balancerAdminService.setRegistrationExclusion(playerId, {
-            exclude_from_balancer: !isInPool,
-            exclude_reason: isInPool ? null : "manual_exclusion"
-          })
-        )
-      );
-      return { updated: playerIds.length, isInPool };
+      if (!tournamentId) throw new Error("Select a tournament first");
+      const result = await balancerAdminService.bulkSetExclusion(tournamentId, {
+        registration_ids: playerIds,
+        exclude_from_balancer: !isInPool,
+        exclude_reason: isInPool ? null : "manual_exclusion"
+      });
+      return { ...result, isInPool };
     },
-    onSuccess: async (result) => {
-      await invalidateRegistrations();
+    onSuccess: (result) => {
+      // The bulk endpoint returns counters only, so a per-row cache patch is
+      // impossible; refetch the registrations list in the background instead.
+      void invalidateRegistrations();
       notify.success(
         `${result.updated} registration${result.updated !== 1 ? "s" : ""} ${result.isInPool ? "included" : "excluded"}`
       );
@@ -282,15 +323,15 @@ export function useBalancerMutations({
       playerIds: number[];
       balancerStatus: string;
     }) => {
-      await Promise.all(
+      const registrations = await Promise.all(
         playerIds.map((playerId) =>
           balancerAdminService.setBalancerStatus(playerId, balancerStatus)
         )
       );
-      return { updated: playerIds.length };
+      return { updated: registrations.length, registrations };
     },
-    onSuccess: async (result) => {
-      await invalidateRegistrations();
+    onSuccess: (result) => {
+      result.registrations.forEach(patchRegistrationInCache);
       notify.success(
         `${result.updated} balancer status${result.updated !== 1 ? "es" : ""} updated`
       );

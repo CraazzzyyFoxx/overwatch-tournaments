@@ -485,6 +485,10 @@ export interface AdminRegistrationUpdateInput {
   roles?: AdminRegistrationRole[] | null;
   /** When set, (re)anchor the registration on this site account's player. */
   auth_user_id?: number | null;
+  /** When set, mirrors the exclusion endpoint semantics in a single PATCH. */
+  exclude_from_balancer?: boolean | null;
+  /** Applied only together with exclude_from_balancer. */
+  exclude_reason?: string | null;
 }
 
 export interface AdminRegistrationExclusionInput {

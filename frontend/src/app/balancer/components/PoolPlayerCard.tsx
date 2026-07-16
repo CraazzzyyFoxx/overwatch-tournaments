@@ -82,7 +82,7 @@ function normalizeRoleEntries(entries: BalancerPlayerRoleEntry[]): BalancerPlaye
 
 type PoolPlayerCardProps = {
   player: BalancerPlayerRecord;
-  onSave: (playerId: number, payload: { role_entries_json: BalancerPlayerRoleEntry[]; is_in_pool: boolean; admin_notes: string | null }) => void;
+  onSave: (playerId: number, payload: { role_entries_json: BalancerPlayerRoleEntry[]; is_in_pool?: boolean; admin_notes: string | null }) => void;
   onRemove?: (playerId: number) => void;
   saving?: boolean;
 };
@@ -396,7 +396,7 @@ export function PoolPlayerCard({ player, onSave, onRemove, saving = false }: Poo
 
         <Button
           type="button"
-          onClick={() => onSave(player.id, { role_entries_json: normalizeRoleEntries(roleEntries), is_in_pool: isInPool, admin_notes: notes || null })}
+          onClick={() => onSave(player.id, { role_entries_json: normalizeRoleEntries(roleEntries), is_in_pool: isInPool === player.is_in_pool ? undefined : isInPool, admin_notes: notes || null })}
           disabled={!isDirty || saving}
         >
           <Save className="mr-2 h-4 w-4" />

@@ -76,7 +76,7 @@ def register(broker: Any, logger: Any) -> None:
             ws_id = await _get_tournament_workspace_id(session, tournament_id)
             c.require_workspace_permission(data, user, ws_id, "team", "import")
             body = admin_schemas.BalancerTournamentConfigUpsert.model_validate(c.payload(data))
-            cfg = await admin_balancer.upsert_tournament_config(session, tournament_id, body.config_json, user)
+            cfg = await admin_balancer.upsert_tournament_config(session, tournament_id, ws_id, body.config_json, user)
             await emit_balancer_data_event(
                 tournament_id,
                 BALANCER_CONFIG_CHANGED,
@@ -112,7 +112,7 @@ def register(broker: Any, logger: Any) -> None:
             body = admin_schemas.BalanceSaveRequest.model_validate(c.payload(data))
             balance = await admin_balancer.save_balance(session, tournament_id, body, user)
             await emit_balancer_data_event(tournament_id, BALANCER_BALANCE_SAVED, actor_user_id=user.id)
-            return serialize_balance(balance)
+            return serialize_balance(balance, already_normalized=True)
 
         return await c.envelope(logger, "admin.balance_save", op, session_factory=_SF)
 

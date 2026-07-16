@@ -17,6 +17,7 @@ import (
 	"io"
 	"log/slog"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
@@ -32,6 +33,12 @@ import (
 const (
 	contentTypeJSON   = "application/json"
 	maxReconnectDelay = 30 * time.Second
+	// publishChannels is the size of the publish-only channel pool. amqp091-go
+	// serializes writes per channel under an internal mutex, so with a single
+	// channel every concurrent Call queues behind one network writer. A small
+	// pool spreads publishes across channels on the same connection; the reply
+	// consumer keeps its own dedicated channel.
+	publishChannels = 4
 )
 
 // ErrNotConnected is returned when a call is made before the client has
@@ -61,10 +68,13 @@ type Client struct {
 
 	mu         sync.RWMutex
 	conn       *amqp.Connection
-	ch         *amqp.Channel
+	ch         *amqp.Channel   // reply-queue channel (declare + consume only)
+	pubChs     []*amqp.Channel // publish-only pool; recreated on each connect
 	replyQueue string
 	connected  bool
 	disconnect chan struct{} // closed on disconnect; replaced on each connect
+
+	pubSeq atomic.Uint64 // round-robin cursor over pubChs
 
 	pendingMu sync.Mutex
 	pending   map[string]chan amqp.Delivery
@@ -195,10 +205,24 @@ func (c *Client) connect() (chan *amqp.Error, error) {
 		return nil, fmt.Errorf("consume reply queue: %w", err)
 	}
 
+	// Publish-only channel pool on the same connection (see publishChannels).
+	// They live and die with the connection: NotifyClose on the connection
+	// covers them, and onDisconnect drops the pool wholesale.
+	pubChs := make([]*amqp.Channel, 0, publishChannels)
+	for range publishChannels {
+		pch, err := conn.Channel()
+		if err != nil {
+			_ = conn.Close()
+			return nil, fmt.Errorf("amqp publish channel: %w", err)
+		}
+		pubChs = append(pubChs, pch)
+	}
+
 	notify := conn.NotifyClose(make(chan *amqp.Error, 1))
 	c.mu.Lock()
 	c.conn = conn
 	c.ch = ch
+	c.pubChs = pubChs
 	c.replyQueue = replyQ.Name
 	c.connected = true
 	c.disconnect = make(chan struct{})
@@ -217,6 +241,7 @@ func (c *Client) onDisconnect() {
 	conn := c.conn
 	c.conn = nil
 	c.ch = nil
+	c.pubChs = nil
 	c.mu.Unlock()
 	if conn != nil {
 		_ = conn.Close()
@@ -246,15 +271,18 @@ func (c *Client) dispatchReplies(deliveries <-chan amqp.Delivery) {
 // content-type application/json.
 func (c *Client) Call(ctx context.Context, queue string, body []byte) ([]byte, error) {
 	c.mu.RLock()
-	ch := c.ch
+	pubChs := c.pubChs
 	replyQ := c.replyQueue
 	connected := c.connected
 	discCh := c.disconnect
 	c.mu.RUnlock()
 
-	if !connected || ch == nil {
+	if !connected || len(pubChs) == 0 {
 		return nil, ErrNotConnected
 	}
+	// Round-robin over the publish pool; amqp091-go channels are safe for
+	// concurrent use, the pool only spreads the per-channel write lock.
+	ch := pubChs[c.pubSeq.Add(1)%uint64(len(pubChs))]
 
 	if !c.limiter.acquire(queue) {
 		if c.onShed != nil {

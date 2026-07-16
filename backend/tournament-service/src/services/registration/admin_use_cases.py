@@ -121,6 +121,8 @@ class UpdateRegistration:
             status_value=payload.status,
             balancer_status_value=payload.balancer_status,
             roles=[role.model_dump() for role in payload.roles] if payload.roles is not None else None,
+            exclude_from_balancer=payload.exclude_from_balancer,
+            exclude_reason=payload.exclude_reason,
         )
 
 

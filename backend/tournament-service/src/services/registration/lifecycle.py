@@ -34,11 +34,11 @@ from src.services.registration._common import (
     replace_registration_roles,
     sync_included_balancer_status,
 )
+from src.services.registration.service import ensure_player_identity
 from src.services.registration.utils import (
     normalize_battle_tag,
     normalize_battle_tag_key,
 )
-from src.services.registration.service import ensure_player_identity
 from src.services.tournament.events import (
     enqueue_registration_approved,
     enqueue_registration_rejected,
@@ -258,6 +258,8 @@ async def update_registration_profile(
     balancer_status_value: str | None,
     roles: list[dict[str, Any]] | None,
     auth_user_id: int | None = None,
+    exclude_from_balancer: bool | None = None,
+    exclude_reason: str | None = None,
 ) -> models.BalancerRegistration:
     registration = await get_registration_by_id(session, registration_id)
     previous_status = registration.status
@@ -327,6 +329,21 @@ async def update_registration_profile(
         replace_registration_roles(registration, roles, hero_catalog=hero_catalog, max_heroes=max_heroes)
         sync_included_balancer_status(registration)
         override_changed = True
+    # Mirror set_registration_exclusion exactly. Applied last so an explicit
+    # exclusion flag wins over the balancer_status/role-sync side effects
+    # above; like the dedicated endpoint it does not bump
+    # balancer_profile_overridden_at. exclude_reason only applies together
+    # with exclude_from_balancer.
+    if exclude_from_balancer is not None:
+        registration.exclude_from_balancer = exclude_from_balancer
+        if exclude_from_balancer:
+            registration.balancer_status = "not_in_balancer"
+            registration.exclude_reason = exclude_reason
+        else:
+            registration.exclude_reason = None
+            registration.balancer_status = (
+                included_balancer_status(registration) if registration.status == "approved" else "not_in_balancer"
+            )
     if override_changed:
         registration.balancer_profile_overridden_at = datetime.now(UTC)
 
@@ -343,7 +360,13 @@ async def update_registration_profile(
         _register_registration_changed(session, registration)
 
     await session.commit()
-    return await get_registration_by_id(session, registration.id)
+    # Refetch only when relationships changed: new hero_entries need their
+    # .hero loaded for serialization and auth_user_id may swap the
+    # workspace_member. Scalar-only updates keep the eagerly-loaded object
+    # valid after commit (expire_on_commit=False).
+    if roles is not None or auth_user_id is not None:
+        return await get_registration_by_id(session, registration.id)
+    return registration
 
 
 async def approve_registration(
@@ -362,6 +385,7 @@ async def approve_registration(
     registration.exclude_reason = None
     await enqueue_registration_approved(session, registration)
     await session.commit()
+    # Refetch: reviewed_by changed, the serializer needs a loaded .reviewer.
     return await get_registration_by_id(session, registration.id)
 
 
@@ -377,6 +401,7 @@ async def reject_registration(
     registration.reviewed_by = reviewed_by
     await enqueue_registration_rejected(session, registration)
     await session.commit()
+    # Refetch: reviewed_by changed, the serializer needs a loaded .reviewer.
     return await get_registration_by_id(session, registration.id)
 
 
@@ -427,7 +452,9 @@ async def set_registration_exclusion(
         )
     _register_registration_changed(session, registration)
     await session.commit()
-    return await get_registration_by_id(session, registration.id)
+    # Scalar-only mutation; the eagerly-loaded object stays valid after
+    # commit (expire_on_commit=False), so no refetch is needed.
+    return registration
 
 
 async def withdraw_registration(
@@ -438,7 +465,8 @@ async def withdraw_registration(
     registration.status = "withdrawn"
     _register_registration_changed(session, registration)
     await session.commit()
-    return await get_registration_by_id(session, registration.id)
+    # Scalar-only mutation; no refetch needed (expire_on_commit=False).
+    return registration
 
 
 async def restore_registration(
@@ -449,7 +477,8 @@ async def restore_registration(
     registration.status = "approved"
     _register_registration_changed(session, registration)
     await session.commit()
-    return await get_registration_by_id(session, registration.id)
+    # Scalar-only mutation; no refetch needed (expire_on_commit=False).
+    return registration
 
 
 async def soft_delete_registration(
@@ -494,7 +523,8 @@ async def set_balancer_status(
         registration.exclude_from_balancer = True
     _register_registration_changed(session, registration)
     await session.commit()
-    return await get_registration_by_id(session, registration.id)
+    # Scalar-only mutation; no refetch needed (expire_on_commit=False).
+    return registration
 
 
 async def check_in_registration(
@@ -514,6 +544,8 @@ async def check_in_registration(
     registration.checked_in_by = checked_in_by
     _register_registration_changed(session, registration)
     await session.commit()
+    # Refetch: checked_in_by changed, the serializer needs a loaded
+    # .checked_in_by_user.
     return await get_registration_by_id(session, registration.id)
 
 
@@ -525,9 +557,14 @@ async def uncheck_in_registration(
     registration.checked_in = False
     registration.checked_in_at = None
     registration.checked_in_by = None
+    # Also clear the loaded relationship so the serializer does not report a
+    # stale username: assigning the FK column alone leaves .checked_in_by_user
+    # populated (and we skip the refetch — expire_on_commit=False keeps the
+    # object valid after commit).
+    registration.checked_in_by_user = None
     _register_registration_changed(session, registration)
     await session.commit()
-    return await get_registration_by_id(session, registration.id)
+    return registration
 
 
 async def bulk_add_to_balancer(
@@ -560,6 +597,47 @@ async def bulk_add_to_balancer(
         )
         registration.exclude_from_balancer = balancer_status == "not_in_balancer"
         registration.exclude_reason = None
+        _register_registration_changed(session, registration)
+    await session.commit()
+    return len(registrations), len(registration_ids) - len(registrations)
+
+
+async def bulk_set_exclusion(
+    session: AsyncSession,
+    tournament_id: int,
+    registration_ids: list[int],
+    *,
+    exclude_from_balancer: bool,
+    exclude_reason: str | None,
+) -> tuple[int, int]:
+    """Apply set_registration_exclusion semantics to many registrations at once.
+
+    Returns ``(updated, skipped)`` where skipped counts ids that are missing,
+    soft-deleted or belong to another tournament.
+    """
+    result = await session.execute(
+        sa.select(models.BalancerRegistration)
+        .where(
+            models.BalancerRegistration.tournament_id == tournament_id,
+            models.BalancerRegistration.deleted_at.is_(None),
+            models.BalancerRegistration.id.in_(registration_ids),
+        )
+        # included_balancer_status inspects .roles — eager-load them since a
+        # lazy load is not available on an async session.
+        .options(selectinload(models.BalancerRegistration.roles))
+    )
+    registrations = list(result.scalars().all())
+    for registration in registrations:
+        # Same semantics as set_registration_exclusion.
+        registration.exclude_from_balancer = exclude_from_balancer
+        if exclude_from_balancer:
+            registration.balancer_status = "not_in_balancer"
+            registration.exclude_reason = exclude_reason
+        else:
+            registration.exclude_reason = None
+            registration.balancer_status = (
+                included_balancer_status(registration) if registration.status == "approved" else "not_in_balancer"
+            )
         _register_registration_changed(session, registration)
     await session.commit()
     return len(registrations), len(registration_ids) - len(registrations)

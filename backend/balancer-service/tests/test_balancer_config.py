@@ -313,13 +313,11 @@ class TournamentConfigPersistenceTests(IsolatedAsyncioTestCase):
         session.add = MagicMock()
         user = SimpleNamespace(id=42)
 
-        with (
-            patch.object(balancer_admin_service, "get_tournament_workspace_id", AsyncMock(return_value=9)),
-            patch.object(balancer_admin_service, "get_tournament_config", AsyncMock(return_value=None)),
-        ):
+        with patch.object(balancer_admin_service, "get_tournament_config", AsyncMock(return_value=None)):
             result = await balancer_admin_service.upsert_tournament_config(
                 session,
                 77,
+                9,
                 {"population_size": 150, "use_captains": None, "workspace_id": 9},
                 user,
             )
@@ -343,13 +341,11 @@ class TournamentConfigPersistenceTests(IsolatedAsyncioTestCase):
             updated_at=None,
         )
 
-        with (
-            patch.object(balancer_admin_service, "get_tournament_workspace_id", AsyncMock(return_value=9)),
-            patch.object(balancer_admin_service, "get_tournament_config", AsyncMock(return_value=existing)),
-        ):
+        with patch.object(balancer_admin_service, "get_tournament_config", AsyncMock(return_value=existing)):
             result = await balancer_admin_service.upsert_tournament_config(
                 session,
                 77,
+                9,
                 {"max_result_variants": 6},
                 user,
             )

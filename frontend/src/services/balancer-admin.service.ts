@@ -388,6 +388,23 @@ export default class balancerAdminService {
     return response.json();
   }
 
+  static async bulkSetExclusion(
+    tournamentId: number,
+    data: {
+      registration_ids: number[];
+      exclude_from_balancer: boolean;
+      exclude_reason?: string | null;
+    }
+  ): Promise<{ updated: number; skipped: number }> {
+    const response = await apiFetch(`/api/v1/admin/balancer/tournaments/${tournamentId}/registrations/bulk-exclusion`,
+      {
+        method: "POST",
+        body: data
+      }
+    );
+    return response.json();
+  }
+
   static async withdrawRegistration(registrationId: number): Promise<AdminRegistration> {
     const response = await apiFetch(`/api/v1/admin/balancer/registrations/${registrationId}/withdraw`,
       {

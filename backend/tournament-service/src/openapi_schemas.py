@@ -186,6 +186,9 @@ OPERATIONS: dict[str, Op] = {
         request=admin_balancer.SetBalancerStatusRequest, response=admin_balancer.BalancerRegistrationRead
     ),
     "rpc.tournament.reg_bulk_add_balancer": Op(response=admin_balancer.BulkBalancerStatusResponse),
+    "rpc.tournament.reg_bulk_exclusion": Op(
+        request=admin_balancer.BulkExclusionRequest, response=admin_balancer.BulkExclusionResponse
+    ),
     "rpc.tournament.reg_rank_autofill_preview": Op(
         request=admin_balancer.BalancerRegistrationRankAutofillRequest,
         response=admin_balancer.BalancerRegistrationRankAutofillResponse,

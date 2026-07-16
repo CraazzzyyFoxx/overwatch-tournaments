@@ -5,7 +5,10 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/rpc"
 )
@@ -122,5 +125,119 @@ func TestResolver_TransportFailureNotCached(t *testing.T) {
 	}
 	if s.calls != 2 {
 		t.Fatalf("expected a second (uncached) rpc call after recovery, got %d", s.calls)
+	}
+}
+
+// TestResolver_LRUEviction asserts the full cache evicts the least-recently-used
+// token instead of dropping the whole map: recently-touched entries survive an
+// overflow (a flood of one-off tokens no longer logs every active session out
+// of the cache at once).
+func TestResolver_LRUEviction(t *testing.T) {
+	s := &stubCaller{reply: []byte(`{"ok":true,"data":{"user_id":1}}`)}
+	r := New(s)
+
+	for i := range maxCacheEntries {
+		if _, ok, err := r.Resolve(reqWithToken(fmt.Sprintf("t%d", i))); !ok || err != nil {
+			t.Fatalf("resolve t%d failed: ok=%v err=%v", i, ok, err)
+		}
+	}
+	if s.calls != maxCacheEntries {
+		t.Fatalf("expected %d rpc calls, got %d", maxCacheEntries, s.calls)
+	}
+
+	// Touch t0 so it becomes the most recently used; t1 is now the LRU tail.
+	if _, ok, err := r.Resolve(reqWithToken("t0")); !ok || err != nil {
+		t.Fatalf("cached resolve t0 failed: ok=%v err=%v", ok, err)
+	}
+	if s.calls != maxCacheEntries {
+		t.Fatalf("t0 must be served from cache, calls=%d", s.calls)
+	}
+
+	// Overflow by one: exactly the LRU entry (t1) is evicted.
+	if _, ok, err := r.Resolve(reqWithToken("overflow")); !ok || err != nil {
+		t.Fatalf("resolve overflow failed: ok=%v err=%v", ok, err)
+	}
+	if s.calls != maxCacheEntries+1 {
+		t.Fatalf("expected %d rpc calls after overflow, got %d", maxCacheEntries+1, s.calls)
+	}
+	if _, ok, err := r.Resolve(reqWithToken("t0")); !ok || err != nil {
+		t.Fatalf("t0 must survive the eviction: ok=%v err=%v", ok, err)
+	}
+	if s.calls != maxCacheEntries+1 {
+		t.Fatalf("t0 must still be cached, calls=%d", s.calls)
+	}
+	if _, _, err := r.Resolve(reqWithToken("t1")); err != nil {
+		t.Fatalf("resolve t1 failed: %v", err)
+	}
+	if s.calls != maxCacheEntries+2 {
+		t.Fatalf("t1 must have been evicted (re-validated), calls=%d", s.calls)
+	}
+}
+
+// gatedCaller blocks every Call until release is closed, counting calls
+// atomically — used to hold several resolves in flight at once.
+type gatedCaller struct {
+	reply   []byte
+	release chan struct{}
+	calls   atomic.Int64
+}
+
+func (g *gatedCaller) Call(ctx context.Context, _ string, _ []byte) ([]byte, error) {
+	g.calls.Add(1)
+	select {
+	case <-g.release:
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+	return g.reply, nil
+}
+
+// TestResolver_ConcurrentMissesSingleflight asserts concurrent cache misses for
+// the same token collapse into a single validate_token RPC instead of firing
+// one per request (a page load fans out N API calls with the same bearer).
+func TestResolver_ConcurrentMissesSingleflight(t *testing.T) {
+	g := &gatedCaller{
+		reply:   []byte(`{"ok":true,"data":{"user_id":7}}`),
+		release: make(chan struct{}),
+	}
+	r := New(g)
+
+	const workers = 8
+	var wg sync.WaitGroup
+	errs := make(chan error, workers)
+	for range workers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			id, ok, err := r.Resolve(reqWithToken("shared"))
+			if err != nil || !ok || id["user_id"].(float64) != 7 {
+				errs <- fmt.Errorf("resolve: ok=%v err=%v id=%v", ok, err, id)
+			}
+		}()
+	}
+
+	// Wait until the flight leader is inside the RPC, give the followers time
+	// to join the flight (the key stays active while the gate is held, so any
+	// DoChan in this window merges), then let the leader finish.
+	for g.calls.Load() == 0 {
+		time.Sleep(time.Millisecond)
+	}
+	time.Sleep(100 * time.Millisecond)
+	close(g.release)
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		t.Fatal(err)
+	}
+
+	if n := g.calls.Load(); n != 1 {
+		t.Fatalf("expected 1 rpc call for %d concurrent misses, got %d", workers, n)
+	}
+	// The result must be cached for followers too.
+	if _, ok, err := r.Resolve(reqWithToken("shared")); !ok || err != nil {
+		t.Fatalf("cached resolve failed: ok=%v err=%v", ok, err)
+	}
+	if n := g.calls.Load(); n != 1 {
+		t.Fatalf("expected cached hit after flight, got %d calls", n)
 	}
 }

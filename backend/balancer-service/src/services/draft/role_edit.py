@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 
 import sqlalchemy as sa
@@ -224,7 +225,8 @@ async def edit_player_role(
         expected_version=expected_version,
     )
     state = await feasibility.load_feasibility_state(session, draft_session)
-    preview = preview_role_addition(state, player_id=player.id, role=role)
+    # Two bipartite matchings (before/after) — pure CPU, run off the event loop.
+    preview = await asyncio.to_thread(preview_role_addition, state, player_id=player.id, role=role)
     if preview_only:
         return RoleEditResult(
             player_id=player.id,

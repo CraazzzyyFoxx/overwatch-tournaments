@@ -33,7 +33,11 @@ os.environ.setdefault("S3_BUCKET_NAME", "test")
 os.environ["DEBUG"] = "false"
 
 from src.core import auth as auth_dependencies  # noqa: E402
-from src.core.security.api_key_limiter import ApiKeyUsageLimiter  # noqa: E402
+from src.core.security.api_key_limiter import (  # noqa: E402
+    REQUEST_SCRIPT,
+    RESERVE_JOB_SCRIPT,
+    ApiKeyUsageLimiter,
+)
 from src.core.security.api_key_policy import validate_api_key_config_policy  # noqa: E402
 from src.core.security.workspace_access import WorkspaceAccessPolicy  # noqa: E402
 
@@ -42,6 +46,12 @@ class FakeRedis:
     def __init__(self) -> None:
         self.values: dict[str, int] = {}
         self.active_sets: dict[str, set[str]] = {}
+
+    def register_script(self, script):
+        async def run(keys=(), args=(), client=None):
+            return await self.eval(script, len(keys), *keys, *args)
+
+        return run
 
     async def eval(self, _script, numkeys, *args):
         if numkeys == 1:
@@ -100,6 +110,8 @@ def _api_key_user(**overrides):
 def _limiter(fake_redis: FakeRedis) -> ApiKeyUsageLimiter:
     limiter = ApiKeyUsageLimiter.__new__(ApiKeyUsageLimiter)
     limiter._redis = fake_redis
+    limiter._request_script = fake_redis.register_script(REQUEST_SCRIPT)
+    limiter._reserve_job_script = fake_redis.register_script(RESERVE_JOB_SCRIPT)
     return limiter
 
 

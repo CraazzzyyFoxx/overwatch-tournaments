@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 import sqlalchemy as sa
+from cashews import cache
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.core.enums import DraftStatus
@@ -29,6 +30,17 @@ _ACTIVE = (
     DraftStatus.LIVE.value,
     DraftStatus.PAUSED.value,
 )
+
+# Safety-net TTL for the public board cache: the event-id in the key already
+# invalidates on every persisted draft event, so the TTL only bounds staleness
+# for hypothetical writes that bypass the event log and expires dead keys.
+_BOARD_CACHE_TTL = "5s"
+
+
+def _board_cache_key(session_id: int, last_event_id: int | None) -> str:
+    # The "backend:" prefix routes the key to the backend configured by
+    # cache.setup() (cashews routes strictly by key prefix).
+    return f"backend:balancer:draft_board:{session_id}:{last_event_id or 0}"
 
 
 async def get_active_session(session: AsyncSession, tournament_id: int) -> DraftSession | None:
@@ -60,6 +72,24 @@ def public_additional_info(additional_info: dict | None) -> dict:
 
 
 async def build_board(session: AsyncSession, draft_session: DraftSession) -> DraftBoardSnapshot:
+    # The cheap max-event-id read runs on every request and doubles as the
+    # cache key: every draft mutation persists a WorkspaceEvent in the same
+    # transaction (services.draft.realtime), so new event -> new key -> fresh
+    # board, and an unchanged id can safely serve the cached snapshot.
+    topic = realtime_topics.draft(draft_session.tournament_id)
+    last_event_id = await session.scalar(
+        sa.select(sa.func.max(WorkspaceEvent.id)).where(WorkspaceEvent.topic == topic)
+    )
+    cache_key = _board_cache_key(draft_session.id, last_event_id)
+    if cache.is_setup():
+        try:
+            cached = await cache.get(cache_key)
+        except Exception:  # noqa: BLE001 — cache is best-effort
+            cached = None
+        if cached is not None:
+            # server_time drives client clock sync; never serve a stale one.
+            return cached.model_copy(update={"server_time": datetime.now(UTC)})
+
     # DraftTeamRead reads captain_user_id, DraftPickRead reads picked_by_user_id,
     # DraftPlayerRead reads user_id/secondary_roles_json/role_ranks/role_top_heroes
     # — eager-load the relationships those compat properties resolve through.
@@ -88,16 +118,14 @@ async def build_board(session: AsyncSession, draft_session: DraftSession) -> Dra
         )
     ).all()
 
-    # Already among `picks` (loaded with pick_options) when set; options guard the
-    # cold-cache path so DraftPickRead.picked_by_user_id never lazy-loads.
+    # The current pick always belongs to this session, so it is among `picks`
+    # (loaded with pick_options above) — no extra fetch needed.
     current = (
-        await session.get(DraftPick, draft_session.current_pick_id, options=loaders.pick_options())
+        next((p for p in picks if p.id == draft_session.current_pick_id), None)
         if draft_session.current_pick_id
         else None
     )
-    topic = realtime_topics.draft(draft_session.tournament_id)
-    last_event_id = await session.scalar(sa.select(sa.func.max(WorkspaceEvent.id)).where(WorkspaceEvent.topic == topic))
-    return DraftBoardSnapshot(
+    snapshot = DraftBoardSnapshot(
         session=DraftSessionRead.model_validate(draft_session),
         teams=[DraftTeamRead.model_validate(t) for t in teams],
         picks=[DraftPickRead.model_validate(p) for p in picks],
@@ -111,3 +139,9 @@ async def build_board(session: AsyncSession, draft_session: DraftSession) -> Dra
         server_time=datetime.now(UTC),
         last_event_id=last_event_id,
     )
+    if cache.is_setup():
+        try:
+            await cache.set(cache_key, snapshot, expire=_BOARD_CACHE_TTL)
+        except Exception:  # noqa: BLE001 — cache is best-effort
+            pass
+    return snapshot

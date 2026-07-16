@@ -119,6 +119,10 @@ def get_principal(user: Any) -> tuple[str, int] | None:
 class ApiKeyUsageLimiter:
     def __init__(self, redis_url: str | None = None) -> None:
         self._redis = redis.from_url(redis_url or config.redis_url, decode_responses=True)
+        # Registered scripts run as EVALSHA (with automatic EVAL fallback on
+        # NOSCRIPT) so the Lua source is not re-sent with every request.
+        self._request_script = self._redis.register_script(REQUEST_SCRIPT)
+        self._reserve_job_script = self._redis.register_script(RESERVE_JOB_SCRIPT)
 
     @staticmethod
     def _minute_key(kind: str, principal_id: int) -> str:
@@ -152,12 +156,9 @@ class ApiKeyUsageLimiter:
             return
         kind, principal_id = principal
         limits = get_effective_limits(user)
-        result = await self._redis.eval(
-            REQUEST_SCRIPT,
-            1,
-            self._minute_key(kind, principal_id),
-            limits["requests_per_minute"],
-            60,
+        result = await self._request_script(
+            keys=[self._minute_key(kind, principal_id)],
+            args=[limits["requests_per_minute"], 60],
         )
         if int(result[0]) != 1:
             self._raise_limited("requests_per_minute", int(result[1]))
@@ -170,16 +171,18 @@ class ApiKeyUsageLimiter:
             return
         kind, principal_id = principal
         limits = get_effective_limits(user)
-        result = await self._redis.eval(
-            RESERVE_JOB_SCRIPT,
-            2,
-            self._daily_key(kind, principal_id),
-            self.active_jobs_key(kind, principal_id),
-            limits["jobs_per_day"],
-            25 * 60 * 60,
-            limits["concurrent_jobs"],
-            job_id,
-            config.balancer_job_ttl_seconds,
+        result = await self._reserve_job_script(
+            keys=[
+                self._daily_key(kind, principal_id),
+                self.active_jobs_key(kind, principal_id),
+            ],
+            args=[
+                limits["jobs_per_day"],
+                25 * 60 * 60,
+                limits["concurrent_jobs"],
+                job_id,
+                config.balancer_job_ttl_seconds,
+            ],
         )
         if int(result[0]) != 1:
             self._raise_limited(str(result[2]), int(result[1]))

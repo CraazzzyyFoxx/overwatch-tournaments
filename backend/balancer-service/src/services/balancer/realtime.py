@@ -9,14 +9,20 @@ here:
 * job lifecycle (``balancer_job.*``) — broadcast job progress to everyone with
   the page open.
 
-Each emitter runs in its own short-lived session + Redis client so it never
-entangles with the request/worker transaction that already committed. Failures
-are swallowed — the frontend self-heals via reconnect refetch (data) or the
-REST job-status snapshot (jobs).
+Each emitter runs in its own short-lived session so it never entangles with
+the request/worker transaction that already committed. The Redis client is a
+module-level singleton (its connection pool is reused across events) instead
+of a fresh TCP connection per event. Data-edit signals are scheduled as
+fire-and-forget tasks (mutation responses never wait on the extra DB session +
+Redis round-trip; ordering between them is irrelevant), while job lifecycle
+events stay awaited so queued/running/succeeded transitions keep their strict
+order for cursor replay. Failures are swallowed — the frontend self-heals via
+reconnect refetch (data) or the REST job-status snapshot (jobs).
 """
 
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime
 from typing import Any
 
@@ -36,6 +42,18 @@ __all__ = (
     "emit_balancer_job_progress",
 )
 
+_redis_client: Redis | None = None
+# Strong references so fire-and-forget publish tasks are not garbage-collected
+# mid-flight (asyncio only keeps weak refs to running tasks).
+_pending_publishes: set[asyncio.Task[None]] = set()
+
+
+def _get_redis() -> Redis:
+    global _redis_client
+    if _redis_client is None:
+        _redis_client = Redis.from_url(config.redis_url, decode_responses=True)
+    return _redis_client
+
 
 async def _emit(
     tournament_id: int,
@@ -45,13 +63,12 @@ async def _emit(
     payload: dict[str, Any] | None,
     actor_user_id: int | None,
 ) -> None:
-    redis = Redis.from_url(config.redis_url, decode_responses=True)
     try:
         async with db.async_session_maker() as session:
             async with session.begin():
                 await publish_balancer_event(
                     session,
-                    redis,
+                    _get_redis(),
                     tournament_id=tournament_id,
                     workspace_id=workspace_id,
                     event_type=event_type,
@@ -64,8 +81,6 @@ async def _emit(
             tournament_id=tournament_id,
             event_type=event_type,
         )
-    finally:
-        await redis.aclose()
 
 
 async def emit_balancer_data_event(
@@ -76,14 +91,22 @@ async def emit_balancer_data_event(
     payload: dict[str, Any] | None = None,
     actor_user_id: int | None = None,
 ) -> None:
-    """Persist + broadcast a ``balancer.*_changed`` data-edit signal."""
-    await _emit(
-        tournament_id,
-        event_type,
-        workspace_id=workspace_id,
-        payload=payload,
-        actor_user_id=actor_user_id,
+    """Schedule a ``balancer.*_changed`` data-edit broadcast off the request path.
+
+    The caller's mutation has already committed, so ordering is preserved: the
+    event (persisted in its own session) always describes committed state.
+    """
+    task = asyncio.create_task(
+        _emit(
+            tournament_id,
+            event_type,
+            workspace_id=workspace_id,
+            payload=payload,
+            actor_user_id=actor_user_id,
+        )
     )
+    _pending_publishes.add(task)
+    task.add_done_callback(_pending_publishes.discard)
 
 
 async def emit_balancer_job_event(
@@ -100,8 +123,9 @@ async def emit_balancer_job_event(
     """Persist + broadcast a ``balancer_job.*`` lifecycle event to all viewers.
 
     Used for the durable transitions (queued/running/succeeded/failed) so a
-    late joiner catches up via cursor replay. Continuous progress ticks go
-    through :func:`emit_balancer_job_progress` (ephemeral) instead.
+    late joiner catches up via cursor replay. Stays awaited (unlike the
+    data-edit signals) so transitions land in order. Continuous progress ticks
+    go through :func:`emit_balancer_job_progress` (ephemeral) instead.
     """
     await _emit(
         tournament_id,
@@ -130,7 +154,7 @@ async def emit_balancer_job_progress(
     Progress is high-frequency and transient, so it is NOT persisted to the
     event log (``event_id=0`` keeps the frontend replay cursor untouched).
     Late joiners still see the last durable lifecycle state plus the next tick.
-    Pass an existing ``redis`` client to reuse the connection across ticks.
+    Pass an existing ``redis`` client to override the shared singleton.
     """
     envelope = WorkspaceEventEnvelope(
         event_id=0,
@@ -145,8 +169,7 @@ async def emit_balancer_job_progress(
             "progress": progress or {},
         },
     )
-    owns_client = redis is None
-    client = redis or Redis.from_url(config.redis_url, decode_responses=True)
+    client = redis if redis is not None else _get_redis()
     try:
         await publish_envelope_to_redis(
             client,
@@ -155,6 +178,3 @@ async def emit_balancer_job_progress(
         )
     except Exception:
         logger.exception("Failed to publish balancer job progress", tournament_id=tournament_id)
-    finally:
-        if owns_client:
-            await client.aclose()

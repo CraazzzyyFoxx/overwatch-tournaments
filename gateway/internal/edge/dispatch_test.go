@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/rpc"
 )
@@ -269,5 +270,56 @@ func TestDispatch_Unavailable_HasRetryAfter(t *testing.T) {
 	}
 	if got := w.Header().Get("Retry-After"); got != "1" {
 		t.Fatalf("Retry-After=%q, want \"1\"", got)
+	}
+}
+
+// deadlineCaller records the context deadline the dispatcher applied to the RPC.
+type deadlineCaller struct {
+	reply    []byte
+	deadline time.Time
+	hasDL    bool
+}
+
+func (m *deadlineCaller) Call(ctx context.Context, _ string, _ []byte) ([]byte, error) {
+	m.deadline, m.hasDL = ctx.Deadline()
+	return m.reply, nil
+}
+
+// TestDispatch_PerRouteTimeout asserts RouteSpec.Timeout overrides the blanket
+// 120s default for the RPC context deadline (which also drives the AMQP TTL +
+// x-deadline-ms propagation, see rpc/deadline.go), and that a zero Timeout
+// keeps the default.
+func TestDispatch_PerRouteTimeout(t *testing.T) {
+	cases := []struct {
+		name     string
+		timeout  time.Duration
+		min, max time.Duration
+	}{
+		{name: "override", timeout: 15 * time.Second, min: 10 * time.Second, max: 16 * time.Second},
+		{name: "default", timeout: 0, min: 115 * time.Second, max: defaultRPCTimeout + time.Second},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			m := &deadlineCaller{reply: []byte(`{"ok":true,"data":{}}`)}
+			d := New(m, slog.New(slog.NewTextHandler(io.Discard, nil)), nil)
+			spec := RouteSpec{Method: "GET", Pattern: "/api/v1/things", Queue: "rpc.q", Timeout: tc.timeout}
+
+			mux := http.NewServeMux()
+			d.Register(mux, []RouteSpec{spec})
+			start := time.Now()
+			w := httptest.NewRecorder()
+			mux.ServeHTTP(w, httptest.NewRequest("GET", "/api/v1/things", nil))
+
+			if w.Code != http.StatusOK {
+				t.Fatalf("status = %d", w.Code)
+			}
+			if !m.hasDL {
+				t.Fatal("rpc context must carry a deadline")
+			}
+			got := m.deadline.Sub(start)
+			if got < tc.min || got > tc.max {
+				t.Fatalf("deadline %v outside [%v, %v]", got, tc.min, tc.max)
+			}
+		})
 	}
 }

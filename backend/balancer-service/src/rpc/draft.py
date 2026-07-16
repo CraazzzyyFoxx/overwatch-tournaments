@@ -21,7 +21,7 @@ from faststream.rabbit import RabbitMessage
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from shared.core.enums import DraftAutopickStrategy, DraftRole
+from shared.core.enums import DraftAutopickStrategy, DraftRole, DraftStatus
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.models.balancer.draft import DraftAuditEvent, DraftPick, DraftSession, DraftTeam
 from src import models
@@ -52,6 +52,7 @@ from src.schemas.draft import (
     DraftSuggestionsResponse,
 )
 from src.services.draft import board as board_svc
+from src.services.draft import clock as clock_svc
 from src.services.draft import export as export_svc
 from src.services.draft import feasibility, lifecycle, loaders, selection
 from src.services.draft import realtime as draft_rt
@@ -100,17 +101,21 @@ async def _load_pick(session: AsyncSession, pick_id: int) -> tuple[DraftSession,
 
 
 async def _seed_counts(session: AsyncSession, session_id: int) -> tuple[int, int, int]:
-    counts = []
-    for model in (models.DraftTeam, models.DraftPlayer, models.DraftPick):
-        counts.append(
-            int(
-                await session.scalar(
-                    sa.select(sa.func.count()).select_from(model).where(model.session_id == session_id)
+    # One round-trip: three scalar subqueries instead of three COUNT queries.
+    row = (
+        await session.execute(
+            sa.select(
+                *(
+                    sa.select(sa.func.count())
+                    .select_from(model)
+                    .where(model.session_id == session_id)
+                    .scalar_subquery()
+                    for model in (models.DraftTeam, models.DraftPlayer, models.DraftPick)
                 )
-                or 0
             )
         )
-    return counts[0], counts[1], counts[2]
+    ).one()
+    return int(row[0] or 0), int(row[1] or 0), int(row[2] or 0)
 
 
 def _pick_event_payload(draft: DraftSession, pick: DraftPick) -> dict:
@@ -255,6 +260,10 @@ async def _lifecycle_action(session, redis, session_id, action, event_type, user
         session, redis, draft_session=draft, event_type=event_type, payload=extra, actor_user_id=user.id
     )
     await session.commit()
+    if draft.status == DraftStatus.LIVE.value:
+        # Wake the supervisor so a freshly started/resumed draft gets its
+        # autopick clock loop immediately (the idle discovery poll is relaxed).
+        await clock_svc.notify_supervisor(redis)
     return DraftSessionRead.model_validate(draft)
 
 
@@ -396,18 +405,12 @@ def register(broker: Any, logger: Any) -> None:
             if draft.current_pick_id is None:
                 raise HTTPException(status_code=409, detail="Draft has no current pick")
             current = await session.get(DraftPick, draft.current_pick_id)
-            available = (
-                await session.scalars(
-                    sa.select(models.DraftPlayer)
-                    .where(
-                        models.DraftPlayer.session_id == draft.id,
-                        models.DraftPlayer.status == "available",
-                    )
-                    # Fit construction reads secondary_roles_json/user_id/role_ranks.
-                    .options(*loaders.player_options())
-                )
-            ).all()
-            counts = await selection._team_role_counts(session, current.draft_team_id)
+            snapshot = await feasibility.load_snapshot(session, draft)
+            # Fit construction reads secondary_roles_json/user_id/role_ranks;
+            # snapshot players carry loaders.player_options() so those never
+            # lazy-load.
+            available = [p for p in snapshot.players if p.status == "available"]
+            counts = selection._team_role_counts(snapshot.players, snapshot.picks, current.draft_team_id)
             capacity = selection._role_capacity(draft.team_size, counts)
             fit_players = [
                 sug.FitPlayer(
@@ -429,6 +432,7 @@ def register(broker: Any, logger: Any) -> None:
                 session,
                 draft,
                 team_id=current.draft_team_id,
+                state=feasibility.state_from_snapshot(draft, snapshot),
             )
             safe_options = {(option.player_id, option.role) for option in options if option.is_safe}
             ranked = sug.rank_suggestions(

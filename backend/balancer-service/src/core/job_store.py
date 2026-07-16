@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import time
 import uuid
@@ -84,7 +85,9 @@ class BalancerJobStore:
         operation_count += 1
 
         if result is not None:
-            pipe.set(self._result_key(job_id), json.dumps(result), ex=self._ttl_seconds)
+            # Result payloads can reach tens of MB; serialize off the event loop.
+            result_raw = await asyncio.to_thread(json.dumps, result)
+            pipe.set(self._result_key(job_id), result_raw, ex=self._ttl_seconds)
             operation_count += 1
 
         if refresh_payload_ttl:
@@ -134,9 +137,11 @@ class BalancerJobStore:
             "config_overrides": config_overrides,
         }
 
+        # The player-data payload can reach 25MB; serialize off the event loop.
+        payload_raw = await asyncio.to_thread(json.dumps, payload)
         pipe = self._redis.pipeline()
         pipe.set(self._meta_key(job_id), json.dumps(meta), ex=self._ttl_seconds)
-        pipe.set(self._payload_key(job_id), json.dumps(payload), ex=self._ttl_seconds)
+        pipe.set(self._payload_key(job_id), payload_raw, ex=self._ttl_seconds)
         pipe.set(self._event_sequence_key(job_id), 0, ex=self._ttl_seconds)
         await pipe.execute()
         record_balancer_redis_writes("create_job", 3)
@@ -162,13 +167,15 @@ class BalancerJobStore:
         raw = await self._redis.get(self._payload_key(job_id))
         if raw is None:
             return None
-        return json.loads(raw)
+        # Payloads can reach 25MB; parse off the event loop.
+        return await asyncio.to_thread(json.loads, raw)
 
     async def get_job_result(self, job_id: str) -> dict[str, Any] | None:
         raw = await self._redis.get(self._result_key(job_id))
         if raw is None:
             return None
-        return json.loads(raw)
+        # Result payloads can reach tens of MB; parse off the event loop.
+        return await asyncio.to_thread(json.loads, raw)
 
     async def append_event(
         self,
@@ -188,6 +195,9 @@ class BalancerJobStore:
         if meta_snapshot is None:
             raise KeyError(job_id)
 
+        # Separate round-trip by necessity: the INCR result is embedded in the
+        # event body below, so it must resolve before the event is serialized
+        # and RPUSHed in the pipeline.
         event_id = await self._redis.incr(self._event_sequence_key(job_id))
         record_balancer_redis_writes("next_event_id", 1)
         event = {

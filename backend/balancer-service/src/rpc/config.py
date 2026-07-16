@@ -15,13 +15,24 @@ from shared.schemas.rpc import rpc_error, rpc_ok
 from src.schemas import BalancerConfigResponse
 from src.services.balancer import jobs
 
+# The public config payload is derived purely from process constants (presets,
+# defaults, limits), so validate + dump it once per process instead of on
+# every request.
+_config_payload: dict[str, Any] | None = None
+
+
+def _get_config_payload() -> dict[str, Any]:
+    global _config_payload
+    if _config_payload is None:
+        _config_payload = BalancerConfigResponse.model_validate(jobs.get_config()).model_dump(mode="json")
+    return _config_payload
+
 
 def register(broker: Any, logger: Any) -> None:
     @broker.subscriber("rpc.balancer.config")
     async def _config(data: dict, msg: RabbitMessage) -> dict:
         try:
-            payload = BalancerConfigResponse.model_validate(jobs.get_config())
-            return rpc_ok(payload.model_dump(mode="json"))
+            return rpc_ok(_get_config_payload())
         except Exception:  # pragma: no cover - defensive worker guard
             logger.exception("balancer rpc failed: config")
             return rpc_error("internal", "internal error")

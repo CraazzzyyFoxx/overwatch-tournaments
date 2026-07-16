@@ -15,13 +15,14 @@ import (
 )
 
 const (
-	// rpcTimeout matches the old Kong edge allowance (up to 120s). Some app-service
-	// reads (e.g. /users/{id}/compare, hero stats on a cold cache) legitimately run
-	// ~20-30s; a tighter cap would turn slow-but-successful responses into 504s that
-	// the HTTP edge returned as 200/500. The gateway server has no write timeout for
-	// the same reason (long WS + long balancer requests).
-	rpcTimeout = 120 * time.Second
-	maxBody    = 12 << 20 // 12 MiB request-body cap before buffering into the RPC message
+	// defaultRPCTimeout matches the old Kong edge allowance (up to 120s). Some
+	// app-service reads (e.g. /users/{id}/compare, hero stats on a cold cache)
+	// legitimately run ~20-30s; a tighter cap would turn slow-but-successful
+	// responses into 504s that the HTTP edge returned as 200/500. The gateway
+	// server has no write timeout for the same reason (long WS + long balancer
+	// requests). Cheap reads override this per route via RouteSpec.Timeout.
+	defaultRPCTimeout = 120 * time.Second
+	maxBody           = 12 << 20 // 12 MiB request-body cap before buffering into the RPC message
 )
 
 // RPCCaller is the subset of rpc.Client the dispatcher needs (eases testing).
@@ -134,7 +135,7 @@ func (d *Dispatcher) serve(w http.ResponseWriter, r *http.Request, spec RouteSpe
 	}
 
 	raw, _ := json.Marshal(data)
-	d.call(w, r, spec.Queue, raw, spec.successStatus())
+	d.call(w, r, spec.Queue, raw, spec.successStatus(), spec.callTimeout())
 }
 
 // Subtree returns an http.Handler that matches an ORDERED list of RouteSpecs by
@@ -209,8 +210,8 @@ func (d *Dispatcher) resolveIdentity(r *http.Request) (map[string]any, bool, err
 }
 
 // call performs the RPC and maps the reply envelope to an HTTP response.
-func (d *Dispatcher) call(w http.ResponseWriter, r *http.Request, queue string, body []byte, success int) {
-	ctx, cancel := context.WithTimeout(r.Context(), rpcTimeout)
+func (d *Dispatcher) call(w http.ResponseWriter, r *http.Request, queue string, body []byte, success int, timeout time.Duration) {
+	ctx, cancel := context.WithTimeout(r.Context(), timeout)
 	defer cancel()
 
 	log := httplog.From(r.Context())
@@ -224,7 +225,7 @@ func (d *Dispatcher) call(w http.ResponseWriter, r *http.Request, queue string, 
 		}
 		// The caller disconnected before the RPC completed: r.Context() was
 		// canceled and propagated through the timeout ctx as context.Canceled
-		// (our own 120s deadline surfaces as context.DeadlineExceeded instead).
+		// (our own per-route deadline surfaces as context.DeadlineExceeded instead).
 		// This is not a server fault — the client is gone, so no response can
 		// be delivered and there is nothing to fix. Log at info (stdout/Loki
 		// only, never a Sentry Issue) and skip the 504.

@@ -258,7 +258,20 @@ async def seed(
     player_ids = {c.user_id for c in ordered_captains if c.user_id is not None}
     player_ids |= {p.user_id for p in players if p.user_id is not None}
     member_by_player: dict[int, int] = {}
-    for player_id in player_ids:
+    if player_ids:
+        # Batch-prefetch existing membership rows (the common case on re-seed)
+        # instead of one INSERT..ON CONFLICT round-trip per player.
+        rows = await session.execute(
+            sa.select(WorkspaceMember.player_id, WorkspaceMember.id).where(
+                WorkspaceMember.workspace_id == draft_session.workspace_id,
+                WorkspaceMember.player_id.in_(player_ids),
+            )
+        )
+        member_by_player = dict(rows.tuples().all())
+    # get_or_create also autofills the baseline RBAC role for a brand-new
+    # auth-linked member — keep that side effect, but only pay for it on
+    # players that genuinely have no membership row yet.
+    for player_id in player_ids - member_by_player.keys():
         member = await get_or_create_workspace_member(
             session, workspace_id=draft_session.workspace_id, player_id=player_id
         )
@@ -374,8 +387,9 @@ async def seed(
     draft_session.status = DraftStatus.READY.value
     draft_session.blocked_reason = None
     bump_seed_version(draft_session)
+    # expire_on_commit=False and all mutations above are Python-side: the
+    # in-memory session row is already current, no refresh round-trip needed.
     await session.flush()
-    await session.refresh(draft_session)
     return draft_session
 
 
@@ -668,7 +682,6 @@ async def start(session: AsyncSession, draft_session: DraftSession) -> DraftSess
     draft_session.blocked_reason = None
     draft_session.current_pick_id = first.id
     await session.flush()
-    await session.refresh(draft_session)
     return draft_session
 
 
@@ -683,7 +696,6 @@ async def pause(session: AsyncSession, draft_session: DraftSession) -> DraftSess
     draft_session.status = DraftStatus.PAUSED.value
     draft_session.blocked_reason = None
     await session.flush()
-    await session.refresh(draft_session)
     return draft_session
 
 
@@ -706,7 +718,6 @@ async def resume(session: AsyncSession, draft_session: DraftSession) -> DraftSes
     draft_session.status = DraftStatus.LIVE.value
     draft_session.blocked_reason = None
     await session.flush()
-    await session.refresh(draft_session)
     return draft_session
 
 
@@ -715,7 +726,6 @@ async def cancel(session: AsyncSession, draft_session: DraftSession) -> DraftSes
     draft_session.status = DraftStatus.CANCELLED.value
     draft_session.blocked_reason = None
     await session.flush()
-    await session.refresh(draft_session)
     return draft_session
 
 
@@ -795,5 +805,4 @@ async def rollback(session: AsyncSession, draft_session: DraftSession) -> DraftS
     draft_session.exported_at = None
 
     await session.flush()
-    await session.refresh(draft_session)
     return draft_session

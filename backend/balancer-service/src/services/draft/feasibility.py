@@ -8,6 +8,7 @@ prevents a locally legal pick from starving another team's future role slot.
 
 from __future__ import annotations
 
+import asyncio
 from collections import Counter
 from collections.abc import Collection, Mapping
 from dataclasses import dataclass
@@ -157,10 +158,22 @@ def build_feasibility_state(
     )
 
 
-async def load_feasibility_state(
-    session: AsyncSession,
-    draft_session: DraftSession,
-) -> DraftFeasibilityState:
+@dataclass(frozen=True)
+class DraftSnapshot:
+    """One consistent read of a session's team/player/pick rows.
+
+    Loaded once per request and shared by every step that needs the session
+    contents (role counts, fit construction, feasibility state) instead of
+    each step re-querying the same rows.
+    """
+
+    teams: tuple[DraftTeam, ...]
+    players: tuple[DraftPlayer, ...]
+    picks: tuple[DraftPick, ...]
+
+
+async def load_snapshot(session: AsyncSession, draft_session: DraftSession) -> DraftSnapshot:
+    """Load the session's rows once; players carry the eager-load option set."""
     teams = (
         await session.scalars(
             sa.select(DraftTeam)
@@ -178,12 +191,24 @@ async def load_feasibility_state(
     picks = (
         await session.scalars(sa.select(DraftPick).where(DraftPick.session_id == draft_session.id))
     ).all()
+    return DraftSnapshot(teams=tuple(teams), players=tuple(players), picks=tuple(picks))
+
+
+def state_from_snapshot(draft_session: DraftSession, snapshot: DraftSnapshot) -> DraftFeasibilityState:
+    """Pure translation of an already-loaded snapshot into the matching input."""
     return build_feasibility_state(
         team_size=draft_session.team_size,
-        teams=teams,
-        players=players,
-        picks=picks,
+        teams=snapshot.teams,
+        players=snapshot.players,
+        picks=snapshot.picks,
     )
+
+
+async def load_feasibility_state(
+    session: AsyncSession,
+    draft_session: DraftSession,
+) -> DraftFeasibilityState:
+    return state_from_snapshot(draft_session, await load_snapshot(session, draft_session))
 
 
 async def analyze_session(
@@ -191,9 +216,13 @@ async def analyze_session(
     draft_session: DraftSession,
     *,
     hypothetical: DraftAssignment | None = None,
+    state: DraftFeasibilityState | None = None,
 ) -> DraftFeasibilityReport:
-    state = await load_feasibility_state(session, draft_session)
-    return analyze_draft_feasibility(
+    if state is None:
+        state = await load_feasibility_state(session, draft_session)
+    # The bipartite matching is pure CPU; run it off the event loop.
+    return await asyncio.to_thread(
+        analyze_draft_feasibility,
         team_ids=state.team_ids,
         role_targets=state.role_targets,
         players=state.players,
@@ -207,9 +236,14 @@ async def evaluate_session_pick_options(
     draft_session: DraftSession,
     *,
     team_id: int,
+    state: DraftFeasibilityState | None = None,
 ) -> tuple[DraftPickOption, ...]:
-    state = await load_feasibility_state(session, draft_session)
-    return evaluate_pick_options(
+    if state is None:
+        state = await load_feasibility_state(session, draft_session)
+    # Up to 21 forced-pick matchings (see evaluate_pick_options) — pure CPU,
+    # run them off the event loop.
+    return await asyncio.to_thread(
+        evaluate_pick_options,
         team_id=team_id,
         team_ids=state.team_ids,
         role_targets=state.role_targets,
@@ -399,6 +433,7 @@ __all__ = (
     "DraftFeasibilityState",
     "DraftPickOption",
     "DraftSlot",
+    "DraftSnapshot",
     "EligiblePlayer",
     "RoleDeficit",
     "analyze_draft_feasibility",
@@ -408,5 +443,7 @@ __all__ = (
     "evaluate_pick_options",
     "evaluate_session_pick_options",
     "load_feasibility_state",
+    "load_snapshot",
     "role_targets_for_team_size",
+    "state_from_snapshot",
 )

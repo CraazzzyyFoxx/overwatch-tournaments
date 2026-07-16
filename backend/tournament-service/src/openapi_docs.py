@@ -433,6 +433,10 @@ DOCS: dict[str, dict] = {
         "summary": "Bulk add to balancer",
         "description": "Adds multiple registrations to the balancer with a given status, returning updated/skipped counts and broadcasting a realtime change; requires team-import permission on the tournament.",
     },
+    "rpc.tournament.reg_bulk_exclusion": {
+        "summary": "Bulk set registration exclusion",
+        "description": "Sets the exclude-from-balancer flag and reason on multiple registrations, returning updated/skipped counts and broadcasting a realtime change; requires team-update permission on the tournament.",
+    },
     "rpc.tournament.reg_rank_autofill_preview": {
         "summary": "Preview rank autofill",
         "description": "Previews autofilling registration ranks from parsed OW data without writing; requires team-read permission on the tournament.",

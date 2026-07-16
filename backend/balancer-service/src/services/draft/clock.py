@@ -34,6 +34,11 @@ from src.services.draft import selection
 LOCK_TTL_SECONDS = 10
 RENEW_INTERVAL_SECONDS = 3
 SUPERVISOR_POLL_SECONDS = 2
+# Relaxed discovery poll while no session is LIVE; start/resume wakes the
+# supervisor instantly via SUPERVISOR_CONTROL_CHANNEL, so the slow poll is
+# only the fallback (e.g. a missed publish or a crashed clock loop).
+SUPERVISOR_IDLE_POLL_SECONDS = 10
+SUPERVISOR_CONTROL_CHANNEL = "draft:clock:supervisor"
 
 SessionFactory = Callable[[], AsyncSession]
 
@@ -205,7 +210,12 @@ async def clock_loop(session_factory: SessionFactory, redis: Redis, session_id: 
 async def draft_clock_supervisor(session_factory: SessionFactory, redis: Redis) -> None:
     """Discover LIVE sessions and spawn a (lock-guarded) clock loop for each."""
     spawned: dict[int, asyncio.Task] = {}
+    pubsub = None
+    with contextlib.suppress(Exception):
+        pubsub = redis.pubsub()
+        await pubsub.subscribe(SUPERVISOR_CONTROL_CHANNEL)
     while True:
+        has_live = True  # on poll failure keep the fast interval
         try:
             async with session_factory() as session:
                 live_ids = (
@@ -213,13 +223,27 @@ async def draft_clock_supervisor(session_factory: SessionFactory, redis: Redis) 
                         sa.select(DraftSession.id).where(DraftSession.status == DraftStatus.LIVE.value)
                     )
                 ).all()
+            has_live = bool(live_ids)
             for sid in live_ids:
                 task = spawned.get(sid)
                 if task is None or task.done():
                     spawned[sid] = asyncio.create_task(clock_loop(session_factory, redis, sid))
         except Exception:  # noqa: BLE001
             logger.exception("Draft clock supervisor poll failed")
-        await asyncio.sleep(SUPERVISOR_POLL_SECONDS)
+        interval = float(SUPERVISOR_POLL_SECONDS if has_live else SUPERVISOR_IDLE_POLL_SECONDS)
+        if pubsub is not None:
+            # A start/resume nudge cuts the idle interval short.
+            await _wait_for_nudge(pubsub, interval)
+        else:
+            await asyncio.sleep(interval)
+
+
+async def notify_supervisor(redis: Redis | None) -> None:
+    """Wake the discovery poll immediately (published on draft start/resume)."""
+    if redis is None:
+        return
+    with contextlib.suppress(Exception):
+        await redis.publish(SUPERVISOR_CONTROL_CHANNEL, "1")
 
 
 async def notify_clock(redis: Redis | None, session_id: int) -> None:
