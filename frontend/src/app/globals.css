@@ -1513,6 +1513,36 @@
   }
 }
 
+/* ── Popover surface (design request) ──────────────────────────────────────
+   The shadcn <Popover> inherited the brand-tinted --popover / --border tokens,
+   which read teal ("бирюзовый") on branded workspaces. Repaint it from global
+   tokens only: fill = page background, white text, and a contrasting neutral
+   (non-teal) rim so the panel stays distinct against the page. Scoped to the
+   Popover via its unique transform-origin utility, so dropdown / select /
+   context-menu surfaces keep their own styling. No component-code
+   changes. Unlayered → wins over the @layer base/utilities token defaults and
+   over any inherited (.dark or .site-theme brand) --popover value. */
+.origin-\[--radix-popover-content-transform-origin\] {
+  --popover: var(--background);
+  --popover-foreground: 0 0% 100%;
+  border-color: hsl(0 0% 100% / 0.16);
+}
+
+/* ── Tooltip surface (design request) ──────────────────────────────────────
+   The default <Tooltip> fills with bg-primary (teal) + dark text; a few
+   analytics tooltips repaint with bg-popover. Unify to the same treatment as
+   the Popover: fill = page background, white text, contrasting neutral rim.
+   Set the paint properties directly (not via --popover) since tooltips key off
+   --primary, not the popover token. Scoped to the tooltip via its unique
+   transform-origin utility. Unlayered → beats bg-primary / bg-popover /
+   border-border utilities. */
+.origin-\[--radix-tooltip-content-transform-origin\] {
+  background-color: hsl(var(--background));
+  color: hsl(0 0% 100%);
+  border: 1px solid hsl(0 0% 100% / 0.16);
+  box-shadow: 0 10px 30px -12px hsl(0 0% 0% / 0.7);
+}
+
 /* ═══════════════════════════════════════════════════════════════════════
    Redesign token layer (global) — OWT handoff palette.
    Dark-only app, so defined on :root. Namespaced --aqt-* to avoid clashing
