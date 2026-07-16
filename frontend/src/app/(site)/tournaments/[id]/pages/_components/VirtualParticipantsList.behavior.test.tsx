@@ -369,7 +369,15 @@ describe("VirtualParticipantsList mount budget", () => {
     const initialHeight = Number.parseFloat(spacer.style.height);
     const expander = row.querySelector<HTMLButtonElement>("button[aria-controls]")!;
     const detailsId = expander.getAttribute("aria-controls")!;
+    const table = container.querySelector<HTMLElement>('[role="table"]')!;
+    const summaryRow = row.querySelector<HTMLElement>('[role="row"]')!;
 
+    expect(table.getAttribute("aria-rowcount")).toBe("2");
+    expect(table.querySelectorAll('[role="row"]')).toHaveLength(2);
+    expect(row.getAttribute("role")).toBeNull();
+    expect(row.getAttribute("aria-rowindex")).toBeNull();
+    expect(summaryRow.getAttribute("aria-rowindex")).toBe("2");
+    expect(summaryRow.querySelectorAll(':scope > [role="cell"]')).toHaveLength(3);
     expect(container.querySelectorAll("[data-rank-history]")).toHaveLength(0);
     expect(container.querySelectorAll("[data-heavy-detail]")).toHaveLength(0);
     expect(container.querySelector(`#${detailsId}`)).toBeNull();
@@ -382,8 +390,10 @@ describe("VirtualParticipantsList mount budget", () => {
     expect(container.querySelectorAll("[data-rank-history]")).toHaveLength(1);
     expect(container.querySelectorAll("[data-heavy-detail]")).toHaveLength(1);
     expect(region.getAttribute("role")).toBe("region");
-    expect(region.parentElement?.getAttribute("role")).toBe("cell");
-    expect(region.parentElement?.getAttribute("aria-colspan")).toBe("3");
+    expect(region.closest('[role="row"]')).toBeNull();
+    expect(region.parentElement?.getAttribute("role")).toBeNull();
+    expect(region.parentElement?.getAttribute("aria-colspan")).toBeNull();
+    expect(summaryRow.querySelectorAll(':scope > [role="cell"]')).toHaveLength(3);
     expect(Number.parseFloat(spacer.style.height)).toBeGreaterThan(initialHeight);
 
     const collapseButton = row.querySelector<HTMLButtonElement>("button[aria-controls]")!;

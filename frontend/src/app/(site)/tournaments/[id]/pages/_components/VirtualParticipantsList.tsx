@@ -157,16 +157,18 @@ export default function VirtualParticipantsList({
 
             return (
               <div
-                aria-rowindex={item.index + 2}
                 className={styles.participantVirtualRow}
                 data-expanded={expanded ? "true" : "false"}
                 data-index={item.index}
                 key={item.key}
                 ref={virtualizer.measureElement}
-                role="row"
                 style={{ transform: `translateY(${item.start - scrollMargin}px)` }}
               >
-                <div className={styles.participantSummaryRow}>
+                <div
+                  aria-rowindex={item.index + 2}
+                  className={styles.participantSummaryRow}
+                  role="row"
+                >
                   {displayColumns.map((column, index) => (
                     <div
                       className={cn(
@@ -219,11 +221,7 @@ export default function VirtualParticipantsList({
                 </div>
 
                 {expanded ? (
-                  <div
-                    aria-colspan={displayColumns.length + 1}
-                    className={styles.participantExpandedCell}
-                    role="cell"
-                  >
+                  <div className={styles.participantExpandedCell}>
                     <div
                       aria-labelledby={expanderId}
                       className={styles.participantExpandedRegion}
