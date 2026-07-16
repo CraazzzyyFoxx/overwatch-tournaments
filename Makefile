@@ -4,7 +4,8 @@
 	app-logs identity-logs parser-logs frontend-logs discord-logs balancer-logs \
 	app-restart identity-restart parser-restart frontend-restart \
 	monitoring-up monitoring-down monitoring-logs monitoring-ps \
-	app-rebuild identity-rebuild parser-rebuild frontend-rebuild
+	app-rebuild identity-rebuild parser-rebuild frontend-rebuild \
+	loadtest loadtest-ui
 
 COMPOSE = docker compose
 PROD_COMPOSE = docker compose -f docker-compose.production.yml
@@ -99,6 +100,21 @@ migrate:
 
 test:
 	$(COMPOSE) exec app-svc pytest
+
+
+# Locust load tests against the running edge (see loadtests/README.md).
+# loadtest-ui opens the web UI on :8089; loadtest runs headless.
+# Override e.g.: make loadtest LOAD_USERS=200 LOAD_TIME=10m LOAD_HOST=https://staging.example.com
+LOAD_USERS ?= 50
+LOAD_RATE ?= 5
+LOAD_TIME ?= 5m
+LOAD_HOST ?= http://localhost
+
+loadtest:
+	cd loadtests && uv run locust --headless -u $(LOAD_USERS) -r $(LOAD_RATE) -t $(LOAD_TIME) --host $(LOAD_HOST) --csv results --html report.html
+
+loadtest-ui:
+	cd loadtests && uv run locust --host $(LOAD_HOST)
 
 clean:
 	$(COMPOSE) down -v --remove-orphans

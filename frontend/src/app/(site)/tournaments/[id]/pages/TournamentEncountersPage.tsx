@@ -67,26 +67,14 @@ const TournamentEncountersPage = ({ tournamentId, page, search }: TournamentEnco
   }
 
   const content = (
-    <section className={styles.publicDataPage} aria-labelledby="tournament-matches-title">
-      <header className={styles.pageHeading}>
-        <div className={styles.pageHeadingCopy}>
-          <span className={styles.pageEyebrow}>
-            {t("tournamentDetail.publicPages.matches.eyebrow")}
-          </span>
-          <div className={styles.pageTitleRow}>
-            <h2 className={styles.pageTitle} id="tournament-matches-title">
-              {t("common.matches")}
-            </h2>
-            <span className={styles.pageCount}>{encounters.total}</span>
-          </div>
-          <p className={styles.pageContext}>{t("tournamentDetail.publicPages.matches.context")}</p>
-        </div>
-        {presentation.showUpdating ? (
-          <span className={styles.updating} role="status" aria-live="polite">
+    <section className={styles.publicDataPage} aria-label={t("common.matches")}>
+      {presentation.showUpdating ? (
+        <p className={styles.updatingRow} role="status" aria-live="polite">
+          <span className={styles.updating}>
             {t("tournamentDetail.pageState.updating")}
           </span>
-        ) : null}
-      </header>
+        </p>
+      ) : null}
 
       <EncountersTable
         encounters={encounters}

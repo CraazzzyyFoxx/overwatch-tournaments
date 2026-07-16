@@ -1080,14 +1080,11 @@ export default function TournamentParticipantsPage({
         </AlertDialogContent>
       </AlertDialog>
 
-      <div className="section-head" ref={resultsHeadingRef}>
-        <h2>
-          {t("common.participants")} <span className="count-tag">{registrations.length}</span>
-        </h2>
-        {listQuery.isFetching ? (
+      {listQuery.isFetching ? (
+        <p className={styles.updatingRow}>
           <span className={styles.updating}>{t("tournamentDetail.pageState.updating")}</span>
-        ) : null}
-      </div>
+        </p>
+      ) : null}
 
       <p aria-atomic="true" aria-live="polite" className="sr-only">
         {t("tournamentDetail.participants.resultCount", { count: filtered.length })}
@@ -1095,7 +1092,7 @@ export default function TournamentParticipantsPage({
 
       {/* Status filter chips + search + column picker */}
       {!trueEmpty && (
-        <div className="filters">
+        <div className="filters" ref={resultsHeadingRef}>
           <button
             type="button"
             className={cn("filter-chip", statusFilter === "all" && "active")}

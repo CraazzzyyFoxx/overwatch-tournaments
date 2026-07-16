@@ -1,0 +1,13 @@
+[project]
+name = "owt-loadtests"
+version = "0.1.0"
+description = "Locust load tests for the OWT public API (nginx -> gateway edge)"
+requires-python = ">=3.12"
+dependencies = [
+    "locust>=2.32,<3.0",
+]
+
+# Standalone on purpose: NOT a member of the backend uv workspace, so locust
+# and its gevent stack are never dragged into the services' CI installs.
+[tool.uv]
+package = false

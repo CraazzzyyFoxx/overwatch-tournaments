@@ -19,13 +19,19 @@ function orderedColumns(
   visibleColumns: readonly ColumnDefinition[],
   allColumns: readonly ColumnDefinition[],
 ): ColumnDefinition[] {
-  const mandatoryColumns = allColumns.filter((column) =>
-    isMandatoryParticipantColumnId(column.id),
+  const visibleIds = new Set(visibleColumns.map((column) => column.id));
+  // Mandatory columns render even when deselected; everything else keeps the
+  // canonical build order instead of being regrouped around the mandatory set.
+  const display = allColumns.filter(
+    (column) =>
+      isMandatoryParticipantColumnId(column.id) || visibleIds.has(column.id),
   );
-  const optionalColumns = visibleColumns.filter(
-    (column) => !isMandatoryParticipantColumnId(column.id),
-  );
-  return [...mandatoryColumns, ...optionalColumns];
+  // The identity column stays leftmost: the grid gives the first track its
+  // wide minmax and the mobile card layout promotes cell 0 to the title row.
+  return [
+    ...display.filter((column) => column.id === "battle_tag"),
+    ...display.filter((column) => column.id !== "battle_tag"),
+  ];
 }
 
 function useDocumentScrollMargin() {

@@ -307,7 +307,7 @@ describe("public tournament data page contracts", () => {
     expect(fallbackRequests).toBe(0);
   });
 
-  it("gives every page the shared editorial heading and exact state components", () => {
+  it("keeps pages headerless with an accessible section label and exact state components", () => {
     const contracts = [
       ["TournamentEncountersPage.tsx", "TournamentMatchesSkeleton"],
       ["TournamentHeroPlaytimePage.tsx", "TournamentHeroesSkeleton"],
@@ -316,9 +316,11 @@ describe("public tournament data page contracts", () => {
 
     for (const [fileName, skeleton] of contracts) {
       const source = pageSource(fileName);
-      expect(source).toContain("styles.pageEyebrow");
-      expect(source).toContain("styles.pageHeading");
-      expect(source).toContain("styles.pageTitle");
+      // The section nav already names the page; no in-page heading remains,
+      // but the landmark keeps an accessible name.
+      expect(source).toContain("aria-label={t(");
+      expect(source).not.toContain('className="section-head"');
+      expect(source).not.toContain("styles.pageHeading");
       expect(source).toContain(skeleton);
       expect(source).toContain('state="initial-error"');
       expect(source).toContain('state="refresh-error"');

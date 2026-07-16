@@ -37,18 +37,6 @@ function SkeletonRegion({
   );
 }
 
-function PageHeadingSkeleton({ action = false }: { action?: boolean }) {
-  return (
-    <header className={styles.skeletonHeader}>
-      <div className={styles.skeletonHeaderText}>
-        <SkeletonBlock style={{ width: "5.5rem", height: "0.55rem" }} />
-        <SkeletonBlock style={{ width: "min(16rem, 72vw)", height: "1.85rem" }} />
-        <SkeletonBlock style={{ width: "min(24rem, 80vw)", height: "0.7rem" }} />
-      </div>
-      {action ? <SkeletonBlock style={{ width: "7.5rem", height: "2.25rem" }} /> : null}
-    </header>
-  );
-}
 
 function ControlRowSkeleton({ search = false }: { search?: boolean }) {
   return (
@@ -153,7 +141,7 @@ export function TournamentBracketSkeleton() {
   return (
     <SkeletonRegion variant="bracket" message={t("tournamentDetail.loading.pages.bracket")}>
       <TournamentPageSkeletonLayout>
-        <PageHeadingSkeleton />
+        
         <div className={styles.skeletonSurface}>
           <div
             className={styles.skeletonHeader}
@@ -190,7 +178,7 @@ export function TournamentTeamsSkeleton() {
   return (
     <SkeletonRegion variant="teams" message={t("tournamentDetail.loading.pages.teams")}>
       <TournamentPageSkeletonLayout>
-        <PageHeadingSkeleton />
+        
         <ControlRowSkeleton />
         <div className={styles.teamsSkeletonGrid}>
           {Array.from({ length: 6 }, (_, card) => (
@@ -216,7 +204,7 @@ export function TournamentParticipantsSkeleton() {
       message={t("tournamentDetail.loading.pages.participants")}
     >
       <TournamentPageSkeletonLayout>
-        <PageHeadingSkeleton />
+        
         <ControlRowSkeleton search />
         <div className={styles.skeletonSurface}>
           <div className={styles.skeletonRow}>
@@ -237,7 +225,7 @@ export function TournamentMatchesSkeleton() {
   return (
     <SkeletonRegion variant="matches" message={t("tournamentDetail.loading.pages.matches")}>
       <TournamentPageSkeletonLayout>
-        <PageHeadingSkeleton />
+        
         <div className={styles.skeletonControls}>
           <SkeletonBlock style={{ width: "min(18rem, 76vw)", height: "2.25rem" }} />
         </div>
@@ -263,7 +251,7 @@ export function TournamentHeroesSkeleton() {
   return (
     <SkeletonRegion variant="heroes" message={t("tournamentDetail.loading.pages.heroes")}>
       <TournamentPageSkeletonLayout>
-        <PageHeadingSkeleton />
+        
         <ControlRowSkeleton />
         <div className={styles.skeletonSurface}>
           {Array.from({ length: 8 }, (_, index) => (
@@ -285,7 +273,7 @@ export function TournamentStandingsSkeleton() {
   return (
     <SkeletonRegion variant="standings" message={t("tournamentDetail.loading.pages.standings")}>
       <TournamentPageSkeletonLayout>
-        <PageHeadingSkeleton />
+        
         <ControlRowSkeleton />
         {[0, 1].map((card) => (
           <div className={styles.skeletonSurface} key={card}>

@@ -131,12 +131,6 @@ const TournamentTeamsPage = ({ tournament }: { tournament: Tournament }) => {
         <TournamentPageState state="empty" />
       ) : (
         <>
-          <div className="section-head">
-            <h2>
-              {t("common.teams")} <span className="count-tag">{teams.length}</span>
-            </h2>
-          </div>
-
           <div className="filters">
             <button
               type="button"
@@ -172,7 +166,7 @@ const TournamentTeamsPage = ({ tournament }: { tournament: Tournament }) => {
           {visibleTeams.length === 0 ? (
             <TournamentPageState state="filtered-empty" onReset={() => setGroupFilter("all")} />
           ) : (
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               {visibleTeams.map((team) => (
                 <TournamentTeamCard key={team.id} team={team} />
               ))}

@@ -147,11 +147,11 @@ describe("tournament workspace scoped pages", () => {
     expect(source).not.toContain("useSelectedWorkspace");
   });
 
-  it("keeps the teams grid to one or two columns", () => {
+  it("scales the teams grid from one column up to three on wide screens", () => {
     const source = readFileSync(join(import.meta.dir, "TournamentTeamsPage.tsx"), "utf8");
 
     expect(source).toContain("md:grid-cols-2");
-    expect(source).not.toContain("xl:grid-cols-3");
+    expect(source).toContain("xl:grid-cols-3");
   });
 
   it("shows background updates without replacing stale teams", () => {

@@ -93,26 +93,14 @@ const TournamentHeroPlaytimePage = ({ tournamentId }: { tournamentId: number }) 
   }
 
   const content = (
-    <section className={styles.publicDataPage} aria-labelledby="tournament-heroes-title">
-      <header className={styles.pageHeading}>
-        <div className={styles.pageHeadingCopy}>
-          <span className={styles.pageEyebrow}>
-            {t("tournamentDetail.publicPages.heroes.eyebrow")}
-          </span>
-          <div className={styles.pageTitleRow}>
-            <h2 className={styles.pageTitle} id="tournament-heroes-title">
-              {t("common.heroes")}
-            </h2>
-            <span className={styles.pageCount}>{heroes.length}</span>
-          </div>
-          <p className={styles.pageContext}>{t("tournamentDetail.publicPages.heroes.context")}</p>
-        </div>
-        {presentation.showUpdating ? (
-          <span className={styles.updating} role="status" aria-live="polite">
+    <section className={styles.publicDataPage} aria-label={t("common.heroes")}>
+      {presentation.showUpdating ? (
+        <p className={styles.updatingRow} role="status" aria-live="polite">
+          <span className={styles.updating}>
             {t("tournamentDetail.pageState.updating")}
           </span>
-        ) : null}
-      </header>
+        </p>
+      ) : null}
 
       {heroes.length > 0 ? (
         <div

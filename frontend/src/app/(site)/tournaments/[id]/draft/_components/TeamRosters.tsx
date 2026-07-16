@@ -245,20 +245,18 @@ export function TeamRosters({
             <TournamentTeamCardFrame
               key={team.id}
               name={team.name}
-              positionTag={<span className="placement def">#{team.draft_position}</span>}
               className={cn(
                 "min-w-0",
                 onClock && "ring-2 ring-[color:var(--aqt-teal)] ring-offset-2 ring-offset-[color:var(--aqt-bg)]"
               )}
               style={team.id === myTeamId ? { borderColor: "var(--aqt-teal)" } : undefined}
-              metricLabel={avgDivision != null ? t("teamAverage") : undefined}
               metricValue={
                 avgDivision != null ? (
                   <span title={`${getDivisionLabel(divisionGrid, avgDivision)} · ${avgRank!.toFixed(0)} SR`}>
                     <PlayerDivisionIcon
                       division={avgDivision}
-                      width={24}
-                      height={24}
+                      width={26}
+                      height={26}
                       className="h-6 w-6 object-contain"
                       tournamentGrid={divisionGrid}
                     />

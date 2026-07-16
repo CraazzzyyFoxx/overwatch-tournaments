@@ -1505,13 +1505,7 @@
       }
     },
     "publicPages": {
-      "bracket": {
-        "eyebrow": "Tournament path",
-        "context": "Move between published stages, inspect standings and follow every route to the final."
-      },
       "matches": {
-        "eyebrow": "Competition log",
-        "context": "Published match results, fifteen at a time. Search keeps its place in the URL.",
         "searchLabel": "Search tournament matches",
         "searchPlaceholder": "Search by name",
         "tableLabel": "Tournament matches. Scroll horizontally for all result details.",
@@ -1519,15 +1513,11 @@
         "emptyDescription": "Matches will appear here after they are scheduled or published."
       },
       "heroes": {
-        "eyebrow": "Performance ledger",
-        "context": "Heroes ranked by their share of tournament play time.",
         "roleLabel": "Filter heroes by role",
         "emptyTitle": "No hero data yet",
         "emptyDescription": "Hero play-time data will appear after match statistics are processed."
       },
       "standings": {
-        "eyebrow": "Competition table",
-        "context": "Full stage records, recent form and published tiebreak priorities.",
         "stageViewLabel": "Choose standings stage view",
         "tableLabel": "Tournament standings. Scroll horizontally for all ranking metrics.",
         "emptyTitle": "No standings yet",

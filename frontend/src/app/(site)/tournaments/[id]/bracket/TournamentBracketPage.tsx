@@ -375,27 +375,11 @@ export default function TournamentBracketPage({ tournament }: TournamentBracketP
 
   const content = (
     <div className={styles.publicDataPage} data-page-section="bracket">
-      <header className={styles.pageHeading}>
-        <div className={styles.pageHeadingCopy}>
-          <p className={styles.pageEyebrow}>
-            {t("tournamentDetail.publicPages.bracket.eyebrow")}
-          </p>
-          <div className={styles.pageTitleRow}>
-            <h2 className={styles.pageTitle}>{t("common.bracket")}</h2>
-            <span className={styles.pageCount}>{stages.length}</span>
-          </div>
-          <p className={styles.pageContext}>
-            {t("tournamentDetail.publicPages.bracket.context")}
-          </p>
-        </div>
-      </header>
       {loadState.isUpdating && loadState.kind !== "refresh-error" ? (
-        <p
-          className="text-right text-xs font-semibold uppercase tracking-[0.14em] text-[var(--aqt-teal)]"
-          role="status"
-          aria-live="polite"
-        >
-          {t("tournamentDetail.pageState.updating")}
+        <p className={styles.updatingRow} role="status" aria-live="polite">
+          <span className={styles.updating}>
+            {t("tournamentDetail.pageState.updating")}
+          </span>
         </p>
       ) : null}
       {activeStages.length > 0 ? (

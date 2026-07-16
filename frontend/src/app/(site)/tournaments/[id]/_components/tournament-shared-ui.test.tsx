@@ -73,10 +73,8 @@ describe("tournament skeleton compositions", () => {
     );
 
     expect(bracketSource).toContain('data-page-section="bracket"');
-    expect(bracketSource).toContain("styles.pageHeading");
-    expect(bracketSource).toContain('t("tournamentDetail.publicPages.bracket.eyebrow")');
-    expect(bracketSource).toContain('t("tournamentDetail.publicPages.bracket.context")');
-    expect(bracketSkeletonSource).toContain('<PageHeadingSkeleton />');
+    expect(bracketSource).not.toContain('className="section-head"');
+    expect(skeletonSource).not.toContain("PageHeadingSkeleton");
     expect(bracketSkeletonSource).toContain('data-skeleton-region="bracket-toolbar"');
     expect(bracketSkeletonSource).not.toContain("<ControlRowSkeleton />");
     expect(shellSource).not.toContain("styles.skeletonGrid");
@@ -192,7 +190,7 @@ describe("tournament detail locale parity", () => {
     expect(Object.keys(en.tournamentDetail.publicPages).sort()).toEqual(
       Object.keys(ru.tournamentDetail.publicPages).sort()
     );
-    expect(en.tournamentDetail.publicPages.bracket).toBeDefined();
-    expect(ru.tournamentDetail.publicPages.bracket).toBeDefined();
+    expect(en.tournamentDetail.publicPages.matches).toBeDefined();
+    expect(ru.tournamentDetail.publicPages.matches).toBeDefined();
   });
 });

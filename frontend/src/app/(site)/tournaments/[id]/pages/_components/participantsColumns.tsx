@@ -532,13 +532,6 @@ const BUILT_IN_FIELD_DEFS: Record<string, BuiltInFieldDef> = {
     searchValue: (reg) =>
       reg.roles?.flatMap((r) => r.top_heroes).join(" ") ?? null,
   },
-  additional_roles: {
-    // Merged into primary_role column — skip as standalone
-    id: "_skip_additional_roles",
-    label: "Additional Roles",
-    defaultVisible: false,
-    render: () => null,
-  },
   stream_pov: {
     id: "stream_pov",
     label: "Stream POV",
@@ -613,47 +606,40 @@ export function buildParticipantColumns(
     ),
   });
 
-  // Built-in fields from form config
-  if (form?.built_in_fields) {
-    for (const [key, config] of Object.entries(form.built_in_fields)) {
-      if (!config.enabled) continue;
-      const def = BUILT_IN_FIELD_DEFS[key];
-      if (!def || def.id === "_skip_additional_roles") continue;
-      if (key === "additional_roles") continue;
+  // Built-in fields in a fixed canonical order: identity first, then gameplay
+  // (roles, heroes), then accounts and extras. The form's JSON key order is
+  // organizer input and must never drive the table layout.
+  const BUILT_IN_KEY_ORDER = [
+    "battle_tag",
+    "primary_role",
+    "top_heroes",
+    "smurf_tags",
+    "discord_nick",
+    "twitch_nick",
+    "stream_pov",
+    "notes",
+  ] as const;
+  const enabledBuiltInKeys = form?.built_in_fields
+    ? BUILT_IN_KEY_ORDER.filter((key) => form.built_in_fields[key]?.enabled)
+    : // Fallback when no form config
+      (["battle_tag", "primary_role", "top_heroes", "smurf_tags", "notes"] as const);
 
-      columns.push({
-        id: def.id,
-        label: getLocalizedLabel(key, def.label),
-        category: "built_in",
-        defaultVisible: def.defaultVisible,
-        responsive: def.responsive ?? "sm",
-        widthClass: def.widthClass,
-        align: def.align,
-        render: def.id === "roles"
-          ? (reg) => <RolesCell roles={reg.roles} grid={grid} showRanks={form?.show_ranks} />
-          : (reg) => def.render(reg),
-        searchValue: def.searchValue,
-      });
-    }
-  } else {
-    // Fallback when no form config
-    for (const key of ["battle_tag", "smurf_tags", "primary_role", "top_heroes", "notes"]) {
-      const def = BUILT_IN_FIELD_DEFS[key];
-      if (!def) continue;
-      columns.push({
-        id: def.id,
-        label: getLocalizedLabel(key, def.label),
-        category: "built_in",
-        defaultVisible: true,
-        responsive: def.responsive ?? "sm",
-        widthClass: def.widthClass,
-        align: def.align,
-        render: def.id === "roles"
-          ? (reg) => <RolesCell roles={reg.roles} grid={grid} showRanks={form?.show_ranks} />
-          : (reg) => def.render(reg),
-        searchValue: def.searchValue,
-      });
-    }
+  for (const key of enabledBuiltInKeys) {
+    const def = BUILT_IN_FIELD_DEFS[key];
+    if (!def) continue;
+    columns.push({
+      id: def.id,
+      label: getLocalizedLabel(key, def.label),
+      category: "built_in",
+      defaultVisible: form?.built_in_fields ? def.defaultVisible : true,
+      responsive: def.responsive ?? "sm",
+      widthClass: def.widthClass,
+      align: def.align,
+      render: def.id === "roles"
+        ? (reg) => <RolesCell roles={reg.roles} grid={grid} showRanks={form?.show_ranks} />
+        : (reg) => def.render(reg),
+      searchValue: def.searchValue,
+    });
   }
 
   if (!columns.some((column) => column.id === "battle_tag")) {
