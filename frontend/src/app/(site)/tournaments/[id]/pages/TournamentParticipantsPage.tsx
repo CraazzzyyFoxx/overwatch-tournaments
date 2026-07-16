@@ -262,6 +262,7 @@ function MyRegistrationCard({
   isCheckingIn,
   isWithdrawing,
   tournament,
+  requireOpenProfile,
 }: {
   registration: Registration;
   canCheckIn: boolean;
@@ -270,6 +271,7 @@ function MyRegistrationCard({
   isCheckingIn: boolean;
   isWithdrawing: boolean;
   tournament: Tournament;
+  requireOpenProfile: boolean;
 }) {
   const t = useTranslations();
   const [isExpanded, setIsExpanded] = useState(false);
@@ -323,9 +325,28 @@ function MyRegistrationCard({
   // custom slugs, missing field) means the rank is still pending.
   const balancerReady = registration.balancer_status === "ready";
 
-  // Four-step journey: submitted -> review/approved -> balancing (rank
-  // assignment) -> check-in. Custom organizer-defined statuses are bucketed
-  // as "under review" and display their own status name on the review step.
+  // Registration journey: submitted -> review/approved -> profile visibility
+  // (when required) -> balancing (rank assignment) -> check-in.
+  const profileStep: RegistrationStep | null = requireOpenProfile
+    ? {
+        key: "profile",
+        label:
+          registration.profiles_open === true
+            ? t("common.profileOpen")
+            : registration.profiles_open === false
+              ? t("common.profileClosed")
+              : t("common.profileNotChecked"),
+        tone:
+          registration.profiles_open === true
+            ? "done"
+            : registration.profiles_open === false
+              ? "failed"
+              : isTerminal
+                ? "idle"
+                : "active",
+      }
+    : null;
+
   const steps: RegistrationStep[] = [
     {
       key: "submitted",
@@ -342,6 +363,7 @@ function MyRegistrationCard({
             : t("registration.myCard.steps.review"),
       tone: isApproved || isCheckedIn ? "done" : isTerminal ? "failed" : "active",
     },
+    ...(profileStep ? [profileStep] : []),
     {
       key: "balancing",
       label: t("registration.myCard.steps.balancing"),
@@ -1012,6 +1034,7 @@ export default function TournamentParticipantsPage({
           isCheckingIn={checkInMutation.isPending}
           isWithdrawing={withdrawMutation.isPending}
           tournament={tournament}
+          requireOpenProfile={formQuery.data?.require_open_profile ?? false}
         />
       )}
 
