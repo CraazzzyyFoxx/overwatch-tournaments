@@ -22,7 +22,6 @@ import {
   ShieldBan,
   X,
   XCircle,
-  Gamepad2,
   Tv,
   Twitch,
   ChevronDown,
@@ -298,16 +297,12 @@ function MyRegistrationCard({
     }
   }
 
-  let statusBadgeStyle: React.CSSProperties | undefined = undefined;
-  let statusBadgeClass = cn(
-    "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-medium",
-    statusConfig.color,
-  );
+  // Custom statuses carry their own accent color; builtin ones use the
+  // Tailwind classes from STATUS_BAR_CONFIG.
+  let statusChipStyle: React.CSSProperties | undefined = undefined;
   if (statusMeta?.icon_color) {
     const color = statusMeta.icon_color;
-    statusBadgeClass =
-      "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-medium";
-    statusBadgeStyle = {
+    statusChipStyle = {
       color: color,
       borderColor: hexToRgba(color, 0.35) ?? color,
       backgroundColor: hexToRgba(color, 0.12) ?? "transparent",
@@ -403,49 +398,79 @@ function MyRegistrationCard({
       <div className="absolute -right-16 -top-16 -z-10 size-32 rounded-full bg-blue-500/5 blur-2xl" />
       <div className="absolute -bottom-16 -left-16 -z-10 size-32 rounded-full bg-violet-500/5 blur-2xl" />
 
-      {/* Header: identity + status + details toggle */}
-      <div className="flex flex-wrap items-center justify-between gap-3 p-4 pb-3">
-        <div className="flex items-center gap-3">
+      {/* Hero header: big status icon, headline, next-step hint, actions */}
+      <div className="flex flex-wrap items-start justify-between gap-3 p-4 sm:p-5">
+        <div className="flex min-w-0 items-center gap-3.5">
           <span
             className={cn(
-              "flex size-9 items-center justify-center rounded-lg border",
-              statusConfig.color,
+              "flex size-11 shrink-0 items-center justify-center rounded-xl border",
+              statusChipStyle ? undefined : statusConfig.color,
             )}
-            style={statusBadgeStyle}
+            style={statusChipStyle}
           >
-            {createElement(StatusIcon, { className: "size-4" })}
+            {createElement(StatusIcon, { className: "size-5" })}
           </span>
-          <div className="flex flex-col items-start gap-0.5">
-            <span className="text-xs font-semibold uppercase tracking-wider text-[color:var(--aqt-fg)]">
+          <div className="min-w-0">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[color:var(--aqt-fg-dim)]">
               {t("registration.myCard.title")}
-            </span>
-            <span className={statusBadgeClass} style={statusBadgeStyle}>
-              {createElement(StatusIcon, { className: "size-3" })}
+            </p>
+            <h3 className="mt-0.5 text-lg font-bold leading-tight text-[color:var(--aqt-fg)]">
               {statusName}
-            </span>
+            </h3>
+            <p className={cn("mt-0.5 text-xs", hintClass)}>{hintText}</p>
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={() => setIsExpanded(!isExpanded)}
-          className="inline-flex items-center gap-1 rounded-md border border-[color:var(--aqt-border-2)] bg-white/[0.03] px-2.5 py-1 text-xs font-medium text-[color:var(--aqt-fg-muted)] transition-colors hover:bg-white/[0.06] hover:text-[color:var(--aqt-fg)]"
-        >
-          <span>
-            {isExpanded
-              ? t("registration.myCard.hideDetails")
-              : t("registration.myCard.showDetails")}
-          </span>
-          {isExpanded ? (
-            <ChevronUp className="size-3" />
-          ) : (
-            <ChevronDown className="size-3" />
+        <div className="flex items-center gap-2">
+          {canCheckIn && (
+            <button
+              type="button"
+              onClick={onCheckIn}
+              disabled={isCheckingIn}
+              className="inline-flex items-center justify-center gap-1 rounded-md bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-[color:var(--aqt-fg)] shadow shadow-emerald-500/20 transition-all hover:bg-emerald-400 hover:shadow-emerald-500/30 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50"
+            >
+              {isCheckingIn && <Loader2 className="size-3 animate-spin" />}
+              {isCheckingIn ? t("common.checkingIn") : t("common.checkIn")}
+            </button>
           )}
-        </button>
+          {canWithdraw && (
+            <button
+              type="button"
+              onClick={onWithdraw}
+              disabled={isWithdrawing || isCheckingIn}
+              className="inline-flex items-center justify-center rounded-md border border-red-500/20 bg-red-500/5 px-2.5 py-1.5 text-[11px] font-semibold text-red-400/90 transition-all hover:border-red-500/40 hover:bg-red-500/10 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50"
+            >
+              {isWithdrawing && <Loader2 className="mr-1 size-3 animate-spin" />}
+              {isWithdrawing ? t("common.withdrawing") : t("common.withdraw")}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => setIsExpanded(!isExpanded)}
+            aria-expanded={isExpanded}
+            aria-label={
+              isExpanded
+                ? t("registration.myCard.hideDetails")
+                : t("registration.myCard.showDetails")
+            }
+            title={
+              isExpanded
+                ? t("registration.myCard.hideDetails")
+                : t("registration.myCard.showDetails")
+            }
+            className="flex size-8 shrink-0 items-center justify-center text-[color:var(--aqt-fg-dim)] transition-colors hover:text-[color:var(--aqt-fg)]"
+          >
+            {isExpanded ? (
+              <ChevronUp className="size-4" />
+            ) : (
+              <ChevronDown className="size-4" />
+            )}
+          </button>
+        </div>
       </div>
 
       {/* Progress stepper */}
-      <div className="flex items-start px-4 pb-4 pt-1 sm:px-6">
+      <div className="flex items-start px-4 pb-4 sm:px-6">
         {steps.map((step, index) => (
           <Fragment key={step.key}>
             {index > 0 && (
@@ -477,134 +502,102 @@ function MyRegistrationCard({
         ))}
       </div>
 
-      {/* Next-step hint + actions */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[color:var(--aqt-border)] bg-white/[0.015] px-4 py-3">
-        <p className={cn("text-xs", hintClass)}>{hintText}</p>
-        <div className="flex items-center gap-2">
-          {canCheckIn && (
-            <button
-              type="button"
-              onClick={onCheckIn}
-              disabled={isCheckingIn}
-              className="inline-flex items-center justify-center gap-1 rounded-md bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-[color:var(--aqt-fg)] shadow shadow-emerald-500/20 transition-all hover:bg-emerald-400 hover:shadow-emerald-500/30 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50"
-            >
-              {isCheckingIn && <Loader2 className="size-3 animate-spin" />}
-              {isCheckingIn ? t("common.checkingIn") : t("common.checkIn")}
-            </button>
-          )}
-          {canWithdraw && (
-            <button
-              type="button"
-              onClick={onWithdraw}
-              disabled={isWithdrawing || isCheckingIn}
-              className="inline-flex items-center justify-center rounded-md border border-red-500/20 bg-red-500/5 px-2.5 py-1.5 text-[11px] font-semibold text-red-400/90 transition-all hover:border-red-500/40 hover:bg-red-500/10 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50"
-            >
-              {isWithdrawing && <Loader2 className="mr-1 size-3 animate-spin" />}
-              {isWithdrawing ? t("common.withdrawing") : t("common.withdraw")}
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Expanded details */}
+      {/* Expanded details: even groups in one row, notes as a quote below */}
       {isExpanded && (
-        <div className="border-t border-[color:var(--aqt-border)] bg-white/[0.01] p-4">
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-            {/* Left column: roles + linked accounts */}
-            <div className="space-y-4">
-              <div className="space-y-1.5">
-                <h4 className="text-[10px] font-medium uppercase tracking-wider text-[color:var(--aqt-fg-dim)]">
-                  {t("common.rolesList")}
-                </h4>
-                {primaryRole || secondaryRoles.length > 0 ? (
-                  <div className="flex flex-wrap gap-1.5">
-                    {primaryRole && (
-                      <RegistrationRoleChip
-                        role={primaryRole}
-                        showPrimaryMark
-                        t={t}
-                      />
-                    )}
-                    {secondaryRoles.map((r) => (
-                      <RegistrationRoleChip
-                        key={`${r.role}-${r.subrole ?? "base"}-${r.priority}`}
-                        role={r}
-                        showPrimaryMark={false}
-                        t={t}
-                      />
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-xs italic text-[color:var(--aqt-fg-dim)]">
-                    {t("registration.myCard.noSecondaryRoles")}
-                  </p>
-                )}
-              </div>
-
-              <div className="space-y-1.5">
-                <h4 className="text-[10px] font-medium uppercase tracking-wider text-[color:var(--aqt-fg-dim)]">
-                  {t("registration.myCard.accounts")}
-                </h4>
-                <div className="flex flex-wrap gap-x-4 gap-y-2 text-xs">
-                  {registration.battle_tag && (
-                    <div className="flex items-center gap-1.5 rounded border border-[color:var(--aqt-border)] bg-white/[0.02] px-2 py-1">
-                      <Gamepad2 className="size-3.5 text-[color:var(--aqt-fg-dim)]" />
-                      <span className="font-semibold text-[color:var(--aqt-fg)]">
-                        {registration.battle_tag}
-                      </span>
-                    </div>
+        <div className="border-t border-[color:var(--aqt-border)] bg-white/[0.01] p-4 sm:px-5">
+          <div className="grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="space-y-2">
+              <h4 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[color:var(--aqt-fg-dim)]">
+                {t("common.rolesList")}
+              </h4>
+              {primaryRole || secondaryRoles.length > 0 ? (
+                <div className="flex flex-wrap gap-1.5">
+                  {primaryRole && (
+                    <RegistrationRoleChip
+                      role={primaryRole}
+                      showPrimaryMark
+                      t={t}
+                    />
                   )}
-                  {registration.discord_nick && (
-                    <div className="flex items-center gap-1.5 rounded border border-[color:var(--aqt-border)] bg-white/[0.02] px-2 py-1">
-                      <DiscordIcon className="size-3.5 text-[#5865F2]" />
-                      <span className="text-[color:var(--aqt-fg-muted)]">
-                        {registration.discord_nick}
-                      </span>
-                    </div>
-                  )}
-                  {registration.twitch_nick && (
-                    <div className="flex items-center gap-1.5 rounded border border-[color:var(--aqt-border)] bg-white/[0.02] px-2 py-1">
-                      <Twitch className="size-3.5 text-[#9146FF]" />
-                      <span className="text-[color:var(--aqt-fg-muted)]">
-                        {registration.twitch_nick}
-                      </span>
-                    </div>
-                  )}
+                  {secondaryRoles.map((r) => (
+                    <RegistrationRoleChip
+                      key={`${r.role}-${r.subrole ?? "base"}-${r.priority}`}
+                      role={r}
+                      showPrimaryMark={false}
+                      t={t}
+                    />
+                  ))}
                 </div>
+              ) : (
+                <p className="text-xs italic text-[color:var(--aqt-fg-dim)]">
+                  {t("registration.myCard.noSecondaryRoles")}
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <h4 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[color:var(--aqt-fg-dim)]">
+                {t("registration.myCard.accounts")}
+              </h4>
+              <div className="flex flex-wrap gap-1.5 text-xs">
+                {registration.battle_tag && (
+                  <div className="flex items-center gap-1.5 rounded-md border border-[color:var(--aqt-border)] bg-white/[0.02] px-2 py-1">
+                    {/* eslint-disable-next-line @next/next/no-img-element -- small static asset from /public */}
+                    <img alt="Battle.net" className="size-3.5" src="/battlenet.svg" />
+                    <span className="font-semibold text-[color:var(--aqt-fg)]">
+                      {registration.battle_tag}
+                    </span>
+                  </div>
+                )}
+                {registration.discord_nick && (
+                  <div className="flex items-center gap-1.5 rounded-md border border-[color:var(--aqt-border)] bg-white/[0.02] px-2 py-1">
+                    <DiscordIcon className="size-3.5 text-[#5865F2]" />
+                    <span className="text-[color:var(--aqt-fg-muted)]">
+                      {registration.discord_nick}
+                    </span>
+                  </div>
+                )}
+                {registration.twitch_nick && (
+                  <div className="flex items-center gap-1.5 rounded-md border border-[color:var(--aqt-border)] bg-white/[0.02] px-2 py-1">
+                    <Twitch className="size-3.5 text-[#9146FF]" />
+                    <span className="text-[color:var(--aqt-fg-muted)]">
+                      {registration.twitch_nick}
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
 
-            {/* Right column: POV + notes */}
-            <div className="space-y-2.5">
-              <div className="flex items-center gap-2 text-xs">
-                <Tv className="size-3.5 text-[color:var(--aqt-fg-dim)]" />
-                <span
-                  className={cn(
-                    "font-medium",
-                    registration.stream_pov
-                      ? "text-emerald-400"
-                      : "text-[color:var(--aqt-fg-muted)]",
-                  )}
-                >
-                  {registration.stream_pov
-                    ? t("registration.myCard.streamPovActive")
-                    : t("registration.myCard.streamPovInactive")}
-                </span>
-              </div>
-
-              <div className="rounded-lg border border-[color:var(--aqt-border)] bg-white/[0.02] p-2.5 text-xs">
-                {registration.notes ? (
-                  <p className="italic leading-normal text-[color:var(--aqt-fg-muted)]">
-                    &ldquo;{registration.notes}&rdquo;
-                  </p>
-                ) : (
-                  <span className="italic text-[color:var(--aqt-fg-dim)]">
-                    {t("registration.myCard.noNotes")}
-                  </span>
+            <div className="space-y-2">
+              <h4 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[color:var(--aqt-fg-dim)]">
+                {t("registration.details.streamPov")}
+              </h4>
+              <span
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium",
+                  registration.stream_pov
+                    ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-400"
+                    : "border-[color:var(--aqt-border)] bg-white/[0.02] text-[color:var(--aqt-fg-dim)]",
                 )}
-              </div>
+              >
+                <Tv className="size-3.5" />
+                {registration.stream_pov
+                  ? t("registration.myCard.streamPovActive")
+                  : t("registration.myCard.streamPovInactive")}
+              </span>
             </div>
           </div>
+
+          {registration.notes ? (
+            <div className="mt-4 space-y-1.5">
+              <h4 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[color:var(--aqt-fg-dim)]">
+                {t("registration.details.notes")}
+              </h4>
+              <p className="border-l-2 border-[color:var(--aqt-border-2)] pl-3 text-xs italic leading-relaxed text-[color:var(--aqt-fg-muted)]">
+                &ldquo;{registration.notes}&rdquo;
+              </p>
+            </div>
+          ) : null}
         </div>
       )}
     </div>
@@ -1080,11 +1073,6 @@ export default function TournamentParticipantsPage({
         </AlertDialogContent>
       </AlertDialog>
 
-      {listQuery.isFetching ? (
-        <p className={styles.updatingRow}>
-          <span className={styles.updating}>{t("tournamentDetail.pageState.updating")}</span>
-        </p>
-      ) : null}
 
       <p aria-atomic="true" aria-live="polite" className="sr-only">
         {t("tournamentDetail.participants.resultCount", { count: filtered.length })}

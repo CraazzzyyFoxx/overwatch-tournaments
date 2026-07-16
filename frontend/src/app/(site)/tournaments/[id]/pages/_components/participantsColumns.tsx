@@ -548,7 +548,10 @@ const BUILT_IN_FIELD_DEFS: Record<string, BuiltInFieldDef> = {
     widthClass: "max-w-50",
     render: (reg) =>
       reg.notes ? (
-        <span className="block max-w-50 whitespace-pre-wrap wrap-break-word text-xs text-[color:var(--aqt-fg-muted)]">
+        <span
+          className="line-clamp-3 max-w-50 wrap-break-word text-xs text-[color:var(--aqt-fg-muted)]"
+          title={reg.notes}
+        >
           {reg.notes}
         </span>
       ) : (

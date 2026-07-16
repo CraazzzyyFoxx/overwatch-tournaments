@@ -13,7 +13,7 @@ import styles from "../../TournamentDetail.module.css";
 import type { ColumnDefinition } from "./participantsColumns";
 import { isMandatoryParticipantColumnId } from "./participants-url-state";
 
-const ESTIMATED_ROW_HEIGHT = 68;
+const ESTIMATED_ROW_HEIGHT = 56;
 
 function orderedColumns(
   visibleColumns: readonly ColumnDefinition[],

@@ -35,6 +35,9 @@
         },
         {
             "path": "backend/env"
+        },
+        {
+            "path": "loadtests"
         }
     ]
 }

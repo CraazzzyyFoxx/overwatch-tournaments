@@ -90,7 +90,6 @@ describe("virtual participants collection", () => {
     expect(pageSource.match(/aria-live="polite"/g)).toHaveLength(1);
     expect(pageSource).toContain("filteredEmpty");
     expect(pageSource).toContain("trueEmpty");
-    expect(pageSource).toContain("listQuery.isFetching");
     expect(pageSource).toContain("listQuery.refetch()");
   });
 

@@ -543,13 +543,13 @@ thead .stickyTeamColumn {
 }
 
 .participantSummaryRow {
-  min-height: 4.25rem;
+  min-height: 3.25rem;
 }
 
 .participantCell,
 .participantExpanderCell {
   min-width: 0;
-  padding: 0.75rem 0.85rem;
+  padding: 0.45rem 0.85rem;
   color: var(--aqt-fg-muted);
   font-size: 0.8125rem;
   overflow-wrap: anywhere;
@@ -589,8 +589,6 @@ thead .stickyTeamColumn {
 
 .participantExpander:hover,
 .participantExpander:focus-visible {
-  border-color: var(--aqt-border-2);
-  background: hsl(0 0% 100% / 0.04);
   color: var(--aqt-teal);
   outline: none;
 }

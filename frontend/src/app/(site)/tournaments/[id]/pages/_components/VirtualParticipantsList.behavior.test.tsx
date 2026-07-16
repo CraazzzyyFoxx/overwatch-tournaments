@@ -169,7 +169,9 @@ let layoutBoundaryHeight = 1200;
 
 function elementHeight(element: Element): number {
   if (element.hasAttribute("data-index")) {
-    return element.getAttribute("data-expanded") === "true" ? 204 : 68;
+    // Keep in sync with ESTIMATED_ROW_HEIGHT in VirtualParticipantsList.tsx so
+    // measured rows match the virtualizer estimate.
+    return element.getAttribute("data-expanded") === "true" ? 204 : 56;
   }
   if (element.hasAttribute("data-participant-layout")) return layoutBoundaryHeight;
   return 0;
@@ -519,7 +521,7 @@ describe("VirtualParticipantsList mount budget", () => {
     expect(firstIndexAfter).toBeLessThan(firstIndexBefore);
     expect(rowsAfter.length).toBeLessThanOrEqual(40);
     expect(firstRowAfter.style.transform).toBe(
-      `translateY(${firstIndexAfter * 68}px)`
+      `translateY(${firstIndexAfter * 56}px)`
     );
 
   });
