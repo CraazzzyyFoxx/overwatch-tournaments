@@ -134,6 +134,7 @@ export default function VirtualParticipantsList({
               className={cn(
                 styles.participantHeaderCell,
                 index > 0 && column.id !== "_status" && styles.participantDetailCell,
+                column.align === "center" && styles.participantCellCenter,
               )}
               data-column-id={column.id}
               data-participant-kind={
