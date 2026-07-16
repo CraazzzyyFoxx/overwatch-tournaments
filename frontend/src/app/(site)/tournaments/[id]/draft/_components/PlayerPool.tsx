@@ -38,7 +38,7 @@ import { allPlayerHeroes, playerRoles, roleTopHeroes } from "../_lib/draft-works
 
 const POOL_ROLES: DraftRole[] = ["tank", "dps", "support"];
 const SEGMENT_CLASS =
-  "inline-flex min-h-9 flex-1 items-center justify-center gap-1.5 rounded-lg px-3 text-sm font-medium text-[color:var(--aqt-fg-muted)] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)]";
+  "inline-flex min-h-8 items-center justify-center gap-1 rounded-md px-2.5 text-xs font-medium text-[color:var(--aqt-fg-muted)] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)]";
 const SEGMENT_ACTIVE = "bg-[color:var(--aqt-card)] text-[color:var(--aqt-fg)]";
 
 interface PlayerPoolProps {
@@ -131,7 +131,7 @@ export function PlayerPool({
       </div>
 
       <div className="mt-2 flex flex-wrap items-center gap-2">
-        <div className="flex min-w-0 flex-1 flex-wrap gap-1 rounded-xl bg-[color:var(--aqt-card-2)] p-1" role="group" aria-label={t("filterRole")}>
+        <div className="inline-flex min-w-0 flex-wrap gap-0.5 rounded-lg bg-[color:var(--aqt-card-2)] p-0.5" role="group" aria-label={t("filterRole")}>
           <button
             type="button"
             aria-pressed={role === "all"}
@@ -160,7 +160,7 @@ export function PlayerPool({
               type="button"
               variant="outline"
               size="sm"
-              className="min-h-9 gap-1.5"
+              className="ml-auto min-h-8 gap-1.5"
               aria-label={t("heroFilterCount", { count: heroFilter.size })}
             >
               {t("heroFilter")} ({heroFilter.size})

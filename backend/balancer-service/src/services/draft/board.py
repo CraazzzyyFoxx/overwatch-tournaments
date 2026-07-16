@@ -20,7 +20,9 @@ from src.schemas.draft import (
 )
 from src.services.draft import loaders
 
-_PRIVATE_ADDITIONAL_INFO_KEYS = frozenset({"notes", "admin_notes", "audit_reason"})
+# Registration `notes` stay public: captains read them in the Player Inspector
+# while drafting. Only organizer-side metadata is stripped from the snapshot.
+_PRIVATE_ADDITIONAL_INFO_KEYS = frozenset({"admin_notes", "audit_reason"})
 _ACTIVE = (
     DraftStatus.SETUP.value,
     DraftStatus.READY.value,

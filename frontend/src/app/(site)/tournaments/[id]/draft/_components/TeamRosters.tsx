@@ -13,7 +13,12 @@ import type { DraftPick, DraftPlayer, DraftRole, DraftTeam } from "@/types/draft
 import type { DivisionGrid } from "@/types/workspace.types";
 
 import { teamCrest } from "../_lib/draft-crest";
-import { buildRosterByTeam, rosterRankForPlayer, rosterRoleForPlayer } from "../_lib/draft-workspace-model";
+import {
+  buildRosterByTeam,
+  roleTargetsForTeamSize,
+  rosterRankForPlayer,
+  rosterRoleForPlayer
+} from "../_lib/draft-workspace-model";
 
 const ROSTER_ROLES: DraftRole[] = ["tank", "dps", "support"];
 
@@ -35,7 +40,7 @@ interface TeamRostersProps {
 interface TeamRosterView {
   roster: DraftPlayer[];
   roleFillCounts: Record<DraftRole, number>;
-  roleTarget: number;
+  roleTargets: Record<DraftRole, number>;
   avgRank: number | null;
   avgDivision: number | null;
   openSlots: number;
@@ -54,8 +59,8 @@ function computeTeamRosterView(
       ROSTER_ROLES.indexOf(rosterRoleForPlayer(b, picks))
   );
   const rosterRoles = roster.map((player) => rosterRoleForPlayer(player, picks));
-  // ponytail: role-target = ceil(team_size/3) default; upgrade to real targets if the session exposes them
-  const roleTarget = Math.ceil(teamSize / 3);
+  // Mirrors the server-enforced targets (feasibility.role_targets_for_team_size).
+  const roleTargets = roleTargetsForTeamSize(teamSize);
   const roleFillCounts = Object.fromEntries(
     ROSTER_ROLES.map((role) => [role, rosterRoles.filter((r) => r === role).length])
   ) as Record<DraftRole, number>;
@@ -66,7 +71,7 @@ function computeTeamRosterView(
     rankValues.length > 0 ? rankValues.reduce((sum, value) => sum + value, 0) / rankValues.length : null;
   const avgDivision = avgRank == null ? null : resolveDivisionFromRank(divisionGrid, avgRank);
   const openSlots = Math.max(0, teamSize - roster.length);
-  return { roster, roleFillCounts, roleTarget, avgRank, avgDivision, openSlots };
+  return { roster, roleFillCounts, roleTargets, avgRank, avgDivision, openSlots };
 }
 
 export function TeamRosters({
@@ -108,7 +113,10 @@ export function TeamRosters({
                 className={cn(
                   "min-w-0 overflow-hidden rounded-[14px] border border-[color:var(--aqt-border)] bg-[color:var(--aqt-card)]",
                   isMine && "border-[color:var(--aqt-teal)]/60",
-                  onClock && "ring-1 ring-[color:var(--aqt-teal)] shadow-[0_0_22px_color-mix(in_srgb,var(--aqt-teal)_20%,transparent)]"
+                  // Border (not ring): the sidebar scroll container clips outer
+                  // box-shadows, which left a ring visible only at the corners.
+                  onClock &&
+                    "border-[color:var(--aqt-teal)] shadow-[0_0_22px_color-mix(in_srgb,var(--aqt-teal)_20%,transparent)]"
                 )}
               >
                 {onClock && (
@@ -156,7 +164,7 @@ export function TeamRosters({
                   {ROSTER_ROLES.map((role) => (
                     <span key={role} className="inline-flex items-center gap-1" style={{ color: ROLE_ACCENT[role] }}>
                       <PlayerRoleIcon role={getRoleIconName(role)} size={14} color={ROLE_ACCENT[role]} />
-                      {view.roleFillCounts[role]}/{view.roleTarget}
+                      {view.roleFillCounts[role]}/{view.roleTargets[role]}
                     </span>
                   ))}
                 </div>
@@ -238,7 +246,7 @@ export function TeamRosters({
       >
         {visibleTeams.map((team) => {
           const view = computeTeamRosterView(team, rosters, picks, teamSize, divisionGrid);
-          const { roster, roleTarget, avgRank, avgDivision, openSlots } = view;
+          const { roster, roleTargets, avgRank, avgDivision, openSlots } = view;
           const onClock = team.id === onClockTeamId;
 
           return (
@@ -275,7 +283,7 @@ export function TeamRosters({
                   return (
                     <span key={role} className="inline-flex items-center gap-1">
                       <PlayerRoleIcon role={getRoleIconName(role)} size={14} />
-                      {filled}/{roleTarget}
+                      {filled}/{roleTargets[role]}
                     </span>
                   );
                 })}

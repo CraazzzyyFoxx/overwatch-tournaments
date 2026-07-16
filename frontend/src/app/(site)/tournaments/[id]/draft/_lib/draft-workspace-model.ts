@@ -147,3 +147,21 @@ export function rosterRoleForPlayer(player: DraftPlayer, picks: DraftPick[]): Dr
 export function rosterRankForPlayer(player: DraftPlayer, role: DraftRole): number | null {
   return player.role_ranks?.[role] ?? player.rank_value ?? null;
 }
+
+/**
+ * Per-role slot targets for a team, mirroring balancer-service
+ * `feasibility.role_targets_for_team_size` (the source of truth the server
+ * enforces on picks): 5+ -> 1 tank / 2 dps / rest support (min 2); smaller
+ * teams fill tank, then dps (max 2), then support.
+ */
+export function roleTargetsForTeamSize(teamSize: number): Record<DraftRole, number> {
+  if (teamSize >= 5) {
+    return { tank: 1, dps: 2, support: Math.max(2, teamSize - 3) };
+  }
+  if (teamSize <= 0) {
+    return { tank: 0, dps: 0, support: 0 };
+  }
+  const tank = Math.min(1, teamSize);
+  const dps = Math.min(2, Math.max(teamSize - tank, 0));
+  return { tank, dps, support: Math.max(teamSize - tank - dps, 0) };
+}

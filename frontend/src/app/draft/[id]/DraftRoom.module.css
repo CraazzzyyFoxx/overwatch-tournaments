@@ -52,7 +52,12 @@
 }
 
 .stage {
-  animation: stage-in 650ms 80ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  /* `backwards` (not `both`): a forwards-filling animation that touches
+     `transform` keeps the element a containing block for `position: fixed`
+     descendants forever, which pinned the pick command bar to the bottom of
+     the page instead of the viewport. Backwards fill still hides the stage
+     during the 80ms delay, then releases the containing block on finish. */
+  animation: stage-in 650ms 80ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
 }
 
 .backArrow {

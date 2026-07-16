@@ -121,17 +121,20 @@ def test_seed_contract_supports_dry_run_and_optimistic_version() -> None:
     assert diff.session_version_after == 8
 
 
-def test_public_player_metadata_strips_private_notes() -> None:
+def test_public_player_metadata_keeps_notes_strips_organizer_keys() -> None:
     public = board.public_additional_info(
         {
-            "notes": "private registration note",
+            "notes": "registration note shown to captains",
             "admin_notes": "organizer only",
             "audit_reason": "private reason",
             "pronouns": "they/them",
         }
     )
 
-    assert public == {"pronouns": "they/them"}
+    assert public == {
+        "notes": "registration note shown to captains",
+        "pronouns": "they/them",
+    }
 
 
 def test_pick_event_payload_contains_resolved_role_rank_and_version() -> None:
