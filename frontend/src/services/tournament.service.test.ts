@@ -71,3 +71,22 @@ describe("tournamentService.getPublicOverview", () => {
     ]);
   });
 });
+
+describe("tournamentService.getStages", () => {
+  beforeEach(() => {
+    calls.length = 0;
+  });
+
+  it("loads public tournament stages without ambient workspace scoping", async () => {
+    await tournamentService.getStages(72);
+
+    expect(calls).toEqual([
+      {
+        path: "/api/v1/tournaments/72/stages",
+        options: {
+          skipWorkspace: true,
+        },
+      },
+    ]);
+  });
+});

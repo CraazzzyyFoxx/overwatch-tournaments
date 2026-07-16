@@ -133,6 +133,8 @@ export default class tournamentService {
   }
 
   static async getStages(id: number): Promise<Stage[]> {
-    return apiFetch(`/api/v1/tournaments/${id}/stages`).then((response) => response.json());
+    return apiFetch(`/api/v1/tournaments/${id}/stages`, {
+      skipWorkspace: true,
+    }).then((response) => response.json());
   }
 }
