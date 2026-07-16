@@ -2,21 +2,25 @@
 
 import {
   createElement,
+  Fragment,
   useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
 } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   AlertTriangle,
+  Check,
   CheckCircle2,
   Clock,
   Loader2,
   Search,
   ShieldBan,
+  X,
   XCircle,
   Gamepad2,
   Tv,
@@ -47,11 +51,16 @@ import { buildParticipantColumns } from "./_components/participantsColumns";
 import {
   PARTICIPANT_SEARCH_MAX_LENGTH,
   isMandatoryParticipantColumnId,
+  parseStoredParticipantColumnIds,
+  participantColumnsStorageKey,
+  participantDefaultColumnIds,
   participantResultsScrollTarget,
   participantResultsTransitionSignature,
   readParticipantUrlState,
   shouldScrollParticipantResults,
+  subscribeParticipantColumnsStorage,
   updateParticipantUrlState,
+  writeStoredParticipantColumnIds,
   type ParticipantUrlUpdate,
 } from "./_components/participants-url-state";
 import { useParticipantSearchInput } from "./_components/useParticipantSearchInput";
@@ -161,6 +170,91 @@ const STATUS_FILTER_ORDER: RegistrationStatus[] = [
 
 type StatusFilter = "all" | RegistrationStatus;
 
+type RegistrationStepTone = "done" | "active" | "failed" | "idle";
+
+interface RegistrationStep {
+  key: string;
+  label: string;
+  tone: RegistrationStepTone;
+}
+
+/** Statuses that permanently take the registration out of the tournament. */
+const TERMINAL_REGISTRATION_STATUSES = new Set<string>([
+  "rejected",
+  "banned",
+  "withdrawn",
+]);
+
+const CHECK_IN_OVER_TOURNAMENT_STATUSES = new Set<string>([
+  "live",
+  "playoffs",
+  "completed",
+  "archived",
+]);
+
+function RegistrationStepMarker({ tone }: { tone: RegistrationStepTone }) {
+  switch (tone) {
+    case "done":
+      return (
+        <span className="flex size-6 shrink-0 items-center justify-center rounded-full border border-emerald-500/40 bg-emerald-500/15 text-emerald-400">
+          <Check className="size-3.5" strokeWidth={3} />
+        </span>
+      );
+    case "failed":
+      return (
+        <span className="flex size-6 shrink-0 items-center justify-center rounded-full border border-red-500/40 bg-red-500/15 text-red-400">
+          <X className="size-3.5" strokeWidth={3} />
+        </span>
+      );
+    case "active":
+      return (
+        <span className="flex size-6 shrink-0 items-center justify-center rounded-full border border-amber-400/50 bg-amber-500/10">
+          <span className="size-2 animate-pulse rounded-full bg-amber-400" />
+        </span>
+      );
+    default:
+      return (
+        <span className="flex size-6 shrink-0 items-center justify-center rounded-full border border-[color:var(--aqt-border-2)] bg-white/5">
+          <span className="size-1.5 rounded-full bg-[color:var(--aqt-fg-dim)]" />
+        </span>
+      );
+  }
+}
+
+function RegistrationRoleChip({
+  role,
+  showPrimaryMark,
+  t,
+}: {
+  role: Registration["roles"][number];
+  showPrimaryMark: boolean;
+  t: ReturnType<typeof useTranslations<never>>;
+}) {
+  return (
+    <div
+      className={cn(
+        "inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-xs font-medium",
+        ROLE_ACCENT_CLASSES[role.role]?.bg,
+        ROLE_ACCENT_CLASSES[role.role]?.border,
+        ROLE_ACCENT_CLASSES[role.role]?.text,
+      )}
+    >
+      <PlayerRoleIcon role={ROLE_TO_ICON[role.role] ?? role.role} size={12} />
+      <span>{getRoleLabel(role.role, t)}</span>
+      {role.subrole && (
+        <span className="text-[10px] opacity-60">
+          ({formatSubroleSlug(role.subrole)})
+        </span>
+      )}
+      {showPrimaryMark && (
+        <span className="text-[10px] uppercase tracking-wide opacity-70">
+          · {t("registration.myCard.primaryRole")}
+        </span>
+      )}
+    </div>
+  );
+}
+
 function MyRegistrationCard({
   registration,
   canCheckIn,
@@ -180,7 +274,7 @@ function MyRegistrationCard({
 }) {
   const t = useTranslations();
   const [isExpanded, setIsExpanded] = useState(false);
-  
+
   const primaryRole = registration.roles.find((r) => r.is_primary);
   const secondaryRoles = registration.roles
     .filter((r) => !r.is_primary)
@@ -188,33 +282,31 @@ function MyRegistrationCard({
 
   const statusConfig =
     STATUS_BAR_CONFIG[registration.status] ?? STATUS_BAR_CONFIG.pending;
-  
-  const statusMeta = registration.status_meta;
-  const statusName = statusMeta?.name ?? (
-    registration.status.charAt(0).toUpperCase() + registration.status.slice(1).replace(/_/g, " ")
-  );
 
-  let StatusIcon = Clock;
+  const statusMeta = registration.status_meta;
+  const statusName =
+    statusMeta?.name ??
+    registration.status.charAt(0).toUpperCase() +
+      registration.status.slice(1).replace(/_/g, " ");
+
+  let StatusIcon = statusConfig.icon ?? Clock;
   if (statusMeta?.icon_slug) {
     try {
       StatusIcon = getStatusIcon(statusMeta.icon_slug);
     } catch {
       StatusIcon = statusConfig.icon ?? Clock;
     }
-  } else {
-    StatusIcon = statusConfig.icon ?? Clock;
   }
 
-  // Color styles
   let statusBadgeStyle: React.CSSProperties | undefined = undefined;
   let statusBadgeClass = cn(
     "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-medium",
-    statusConfig.color
+    statusConfig.color,
   );
-
   if (statusMeta?.icon_color) {
     const color = statusMeta.icon_color;
-    statusBadgeClass = "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-medium";
+    statusBadgeClass =
+      "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-medium";
     statusBadgeStyle = {
       color: color,
       borderColor: hexToRgba(color, 0.35) ?? color,
@@ -223,153 +315,223 @@ function MyRegistrationCard({
   }
 
   const isCheckedIn = registration.checked_in === true;
+  const isApproved = registration.status === "approved";
+  const isTerminal = TERMINAL_REGISTRATION_STATUSES.has(registration.status);
+  const checkInPhaseOver =
+    !isCheckedIn &&
+    !canCheckIn &&
+    CHECK_IN_OVER_TOURNAMENT_STATUSES.has(tournament.status);
+  const canWithdraw =
+    registration.status === "pending" || registration.status === "approved";
+  // "ready" is the terminal balancer state: the organizers added the player to
+  // the pool and assigned a rank. Anything else (not_in_balancer, incomplete,
+  // custom slugs, missing field) means the rank is still pending.
+  const balancerReady = registration.balancer_status === "ready";
 
-  let checkInBadgeClass = "bg-white/5 border-[color:var(--aqt-border-2)] text-[color:var(--aqt-fg-muted)]";
-  let checkInBadgeText = t("registration.myCard.checkInNotStarted");
+  // Four-step journey: submitted -> review/approved -> balancing (rank
+  // assignment) -> check-in. Custom organizer-defined statuses are bucketed
+  // as "under review" and display their own status name on the review step.
+  const steps: RegistrationStep[] = [
+    {
+      key: "submitted",
+      label: t("registration.myCard.steps.submitted"),
+      tone: "done",
+    },
+    {
+      key: "review",
+      label:
+        isApproved || isCheckedIn
+          ? t("registration.myCard.steps.approved")
+          : isTerminal
+            ? statusName
+            : t("registration.myCard.steps.review"),
+      tone: isApproved || isCheckedIn ? "done" : isTerminal ? "failed" : "active",
+    },
+    {
+      key: "balancing",
+      label: t("registration.myCard.steps.balancing"),
+      tone: balancerReady
+        ? "done"
+        : isTerminal
+          ? "idle"
+          : isApproved || isCheckedIn
+            ? "active"
+            : "idle",
+    },
+    {
+      key: "checkIn",
+      label: t("registration.myCard.steps.checkIn"),
+      tone: isCheckedIn
+        ? "done"
+        : isTerminal
+          ? "idle"
+          : canCheckIn
+            ? "active"
+            : checkInPhaseOver
+              ? "failed"
+              : "idle",
+    },
+  ];
 
+  // Single "what happens next" line next to the actions.
+  let hintText: string;
+  let hintClass = "text-[color:var(--aqt-fg-muted)]";
   if (isCheckedIn) {
-    checkInBadgeClass = "bg-emerald-500/10 border-emerald-500/20 text-emerald-400";
-    checkInBadgeText = t("registration.myCard.checkedIn");
+    hintText = t("registration.myCard.checkInSuccess");
+    hintClass = "text-emerald-400 font-medium";
   } else if (canCheckIn) {
-    checkInBadgeClass = "bg-amber-500/10 border-amber-500/20 text-amber-400 animate-pulse";
-    checkInBadgeText = t("registration.myCard.checkInRequired");
-  } else if (
-    tournament.status === "live" ||
-    tournament.status === "completed" ||
-    tournament.status === "playoffs" ||
-    tournament.status === "archived"
-  ) {
-    checkInBadgeClass = "bg-red-500/10 border-red-500/20 text-red-400";
-    checkInBadgeText = t("registration.myCard.checkInClosed");
+    hintText = t("registration.myCard.checkInOpenDesc");
+    hintClass = "text-amber-400 font-medium";
+  } else if (isTerminal) {
+    hintText = statusMeta?.description || t("registration.myCard.inactiveDesc");
+    hintClass = "text-[color:var(--aqt-fg-dim)]";
+  } else if (isApproved && checkInPhaseOver) {
+    hintText = t("registration.myCard.checkInClosedDesc");
+    hintClass = "text-red-400/90";
+  } else if (isApproved && !balancerReady) {
+    hintText = t("registration.myCard.balancerWaitingDesc");
+  } else if (isApproved) {
+    hintText = t("registration.myCard.pendingCheckInDesc");
+  } else {
+    hintText =
+      statusMeta?.description || t("registration.myCard.pendingReviewDesc");
   }
 
   return (
-    <div className="relative overflow-hidden rounded-xl border border-[color:var(--aqt-border)] bg-white/[0.02] shadow-md backdrop-blur-md transition-all duration-200">
+    <div className="relative overflow-hidden rounded-xl border border-[color:var(--aqt-border)] bg-white/[0.02] shadow-md backdrop-blur-md">
       {/* Decorative gradient blurs */}
       <div className="absolute -right-16 -top-16 -z-10 size-32 rounded-full bg-blue-500/5 blur-2xl" />
       <div className="absolute -bottom-16 -left-16 -z-10 size-32 rounded-full bg-violet-500/5 blur-2xl" />
 
-      {/* Main Bar (Always Visible) */}
-      <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
-        {/* Left Side: Title, Status, Primary Role */}
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold text-[color:var(--aqt-fg)] uppercase tracking-wider">
+      {/* Header: identity + status + details toggle */}
+      <div className="flex flex-wrap items-center justify-between gap-3 p-4 pb-3">
+        <div className="flex items-center gap-3">
+          <span
+            className={cn(
+              "flex size-9 items-center justify-center rounded-lg border",
+              statusConfig.color,
+            )}
+            style={statusBadgeStyle}
+          >
+            {createElement(StatusIcon, { className: "size-4" })}
+          </span>
+          <div className="flex flex-col items-start gap-0.5">
+            <span className="text-xs font-semibold uppercase tracking-wider text-[color:var(--aqt-fg)]">
               {t("registration.myCard.title")}
             </span>
-            <span
-              className={statusBadgeClass}
-              style={statusBadgeStyle}
-            >
+            <span className={statusBadgeClass} style={statusBadgeStyle}>
               {createElement(StatusIcon, { className: "size-3" })}
               {statusName}
             </span>
           </div>
-
-          {/* Primary Role indicator */}
-          {primaryRole && (
-            <div className="flex items-center gap-2 border-l border-[color:var(--aqt-border-2)] pl-4 text-xs">
-              <span className="text-[color:var(--aqt-fg-dim)]">{t("registration.myCard.primaryRole")}:</span>
-              <div
-                className={cn(
-                  "inline-flex items-center gap-1.5 rounded px-2 py-0.5 font-medium border",
-                  ROLE_ACCENT_CLASSES[primaryRole.role]?.bg,
-                  ROLE_ACCENT_CLASSES[primaryRole.role]?.border,
-                  ROLE_ACCENT_CLASSES[primaryRole.role]?.text,
-                )}
-              >
-                <PlayerRoleIcon
-                  role={ROLE_TO_ICON[primaryRole.role] ?? primaryRole.role}
-                  size={12}
-                />
-                <span>{getRoleLabel(primaryRole.role, t)}</span>
-                {primaryRole.subrole && (
-                  <span className="opacity-60 text-[10px]">
-                    ({formatSubroleSlug(primaryRole.subrole)})
-                  </span>
-                )}
-              </div>
-            </div>
-          )}
         </div>
 
-        {/* Right Side: Check-in button/badge and toggle */}
-        <div className="flex flex-wrap items-center gap-3">
-          {/* Check-in status indicator */}
-          <div className="flex items-center gap-2 text-xs">
-            <span className="text-[color:var(--aqt-fg-dim)]">{t("registration.myCard.checkInStatus")}:</span>
-            <span
-              className={cn(
-                "inline-flex items-center gap-1 rounded-md border px-2 py-0.5 font-semibold uppercase tracking-wide text-[10px]",
-                checkInBadgeClass,
-              )}
-            >
-              {checkInBadgeText}
-            </span>
-          </div>
+        <button
+          type="button"
+          onClick={() => setIsExpanded(!isExpanded)}
+          className="inline-flex items-center gap-1 rounded-md border border-[color:var(--aqt-border-2)] bg-white/[0.03] px-2.5 py-1 text-xs font-medium text-[color:var(--aqt-fg-muted)] transition-colors hover:bg-white/[0.06] hover:text-[color:var(--aqt-fg)]"
+        >
+          <span>
+            {isExpanded
+              ? t("registration.myCard.hideDetails")
+              : t("registration.myCard.showDetails")}
+          </span>
+          {isExpanded ? (
+            <ChevronUp className="size-3" />
+          ) : (
+            <ChevronDown className="size-3" />
+          )}
+        </button>
+      </div>
 
-          {/* Inline Check-in Button if required */}
+      {/* Progress stepper */}
+      <div className="flex items-start px-4 pb-4 pt-1 sm:px-6">
+        {steps.map((step, index) => (
+          <Fragment key={step.key}>
+            {index > 0 && (
+              <div
+                aria-hidden="true"
+                className={cn(
+                  "mx-2 mt-3 h-px flex-1",
+                  steps[index - 1].tone === "done"
+                    ? "bg-emerald-500/40"
+                    : "bg-[color:var(--aqt-border-2)]",
+                )}
+              />
+            )}
+            <div className="flex min-w-0 max-w-40 flex-col items-center gap-1.5 text-center">
+              <RegistrationStepMarker tone={step.tone} />
+              <span
+                className={cn(
+                  "text-[11px] leading-tight",
+                  step.tone === "done" && "text-emerald-300/90",
+                  step.tone === "active" && "font-medium text-amber-300/90",
+                  step.tone === "failed" && "text-red-400/90",
+                  step.tone === "idle" && "text-[color:var(--aqt-fg-dim)]",
+                )}
+              >
+                {step.label}
+              </span>
+            </div>
+          </Fragment>
+        ))}
+      </div>
+
+      {/* Next-step hint + actions */}
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[color:var(--aqt-border)] bg-white/[0.015] px-4 py-3">
+        <p className={cn("text-xs", hintClass)}>{hintText}</p>
+        <div className="flex items-center gap-2">
           {canCheckIn && (
             <button
               type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onCheckIn();
-              }}
+              onClick={onCheckIn}
               disabled={isCheckingIn}
-              className="inline-flex items-center justify-center gap-1 rounded-md bg-emerald-500 px-3 py-1 text-xs font-semibold text-[color:var(--aqt-fg)] shadow shadow-emerald-500/20 transition-all hover:bg-emerald-400 hover:shadow-emerald-500/30 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50"
+              className="inline-flex items-center justify-center gap-1 rounded-md bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-[color:var(--aqt-fg)] shadow shadow-emerald-500/20 transition-all hover:bg-emerald-400 hover:shadow-emerald-500/30 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50"
             >
               {isCheckingIn && <Loader2 className="size-3 animate-spin" />}
               {isCheckingIn ? t("common.checkingIn") : t("common.checkIn")}
             </button>
           )}
-
-          {/* Toggle details */}
-          <button
-            type="button"
-            onClick={() => setIsExpanded(!isExpanded)}
-            className="inline-flex items-center gap-1 rounded-md border border-[color:var(--aqt-border-2)] bg-white/[0.03] px-2.5 py-1 text-xs font-medium text-[color:var(--aqt-fg-muted)] hover:bg-white/[0.06] hover:text-[color:var(--aqt-fg)] transition-colors"
-          >
-            <span>{isExpanded ? t("registration.myCard.hideDetails") : t("registration.myCard.showDetails")}</span>
-            {isExpanded ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />}
-          </button>
+          {canWithdraw && (
+            <button
+              type="button"
+              onClick={onWithdraw}
+              disabled={isWithdrawing || isCheckingIn}
+              className="inline-flex items-center justify-center rounded-md border border-red-500/20 bg-red-500/5 px-2.5 py-1.5 text-[11px] font-semibold text-red-400/90 transition-all hover:border-red-500/40 hover:bg-red-500/10 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50"
+            >
+              {isWithdrawing && <Loader2 className="mr-1 size-3 animate-spin" />}
+              {isWithdrawing ? t("common.withdrawing") : t("common.withdraw")}
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Expanded Content Details */}
+      {/* Expanded details */}
       {isExpanded && (
-        <div className="border-t border-[color:var(--aqt-border)] bg-white/[0.01] p-4 transition-all duration-200">
+        <div className="border-t border-[color:var(--aqt-border)] bg-white/[0.01] p-4">
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-            {/* Left Column: Fallbacks & Accounts */}
+            {/* Left column: roles + linked accounts */}
             <div className="space-y-4">
-              {/* Secondary roles */}
               <div className="space-y-1.5">
                 <h4 className="text-[10px] font-medium uppercase tracking-wider text-[color:var(--aqt-fg-dim)]">
-                  {t("registration.myCard.secondaryRoles")}
+                  {t("common.rolesList")}
                 </h4>
-                {secondaryRoles.length > 0 ? (
+                {primaryRole || secondaryRoles.length > 0 ? (
                   <div className="flex flex-wrap gap-1.5">
+                    {primaryRole && (
+                      <RegistrationRoleChip
+                        role={primaryRole}
+                        showPrimaryMark
+                        t={t}
+                      />
+                    )}
                     {secondaryRoles.map((r) => (
-                      <div
-                        key={r.role}
-                        className={cn(
-                          "inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-xs font-medium",
-                          ROLE_ACCENT_CLASSES[r.role]?.bg,
-                          ROLE_ACCENT_CLASSES[r.role]?.border,
-                          ROLE_ACCENT_CLASSES[r.role]?.text,
-                        )}
-                      >
-                        <PlayerRoleIcon
-                          role={ROLE_TO_ICON[r.role] ?? r.role}
-                          size={11}
-                        />
-                        <span>{getRoleLabel(r.role, t)}</span>
-                        {r.subrole && (
-                          <span className="text-[10px] opacity-60">
-                            ({formatSubroleSlug(r.subrole)})
-                          </span>
-                        )}
-                      </div>
+                      <RegistrationRoleChip
+                        key={`${r.role}-${r.subrole ?? "base"}-${r.priority}`}
+                        role={r}
+                        showPrimaryMark={false}
+                        t={t}
+                      />
                     ))}
                   </div>
                 ) : (
@@ -379,7 +541,6 @@ function MyRegistrationCard({
                 )}
               </div>
 
-              {/* Linked accounts */}
               <div className="space-y-1.5">
                 <h4 className="text-[10px] font-medium uppercase tracking-wider text-[color:var(--aqt-fg-dim)]">
                   {t("registration.myCard.accounts")}
@@ -388,83 +549,58 @@ function MyRegistrationCard({
                   {registration.battle_tag && (
                     <div className="flex items-center gap-1.5 rounded border border-[color:var(--aqt-border)] bg-white/[0.02] px-2 py-1">
                       <Gamepad2 className="size-3.5 text-[color:var(--aqt-fg-dim)]" />
-                      <span className="font-semibold text-[color:var(--aqt-fg)]">{registration.battle_tag}</span>
+                      <span className="font-semibold text-[color:var(--aqt-fg)]">
+                        {registration.battle_tag}
+                      </span>
                     </div>
                   )}
                   {registration.discord_nick && (
                     <div className="flex items-center gap-1.5 rounded border border-[color:var(--aqt-border)] bg-white/[0.02] px-2 py-1">
                       <DiscordIcon className="size-3.5 text-[#5865F2]" />
-                      <span className="text-[color:var(--aqt-fg-muted)]">{registration.discord_nick}</span>
+                      <span className="text-[color:var(--aqt-fg-muted)]">
+                        {registration.discord_nick}
+                      </span>
                     </div>
                   )}
                   {registration.twitch_nick && (
                     <div className="flex items-center gap-1.5 rounded border border-[color:var(--aqt-border)] bg-white/[0.02] px-2 py-1">
                       <Twitch className="size-3.5 text-[#9146FF]" />
-                      <span className="text-[color:var(--aqt-fg-muted)]">{registration.twitch_nick}</span>
+                      <span className="text-[color:var(--aqt-fg-muted)]">
+                        {registration.twitch_nick}
+                      </span>
                     </div>
                   )}
                 </div>
               </div>
             </div>
 
-            {/* Right Column: POV, Notes & Cancel Action */}
-            <div className="space-y-4 flex flex-col justify-between">
-              {/* POV and Notes */}
-              <div className="space-y-2.5">
-                <div className="flex items-center gap-2 text-xs">
-                  <Tv className="size-3.5 text-[color:var(--aqt-fg-dim)]" />
-                  <span
-                    className={cn(
-                      "font-medium",
-                      registration.stream_pov ? "text-emerald-400" : "text-[color:var(--aqt-fg-muted)]",
-                    )}
-                  >
-                    {registration.stream_pov
-                      ? t("registration.myCard.streamPovActive")
-                      : t("registration.myCard.streamPovInactive")}
-                  </span>
-                </div>
-
-                <div className="rounded-lg border border-[color:var(--aqt-border)] bg-white/[0.02] p-2.5 text-xs">
-                  {registration.notes ? (
-                    <p className="italic text-[color:var(--aqt-fg-muted)] leading-normal">
-                      &ldquo;{registration.notes}&rdquo;
-                    </p>
-                  ) : (
-                    <span className="italic text-[color:var(--aqt-fg-dim)]">
-                      {t("registration.myCard.noNotes")}
-                    </span>
+            {/* Right column: POV + notes */}
+            <div className="space-y-2.5">
+              <div className="flex items-center gap-2 text-xs">
+                <Tv className="size-3.5 text-[color:var(--aqt-fg-dim)]" />
+                <span
+                  className={cn(
+                    "font-medium",
+                    registration.stream_pov
+                      ? "text-emerald-400"
+                      : "text-[color:var(--aqt-fg-muted)]",
                   )}
-                </div>
+                >
+                  {registration.stream_pov
+                    ? t("registration.myCard.streamPovActive")
+                    : t("registration.myCard.streamPovInactive")}
+                </span>
               </div>
 
-              {/* Action row at bottom of details */}
-              <div className="flex items-center justify-between border-t border-[color:var(--aqt-border)] pt-3 mt-2">
-                {/* Pending check-in state helper text */}
-                <div className="text-[11px] text-[color:var(--aqt-fg-dim)]">
-                  {isCheckedIn ? (
-                    <span className="text-emerald-400 font-medium">
-                      {t("registration.myCard.checkInSuccess")}
-                    </span>
-                  ) : registration.status === "approved" ? (
-                    <span>{t("registration.myCard.pendingCheckInDesc")}</span>
-                  ) : (
-                    <span>{t("registration.myCard.pendingReviewDesc")}</span>
-                  )}
-                </div>
-
-                {/* Withdraw button */}
-                {(registration.status === "pending" ||
-                  registration.status === "approved") && (
-                  <button
-                    type="button"
-                    onClick={onWithdraw}
-                    disabled={isWithdrawing || isCheckingIn}
-                    className="inline-flex items-center justify-center rounded-md border border-red-500/20 bg-red-500/5 px-2.5 py-1.5 text-[11px] font-semibold text-red-400/90 transition-all hover:border-red-500/40 hover:bg-red-500/10 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50"
-                  >
-                    {isWithdrawing && <Loader2 className="size-3 animate-spin mr-1" />}
-                    {isWithdrawing ? t("common.withdrawing") : t("common.withdraw")}
-                  </button>
+              <div className="rounded-lg border border-[color:var(--aqt-border)] bg-white/[0.02] p-2.5 text-xs">
+                {registration.notes ? (
+                  <p className="italic leading-normal text-[color:var(--aqt-fg-muted)]">
+                    &ldquo;{registration.notes}&rdquo;
+                  </p>
+                ) : (
+                  <span className="italic text-[color:var(--aqt-fg-dim)]">
+                    {t("registration.myCard.noNotes")}
+                  </span>
                 )}
               </div>
             </div>
@@ -648,8 +784,39 @@ export default function TournamentParticipantsPage({
   }, [registrations]);
 
   const defaultColumnIds = useMemo(
-    () => allColumns.filter((column) => column.defaultVisible).map((column) => column.id),
+    () => participantDefaultColumnIds(allColumns),
     [allColumns],
+  );
+  // Optional column ids persisted per tournament. localStorage is an external
+  // store: the raw entry is read via useSyncExternalStore (server snapshot is
+  // null, so SSR/hydration never touches it) and writers notify subscribers.
+  const storedColumnsRaw = useSyncExternalStore(
+    subscribeParticipantColumnsStorage,
+    () => {
+      try {
+        return window.localStorage.getItem(
+          participantColumnsStorageKey(tournament.id),
+        );
+      } catch {
+        return null;
+      }
+    },
+    () => null,
+  );
+  const storedColumnIds = useMemo(
+    () => parseStoredParticipantColumnIds(storedColumnsRaw),
+    [storedColumnsRaw],
+  );
+  const persistColumns = useCallback(
+    (visibleIds: readonly string[]) => {
+      writeStoredParticipantColumnIds(
+        typeof window === "undefined" ? null : window.localStorage,
+        tournament.id,
+        visibleIds,
+        defaultColumnIds,
+      );
+    },
+    [defaultColumnIds, tournament.id],
   );
   const participantUrl = useMemo(
     () =>
@@ -657,8 +824,9 @@ export default function TournamentParticipantsPage({
         new URLSearchParams(searchParamsString),
         allowedStatuses,
         allColumns,
+        storedColumnIds,
       ),
-    [allColumns, allowedStatuses, searchParamsString],
+    [allColumns, allowedStatuses, searchParamsString, storedColumnIds],
   );
   const latestParamsRef = useRef(searchParamsString);
   const searchQuery = participantUrl.state.search;
@@ -742,6 +910,7 @@ export default function TournamentParticipantsPage({
               column.id === columnId || visibleColumnIdSet.has(column.id),
             )
             .map((column) => column.id);
+      persistColumns(nextIds);
       navigateParticipantUrl({
         type: "columns",
         value: nextIds,
@@ -751,19 +920,19 @@ export default function TournamentParticipantsPage({
       allColumns,
       defaultColumnIds,
       navigateParticipantUrl,
+      persistColumns,
       visibleColumnIdSet,
       visibleColumnIds,
     ],
   );
-  const resetToDefaults = useCallback(
-    () =>
-      navigateParticipantUrl({
-        type: "columns",
-        value: defaultColumnIds,
-        defaultValue: defaultColumnIds,
-      }),
-    [defaultColumnIds, navigateParticipantUrl],
-  );
+  const resetToDefaults = useCallback(() => {
+    persistColumns(defaultColumnIds);
+    navigateParticipantUrl({
+      type: "columns",
+      value: defaultColumnIds,
+      defaultValue: defaultColumnIds,
+    });
+  }, [defaultColumnIds, navigateParticipantUrl, persistColumns]);
 
   // Status filter + dynamic search across all searchable columns.
   const filtered = useMemo(() => {
@@ -986,7 +1155,10 @@ export default function TournamentParticipantsPage({
       ) : filteredEmpty ? (
         <TournamentPageState
           state="filtered-empty"
-          onReset={() => navigateParticipantUrl({ type: "reset" })}
+          onReset={() => {
+            persistColumns(defaultColumnIds);
+            navigateParticipantUrl({ type: "reset" });
+          }}
         />
       ) : (
         <TournamentPageState

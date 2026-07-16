@@ -12,7 +12,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from shared.balancer_registration_statuses import build_unknown_status_meta, get_status_metas_map
+from shared.balancer_registration_statuses import get_status_metas_map
 from shared.balancer_subrole_catalog import resolve_subrole_catalog
 from shared.core import enums
 from shared.core.errors import BaseAPIException as HTTPException
@@ -809,13 +809,12 @@ async def build_public_registration_list(
                 workspace_id=workspace_id,
                 status_meta_map=status_meta_map,
                 show_ranks=show_ranks,
-                # Anonymous endpoint: strip notes / custom fields (may hold
-                # PII, admin-only). Smurf tags stay public — see _reg_to_read.
+                # Anonymous endpoint: strip custom fields (may hold PII,
+                # admin-only). Notes and smurf tags stay public — see
+                # _reg_to_read.
                 include_private=False,
             ).model_dump(),
-            balancer_status=r.balancer_status,
-            balancer_status_meta=status_meta_map["balancer"].get(r.balancer_status)
-            or build_unknown_status_meta("balancer", r.balancer_status),
+            # balancer_status(+meta) now come from _reg_to_read itself.
             profiles_open=profiles_open_map.get(r.id),
             tournament_history=history_map.get(r.id, []),
             tournament_history_count=history_count_map.get(r.id, 0),

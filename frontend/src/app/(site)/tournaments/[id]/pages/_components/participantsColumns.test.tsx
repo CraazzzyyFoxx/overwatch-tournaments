@@ -28,4 +28,35 @@ describe("participant column model", () => {
       "_status",
     ]);
   });
+
+  it("always offers the notes column even when the form omits or disables it", () => {
+    const baseForm: RegistrationForm = {
+      id: 1,
+      tournament_id: 72,
+      workspace_id: 1,
+      is_open: true,
+      opens_at: null,
+      closes_at: null,
+      built_in_fields: {
+        battle_tag: { enabled: true, required: true },
+      },
+      custom_fields: [],
+    };
+    const disabledNotesForm: RegistrationForm = {
+      ...baseForm,
+      built_in_fields: {
+        battle_tag: { enabled: true, required: true },
+        notes: { enabled: false, required: false },
+      },
+    };
+    const t = ((key: string) => key) as never;
+
+    for (const form of [baseForm, disabledNotesForm, null]) {
+      const notesColumns = buildParticipantColumns(form, t).filter(
+        (column) => column.id === "notes",
+      );
+      expect(notesColumns).toHaveLength(1);
+      expect(notesColumns[0].defaultVisible).toBe(true);
+    }
+  });
 });

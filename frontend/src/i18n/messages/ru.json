@@ -293,14 +293,7 @@
     },
     "myCard": {
       "title": "Ваша заявка",
-      "status": "Статус заявки",
-      "checkInStatus": "Чек-ин",
-      "checkedIn": "Пройден",
-      "checkInRequired": "Требуется чек-ин",
-      "checkInNotStarted": "Ожидание чек-ина",
-      "checkInClosed": "Закрыт",
       "primaryRole": "Основная роль",
-      "secondaryRoles": "Запасные роли",
       "noSecondaryRoles": "Запасные роли отсутствуют",
       "accounts": "Привязанные аккаунты",
       "details": "Детали регистрации",
@@ -309,7 +302,18 @@
       "noNotes": "Примечания отсутствуют",
       "checkInSuccess": "Вы подтвердили участие на турнире!",
       "pendingCheckInDesc": "Заявка одобрена. Чек-ин начнется позже.",
-      "pendingReviewDesc": "Заявка находится в статусе рассмотрения организаторами турнира.",
+      "pendingReviewDesc": "Заявка находится на рассмотрении организаторами турнира.",
+      "checkInOpenDesc": "Чек-ин открыт — подтвердите своё участие.",
+      "checkInClosedDesc": "Чек-ин завершён.",
+      "inactiveDesc": "Заявка не участвует в турнире.",
+      "balancerWaitingDesc": "Ожидание балансировки — организаторы выставят вам ранг.",
+      "steps": {
+        "submitted": "Заявка подана",
+        "review": "Рассмотрение",
+        "approved": "Одобрена",
+        "balancing": "Балансировка",
+        "checkIn": "Чек-ин"
+      },
       "showDetails": "Подробнее",
       "hideDetails": "Скрыть"
     }

@@ -1,13 +1,31 @@
 import { describe, expect, it } from "bun:test";
 
 import {
+  participantColumnsStorageKey,
+  participantDefaultColumnIds,
   participantResultsScrollTarget,
   participantResultsTransitionSignature,
   normalizeParticipantSearch,
   readParticipantUrlState,
+  readStoredParticipantColumnIds,
   shouldScrollParticipantResults,
   updateParticipantUrlState,
+  writeStoredParticipantColumnIds,
 } from "./participants-url-state";
+
+function memoryStorage(initial: Record<string, string> = {}) {
+  const data = new Map(Object.entries(initial));
+  return {
+    data,
+    getItem: (key: string) => data.get(key) ?? null,
+    setItem: (key: string, value: string) => {
+      data.set(key, value);
+    },
+    removeItem: (key: string) => {
+      data.delete(key);
+    },
+  };
+}
 
 const columns = [
   { id: "battle_tag", defaultVisible: true },
@@ -199,5 +217,80 @@ describe("participant URL state", () => {
 
     expect(realtimeReorder).toBe(before);
     expect(backForwardFilter).not.toBe(before);
+  });
+  it("computes the same default set the Reset button applies (mandatory first)", () => {
+    const defaults = participantDefaultColumnIds(columns);
+
+    expect(defaults).toEqual(["battle_tag", "_status", "roles"]);
+    expect(
+      readParticipantUrlState(new URLSearchParams(), ["approved"], columns).state
+        .visibleColumnIds,
+    ).toEqual(defaults);
+  });
+
+  it("seeds visible columns from the stored selection without touching the URL", () => {
+    const stored = readParticipantUrlState(
+      new URLSearchParams("tab=rules"),
+      ["approved"],
+      columns,
+      ["notes"],
+    );
+    const storedNone = readParticipantUrlState(
+      new URLSearchParams(),
+      ["approved"],
+      columns,
+      [],
+    );
+    const storedInvalid = readParticipantUrlState(
+      new URLSearchParams(),
+      ["approved"],
+      columns,
+      ["ghost_column"],
+    );
+
+    expect(stored.state.visibleColumnIds).toEqual(["battle_tag", "_status", "notes"]);
+    expect(stored.needsNormalization).toBe(false);
+    expect(stored.params.toString()).toBe("tab=rules");
+    expect(storedNone.state.visibleColumnIds).toEqual(["battle_tag", "_status"]);
+    expect(storedInvalid.state.visibleColumnIds).toEqual([
+      "battle_tag",
+      "_status",
+      "roles",
+    ]);
+  });
+
+  it("lets an explicit URL selection win over the stored selection", () => {
+    const result = readParticipantUrlState(
+      new URLSearchParams("participantColumns=roles"),
+      ["approved"],
+      columns,
+      ["notes"],
+    );
+
+    expect(result.state.visibleColumnIds).toEqual(["battle_tag", "_status", "roles"]);
+  });
+
+  it("round-trips the stored selection and removes it for defaults or garbage", () => {
+    const storage = memoryStorage();
+    const defaults = participantDefaultColumnIds(columns);
+
+    expect(
+      writeStoredParticipantColumnIds(storage, 7, ["battle_tag", "_status", "notes"], defaults),
+    ).toEqual(["notes"]);
+    expect(readStoredParticipantColumnIds(storage, 7)).toEqual(["notes"]);
+    // Another tournament never sees a foreign selection.
+    expect(readStoredParticipantColumnIds(storage, 8)).toBeNull();
+
+    expect(writeStoredParticipantColumnIds(storage, 7, defaults, defaults)).toBeNull();
+    expect(readStoredParticipantColumnIds(storage, 7)).toBeNull();
+    expect(storage.data.has(participantColumnsStorageKey(7))).toBe(false);
+
+    const garbage = memoryStorage({
+      [participantColumnsStorageKey(9)]: "{not json",
+      [participantColumnsStorageKey(10)]: JSON.stringify({ nope: true }),
+    });
+    expect(readStoredParticipantColumnIds(garbage, 9)).toBeNull();
+    expect(readStoredParticipantColumnIds(garbage, 10)).toBeNull();
+    expect(readStoredParticipantColumnIds(null, 9)).toBeNull();
   });
 });

@@ -293,14 +293,7 @@
     },
     "myCard": {
       "title": "Your Registration",
-      "status": "Status",
-      "checkInStatus": "Check-in",
-      "checkedIn": "Checked In",
-      "checkInRequired": "Required",
-      "checkInNotStarted": "Pending",
-      "checkInClosed": "Closed",
       "primaryRole": "Primary Role",
-      "secondaryRoles": "Secondary Roles",
       "noSecondaryRoles": "No fallback roles",
       "accounts": "Linked Accounts",
       "details": "Additional Details",
@@ -310,6 +303,17 @@
       "checkInSuccess": "You have confirmed your participation!",
       "pendingCheckInDesc": "Registration approved. Check-in will start later.",
       "pendingReviewDesc": "The application is currently under review by the tournament organizers.",
+      "checkInOpenDesc": "Check-in is open — confirm your participation now.",
+      "checkInClosedDesc": "Check-in has closed.",
+      "inactiveDesc": "This registration is no longer active.",
+      "balancerWaitingDesc": "Waiting for balancing — organizers will assign your rank.",
+      "steps": {
+        "submitted": "Application submitted",
+        "review": "Review",
+        "approved": "Approved",
+        "balancing": "Balancing",
+        "checkIn": "Check-in"
+      },
       "showDetails": "Show details",
       "hideDetails": "Hide details"
     }

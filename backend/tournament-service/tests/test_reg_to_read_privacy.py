@@ -2,8 +2,9 @@
 
 Smurf tags are declared alternate battle tags (anti-smurf transparency, same
 class as the public ``battle_tag``) and must stay visible on the anonymous
-participants roster. Free-text notes and organizer custom fields are admin/self
-only and must be stripped when ``include_private=False``.
+participants roster. Free-text notes are a participant-facing form field
+rendered as a roster column, so they stay public too. Organizer custom fields
+remain admin/self only and must be stripped when ``include_private=False``.
 """
 
 from datetime import datetime
@@ -23,28 +24,34 @@ def _reg_stub() -> SimpleNamespace:
         twitch_nick="player_tv",
         stream_pov=False,
         roles=[],
-        notes="private note with PII",
+        notes="anything you'd like organizers to know",
         custom_fields_json={"phone": "555-1234"},
         status="approved",
+        balancer_status="ready",
         checked_in=False,
         submitted_at=datetime(2026, 1, 1),
         reviewed_at=None,
     )
 
 
-def test_public_list_keeps_smurf_tags_strips_notes_and_custom_fields():
+def test_public_list_keeps_smurf_tags_and_notes_strips_custom_fields():
     read = _reg_to_read(_reg_stub(), workspace_id=1, include_private=False)
 
     # Anti-smurf transparency data stays public (the roster's whole point).
     assert read.smurf_tags_json == ["Alt#1111", "Alt#2222"]
-    # Genuinely private fields are stripped for anonymous viewers.
-    assert read.notes is None
+    # Notes are a roster column — public even for anonymous viewers.
+    assert read.notes == "anything you'd like organizers to know"
+    # Organizer custom fields are genuinely private and stay stripped.
     assert read.custom_fields_json is None
+    # Balancer progress is public: the roster shows it and the registrant's
+    # own card renders the balancing step from it.
+    assert read.balancer_status == "ready"
+    assert read.balancer_status_meta is not None
 
 
 def test_private_context_keeps_everything():
     read = _reg_to_read(_reg_stub(), workspace_id=1, include_private=True)
 
     assert read.smurf_tags_json == ["Alt#1111", "Alt#2222"]
-    assert read.notes == "private note with PII"
+    assert read.notes == "anything you'd like organizers to know"
     assert read.custom_fields_json == {"phone": "555-1234"}

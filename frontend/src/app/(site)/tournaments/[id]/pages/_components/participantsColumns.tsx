@@ -669,6 +669,23 @@ export function buildParticipantColumns(
     });
   }
 
+  // Notes may hold data even when the form field is disabled (e.g. a Google
+  // Sheets sync maps a notes column), so the roster always offers it.
+  if (!columns.some((column) => column.id === "notes")) {
+    const notesDef = BUILT_IN_FIELD_DEFS.notes;
+    columns.push({
+      id: notesDef.id,
+      label: getLocalizedLabel("notes", notesDef.label),
+      category: "built_in",
+      defaultVisible: notesDef.defaultVisible,
+      responsive: notesDef.responsive ?? "sm",
+      widthClass: notesDef.widthClass,
+      align: notesDef.align,
+      render: (reg) => notesDef.render(reg),
+      searchValue: notesDef.searchValue,
+    });
+  }
+
   // Custom fields from form config
   if (form?.custom_fields) {
     for (const field of form.custom_fields) {

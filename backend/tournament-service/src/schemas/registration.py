@@ -136,6 +136,8 @@ class RegistrationRead(BaseModel):
     custom_fields_json: dict[str, Any] | None = None
     status: str = "pending"
     status_meta: dict[str, Any] | None = None
+    balancer_status: str = "not_in_balancer"
+    balancer_status_meta: dict[str, Any] | None = None
     checked_in: bool = False
     submitted_at: datetime | None = None
     reviewed_at: datetime | None = None
@@ -152,9 +154,6 @@ class TournamentHistoryEntry(BaseModel):
 
 
 class RegistrationListRead(RegistrationRead):
-    balancer_status: str = "not_in_balancer"
-    balancer_status_meta: dict[str, Any] | None = None
-    checked_in: bool = False
     # All-profiles-open verdict (only computed when the tournament requires it):
     # True = public, False = closed, None = unknown / not required.
     profiles_open: bool | None = None

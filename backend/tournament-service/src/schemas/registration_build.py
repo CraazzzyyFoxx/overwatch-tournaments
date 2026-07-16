@@ -122,10 +122,12 @@ def _reg_to_read(
     """Serialize a registration for public API responses.
 
     ``include_private=False`` is for anonymous/list contexts: it strips
-    free-text notes and organizer-defined custom fields — both of which may
-    contain PII and are only meant for the registrant themselves and admins.
-    Smurf tags stay public: they are declared alternate battle tags, the same
-    anti-smurf transparency class as ``battle_tag``/``discord_nick``/
+    organizer-defined custom fields, which may contain PII and are only meant
+    for the registrant themselves and admins. Free-text ``notes`` stay public:
+    they are the participant-facing "anything you'd like organizers to know"
+    form field and are rendered as a column on the public participants roster.
+    Smurf tags stay public too: they are declared alternate battle tags, the
+    same anti-smurf transparency class as ``battle_tag``/``discord_nick``/
     ``twitch_nick`` (all already public), and the participants roster exists
     precisely to surface them.
     """
@@ -158,11 +160,16 @@ def _reg_to_read(
         twitch_nick=reg.twitch_nick,
         stream_pov=reg.stream_pov,
         roles=roles,
-        notes=reg.notes if include_private else None,
+        notes=reg.notes,
         custom_fields_json=reg.custom_fields_json if include_private else None,
         status=reg.status,
         status_meta=(status_meta_map["registration"].get(reg.status) if status_meta_map is not None else None)
         or build_unknown_status_meta("registration", reg.status),
+        balancer_status=reg.balancer_status,
+        balancer_status_meta=(
+            status_meta_map["balancer"].get(reg.balancer_status) if status_meta_map is not None else None
+        )
+        or build_unknown_status_meta("balancer", reg.balancer_status),
         checked_in=reg.checked_in,
         submitted_at=reg.submitted_at,
         reviewed_at=reg.reviewed_at,

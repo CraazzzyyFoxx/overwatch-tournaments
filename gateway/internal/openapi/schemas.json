@@ -29934,6 +29934,24 @@
     },
     "tournament.RegistrationRead": {
       "properties": {
+        "balancer_status": {
+          "default": "not_in_balancer",
+          "title": "Balancer Status",
+          "type": "string"
+        },
+        "balancer_status_meta": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Balancer Status Meta"
+        },
         "battle_tag": {
           "anyOf": [
             {
@@ -32687,6 +32705,18 @@
           "default": "balancer",
           "title": "Team Formation",
           "type": "string"
+        },
+        "teams_count": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Teams Count"
         },
         "win_points": {
           "default": 1.0,
