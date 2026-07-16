@@ -6,6 +6,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, mock } from "bun:test";
 
 mock.module("next-intl", () => ({
+  useLocale: () => "en",
   useTranslations: () => (key: string) => `draftRedesign.${key}`
 }));
 

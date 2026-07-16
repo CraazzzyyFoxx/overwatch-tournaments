@@ -1,6 +1,7 @@
-import { afterAll, beforeAll, describe, expect, it, mock } from "bun:test";
+import { afterAll, afterEach, beforeAll, describe, expect, it, mock } from "bun:test";
 import { Window } from "happy-dom";
 import { act, useState, type ReactNode } from "react";
+import type { Root } from "react-dom/client";
 
 import type { Registration } from "@/types/registration.types";
 
@@ -12,8 +13,8 @@ const testWindow = new Window({
   width: 1280,
   height: 900
 });
-const globals = globalThis as typeof globalThis & Record<string, unknown>;
-const previousGlobals = new Map<string, unknown>();
+const previousGlobals = new Map<PropertyKey, PropertyDescriptor | undefined>();
+const mountedRoots = new Set<Root>();
 
 class TestResizeObserver {
   static readonly instances = new Set<TestResizeObserver>();
@@ -73,29 +74,13 @@ class TestResizeObserver {
   }
 }
 
-const originalWindowResizeObserver = testWindow.ResizeObserver;
-(testWindow as unknown as { ResizeObserver: typeof ResizeObserver }).ResizeObserver =
-  TestResizeObserver as unknown as typeof ResizeObserver;
-
-for (const [key, value] of Object.entries({
-  window: testWindow,
-  document: testWindow.document,
-  navigator: testWindow.navigator,
-  HTMLElement: testWindow.HTMLElement,
-  Event: testWindow.Event,
-  Node: testWindow.Node,
-  MutationObserver: testWindow.MutationObserver,
-  ResizeObserver: TestResizeObserver,
-  getComputedStyle: testWindow.getComputedStyle.bind(testWindow),
-  requestAnimationFrame: testWindow.requestAnimationFrame.bind(testWindow),
-  cancelAnimationFrame: testWindow.cancelAnimationFrame.bind(testWindow),
-  IS_REACT_ACT_ENVIRONMENT: true
-})) {
-  previousGlobals.set(key, globals[key]);
-  globals[key] = value;
-}
+const originalWindowResizeObserver = Object.getOwnPropertyDescriptor(
+  testWindow,
+  "ResizeObserver"
+);
 
 mock.module("next-intl", () => ({
+  useLocale: () => "en",
   useTranslations: () => (key: string) => key
 }));
 mock.module("@/components/BattleTagRankHistory", () => ({
@@ -126,9 +111,54 @@ mock.module("@/components/ui/popover", () => ({
   PopoverTrigger: ({ children }: { children: ReactNode }) => <>{children}</>
 }));
 
-const { createRoot } = await import("react-dom/client");
-const { default: VirtualParticipantsList } = await import("./VirtualParticipantsList");
-const { default: ColumnPicker } = await import("./ColumnPicker");
+let createRoot: typeof import("react-dom/client").createRoot;
+let VirtualParticipantsList: typeof import("./VirtualParticipantsList").default;
+let ColumnPicker: typeof import("./ColumnPicker").default;
+
+function restoreGlobals() {
+  for (const [key, descriptor] of previousGlobals) {
+    if (descriptor) Object.defineProperty(globalThis, key, descriptor);
+    else Reflect.deleteProperty(globalThis, key);
+  }
+  previousGlobals.clear();
+}
+
+function installGlobals() {
+  const values = {
+    window: testWindow,
+    document: testWindow.document,
+    navigator: testWindow.navigator,
+    HTMLElement: testWindow.HTMLElement,
+    Event: testWindow.Event,
+    Node: testWindow.Node,
+    MutationObserver: testWindow.MutationObserver,
+    ResizeObserver: TestResizeObserver,
+    getComputedStyle: testWindow.getComputedStyle.bind(testWindow),
+    requestAnimationFrame: testWindow.requestAnimationFrame.bind(testWindow),
+    cancelAnimationFrame: testWindow.cancelAnimationFrame.bind(testWindow),
+    IS_REACT_ACT_ENVIRONMENT: true
+  };
+
+  try {
+    for (const [key, value] of Object.entries(values)) {
+      previousGlobals.set(key, Object.getOwnPropertyDescriptor(globalThis, key));
+      Object.defineProperty(globalThis, key, {
+        configurable: true,
+        value,
+        writable: true
+      });
+    }
+  } catch (error) {
+    restoreGlobals();
+    throw error;
+  }
+}
+
+function createTestRoot(container: Element) {
+  const root = createRoot(container);
+  mountedRoots.add(root);
+  return root;
+}
 
 const originalBoundingRect = testWindow.HTMLElement.prototype.getBoundingClientRect;
 const originalOffsetHeight = Object.getOwnPropertyDescriptor(
@@ -217,7 +247,13 @@ function ExpandableListHarness() {
   );
 }
 
-beforeAll(() => {
+beforeAll(async () => {
+  installGlobals();
+  Object.defineProperty(testWindow, "ResizeObserver", {
+    configurable: true,
+    value: TestResizeObserver,
+    writable: true
+  });
   Object.defineProperty(testWindow.HTMLElement.prototype, "offsetHeight", {
     configurable: true,
     get() {
@@ -242,20 +278,45 @@ beforeAll(() => {
       toJSON: () => ({})
     } as DOMRect;
   };
+  ({ createRoot } = await import("react-dom/client"));
+  ({ default: VirtualParticipantsList } = await import("./VirtualParticipantsList"));
+  ({ default: ColumnPicker } = await import("./ColumnPicker"));
+});
+
+afterEach(() => {
+  try {
+    act(() => {
+      for (const root of mountedRoots) root.unmount();
+    });
+  } finally {
+    mountedRoots.clear();
+    for (const observer of [...TestResizeObserver.instances]) observer.disconnect();
+    document.body.replaceChildren();
+    listDocumentTop = 0;
+    layoutBoundaryHeight = 1200;
+    Object.defineProperty(testWindow, "scrollY", {
+      configurable: true,
+      value: 0,
+      writable: true
+    });
+  }
 });
 
 afterAll(async () => {
-  testWindow.HTMLElement.prototype.getBoundingClientRect = originalBoundingRect;
-  if (originalOffsetHeight) {
-    Object.defineProperty(testWindow.HTMLElement.prototype, "offsetHeight", originalOffsetHeight);
-  }
-  (testWindow as unknown as { ResizeObserver: typeof ResizeObserver }).ResizeObserver =
-    originalWindowResizeObserver;
-  mock.restore();
-  await testWindow.close();
-  for (const [key, value] of previousGlobals) {
-    if (value === undefined) delete globals[key];
-    else globals[key] = value;
+  try {
+    testWindow.HTMLElement.prototype.getBoundingClientRect = originalBoundingRect;
+    if (originalOffsetHeight) {
+      Object.defineProperty(testWindow.HTMLElement.prototype, "offsetHeight", originalOffsetHeight);
+    }
+    if (originalWindowResizeObserver) {
+      Object.defineProperty(testWindow, "ResizeObserver", originalWindowResizeObserver);
+    } else {
+      Reflect.deleteProperty(testWindow, "ResizeObserver");
+    }
+    mock.restore();
+    await testWindow.close();
+  } finally {
+    restoreGlobals();
   }
 });
 
@@ -263,7 +324,7 @@ describe("VirtualParticipantsList mount budget", () => {
   it("renders a bounded window for 500 registrations without far-row images", async () => {
     const container = document.createElement("div");
     document.body.append(container);
-    const root = createRoot(container);
+    const root = createTestRoot(container);
 
     await act(async () => {
       root.render(
@@ -290,15 +351,13 @@ describe("VirtualParticipantsList mount budget", () => {
     expect(container.querySelector('[data-registration-image="500"]')).toBeNull();
     expect(container.querySelector('[data-index="499"]')).toBeNull();
 
-    act(() => root.unmount());
-    container.remove();
   });
 
   it("mounts expensive details only for the expanded row and remeasures its height", async () => {
     const container = document.createElement("div");
     container.setAttribute("data-participant-layout", "true");
     document.body.append(container);
-    const root = createRoot(container);
+    const root = createTestRoot(container);
 
     await act(async () => {
       root.render(<ExpandableListHarness />);
@@ -337,8 +396,6 @@ describe("VirtualParticipantsList mount budget", () => {
     expect(document.activeElement).toBe(collapseButton);
     expect(Number.parseFloat(spacer.style.height)).toBe(initialHeight);
 
-    act(() => root.unmount());
-    container.remove();
   });
 
   it("keeps identity and status in the same row DOM when URL columns are none", async () => {
@@ -351,7 +408,7 @@ describe("VirtualParticipantsList mount budget", () => {
     const visibleColumns = columns.filter((column) => selected.includes(column.id));
     const container = document.createElement("div");
     document.body.append(container);
-    const root = createRoot(container);
+    const root = createTestRoot(container);
 
     await act(async () => {
       root.render(
@@ -371,15 +428,13 @@ describe("VirtualParticipantsList mount budget", () => {
     expect(row.querySelectorAll('[data-participant-kind="status"]')).toHaveLength(1);
     expect(row.querySelector('[data-column-id="notes"]')).toBeNull();
 
-    act(() => root.unmount());
-    container.remove();
   });
 
   it("locks mandatory identity and status controls in the column picker", () => {
     const toggled: string[] = [];
     const container = document.createElement("div");
     document.body.append(container);
-    const root = createRoot(container);
+    const root = createTestRoot(container);
 
     act(() => {
       root.render(
@@ -412,8 +467,6 @@ describe("VirtualParticipantsList mount budget", () => {
     notesToggle.click();
     expect(toggled).toEqual(["notes"]);
 
-    act(() => root.unmount());
-    container.remove();
   });
 
   it("remeasures the document margin when a preceding layout shift moves the list", async () => {
@@ -426,7 +479,7 @@ describe("VirtualParticipantsList mount budget", () => {
     const container = document.createElement("div");
     container.setAttribute("data-participant-layout", "true");
     document.body.append(container);
-    const root = createRoot(container);
+    const root = createTestRoot(container);
 
     await act(async () => {
       root.render(
@@ -460,14 +513,5 @@ describe("VirtualParticipantsList mount budget", () => {
       `translateY(${firstIndexAfter * 68}px)`
     );
 
-    act(() => root.unmount());
-    container.remove();
-    listDocumentTop = 0;
-    layoutBoundaryHeight = 1200;
-    Object.defineProperty(testWindow, "scrollY", {
-      configurable: true,
-      value: 0,
-      writable: true
-    });
   });
 });

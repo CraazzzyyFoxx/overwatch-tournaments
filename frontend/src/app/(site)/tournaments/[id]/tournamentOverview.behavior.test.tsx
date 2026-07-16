@@ -13,6 +13,10 @@ import { TournamentShellSkeleton } from "./_components/TournamentSkeletons";
 mock.module("next-intl/server", () => ({
   getTranslations: async () => (key: string) => key
 }));
+mock.module("next-intl", () => ({
+  useLocale: () => "en",
+  useTranslations: () => (key: string) => key
+}));
 mock.module("@/lib/site-metadata", () => ({
   resolveSiteMetadata: async () => ({ name: "Test OWT", origin: "https://example.test" })
 }));

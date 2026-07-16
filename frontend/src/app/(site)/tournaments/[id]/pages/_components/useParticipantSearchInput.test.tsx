@@ -1,6 +1,7 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, jest } from "bun:test";
 import { Window } from "happy-dom";
 import { act } from "react";
+import type { Root } from "react-dom/client";
 
 import { useParticipantSearchInput } from "./useParticipantSearchInput";
 
@@ -10,27 +11,54 @@ const testWindow = new Window({
   height: 900
 });
 
-const globals = globalThis as typeof globalThis & Record<string, unknown>;
-const previousGlobals = new Map<string, unknown>();
-for (const [key, value] of Object.entries({
-  window: testWindow,
-  document: testWindow.document,
-  navigator: testWindow.navigator,
-  HTMLElement: testWindow.HTMLElement,
-  Event: testWindow.Event,
-  InputEvent: testWindow.InputEvent,
-  Node: testWindow.Node,
-  MutationObserver: testWindow.MutationObserver,
-  getComputedStyle: testWindow.getComputedStyle.bind(testWindow),
-  requestAnimationFrame: testWindow.requestAnimationFrame.bind(testWindow),
-  cancelAnimationFrame: testWindow.cancelAnimationFrame.bind(testWindow),
-  IS_REACT_ACT_ENVIRONMENT: true
-})) {
-  previousGlobals.set(key, globals[key]);
-  globals[key] = value;
+const previousGlobals = new Map<PropertyKey, PropertyDescriptor | undefined>();
+const mountedRoots = new Set<Root>();
+let createRoot: typeof import("react-dom/client").createRoot;
+
+function restoreGlobals() {
+  for (const [key, descriptor] of previousGlobals) {
+    if (descriptor) Object.defineProperty(globalThis, key, descriptor);
+    else Reflect.deleteProperty(globalThis, key);
+  }
+  previousGlobals.clear();
 }
 
-const { createRoot } = await import("react-dom/client");
+function installGlobals() {
+  const values = {
+    window: testWindow,
+    document: testWindow.document,
+    navigator: testWindow.navigator,
+    HTMLElement: testWindow.HTMLElement,
+    Event: testWindow.Event,
+    InputEvent: testWindow.InputEvent,
+    Node: testWindow.Node,
+    MutationObserver: testWindow.MutationObserver,
+    getComputedStyle: testWindow.getComputedStyle.bind(testWindow),
+    requestAnimationFrame: testWindow.requestAnimationFrame.bind(testWindow),
+    cancelAnimationFrame: testWindow.cancelAnimationFrame.bind(testWindow),
+    IS_REACT_ACT_ENVIRONMENT: true
+  };
+
+  try {
+    for (const [key, value] of Object.entries(values)) {
+      previousGlobals.set(key, Object.getOwnPropertyDescriptor(globalThis, key));
+      Object.defineProperty(globalThis, key, {
+        configurable: true,
+        value,
+        writable: true
+      });
+    }
+  } catch (error) {
+    restoreGlobals();
+    throw error;
+  }
+}
+
+function createTestRoot(container: Element) {
+  const root = createRoot(container);
+  mountedRoots.add(root);
+  return root;
+}
 
 interface HarnessProps {
   canonicalSearch: string;
@@ -61,21 +89,30 @@ function dispatchInput(input: HTMLInputElement, value: string, caret = value.len
   input.dispatchEvent(new testWindow.InputEvent("input", { bubbles: true, data: value }));
 }
 
-beforeAll(() => {
+beforeAll(async () => {
+  installGlobals();
+  ({ createRoot } = await import("react-dom/client"));
   jest.useFakeTimers();
 });
 
 afterEach(() => {
-  document.body.replaceChildren();
-  jest.clearAllTimers();
+  try {
+    act(() => {
+      for (const root of mountedRoots) root.unmount();
+    });
+  } finally {
+    mountedRoots.clear();
+    document.body.replaceChildren();
+    jest.clearAllTimers();
+  }
 });
 
 afterAll(async () => {
-  jest.useRealTimers();
-  await testWindow.close();
-  for (const [key, value] of previousGlobals) {
-    if (value === undefined) delete globals[key];
-    else globals[key] = value;
+  try {
+    jest.useRealTimers();
+    await testWindow.close();
+  } finally {
+    restoreGlobals();
   }
 });
 
@@ -84,7 +121,7 @@ describe("participant search URL input", () => {
     const commits: string[] = [];
     const container = document.createElement("div");
     document.body.append(container);
-    const root = createRoot(container);
+    const root = createTestRoot(container);
 
     act(() => {
       root.render(
@@ -108,14 +145,13 @@ describe("participant search URL input", () => {
     expect(input.selectionStart).toBe(3);
     expect(input.selectionEnd).toBe(3);
 
-    act(() => root.unmount());
   });
 
   it("clears whitespace-only input but leaves ordinary internal spaces typable", () => {
     const commits: string[] = [];
     const container = document.createElement("div");
     document.body.append(container);
-    const root = createRoot(container);
+    const root = createTestRoot(container);
 
     act(() => {
       root.render(
@@ -146,13 +182,12 @@ describe("participant search URL input", () => {
     expect(input.value).toBe("foo bar");
     expect(input.selectionStart).toBe(4);
 
-    act(() => root.unmount());
   });
 
   it("maps the caret across trimmed prefixes, trailing whitespace, and the cap", () => {
     const container = document.createElement("div");
     document.body.append(container);
-    const root = createRoot(container);
+    const root = createTestRoot(container);
 
     act(() => {
       root.render(
@@ -191,14 +226,13 @@ describe("participant search URL input", () => {
     expect(input.selectionStart).toBe(120);
     expect(document.activeElement).toBe(input);
 
-    act(() => root.unmount());
   });
 
   it("cancels stale debounce on Back/Forward and permits later typing", () => {
     const commits: string[] = [];
     const container = document.createElement("div");
     document.body.append(container);
-    const root = createRoot(container);
+    const root = createTestRoot(container);
 
     act(() => {
       root.render(
@@ -234,6 +268,7 @@ describe("participant search URL input", () => {
 
     act(() => dispatchInput(input, "unmounted"));
     act(() => root.unmount());
+    mountedRoots.delete(root);
     act(() => jest.advanceTimersByTime(250));
     expect(commits).toEqual(["later"]);
   });
@@ -242,7 +277,7 @@ describe("participant search URL input", () => {
     const commits: string[] = [];
     const container = document.createElement("div");
     document.body.append(container);
-    const root = createRoot(container);
+    const root = createTestRoot(container);
 
     act(() => {
       root.render(
@@ -275,6 +310,5 @@ describe("participant search URL input", () => {
     expect(input.value).toBe("foo");
     expect(document.activeElement).toBe(input);
 
-    act(() => root.unmount());
   });
 });
