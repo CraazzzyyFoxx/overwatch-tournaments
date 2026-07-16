@@ -145,14 +145,6 @@ export function TournamentShellSkeleton() {
           </div>
         </div>
 
-        <div className={styles.skeletonSurface} style={{ padding: "1.5rem" }}>
-          <PageHeadingSkeleton action />
-          <div className={styles.skeletonGrid} style={{ marginTop: "1.5rem" }}>
-            {Array.from({ length: 3 }, (_, index) => (
-              <SkeletonBlock key={index} style={{ height: "8.5rem" }} />
-            ))}
-          </div>
-        </div>
       </div>
     </SkeletonRegion>
   );
@@ -165,8 +157,21 @@ export function TournamentBracketSkeleton() {
     <SkeletonRegion variant="bracket" message={t("tournamentDetail.loading.pages.bracket")}>
       <TournamentPageSkeletonLayout>
         <PageHeadingSkeleton />
-        <ControlRowSkeleton />
         <div className={styles.skeletonSurface}>
+          <div
+            className={styles.skeletonHeader}
+            data-skeleton-region="bracket-toolbar"
+            style={{ padding: "1rem" }}
+          >
+            <div className={styles.skeletonControls}>
+              <SkeletonBlock style={{ width: "6.5rem", height: "2.15rem" }} />
+              <SkeletonBlock style={{ width: "5.5rem", height: "2.15rem" }} />
+            </div>
+            <div className={styles.skeletonControls}>
+              <SkeletonBlock style={{ width: "5.5rem", height: "2.15rem" }} />
+              <SkeletonBlock style={{ width: "4.75rem", height: "2.15rem" }} />
+            </div>
+          </div>
           <div className={styles.bracketFrame}>
             {Array.from({ length: 3 }, (_, column) => (
               <div className={styles.bracketColumn} key={column}>

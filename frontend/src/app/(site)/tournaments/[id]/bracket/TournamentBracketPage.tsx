@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils";
 import { useTranslations } from "next-intl";
 import { TournamentPageState } from "../_components/TournamentPageState";
 import { TournamentBracketSkeleton } from "../_components/TournamentSkeletons";
+import styles from "../TournamentDetail.module.css";
 import { BracketLeanStandings } from "./BracketLeanStandings";
 import { createBracketQueryPlan, deriveBracketLoadState } from "./bracketData";
 
@@ -373,7 +374,21 @@ export default function TournamentBracketPage({ tournament }: TournamentBracketP
   }
 
   const content = (
-    <div className="space-y-5">
+    <div className={styles.publicDataPage} data-page-section="bracket">
+      <header className={styles.pageHeading}>
+        <div className={styles.pageHeadingCopy}>
+          <p className={styles.pageEyebrow}>
+            {t("tournamentDetail.publicPages.bracket.eyebrow")}
+          </p>
+          <div className={styles.pageTitleRow}>
+            <h2 className={styles.pageTitle}>{t("common.bracket")}</h2>
+            <span className={styles.pageCount}>{stages.length}</span>
+          </div>
+          <p className={styles.pageContext}>
+            {t("tournamentDetail.publicPages.bracket.context")}
+          </p>
+        </div>
+      </header>
       {loadState.isUpdating && loadState.kind !== "refresh-error" ? (
         <p
           className="text-right text-xs font-semibold uppercase tracking-[0.14em] text-[var(--aqt-teal)]"

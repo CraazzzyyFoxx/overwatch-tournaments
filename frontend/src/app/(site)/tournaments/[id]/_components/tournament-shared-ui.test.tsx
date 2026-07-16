@@ -53,6 +53,34 @@ describe("tournament skeleton compositions", () => {
     expect(source).toContain(exportName);
     expect(source).toContain(`return <${exportName} />`);
   });
+
+  it("matches the Bracket hierarchy and keeps the shell fallback route-agnostic", () => {
+    const skeletonSource = readFileSync(
+      resolve(tournamentRoot, "_components/TournamentSkeletons.tsx"),
+      "utf8"
+    );
+    const bracketSource = readFileSync(
+      resolve(tournamentRoot, "bracket/TournamentBracketPage.tsx"),
+      "utf8"
+    );
+    const shellSource = skeletonSource.slice(
+      skeletonSource.indexOf("export function TournamentShellSkeleton"),
+      skeletonSource.indexOf("export function TournamentBracketSkeleton")
+    );
+    const bracketSkeletonSource = skeletonSource.slice(
+      skeletonSource.indexOf("export function TournamentBracketSkeleton"),
+      skeletonSource.indexOf("export function TournamentTeamsSkeleton")
+    );
+
+    expect(bracketSource).toContain('data-page-section="bracket"');
+    expect(bracketSource).toContain("styles.pageHeading");
+    expect(bracketSource).toContain('t("tournamentDetail.publicPages.bracket.eyebrow")');
+    expect(bracketSource).toContain('t("tournamentDetail.publicPages.bracket.context")');
+    expect(bracketSkeletonSource).toContain('<PageHeadingSkeleton />');
+    expect(bracketSkeletonSource).toContain('data-skeleton-region="bracket-toolbar"');
+    expect(bracketSkeletonSource).not.toContain("<ControlRowSkeleton />");
+    expect(shellSource).not.toContain("styles.skeletonGrid");
+  });
 });
 
 describe("TournamentPageState", () => {
@@ -164,5 +192,10 @@ describe("tournament detail locale parity", () => {
     expect(Object.keys(en.tournamentDetail.pageState).sort()).toEqual(
       Object.keys(ru.tournamentDetail.pageState).sort()
     );
+    expect(Object.keys(en.tournamentDetail.publicPages).sort()).toEqual(
+      Object.keys(ru.tournamentDetail.publicPages).sort()
+    );
+    expect(en.tournamentDetail.publicPages.bracket).toBeDefined();
+    expect(ru.tournamentDetail.publicPages.bracket).toBeDefined();
   });
 });

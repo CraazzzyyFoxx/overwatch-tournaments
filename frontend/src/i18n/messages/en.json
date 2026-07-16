@@ -1511,6 +1511,10 @@
       }
     },
     "publicPages": {
+      "bracket": {
+        "eyebrow": "Tournament path",
+        "context": "Move between published stages, inspect standings and follow every route to the final."
+      },
       "matches": {
         "eyebrow": "Competition log",
         "context": "Published match results, fifteen at a time. Search keeps its place in the URL.",
