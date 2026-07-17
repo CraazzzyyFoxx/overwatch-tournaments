@@ -141,11 +141,7 @@ export default function TournamentClientLayout({
         lede={tournament.description || undefined}
         actions={
           !isEnded ? (
-            <TournamentRegisterButton
-              workspaceId={tournament.workspace_id}
-              tournamentId={tournament.id}
-              tournamentName={tournament.name}
-            />
+            <TournamentRegisterButton tournament={tournament} />
           ) : undefined
         }
         aside={

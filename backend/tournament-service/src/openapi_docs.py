@@ -228,6 +228,10 @@ DOCS: dict[str, dict] = {
         "summary": "Transition tournament status",
         "description": "Transitions a tournament to the requested status; requires tournament-update permission, and the force bypass is superuser-only.",
     },
+    "rpc.tournament.tournament_schedule_set": {
+        "summary": "Set tournament phase schedule",
+        "description": "Replaces the tournament's phase schedule (full replace of REGISTRATION/DRAFT/CHECK_IN/LIVE rows); requires tournament-update permission.",
+    },
     "rpc.tournament.standing_recalculate": {
         "summary": "Recalculate standings",
         "description": "Schedules a durable standings-recalculation job (202 Accepted) for the tournament; requires standing-recalculate permission.",

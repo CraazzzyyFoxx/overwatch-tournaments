@@ -117,6 +117,9 @@ OPERATIONS: dict[str, Op] = {
     "rpc.tournament.tournament_status": Op(
         request=admin_tournament.TournamentStatusTransition, response=schemas.TournamentRead
     ),
+    "rpc.tournament.tournament_schedule_set": Op(
+        request=admin_tournament.TournamentScheduleSet, response=schemas.TournamentRead
+    ),
     "rpc.tournament.standing_recalculate": Op(response=TournamentComputationJobRead),
     # ── bespoke: stage workflow ────────────────────────────────────────────
     "rpc.tournament.stage_merge": Op(request=admin_stage.MergeGroupStagesRequest, response=schemas.StageRead),

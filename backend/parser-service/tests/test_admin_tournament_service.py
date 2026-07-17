@@ -145,6 +145,7 @@ class AdminTournamentServiceTests(IsolatedAsyncioTestCase):
             id=123,
             status=enums.TournamentStatus.DRAFT,
             is_finished=False,
+            auto_transitions_enabled=True,
             stages=[
                 SimpleNamespace(
                     id=11,
@@ -201,6 +202,8 @@ class AdminTournamentServiceTests(IsolatedAsyncioTestCase):
         self.assertIs(result_tournament, tournament)
         self.assertEqual(enums.TournamentStatus.LIVE, tournament.status)
         self.assertFalse(tournament.is_finished)
+        # Manual transition pauses time-driven automation.
+        self.assertFalse(tournament.auto_transitions_enabled)
         session.commit.assert_awaited_once_with()
         request_bracket_job.assert_awaited_once_with(
             session,
@@ -215,6 +218,7 @@ class AdminTournamentServiceTests(IsolatedAsyncioTestCase):
             id=123,
             status=enums.TournamentStatus.CHECK_IN,
             is_finished=False,
+            auto_transitions_enabled=True,
             stages=[
                 SimpleNamespace(
                     id=11,
@@ -269,3 +273,37 @@ class AdminTournamentServiceTests(IsolatedAsyncioTestCase):
             stage_id=11,
             operation="generate_stage",
         )
+
+    async def test_automated_transition_keeps_auto_transitions_enabled(self) -> None:
+        tournament = SimpleNamespace(
+            id=123,
+            status=enums.TournamentStatus.REGISTRATION,
+            is_finished=False,
+            auto_transitions_enabled=True,
+            stages=[],
+        )
+
+        result = Mock()
+        result.scalar_one_or_none.return_value = tournament
+        session = SimpleNamespace(
+            execute=AsyncMock(return_value=result),
+            scalar=AsyncMock(return_value=0),
+            commit=AsyncMock(),
+        )
+
+        with patch.object(
+            admin_tournament_service,
+            "get_tournament",
+            AsyncMock(return_value=tournament),
+        ):
+            await admin_tournament_service.transition_status(
+                session,
+                tournament.id,
+                enums.TournamentStatus.CHECK_IN,
+                automated=True,
+            )
+
+        self.assertEqual(enums.TournamentStatus.CHECK_IN, tournament.status)
+        # Automated transitions never flip the tournament into manual mode.
+        self.assertTrue(tournament.auto_transitions_enabled)
+        session.commit.assert_awaited_once_with()

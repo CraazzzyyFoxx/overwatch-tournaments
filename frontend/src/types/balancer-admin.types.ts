@@ -334,8 +334,6 @@ export interface AdminRegistrationForm {
   workspace_id: number;
   is_open: boolean;
   auto_approve: boolean;
-  opens_at: string | null;
-  closes_at: string | null;
   require_open_profile?: boolean;
   open_profile_scope?: "main" | "all";
   show_ranks?: boolean;
@@ -347,8 +345,6 @@ export interface AdminRegistrationForm {
 export interface AdminRegistrationFormUpsert {
   is_open: boolean;
   auto_approve: boolean;
-  opens_at?: string | null;
-  closes_at?: string | null;
   require_open_profile?: boolean;
   open_profile_scope?: "main" | "all";
   show_ranks?: boolean;

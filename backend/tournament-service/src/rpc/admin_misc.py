@@ -43,6 +43,7 @@ from src.services.computation import jobs as computation_jobs
 from src.services.encounter import captain as captain_service
 from src.services.encounter import map_veto as map_veto_service
 from src.services.tournament import flows as tournament_flows
+from src.services.tournament import schedule as schedule_service
 from src.services.tournament.cache_invalidation import invalidate_tournament_cache
 
 
@@ -171,6 +172,20 @@ def register(broker: Any, logger: Any) -> None:
                 body.status,
                 force=body.force,
             )
+            return _dump(await tournament_flows.to_pydantic(session, tournament, ["stages"]))
+
+        return await _run(logger, op)
+
+    @broker.subscriber("rpc.tournament.tournament_schedule_set")
+    async def _tournament_schedule_set(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            user = _identity(data)
+            tournament_id = _require_id(data)
+            ws_id = await auth.get_tournament_workspace_id(session, tournament_id)
+            ensure_workspace_permission(user, ws_id, "tournament", "update")
+            body = tournament_schemas.TournamentScheduleSet.model_validate(_payload(data))
+            # set_schedule commits internally (full replace of the phase rows).
+            tournament = await schedule_service.set_schedule(session, tournament_id, body.schedule)
             return _dump(await tournament_flows.to_pydantic(session, tournament, ["stages"]))
 
         return await _run(logger, op)

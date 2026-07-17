@@ -12,20 +12,23 @@ import {
 } from "@/components/ui/dialog";
 import { getCurrentPathForAuthRedirect } from "@/lib/auth-redirect";
 import { cn } from "@/lib/utils";
+import { isRegistrationOpen } from "@/lib/tournament-status";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
 import { useAuthModalStore } from "@/stores/auth-modal.store";
 import registrationService from "@/services/registration.service";
+import type { Tournament } from "@/types/tournament.types";
 
 import { useTranslations } from "next-intl";
 import RegistrationWizard from "@/components/registration/RegistrationWizard";
 
 type Props = {
-  workspaceId: number;
-  tournamentId: number;
-  tournamentName?: string;
+  tournament: Tournament;
 };
 
-export default function TournamentRegisterButton({ workspaceId, tournamentId, tournamentName }: Props) {
+export default function TournamentRegisterButton({ tournament }: Props) {
+  const workspaceId = tournament.workspace_id;
+  const tournamentId = tournament.id;
+  const tournamentName = tournament.name;
   const t = useTranslations();
   const { user, status: authStatus } = useAuthProfile();
   const openAuthModal = useAuthModalStore((state) => state.open);
@@ -58,7 +61,7 @@ export default function TournamentRegisterButton({ workspaceId, tournamentId, to
   if (!form) return null;
   if (isAuthenticated && myRegQuery.isLoading) return null;
 
-  if (!form.is_open) {
+  if (!isRegistrationOpen(tournament, form.is_open)) {
     return (
       <div className="inline-flex items-center gap-2 rounded-lg border border-white/7 bg-white/2 px-4 py-2 text-sm text-white/40">
         <Clock className="size-4" />

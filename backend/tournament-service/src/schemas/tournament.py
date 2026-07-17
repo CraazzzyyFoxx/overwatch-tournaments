@@ -13,6 +13,7 @@ from src.schemas.stage import StageSummaryRead
 __all__ = (
     "TournamentRead",
     "TournamentGroupRead",
+    "TournamentPhaseScheduleRead",
     "OwalStanding",
     "OwalStandingDay",
     "OwalStandings",
@@ -30,6 +31,14 @@ class TournamentGroupRead(BaseRead):
     challonge_slug: str | None
 
 
+class TournamentPhaseScheduleRead(BaseModel):
+    """One phase-schedule row: when phase ``status`` starts (and its action window ends)."""
+
+    status: enums.TournamentStatus
+    starts_at: datetime
+    ends_at: datetime | None = None
+
+
 class TournamentRead(BaseRead):
     workspace_id: int
     number: int | None
@@ -44,10 +53,9 @@ class TournamentRead(BaseRead):
     status: enums.TournamentStatus
     start_date: datetime
     end_date: datetime
-    registration_opens_at: datetime | None = None
-    registration_closes_at: datetime | None = None
-    check_in_opens_at: datetime | None = None
-    check_in_closes_at: datetime | None = None
+    auto_transitions_enabled: bool = True
+    allow_late_registration: bool = False
+    phase_schedule: list[TournamentPhaseScheduleRead] = []
     win_points: float = 1.0
     draw_points: float = 0.5
     loss_points: float = 0.0

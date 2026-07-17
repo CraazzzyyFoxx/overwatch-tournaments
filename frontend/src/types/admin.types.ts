@@ -137,10 +137,8 @@ export interface TournamentCreateInput {
   status?: TournamentStatus;
   start_date: string;
   end_date: string;
-  registration_opens_at?: string | null;
-  registration_closes_at?: string | null;
-  check_in_opens_at?: string | null;
-  check_in_closes_at?: string | null;
+  auto_transitions_enabled?: boolean;
+  allow_late_registration?: boolean;
   win_points?: number;
   draw_points?: number;
   loss_points?: number;
@@ -158,14 +156,18 @@ export interface TournamentUpdateInput {
   team_formation?: string;
   start_date?: string;
   end_date?: string;
-  registration_opens_at?: string | null;
-  registration_closes_at?: string | null;
-  check_in_opens_at?: string | null;
-  check_in_closes_at?: string | null;
+  auto_transitions_enabled?: boolean;
+  allow_late_registration?: boolean;
   win_points?: number;
   draw_points?: number;
   loss_points?: number;
   division_grid_version_id?: number | null;
+}
+
+export interface TournamentPhaseScheduleEntryInput {
+  status: TournamentStatus;
+  starts_at: string;
+  ends_at?: string | null;
 }
 
 export interface TournamentPreviewAccessUser {

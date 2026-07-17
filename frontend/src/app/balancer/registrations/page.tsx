@@ -136,8 +136,6 @@ const ADMIN_ROLE_FORM: RegistrationForm = {
   tournament_id: 0,
   workspace_id: 0,
   is_open: true,
-  opens_at: null,
-  closes_at: null,
   built_in_fields: {
     primary_role: { enabled: true, required: true },
     additional_roles: { enabled: true, required: false }

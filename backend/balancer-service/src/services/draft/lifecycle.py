@@ -23,6 +23,7 @@ from shared.core.enums import (
     DraftPlayerStatus,
     DraftRole,
     DraftStatus,
+    TournamentStatus,
 )
 from shared.core.errors import ApiExc, ApiHTTPException
 from shared.models.balancer.draft import (
@@ -39,6 +40,7 @@ from shared.models.registration.registration import (
     BalancerRegistrationRoleHero,
 )
 from shared.models.tenancy.workspace import WorkspaceMember
+from shared.models.tournament import Tournament
 from shared.repository.workspace import get_or_create_workspace_member
 from src.services.draft import feasibility
 
@@ -670,6 +672,14 @@ async def _first_upcoming(session: AsyncSession, draft_session_id: int) -> Draft
 
 async def start(session: AsyncSession, draft_session: DraftSession) -> DraftSession:
     draft_state.validate_transition(DraftStatus(draft_session.status), DraftStatus.LIVE)
+    tournament_status = await session.scalar(
+        sa.select(Tournament.status).where(Tournament.id == draft_session.tournament_id)
+    )
+    if tournament_status != TournamentStatus.DRAFT.value:
+        raise _err(
+            "tournament_not_in_draft_phase",
+            "Draft can only start while the tournament is in the draft phase",
+        )
     first = await _first_upcoming(session, draft_session.id)
     if first is None:
         raise _err("draft_no_picks", "Draft has no picks to start")

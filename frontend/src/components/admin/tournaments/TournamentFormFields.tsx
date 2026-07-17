@@ -2,7 +2,6 @@
 
 import type { DivisionGridVersion } from "@/types/workspace.types";
 import { Checkbox } from "@/components/ui/checkbox";
-import { DateTimePicker } from "@/components/ui/date-picker";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -31,10 +30,6 @@ export type TournamentFormFieldsValue = {
   number?: number | null;
   challonge_slug?: string | null;
   is_finished?: boolean;
-  registration_opens_at?: string | null;
-  registration_closes_at?: string | null;
-  check_in_opens_at?: string | null;
-  check_in_closes_at?: string | null;
   win_points?: number;
   draw_points?: number;
   loss_points?: number;
@@ -71,7 +66,6 @@ export function TournamentFormFields<T extends TournamentFormFieldsValue>({
   const showDivisionGrid =
     mode === "workspace-edit" || mode === "manual-create" || mode === "challonge-create";
   const showScoring = mode === "workspace-edit";
-  const showPeriods = mode === "workspace-edit";
   const showTeamFormation =
     mode === "workspace-edit" || mode === "manual-create" || mode === "challonge-create";
 
@@ -301,54 +295,6 @@ export function TournamentFormFields<T extends TournamentFormFieldsValue>({
                   onChange({ ...value, loss_points: Number(event.target.value) })
                 }
                 className="mt-1.5"
-              />
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {showPeriods ? (
-        <div className="col-span-full grid grid-cols-1 md:grid-cols-2 gap-6 border-t border-border/40 pt-4">
-          <div className="space-y-3">
-            <p className="text-sm font-medium">Registration Period</p>
-            <div className="grid gap-3">
-              <DateTimePicker
-                id={`${idPrefix}-registration-opens`}
-                timeId={`${idPrefix}-registration-opens-time`}
-                dateLabel="Opens at"
-                timeLabel="Time"
-                value={value.registration_opens_at ?? ""}
-                onChange={(nextValue) => onChange({ ...value, registration_opens_at: nextValue })}
-              />
-              <DateTimePicker
-                id={`${idPrefix}-registration-closes`}
-                timeId={`${idPrefix}-registration-closes-time`}
-                dateLabel="Closes at"
-                timeLabel="Time"
-                value={value.registration_closes_at ?? ""}
-                onChange={(nextValue) => onChange({ ...value, registration_closes_at: nextValue })}
-              />
-            </div>
-          </div>
-
-          <div className="space-y-3">
-            <p className="text-sm font-medium">Check-in Period</p>
-            <div className="grid gap-3">
-              <DateTimePicker
-                id={`${idPrefix}-check-in-opens`}
-                timeId={`${idPrefix}-check-in-opens-time`}
-                dateLabel="Opens at"
-                timeLabel="Time"
-                value={value.check_in_opens_at ?? ""}
-                onChange={(nextValue) => onChange({ ...value, check_in_opens_at: nextValue })}
-              />
-              <DateTimePicker
-                id={`${idPrefix}-check-in-closes`}
-                timeId={`${idPrefix}-check-in-closes-time`}
-                dateLabel="Closes at"
-                timeLabel="Time"
-                value={value.check_in_closes_at ?? ""}
-                onChange={(nextValue) => onChange({ ...value, check_in_closes_at: nextValue })}
               />
             </div>
           </div>

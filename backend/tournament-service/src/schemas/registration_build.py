@@ -100,8 +100,6 @@ def _form_to_read(
         workspace_id=form.workspace_id,
         is_open=form.is_open,
         auto_approve=form.auto_approve,
-        opens_at=form.opens_at,
-        closes_at=form.closes_at,
         require_open_profile=form.require_open_profile,
         open_profile_scope=form.open_profile_scope,
         show_ranks=form.show_ranks,

@@ -20,6 +20,7 @@ import {
   TournamentUpdateInput,
   TournamentPreviewAccessEntry,
   TournamentStatusTransitionInput,
+  TournamentPhaseScheduleEntryInput,
   StageCreateInput,
   StageUpdateInput,
   StageItemCreateInput,
@@ -146,6 +147,17 @@ class AdminService {
     const response = await apiFetch(`/api/v1/admin/tournaments/${id}`, {
       method: "PATCH",
       body: data
+    });
+    return response.json();
+  }
+
+  async setTournamentSchedule(
+    id: number,
+    schedule: TournamentPhaseScheduleEntryInput[]
+  ): Promise<Tournament> {
+    const response = await apiFetch(`/api/v1/admin/tournaments/${id}/schedule`, {
+      method: "PUT",
+      body: { schedule }
     });
     return response.json();
   }

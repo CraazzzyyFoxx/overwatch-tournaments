@@ -6469,6 +6469,18 @@
       },
       "summary": "Bulk approve registrations"
     },
+    "rpc.tournament.reg_bulk_exclusion": {
+      "description": "Sets the exclude-from-balancer flag and reason on multiple registrations, returning updated/skipped counts and broadcasting a realtime change; requires team-update permission on the tournament.",
+      "request": {
+        "array": false,
+        "ref": "tournament.BulkExclusionRequest"
+      },
+      "response": {
+        "array": false,
+        "ref": "tournament.BulkExclusionResponse"
+      },
+      "summary": "Bulk set registration exclusion"
+    },
     "rpc.tournament.reg_check_in": {
       "description": "Checks a registration in or out (per the body flag) and broadcasts a realtime change; requires team-update permission on its workspace.",
       "request": {
@@ -6968,6 +6980,18 @@
         "ref": "tournament.TournamentRead"
       },
       "summary": "Toggle tournament finished"
+    },
+    "rpc.tournament.tournament_schedule_set": {
+      "description": "Replaces the tournament's phase schedule (full replace of REGISTRATION/DRAFT/CHECK_IN/LIVE rows); requires tournament-update permission.",
+      "request": {
+        "array": false,
+        "ref": "tournament.TournamentScheduleSet"
+      },
+      "response": {
+        "array": false,
+        "ref": "tournament.TournamentRead"
+      },
+      "summary": "Set tournament phase schedule"
     },
     "rpc.tournament.tournament_status": {
       "description": "Transitions a tournament to the requested status; requires tournament-update permission, and the force bypass is superuser-only.",
@@ -22991,8 +23015,50 @@
       "title": "StageType",
       "type": "string"
     },
+    "parser.TournamentPhaseScheduleRead": {
+      "description": "One phase-schedule row: when phase ``status`` starts (and its action window ends).",
+      "properties": {
+        "ends_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ends At"
+        },
+        "starts_at": {
+          "format": "date-time",
+          "title": "Starts At",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/components/schemas/parser.TournamentStatus"
+        }
+      },
+      "required": [
+        "status",
+        "starts_at"
+      ],
+      "title": "TournamentPhaseScheduleRead",
+      "type": "object"
+    },
     "parser.TournamentRead": {
       "properties": {
+        "allow_late_registration": {
+          "default": false,
+          "title": "Allow Late Registration",
+          "type": "boolean"
+        },
+        "auto_transitions_enabled": {
+          "default": true,
+          "title": "Auto Transitions Enabled",
+          "type": "boolean"
+        },
         "challonge_id": {
           "anyOf": [
             {
@@ -23014,32 +23080,6 @@
             }
           ],
           "title": "Challonge Slug"
-        },
-        "check_in_closes_at": {
-          "anyOf": [
-            {
-              "format": "date-time",
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Check In Closes At"
-        },
-        "check_in_opens_at": {
-          "anyOf": [
-            {
-              "format": "date-time",
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Check In Opens At"
         },
         "description": {
           "anyOf": [
@@ -23116,31 +23156,13 @@
           ],
           "title": "Number"
         },
-        "registration_closes_at": {
-          "anyOf": [
-            {
-              "format": "date-time",
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Registration Closes At"
-        },
-        "registration_opens_at": {
-          "anyOf": [
-            {
-              "format": "date-time",
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Registration Opens At"
+        "phase_schedule": {
+          "default": [],
+          "items": {
+            "$ref": "#/components/schemas/parser.TournamentPhaseScheduleRead"
+          },
+          "title": "Phase Schedule",
+          "type": "array"
         },
         "stages": {
           "default": [],
@@ -25062,6 +25084,30 @@
           "default": null,
           "title": "Display Name"
         },
+        "exclude_from_balancer": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Exclude From Balancer"
+        },
+        "exclude_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Exclude Reason"
+        },
         "notes": {
           "anyOf": [
             {
@@ -25240,6 +25286,58 @@
         "skipped"
       ],
       "title": "BulkBalancerStatusResponse",
+      "type": "object"
+    },
+    "tournament.BulkExclusionRequest": {
+      "properties": {
+        "exclude_from_balancer": {
+          "title": "Exclude From Balancer",
+          "type": "boolean"
+        },
+        "exclude_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Exclude Reason"
+        },
+        "registration_ids": {
+          "items": {
+            "type": "integer"
+          },
+          "maxItems": 500,
+          "title": "Registration Ids",
+          "type": "array"
+        }
+      },
+      "required": [
+        "registration_ids",
+        "exclude_from_balancer"
+      ],
+      "title": "BulkExclusionRequest",
+      "type": "object"
+    },
+    "tournament.BulkExclusionResponse": {
+      "properties": {
+        "skipped": {
+          "title": "Skipped",
+          "type": "integer"
+        },
+        "updated": {
+          "title": "Updated",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "updated",
+        "skipped"
+      ],
+      "title": "BulkExclusionResponse",
       "type": "object"
     },
     "tournament.ChallongeMatch": {
@@ -29777,19 +29875,6 @@
           "title": "Built In Fields",
           "type": "object"
         },
-        "closes_at": {
-          "anyOf": [
-            {
-              "format": "date-time",
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Closes At"
-        },
         "custom_fields": {
           "items": {
             "$ref": "#/components/schemas/tournament.CustomFieldDefinition"
@@ -29809,19 +29894,6 @@
           "default": "main",
           "title": "Open Profile Scope",
           "type": "string"
-        },
-        "opens_at": {
-          "anyOf": [
-            {
-              "format": "date-time",
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Opens At"
         },
         "require_open_profile": {
           "default": false,
@@ -29875,19 +29947,6 @@
           "title": "Built In Fields",
           "type": "object"
         },
-        "closes_at": {
-          "anyOf": [
-            {
-              "format": "date-time",
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Closes At"
-        },
         "custom_fields": {
           "items": {
             "$ref": "#/components/schemas/tournament.CustomFieldDefinition"
@@ -29904,19 +29963,6 @@
           "default": "main",
           "title": "Open Profile Scope",
           "type": "string"
-        },
-        "opens_at": {
-          "anyOf": [
-            {
-              "format": "date-time",
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Opens At"
         },
         "require_open_profile": {
           "default": false,
@@ -30009,6 +30055,18 @@
           ],
           "default": null,
           "title": "Notes"
+        },
+        "profiles_open": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Profiles Open"
         },
         "reviewed_at": {
           "anyOf": [
@@ -32213,31 +32271,15 @@
     "tournament.TournamentCreate": {
       "description": "Schema for creating a tournament",
       "properties": {
-        "check_in_closes_at": {
-          "anyOf": [
-            {
-              "format": "date-time",
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Check In Closes At"
+        "allow_late_registration": {
+          "default": false,
+          "title": "Allow Late Registration",
+          "type": "boolean"
         },
-        "check_in_opens_at": {
-          "anyOf": [
-            {
-              "format": "date-time",
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Check In Opens At"
+        "auto_transitions_enabled": {
+          "default": true,
+          "title": "Auto Transitions Enabled",
+          "type": "boolean"
         },
         "description": {
           "anyOf": [
@@ -32304,32 +32346,6 @@
           "default": null,
           "title": "Number"
         },
-        "registration_closes_at": {
-          "anyOf": [
-            {
-              "format": "date-time",
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Registration Closes At"
-        },
-        "registration_opens_at": {
-          "anyOf": [
-            {
-              "format": "date-time",
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Registration Opens At"
-        },
         "start_date": {
           "format": "date",
           "title": "Start Date",
@@ -32337,7 +32353,7 @@
         },
         "status": {
           "$ref": "#/components/schemas/tournament.TournamentStatus",
-          "default": "draft"
+          "default": "registration"
         },
         "team_formation": {
           "default": "balancer",
@@ -32506,8 +32522,50 @@
       "title": "TournamentPaginationSortSearchQueryParams",
       "type": "object"
     },
+    "tournament.TournamentPhaseScheduleRead": {
+      "description": "One phase-schedule row: when phase ``status`` starts (and its action window ends).",
+      "properties": {
+        "ends_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ends At"
+        },
+        "starts_at": {
+          "format": "date-time",
+          "title": "Starts At",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/components/schemas/tournament.TournamentStatus"
+        }
+      },
+      "required": [
+        "status",
+        "starts_at"
+      ],
+      "title": "TournamentPhaseScheduleRead",
+      "type": "object"
+    },
     "tournament.TournamentRead": {
       "properties": {
+        "allow_late_registration": {
+          "default": false,
+          "title": "Allow Late Registration",
+          "type": "boolean"
+        },
+        "auto_transitions_enabled": {
+          "default": true,
+          "title": "Auto Transitions Enabled",
+          "type": "boolean"
+        },
         "challonge_id": {
           "anyOf": [
             {
@@ -32529,32 +32587,6 @@
             }
           ],
           "title": "Challonge Slug"
-        },
-        "check_in_closes_at": {
-          "anyOf": [
-            {
-              "format": "date-time",
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Check In Closes At"
-        },
-        "check_in_opens_at": {
-          "anyOf": [
-            {
-              "format": "date-time",
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Check In Opens At"
         },
         "description": {
           "anyOf": [
@@ -32647,31 +32679,13 @@
           ],
           "title": "Participants Count"
         },
-        "registration_closes_at": {
-          "anyOf": [
-            {
-              "format": "date-time",
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Registration Closes At"
-        },
-        "registration_opens_at": {
-          "anyOf": [
-            {
-              "format": "date-time",
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Registration Opens At"
+        "phase_schedule": {
+          "default": [],
+          "items": {
+            "$ref": "#/components/schemas/tournament.TournamentPhaseScheduleRead"
+          },
+          "title": "Phase Schedule",
+          "type": "array"
         },
         "registrations_count": {
           "anyOf": [
@@ -32745,6 +32759,55 @@
         "division_grid_version_id"
       ],
       "title": "TournamentRead",
+      "type": "object"
+    },
+    "tournament.TournamentScheduleEntryInput": {
+      "description": "One phase-schedule row in a full-replace schedule update.",
+      "properties": {
+        "ends_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ends At"
+        },
+        "starts_at": {
+          "format": "date-time",
+          "title": "Starts At",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/components/schemas/tournament.TournamentStatus"
+        }
+      },
+      "required": [
+        "status",
+        "starts_at"
+      ],
+      "title": "TournamentScheduleEntryInput",
+      "type": "object"
+    },
+    "tournament.TournamentScheduleSet": {
+      "description": "Schema for replacing a tournament's phase schedule (full replace).",
+      "properties": {
+        "schedule": {
+          "items": {
+            "$ref": "#/components/schemas/tournament.TournamentScheduleEntryInput"
+          },
+          "title": "Schedule",
+          "type": "array"
+        }
+      },
+      "required": [
+        "schedule"
+      ],
+      "title": "TournamentScheduleSet",
       "type": "object"
     },
     "tournament.TournamentStatistics": {
@@ -32821,6 +32884,30 @@
     "tournament.TournamentUpdate": {
       "description": "Schema for updating a tournament",
       "properties": {
+        "allow_late_registration": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Allow Late Registration"
+        },
+        "auto_transitions_enabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Auto Transitions Enabled"
+        },
         "challonge_slug": {
           "anyOf": [
             {
@@ -32832,32 +32919,6 @@
           ],
           "default": null,
           "title": "Challonge Slug"
-        },
-        "check_in_closes_at": {
-          "anyOf": [
-            {
-              "format": "date-time",
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Check In Closes At"
-        },
-        "check_in_opens_at": {
-          "anyOf": [
-            {
-              "format": "date-time",
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Check In Opens At"
         },
         "description": {
           "anyOf": [
@@ -32979,32 +33040,6 @@
           ],
           "default": null,
           "title": "Number"
-        },
-        "registration_closes_at": {
-          "anyOf": [
-            {
-              "format": "date-time",
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Registration Closes At"
-        },
-        "registration_opens_at": {
-          "anyOf": [
-            {
-              "format": "date-time",
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Registration Opens At"
         },
         "start_date": {
           "anyOf": [

@@ -319,6 +319,8 @@ async def toggle_finished(session: AsyncSession, tournament_id: int) -> models.T
 
     tournament.is_finished = not tournament.is_finished
     tournament.status = TournamentStatus.COMPLETED if tournament.is_finished else TournamentStatus.LIVE
+    # Manual status change — pause time-driven automation (see transition_status).
+    tournament.auto_transitions_enabled = False
 
     await session.commit()
     return await get_tournament(session, tournament_id)
@@ -330,8 +332,14 @@ async def transition_status(
     target_status: TournamentStatus,
     *,
     force: bool = False,
+    automated: bool = False,
 ) -> models.Tournament:
-    """Transition tournament to a new status with state machine validation."""
+    """Transition tournament to a new status with state machine validation.
+
+    Manual transitions (``automated=False``) pause time-driven automation by
+    setting ``auto_transitions_enabled = False`` in the same transaction, so
+    the tick never fights an admin decision.
+    """
     result = await session.execute(
         select(models.Tournament)
         .where(models.Tournament.id == tournament_id)
@@ -351,6 +359,8 @@ async def transition_status(
 
     tournament.status = target_status
     tournament.is_finished = tournament_state.is_finished_for_status(target_status)
+    if not automated:
+        tournament.auto_transitions_enabled = False
 
     await session.commit()
     await _maybe_auto_start_group_stage(

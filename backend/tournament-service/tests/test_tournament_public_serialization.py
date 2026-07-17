@@ -46,10 +46,8 @@ def _tournament() -> models.Tournament:
         status=enums.TournamentStatus.LIVE,
         start_date=datetime.now(UTC),
         end_date=datetime.now(UTC),
-        registration_opens_at=None,
-        registration_closes_at=None,
-        check_in_opens_at=None,
-        check_in_closes_at=None,
+        auto_transitions_enabled=True,
+        allow_late_registration=False,
         win_points=1.0,
         draw_points=0.5,
         loss_points=0.0,
@@ -67,6 +65,38 @@ class TournamentSerializationTests(IsolatedAsyncioTestCase):
 
         self.assertEqual(5, read.division_grid_version_id)
         self.assertIsNone(read.division_grid_version)
+
+    async def test_to_pydantic_round_trips_flags_and_phase_schedule(self) -> None:
+        tournament = _tournament()
+        starts_at = datetime(2026, 7, 1, 18, 0, tzinfo=UTC)
+        ends_at = datetime(2026, 7, 1, 18, 45, tzinfo=UTC)
+        tournament.phase_schedule = [
+            models.TournamentPhaseSchedule(
+                id=1,
+                created_at=datetime.now(UTC),
+                updated_at=None,
+                tournament_id=tournament.id,
+                status=enums.TournamentStatus.CHECK_IN,
+                starts_at=starts_at,
+                ends_at=ends_at,
+            )
+        ]
+        make_transient_to_detached(tournament)
+
+        read = await flows.to_pydantic(cast(AsyncSession, object()), tournament, [])
+
+        self.assertTrue(read.auto_transitions_enabled)
+        self.assertFalse(read.allow_late_registration)
+        self.assertEqual(
+            [
+                schemas.TournamentPhaseScheduleRead(
+                    status=enums.TournamentStatus.CHECK_IN,
+                    starts_at=starts_at,
+                    ends_at=ends_at,
+                )
+            ],
+            read.phase_schedule,
+        )
 
     async def test_to_pydantic_resolves_requested_teams_count(self) -> None:
         tournament = _tournament()

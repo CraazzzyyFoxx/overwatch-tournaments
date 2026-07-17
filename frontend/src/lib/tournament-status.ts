@@ -1,4 +1,4 @@
-import type { TournamentStatus } from "@/types/tournament.types";
+import type { Tournament, TournamentStatus } from "@/types/tournament.types";
 
 type TournamentStatusMeta = {
   label: string;
@@ -119,4 +119,39 @@ export function countByTournamentStatus(
     counts[status] += 1;
   }
   return counts;
+}
+
+/**
+ * True when the tournament currently sits in `status` and `now` falls inside
+ * that phase's schedule row window. A missing row or a `null` ends_at means
+ * the window spans the whole phase.
+ */
+export function isPhaseWindowActive(
+  tournament: Pick<Tournament, "status" | "phase_schedule">,
+  status: TournamentStatus,
+  now: number = Date.now()
+) {
+  if (tournament.status !== status) return false;
+
+  const row = tournament.phase_schedule?.find((entry) => entry.status === status);
+  if (!row) return true;
+
+  const startsAt = new Date(row.starts_at).getTime();
+  const endsAt = row.ends_at ? new Date(row.ends_at).getTime() : null;
+  return startsAt <= now && (endsAt === null || now <= endsAt);
+}
+
+/**
+ * Mirrors the backend registration gate: the form kill switch must be on, the
+ * tournament must not be over, and either the registration phase window is
+ * currently active or late registration is allowed.
+ */
+export function isRegistrationOpen(
+  tournament: Pick<Tournament, "status" | "phase_schedule" | "allow_late_registration">,
+  formIsOpen: boolean,
+  now: number = Date.now()
+) {
+  if (!formIsOpen) return false;
+  if (tournament.status === "completed" || tournament.status === "archived") return false;
+  return isPhaseWindowActive(tournament, "registration", now) || tournament.allow_late_registration;
 }

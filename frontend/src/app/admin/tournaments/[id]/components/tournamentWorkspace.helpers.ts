@@ -2,6 +2,16 @@ import { Layers3, Trophy, type LucideIcon } from "lucide-react";
 import type { Encounter } from "@/types/encounter.types";
 import type { Team } from "@/types/team.types";
 import type { Stage, Standings, Tournament } from "@/types/tournament.types";
+import type { TournamentPhaseScheduleEntryInput } from "@/types/admin.types";
+
+export const SCHEDULABLE_PHASES = ["registration", "draft", "check_in", "live"] as const;
+
+export type SchedulablePhase = (typeof SCHEDULABLE_PHASES)[number];
+
+export type PhaseScheduleFormState = Record<
+  SchedulablePhase,
+  { starts_at: string; ends_at: string }
+>;
 
 export type TournamentFormState = {
   number: number | null;
@@ -16,10 +26,9 @@ export type TournamentFormState = {
   win_points: number;
   draw_points: number;
   loss_points: number;
-  registration_opens_at: string;
-  registration_closes_at: string;
-  check_in_opens_at: string;
-  check_in_closes_at: string;
+  auto_transitions_enabled: boolean;
+  allow_late_registration: boolean;
+  phase_schedule: PhaseScheduleFormState;
   division_grid_version_id: number | null;
   team_formation: string;
 };
@@ -95,6 +104,33 @@ export function toDateTimeInput(value?: Date | string | null) {
   return new Date(value).toISOString().slice(0, 16);
 }
 
+export function getPhaseScheduleForm(tournament: Tournament): PhaseScheduleFormState {
+  const schedule = Object.fromEntries(
+    SCHEDULABLE_PHASES.map((phase) => [phase, { starts_at: "", ends_at: "" }])
+  ) as PhaseScheduleFormState;
+
+  for (const row of tournament.phase_schedule ?? []) {
+    if ((SCHEDULABLE_PHASES as readonly string[]).includes(row.status)) {
+      schedule[row.status as SchedulablePhase] = {
+        starts_at: toDateTimeInput(row.starts_at),
+        ends_at: toDateTimeInput(row.ends_at)
+      };
+    }
+  }
+
+  return schedule;
+}
+
+export function getPhaseSchedulePayload(
+  schedule: PhaseScheduleFormState
+): TournamentPhaseScheduleEntryInput[] {
+  return SCHEDULABLE_PHASES.filter((phase) => schedule[phase].starts_at).map((phase) => ({
+    status: phase,
+    starts_at: schedule[phase].starts_at,
+    ends_at: schedule[phase].ends_at || null
+  }));
+}
+
 export function getTournamentForm(tournament: Tournament): TournamentFormState {
   return {
     number: tournament.number ?? null,
@@ -109,10 +145,9 @@ export function getTournamentForm(tournament: Tournament): TournamentFormState {
     win_points: tournament.win_points ?? 1,
     draw_points: tournament.draw_points ?? 0.5,
     loss_points: tournament.loss_points ?? 0,
-    registration_opens_at: toDateTimeInput(tournament.registration_opens_at),
-    registration_closes_at: toDateTimeInput(tournament.registration_closes_at),
-    check_in_opens_at: toDateTimeInput(tournament.check_in_opens_at),
-    check_in_closes_at: toDateTimeInput(tournament.check_in_closes_at),
+    auto_transitions_enabled: tournament.auto_transitions_enabled ?? true,
+    allow_late_registration: tournament.allow_late_registration ?? false,
+    phase_schedule: getPhaseScheduleForm(tournament),
     division_grid_version_id: tournament.division_grid_version_id ?? null,
     team_formation: tournament.team_formation ?? "balancer"
   };

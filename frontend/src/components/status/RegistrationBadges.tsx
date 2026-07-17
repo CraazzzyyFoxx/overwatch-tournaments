@@ -12,12 +12,7 @@ interface StatusBadgeProps {
   compact?: boolean;
 }
 
-export function RegistrationStatusBadge({
-  status,
-  meta,
-  className,
-  compact,
-}: StatusBadgeProps) {
+export function RegistrationStatusBadge({ status, meta, className, compact }: StatusBadgeProps) {
   return (
     <StatusMetaBadge
       meta={meta}
@@ -28,12 +23,7 @@ export function RegistrationStatusBadge({
   );
 }
 
-export function BalancerStatusBadge({
-  status,
-  meta,
-  className,
-  compact,
-}: StatusBadgeProps) {
+export function BalancerStatusBadge({ status, meta, className, compact }: StatusBadgeProps) {
   return (
     <StatusMetaBadge
       meta={meta}
@@ -49,10 +39,7 @@ interface CheckInStatusBadgeProps {
   className?: string;
 }
 
-export function CheckInStatusBadge({
-  checkedIn,
-  className,
-}: CheckInStatusBadgeProps) {
+export function CheckInStatusBadge({ checkedIn, className }: CheckInStatusBadgeProps) {
   const t = useTranslations();
   const isCheckedIn = checkedIn === true;
   const label = isCheckedIn ? t("common.checkedIn") : t("common.notCheckedIn");
@@ -64,14 +51,10 @@ export function CheckInStatusBadge({
       className={cn(
         "inline-flex size-5 items-center justify-center",
         isCheckedIn ? "text-emerald-400" : "text-white/35",
-        className,
+        className
       )}
     >
-      {isCheckedIn ? (
-        <CheckCircle2 className="size-4" />
-      ) : (
-        <Circle className="size-4" />
-      )}
+      {isCheckedIn ? <CheckCircle2 className="size-4" /> : <Circle className="size-4" />}
     </span>
   );
 }
@@ -94,13 +77,9 @@ export function isAdmitted(
   registrationStatus: string,
   balancerStatus: string | undefined | null,
   checkedIn: boolean | undefined | null,
-  options?: AdmissionOptions,
+  options?: AdmissionOptions
 ): boolean {
-  if (
-    registrationStatus !== "approved" ||
-    balancerStatus !== "ready" ||
-    checkedIn !== true
-  ) {
+  if (registrationStatus !== "approved" || balancerStatus !== "ready" || checkedIn !== true) {
     return false;
   }
   // Open-profile requirement: only a *confirmed* closed profile blocks admission
@@ -117,12 +96,13 @@ export function AdmissionStatusBadge({
   checkedIn,
   requireOpenProfile,
   profilesOpen,
-  className,
+  className
 }: AdmissionStatusBadgeProps) {
   const t = useTranslations();
 
   const isProfileClosed = requireOpenProfile && profilesOpen === false;
-  const isApprovedAndReady = registrationStatus === "approved" && balancerStatus === "ready" && !isProfileClosed;
+  const isApprovedAndReady =
+    registrationStatus === "approved" && balancerStatus === "ready" && !isProfileClosed;
 
   let status: "admitted" | "pending_check_in" | "not_admitted";
   if (!isApprovedAndReady) {
@@ -151,7 +131,7 @@ export function AdmissionStatusBadge({
         status === "admitted" && "text-emerald-400",
         status === "pending_check_in" && "text-amber-400",
         status === "not_admitted" && "text-red-400",
-        className,
+        className
       )}
     >
       {status === "admitted" && <CheckCircle2 className="size-4" />}
@@ -181,13 +161,13 @@ export function ProfileStatusBadge({ profilesOpen, className }: ProfileStatusBad
       title={label}
       aria-label={label}
       className={cn(
-        "inline-flex size-5 items-center justify-center",
+        "size-5",
         profilesOpen === true
           ? "text-emerald-400"
           : profilesOpen === false
             ? "text-red-400"
             : "text-white/35",
-        className,
+        className
       )}
     >
       {profilesOpen === true ? (

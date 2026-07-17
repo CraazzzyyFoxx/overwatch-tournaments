@@ -53,8 +53,6 @@ class RegistrationFormRead(BaseModel):
     workspace_id: int
     is_open: bool
     auto_approve: bool = False
-    opens_at: datetime | None = None
-    closes_at: datetime | None = None
     require_open_profile: bool = False
     open_profile_scope: str = "main"
     show_ranks: bool = False
@@ -69,8 +67,6 @@ class RegistrationFormRead(BaseModel):
 class RegistrationFormUpsert(BaseModel):
     is_open: bool = False
     auto_approve: bool = False
-    opens_at: datetime | None = None
-    closes_at: datetime | None = None
     require_open_profile: bool = False
     open_profile_scope: str = "main"
     show_ranks: bool = False

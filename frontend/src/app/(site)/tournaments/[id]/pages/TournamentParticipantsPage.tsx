@@ -8,7 +8,7 @@ import {
   useMemo,
   useRef,
   useState,
-  useSyncExternalStore,
+  useSyncExternalStore
 } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -25,7 +25,7 @@ import {
   Tv,
   Twitch,
   ChevronDown,
-  ChevronUp,
+  ChevronUp
 } from "lucide-react";
 
 import {
@@ -36,9 +36,10 @@ import {
   AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogHeader,
-  AlertDialogTitle,
+  AlertDialogTitle
 } from "@/components/ui/alert-dialog";
 import { cn, hexToRgba } from "@/lib/utils";
+import { isPhaseWindowActive } from "@/lib/tournament-status";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
 import { tournamentQueryKeys } from "@/lib/tournament-query-keys";
 import registrationService from "@/services/registration.service";
@@ -60,7 +61,7 @@ import {
   subscribeParticipantColumnsStorage,
   updateParticipantUrlState,
   writeStoredParticipantColumnIds,
-  type ParticipantUrlUpdate,
+  type ParticipantUrlUpdate
 } from "./_components/participants-url-state";
 import { useParticipantSearchInput } from "./_components/useParticipantSearchInput";
 import VirtualParticipantsList from "./_components/VirtualParticipantsList";
@@ -77,56 +78,48 @@ import styles from "../TournamentDetail.module.css";
 // My registration status bar / card configs
 // ---------------------------------------------------------------------------
 
-
-
-const STATUS_BAR_CONFIG: Record<
-  RegistrationStatus,
-  { icon: typeof Clock; color: string }
-> = {
+const STATUS_BAR_CONFIG: Record<RegistrationStatus, { icon: typeof Clock; color: string }> = {
   pending: {
     icon: Clock,
-    color: "text-amber-400 border-amber-500/20 bg-amber-500/10",
+    color: "text-amber-400 border-amber-500/20 bg-amber-500/10"
   },
   approved: {
     icon: CheckCircle2,
-    color: "text-emerald-400 border-emerald-500/20 bg-emerald-500/10",
+    color: "text-emerald-400 border-emerald-500/20 bg-emerald-500/10"
   },
   rejected: {
     icon: XCircle,
-    color: "text-red-400 border-red-500/20 bg-red-500/10",
+    color: "text-red-400 border-red-500/20 bg-red-500/10"
   },
   withdrawn: {
     icon: XCircle,
-    color: "text-[color:var(--aqt-fg-dim)] border-[color:var(--aqt-border-2)] bg-white/5",
+    color: "text-[color:var(--aqt-fg-dim)] border-[color:var(--aqt-border-2)] bg-white/5"
   },
   banned: {
     icon: ShieldBan,
-    color: "text-red-400 border-red-500/20 bg-red-500/10",
+    color: "text-red-400 border-red-500/20 bg-red-500/10"
   },
   insufficient_data: {
     icon: AlertTriangle,
-    color: "text-orange-400 border-orange-500/20 bg-orange-500/10",
-  },
+    color: "text-orange-400 border-orange-500/20 bg-orange-500/10"
+  }
 };
 
 const ROLE_ACCENT_CLASSES: Record<string, { bg: string; text: string; border: string }> = {
   tank: { bg: "bg-sky-500/10", text: "text-sky-300", border: "border-sky-500/20" },
   dps: { bg: "bg-orange-500/10", text: "text-orange-300", border: "border-orange-500/20" },
   support: { bg: "bg-emerald-500/10", text: "text-emerald-300", border: "border-emerald-500/20" },
-  flex: { bg: "bg-violet-500/10", text: "text-violet-300", border: "border-violet-500/20" },
+  flex: { bg: "bg-violet-500/10", text: "text-violet-300", border: "border-violet-500/20" }
 };
 
 const ROLE_TO_ICON: Record<string, string> = {
   tank: "Tank",
   dps: "Damage",
   support: "Support",
-  flex: "Flex",
+  flex: "Flex"
 };
 
-function getRoleLabel(
-  role: string,
-  t: ReturnType<typeof useTranslations<never>>,
-): string {
+function getRoleLabel(role: string, t: ReturnType<typeof useTranslations<never>>): string {
   switch (role.toLowerCase()) {
     case "tank":
       return t("common.roles.tank");
@@ -153,7 +146,7 @@ const STATUS_FILTER_META: Record<RegistrationStatus, { dot: string }> = {
   insufficient_data: { dot: "var(--aqt-amber)" },
   rejected: { dot: "var(--aqt-rose)" },
   banned: { dot: "var(--aqt-rose)" },
-  withdrawn: { dot: "var(--aqt-fg-dim)" },
+  withdrawn: { dot: "var(--aqt-fg-dim)" }
 };
 
 const STATUS_FILTER_ORDER: RegistrationStatus[] = [
@@ -162,7 +155,7 @@ const STATUS_FILTER_ORDER: RegistrationStatus[] = [
   "insufficient_data",
   "rejected",
   "banned",
-  "withdrawn",
+  "withdrawn"
 ];
 
 // localeKeyMap removed to support DB status names without hardcoded translation
@@ -178,17 +171,13 @@ interface RegistrationStep {
 }
 
 /** Statuses that permanently take the registration out of the tournament. */
-const TERMINAL_REGISTRATION_STATUSES = new Set<string>([
-  "rejected",
-  "banned",
-  "withdrawn",
-]);
+const TERMINAL_REGISTRATION_STATUSES = new Set<string>(["rejected", "banned", "withdrawn"]);
 
 const CHECK_IN_OVER_TOURNAMENT_STATUSES = new Set<string>([
   "live",
   "playoffs",
   "completed",
-  "archived",
+  "archived"
 ]);
 
 function RegistrationStepMarker({ tone }: { tone: RegistrationStepTone }) {
@@ -223,7 +212,7 @@ function RegistrationStepMarker({ tone }: { tone: RegistrationStepTone }) {
 function RegistrationRoleChip({
   role,
   showPrimaryMark,
-  t,
+  t
 }: {
   role: Registration["roles"][number];
   showPrimaryMark: boolean;
@@ -235,15 +224,13 @@ function RegistrationRoleChip({
         "inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-xs font-medium",
         ROLE_ACCENT_CLASSES[role.role]?.bg,
         ROLE_ACCENT_CLASSES[role.role]?.border,
-        ROLE_ACCENT_CLASSES[role.role]?.text,
+        ROLE_ACCENT_CLASSES[role.role]?.text
       )}
     >
       <PlayerRoleIcon role={ROLE_TO_ICON[role.role] ?? role.role} size={12} />
       <span>{getRoleLabel(role.role, t)}</span>
       {role.subrole && (
-        <span className="text-[10px] opacity-60">
-          ({formatSubroleSlug(role.subrole)})
-        </span>
+        <span className="text-[10px] opacity-60">({formatSubroleSlug(role.subrole)})</span>
       )}
       {showPrimaryMark && (
         <span className="text-[10px] uppercase tracking-wide opacity-70">
@@ -262,7 +249,7 @@ function MyRegistrationCard({
   isCheckingIn,
   isWithdrawing,
   tournament,
-  requireOpenProfile,
+  requireOpenProfile
 }: {
   registration: Registration;
   canCheckIn: boolean;
@@ -281,14 +268,12 @@ function MyRegistrationCard({
     .filter((r) => !r.is_primary)
     .sort((a, b) => a.priority - b.priority);
 
-  const statusConfig =
-    STATUS_BAR_CONFIG[registration.status] ?? STATUS_BAR_CONFIG.pending;
+  const statusConfig = STATUS_BAR_CONFIG[registration.status] ?? STATUS_BAR_CONFIG.pending;
 
   const statusMeta = registration.status_meta;
   const statusName =
     statusMeta?.name ??
-    registration.status.charAt(0).toUpperCase() +
-      registration.status.slice(1).replace(/_/g, " ");
+    registration.status.charAt(0).toUpperCase() + registration.status.slice(1).replace(/_/g, " ");
 
   let StatusIcon = statusConfig.icon ?? Clock;
   if (statusMeta?.icon_slug) {
@@ -307,7 +292,7 @@ function MyRegistrationCard({
     statusChipStyle = {
       color: color,
       borderColor: hexToRgba(color, 0.35) ?? color,
-      backgroundColor: hexToRgba(color, 0.12) ?? "transparent",
+      backgroundColor: hexToRgba(color, 0.12) ?? "transparent"
     };
   }
 
@@ -315,11 +300,8 @@ function MyRegistrationCard({
   const isApproved = registration.status === "approved";
   const isTerminal = TERMINAL_REGISTRATION_STATUSES.has(registration.status);
   const checkInPhaseOver =
-    !isCheckedIn &&
-    !canCheckIn &&
-    CHECK_IN_OVER_TOURNAMENT_STATUSES.has(tournament.status);
-  const canWithdraw =
-    registration.status === "pending" || registration.status === "approved";
+    !isCheckedIn && !canCheckIn && CHECK_IN_OVER_TOURNAMENT_STATUSES.has(tournament.status);
+  const canWithdraw = registration.status === "pending" || registration.status === "approved";
   // "ready" is the terminal balancer state: the organizers added the player to
   // the pool and assigned a rank. Anything else (not_in_balancer, incomplete,
   // custom slugs, missing field) means the rank is still pending.
@@ -343,7 +325,7 @@ function MyRegistrationCard({
               ? "failed"
               : isTerminal
                 ? "idle"
-                : "active",
+                : "active"
       }
     : null;
 
@@ -351,7 +333,7 @@ function MyRegistrationCard({
     {
       key: "submitted",
       label: t("registration.myCard.steps.submitted"),
-      tone: "done",
+      tone: "done"
     },
     {
       key: "review",
@@ -361,7 +343,7 @@ function MyRegistrationCard({
           : isTerminal
             ? statusName
             : t("registration.myCard.steps.review"),
-      tone: isApproved || isCheckedIn ? "done" : isTerminal ? "failed" : "active",
+      tone: isApproved || isCheckedIn ? "done" : isTerminal ? "failed" : "active"
     },
     ...(profileStep ? [profileStep] : []),
     {
@@ -373,7 +355,7 @@ function MyRegistrationCard({
           ? "idle"
           : isApproved || isCheckedIn
             ? "active"
-            : "idle",
+            : "idle"
     },
     {
       key: "checkIn",
@@ -386,8 +368,8 @@ function MyRegistrationCard({
             ? "active"
             : checkInPhaseOver
               ? "failed"
-              : "idle",
-    },
+              : "idle"
+    }
   ];
 
   // Single "what happens next" line next to the actions.
@@ -410,8 +392,7 @@ function MyRegistrationCard({
   } else if (isApproved) {
     hintText = t("registration.myCard.pendingCheckInDesc");
   } else {
-    hintText =
-      statusMeta?.description || t("registration.myCard.pendingReviewDesc");
+    hintText = statusMeta?.description || t("registration.myCard.pendingReviewDesc");
   }
 
   return (
@@ -426,7 +407,7 @@ function MyRegistrationCard({
           <span
             className={cn(
               "flex size-11 shrink-0 items-center justify-center rounded-xl border",
-              statusChipStyle ? undefined : statusConfig.color,
+              statusChipStyle ? undefined : statusConfig.color
             )}
             style={statusChipStyle}
           >
@@ -482,11 +463,7 @@ function MyRegistrationCard({
             }
             className="flex size-8 shrink-0 items-center justify-center text-[color:var(--aqt-fg-dim)] transition-colors hover:text-[color:var(--aqt-fg)]"
           >
-            {isExpanded ? (
-              <ChevronUp className="size-4" />
-            ) : (
-              <ChevronDown className="size-4" />
-            )}
+            {isExpanded ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
           </button>
         </div>
       </div>
@@ -502,7 +479,7 @@ function MyRegistrationCard({
                   "mx-2 mt-3 h-px flex-1",
                   steps[index - 1].tone === "done"
                     ? "bg-emerald-500/40"
-                    : "bg-[color:var(--aqt-border-2)]",
+                    : "bg-[color:var(--aqt-border-2)]"
                 )}
               />
             )}
@@ -514,7 +491,7 @@ function MyRegistrationCard({
                   step.tone === "done" && "text-emerald-300/90",
                   step.tone === "active" && "font-medium text-amber-300/90",
                   step.tone === "failed" && "text-red-400/90",
-                  step.tone === "idle" && "text-[color:var(--aqt-fg-dim)]",
+                  step.tone === "idle" && "text-[color:var(--aqt-fg-dim)]"
                 )}
               >
                 {step.label}
@@ -534,13 +511,7 @@ function MyRegistrationCard({
               </h4>
               {primaryRole || secondaryRoles.length > 0 ? (
                 <div className="flex flex-wrap gap-1.5">
-                  {primaryRole && (
-                    <RegistrationRoleChip
-                      role={primaryRole}
-                      showPrimaryMark
-                      t={t}
-                    />
-                  )}
+                  {primaryRole && <RegistrationRoleChip role={primaryRole} showPrimaryMark t={t} />}
                   {secondaryRoles.map((r) => (
                     <RegistrationRoleChip
                       key={`${r.role}-${r.subrole ?? "base"}-${r.priority}`}
@@ -599,7 +570,7 @@ function MyRegistrationCard({
                   "inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium",
                   registration.stream_pov
                     ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-400"
-                    : "border-[color:var(--aqt-border)] bg-white/[0.02] text-[color:var(--aqt-fg-dim)]",
+                    : "border-[color:var(--aqt-border)] bg-white/[0.02] text-[color:var(--aqt-fg-dim)]"
                 )}
               >
                 <Tv className="size-3.5" />
@@ -626,30 +597,15 @@ function MyRegistrationCard({
   );
 }
 
-
 function isCheckInWindowActive(tournament: Tournament) {
-  if (tournament.status !== "check_in") return false;
-
-  const now = Date.now();
-  const opensAt = tournament.check_in_opens_at
-    ? new Date(tournament.check_in_opens_at).getTime()
-    : null;
-  const closesAt = tournament.check_in_closes_at
-    ? new Date(tournament.check_in_closes_at).getTime()
-    : null;
-
-  return (opensAt === null || opensAt <= now) && (closesAt === null || now <= closesAt);
+  return isPhaseWindowActive(tournament, "check_in");
 }
 
 // ---------------------------------------------------------------------------
 // Main page
 // ---------------------------------------------------------------------------
 
-export default function TournamentParticipantsPage({
-  tournament,
-}: {
-  tournament: Tournament;
-}) {
+export default function TournamentParticipantsPage({ tournament }: { tournament: Tournament }) {
   const t = useTranslations();
   const locale = useLocale();
   const { user, status: authStatus } = useAuthProfile();
@@ -680,17 +636,17 @@ export default function TournamentParticipantsPage({
   const myRegQuery = useQuery({
     queryKey: tournamentQueryKeys.registration(tournament.workspace_id, tournament.id),
     queryFn: () => registrationService.getMyRegistration(tournament.id),
-    enabled: isAuthenticated,
+    enabled: isAuthenticated
   });
 
   const listQuery = useQuery({
     queryKey: tournamentQueryKeys.registrationsList(tournament.workspace_id, tournament.id),
-    queryFn: () => registrationService.listRegistrations(tournament.id),
+    queryFn: () => registrationService.listRegistrations(tournament.id)
   });
 
   const formQuery = useQuery({
     queryKey: tournamentQueryKeys.registrationForm(tournament.workspace_id, tournament.id),
-    queryFn: () => registrationService.getForm(tournament.id),
+    queryFn: () => registrationService.getForm(tournament.id)
   });
 
   const withdrawMutation = useMutation({
@@ -699,16 +655,16 @@ export default function TournamentParticipantsPage({
       setIsWithdrawDialogOpen(false);
       await Promise.all([
         queryClient.invalidateQueries({
-          queryKey: tournamentQueryKeys.registration(tournament.workspace_id, tournament.id),
+          queryKey: tournamentQueryKeys.registration(tournament.workspace_id, tournament.id)
         }),
         queryClient.invalidateQueries({
-          queryKey: tournamentQueryKeys.registrationsList(tournament.workspace_id, tournament.id),
+          queryKey: tournamentQueryKeys.registrationsList(tournament.workspace_id, tournament.id)
         }),
         queryClient.invalidateQueries({
-          queryKey: tournamentQueryKeys.registrationForm(tournament.workspace_id, tournament.id),
-        }),
+          queryKey: tournamentQueryKeys.registrationForm(tournament.workspace_id, tournament.id)
+        })
       ]);
-    },
+    }
   });
 
   const checkInMutation = useMutation({
@@ -717,13 +673,13 @@ export default function TournamentParticipantsPage({
       setIsCheckInDialogOpen(false);
       await Promise.all([
         queryClient.invalidateQueries({
-          queryKey: tournamentQueryKeys.registration(tournament.workspace_id, tournament.id),
+          queryKey: tournamentQueryKeys.registration(tournament.workspace_id, tournament.id)
         }),
         queryClient.invalidateQueries({
-          queryKey: tournamentQueryKeys.registrationsList(tournament.workspace_id, tournament.id),
-        }),
+          queryKey: tournamentQueryKeys.registrationsList(tournament.workspace_id, tournament.id)
+        })
       ]);
-    },
+    }
   });
 
   const registrations = listQuery.data ?? [];
@@ -740,7 +696,7 @@ export default function TournamentParticipantsPage({
   // Dynamic columns
   const allColumns = useMemo(
     () => buildParticipantColumns(form, t, locale, divisionGrid),
-    [form, t, locale, divisionGrid],
+    [form, t, locale, divisionGrid]
   );
 
   // Status counts + chips present in the data.
@@ -755,25 +711,25 @@ export default function TournamentParticipantsPage({
   const presentStatuses = useMemo(() => {
     // Collect all unique statuses actually present in registrations
     const uniqueStatuses = Array.from(new Set(registrations.map((r) => r.status)));
-    
+
     // Sort them so that built-in ones in STATUS_FILTER_ORDER come first, and any others (custom) come after
     return uniqueStatuses.sort((a, b) => {
       const idxA = STATUS_FILTER_ORDER.indexOf(a);
       const idxB = STATUS_FILTER_ORDER.indexOf(b);
-      
+
       if (idxA !== -1 && idxB !== -1) {
         return idxA - idxB;
       }
       if (idxA !== -1) return -1;
       if (idxB !== -1) return 1;
-      
+
       // Both are custom, sort alphabetically
       return a.localeCompare(b);
     });
   }, [registrations]);
   const allowedStatuses = useMemo(
     () => Array.from(new Set([...STATUS_FILTER_ORDER, ...presentStatuses])),
-    [presentStatuses],
+    [presentStatuses]
   );
 
   const statusMetaMap = useMemo(() => {
@@ -798,10 +754,7 @@ export default function TournamentParticipantsPage({
     return map;
   }, [registrations]);
 
-  const defaultColumnIds = useMemo(
-    () => participantDefaultColumnIds(allColumns),
-    [allColumns],
-  );
+  const defaultColumnIds = useMemo(() => participantDefaultColumnIds(allColumns), [allColumns]);
   // Optional column ids persisted per tournament. localStorage is an external
   // store: the raw entry is read via useSyncExternalStore (server snapshot is
   // null, so SSR/hydration never touches it) and writers notify subscribers.
@@ -809,18 +762,16 @@ export default function TournamentParticipantsPage({
     subscribeParticipantColumnsStorage,
     () => {
       try {
-        return window.localStorage.getItem(
-          participantColumnsStorageKey(tournament.id),
-        );
+        return window.localStorage.getItem(participantColumnsStorageKey(tournament.id));
       } catch {
         return null;
       }
     },
-    () => null,
+    () => null
   );
   const storedColumnIds = useMemo(
     () => parseStoredParticipantColumnIds(storedColumnsRaw),
-    [storedColumnsRaw],
+    [storedColumnsRaw]
   );
   const persistColumns = useCallback(
     (visibleIds: readonly string[]) => {
@@ -828,10 +779,10 @@ export default function TournamentParticipantsPage({
         typeof window === "undefined" ? null : window.localStorage,
         tournament.id,
         visibleIds,
-        defaultColumnIds,
+        defaultColumnIds
       );
     },
-    [defaultColumnIds, tournament.id],
+    [defaultColumnIds, tournament.id]
   );
   const participantUrl = useMemo(
     () =>
@@ -839,9 +790,9 @@ export default function TournamentParticipantsPage({
         new URLSearchParams(searchParamsString),
         allowedStatuses,
         allColumns,
-        storedColumnIds,
+        storedColumnIds
       ),
-    [allColumns, allowedStatuses, searchParamsString, storedColumnIds],
+    [allColumns, allowedStatuses, searchParamsString, storedColumnIds]
   );
   const latestParamsRef = useRef(searchParamsString);
   const searchQuery = participantUrl.state.search;
@@ -851,20 +802,20 @@ export default function TournamentParticipantsPage({
       statusFilter !== "all" && !presentStatuses.includes(statusFilter)
         ? [...presentStatuses, statusFilter]
         : presentStatuses,
-    [presentStatuses, statusFilter],
+    [presentStatuses, statusFilter]
   );
   const visibleColumnIds = participantUrl.state.visibleColumnIds;
   const visibleColumnIdSet = useMemo(() => new Set(visibleColumnIds), [visibleColumnIds]);
   const visibleColumns = useMemo(
     () => allColumns.filter((column) => visibleColumnIdSet.has(column.id)),
-    [allColumns, visibleColumnIdSet],
+    [allColumns, visibleColumnIdSet]
   );
   const visibility = useMemo(
     () =>
       Object.fromEntries(
-        allColumns.map((column) => [column.id, visibleColumnIdSet.has(column.id)]),
+        allColumns.map((column) => [column.id, visibleColumnIdSet.has(column.id)])
       ),
-    [allColumns, visibleColumnIdSet],
+    [allColumns, visibleColumnIdSet]
   );
 
   useEffect(() => {
@@ -875,7 +826,7 @@ export default function TournamentParticipantsPage({
     (update: ParticipantUrlUpdate) => {
       const result = updateParticipantUrlState(
         new URLSearchParams(latestParamsRef.current),
-        update,
+        update
       );
       const query = result.params.toString();
       const href = query ? `${pathname}?${query}` : pathname;
@@ -883,20 +834,18 @@ export default function TournamentParticipantsPage({
       if (result.history === "replace") router.replace(href, { scroll: false });
       else router.push(href, { scroll: false });
     },
-    [pathname, router],
+    [pathname, router]
   );
   const commitSearch = useCallback(
     (value: string) => navigateParticipantUrl({ type: "search", value }),
-    [navigateParticipantUrl],
+    [navigateParticipantUrl]
   );
-  const {
-    inputRef: participantSearchInputRef,
-    onChange: handleParticipantSearchChange,
-  } = useParticipantSearchInput({
-    canonicalSearch: searchQuery,
-    canonicalUrl: searchParamsString,
-    onCommit: commitSearch,
-  });
+  const { inputRef: participantSearchInputRef, onChange: handleParticipantSearchChange } =
+    useParticipantSearchInput({
+      canonicalSearch: searchQuery,
+      canonicalUrl: searchParamsString,
+      onCommit: commitSearch
+    });
 
   useEffect(() => {
     if (!listQuery.isFetched || !formQuery.isFetched || !participantUrl.needsNormalization) {
@@ -912,7 +861,7 @@ export default function TournamentParticipantsPage({
     participantUrl.needsNormalization,
     participantUrl.params,
     pathname,
-    router,
+    router
   ]);
 
   const toggleColumn = useCallback(
@@ -921,31 +870,30 @@ export default function TournamentParticipantsPage({
       const nextIds = visibleColumnIdSet.has(columnId)
         ? visibleColumnIds.filter((id) => id !== columnId)
         : allColumns
-            .filter((column) =>
-              column.id === columnId || visibleColumnIdSet.has(column.id),
-            )
+            .filter((column) => column.id === columnId || visibleColumnIdSet.has(column.id))
             .map((column) => column.id);
       persistColumns(nextIds);
       navigateParticipantUrl({
         type: "columns",
         value: nextIds,
-        defaultValue: defaultColumnIds,
+        defaultValue: defaultColumnIds
       });
-    }, [
+    },
+    [
       allColumns,
       defaultColumnIds,
       navigateParticipantUrl,
       persistColumns,
       visibleColumnIdSet,
-      visibleColumnIds,
-    ],
+      visibleColumnIds
+    ]
   );
   const resetToDefaults = useCallback(() => {
     persistColumns(defaultColumnIds);
     navigateParticipantUrl({
       type: "columns",
       value: defaultColumnIds,
-      defaultValue: defaultColumnIds,
+      defaultValue: defaultColumnIds
     });
   }, [defaultColumnIds, navigateParticipantUrl, persistColumns]);
 
@@ -963,7 +911,7 @@ export default function TournamentParticipantsPage({
         if (!col.searchValue) return false;
         const val = col.searchValue(r);
         return val?.toLowerCase().includes(q) ?? false;
-      }),
+      })
     );
   }, [registrations, searchQuery, statusFilter, visibleColumns]);
 
@@ -972,9 +920,9 @@ export default function TournamentParticipantsPage({
       participantResultsTransitionSignature({
         search: searchQuery,
         status: statusFilter,
-        visibleColumnIds,
+        visibleColumnIds
       }),
-    [searchQuery, statusFilter, visibleColumnIds],
+    [searchQuery, statusFilter, visibleColumnIds]
   );
   useEffect(() => {
     if (previousResultsSignatureRef.current === null) {
@@ -993,12 +941,12 @@ export default function TournamentParticipantsPage({
         shouldScrollParticipantResults({
           scrollY: window.scrollY,
           headingDocumentTop,
-          stickyOffset,
+          stickyOffset
         })
       ) {
         window.scrollTo({
           top: participantResultsScrollTarget(headingDocumentTop, stickyOffset),
-          behavior: "auto",
+          behavior: "auto"
         });
       }
     });
@@ -1014,12 +962,7 @@ export default function TournamentParticipantsPage({
   }
 
   if (listQuery.isError && listQuery.data === undefined) {
-    return (
-      <TournamentPageState
-        state="initial-error"
-        onRetry={() => void listQuery.refetch()}
-      />
-    );
+    return <TournamentPageState state="initial-error" onRetry={() => void listQuery.refetch()} />;
   }
 
   return (
@@ -1038,16 +981,11 @@ export default function TournamentParticipantsPage({
         />
       )}
 
-      <AlertDialog
-        open={isCheckInDialogOpen}
-        onOpenChange={setIsCheckInDialogOpen}
-      >
+      <AlertDialog open={isCheckInDialogOpen} onOpenChange={setIsCheckInDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>{t("common.confirmCheckIn")}</AlertDialogTitle>
-            <AlertDialogDescription>
-              {t("common.checkInDesc")}
-            </AlertDialogDescription>
+            <AlertDialogDescription>{t("common.checkInDesc")}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={checkInMutation.isPending}>
@@ -1067,16 +1005,11 @@ export default function TournamentParticipantsPage({
         </AlertDialogContent>
       </AlertDialog>
 
-      <AlertDialog
-        open={isWithdrawDialogOpen}
-        onOpenChange={setIsWithdrawDialogOpen}
-      >
+      <AlertDialog open={isWithdrawDialogOpen} onOpenChange={setIsWithdrawDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>{t("common.withdrawReg")}</AlertDialogTitle>
-            <AlertDialogDescription>
-              {t("common.withdrawDesc")}
-            </AlertDialogDescription>
+            <AlertDialogDescription>{t("common.withdrawDesc")}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={withdrawMutation.isPending}>
@@ -1095,7 +1028,6 @@ export default function TournamentParticipantsPage({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
 
       <p aria-atomic="true" aria-live="polite" className="sr-only">
         {t("tournamentDetail.participants.resultCount", { count: filtered.length })}
@@ -1121,13 +1053,12 @@ export default function TournamentParticipantsPage({
                 onClick={() =>
                   navigateParticipantUrl({
                     type: "status",
-                    value: statusFilter === status ? "all" : status,
+                    value: statusFilter === status ? "all" : status
                   })
                 }
               >
                 <span className="dot" style={{ background: meta?.dot ?? "var(--aqt-fg-dim)" }} />
-                {meta?.name ?? status}{" "}
-                <span className="count">{statusCounts[status] ?? 0}</span>
+                {meta?.name ?? status} <span className="count">{statusCounts[status] ?? 0}</span>
               </button>
             );
           })}

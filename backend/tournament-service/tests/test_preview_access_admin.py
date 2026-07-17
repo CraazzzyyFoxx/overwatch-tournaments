@@ -12,10 +12,16 @@ import asyncio
 import os
 import sys
 import uuid
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 import pytest
 import sqlalchemy as sa
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.pool import NullPool
+
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 
 def _ensure_test_env() -> None:
@@ -48,30 +54,30 @@ from shared.services.division_grid_access import get_default_division_grid_versi
 from src.services.admin import preview_access as preview_access_service  # noqa: E402
 
 
-@pytest.fixture
-def db_session():
-    from src.core import db as db_module
+@asynccontextmanager
+async def _db_sessions():
+    """Yield a fresh per-test session factory, or skip if the DB is unreachable.
 
-    async def _probe_and_open():
-        session = db_module.async_session_maker()
-        dbname = (await session.execute(sa.text("select current_database()"))).scalar()
-        return session, dbname
+    Pooled asyncpg connections are bound to the event loop that created them,
+    so the module-global engine cannot be shared across ``asyncio.run()``
+    calls: each test gets its own NullPool engine, created and disposed inside
+    the test's single event loop. Probes with ``select current_database()``
+    and hard-guards against ever running against a production database.
+    """
+    from src.core import config
 
+    engine = create_async_engine(config.settings.db_url_asyncpg, poolclass=NullPool)
     try:
-        session, dbname = asyncio.run(_probe_and_open())
-    except Exception as exc:  # noqa: BLE001
-        pytest.skip(f"database unreachable: {exc}")
-        return
-
-    if dbname in {"anak_v5", "anak_prod"}:
-        asyncio.run(session.close())
-        pytest.skip("refusing to run integration tests against production")
-        return
-
-    try:
-        yield session
+        try:
+            async with engine.connect() as conn:
+                dbname = (await conn.execute(sa.text("select current_database()"))).scalar()
+        except Exception as exc:  # noqa: BLE001 -- any connect failure => skip, not fail
+            pytest.skip(f"database unreachable: {exc}")
+        if dbname in {"anak_v5", "anak_prod"}:
+            pytest.skip("refusing to run integration tests against production")
+        yield async_sessionmaker(engine, expire_on_commit=False)
     finally:
-        asyncio.run(session.close())
+        await engine.dispose()
 
 
 async def _seed(session):
@@ -103,27 +109,37 @@ async def _seed(session):
     return ws.id, tournament.id, auth_user.id
 
 
-async def _cleanup(session, *, workspace_id: int) -> None:
-    await session.execute(sa.delete(Workspace).where(Workspace.id == workspace_id))
-    await session.commit()
+async def _cleanup(session_maker, *, workspace_id: int) -> None:
+    async with session_maker() as session:
+        await session.execute(sa.delete(Workspace).where(Workspace.id == workspace_id))
+        await session.commit()
 
 
-def test_add_list_remove_idempotent(db_session) -> None:
+def test_add_list_remove_idempotent() -> None:
     async def _run():
-        ws_id, tid, uid = await _seed(db_session)
+        async with _db_sessions() as session_maker:
+            async with session_maker() as session:
+                ws_id, tid, uid = await _seed(session)
 
-        first = await preview_access_service.add_preview_access(db_session, tid, uid)
-        again = await preview_access_service.add_preview_access(db_session, tid, uid)
-        listed = await preview_access_service.list_preview_access(db_session, tid)
-        await preview_access_service.remove_preview_access(db_session, tid, uid)
-        after = await preview_access_service.list_preview_access(db_session, tid)
-        return ws_id, first, again, listed, after
+            try:
+                async with session_maker() as session:
+                    first = await preview_access_service.add_preview_access(session, tid, uid)
+                    again = await preview_access_service.add_preview_access(session, tid, uid)
+                    listed = await preview_access_service.list_preview_access(session, tid)
+                    await preview_access_service.remove_preview_access(session, tid, uid)
+                    after = await preview_access_service.list_preview_access(session, tid)
+                    return (
+                        first.id,
+                        again.id,
+                        [entry.auth_user_id for entry in listed],
+                        list(after),
+                    )
+            finally:
+                await _cleanup(session_maker, workspace_id=ws_id)
 
-    try:
-        ws_id, first, again, listed, after = asyncio.run(_run())
-        assert first.id == again.id  # idempotent add
-        assert len(listed) == 1
-        assert listed[0].auth_user_id is not None
-        assert after == []  # removed
-    finally:
-        asyncio.run(_cleanup(db_session, workspace_id=ws_id))
+    first_id, again_id, listed_user_ids, after = asyncio.run(_run())
+
+    assert first_id == again_id  # idempotent add
+    assert len(listed_user_ids) == 1
+    assert listed_user_ids[0] is not None
+    assert after == []  # removed

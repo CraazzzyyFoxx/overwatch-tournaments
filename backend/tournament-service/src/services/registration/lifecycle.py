@@ -19,7 +19,6 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from shared.core import enums
 from shared.core import http_status as status
 from shared.core.errors import BaseAPIException as HTTPException
 from src import models
@@ -39,6 +38,7 @@ from src.services.registration.utils import (
     normalize_battle_tag,
     normalize_battle_tag_key,
 )
+from src.services.registration.windows import is_check_in_window_active
 from src.services.tournament.events import (
     enqueue_registration_approved,
     enqueue_registration_rejected,
@@ -49,20 +49,6 @@ def _as_utc(value: datetime) -> datetime:
     if value.tzinfo is None:
         return value.replace(tzinfo=UTC)
     return value.astimezone(UTC)
-
-
-def is_check_in_window_active(
-    tournament: models.Tournament,
-    *,
-    now: datetime | None = None,
-) -> bool:
-    if tournament.status != enums.TournamentStatus.CHECK_IN:
-        return False
-
-    current_time = _as_utc(now or datetime.now(UTC))
-    opens_at = _as_utc(tournament.check_in_opens_at) if tournament.check_in_opens_at is not None else None
-    closes_at = _as_utc(tournament.check_in_closes_at) if tournament.check_in_closes_at is not None else None
-    return (opens_at is None or opens_at <= current_time) and (closes_at is None or current_time <= closes_at)
 
 
 async def list_registrations(

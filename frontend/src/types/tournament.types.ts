@@ -96,6 +96,12 @@ export interface Stage extends StageSummary {
 
 // ─── Tournament ─────────────────────────────────────────────────────────────
 
+export interface TournamentPhaseSchedule {
+  status: TournamentStatus;
+  starts_at: string;
+  ends_at: string | null;
+}
+
 export interface Tournament {
   id: number;
   created_at: Date;
@@ -113,10 +119,9 @@ export interface Tournament {
   is_hidden: boolean;
   team_formation: string;
   status: TournamentStatus;
-  registration_opens_at: Date | null;
-  registration_closes_at: Date | null;
-  check_in_opens_at: Date | null;
-  check_in_closes_at: Date | null;
+  auto_transitions_enabled: boolean;
+  allow_late_registration: boolean;
+  phase_schedule: TournamentPhaseSchedule[];
   win_points: number;
   draw_points: number;
   loss_points: number;

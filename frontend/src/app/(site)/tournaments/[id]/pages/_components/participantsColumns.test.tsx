@@ -11,8 +11,6 @@ describe("participant column model", () => {
       tournament_id: 72,
       workspace_id: 1,
       is_open: true,
-      opens_at: null,
-      closes_at: null,
       built_in_fields: {
         battle_tag: { enabled: false, required: false },
         notes: { enabled: true, required: false },
@@ -35,8 +33,6 @@ describe("participant column model", () => {
       tournament_id: 72,
       workspace_id: 1,
       is_open: true,
-      opens_at: null,
-      closes_at: null,
       built_in_fields: {
         battle_tag: { enabled: true, required: true },
       },

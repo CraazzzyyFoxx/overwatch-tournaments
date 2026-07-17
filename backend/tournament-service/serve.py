@@ -35,7 +35,7 @@ from src.services.computation.standings_worker import process_standings_job
 # publish encounter map-veto realtime signals (encounter:{id}:map-veto).
 from src.services.encounter import realtime_commit as _encounter_realtime_commit  # noqa: F401
 from src.services.registration import admin as registration_service
-from src.services.tournament import recalculation_events
+from src.services.tournament import auto_transitions, recalculation_events
 
 logger = setup_logging(
     service_name="tournament-svc",
@@ -97,6 +97,12 @@ async def sync_challonge_active_tournaments() -> None:
         logger.info("Challonge auto-sync completed", results=results)
 
 
+async def auto_transition_tournaments() -> None:
+    results = await auto_transitions.run_due_transitions(db.async_session_maker)
+    if results:
+        logger.info("Tournament auto-transitions applied", results=results)
+
+
 @app.on_startup
 async def start_worker() -> None:
     await broker.connect()
@@ -135,6 +141,12 @@ async def start_worker() -> None:
         "interval",
         minutes=config.settings.challonge_auto_sync_interval_minutes,
         id="challonge_active_sync",
+    )
+    scheduler.add_job(
+        auto_transition_tournaments,
+        "interval",
+        seconds=30,
+        id="auto_transition_tournaments",
     )
     scheduler.start()
     logger.info("Tournament worker scheduler started")

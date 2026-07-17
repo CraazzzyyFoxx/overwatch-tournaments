@@ -12,10 +12,17 @@ import asyncio
 import os
 import sys
 import uuid
+from contextlib import asynccontextmanager
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
 import sqlalchemy as sa
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.pool import NullPool
+
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 
 def _ensure_test_env() -> None:
@@ -51,30 +58,30 @@ from src import schemas  # noqa: E402
 from src.services.tournament import flows as tournament_flows  # noqa: E402
 
 
-@pytest.fixture
-def db_session():
-    from src.core import db as db_module
+@asynccontextmanager
+async def _db_sessions():
+    """Yield a fresh per-test session factory, or skip if the DB is unreachable.
 
-    async def _probe_and_open():
-        session = db_module.async_session_maker()
-        dbname = (await session.execute(sa.text("select current_database()"))).scalar()
-        return session, dbname
+    Pooled asyncpg connections are bound to the event loop that created them,
+    so the module-global engine cannot be shared across ``asyncio.run()``
+    calls: each test gets its own NullPool engine, created and disposed inside
+    the test's single event loop. Probes with ``select current_database()``
+    and hard-guards against ever running against a production database.
+    """
+    from src.core import config
 
+    engine = create_async_engine(config.settings.db_url_asyncpg, poolclass=NullPool)
     try:
-        session, dbname = asyncio.run(_probe_and_open())
-    except Exception as exc:  # noqa: BLE001
-        pytest.skip(f"database unreachable: {exc}")
-        return
-
-    if dbname in {"anak_v5", "anak_prod"}:
-        asyncio.run(session.close())
-        pytest.skip("refusing to run integration tests against production")
-        return
-
-    try:
-        yield session
+        try:
+            async with engine.connect() as conn:
+                dbname = (await conn.execute(sa.text("select current_database()"))).scalar()
+        except Exception as exc:  # noqa: BLE001 -- any connect failure => skip, not fail
+            pytest.skip(f"database unreachable: {exc}")
+        if dbname in {"anak_v5", "anak_prod"}:
+            pytest.skip("refusing to run integration tests against production")
+        yield async_sessionmaker(engine, expire_on_commit=False)
     finally:
-        asyncio.run(session.close())
+        await engine.dispose()
 
 
 async def _make_workspace(session) -> Workspace:
@@ -94,11 +101,16 @@ async def _make_workspace(session) -> Workspace:
 
 async def _make_tournament(session, *, workspace_id: int, is_hidden: bool) -> Tournament:
     suffix = uuid.uuid4().hex[:12]
+    # ``TournamentRead.start_date``/``end_date`` are required datetimes, so the
+    # list serializer (``flows.get_all``) rejects rows seeded without dates.
+    now = datetime.now(UTC)
     tournament = Tournament(
         workspace_id=workspace_id,
         name=f"Hidden Vis Tournament {suffix}",
         status=enums.TournamentStatus.DRAFT,
         is_hidden=is_hidden,
+        start_date=now,
+        end_date=now + timedelta(days=1),
     )
     session.add(tournament)
     await session.flush()
@@ -132,91 +144,111 @@ def _viewer(auth_user_id: int, *, superuser: bool = False, ws_admin: list[int] |
     return user
 
 
-async def _cleanup(session, *, workspace_id: int) -> None:
-    await session.execute(sa.delete(Workspace).where(Workspace.id == workspace_id))
-    await session.commit()
+async def _cleanup(session_maker, *, workspace_id: int) -> None:
+    async with session_maker() as session:
+        await session.execute(sa.delete(Workspace).where(Workspace.id == workspace_id))
+        await session.commit()
 
 
-def test_assert_viewable_matrix(db_session) -> None:
+def test_assert_viewable_matrix() -> None:
     suffix = uuid.uuid4().hex[:10]
 
     async def _run():
-        ws = await _make_workspace(db_session)
-        hidden = await _make_tournament(db_session, workspace_id=ws.id, is_hidden=True)
-        visible = await _make_tournament(db_session, workspace_id=ws.id, is_hidden=False)
-        allow_user = await _make_auth_user(db_session, suffix)
-        await db_session.commit()
+        async with _db_sessions() as session_maker:
+            async with session_maker() as session:
+                ws = await _make_workspace(session)
+                hidden = await _make_tournament(session, workspace_id=ws.id, is_hidden=True)
+                visible = await _make_tournament(session, workspace_id=ws.id, is_hidden=False)
+                allow_user = await _make_auth_user(session, suffix)
+                await session.commit()
+                workspace_id = ws.id
+                hidden_id, visible_id, allow_user_id = hidden.id, visible.id, allow_user.id
 
-        # allowlist allow_user for the hidden tournament
-        db_session.add(TournamentPreviewAccess(tournament_id=hidden.id, auth_user_id=allow_user.id))
-        await db_session.commit()
+            try:
+                async with session_maker() as session:
+                    # allowlist allow_user for the hidden tournament
+                    session.add(
+                        TournamentPreviewAccess(tournament_id=hidden_id, auth_user_id=allow_user_id)
+                    )
+                    await session.commit()
 
-        results: dict[str, object] = {}
+                    results: dict[str, object] = {}
 
-        # not hidden -> anyone (even anon) sees it
-        await assert_tournament_viewable(db_session, None, visible.id)
-        results["visible_anon"] = "ok"
+                    # not hidden -> anyone (even anon) sees it
+                    await assert_tournament_viewable(session, None, visible_id)
+                    results["visible_anon"] = "ok"
 
-        # hidden + anon -> 404
-        try:
-            await assert_tournament_viewable(db_session, None, hidden.id)
-            results["hidden_anon"] = "leak"
-        except BaseAPIException as exc:
-            results["hidden_anon"] = exc.status_code
+                    # hidden + anon -> 404
+                    try:
+                        await assert_tournament_viewable(session, None, hidden_id)
+                        results["hidden_anon"] = "leak"
+                    except BaseAPIException as exc:
+                        results["hidden_anon"] = exc.status_code
 
-        # hidden + superuser -> ok
-        await assert_tournament_viewable(db_session, _viewer(999999, superuser=True), hidden.id)
-        results["hidden_superuser"] = "ok"
+                    # hidden + superuser -> ok
+                    await assert_tournament_viewable(session, _viewer(999999, superuser=True), hidden_id)
+                    results["hidden_superuser"] = "ok"
 
-        # hidden + workspace admin -> ok
-        await assert_tournament_viewable(db_session, _viewer(999998, ws_admin=[ws.id]), hidden.id)
-        results["hidden_ws_admin"] = "ok"
+                    # hidden + workspace admin -> ok
+                    await assert_tournament_viewable(
+                        session, _viewer(999998, ws_admin=[workspace_id]), hidden_id
+                    )
+                    results["hidden_ws_admin"] = "ok"
 
-        # hidden + allowlisted -> ok
-        await assert_tournament_viewable(db_session, _viewer(allow_user.id), hidden.id)
-        results["hidden_allowlisted"] = "ok"
+                    # hidden + allowlisted -> ok
+                    await assert_tournament_viewable(session, _viewer(allow_user_id), hidden_id)
+                    results["hidden_allowlisted"] = "ok"
 
-        # hidden + non-allowlisted logged-in user -> 404
-        try:
-            await assert_tournament_viewable(db_session, _viewer(999997), hidden.id)
-            results["hidden_outsider"] = "leak"
-        except BaseAPIException as exc:
-            results["hidden_outsider"] = exc.status_code
+                    # hidden + non-allowlisted logged-in user -> 404
+                    try:
+                        await assert_tournament_viewable(session, _viewer(999997), hidden_id)
+                        results["hidden_outsider"] = "leak"
+                    except BaseAPIException as exc:
+                        results["hidden_outsider"] = exc.status_code
 
-        return ws.id, results
+                return results
+            finally:
+                await _cleanup(session_maker, workspace_id=workspace_id)
 
-    try:
-        workspace_id, results = asyncio.run(_run())
-        assert results["visible_anon"] == "ok"
-        assert results["hidden_anon"] == 404
-        assert results["hidden_superuser"] == "ok"
-        assert results["hidden_ws_admin"] == "ok"
-        assert results["hidden_allowlisted"] == "ok"
-        assert results["hidden_outsider"] == 404
-    finally:
-        asyncio.run(_cleanup(db_session, workspace_id=workspace_id))
+    results = asyncio.run(_run())
+    assert results["visible_anon"] == "ok"
+    assert results["hidden_anon"] == 404
+    assert results["hidden_superuser"] == "ok"
+    assert results["hidden_ws_admin"] == "ok"
+    assert results["hidden_allowlisted"] == "ok"
+    assert results["hidden_outsider"] == 404
 
 
-def test_list_excludes_hidden_for_anonymous(db_session) -> None:
+def test_list_excludes_hidden_for_anonymous() -> None:
     async def _run():
-        ws = await _make_workspace(db_session)
-        hidden = await _make_tournament(db_session, workspace_id=ws.id, is_hidden=True)
-        visible = await _make_tournament(db_session, workspace_id=ws.id, is_hidden=False)
-        await db_session.commit()
+        async with _db_sessions() as session_maker:
+            async with session_maker() as session:
+                ws = await _make_workspace(session)
+                hidden = await _make_tournament(session, workspace_id=ws.id, is_hidden=True)
+                visible = await _make_tournament(session, workspace_id=ws.id, is_hidden=False)
+                await session.commit()
+                workspace_id = ws.id
+                hidden_id, visible_id = hidden.id, visible.id
 
-        qp = schemas.TournamentPaginationSortSearchQueryParams(workspace_id=ws.id, per_page=100)
-        params = schemas.TournamentPaginationSortSearchParams.from_query_params(qp)
+            try:
+                async with session_maker() as session:
+                    qp = schemas.TournamentPaginationSortSearchQueryParams(
+                        workspace_id=workspace_id, per_page=100
+                    )
+                    params = schemas.TournamentPaginationSortSearchParams.from_query_params(qp)
 
-        anon_page = await tournament_flows.get_all(db_session, params, viewer=None)
-        super_page = await tournament_flows.get_all(db_session, params, viewer=_viewer(1, superuser=True))
-        return ws.id, hidden.id, visible.id, anon_page, super_page
+                    anon_page = await tournament_flows.get_all(session, params, viewer=None)
+                    super_page = await tournament_flows.get_all(
+                        session, params, viewer=_viewer(1, superuser=True)
+                    )
+                    anon_ids = {r.id for r in anon_page.results}
+                    super_ids = {r.id for r in super_page.results}
 
-    try:
-        workspace_id, hidden_id, visible_id, anon_page, super_page = asyncio.run(_run())
-        anon_ids = {r.id for r in anon_page.results}
-        super_ids = {r.id for r in super_page.results}
-        assert visible_id in anon_ids
-        assert hidden_id not in anon_ids
-        assert hidden_id in super_ids
-    finally:
-        asyncio.run(_cleanup(db_session, workspace_id=workspace_id))
+                return hidden_id, visible_id, anon_ids, super_ids
+            finally:
+                await _cleanup(session_maker, workspace_id=workspace_id)
+
+    hidden_id, visible_id, anon_ids, super_ids = asyncio.run(_run())
+    assert visible_id in anon_ids
+    assert hidden_id not in anon_ids
+    assert hidden_id in super_ids
