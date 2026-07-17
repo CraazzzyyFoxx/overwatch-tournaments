@@ -5,6 +5,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/components/ui/number-input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -109,16 +110,11 @@ export function TournamentFormFields<T extends TournamentFormFieldsValue>({
               <Label htmlFor={`${idPrefix}-number`}>
                 {mode === "challonge-create" ? "Number *" : "Number"}
               </Label>
-              <Input
+              <NumberInput
                 id={`${idPrefix}-number`}
-                type="number"
-                value={value.number ?? ""}
-                onChange={(event) =>
-                  onChange({
-                    ...value,
-                    number: event.target.value ? Number(event.target.value) : null,
-                  })
-                }
+                integer
+                value={value.number}
+                onValueChange={(next) => onChange({ ...value, number: next })}
                 required={mode === "challonge-create"}
                 className="mt-1.5"
               />
@@ -260,40 +256,28 @@ export function TournamentFormFields<T extends TournamentFormFieldsValue>({
           <div className="grid grid-cols-3 gap-3">
             <div>
               <Label htmlFor={`${idPrefix}-win-points`}>Win</Label>
-              <Input
+              <NumberInput
                 id={`${idPrefix}-win-points`}
-                type="number"
-                step="0.5"
                 value={value.win_points ?? 0}
-                onChange={(event) =>
-                  onChange({ ...value, win_points: Number(event.target.value) })
-                }
+                onValueChange={(next) => onChange({ ...value, win_points: next ?? 0 })}
                 className="mt-1.5"
               />
             </div>
             <div>
               <Label htmlFor={`${idPrefix}-draw-points`}>Draw</Label>
-              <Input
+              <NumberInput
                 id={`${idPrefix}-draw-points`}
-                type="number"
-                step="0.5"
                 value={value.draw_points ?? 0}
-                onChange={(event) =>
-                  onChange({ ...value, draw_points: Number(event.target.value) })
-                }
+                onValueChange={(next) => onChange({ ...value, draw_points: next ?? 0 })}
                 className="mt-1.5"
               />
             </div>
             <div>
               <Label htmlFor={`${idPrefix}-loss-points`}>Loss</Label>
-              <Input
+              <NumberInput
                 id={`${idPrefix}-loss-points`}
-                type="number"
-                step="0.5"
                 value={value.loss_points ?? 0}
-                onChange={(event) =>
-                  onChange({ ...value, loss_points: Number(event.target.value) })
-                }
+                onValueChange={(next) => onChange({ ...value, loss_points: next ?? 0 })}
                 className="mt-1.5"
               />
             </div>

@@ -47,10 +47,6 @@ const NUMERIC_CONFIG_KEYS = new Set<string>([
 const SUPPORTED_CONFIG_KEY_SET = new Set<string>(SUPPORTED_BALANCER_CONFIG_KEYS);
 const SUPPORTED_BALANCER_ALGORITHM_SET = new Set<string>(SUPPORTED_BALANCER_ALGORITHMS);
 
-type SanitizeOptions = {
-  preserveDraftStrings?: boolean;
-};
-
 function sortJsonValue(value: unknown): JsonValue {
   if (Array.isArray(value)) {
     return value.map(sortJsonValue);
@@ -77,10 +73,7 @@ function sortJsonValue(value: unknown): JsonValue {
   return null;
 }
 
-export function sanitizeBalancerConfig(
-  config: BalancerConfig | null | undefined,
-  options: SanitizeOptions = {}
-): BalancerConfig {
+export function sanitizeBalancerConfig(config: BalancerConfig | null | undefined): BalancerConfig {
   if (!config) {
     return {};
   }
@@ -97,7 +90,7 @@ export function sanitizeBalancerConfig(
     if (typeof value === "string") {
       const trimmedValue = value.trim();
       if (trimmedValue === "") {
-        return options.preserveDraftStrings ? [[key, ""]] : [];
+        return [];
       }
 
       if (key === "algorithm") {
@@ -105,10 +98,6 @@ export function sanitizeBalancerConfig(
       }
 
       if (NUMERIC_CONFIG_KEYS.has(key)) {
-        if (options.preserveDraftStrings) {
-          return [[key, trimmedValue]];
-        }
-
         const numericValue = Number(trimmedValue);
         return Number.isFinite(numericValue) ? [[key, numericValue]] : [];
       }

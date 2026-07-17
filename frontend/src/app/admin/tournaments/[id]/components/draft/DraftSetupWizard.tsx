@@ -51,6 +51,8 @@ import {
   canCancelDraftSetup,
   canNavigateToSetupStep,
   derivePoolReadiness,
+  MAX_DRAFT_TEAM_COUNT,
+  MIN_DRAFT_TEAM_COUNT,
   orderCaptainIds,
   previousSetupStep,
   roundsForTeamSize,
@@ -323,8 +325,8 @@ export function DraftSetupWizard({ tournamentId, board }: DraftSetupWizardProps)
     if (step === "config") {
       if (
         validateSetupStep(step, validationState).length > 0 ||
-        config.teamCount < 2 ||
-        config.teamCount > 12
+        config.teamCount < MIN_DRAFT_TEAM_COUNT ||
+        config.teamCount > MAX_DRAFT_TEAM_COUNT
       ) {
         notify.warning(t("fixStepErrors"));
         return;

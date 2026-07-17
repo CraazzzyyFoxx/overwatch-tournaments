@@ -5,6 +5,11 @@ import type {
   DraftStatus
 } from "@/types/draft.types";
 
+// The backend does not cap team_count (it flows through settings_json);
+// this is a UI sanity bound only.
+export const MIN_DRAFT_TEAM_COUNT = 2;
+export const MAX_DRAFT_TEAM_COUNT = 32;
+
 export const SETUP_STEPS = [
   "config",
   "pool",

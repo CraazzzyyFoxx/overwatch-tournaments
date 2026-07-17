@@ -7,6 +7,7 @@ import Image from "next/image";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/components/ui/number-input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -142,9 +143,8 @@ function RankCollectionSection({
     onSuccess: onSaved
   });
 
-  const num =
-    (key: keyof RankCollectionConfig) => (e: React.ChangeEvent<HTMLInputElement>) =>
-      setForm({ ...form, [key]: Number(e.target.value) });
+  const num = (key: keyof RankCollectionConfig) => (next: number | null) =>
+    setForm({ ...form, [key]: next ?? 0 });
 
   return (
     <Card>
@@ -177,24 +177,24 @@ function RankCollectionSection({
         <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
           <div className="space-y-1">
             <Label>Interval (seconds)</Label>
-            <Input
-              type="number"
+            <NumberInput
+              integer
               min={60}
               value={form.interval_seconds}
-              onChange={num("interval_seconds")}
+              onValueChange={num("interval_seconds")}
             />
           </div>
           <div className="space-y-1">
             <Label>Batch size</Label>
-            <Input type="number" min={1} value={form.batch_size} onChange={num("batch_size")} />
+            <NumberInput integer min={1} value={form.batch_size} onValueChange={num("batch_size")} />
           </div>
           <div className="space-y-1">
             <Label>Rate limit (per minute)</Label>
-            <Input
-              type="number"
+            <NumberInput
+              integer
               min={1}
               value={form.rate_limit_per_minute}
-              onChange={num("rate_limit_per_minute")}
+              onValueChange={num("rate_limit_per_minute")}
             />
           </div>
           <div className="space-y-1">
@@ -216,55 +216,48 @@ function RankCollectionSection({
           </div>
           <div className="space-y-1">
             <Label>Extra accounts / registration</Label>
-            <Input
-              type="number"
+            <NumberInput
+              integer
               min={0}
               value={form.extra_accounts_per_registration}
-              onChange={num("extra_accounts_per_registration")}
+              onValueChange={num("extra_accounts_per_registration")}
             />
           </div>
           <div className="space-y-1">
             <Label>Max consecutive failures</Label>
-            <Input
-              type="number"
+            <NumberInput
+              integer
               min={1}
               value={form.max_consecutive_failures}
-              onChange={num("max_consecutive_failures")}
+              onValueChange={num("max_consecutive_failures")}
             />
           </div>
           <div className="space-y-1">
             <Label>Backoff base (seconds)</Label>
-            <Input
-              type="number"
+            <NumberInput
+              integer
               min={1}
               value={form.backoff_base_seconds}
-              onChange={num("backoff_base_seconds")}
+              onValueChange={num("backoff_base_seconds")}
             />
           </div>
           <div className="space-y-1">
             <Label>Jitter fraction (0–1)</Label>
-            <Input
-              type="number"
+            <NumberInput
               min={0}
               max={1}
-              step={0.05}
               value={form.jitter_fraction}
-              onChange={num("jitter_fraction")}
+              onValueChange={num("jitter_fraction")}
             />
           </div>
           <div className="space-y-1">
             <Label>Max per tick (blank = auto)</Label>
-            <Input
-              type="number"
+            <NumberInput
+              integer
               min={1}
               placeholder="auto"
-              value={form.max_per_tick ?? ""}
-              onChange={(e) =>
-                setForm({
-                  ...form,
-                  max_per_tick: e.target.value === "" ? null : Number(e.target.value)
-                })
-              }
+              value={form.max_per_tick}
+              onValueChange={(next) => setForm({ ...form, max_per_tick: next })}
             />
           </div>
         </div>

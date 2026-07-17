@@ -18,6 +18,7 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/components/ui/number-input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -225,16 +226,11 @@ export function TournamentSettingsTab({
                   <Label htmlFor="settings-number" className="text-xs">
                     Number
                   </Label>
-                  <Input
+                  <NumberInput
                     id="settings-number"
-                    type="number"
-                    value={formData.number ?? ""}
-                    onChange={(event) =>
-                      setFormData({
-                        ...formData,
-                        number: event.target.value ? Number(event.target.value) : null
-                      })
-                    }
+                    integer
+                    value={formData.number}
+                    onValueChange={(next) => setFormData({ ...formData, number: next })}
                     className="mt-1.5 bg-background/50"
                   />
                 </div>
@@ -540,13 +536,11 @@ export function TournamentSettingsTab({
                     <Label htmlFor="settings-win-points" className="text-xs">
                       Win
                     </Label>
-                    <Input
+                    <NumberInput
                       id="settings-win-points"
-                      type="number"
-                      step="0.5"
                       value={formData.win_points}
-                      onChange={(event) =>
-                        setFormData({ ...formData, win_points: Number(event.target.value) })
+                      onValueChange={(next) =>
+                        setFormData({ ...formData, win_points: next ?? 0 })
                       }
                       className="mt-1.5 bg-background/50"
                     />
@@ -555,13 +549,11 @@ export function TournamentSettingsTab({
                     <Label htmlFor="settings-draw-points" className="text-xs">
                       Draw
                     </Label>
-                    <Input
+                    <NumberInput
                       id="settings-draw-points"
-                      type="number"
-                      step="0.5"
                       value={formData.draw_points}
-                      onChange={(event) =>
-                        setFormData({ ...formData, draw_points: Number(event.target.value) })
+                      onValueChange={(next) =>
+                        setFormData({ ...formData, draw_points: next ?? 0 })
                       }
                       className="mt-1.5 bg-background/50"
                     />
@@ -570,13 +562,11 @@ export function TournamentSettingsTab({
                     <Label htmlFor="settings-loss-points" className="text-xs">
                       Loss
                     </Label>
-                    <Input
+                    <NumberInput
                       id="settings-loss-points"
-                      type="number"
-                      step="0.5"
                       value={formData.loss_points}
-                      onChange={(event) =>
-                        setFormData({ ...formData, loss_points: Number(event.target.value) })
+                      onValueChange={(next) =>
+                        setFormData({ ...formData, loss_points: next ?? 0 })
                       }
                       className="mt-1.5 bg-background/50"
                     />

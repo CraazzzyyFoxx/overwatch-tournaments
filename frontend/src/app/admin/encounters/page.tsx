@@ -34,6 +34,7 @@ import { Encounter } from "@/types/encounter.types";
 import { EncounterCreateInput, EncounterUpdateInput } from "@/types/admin.types";
 import { StageItem } from "@/types/tournament.types";
 import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/components/ui/number-input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -632,11 +633,11 @@ export default function EncountersPage() {
 
           <div>
             <Label htmlFor="round">Round *</Label>
-            <Input
+            <NumberInput
               id="round"
-              type="number"
+              integer
               value={(formData as EncounterCreateInput).round}
-              onChange={(e) => setFormData({ ...formData, round: parseInt(e.target.value) })}
+              onValueChange={(next) => setFormData({ ...formData, round: next ?? 0 })}
               required
             />
           </div>
@@ -769,11 +770,11 @@ export default function EncountersPage() {
 
           <div>
             <Label htmlFor="edit-round">Round</Label>
-            <Input
+            <NumberInput
               id="edit-round"
-              type="number"
+              integer
               value={(formData as EncounterUpdateInput).round}
-              onChange={(e) => setFormData({ ...formData, round: parseInt(e.target.value) })}
+              onValueChange={(next) => setFormData({ ...formData, round: next ?? 0 })}
             />
           </div>
 

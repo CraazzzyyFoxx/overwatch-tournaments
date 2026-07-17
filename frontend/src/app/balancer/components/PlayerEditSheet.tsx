@@ -41,6 +41,7 @@ import {
   SheetTitle
 } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/components/ui/number-input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -483,23 +484,22 @@ function SortableRoleEntry({
                 </span>
               ) : null}
             </div>
-            <Input
-              type="number"
+            <NumberInput
+              integer
               min={sliderBounds.min}
               max={sliderBounds.max}
               className={cn(
                 "h-7 border-[color:var(--aqt-border-2)] bg-black/15 px-2 text-xs text-[color:var(--aqt-fg)] shadow-none focus-visible:ring-1 focus-visible:ring-primary/40",
                 !entry.is_active && "text-[color:var(--aqt-fg-dim)]"
               )}
-              value={entry.rank_value ?? ""}
-              onChange={(event) => {
-                const rankValue = event.target.value ? Number(event.target.value) : null;
+              value={entry.rank_value}
+              onValueChange={(rankValue) =>
                 onUpdate(index, {
                   ...entry,
                   rank_value: rankValue,
                   division_number: resolveDivision(rankValue)
-                });
-              }}
+                })
+              }
             />
             <input
               type="range"

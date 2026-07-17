@@ -21,10 +21,9 @@ import { useTranslations } from "next-intl";
 
 import {
   STAGE_WINDOW_KIND,
-  parseLookbackInput,
   stageWindowValue
 } from "@/app/balancer/components/rank-autofill-stages";
-import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/components/ui/number-input";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import type {
@@ -100,14 +99,13 @@ function SortableStageRow({
       </div>
 
       <label className="flex shrink-0 items-center gap-1.5">
-        <Input
-          type="number"
+        <NumberInput
+          integer
           min={1}
-          inputMode="numeric"
-          value={windowValue ?? ""}
+          value={windowValue}
           placeholder={t(`rankAutofill.window.${windowKind}Placeholder`)}
           disabled={disabled}
-          onChange={(event) => onLookbackChange(stage.source, parseLookbackInput(event.target.value))}
+          onValueChange={(next) => onLookbackChange(stage.source, next)}
           className="h-8 w-16 text-right text-xs"
           aria-label={t("rankAutofill.windowAria", { label })}
         />

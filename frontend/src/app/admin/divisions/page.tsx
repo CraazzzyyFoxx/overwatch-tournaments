@@ -36,6 +36,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/components/ui/number-input";
 import {
   Select,
   SelectContent,
@@ -641,15 +642,13 @@ function DivisionGridEditorCard({
               <label className="text-xs font-medium text-muted-foreground" htmlFor="rank-delta">
                 Rank delta
               </label>
-              <Input
+              <NumberInput
                 id="rank-delta"
-                type="number"
-                inputMode="numeric"
+                integer
+                min={0}
                 className="h-9 w-28 tabular-nums"
                 value={rankDelta}
-                onChange={(event) =>
-                  setRankDelta(Math.max(0, parseIntegerInput(event.target.value)))
-                }
+                onValueChange={(next) => setRankDelta(next ?? 0)}
                 disabled={!canEdit}
               />
             </div>
@@ -673,15 +672,13 @@ function DivisionGridEditorCard({
               <label className="text-xs font-medium text-muted-foreground" htmlFor="range-start">
                 Range start
               </label>
-              <Input
+              <NumberInput
                 id="range-start"
-                type="number"
-                inputMode="numeric"
+                integer
+                min={0}
                 className="h-9 w-28 tabular-nums"
                 value={rangeStart}
-                onChange={(event) =>
-                  setRangeStart(Math.max(0, parseIntegerInput(event.target.value)))
-                }
+                onValueChange={(next) => setRangeStart(next ?? 0)}
                 disabled={!canEdit}
               />
             </div>
@@ -689,16 +686,13 @@ function DivisionGridEditorCard({
               <label className="text-xs font-medium text-muted-foreground" htmlFor="range-step">
                 Step
               </label>
-              <Input
+              <NumberInput
                 id="range-step"
-                type="number"
-                inputMode="numeric"
+                integer
                 min={1}
                 className="h-9 w-24 tabular-nums"
                 value={rangeStep}
-                onChange={(event) =>
-                  setRangeStep(Math.max(1, parseIntegerInput(event.target.value, 1)))
-                }
+                onValueChange={(next) => setRangeStep(next ?? 1)}
                 disabled={!canEdit}
               />
             </div>
@@ -731,16 +725,13 @@ function DivisionGridEditorCard({
               <label className="text-xs font-medium text-muted-foreground" htmlFor="tiers-to-add">
                 Tiers
               </label>
-              <Input
+              <NumberInput
                 id="tiers-to-add"
-                type="number"
-                inputMode="numeric"
+                integer
                 min={1}
                 className="h-9 w-20 tabular-nums"
                 value={tiersToAdd}
-                onChange={(event) =>
-                  setTiersToAdd(Math.max(1, parseIntegerInput(event.target.value, 1)))
-                }
+                onValueChange={(next) => setTiersToAdd(next ?? 1)}
                 disabled={!canEdit}
               />
             </div>

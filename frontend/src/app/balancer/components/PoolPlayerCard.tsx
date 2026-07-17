@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/components/ui/number-input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
@@ -301,21 +302,20 @@ export function PoolPlayerCard({ player, onSave, onRemove, saving = false }: Poo
 
               <div className="space-y-1 md:space-y-0">
                 <span className="text-xs text-muted-foreground md:hidden">Division</span>
-                <Input
-                  type="number"
+                <NumberInput
+                  integer
                   min={1}
                   max={20}
                   className="h-9"
                   disabled={!entry.is_active}
-                  value={entry.division_number ?? ""}
-                  onChange={(event) => {
-                    const divisionNumber = event.target.value ? Number(event.target.value) : null;
+                  value={entry.division_number}
+                  onValueChange={(divisionNumber) =>
                     updateEntry(index, {
                       ...entry,
                       division_number: divisionNumber,
-                      rank_value: resolveRankFromDivision(divisionNumber),
-                    });
-                  }}
+                      rank_value: resolveRankFromDivision(divisionNumber)
+                    })
+                  }
                 />
               </div>
 

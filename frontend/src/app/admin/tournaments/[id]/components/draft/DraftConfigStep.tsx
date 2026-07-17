@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/components/ui/number-input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -18,7 +18,7 @@ import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import type { DraftAutopickStrategy, DraftFormat } from "@/types/draft.types";
 
-import { roundsForTeamSize } from "./setup-model";
+import { MAX_DRAFT_TEAM_COUNT, MIN_DRAFT_TEAM_COUNT, roundsForTeamSize } from "./setup-model";
 import type { DraftSetupConfig } from "./setup-types";
 
 interface DraftConfigStepProps {
@@ -59,15 +59,15 @@ export function DraftConfigStep({ value, onChange, locked = false }: DraftConfig
           <Label htmlFor="draft-team-size">{t("teamSize")}</Label>
           <div className="relative">
             <Users className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
+            <NumberInput
               id="draft-team-size"
               className="pl-9"
-              type="number"
+              integer
               min={2}
               max={9}
               disabled={locked}
               value={value.teamSize}
-              onChange={(event) => setTeamSize(Number(event.target.value) || 2)}
+              onValueChange={(next) => setTeamSize(next ?? 2)}
             />
           </div>
           <p className="text-xs text-muted-foreground">
@@ -76,14 +76,14 @@ export function DraftConfigStep({ value, onChange, locked = false }: DraftConfig
         </div>
         <div className="space-y-2">
           <Label htmlFor="draft-team-count">{t("teamCount")}</Label>
-          <Input
+          <NumberInput
             id="draft-team-count"
-            type="number"
-            min={2}
-            max={12}
+            integer
+            min={MIN_DRAFT_TEAM_COUNT}
+            max={MAX_DRAFT_TEAM_COUNT}
             disabled={locked}
             value={value.teamCount}
-            onChange={(event) => patch({ teamCount: Number(event.target.value) || 2 })}
+            onValueChange={(next) => patch({ teamCount: next ?? MIN_DRAFT_TEAM_COUNT })}
           />
           <p className="text-xs text-muted-foreground">{t("teamCountHint")}</p>
         </div>
@@ -107,15 +107,15 @@ export function DraftConfigStep({ value, onChange, locked = false }: DraftConfig
               {seconds}s
             </Button>
           ))}
-          <Input
+          <NumberInput
             id="draft-pick-time"
             aria-label={t("customPickTime")}
-            type="number"
+            integer
             min={10}
             max={600}
             disabled={locked}
             value={value.pickTimeSeconds}
-            onChange={(event) => patch({ pickTimeSeconds: Number(event.target.value) || 45 })}
+            onValueChange={(next) => patch({ pickTimeSeconds: next ?? 45 })}
             className="h-9 w-24"
           />
         </div>

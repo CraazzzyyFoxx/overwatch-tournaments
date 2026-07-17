@@ -388,9 +388,7 @@ export function BalancerMainPageClient() {
 
   const handleConfigFieldChange = useCallback((key: keyof BalancerConfig, value: unknown) => {
     setSelectedPreset(CUSTOM_PRESET);
-    setDraftConfig((current) =>
-      sanitizeBalancerConfig({ ...current, [key]: value }, { preserveDraftStrings: true })
-    );
+    setDraftConfig((current) => sanitizeBalancerConfig({ ...current, [key]: value }));
   }, []);
 
   const handleConfigSavedFromRun = useCallback(

@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { Save, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { NumberInput } from "@/components/ui/number-input";
 import {
   Select,
   SelectContent,
@@ -57,102 +57,6 @@ function formatValue(value: unknown): string {
   return String(value);
 }
 
-function normalizeNumericText(value: string, field: BalancerConfigField): string | null {
-  const normalized = value.replace(",", ".");
-  const pattern = field.type === "integer" ? /^\d*$/ : /^\d*(?:\.\d*)?$/;
-
-  return pattern.test(normalized) ? normalized : null;
-}
-
-function clampNumber(value: number, field: BalancerConfigField): number {
-  const min = field.limits?.min;
-  const max = field.limits?.max;
-  let nextValue = field.type === "integer" ? Math.round(value) : value;
-
-  if (typeof min === "number" && nextValue < min) {
-    nextValue = min;
-  }
-  if (typeof max === "number" && nextValue > max) {
-    nextValue = max;
-  }
-
-  return nextValue;
-}
-
-function NumericConfigInput({
-  field,
-  value,
-  onChange,
-}: {
-  field: BalancerConfigField;
-  value: unknown;
-  onChange: (value: unknown) => void;
-}) {
-  const [rawValue, setRawValue] = useState(() =>
-    value === undefined || value === null ? "" : String(value)
-  );
-  const [isFocused, setIsFocused] = useState(false);
-
-  /* eslint-disable react-hooks/set-state-in-effect -- Keep the editable string in sync with preset/reset changes while preserving in-progress typing. */
-  useEffect(() => {
-    if (!isFocused) {
-      setRawValue(value === undefined || value === null ? "" : String(value));
-    }
-  }, [isFocused, value]);
-  /* eslint-enable react-hooks/set-state-in-effect */
-
-  const handleChange = (nextRawValue: string) => {
-    const normalized = normalizeNumericText(nextRawValue, field);
-    if (normalized === null) {
-      return;
-    }
-
-    setRawValue(normalized);
-
-    if (normalized === "" || normalized === ".") {
-      onChange("");
-      return;
-    }
-
-    if (normalized.endsWith(".")) {
-      onChange(normalized);
-      return;
-    }
-
-    onChange(Number(normalized));
-  };
-
-  const handleBlur = () => {
-    setIsFocused(false);
-    if (rawValue === "" || rawValue === ".") {
-      onChange("");
-      return;
-    }
-
-    const numericValue = Number(rawValue);
-    if (!Number.isFinite(numericValue)) {
-      return;
-    }
-
-    const clampedValue = clampNumber(numericValue, field);
-    setRawValue(String(clampedValue));
-    onChange(clampedValue);
-  };
-
-  return (
-    <Input
-      id={`config-${field.key}`}
-      value={rawValue}
-      type="text"
-      inputMode={field.type === "integer" ? "numeric" : "decimal"}
-      onFocus={() => setIsFocused(true)}
-      onBlur={handleBlur}
-      onChange={(event) => handleChange(event.target.value)}
-      className="h-9 rounded-lg"
-    />
-  );
-}
-
 function ConfigMapEditor({
   id,
   value,
@@ -199,13 +103,21 @@ function ConfigMapEditor({
             className="h-8 rounded-lg"
             aria-label="Config key"
           />
-          <Input
-            value={String(currentValue)}
-            type={valueType}
-            onChange={(event) => updateEntry(index, key, event.target.value)}
-            className="h-8 rounded-lg"
-            aria-label="Config value"
-          />
+          {valueType === "number" ? (
+            <NumberInput
+              value={typeof currentValue === "number" ? currentValue : Number(currentValue) || 0}
+              onValueChange={(next) => updateEntry(index, key, String(next ?? 0))}
+              className="h-8 rounded-lg"
+              aria-label="Config value"
+            />
+          ) : (
+            <Input
+              value={String(currentValue)}
+              onChange={(event) => updateEntry(index, key, event.target.value)}
+              className="h-8 rounded-lg"
+              aria-label="Config value"
+            />
+          )}
           <Button
             type="button"
             variant="outline"
@@ -294,8 +206,23 @@ function ConfigFieldControl({
     );
   }
 
+  const numericValue =
+    typeof value === "number"
+      ? value
+      : typeof value === "string" && value.trim() !== "" && Number.isFinite(Number(value))
+        ? Number(value)
+        : null;
+
   return (
-    <NumericConfigInput field={field} value={value} onChange={onChange} />
+    <NumberInput
+      id={`config-${field.key}`}
+      value={numericValue}
+      onValueChange={onChange}
+      min={field.limits?.min}
+      max={field.limits?.max}
+      integer={field.type === "integer"}
+      className="h-9 rounded-lg"
+    />
   );
 }
 

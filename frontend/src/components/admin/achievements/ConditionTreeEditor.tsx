@@ -5,6 +5,7 @@ import { Plus, Trash2, ChevronDown, ChevronRight } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/components/ui/number-input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -303,10 +304,9 @@ function LeafConditionEditor({ node, onChange, onRemove, depth }: LeafEditorProp
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs">Value</Label>
-                    <Input
-                      type="number"
+                    <NumberInput
                       value={(params.value as number) ?? 0}
-                      onChange={(e) => setParam("value", Number(e.target.value))}
+                      onValueChange={(next) => setParam("value", next ?? 0)}
                     />
                   </div>
                 </>
@@ -335,10 +335,9 @@ function LeafConditionEditor({ node, onChange, onRemove, depth }: LeafEditorProp
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs">Value</Label>
-                    <Input
-                      type="number"
+                    <NumberInput
                       value={(params.value as number) ?? 0}
-                      onChange={(e) => setParam("value", Number(e.target.value))}
+                      onValueChange={(next) => setParam("value", next ?? 0)}
                     />
                   </div>
                 </>
@@ -357,10 +356,10 @@ function LeafConditionEditor({ node, onChange, onRemove, depth }: LeafEditorProp
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs">Value</Label>
-                    <Input
-                      type="number"
+                    <NumberInput
+                      integer
                       value={(params.value as number) ?? 1}
-                      onChange={(e) => setParam("value", Number(e.target.value))}
+                      onValueChange={(next) => setParam("value", next ?? 1)}
                     />
                   </div>
                 </>
@@ -380,10 +379,10 @@ function LeafConditionEditor({ node, onChange, onRemove, depth }: LeafEditorProp
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs">Min Shift</Label>
-                    <Input
-                      type="number"
+                    <NumberInput
+                      integer
                       value={(params.min_shift as number) ?? 1}
-                      onChange={(e) => setParam("min_shift", Number(e.target.value))}
+                      onValueChange={(next) => setParam("min_shift", next ?? 1)}
                     />
                   </div>
                 </>
@@ -401,18 +400,18 @@ function LeafConditionEditor({ node, onChange, onRemove, depth }: LeafEditorProp
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs">Min Time (sec)</Label>
-                    <Input
-                      type="number"
+                    <NumberInput
+                      integer
                       value={(params.min_time as number) ?? 600}
-                      onChange={(e) => setParam("min_time", Number(e.target.value))}
+                      onValueChange={(next) => setParam("min_time", next ?? 600)}
                     />
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs">Min Matches</Label>
-                    <Input
-                      type="number"
+                    <NumberInput
+                      integer
                       value={(params.min_matches as number) ?? 3}
-                      onChange={(e) => setParam("min_matches", Number(e.target.value))}
+                      onValueChange={(next) => setParam("min_matches", next ?? 3)}
                     />
                   </div>
                 </>
@@ -469,10 +468,10 @@ function LeafConditionEditor({ node, onChange, onRemove, depth }: LeafEditorProp
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs">Value</Label>
-                    <Input
-                      type="number"
+                    <NumberInput
+                      integer
                       value={(params.value as number) ?? 1}
-                      onChange={(e) => setParam("value", Number(e.target.value))}
+                      onValueChange={(next) => setParam("value", next ?? 1)}
                     />
                   </div>
                 </>
@@ -508,10 +507,10 @@ function LeafConditionEditor({ node, onChange, onRemove, depth }: LeafEditorProp
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs">Limit</Label>
-                    <Input
-                      type="number"
+                    <NumberInput
+                      integer
                       value={(params.limit as number) ?? 20}
-                      onChange={(e) => setParam("limit", Number(e.target.value))}
+                      onValueChange={(next) => setParam("limit", next ?? 20)}
                     />
                   </div>
                 </>
@@ -531,10 +530,10 @@ function LeafConditionEditor({ node, onChange, onRemove, depth }: LeafEditorProp
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs">Min Streak</Label>
-                    <Input
-                      type="number"
+                    <NumberInput
+                      integer
                       value={(params.min_streak as number) ?? 2}
-                      onChange={(e) => setParam("min_streak", Number(e.target.value))}
+                      onValueChange={(next) => setParam("min_streak", next ?? 2)}
                     />
                   </div>
                 </>
@@ -564,10 +563,10 @@ function LeafConditionEditor({ node, onChange, onRemove, depth }: LeafEditorProp
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs">Value</Label>
-                    <Input
-                      type="number"
+                    <NumberInput
+                      integer
                       value={(params.value as number) ?? 1}
-                      onChange={(e) => setParam("value", Number(e.target.value))}
+                      onValueChange={(next) => setParam("value", next ?? 1)}
                     />
                   </div>
                 </>
@@ -599,11 +598,11 @@ function LeafConditionEditor({ node, onChange, onRemove, depth }: LeafEditorProp
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs">Min Streak</Label>
-                    <Input
-                      type="number"
+                    <NumberInput
+                      integer
                       min={2}
                       value={(params.min_streak as number) ?? 2}
-                      onChange={(e) => setParam("min_streak", Number(e.target.value))}
+                      onValueChange={(next) => setParam("min_streak", next ?? 2)}
                     />
                   </div>
                 </>

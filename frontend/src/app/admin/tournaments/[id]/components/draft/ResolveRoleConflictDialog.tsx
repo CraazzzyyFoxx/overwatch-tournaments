@@ -17,6 +17,7 @@ import {
   DialogTitle
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/components/ui/number-input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -63,7 +64,7 @@ export function ResolveRoleConflictDialog({
   const queryClient = useQueryClient();
   const [playerId, setPlayerId] = useState<number | null>(null);
   const [role, setRole] = useState<DraftRole | null>(null);
-  const [rankText, setRankText] = useState("");
+  const [rankValue, setRankValue] = useState<number | null>(null);
   const [rankAbsent, setRankAbsent] = useState(false);
   const [reason, setReason] = useState("");
   const [preview, setPreview] = useState<DraftRoleEditResponse | null>(null);
@@ -73,7 +74,6 @@ export function ResolveRoleConflictDialog({
   );
   const player = players.find((candidate) => candidate.id === playerId) ?? null;
   const availableRoles = player ? availableRolesForPlayer(player) : [];
-  const rankValue = rankAbsent || !rankText.trim() ? null : Number(rankText);
 
   const resetPreview = () => setPreview(null);
   const request = (previewOnly: boolean): DraftRoleEditRequest | null => {
@@ -130,7 +130,7 @@ export function ResolveRoleConflictDialog({
     if (!next) {
       setPlayerId(null);
       setRole(null);
-      setRankText("");
+      setRankValue(null);
       setRankAbsent(false);
       setReason("");
       setPreview(null);
@@ -217,14 +217,14 @@ export function ResolveRoleConflictDialog({
 
           <div className="space-y-2">
             <Label htmlFor="role-conflict-rank">{t("rank")}</Label>
-            <Input
+            <NumberInput
               id="role-conflict-rank"
-              type="number"
+              integer
               min={0}
               disabled={rankAbsent}
-              value={rankText}
-              onChange={(event) => {
-                setRankText(event.target.value);
+              value={rankValue}
+              onValueChange={(next) => {
+                setRankValue(next);
                 resetPreview();
               }}
             />
@@ -233,7 +233,7 @@ export function ResolveRoleConflictDialog({
                 checked={rankAbsent}
                 onCheckedChange={(checked) => {
                   setRankAbsent(checked === true);
-                  if (checked) setRankText("");
+                  if (checked) setRankValue(null);
                   resetPreview();
                 }}
               />

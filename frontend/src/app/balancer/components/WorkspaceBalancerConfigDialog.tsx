@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -11,7 +11,7 @@ import {
   DialogHeader,
   DialogTitle
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/components/ui/number-input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { notify } from "@/lib/notify";
@@ -33,20 +33,26 @@ export function WorkspaceBalancerConfigDialog({
 }: WorkspaceBalancerConfigDialogProps) {
   const queryClient = useQueryClient();
 
-  const [threshold, setThreshold] = useState<string>("");
-  const [hideFromPool, setHideFromPool] = useState(false);
+  const [threshold, setThreshold] = useState<number | null>(
+    config?.rank_delta_threshold ?? null
+  );
+  const [hideFromPool, setHideFromPool] = useState(
+    config?.rank_delta_hide_from_pool ?? false
+  );
+  const [wasOpen, setWasOpen] = useState(open);
 
-  useEffect(() => {
+  if (open !== wasOpen) {
+    setWasOpen(open);
     if (open) {
-      setThreshold(config?.rank_delta_threshold != null ? String(config.rank_delta_threshold) : "");
+      setThreshold(config?.rank_delta_threshold ?? null);
       setHideFromPool(config?.rank_delta_hide_from_pool ?? false);
     }
-  }, [open, config]);
+  }
 
   const mutation = useMutation({
     mutationFn: () =>
       balancerAdminService.upsertWorkspaceBalancerConfig(workspaceId, {
-        rank_delta_threshold: threshold === "" ? null : Number(threshold),
+        rank_delta_threshold: threshold,
         rank_delta_hide_from_pool: hideFromPool
       }),
     onSuccess: () => {
@@ -78,14 +84,14 @@ export function WorkspaceBalancerConfigDialog({
                 (rank points, empty = disabled)
               </span>
             </Label>
-            <Input
+            <NumberInput
               id="delta-threshold"
-              type="number"
+              integer
               min={1}
               max={10000}
               placeholder="e.g. 500"
               value={threshold}
-              onChange={(e) => setThreshold(e.target.value)}
+              onValueChange={setThreshold}
             />
           </div>
 

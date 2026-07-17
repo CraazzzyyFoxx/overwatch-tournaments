@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible";
 import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/components/ui/number-input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
@@ -169,17 +170,14 @@ export function BuiltInFieldsCard({
                         {def.supportsMaxHeroes && (
                           <div className="max-w-[10rem] space-y-1">
                             <Label className="text-xs">Max heroes per role</Label>
-                            <Input
-                              type="number"
+                            <NumberInput
+                              integer
                               min={1}
                               max={20}
-                              value={cfg.max_heroes ?? ""}
-                              onChange={(e) => {
-                                const parsed = parseInt(e.target.value, 10);
-                                onUpdate(def.key, {
-                                  max_heroes: Number.isFinite(parsed) && parsed > 0 ? parsed : null
-                                });
-                              }}
+                              value={cfg.max_heroes}
+                              onValueChange={(next) =>
+                                onUpdate(def.key, { max_heroes: next })
+                              }
                               placeholder="5"
                               className="h-8 bg-background/50 text-xs"
                             />
