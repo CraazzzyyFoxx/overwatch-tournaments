@@ -114,6 +114,14 @@ async def advance_winner(
             continue
 
         team_id = winner_id if link.role == enums.EncounterLinkRole.WINNER else loser_id
+        current_team_id = (
+            target.home_team_id if link.target_slot == enums.EncounterLinkSlot.HOME else target.away_team_id
+        )
+        if current_team_id == team_id:
+            # Idempotent re-finalisation (e.g. admin corrected the score but
+            # the winner did not change) — nothing to propagate.
+            continue
+
         if link.target_slot == enums.EncounterLinkSlot.HOME:
             target.home_team_id = team_id
         else:
@@ -125,6 +133,11 @@ async def advance_winner(
         )
         updated.append(target)
 
+        # The slot previously held a DIFFERENT team (an upstream result was
+        # corrected): any result already recorded on the target — and anything
+        # that result had advanced further down the bracket — is stale now.
+        updated.extend(await _reset_stale_result(session, target))
+
     reset_match = await _maybe_create_grand_final_reset(session, encounter, winner_id)
     if reset_match is not None:
         updated.append(reset_match)
@@ -132,6 +145,81 @@ async def advance_winner(
     if updated:
         await session.flush()
     return updated
+
+
+async def _reset_stale_result(
+    session: AsyncSession,
+    encounter: Encounter,
+) -> list[Encounter]:
+    """Un-play an encounter whose participants just changed.
+
+    Called when a corrected upstream result rewired one of ``encounter``'s
+    team slots. Any score/confirmation recorded for the OLD matchup is void:
+    reset it, and if the old result had already advanced teams further
+    (status was COMPLETED), recursively clear the downstream slots it fed —
+    those matches now wait for this one to be replayed.
+
+    Returns every additional encounter that was modified. Only flushes are
+    left to the caller (``advance_winner``).
+    """
+    had_advanced = encounter.status == enums.EncounterStatus.COMPLETED
+    has_recorded_result = (
+        had_advanced
+        or encounter.result_status != enums.EncounterResultStatus.NONE
+        or encounter.home_score != 0
+        or encounter.away_score != 0
+    )
+    if not has_recorded_result:
+        return []
+
+    encounter.home_score = 0
+    encounter.away_score = 0
+    encounter.status = enums.EncounterStatus.OPEN
+    encounter.result_status = enums.EncounterResultStatus.NONE
+    encounter.submitted_by_id = None
+    encounter.submitted_at = None
+    encounter.confirmed_by_id = None
+    encounter.confirmed_at = None
+    logger.info(
+        "Reset stale result on encounter %s after an upstream correction",
+        encounter.id,
+    )
+
+    if not had_advanced:
+        # A pending/disputed submission never advanced anyone — no fan-out.
+        return []
+
+    links = (
+        (await session.execute(sa.select(EncounterLink).where(EncounterLink.source_encounter_id == encounter.id)))
+        .scalars()
+        .all()
+    )
+    cleared: list[Encounter] = []
+    for link in links:
+        target = await session.get(
+            Encounter,
+            link.target_encounter_id,
+            with_for_update=True,
+        )
+        if target is None:
+            continue
+
+        if link.target_slot == enums.EncounterLinkSlot.HOME:
+            if target.home_team_id is None:
+                continue
+            target.home_team_id = None
+        else:
+            if target.away_team_id is None:
+                continue
+            target.away_team_id = None
+        target.name = await _build_encounter_name_for_ids(
+            session,
+            home_team_id=target.home_team_id,
+            away_team_id=target.away_team_id,
+        )
+        cleared.append(target)
+        cleared.extend(await _reset_stale_result(session, target))
+    return cleared
 
 
 async def _maybe_create_grand_final_reset(

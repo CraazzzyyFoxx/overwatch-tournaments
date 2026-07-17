@@ -54,6 +54,12 @@ class BracketAdvancementNameTests(IsolatedAsyncioTestCase):
             home_team_id=None,
             away_team_id=33,
             name="TBD vs Team Gamma",
+            # advance_winner now inspects the target's recorded result to
+            # decide whether a slot change invalidates it.
+            home_score=0,
+            away_score=0,
+            status=enums.EncounterStatus.OPEN,
+            result_status=enums.EncounterResultStatus.NONE,
         )
         link = EncounterLink(
             source_encounter_id=source.id,
