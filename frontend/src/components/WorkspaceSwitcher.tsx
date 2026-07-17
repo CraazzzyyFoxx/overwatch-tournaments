@@ -10,15 +10,7 @@ import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from "@/compon
 import { cn } from "@/lib/utils";
 import { useWorkspaceStore } from "@/stores/workspace.store";
 import { Workspace } from "@/types/workspace.types";
-
-function getInitials(name: string): string {
-  return name
-    .split(/[\s-]+/)
-    .slice(0, 2)
-    .map((w) => w[0])
-    .join("")
-    .toUpperCase();
-}
+import { workspaceInitials } from "@/components/WorkspaceBrandIcon";
 
 const FALLBACK_COLORS = [
   "bg-violet-600",
@@ -51,7 +43,7 @@ function WorkspaceAvatar({ workspace, size = "sm" }: { workspace: Workspace; siz
           getColorForWorkspace(workspace.id)
         )}
       >
-        {getInitials(workspace.name)}
+        {workspaceInitials(workspace.name)}
       </AvatarFallback>
     </Avatar>
   );

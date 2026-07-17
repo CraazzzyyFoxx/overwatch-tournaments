@@ -16,6 +16,8 @@ import { useOAuthProviders } from "@/hooks/use-oauth-providers";
 import { OAUTH_PROVIDER_META } from "@/lib/oauth-providers";
 import { useAuthModalStore } from "@/stores/auth-modal.store";
 import { SITE_ICON, SITE_NAME } from "@/config/site";
+import WorkspaceBrandIcon from "@/components/WorkspaceBrandIcon";
+import type { TenantWorkspaceBranding } from "@/lib/tenant-host";
 
 type ProviderButtonProps = {
   href: string;
@@ -40,7 +42,16 @@ const ProviderButton = ({ href, title, icon }: ProviderButtonProps) => {
   );
 };
 
-const AuthModal = () => {
+type AuthModalProps = {
+  /**
+   * The host workspace's branding on a tenant (white-label) host, resolved
+   * server-side in the root layout. When set, it replaces the platform
+   * icon/name in the modal header. Absent on the apex/platform host.
+   */
+  tenantWorkspace?: TenantWorkspaceBranding;
+};
+
+const AuthModal = ({ tenantWorkspace }: AuthModalProps) => {
   const t = useTranslations();
   const isOpen = useAuthModalStore((state) => state.isOpen);
   const nextPath = useAuthModalStore((state) => state.nextPath);
@@ -56,20 +67,28 @@ const AuthModal = () => {
         {/* Branding header */}
         <div className="flex flex-col items-center px-8 pt-8 pb-6">
           <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.05] shadow-sm">
-            <Image
-              src={SITE_ICON}
-              alt={SITE_NAME}
-              width={22}
-              height={22}
-              className="rounded-sm"
-            />
+            {tenantWorkspace ? (
+              <WorkspaceBrandIcon
+                name={tenantWorkspace.name}
+                iconUrl={tenantWorkspace.iconUrl}
+                className="size-[22px] rounded-sm text-[10px]"
+              />
+            ) : (
+              <Image
+                src={SITE_ICON}
+                alt={SITE_NAME}
+                width={22}
+                height={22}
+                className="rounded-sm"
+              />
+            )}
           </div>
 
           <DialogTitle className="text-[15px] font-semibold text-white tracking-[-0.01em]">
             {t("auth.signIn")}
           </DialogTitle>
           <DialogDescription className="mt-1 text-[12px] text-white/40 font-normal">
-            {t("auth.continueTo", { siteName: SITE_NAME })}
+            {t("auth.continueTo", { siteName: tenantWorkspace?.name ?? SITE_NAME })}
           </DialogDescription>
         </div>
 

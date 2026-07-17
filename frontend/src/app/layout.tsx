@@ -34,6 +34,7 @@ import LoginModalTrigger from "@/components/LoginModalTrigger";
 import { Toaster } from "@/components/ui/sonner";
 import { Suspense } from "react";
 import { resolveSiteMetadata } from "@/lib/site-metadata";
+import { resolveTenantWorkspace } from "@/lib/tenant-host";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale } from "next-intl/server";
 
@@ -65,7 +66,10 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const locale = await getLocale();
+  const [locale, tenantWorkspace] = await Promise.all([
+    getLocale(),
+    resolveTenantWorkspace()
+  ]);
   return (
     <html lang={locale}>
       <body
@@ -83,7 +87,7 @@ export default async function RootLayout({
             <Suspense fallback={null}>
               <LoginModalTrigger />
             </Suspense>
-            <AuthModal />
+            <AuthModal tenantWorkspace={tenantWorkspace ?? undefined} />
             <Suspense fallback={null}>
               <AccountSettingsModal />
             </Suspense>

@@ -28,6 +28,7 @@ import { SITE_ICON, SITE_NAME } from "@/config/site";
 import UserMenu from "@/components/UserMenu";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
 import WorkspaceSwitcher from "@/components/WorkspaceSwitcher";
+import WorkspaceBrandIcon from "@/components/WorkspaceBrandIcon";
 import ActiveEvents from "@/components/ActiveEvents";
 import { adminEntryPermissions } from "@/components/admin/admin-navigation";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
@@ -111,15 +112,6 @@ function isNavGroupActive(
   });
 }
 
-function workspaceInitials(name: string): string {
-  return name
-    .split(/[\s-]+/)
-    .slice(0, 2)
-    .map((w) => w[0] ?? "")
-    .join("")
-    .toUpperCase();
-}
-
 interface HeaderProps {
   /**
    * True on a tenant (white-label) host — injected server-side from the
@@ -176,20 +168,11 @@ const Header = ({ tenantMode, tenantWorkspace }: HeaderProps) => {
             aria-label={`${tenantWorkspace.name} — home`}
             className="flex items-center gap-2 rounded-lg outline-none transition-opacity hover:opacity-80 focus-visible:ring-2 focus-visible:ring-ring"
           >
-            {tenantWorkspace.iconUrl ? (
-              // Plain <img> (not next/image) to avoid remote-domain config for
-              // arbitrary workspace icon hosts — same pattern as the switcher.
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={tenantWorkspace.iconUrl}
-                alt=""
-                className="size-7 shrink-0 rounded-md object-cover"
-              />
-            ) : (
-              <span className="grid size-7 shrink-0 place-items-center rounded-md bg-(--aqt-teal) text-xs font-semibold text-black">
-                {workspaceInitials(tenantWorkspace.name)}
-              </span>
-            )}
+            <WorkspaceBrandIcon
+              name={tenantWorkspace.name}
+              iconUrl={tenantWorkspace.iconUrl}
+              className="size-7 rounded-md text-xs"
+            />
             <span className="hidden max-w-48 truncate text-sm font-semibold sm:inline">
               {tenantWorkspace.name}
             </span>
@@ -238,9 +221,24 @@ const Header = ({ tenantMode, tenantWorkspace }: HeaderProps) => {
         </SheetTrigger>
         <SheetContent side="left">
           <nav className="grid gap-2 text-lg font-medium">
-            <Link href="#" className="flex items-center gap-2 text-lg font-semibold mb-4">
-              <Image src={SITE_ICON} alt={SITE_NAME} width={32} height={32} />
-              <span className="sr-only">{SITE_NAME}</span>
+            <Link href="/" className="flex items-center gap-2 text-lg font-semibold mb-4">
+              {tenantMode && tenantWorkspace ? (
+                <>
+                  <WorkspaceBrandIcon
+                    name={tenantWorkspace.name}
+                    iconUrl={tenantWorkspace.iconUrl}
+                    className="size-8 rounded-md text-sm"
+                  />
+                  <span className="max-w-48 truncate text-base font-semibold">
+                    {tenantWorkspace.name}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <Image src={SITE_ICON} alt={SITE_NAME} width={32} height={32} />
+                  <span className="sr-only">{SITE_NAME}</span>
+                </>
+              )}
             </Link>
             <Accordion type="single" collapsible className="w-full">
               {NAV_GROUPS.filter(
