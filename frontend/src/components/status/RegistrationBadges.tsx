@@ -161,7 +161,7 @@ export function ProfileStatusBadge({ profilesOpen, className }: ProfileStatusBad
       title={label}
       aria-label={label}
       className={cn(
-        "size-5",
+        "inline-flex size-5 items-center justify-center",
         profilesOpen === true
           ? "text-emerald-400"
           : profilesOpen === false
