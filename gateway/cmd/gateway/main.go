@@ -28,6 +28,7 @@ import (
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/app"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/auth"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/balancer"
+	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/cachecontrol"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/config"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/db"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/edge"
@@ -42,6 +43,7 @@ import (
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/proxy"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/ratelimit"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/replay"
+	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/respcache"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/rpc"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/safego"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/tournament"
@@ -254,12 +256,20 @@ func run() error {
 	})
 	// tournament-service: typed RPC reads + generic admin CRUD (the rest of
 	// /api/v1 still proxies). Specific patterns win over the proxy.
-	tournamentEdge.Register(mux, tournament.PublicReadRoutes)
+	// Public reads go through the anonymous response cache (respcache): one
+	// upstream RPC per unique URL per TTL/invalidation window instead of one
+	// per page view. Invalidated below by the worker's realtime
+	// tournament-changed signal; nil (disabled) when GATEWAY_RESPONSE_CACHE_TTL=0.
+	respCache := respcache.New(cfg.ResponseCacheTTL, logger)
+	respcache.RegisterCached(mux, tournamentEdge, tournament.PublicReadRoutes, tournament.PublicCacheableReads, respCache)
 	tournamentEdge.Register(mux, tournament.AdminCrudRoutes)
 	tournamentEdge.Register(mux, tournament.AdminMiscRoutes)
 	tournamentEdge.Register(mux, tournament.RegistrationAdminRoutes)
 	tournamentEdge.Register(mux, tournament.IntegrationsRoutes)
-	tournamentEdge.Register(mux, tournament.PublicWriteRoutes)
+	// PublicWriteRoutes are mostly writes (never cached), but the public
+	// participants list rides here too — the heaviest anonymous read of a
+	// registration-phase tournament, with no backend cache at all.
+	respcache.RegisterCached(mux, tournamentEdge, tournament.PublicWriteRoutes, tournament.PublicWriteCacheableReads, respCache)
 	// division-grids + admin/stages: ambiguous patterns under ServeMux -> subtree matcher.
 	mux.Handle("/api/v1/division-grids/", tournamentEdge.Subtree(tournament.DivisionGridRoutes))
 	mux.Handle("/api/v1/admin/stages/", tournamentEdge.Subtree(tournament.StageSubtreeRoutes))
@@ -286,9 +296,12 @@ func run() error {
 	mux.Handle("/api/v1/admin/ws/", parserEdge.Subtree(parser.AchievementAdminRoutes))
 	// app-service: typed RPC public reads (the rest of /api/v1 still proxies).
 	// hero/map/gamemode/achievement get+list use the shared CRUD read engine.
-	// Specific patterns win over the /api/v1 proxy below.
+	// Specific patterns win over the /api/v1 proxy below. Home-page aggregates
+	// and /users/[slug] profile reads go through the same anonymous response
+	// cache as the tournament page (mostly TTL-only — no per-user realtime
+	// signal exists; see app.PublicCacheableReads).
 	appEdge := edge.New(rpcClient, logger, resolver.Resolve)
-	appEdge.Register(mux, app.ReadRoutes)
+	respcache.RegisterCached(mux, appEdge, app.ReadRoutes, app.PublicCacheableReads, respCache)
 	appEdge.Register(mux, app.WorkspaceWriteRoutes)
 	appEdge.Register(mux, app.MetadataAdminRoutes)
 	appEdge.Register(mux, app.UsersAdminRoutes)
@@ -365,10 +378,18 @@ func run() error {
 
 	mux.Handle("/", rev)
 
-	// Relay the realtime Redis bus to WebSocket subscribers. safego recovers a
-	// panic here (unexpected Redis message format, etc.) instead of crashing the
-	// whole process.
-	subscriber := events.New(rdb, hub, logger)
+	// Relay the realtime Redis bus to WebSocket subscribers, and tee it into
+	// the response cache's invalidator: the worker's tournament_changed
+	// consumer publishes realtime:tournament:{id}:bracket after every
+	// committed tournament write (via the transactional outbox), so cached
+	// public reads drop the moment the backend's own cache does. safego
+	// recovers a panic here (unexpected Redis message format, etc.) instead
+	// of crashing the whole process.
+	bus := events.Broadcaster(hub)
+	if respCache != nil {
+		bus = events.Fanout(hub, respCache)
+	}
+	subscriber := events.New(rdb, bus, logger)
 	safego.Go(func() {
 		if err := subscriber.Run(rootCtx); err != nil && !errors.Is(err, context.Canceled) {
 			logger.Error("realtime subscriber stopped", "err", err)
@@ -411,8 +432,13 @@ func run() error {
 	// under the coarse nginx limit_req. Innermost (wrapping mux) so a throttled
 	// 429 is still metered + access-logged. Disabled (pass-through) when
 	// GATEWAY_ANON_RATE_LIMIT <= 0.
+	// cachecontrol sits just outside the limiter so every /api/* response —
+	// including the limiter's own 429s — leaves with an explicit Cache-Control
+	// when no upstream set one (an absent header invites heuristic caching of
+	// viewer-dependent payloads by intermediaries).
 	anonLimiter := ratelimit.New(cfg.AnonRateLimit, cfg.AnonRateWindow)
-	instrumented := httplog.Middleware(mtr.Middleware(anonLimiter.WrapAnon(mux), authn, activeUsers), logger, authn)
+	apiSurface := cachecontrol.Middleware(anonLimiter.WrapAnon(mux))
+	instrumented := httplog.Middleware(mtr.Middleware(apiSurface, authn, activeUsers), logger, authn)
 	traced := tracing.Middleware(instrumented)
 	tracedMux := sentryhttp.New(sentryhttp.Options{Repanic: true}).Handle(traced)
 

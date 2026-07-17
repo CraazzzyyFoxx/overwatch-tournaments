@@ -71,6 +71,14 @@ type Config struct {
 	// public API calls, so a tight limit would throttle legitimate visitors.
 	AnonRateLimit  int
 	AnonRateWindow time.Duration
+	// ResponseCacheTTL is the staleness backstop for the gateway's in-memory
+	// response cache on anonymous public tournament reads (internal/respcache).
+	// Invalidation is event-driven (the worker's tournament_changed consumer
+	// publishes realtime:tournament:{id}:bracket, which the cache consumes), so
+	// the TTL only bounds staleness for writes that emit no event (e.g. public
+	// registration counts) and for missed pub/sub messages. 0 disables the
+	// cache entirely (GATEWAY_RESPONSE_CACHE_TTL, seconds).
+	ResponseCacheTTL time.Duration
 	// RPCMaxInFlight caps concurrent in-flight RPC calls per queue (bulkhead).
 	// When a queue is saturated the gateway sheds the request with an immediate
 	// 503 instead of queueing it for up to the full RPC timeout. 0 disables.
@@ -182,6 +190,7 @@ func Load() (*Config, error) {
 		WSCustomDomainRateWindow: time.Duration(getenvInt("GATEWAY_WS_CUSTOM_DOMAIN_RATE_WINDOW", 10)) * time.Second,
 		AnonRateLimit:            getenvInt("GATEWAY_ANON_RATE_LIMIT", 0), // 0 = disabled (pass-through)
 		AnonRateWindow:           time.Duration(getenvInt("GATEWAY_ANON_RATE_WINDOW", 10)) * time.Second,
+		ResponseCacheTTL:         time.Duration(getenvInt("GATEWAY_RESPONSE_CACHE_TTL", 30)) * time.Second,
 		RPCMaxInFlight:           getenvInt("GATEWAY_RPC_MAX_INFLIGHT", 64),
 		Upstreams: Upstreams{
 			Parser:    getenv("UPSTREAM_PARSER", "http://parser:8002"),
