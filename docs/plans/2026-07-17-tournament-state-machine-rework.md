@@ -51,14 +51,14 @@
 
 ### 1. State machine (`shared/core/tournament_state.py`)
 
-New transition matrix — forward edges allow phase skipping, plus one-phase-back rollback
-edges for admins **without** `force`:
+New transition matrix — forward edges allow phase skipping, plus rollback edges
+to prior effective phases for admins **without** `force`:
 
 ```
-REGISTRATION → DRAFT | CHECK_IN | LIVE
-DRAFT        → CHECK_IN | LIVE | REGISTRATION      (back)
-CHECK_IN     → LIVE | DRAFT | REGISTRATION         (back)
-LIVE         → PLAYOFFS | COMPLETED | CHECK_IN     (back)
+REGISTRATION → CHECK_IN | DRAFT | LIVE
+CHECK_IN     → DRAFT | LIVE | REGISTRATION          (back)
+DRAFT        → LIVE | CHECK_IN | REGISTRATION       (back)
+LIVE         → PLAYOFFS | COMPLETED | DRAFT | CHECK_IN (back)
 PLAYOFFS     → COMPLETED
 COMPLETED    ⇄ ARCHIVED
 ```
@@ -79,7 +79,7 @@ Initial status: `REGISTRATION` — model default, `server_default`, and
 tournament.tournament_phase_schedule
   id             PK
   tournament_id  FK → tournament.tournament(id) ON DELETE CASCADE
-  status         tournamentstatus   -- target phase; allowed: REGISTRATION, DRAFT, CHECK_IN, LIVE
+  status         tournamentstatus   -- target phase; allowed: REGISTRATION, CHECK_IN, DRAFT, LIVE
   starts_at      timestamptz NOT NULL
   ends_at        timestamptz NULL   -- NULL = "until the next phase starts"
   created_at / updated_at

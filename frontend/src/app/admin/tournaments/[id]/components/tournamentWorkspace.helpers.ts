@@ -4,7 +4,7 @@ import type { Team } from "@/types/team.types";
 import type { Stage, Standings, Tournament } from "@/types/tournament.types";
 import type { TournamentPhaseScheduleEntryInput } from "@/types/admin.types";
 
-export const SCHEDULABLE_PHASES = ["registration", "draft", "check_in", "live"] as const;
+export const SCHEDULABLE_PHASES = ["registration", "check_in", "draft", "live"] as const;
 
 export type SchedulablePhase = (typeof SCHEDULABLE_PHASES)[number];
 

@@ -10,6 +10,7 @@ sys.path.insert(0, str(backend_root))
 
 from shared.core.enums import TournamentStatus  # noqa: E402
 from shared.core.tournament_state import (  # noqa: E402
+    PHASE_ORDER,
     can_transition,
     is_within_phase_window,
     next_due_status,
@@ -44,6 +45,11 @@ def test_next_due_status_ignores_phases_not_yet_due() -> None:
         _row(TournamentStatus.LIVE, timedelta(hours=1)),
     ]
     assert next_due_status(TournamentStatus.REGISTRATION, schedule, NOW) == TournamentStatus.CHECK_IN
+
+
+def test_next_due_status_advances_from_check_in_to_draft() -> None:
+    schedule = [_row(TournamentStatus.DRAFT, timedelta(minutes=-1))]
+    assert next_due_status(TournamentStatus.CHECK_IN, schedule, NOW) == TournamentStatus.DRAFT
 
 
 def test_next_due_status_ignores_non_schedulable_rows() -> None:
@@ -114,19 +120,28 @@ def test_window_with_null_ends_at_spans_rest_of_phase() -> None:
 # ─── can_transition ──────────────────────────────────────────────────────────
 
 
+def test_check_in_precedes_team_draft() -> None:
+    assert PHASE_ORDER[TournamentStatus.REGISTRATION] < PHASE_ORDER[TournamentStatus.CHECK_IN]
+    assert PHASE_ORDER[TournamentStatus.CHECK_IN] < PHASE_ORDER[TournamentStatus.DRAFT]
+    assert PHASE_ORDER[TournamentStatus.DRAFT] < PHASE_ORDER[TournamentStatus.LIVE]
+
+
 def test_forward_transitions_allow_phase_skips() -> None:
-    assert can_transition(TournamentStatus.REGISTRATION, TournamentStatus.DRAFT)
     assert can_transition(TournamentStatus.REGISTRATION, TournamentStatus.CHECK_IN)
+    assert can_transition(TournamentStatus.REGISTRATION, TournamentStatus.DRAFT)
     assert can_transition(TournamentStatus.REGISTRATION, TournamentStatus.LIVE)
+    assert can_transition(TournamentStatus.CHECK_IN, TournamentStatus.DRAFT)
+    assert can_transition(TournamentStatus.CHECK_IN, TournamentStatus.LIVE)
     assert can_transition(TournamentStatus.DRAFT, TournamentStatus.LIVE)
     assert can_transition(TournamentStatus.LIVE, TournamentStatus.PLAYOFFS)
     assert can_transition(TournamentStatus.LIVE, TournamentStatus.COMPLETED)
 
 
-def test_one_phase_back_rollbacks_are_legal() -> None:
-    assert can_transition(TournamentStatus.DRAFT, TournamentStatus.REGISTRATION)
-    assert can_transition(TournamentStatus.CHECK_IN, TournamentStatus.DRAFT)
+def test_rollbacks_to_prior_effective_phases_are_legal() -> None:
     assert can_transition(TournamentStatus.CHECK_IN, TournamentStatus.REGISTRATION)
+    assert can_transition(TournamentStatus.DRAFT, TournamentStatus.CHECK_IN)
+    assert can_transition(TournamentStatus.DRAFT, TournamentStatus.REGISTRATION)
+    assert can_transition(TournamentStatus.LIVE, TournamentStatus.DRAFT)
     assert can_transition(TournamentStatus.LIVE, TournamentStatus.CHECK_IN)
     assert can_transition(TournamentStatus.COMPLETED, TournamentStatus.ARCHIVED)
     assert can_transition(TournamentStatus.ARCHIVED, TournamentStatus.COMPLETED)

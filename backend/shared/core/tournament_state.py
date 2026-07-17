@@ -1,9 +1,9 @@
 """Tournament lifecycle state machine and schedule helpers.
 
-Phases run REGISTRATION -> [DRAFT] -> [CHECK_IN] -> LIVE -> [PLAYOFFS] ->
-COMPLETED <-> ARCHIVED. DRAFT is the team-draft phase (team_formation="draft"
-only) and CHECK_IN is optional, so forward transitions may skip phases.
-Rollback edges go one effective phase back so admins can e.g. reopen
+Phases run REGISTRATION -> [CHECK_IN] -> [DRAFT] -> LIVE -> [PLAYOFFS] ->
+COMPLETED <-> ARCHIVED. CHECK_IN is optional and DRAFT is the team-draft
+phase (team_formation="draft" only), so forward transitions may skip phases.
+Rollback edges cover prior effective phases so admins can e.g. reopen
 registration without the superuser ``force`` bypass.
 
 Time-driven automation (the tournament-worker tick) advances the status
@@ -21,16 +21,16 @@ from shared.core.errors import ApiExc, ApiHTTPException
 
 _VALID_TRANSITIONS: dict[TournamentStatus, frozenset[TournamentStatus]] = {
     TournamentStatus.REGISTRATION: frozenset(
-        {TournamentStatus.DRAFT, TournamentStatus.CHECK_IN, TournamentStatus.LIVE}
-    ),
-    TournamentStatus.DRAFT: frozenset(
-        {TournamentStatus.CHECK_IN, TournamentStatus.LIVE, TournamentStatus.REGISTRATION}
+        {TournamentStatus.CHECK_IN, TournamentStatus.DRAFT, TournamentStatus.LIVE}
     ),
     TournamentStatus.CHECK_IN: frozenset(
-        {TournamentStatus.LIVE, TournamentStatus.DRAFT, TournamentStatus.REGISTRATION}
+        {TournamentStatus.DRAFT, TournamentStatus.LIVE, TournamentStatus.REGISTRATION}
+    ),
+    TournamentStatus.DRAFT: frozenset(
+        {TournamentStatus.LIVE, TournamentStatus.CHECK_IN, TournamentStatus.REGISTRATION}
     ),
     TournamentStatus.LIVE: frozenset(
-        {TournamentStatus.PLAYOFFS, TournamentStatus.COMPLETED, TournamentStatus.CHECK_IN}
+        {TournamentStatus.PLAYOFFS, TournamentStatus.COMPLETED, TournamentStatus.DRAFT, TournamentStatus.CHECK_IN}
     ),
     TournamentStatus.PLAYOFFS: frozenset({TournamentStatus.COMPLETED}),
     TournamentStatus.COMPLETED: frozenset({TournamentStatus.ARCHIVED}),
@@ -43,8 +43,8 @@ _FINISHED_STATUSES: frozenset[TournamentStatus] = frozenset({TournamentStatus.CO
 # along this order.
 PHASE_ORDER: dict[TournamentStatus, int] = {
     TournamentStatus.REGISTRATION: 0,
-    TournamentStatus.DRAFT: 1,
-    TournamentStatus.CHECK_IN: 2,
+    TournamentStatus.CHECK_IN: 1,
+    TournamentStatus.DRAFT: 2,
     TournamentStatus.LIVE: 3,
     TournamentStatus.PLAYOFFS: 4,
     TournamentStatus.COMPLETED: 5,

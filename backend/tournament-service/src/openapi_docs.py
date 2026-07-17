@@ -230,7 +230,7 @@ DOCS: dict[str, dict] = {
     },
     "rpc.tournament.tournament_schedule_set": {
         "summary": "Set tournament phase schedule",
-        "description": "Replaces the tournament's phase schedule (full replace of REGISTRATION/DRAFT/CHECK_IN/LIVE rows); requires tournament-update permission.",
+        "description": "Replaces the tournament's phase schedule (full replace of REGISTRATION/CHECK_IN/DRAFT/LIVE rows); requires tournament-update permission.",
     },
     "rpc.tournament.standing_recalculate": {
         "summary": "Recalculate standings",

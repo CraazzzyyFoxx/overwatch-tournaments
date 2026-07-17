@@ -106,7 +106,7 @@ class TournamentPhaseSchedule(db.TimeStampIntegerMixin):
     ``starts_at`` is the only field that moves ``Tournament.status`` (forward,
     via the worker tick). ``ends_at`` optionally closes the phase's action
     window early (e.g. check-in closes 15 minutes before matches start) and
-    never changes the status. Only REGISTRATION/DRAFT/CHECK_IN/LIVE may be
+    never changes the status. Only REGISTRATION/CHECK_IN/DRAFT/LIVE may be
     scheduled — see ``shared.core.tournament_state.SCHEDULABLE_STATUSES``.
     """
 
