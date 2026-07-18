@@ -61,6 +61,20 @@ export function isResultNotReportableError(error: unknown): boolean {
   );
 }
 
+/**
+ * True when a captain tried to confirm a result they submitted themselves. The
+ * backend rejects this with 400 and a detail like
+ * `Cannot confirm your own submission - the other captain must confirm`.
+ * Callers swap the raw string for a friendly localized message.
+ */
+export function isConfirmOwnSubmissionError(error: unknown): boolean {
+  return (
+    error instanceof ApiError &&
+    error.status === 400 &&
+    error.details.some((d) => /confirm your own submission/i.test(d.msg))
+  );
+}
+
 // ─── Parsing ──────────────────────────────────────────────────────────────────
 
 const PYDANTIC_LOC_PREFIXES = ["body", "query", "path", "header", "cookie"];

@@ -578,6 +578,12 @@
     "alreadyConfirmedBody": "This match result has been confirmed and can no longer be changed. Contact an admin if a correction is needed.",
     "pendingSubmissionTitle": "Result awaiting confirmation",
     "pendingSubmissionBody": "A result has already been submitted for this match and is waiting for the other captain to confirm it. Dispute it from the match page if it's wrong.",
+    "confirmedSuccess": "Result confirmed",
+    "confirmErrorMessage": "Failed to confirm",
+    "cannotConfirmOwnTitle": "Can't confirm your own result",
+    "cannotConfirmOwnBody": "The other team's captain has to confirm this result.",
+    "nothingToConfirmTitle": "Nothing to confirm",
+    "nothingToConfirmBody": "This match no longer has a result waiting for confirmation.",
     "qualityDescriptions": {
       "1": "One-sided match",
       "2": "Almost one-sided",
@@ -1656,6 +1662,7 @@
     "disputed": "Disputed",
     "editMatch": "Edit match",
     "reportMatch": "Report match",
+    "confirmMatch": "Confirm result",
     "doubleElimination": "Double Elimination",
     "singleElimination": "Single Elimination"
   },

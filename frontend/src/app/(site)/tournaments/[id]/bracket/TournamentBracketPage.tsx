@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { EncounterEditDialog } from "@/components/tournaments/EncounterEditDialog";
 import { MatchReportDialog } from "@/components/tournaments/MatchReportDialog";
 import { notify } from "@/lib/notify";
+import { getApiErrorMessage, isConfirmOwnSubmissionError } from "@/lib/api-error";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
 import { usePermissions } from "@/hooks/usePermissions";
 import captainService from "@/services/captain.service";
@@ -42,8 +43,10 @@ function GroupStagePanel({
   stages,
   onEdit,
   onReport,
+  onConfirm,
   canEdit,
   canReport,
+  canConfirm,
   bracketTabs
 }: {
   stage: Stage;
@@ -53,8 +56,10 @@ function GroupStagePanel({
   stages: Stage[];
   onEdit?: (encounter: Encounter) => void;
   onReport?: (encounter: Encounter) => void;
+  onConfirm?: (encounter: Encounter) => void;
   canEdit?: (encounter: Encounter) => boolean;
   canReport?: (encounter: Encounter) => boolean;
+  canConfirm?: (encounter: Encounter) => boolean;
   bracketTabs?: Array<{
     key: string;
     href: string;
@@ -136,8 +141,10 @@ function GroupStagePanel({
           type={stage.stage_type}
           onEdit={onEdit}
           onReport={onReport}
+          onConfirm={onConfirm}
           canEdit={canEdit}
           canReport={canReport}
+          canConfirm={canConfirm}
         />
       </TabsContent>
     </Tabs>
@@ -215,6 +222,48 @@ export default function TournamentBracketPage({ tournament }: TournamentBracketP
             setReportEncounter(fresh);
           } catch {
             notify.error(t("common.error"), { description: t("common.roleVerificationFailed") });
+          }
+        }
+      : undefined;
+
+  const canConfirm =
+    isAuthenticated && !isAdmin
+      ? (enc: Encounter) => enc.result_status === "pending_confirmation"
+      : undefined;
+  const handleConfirm =
+    isAuthenticated && !isAdmin
+      ? async (enc: Encounter) => {
+          try {
+            const [fresh, role] = await Promise.all([
+              encounterService.getEncounter(enc.id),
+              captainService.getMyRole(enc.id)
+            ]);
+            if (fresh.result_status !== "pending_confirmation") {
+              // Bracket data was stale — nothing pending to confirm anymore.
+              notify.error(t("matchReport.nothingToConfirmTitle"), {
+                description: t("matchReport.nothingToConfirmBody")
+              });
+              void encountersQuery.refetch();
+              return;
+            }
+            if (role.side === null) {
+              notify.error(t("common.noAccess"), { description: t("common.notCaptain") });
+              return;
+            }
+            await captainService.confirmResult(enc.id);
+            notify.success(t("matchReport.confirmedSuccess"));
+            await Promise.all([encountersQuery.refetch(), standingsQuery.refetch()]);
+          } catch (error) {
+            if (isConfirmOwnSubmissionError(error)) {
+              notify.error(t("matchReport.cannotConfirmOwnTitle"), {
+                description: t("matchReport.cannotConfirmOwnBody")
+              });
+              return;
+            }
+            notify.apiError(error, {
+              title: t("matchReport.confirmErrorMessage"),
+              description: getApiErrorMessage(error)
+            });
           }
         }
       : undefined;
@@ -423,8 +472,10 @@ export default function TournamentBracketPage({ tournament }: TournamentBracketP
                   stages={stages}
                   onEdit={handleEdit}
                   onReport={handleReport}
+                  onConfirm={handleConfirm}
                   canEdit={canEdit}
                   canReport={canReport}
+                  canConfirm={canConfirm}
                   bracketTabs={index === 0 ? bracketTabs : undefined}
                 />
               ))
@@ -523,8 +574,10 @@ export default function TournamentBracketPage({ tournament }: TournamentBracketP
                           type={stage.stage_type}
                           onEdit={handleEdit}
                           onReport={handleReport}
+                          onConfirm={handleConfirm}
                           canEdit={canEdit}
                           canReport={canReport}
+                          canConfirm={canConfirm}
                         />
                       )}
                     </TabsContent>
