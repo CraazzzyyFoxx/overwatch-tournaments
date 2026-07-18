@@ -1631,7 +1631,7 @@ async def get_best_teammates(
     ttl=config.settings.users_cache_ttl,
     key=(
         "user_encounters:{user_id}:{workspace_id}:{params.page}:{params.per_page}:"
-        "{params.sort}:{params.order}:{result}:{stage}:{mvp1}:{has_logs}:{opponent}"
+        "{params.sort}:{params.order}:{result_filter}:{stage}:{mvp1}:{has_logs}:{opponent}"
     ),
     prefix="backend:",
     lock=True,
@@ -1642,7 +1642,7 @@ async def get_encounters_by_user(
     params: pagination.PaginationSortParams,
     workspace_id: int | None = None,
     *,
-    result: str | None = None,
+    result_filter: str | None = None,
     stage: str | None = None,
     mvp1: bool = False,
     has_logs: bool | None = None,
@@ -1661,7 +1661,7 @@ async def get_encounters_by_user(
         user.id,
         params,
         workspace_id=workspace_id,
-        result=result,
+        result=result_filter,
         stage=stage,
         mvp1=mvp1,
         has_logs=has_logs,

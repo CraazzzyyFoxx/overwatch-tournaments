@@ -223,7 +223,7 @@ def register(broker: Any, logger: Any) -> None:
                 c.require_id(data),
                 pagination.PaginationSortParams.from_query_params(qp),
                 workspace_id=_ws_id(data),
-                result=c.q1(data, "result", str, None),
+                result_filter=c.q1(data, "result", str, None),
                 stage=c.q1(data, "stage", str, None),
                 mvp1=c.q1(data, "mvp1", c.qbool, False),
                 has_logs=c.q1(data, "has_logs", c.qbool, None),
