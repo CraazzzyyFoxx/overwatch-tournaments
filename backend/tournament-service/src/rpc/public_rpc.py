@@ -30,6 +30,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from faststream.rabbit import Channel
 from faststream.rabbit.annotations import RabbitMessage
 
 from shared.balancer_registration_statuses import get_status_metas_map
@@ -414,7 +415,13 @@ def register(broker: Any, logger: Any) -> None:
 
         return await _run(logger, op)
 
-    @broker.subscriber("rpc.tournament.reg_pub_list")
+    # Isolated QoS: the participants list is the heaviest public read and fans
+    # out to every connected viewer after each registration mutation (the
+    # realtime invalidation herd). On its own channel a burst of list rebuilds
+    # can no longer occupy the default channel's RPC_PREFETCH_COUNT slots and
+    # starve the write RPCs (check-in/register) queued behind it — mirrors
+    # recalculation_events._EVENTS_CHANNEL.
+    @broker.subscriber("rpc.tournament.reg_pub_list", channel=Channel(prefetch_count=8))
     async def _reg_pub_list(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
             # Public route — no identity required. Read-model assembly lives in

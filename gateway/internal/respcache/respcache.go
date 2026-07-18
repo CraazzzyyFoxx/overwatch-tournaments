@@ -173,13 +173,17 @@ type HandlerBuilder interface {
 type Rule struct {
 	// Extract resolves the invalidation scope (see Extractor).
 	Extract Extractor
-	// AuthedRead lets bearer-carrying requests READ entries — which are only
-	// ever WRITTEN by anonymous requests — instead of bypassing the cache
-	// entirely. Authenticated requests still never populate an entry and
-	// never join a singleflight: on a miss they go upstream with their own
-	// identity (an allowlisted viewer may see MORE than anonymous — a hidden
-	// tournament's preview — so an anonymous 404 or in-flight result must
-	// never become their answer).
+	// AuthedRead lets bearer-carrying requests use the shared cache: they READ
+	// entries on a hit, and on a miss they JOIN the anonymized singleflight —
+	// the upstream fetch runs without any identity, so its 200 is exactly the
+	// universal body an anonymous request would produce, and it populates the
+	// entry. Without the grant, bearer-carrying requests bypass the cache
+	// entirely.
+	//
+	// A non-200 flight result is viewer-dependent territory (an allowlisted
+	// viewer may see MORE than anonymous — a hidden tournament's preview — so
+	// an anonymous 404 must never become their answer): authed waiters retry
+	// upstream with their own identity instead of accepting it.
 	//
 	// Safe ONLY when both hold for the route, verified against the backend
 	// handler:
@@ -188,9 +192,9 @@ type Rule struct {
 	//   2. the body after the gate is viewer-agnostic (the backend computes
 	//      or caches it with no viewer in the key).
 	// Holds for rpc.tournament.get_tournament / get_stages / get_standings /
-	// list_teams (viewer is used exclusively in the gate). Holds for
-	// list_encounters EXCEPT scope=my_team (see AuthedReadUnless). Does NOT
-	// hold for encounters_overview, whose body carries a per-viewer
+	// list_teams / reg_pub_list (viewer is used exclusively in the gate).
+	// Holds for list_encounters EXCEPT scope=my_team (see AuthedReadUnless).
+	// Does NOT hold for encounters_overview, whose body carries a per-viewer
 	// my_team_count.
 	AuthedRead bool
 	// AuthedReadUnless, when non-nil, revokes AuthedRead for requests it
@@ -217,10 +221,11 @@ func RegisterCached(mux *http.ServeMux, b HandlerBuilder, specs []edge.RouteSpec
 	}
 }
 
-// Wrap returns next guarded by the cache. Anonymous GETs whose extractor
-// resolves a scope are cached (200s small enough to store); authenticated
-// requests bypass entirely unless rule.AuthedRead grants them read-only
-// access. Everything else passes through untouched.
+// Wrap returns next guarded by the cache. GETs whose extractor resolves a
+// scope are cached; authenticated requests bypass entirely unless
+// rule.AuthedRead grants them shared-cache access (hit reads + anonymized
+// miss flights — see Rule.AuthedRead). Everything else passes through
+// untouched.
 func (c *Cache) Wrap(next http.Handler, rule Rule) http.Handler {
 	if c == nil {
 		return next
@@ -247,19 +252,22 @@ func (c *Cache) Wrap(next http.Handler, rule Rule) http.Handler {
 			return
 		}
 
-		if authed {
-			// Read-only grant: a miss goes upstream with the caller's own
-			// identity, populates nothing, and joins no flight (see
-			// Rule.AuthedRead).
-			next.ServeHTTP(w, r)
-			return
-		}
+		// Every miss — anonymous or AuthedRead-granted — shares ONE
+		// anonymized flight per key: after each invalidation the whole herd
+		// of logged-in viewers costs a single upstream rebuild instead of
+		// one per client, and the 200 repopulates the entry even when no
+		// anonymous viewer ever arrives (during a check-in window everyone
+		// on the participants page is logged in).
 
 		ch := c.flight.DoChan(key, func() (any, error) {
 			rec := &recorder{header: make(http.Header), status: http.StatusOK}
 			// Detach from the initiating client's lifetime; the edge
 			// dispatcher's per-route RPC timeout still bounds the call.
-			next.ServeHTTP(rec, r.Clone(context.WithoutCancel(r.Context())))
+			// Strip the caller's identity so the upstream answer is the
+			// universal anonymous body (a no-op for anonymous initiators).
+			req := r.Clone(context.WithoutCancel(r.Context()))
+			req.Header.Del("Authorization")
+			next.ServeHTTP(rec, req)
 			e := &entry{
 				key:          key,
 				tournamentID: tid,
@@ -285,11 +293,19 @@ func (c *Cache) Wrap(next http.Handler, rule Rule) http.Handler {
 				next.ServeHTTP(w, r)
 				return
 			}
+			e := res.Val.(*entry)
+			if authed && e.status != http.StatusOK {
+				// The anonymous answer under-represents an allowlisted
+				// viewer (hidden tournament preview): retry with their own
+				// identity rather than serving them an anonymous 404/error.
+				next.ServeHTTP(w, r)
+				return
+			}
 			label := "MISS"
 			if res.Shared {
 				label = "COALESCED"
 			}
-			writeEntry(w, res.Val.(*entry), label)
+			writeEntry(w, e, label)
 		case <-r.Context().Done():
 			// Client gone; the shared flight keeps running for the others.
 		}

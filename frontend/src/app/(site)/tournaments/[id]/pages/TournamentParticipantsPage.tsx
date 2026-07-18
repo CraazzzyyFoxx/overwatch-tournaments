@@ -669,16 +669,20 @@ export default function TournamentParticipantsPage({ tournament }: { tournament:
 
   const checkInMutation = useMutation({
     mutationFn: () => registrationService.checkInMyRegistration(tournament.id),
-    onSuccess: async () => {
+    onSuccess: (updated) => {
       setIsCheckInDialogOpen(false);
-      await Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: tournamentQueryKeys.registration(tournament.workspace_id, tournament.id)
-        }),
-        queryClient.invalidateQueries({
-          queryKey: tournamentQueryKeys.registrationsList(tournament.workspace_id, tournament.id)
-        })
-      ]);
+      // The response IS the updated registration: write it into the cache
+      // instead of refetching. The list refetch is fire-and-forget — our own
+      // commit just invalidated the gateway entry, so awaiting it kept the
+      // button spinning through the post-invalidation rebuild (and the WS
+      // structure_changed event refreshes the list anyway).
+      queryClient.setQueryData(
+        tournamentQueryKeys.registration(tournament.workspace_id, tournament.id),
+        updated
+      );
+      void queryClient.invalidateQueries({
+        queryKey: tournamentQueryKeys.registrationsList(tournament.workspace_id, tournament.id)
+      });
     }
   });
 

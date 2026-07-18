@@ -103,25 +103,37 @@ func TestAuthedReadServesAnonymousEntry(t *testing.T) {
 	}
 }
 
-// AuthedRead is strictly read-only: an authenticated MISS goes upstream with
-// the caller's own identity and must never populate the shared cache — an
-// allowlisted viewer's 200 for a hidden tournament must not become the
-// anonymous answer.
-func TestAuthedReadNeverWrites(t *testing.T) {
+// An AuthedRead miss populates the shared cache via the anonymized flight:
+// the upstream fetch carries no identity, so its 200 is the universal
+// anonymous body and later viewers (anonymous or authed) hit the entry.
+// During a check-in window every viewer is logged in — without this, each
+// invalidation cost one full rebuild PER connected client.
+func TestAuthedMissPopulatesViaAnonymizedFlight(t *testing.T) {
 	var calls atomic.Int64
+	var sawAuth atomic.Bool
 	c := testCache(t)
-	h := c.Wrap(upstream(&calls), Rule{Extract: FromPathValue("id"), AuthedRead: true})
+	h := c.Wrap(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		if r.Header.Get("Authorization") != "" {
+			sawAuth.Store(true)
+		}
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}), Rule{Extract: FromPathValue("id"), AuthedRead: true})
 
-	authed := doGet(h, "/api/v1/tournaments/72", "Bearer tok") // MISS, upstream
-	if authed.Header().Get("X-Cache") != "" {
-		t.Fatal("authed miss must carry no X-Cache label")
+	authed := doGet(h, "/api/v1/tournaments/72", "Bearer tok") // MISS, anonymized flight
+	if got := authed.Header().Get("X-Cache"); got != "MISS" {
+		t.Fatalf("X-Cache = %q, want MISS", got)
+	}
+	if sawAuth.Load() {
+		t.Fatal("flight leaked the caller's Authorization header upstream")
 	}
 	anon := doGet(h, "/api/v1/tournaments/72", "")
-	if anon.Header().Get("X-Cache") == "HIT" {
-		t.Fatal("authed request populated the shared cache")
+	if got := anon.Header().Get("X-Cache"); got != "HIT" {
+		t.Fatalf("authed miss did not populate the cache: X-Cache = %q", got)
 	}
-	if calls.Load() != 2 {
-		t.Fatalf("calls = %d, want 2 (authed miss cached nothing)", calls.Load())
+	if calls.Load() != 1 {
+		t.Fatalf("calls = %d, want 1", calls.Load())
 	}
 }
 
@@ -162,10 +174,9 @@ func TestAuthedReadUnlessRevokesGrantPerRequest(t *testing.T) {
 	}
 }
 
-// An authenticated miss must not join an anonymous singleflight either: the
-// in-flight result may be an anonymous 404 (hidden tournament), which is the
-// wrong answer for an allowlisted viewer.
-func TestAuthedMissBypassesFlight(t *testing.T) {
+// An authenticated miss joins the anonymous singleflight: N concurrent
+// viewers after an invalidation cost exactly one upstream rebuild.
+func TestAuthedMissJoinsFlight(t *testing.T) {
 	var calls atomic.Int64
 	release := make(chan struct{})
 	c := testCache(t)
@@ -177,21 +188,62 @@ func TestAuthedMissBypassesFlight(t *testing.T) {
 	}), Rule{Extract: FromPathValue("id"), AuthedRead: true})
 
 	var wg sync.WaitGroup
+	codes := make([]int, 2)
 	wg.Add(2)
-	go func() { defer wg.Done(); doGet(h, "/api/v1/tournaments/72", "") }()
-	go func() { defer wg.Done(); doGet(h, "/api/v1/tournaments/72", "Bearer tok") }()
-	// Both must reach upstream independently before release: the authed
-	// request may not wait behind the anonymous flight.
+	go func() { defer wg.Done(); codes[0] = doGet(h, "/api/v1/tournaments/72", "").Code }()
+	go func() { defer wg.Done(); codes[1] = doGet(h, "/api/v1/tournaments/72", "Bearer tok").Code }()
+	// Give both goroutines time to reach the flight; only one may go upstream.
 	deadline := time.After(2 * time.Second)
-	for calls.Load() < 2 {
+	for calls.Load() < 1 {
 		select {
 		case <-deadline:
-			t.Fatalf("authed request coalesced into the anonymous flight (calls = %d)", calls.Load())
+			t.Fatal("no request reached upstream")
 		case <-time.After(5 * time.Millisecond):
 		}
 	}
+	time.Sleep(20 * time.Millisecond)
+	if calls.Load() != 1 {
+		t.Fatalf("authed miss did not coalesce into the flight (calls = %d)", calls.Load())
+	}
 	close(release)
 	wg.Wait()
+	if codes[0] != http.StatusOK || codes[1] != http.StatusOK {
+		t.Fatalf("codes = %v, want both 200", codes)
+	}
+}
+
+// A non-200 flight result must never become an authed viewer's answer (an
+// allowlisted viewer may see a hidden tournament the anonymous fetch 404s
+// on): the authed caller retries upstream with its own identity, and the
+// error is not cached.
+func TestAuthedMissFallsBackOnNon200(t *testing.T) {
+	var calls atomic.Int64
+	c := testCache(t)
+	h := c.Wrap(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		if r.Header.Get("Authorization") == "" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"hidden":true}`))
+	}), Rule{Extract: FromPathValue("id"), AuthedRead: true})
+
+	authed := doGet(h, "/api/v1/tournaments/72", "Bearer tok")
+	if authed.Code != http.StatusOK {
+		t.Fatalf("authed fallback code = %d, want 200 (own-identity retry)", authed.Code)
+	}
+	if authed.Body.String() != `{"hidden":true}` {
+		t.Fatalf("authed fallback body = %q", authed.Body.String())
+	}
+	if calls.Load() != 2 {
+		t.Fatalf("calls = %d, want 2 (anonymized 404 + identity retry)", calls.Load())
+	}
+	// The anonymous 404 must not have been stored.
+	anon := doGet(h, "/api/v1/tournaments/72", "")
+	if anon.Header().Get("X-Cache") == "HIT" {
+		t.Fatal("non-200 flight result was cached")
+	}
 }
 
 // A request whose extractor resolves no tournament id would be unreachable by
