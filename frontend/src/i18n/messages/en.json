@@ -574,6 +574,8 @@
     "submitting": "Submitting...",
     "submittedForConfirmation": "Result submitted for confirmation",
     "submitErrorMessage": "Failed to submit",
+    "alreadyConfirmedTitle": "Result already confirmed",
+    "alreadyConfirmedBody": "This match result has been confirmed and can no longer be changed. Contact an admin if a correction is needed.",
     "qualityDescriptions": {
       "1": "One-sided match",
       "2": "Almost one-sided",

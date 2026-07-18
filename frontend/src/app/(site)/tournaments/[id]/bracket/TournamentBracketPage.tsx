@@ -12,6 +12,7 @@ import { notify } from "@/lib/notify";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
 import { usePermissions } from "@/hooks/usePermissions";
 import captainService from "@/services/captain.service";
+import encounterService from "@/services/encounter.service";
 import type { Encounter } from "@/types/encounter.types";
 import type { Standings, Tournament, Stage, StageItem } from "@/types/tournament.types";
 
@@ -179,12 +180,23 @@ export default function TournamentBracketPage({ tournament }: TournamentBracketP
     isAuthenticated && !isAdmin
       ? async (enc: Encounter) => {
           try {
-            const { side } = await captainService.getMyRole(enc.id);
-            if (side === null) {
+            const [fresh, role] = await Promise.all([
+              encounterService.getEncounter(enc.id),
+              captainService.getMyRole(enc.id)
+            ]);
+            if (fresh.result_status === "confirmed") {
+              notify.error(t("matchReport.alreadyConfirmedTitle"), {
+                description: t("matchReport.alreadyConfirmedBody")
+              });
+              // Cached bracket data was stale; refresh so the report action hides.
+              void encountersQuery.refetch();
+              return;
+            }
+            if (role.side === null) {
               notify.error(t("common.noAccess"), { description: t("common.notCaptain") });
               return;
             }
-            setReportEncounter(enc);
+            setReportEncounter(fresh);
           } catch {
             notify.error(t("common.error"), { description: t("common.roleVerificationFailed") });
           }

@@ -30,6 +30,22 @@ export function isNotFoundError(error: unknown): boolean {
   );
 }
 
+/**
+ * True when a captain result submission was rejected because the encounter's
+ * result is already locked (confirmed). The tournament backend answers such
+ * attempts with 400 and a detail string like
+ * `Cannot submit: result status is 'confirmed'`. Callers use this to swap the
+ * raw backend string for a friendly "ask an admin" message and refresh stale
+ * UI so the report action disappears.
+ */
+export function isResultLockedError(error: unknown): boolean {
+  return (
+    error instanceof ApiError &&
+    error.status === 400 &&
+    error.details.some((d) => /result status is 'confirmed'/i.test(d.msg))
+  );
+}
+
 // ─── Parsing ──────────────────────────────────────────────────────────────────
 
 const PYDANTIC_LOC_PREFIXES = ["body", "query", "path", "header", "cookie"];
