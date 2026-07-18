@@ -8,6 +8,28 @@ export type TournamentChangedReason =
   | "results_changed"
   | "structure_changed";
 
+const TOURNAMENT_REASON_RANK: Record<TournamentChangedReason, number> = {
+  bracket_changed: 0,
+  results_changed: 1,
+  structure_changed: 2,
+};
+
+/**
+ * Pick the broader of two tournament realtime reasons. Each reason's update plan
+ * is a superset of the weaker one's (structure ⊇ results ⊇ bracket), so applying
+ * the strongest reason seen within a coalescing window covers every reason it
+ * coalesced into one refetch.
+ */
+export function strongerTournamentReason(
+  current: TournamentChangedReason | null,
+  next: TournamentChangedReason,
+): TournamentChangedReason {
+  if (current === null) {
+    return next;
+  }
+  return TOURNAMENT_REASON_RANK[current] >= TOURNAMENT_REASON_RANK[next] ? current : next;
+}
+
 type TournamentUpdatedMessage = {
   type: "tournament:updated";
   data?: {

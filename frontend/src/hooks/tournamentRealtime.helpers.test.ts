@@ -9,6 +9,7 @@ import {
   getTournamentRealtimeCatchUpPlan,
   getTournamentRealtimeUpdatePlan,
   parseTournamentRealtimeMessage,
+  strongerTournamentReason,
 } from "@/hooks/tournamentRealtime.helpers";
 import { tournamentQueryKeys } from "@/lib/tournament-query-keys";
 import { buildRealtimeWebSocketUrl } from "@/services/realtime.service";
@@ -354,5 +355,17 @@ describe("tournament realtime helpers", () => {
     expect(
       buildRealtimeWebSocketUrl("/api/realtime", "https://example.test"),
     ).toBe("wss://example.test/api/realtime/ws");
+  });
+
+  it("keeps the broadest reason seen so coalesced waves apply the superset plan", () => {
+    expect(strongerTournamentReason(null, "bracket_changed")).toBe("bracket_changed");
+    expect(strongerTournamentReason("bracket_changed", "results_changed")).toBe("results_changed");
+    expect(strongerTournamentReason("results_changed", "bracket_changed")).toBe("results_changed");
+    expect(strongerTournamentReason("results_changed", "structure_changed")).toBe(
+      "structure_changed",
+    );
+    expect(strongerTournamentReason("structure_changed", "bracket_changed")).toBe(
+      "structure_changed",
+    );
   });
 });
