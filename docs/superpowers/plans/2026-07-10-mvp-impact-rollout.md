@@ -6,7 +6,7 @@
 >
 > Реализация: ветка `feature/mvp-impact-scoring` (Tasks 1–9). Спека:
 > `docs/superpowers/specs/2026-07-10-mvp-impact-scoring-design.md`.
-> Прод: `anakq.xyz` → `72.56.118.90`, стек в `/root/overwatch-tournaments`.
+> Прод: `owt.craazzzyyfoxx.me` → `72.56.118.90`, стек в `/root/overwatch-tournaments`.
 
 ## Что именно катим
 
