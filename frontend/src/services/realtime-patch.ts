@@ -15,62 +15,50 @@ export type PatchReducer<TSnapshot, TData = Record<string, unknown>> = (
   event: RealtimeEventEnvelope<TData>,
 ) => TSnapshot;
 
-export type RealtimeResource<TSnapshot, TData = Record<string, unknown>> = {
-  /** The react-query key holding the snapshot this resource patches. */
-  queryKey: (resourceId: number) => QueryKey;
-  /** Fold a single realtime event into the cached snapshot. */
-  reduce: PatchReducer<TSnapshot, TData>;
-};
-
 /**
  * Outcome of a patch attempt:
  *  - "applied":      the cached snapshot was patched in place — no refetch.
- *  - "unregistered": no resource is registered under this name.
- *  - "uncached":     the resource is registered but nothing is cached yet, so the
- *                    caller should seed a snapshot (refetch) before patching.
+ *  - "unregistered": no reducer is registered under this resource name.
+ *  - "uncached":     nothing is cached under the query key yet, so the caller
+ *                    should seed a snapshot (refetch) before patching.
  */
 export type PatchOutcome = "applied" | "unregistered" | "uncached";
 
-const registry = new Map<string, RealtimeResource<unknown, Record<string, unknown>>>();
+const reducers = new Map<string, PatchReducer<unknown, Record<string, unknown>>>();
 
 /**
- * Register a patchable realtime resource. A consumer calls this once (at module
- * load) to declare how its cached read model is keyed and how a realtime event
- * folds into it — the general, reusable half of the mechanism. Registering the
- * same resource again replaces the prior definition.
+ * Register the reducer for a patchable realtime resource. A consumer calls this
+ * once (at module load) to declare how a realtime event folds into its cached
+ * read model. The query key is supplied per call to applyResourcePatch, so a
+ * resource whose cache key carries more than one id (e.g. tournament + workspace)
+ * is supported. Registering the same resource again replaces the reducer.
  */
 export function registerRealtimeResource<TSnapshot, TData = Record<string, unknown>>(
   resource: string,
-  definition: RealtimeResource<TSnapshot, TData>,
+  reduce: PatchReducer<TSnapshot, TData>,
 ): void {
-  registry.set(
-    resource,
-    definition as unknown as RealtimeResource<unknown, Record<string, unknown>>,
-  );
+  reducers.set(resource, reduce as unknown as PatchReducer<unknown, Record<string, unknown>>);
 }
 
 /**
- * Apply a realtime event to the cached snapshot of a registered resource,
- * returning the outcome so the caller can fall back (buffer + refetch) when
- * there is no snapshot to patch yet. A no-op that never throws for events whose
- * resource is unregistered or uncached.
+ * Apply a realtime event to the cached snapshot at queryKey using the resource's
+ * registered reducer, returning the outcome so the caller can fall back
+ * (buffer + refetch) when there is no snapshot to patch yet. Never throws for an
+ * unregistered resource or an uncached key.
  */
 export function applyResourcePatch(
   queryClient: QueryClient,
-  params: { resource: string; resourceId: number; event: RealtimeEventEnvelope },
+  params: { resource: string; queryKey: QueryKey; event: RealtimeEventEnvelope },
 ): PatchOutcome {
-  const definition = registry.get(params.resource);
-  if (!definition) {
+  const reduce = reducers.get(params.resource);
+  if (!reduce) {
     return "unregistered";
   }
-
-  const queryKey = definition.queryKey(params.resourceId);
-  if (queryClient.getQueryData(queryKey) === undefined) {
+  if (queryClient.getQueryData(params.queryKey) === undefined) {
     return "uncached";
   }
-
-  queryClient.setQueryData(queryKey, (snapshot: unknown) =>
-    snapshot == null ? snapshot : definition.reduce(snapshot, params.event),
+  queryClient.setQueryData(params.queryKey, (snapshot: unknown) =>
+    snapshot == null ? snapshot : reduce(snapshot, params.event),
   );
   return "applied";
 }

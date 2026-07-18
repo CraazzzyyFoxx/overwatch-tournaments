@@ -19,12 +19,9 @@ function incEvent(by: number): RealtimeEventEnvelope {
 
 const counterKey = (id: number) => ["counter", id] as const;
 
-registerRealtimeResource<Counter>("test.counter", {
-  queryKey: counterKey,
-  reduce: (snapshot, event) => ({
-    value: snapshot.value + Number(event.data.by ?? 1),
-  }),
-});
+registerRealtimeResource<Counter>("test.counter", (snapshot, event) => ({
+  value: snapshot.value + Number(event.data.by ?? 1),
+}));
 
 describe("applyResourcePatch", () => {
   it("folds the event into the cached snapshot in place", () => {
@@ -33,7 +30,7 @@ describe("applyResourcePatch", () => {
 
     const outcome = applyResourcePatch(queryClient, {
       resource: "test.counter",
-      resourceId: 7,
+      queryKey: counterKey(7),
       event: incEvent(5),
     });
 
@@ -46,7 +43,7 @@ describe("applyResourcePatch", () => {
 
     const outcome = applyResourcePatch(queryClient, {
       resource: "test.counter",
-      resourceId: 9,
+      queryKey: counterKey(9),
       event: incEvent(1),
     });
 
@@ -59,7 +56,7 @@ describe("applyResourcePatch", () => {
 
     const outcome = applyResourcePatch(queryClient, {
       resource: "nope.unknown",
-      resourceId: 1,
+      queryKey: ["nope", 1],
       event: incEvent(1),
     });
 

@@ -53,10 +53,9 @@ const DRAFT_BOARD_RESOURCE = "draft.board";
 // Register the draft board as a patchable realtime resource: draft WS events
 // fold into the cached board in place instead of triggering a refetch. Mirrors
 // the backend resource tag emitted by publish_draft_event.
-registerRealtimeResource<DraftBoard, DraftEventData>(DRAFT_BOARD_RESOURCE, {
-  queryKey: (tournamentId) => tournamentQueryKeys.draftBoard(tournamentId),
-  reduce: (board, event) => applyDraftEvents(board, [event]),
-});
+registerRealtimeResource<DraftBoard, DraftEventData>(DRAFT_BOARD_RESOURCE, (board, event) =>
+  applyDraftEvents(board, [event]),
+);
 
 export function useDraftBoardQuery(tournamentId: number) {
   return useQuery({
@@ -149,11 +148,11 @@ export function useDraftRealtime(
 
       applyResourcePatch(queryClient, {
         resource: DRAFT_BOARD_RESOURCE,
-        resourceId: tournamentId,
+        queryKey,
         event,
       });
     },
-    [queryClient, queryKey, topic, tournamentId]
+    [queryClient, queryKey, topic]
   );
 
   useEffect(() => {
@@ -176,11 +175,11 @@ export function useDraftRealtime(
     for (const pendingEvent of pending) {
       applyResourcePatch(queryClient, {
         resource: DRAFT_BOARD_RESOURCE,
-        resourceId: tournamentId,
+        queryKey,
         event: pendingEvent,
       });
     }
-  }, [board, queryClient, queryKey, topic, tournamentId]);
+  }, [board, queryClient, queryKey, topic]);
 
   // On reconnect, the client replays from the cursor; refetch the snapshot as a
   // safety net so the board converges even after a long disconnect.
