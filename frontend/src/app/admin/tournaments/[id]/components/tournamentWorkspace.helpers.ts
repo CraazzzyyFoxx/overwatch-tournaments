@@ -3,6 +3,7 @@ import type { Encounter } from "@/types/encounter.types";
 import type { Team } from "@/types/team.types";
 import type { Stage, Standings, Tournament } from "@/types/tournament.types";
 import type { TournamentPhaseScheduleEntryInput } from "@/types/admin.types";
+import { utcToZonedInput, zonedInputToUtc } from "@/lib/timezone";
 
 export const SCHEDULABLE_PHASES = ["registration", "check_in", "draft", "live"] as const;
 
@@ -104,7 +105,10 @@ export function toDateTimeInput(value?: Date | string | null) {
   return new Date(value).toISOString().slice(0, 16);
 }
 
-export function getPhaseScheduleForm(tournament: Tournament): PhaseScheduleFormState {
+export function getPhaseScheduleForm(
+  tournament: Tournament,
+  timezone: string
+): PhaseScheduleFormState {
   const schedule = Object.fromEntries(
     SCHEDULABLE_PHASES.map((phase) => [phase, { starts_at: "", ends_at: "" }])
   ) as PhaseScheduleFormState;
@@ -112,8 +116,8 @@ export function getPhaseScheduleForm(tournament: Tournament): PhaseScheduleFormS
   for (const row of tournament.phase_schedule ?? []) {
     if ((SCHEDULABLE_PHASES as readonly string[]).includes(row.status)) {
       schedule[row.status as SchedulablePhase] = {
-        starts_at: toDateTimeInput(row.starts_at),
-        ends_at: toDateTimeInput(row.ends_at)
+        starts_at: utcToZonedInput(row.starts_at, timezone),
+        ends_at: utcToZonedInput(row.ends_at, timezone)
       };
     }
   }
@@ -122,16 +126,17 @@ export function getPhaseScheduleForm(tournament: Tournament): PhaseScheduleFormS
 }
 
 export function getPhaseSchedulePayload(
-  schedule: PhaseScheduleFormState
+  schedule: PhaseScheduleFormState,
+  timezone: string
 ): TournamentPhaseScheduleEntryInput[] {
   return SCHEDULABLE_PHASES.filter((phase) => schedule[phase].starts_at).map((phase) => ({
     status: phase,
-    starts_at: schedule[phase].starts_at,
-    ends_at: schedule[phase].ends_at || null
+    starts_at: zonedInputToUtc(schedule[phase].starts_at, timezone) ?? schedule[phase].starts_at,
+    ends_at: zonedInputToUtc(schedule[phase].ends_at, timezone)
   }));
 }
 
-export function getTournamentForm(tournament: Tournament): TournamentFormState {
+export function getTournamentForm(tournament: Tournament, timezone: string): TournamentFormState {
   return {
     number: tournament.number ?? null,
     name: tournament.name,
@@ -147,7 +152,7 @@ export function getTournamentForm(tournament: Tournament): TournamentFormState {
     loss_points: tournament.loss_points ?? 0,
     auto_transitions_enabled: tournament.auto_transitions_enabled ?? true,
     allow_late_registration: tournament.allow_late_registration ?? false,
-    phase_schedule: getPhaseScheduleForm(tournament),
+    phase_schedule: getPhaseScheduleForm(tournament, timezone),
     division_grid_version_id: tournament.division_grid_version_id ?? null,
     team_formation: tournament.team_formation ?? "balancer"
   };

@@ -1,4 +1,5 @@
 from datetime import datetime
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -29,6 +30,7 @@ class WorkspaceRead(BaseRead):
     description: str | None
     icon_url: str | None
     is_active: bool
+    timezone: str = "Europe/Moscow"
     branding_enabled: bool = False
     brand_primary: str | None = None
     brand_secondary: str | None = None
@@ -66,6 +68,7 @@ class WorkspaceUpdate(BaseModel):
     description: str | None = None
     icon_url: str | None = None
     is_active: bool | None = None
+    timezone: str | None = None
     branding_enabled: bool | None = None
     brand_primary: str | None = Field(default=None, pattern=_HEX_COLOR)
     brand_secondary: str | None = Field(default=None, pattern=_HEX_COLOR)
@@ -109,6 +112,19 @@ class WorkspaceUpdate(BaseModel):
         if value is None or value == "":
             return None
         return validate_subdomain_label(value)
+
+    @field_validator("timezone")
+    @classmethod
+    def _validate_timezone(cls, value: str | None) -> str | None:
+        # The column is NOT NULL: None means "field untouched"; a blank or
+        # unknown zone is rejected rather than silently written as NULL.
+        if value is None:
+            return None
+        try:
+            ZoneInfo(value)
+        except (ZoneInfoNotFoundError, ValueError, KeyError) as exc:
+            raise ValueError(f"Unknown IANA timezone: {value!r}") from exc
+        return value
 
 
 class WorkspaceCustomDomainSet(BaseModel):

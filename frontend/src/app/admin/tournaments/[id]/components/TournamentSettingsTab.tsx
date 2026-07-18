@@ -38,6 +38,8 @@ import { notify } from "@/lib/notify";
 import adminService from "@/services/admin.service";
 import { normalizeChallongeSlug } from "@/lib/challonge";
 import { hasUnsavedChanges } from "@/lib/form-change";
+import { DEFAULT_WORKSPACE_TIMEZONE, getUtcOffsetLabel } from "@/lib/timezone";
+import { useWorkspaceStore } from "@/stores/workspace.store";
 import type { Tournament } from "@/types/tournament.types";
 import type { DivisionGridVersion } from "@/types/workspace.types";
 import type { TournamentPhaseScheduleEntryInput, TournamentUpdateInput } from "@/types/admin.types";
@@ -77,16 +79,25 @@ export function TournamentSettingsTab({
   const router = useRouter();
   const queryClient = useQueryClient();
 
-  const [formData, setFormData] = useState<TournamentFormState>(getTournamentForm(tournament));
+  // Schedule times are entered/shown in the tournament workspace's zone;
+  // storage and the API stay UTC.
+  const workspaces = useWorkspaceStore((s) => s.workspaces);
+  const timezone =
+    workspaces.find((ws) => ws.id === tournament.workspace_id)?.timezone ??
+    DEFAULT_WORKSPACE_TIMEZONE;
+
+  const [formData, setFormData] = useState<TournamentFormState>(
+    getTournamentForm(tournament, timezone)
+  );
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
-  const initialFormData = getTournamentForm(tournament);
+  const initialFormData = getTournamentForm(tournament, timezone);
   const isDirty = hasUnsavedChanges(formData, initialFormData);
 
-  // Sync state if tournament updates in background
+  // Sync state if tournament updates in background (or the zone loads in).
   useEffect(() => {
-    setFormData(getTournamentForm(tournament));
-  }, [tournament]);
+    setFormData(getTournamentForm(tournament, timezone));
+  }, [tournament, timezone]);
 
   const updateMutation = useMutation({
     mutationFn: async ({
@@ -162,7 +173,7 @@ export function TournamentSettingsTab({
 
     updateMutation.mutate({
       payload,
-      schedule: getPhaseSchedulePayload(formData.phase_schedule)
+      schedule: getPhaseSchedulePayload(formData.phase_schedule, timezone)
     });
   };
 
@@ -294,6 +305,9 @@ export function TournamentSettingsTab({
                     Each phase starts automatically at its start time when automatic transitions
                     are enabled. An end time only closes that phase&apos;s action window early —
                     it never changes the tournament status.
+                  </p>
+                  <p className="mt-1 text-xs font-medium text-foreground/80">
+                    Time zone: {timezone} ({getUtcOffsetLabel(timezone)})
                   </p>
                 </div>
 

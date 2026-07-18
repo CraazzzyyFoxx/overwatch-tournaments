@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useEffect, useState, type CSSProperties } from "react";
+import { use, useEffect, useMemo, useState, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -18,6 +18,7 @@ import { notify } from "@/lib/notify";
 import { usePermissions } from "@/hooks/usePermissions";
 import { deriveWorkspacePalette } from "@/lib/workspace-theme";
 import { PLATFORM_ZONE } from "@/lib/host";
+import { DEFAULT_WORKSPACE_TIMEZONE, getUtcOffsetLabel } from "@/lib/timezone";
 import workspaceService from "@/services/workspace.service";
 import { useWorkspaceStore } from "@/stores/workspace.store";
 import type { Workspace } from "@/types/workspace.types";
@@ -29,6 +30,7 @@ const VERIFY_POLL_MS = 15000;
 interface EditFormData {
   name: string;
   description: string;
+  timezone: string;
   branding_enabled: boolean;
   brand_primary: string | null;
   brand_secondary: string | null;
@@ -49,6 +51,7 @@ function formFromWorkspace(ws: Workspace): EditFormData {
   return {
     name: ws.name,
     description: ws.description ?? "",
+    timezone: ws.timezone ?? DEFAULT_WORKSPACE_TIMEZONE,
     branding_enabled: ws.branding_enabled,
     brand_primary: ws.brand_primary,
     brand_secondary: ws.brand_secondary,
@@ -129,6 +132,19 @@ export default function WorkspaceEditPage({ params }: { params: Promise<{ id: st
     verifiedAt: string | null;
     token: string | null;
   }>({ domain: null, verifiedAt: null, token: null });
+
+  // All IANA zones the runtime knows, with a fallback and the saved value kept
+  // selectable even if the runtime doesn't list it.
+  const timezoneOptions = useMemo(() => {
+    let zones: string[];
+    try {
+      zones = Intl.supportedValuesOf("timeZone");
+    } catch {
+      zones = [DEFAULT_WORKSPACE_TIMEZONE, "UTC"];
+    }
+    const current = form?.timezone;
+    return current && !zones.includes(current) ? [current, ...zones] : zones;
+  }, [form?.timezone]);
 
   // Seed local state once the workspace loads (guarded so a background refetch
   // never clobbers in-progress edits).
@@ -299,6 +315,7 @@ export default function WorkspaceEditPage({ params }: { params: Promise<{ id: st
     updateMutation.mutate({
       name: form.name,
       description: form.description,
+      timezone: form.timezone,
       branding_enabled: form.branding_enabled,
       brand_primary: hexOrNull(form.brand_primary),
       brand_secondary: hexOrNull(form.brand_secondary),
@@ -345,6 +362,24 @@ export default function WorkspaceEditPage({ params }: { params: Promise<{ id: st
             value={form.description}
             onChange={(e) => patch({ description: e.target.value })}
           />
+        </div>
+        <div>
+          <Label htmlFor="edit-timezone">Timezone</Label>
+          <select
+            id="edit-timezone"
+            className="mt-1.5 flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            value={form.timezone}
+            onChange={(e) => patch({ timezone: e.target.value })}
+          >
+            {timezoneOptions.map((zone) => (
+              <option key={zone} value={zone}>
+                {zone} ({getUtcOffsetLabel(zone)})
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Tournament schedule times are entered and shown in this zone.
+          </p>
         </div>
         <div>
           <Label>Icon</Label>

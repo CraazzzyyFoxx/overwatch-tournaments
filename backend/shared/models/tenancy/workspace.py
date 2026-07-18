@@ -24,6 +24,9 @@ class Workspace(db.TimeStampIntegerMixin):
     description: Mapped[str | None] = mapped_column(String(), nullable=True)
     icon_url: Mapped[str | None] = mapped_column(String(), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean(), server_default="true")
+    # IANA timezone all workspace tournaments run in (admin schedule forms
+    # display/parse wall-clock times in this zone; storage stays UTC).
+    timezone: Mapped[str] = mapped_column(String(64), nullable=False, server_default="Europe/Moscow")
     # Per-workspace site branding (main public site only). Typed hex colours
     # (#RRGGBB); the rest of the palette (text/borders/hover) is derived on the
     # frontend with contrast guards. ``branding_enabled`` is the master toggle so

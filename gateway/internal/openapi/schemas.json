@@ -6982,7 +6982,7 @@
       "summary": "Toggle tournament finished"
     },
     "rpc.tournament.tournament_schedule_set": {
-      "description": "Replaces the tournament's phase schedule (full replace of REGISTRATION/DRAFT/CHECK_IN/LIVE rows); requires tournament-update permission.",
+      "description": "Replaces the tournament's phase schedule (full replace of REGISTRATION/CHECK_IN/DRAFT/LIVE rows); requires tournament-update permission.",
       "request": {
         "array": false,
         "ref": "tournament.TournamentScheduleSet"
@@ -15050,6 +15050,11 @@
           ],
           "default": null,
           "title": "Subdomain"
+        },
+        "timezone": {
+          "default": "Europe/Moscow",
+          "title": "Timezone",
+          "type": "string"
         }
       },
       "required": [
@@ -15303,6 +15308,18 @@
           ],
           "default": null,
           "title": "Subdomain"
+        },
+        "timezone": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Timezone"
         }
       },
       "title": "WorkspaceUpdate",

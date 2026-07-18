@@ -118,6 +118,8 @@ export interface Workspace {
   description: string | null;
   icon_url: string | null;
   is_active: boolean;
+  /** IANA zone tournament schedule forms display and parse times in. */
+  timezone: string;
   /** Per-workspace main-site branding (see lib/workspace-theme). */
   branding_enabled: boolean;
   brand_primary: string | null;
