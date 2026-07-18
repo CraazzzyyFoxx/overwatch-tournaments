@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
+import { Loader2 } from "lucide-react";
 
 import { BracketView } from "@/components/BracketView";
 import StandingsTable from "@/components/StandingsTable";
@@ -457,11 +458,15 @@ export default function TournamentBracketPage({ tournament }: TournamentBracketP
   const content = (
     <div className={styles.publicDataPage} data-page-section="bracket">
       {loadState.isUpdating && loadState.kind !== "refresh-error" ? (
-        <p className={styles.updatingRow} role="status" aria-live="polite">
-          <span className={styles.updating}>
-            {t("tournamentDetail.pageState.updating")}
-          </span>
-        </p>
+        <span
+          className={styles.updatingBadge}
+          role="status"
+          aria-live="polite"
+          aria-label={t("tournamentDetail.pageState.updating")}
+          title={t("tournamentDetail.pageState.updating")}
+        >
+          <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden />
+        </span>
       ) : null}
       {activeStages.length > 0 ? (
         <div className="space-y-6">

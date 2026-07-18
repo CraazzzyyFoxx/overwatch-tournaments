@@ -1,6 +1,7 @@
 "use client";
 
 import { useTranslations } from "next-intl";
+import { Loader2 } from "lucide-react";
 
 import EncountersTable, {
   getEncountersQueryPresentation,
@@ -69,11 +70,15 @@ const TournamentEncountersPage = ({ tournamentId, page, search }: TournamentEnco
   const content = (
     <section className={styles.publicDataPage} aria-label={t("common.matches")}>
       {presentation.showUpdating ? (
-        <p className={styles.updatingRow} role="status" aria-live="polite">
-          <span className={styles.updating}>
-            {t("tournamentDetail.pageState.updating")}
-          </span>
-        </p>
+        <span
+          className={styles.updatingBadge}
+          role="status"
+          aria-live="polite"
+          aria-label={t("tournamentDetail.pageState.updating")}
+          title={t("tournamentDetail.pageState.updating")}
+        >
+          <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden />
+        </span>
       ) : null}
 
       <EncountersTable

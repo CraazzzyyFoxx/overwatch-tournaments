@@ -360,28 +360,30 @@
   text-transform: uppercase;
 }
 
-.updatingRow {
-  position: absolute;
-  top: 0;
-  right: 0;
-  margin: 0;
-  transform: translateY(-100%);
-  text-align: end;
+.updatingBadge {
+  position: fixed;
+  bottom: 1.25rem;
+  right: 1.25rem;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 999px;
+  color: var(--aqt-teal);
+  background: color-mix(in srgb, var(--aqt-bg) 82%, transparent);
+  border: 1px solid color-mix(in srgb, var(--aqt-teal) 30%, transparent);
+  backdrop-filter: blur(6px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.28);
   pointer-events: none;
-  z-index: 2;
 }
 
 .publicDataPage {
-  position: relative;
   display: grid;
   width: 100%;
   min-width: 0;
   max-width: 100%;
   gap: 1rem;
-}
-
-.teamsContent {
-  position: relative;
 }
 
 .controlRail,

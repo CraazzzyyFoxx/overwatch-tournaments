@@ -2,7 +2,7 @@
 
 import React, { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { BarChart3, Circle, LayoutGrid } from "lucide-react";
+import { BarChart3, Circle, LayoutGrid, Loader2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import StandingsTable from "@/components/StandingsTable";
@@ -158,11 +158,15 @@ const TournamentStandingsPage = ({ tournamentId }: { tournamentId: number }) => 
   const content = (
     <section className={styles.publicDataPage} aria-label={t("common.standings")}>
       {presentation.showUpdating ? (
-        <p className={styles.updatingRow} role="status" aria-live="polite">
-          <span className={styles.updating}>
-            {t("tournamentDetail.pageState.updating")}
-          </span>
-        </p>
+        <span
+          className={styles.updatingBadge}
+          role="status"
+          aria-live="polite"
+          aria-label={t("tournamentDetail.pageState.updating")}
+          title={t("tournamentDetail.pageState.updating")}
+        >
+          <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden />
+        </span>
       ) : null}
 
       {showTabs ? (

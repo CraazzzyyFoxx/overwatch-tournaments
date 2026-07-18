@@ -3,6 +3,7 @@
 import React, { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "next-intl";
+import { Loader2 } from "lucide-react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { tournamentQueryKeys } from "@/lib/tournament-query-keys";
@@ -95,11 +96,15 @@ const TournamentHeroPlaytimePage = ({ tournamentId }: { tournamentId: number }) 
   const content = (
     <section className={styles.publicDataPage} aria-label={t("common.heroes")}>
       {presentation.showUpdating ? (
-        <p className={styles.updatingRow} role="status" aria-live="polite">
-          <span className={styles.updating}>
-            {t("tournamentDetail.pageState.updating")}
-          </span>
-        </p>
+        <span
+          className={styles.updatingBadge}
+          role="status"
+          aria-live="polite"
+          aria-label={t("tournamentDetail.pageState.updating")}
+          title={t("tournamentDetail.pageState.updating")}
+        >
+          <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden />
+        </span>
       ) : null}
 
       {heroes.length > 0 ? (

@@ -2,6 +2,7 @@
 
 import React, { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Loader2 } from "lucide-react";
 
 import { Tournament } from "@/types/tournament.types";
 import { Team } from "@/types/team.types";
@@ -118,11 +119,17 @@ const TournamentTeamsPage = ({ tournament }: { tournament: Tournament }) => {
   }
 
   const content = (
-    <div className={cn("space-y-4", styles.teamsContent)}>
+    <div className="space-y-4">
       {presentation.showUpdating ? (
-        <p className={styles.updatingRow} role="status" aria-live="polite">
-          <span className={styles.updating}>{t("tournamentDetail.pageState.updating")}</span>
-        </p>
+        <span
+          className={styles.updatingBadge}
+          role="status"
+          aria-live="polite"
+          aria-label={t("tournamentDetail.pageState.updating")}
+          title={t("tournamentDetail.pageState.updating")}
+        >
+          <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden />
+        </span>
       ) : null}
       {presentation.contentState === "empty" ? (
         <TournamentPageState state="empty" />
