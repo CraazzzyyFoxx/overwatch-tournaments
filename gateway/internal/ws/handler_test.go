@@ -45,9 +45,13 @@ func (f fakeReplayer) EventsSince(context.Context, string, *int64, int64) ([]pro
 }
 
 func newServer(t *testing.T, authz Authorizer, rep Replayer) string {
+	return newServerLimits(t, authz, rep, Limits{})
+}
+
+func newServerLimits(t *testing.T, authz Authorizer, rep Replayer, limits Limits) string {
 	t.Helper()
 	h := NewHandler(NewHub(), auth.New(wsSecret), authz, rep, 30*time.Second,
-		slog.New(slog.NewTextHandler(io.Discard, nil)), nil, nil, nil, nil)
+		slog.New(slog.NewTextHandler(io.Discard, nil)), nil, nil, nil, nil, limits)
 	mux := http.NewServeMux()
 	mux.Handle("/ws", h)
 	srv := httptest.NewServer(mux)
@@ -335,5 +339,42 @@ func TestWS_ClosesAtTokenExpiry(t *testing.T) {
 	defer cancel()
 	if _, _, err := c.Read(readCtx); err == nil {
 		t.Fatal("expected the connection to close at token expiry")
+	}
+}
+
+// TestWS_TopicSubscriptionCap asserts a connection cannot exceed its topic
+// budget (tighter for anonymous clients).
+func TestWS_TopicSubscriptionCap(t *testing.T) {
+	url := newServerLimits(t, allowAuthorizer{allow: true}, fakeReplayer{cursor: 1}, Limits{MaxTopicsAnon: 1})
+	ctx := context.Background()
+	c := dial(t, ctx, url, "")
+
+	writeJSON(t, ctx, c, map[string]any{"op": "subscribe", "topic": "tournament:1:bracket"})
+	if m := readJSON(t, ctx, c); m["op"] != "subscribed" {
+		t.Fatalf("first subscribe should succeed, got %v", m)
+	}
+
+	writeJSON(t, ctx, c, map[string]any{"op": "subscribe", "topic": "tournament:2:bracket"})
+	if m := readJSON(t, ctx, c); m["op"] != "error" || m["code"] != "too_many_topics" {
+		t.Fatalf("second subscribe should hit the topic cap, got %v", m)
+	}
+}
+
+// TestWS_AnonConnectionCapPerIP asserts a second anonymous connection from the
+// same IP is rejected at the handshake with a 429 while one is already open.
+func TestWS_AnonConnectionCapPerIP(t *testing.T) {
+	url := newServerLimits(t, allowAuthorizer{allow: true}, fakeReplayer{}, Limits{MaxAnonConnsPerIP: 1})
+	ctx := context.Background()
+
+	dial(t, ctx, url, "") // first anonymous connection holds the only slot
+
+	u := "ws" + strings.TrimPrefix(url, "http") + "/ws"
+	conn, resp, err := websocket.Dial(ctx, u, nil)
+	if err == nil {
+		conn.CloseNow()
+		t.Fatal("expected the second anonymous connection to be rejected")
+	}
+	if resp == nil || resp.StatusCode != http.StatusTooManyRequests {
+		t.Fatalf("expected 429, got resp=%v err=%v", resp, err)
 	}
 }

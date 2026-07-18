@@ -65,6 +65,21 @@ type CustomDomainResolver interface {
 	IsVerifiedCustomDomain(ctx context.Context, host string) (bool, error)
 }
 
+// Limits caps per-IP anonymous connections and per-connection topic
+// subscriptions, with a tighter topic budget for anonymous clients than for
+// authenticated ones. A zero value disables every cap (the safe default for
+// tests and for operators who opt out).
+type Limits struct {
+	// MaxAnonConnsPerIP bounds concurrent anonymous sockets from one client IP
+	// (0 = unlimited). Keep it generous: shared NATs put many legitimate
+	// visitors behind one IP, and one browser tab is one socket.
+	MaxAnonConnsPerIP int
+	// MaxTopicsAnon / MaxTopicsAuth bound simultaneous topic subscriptions on a
+	// single connection (0 = unlimited).
+	MaxTopicsAnon int
+	MaxTopicsAuth int
+}
+
 // Handler serves the WebSocket endpoint: it authenticates the connection,
 // registers it with the hub, and runs the per-connection read loop.
 type Handler struct {
@@ -78,6 +93,8 @@ type Handler struct {
 	customDomains       CustomDomainResolver
 	customDomainLimiter *ratelimit.Limiter
 	recordActive        func(userID int64)
+	limits              Limits
+	anonConns           *ipCounter
 }
 
 // NewHandler wires the WebSocket handler. recordActive may be nil; when set it
@@ -115,7 +132,7 @@ type Handler struct {
 // built from a non-positive limit, behaves the same way) to disable the
 // throttle — acceptOptionsFor never dereferences a nil limiter directly, it
 // only ever calls its nil-safe Allow method.
-func NewHandler(hub *Hub, a *auth.Authenticator, authz Authorizer, rep Replayer, idleTimeout time.Duration, log *slog.Logger, allowedOrigins []string, customDomains CustomDomainResolver, customDomainLimiter *ratelimit.Limiter, recordActive func(userID int64)) *Handler {
+func NewHandler(hub *Hub, a *auth.Authenticator, authz Authorizer, rep Replayer, idleTimeout time.Duration, log *slog.Logger, allowedOrigins []string, customDomains CustomDomainResolver, customDomainLimiter *ratelimit.Limiter, recordActive func(userID int64), limits Limits) *Handler {
 	if len(allowedOrigins) == 0 {
 		log.Warn("GATEWAY_WS_ALLOWED_ORIGINS is empty; WebSocket origin checking is degraded to same-origin-only")
 	}
@@ -137,6 +154,8 @@ func NewHandler(hub *Hub, a *auth.Authenticator, authz Authorizer, rep Replayer,
 		accept:              accept,
 		customDomains:       customDomains,
 		customDomainLimiter: customDomainLimiter,
+		limits:              limits,
+		anonConns:           newIPCounter(),
 	}
 }
 
@@ -144,6 +163,20 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	user := h.auth.UserFromRequest(r)
 	if user != nil && h.recordActive != nil {
 		h.recordActive(user.ID)
+	}
+
+	// Cap concurrent ANONYMOUS connections per client IP. /ws has no auth and no
+	// per-IP rate limiter in front of it, so this is the only bound on a single
+	// IP opening sockets; authenticated connections are bounded by the account
+	// instead and skip this. Reject before the upgrade so the client gets a
+	// plain 429 rather than an opened-then-closed socket.
+	if user == nil {
+		ip := clientip.From(r)
+		if !h.anonConns.acquire(ip, h.limits.MaxAnonConnsPerIP) {
+			http.Error(w, "too many anonymous WebSocket connections", http.StatusTooManyRequests)
+			return
+		}
+		defer h.anonConns.release(ip, h.limits.MaxAnonConnsPerIP)
 	}
 
 	// Per-connection logger carrying the correlation id (this path bypasses the
@@ -424,6 +457,18 @@ func (h *Handler) handleSubscribe(ctx context.Context, conn *Conn, op *protocol.
 	// Ignore a duplicate subscribe to an already-subscribed topic: it would
 	// otherwise re-run the ACL/replay queries and re-deliver replay events.
 	if conn.hasTopic(op.Topic) {
+		return
+	}
+
+	// Cap topics per connection, with a tighter budget for anonymous clients.
+	// Checked before the ACL/replay queries so an over-subscribing client cannot
+	// drive DB work past its budget.
+	maxTopics := h.limits.MaxTopicsAuth
+	if conn.user == nil {
+		maxTopics = h.limits.MaxTopicsAnon
+	}
+	if maxTopics > 0 && conn.topicCount() >= maxTopics {
+		_ = conn.send(protocol.ErrorFrame("too_many_topics", "Subscription limit reached; unsubscribe before subscribing to more topics", topicPtr))
 		return
 	}
 

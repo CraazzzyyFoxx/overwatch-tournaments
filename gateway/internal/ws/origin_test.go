@@ -50,7 +50,7 @@ func dialWithOrigin(t *testing.T, srvURL, origin string) error {
 // value or how it's wired into ws.NewHandler's AcceptOptions fails this test.
 func TestWS_OriginAllowlist_ProductionDefault(t *testing.T) {
 	h := NewHandler(NewHub(), auth.New(wsSecret), allowAuthorizer{allow: true}, fakeReplayer{},
-		30*time.Second, slog.New(slog.NewTextHandler(io.Discard, nil)), productionWSAllowedOrigins, nil, nil, nil)
+		30*time.Second, slog.New(slog.NewTextHandler(io.Discard, nil)), productionWSAllowedOrigins, nil, nil, nil, Limits{})
 	mux := http.NewServeMux()
 	mux.Handle("/ws", h)
 	srv := httptest.NewServer(mux)
@@ -89,7 +89,7 @@ func TestWS_OriginAllowlist_ProductionDefault(t *testing.T) {
 // while a same-origin handshake (Origin host == request Host) still works.
 func TestWS_OriginAllowlist_EmptyRejectsForeignOrigin(t *testing.T) {
 	h := NewHandler(NewHub(), auth.New(wsSecret), allowAuthorizer{allow: true}, fakeReplayer{},
-		30*time.Second, slog.New(slog.NewTextHandler(io.Discard, nil)), nil, nil, nil, nil)
+		30*time.Second, slog.New(slog.NewTextHandler(io.Discard, nil)), nil, nil, nil, nil, Limits{})
 	mux := http.NewServeMux()
 	mux.Handle("/ws", h)
 	srv := httptest.NewServer(mux)
@@ -172,7 +172,7 @@ func TestWS_OriginAllowlist_VerifiedCustomDomain(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			h := NewHandler(NewHub(), auth.New(wsSecret), allowAuthorizer{allow: true}, fakeReplayer{},
-				30*time.Second, slog.New(slog.NewTextHandler(io.Discard, nil)), productionWSAllowedOrigins, tt.resolver, nil, nil)
+				30*time.Second, slog.New(slog.NewTextHandler(io.Discard, nil)), productionWSAllowedOrigins, tt.resolver, nil, nil, Limits{})
 			mux := http.NewServeMux()
 			mux.Handle("/ws", h)
 			srv := httptest.NewServer(mux)
@@ -202,7 +202,7 @@ func TestWS_OriginAllowlist_VerifiedCustomDomain(t *testing.T) {
 func TestWS_OriginAllowlist_VerifiedCustomDomainPinsHTTPS(t *testing.T) {
 	resolver := &stubCustomDomainResolver{verified: true}
 	h := NewHandler(NewHub(), auth.New(wsSecret), allowAuthorizer{allow: true}, fakeReplayer{},
-		30*time.Second, slog.New(slog.NewTextHandler(io.Discard, nil)), productionWSAllowedOrigins, resolver, nil, nil)
+		30*time.Second, slog.New(slog.NewTextHandler(io.Discard, nil)), productionWSAllowedOrigins, resolver, nil, nil, Limits{})
 	mux := http.NewServeMux()
 	mux.Handle("/ws", h)
 	srv := httptest.NewServer(mux)
@@ -224,7 +224,7 @@ func TestWS_OriginAllowlist_VerifiedCustomDomainPinsHTTPS(t *testing.T) {
 func TestWS_OriginAllowlist_StaticOriginSkipsCustomDomainLookup(t *testing.T) {
 	resolver := &stubCustomDomainResolver{verified: false, err: errors.New("must not be called for a static origin")}
 	h := NewHandler(NewHub(), auth.New(wsSecret), allowAuthorizer{allow: true}, fakeReplayer{},
-		30*time.Second, slog.New(slog.NewTextHandler(io.Discard, nil)), productionWSAllowedOrigins, resolver, nil, nil)
+		30*time.Second, slog.New(slog.NewTextHandler(io.Discard, nil)), productionWSAllowedOrigins, resolver, nil, nil, Limits{})
 	mux := http.NewServeMux()
 	mux.Handle("/ws", h)
 	srv := httptest.NewServer(mux)
@@ -251,7 +251,7 @@ func TestWS_OriginAllowlist_StaticOriginSkipsCustomDomainLookup(t *testing.T) {
 // overhead/timing sensitivity of a full WS handshake.
 func newAcceptTestHandler(resolver CustomDomainResolver, limiter *ratelimit.Limiter) *Handler {
 	return NewHandler(NewHub(), auth.New(wsSecret), allowAuthorizer{allow: true}, fakeReplayer{},
-		30*time.Second, slog.New(slog.NewTextHandler(io.Discard, nil)), productionWSAllowedOrigins, resolver, limiter, nil)
+		30*time.Second, slog.New(slog.NewTextHandler(io.Discard, nil)), productionWSAllowedOrigins, resolver, limiter, nil, Limits{})
 }
 
 // newUpgradeRequest builds a GET /ws request carrying the Connection/Upgrade

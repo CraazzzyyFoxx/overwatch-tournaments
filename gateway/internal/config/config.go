@@ -52,6 +52,15 @@ type Config struct {
 	WSIdleTimeout      time.Duration
 	WSReplayLimit      int
 	WSAllowedOrigins   []string
+	// WSMaxAnonConnsPerIP caps concurrent anonymous /ws connections per client
+	// IP (0 = unlimited). /ws has no auth and no per-IP limiter in front of it,
+	// so this is the only bound on one IP opening sockets; keep it generous
+	// because shared NATs put many legitimate visitors behind one IP.
+	// WSMaxTopicsAnon/Auth cap simultaneous topic subscriptions per connection,
+	// tighter for anonymous clients (0 = unlimited).
+	WSMaxAnonConnsPerIP int
+	WSMaxTopicsAnon     int
+	WSMaxTopicsAuth     int
 	AuthRateLimit      int
 	AuthRateWindow     time.Duration
 	// WSCustomDomainRateLimit/Window bound how often ws.Handler's dynamic
@@ -184,6 +193,9 @@ func Load() (*Config, error) {
 		WSIdleTimeout:            time.Duration(getenvInt("WS_IDLE_TIMEOUT", 60)) * time.Second,
 		WSReplayLimit:            getenvInt("WS_REPLAY_LIMIT", 500),
 		WSAllowedOrigins:         splitCSV(getenv("GATEWAY_WS_ALLOWED_ORIGINS", defaultWSAllowedOrigins)),
+		WSMaxAnonConnsPerIP:      getenvInt("GATEWAY_WS_MAX_ANON_CONNS_PER_IP", 64),
+		WSMaxTopicsAnon:          getenvInt("GATEWAY_WS_MAX_TOPICS_ANON", 24),
+		WSMaxTopicsAuth:          getenvInt("GATEWAY_WS_MAX_TOPICS_AUTH", 128),
 		AuthRateLimit:            getenvInt("GATEWAY_AUTH_RATE_LIMIT", 10),
 		AuthRateWindow:           time.Duration(getenvInt("GATEWAY_AUTH_RATE_WINDOW", 60)) * time.Second,
 		WSCustomDomainRateLimit:  getenvInt("GATEWAY_WS_CUSTOM_DOMAIN_RATE_LIMIT", 30),

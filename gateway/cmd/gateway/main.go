@@ -159,6 +159,11 @@ func run() error {
 		wsStore,
 		wsCustomDomainLimiter,
 		activeUsers.Record,
+		ws.Limits{
+			MaxAnonConnsPerIP: cfg.WSMaxAnonConnsPerIP,
+			MaxTopicsAnon:     cfg.WSMaxTopicsAnon,
+			MaxTopicsAuth:     cfg.WSMaxTopicsAuth,
+		},
 	)
 
 	rev, err := proxy.New(cfg.Upstreams)

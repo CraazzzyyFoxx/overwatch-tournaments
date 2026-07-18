@@ -67,6 +67,12 @@ func (c *Conn) hasTopic(topic string) bool {
 	return ok
 }
 
+func (c *Conn) topicCount() int {
+	c.topicsMu.RLock()
+	defer c.topicsMu.RUnlock()
+	return len(c.topics)
+}
+
 func (c *Conn) subscribedTopics() []string {
 	c.topicsMu.RLock()
 	defer c.topicsMu.RUnlock()
