@@ -13,6 +13,7 @@ from shared.core.enums import EncounterResultStatus, EncounterStatus, StageType
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.services.bracket import advancement
 from src import models
+from src.services.encounter import veto_session as veto_session_service
 
 FinalizeSource = Literal["captain", "admin", "challonge", "log"]
 
@@ -74,6 +75,13 @@ async def finalize_encounter_score(
         locked_encounter.confirmed_at = confirmed_at or datetime.now(UTC)
 
     advanced_encounters = await advancement.advance_winner(session, locked_encounter)
+    # Bracket propagation is THE write path where encounter team slots become
+    # set (or change): keep each affected encounter's veto session in sync —
+    # both teams known -> ensure a session; teams changed under an existing
+    # session -> reset it (unless a map was already played). Runs in the
+    # caller's transaction, like the advancement itself.
+    for advanced in advanced_encounters:
+        await veto_session_service.sync_veto_session_after_team_change(session, advanced)
     return FinalizedEncounterScore(
         encounter=locked_encounter,
         advanced_encounters=advanced_encounters,

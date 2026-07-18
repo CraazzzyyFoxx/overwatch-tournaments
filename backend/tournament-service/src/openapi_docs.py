@@ -236,6 +236,27 @@ DOCS: dict[str, dict] = {
         "summary": "Recalculate standings",
         "description": "Schedules a durable standings-recalculation job (202 Accepted) for the tournament; requires standing-recalculate permission.",
     },
+    # ── bespoke: map veto ──────────────────────────────────────────────────
+    "rpc.tournament.admin_veto_config_list": {
+        "summary": "List veto configs",
+        "description": "Returns all map-veto configs of a tournament (cascade levels ordered tournament, stage, round); requires match-update permission on its workspace.",
+    },
+    "rpc.tournament.admin_veto_config_upsert": {
+        "summary": "Upsert veto config",
+        "description": "Creates or replaces the map-veto config for one cascade level (tournament, stage or stage+round) after validating the step sequence and map pool; requires match-update permission on its workspace.",
+    },
+    "rpc.tournament.admin_veto_config_delete": {
+        "summary": "Delete veto config",
+        "description": "Deletes a map-veto config by id (running sessions keep their snapshot); requires match-update permission on its workspace.",
+    },
+    "rpc.tournament.admin_veto_session_reset": {
+        "summary": "Reset veto session",
+        "description": "Drops an encounter's veto session and map pool, re-creates them with freshly resolved seeds and returns the new room state; requires match-update permission on its workspace.",
+    },
+    "rpc.tournament.admin_veto_act": {
+        "summary": "Veto for a side",
+        "description": "Performs a ban or pick on behalf of the given side (admin override of the captain flow) and returns the updated pool entry; requires match-update permission on its workspace.",
+    },
     # ── bespoke: stage workflow ────────────────────────────────────────────
     "rpc.tournament.stage_progress": {
         "summary": "Get stage progress",
@@ -517,7 +538,7 @@ DOCS: dict[str, dict] = {
     },
     "rpc.tournament.captain_map_pool_state": {
         "summary": "Get map veto state",
-        "description": "Returns the encounter's map-veto state; with optional auth the requesting captain's side is annotated, otherwise viewer_side is null.",
+        "description": "Returns the encounter's map-veto room state, lazily creating the veto session when both teams and a config are known; without a session it reports the reason (not_configured/teams_unknown) instead of failing. With optional auth the requesting captain's side is annotated, otherwise viewer_side is null.",
     },
     "rpc.tournament.captain_veto": {
         "summary": "Veto map",

@@ -9,7 +9,7 @@ import { Swords, ArrowLeft } from "lucide-react";
 import { SITE_NAME, SITE_URL } from "@/config/site";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { MapVeto } from "@/app/(site)/encounters/[id]/components/MapVeto";
+import { VetoRoomLink } from "@/app/(site)/encounters/[id]/components/VetoRoomLink";
 
 export const dynamic = 'force-dynamic';
 
@@ -79,7 +79,7 @@ const EncounterPage = async (props: { params: Promise<{ id: number }> }) => {
         </Button>
       </div>
       <Card>
-        <CardContent className="flex flex-row gap-8 p-4">
+        <CardContent className="flex flex-row flex-wrap items-center gap-8 p-4">
           <div className="flex flex-row gap-4 items-center">
             <Swords height={40} width={40} />
             <div className="flex flex-col">
@@ -92,6 +92,9 @@ const EncounterPage = async (props: { params: Promise<{ id: number }> }) => {
                 {stageLabel}
               </h4>
             </div>
+          </div>
+          <div className="ml-auto">
+            <VetoRoomLink encounterId={encounter.id} tournamentId={encounter.tournament_id} />
           </div>
         </CardContent>
       </Card>
@@ -137,7 +140,6 @@ const EncounterPage = async (props: { params: Promise<{ id: number }> }) => {
           tournamentGrid={tournamentGrid}
         />
       </div>
-      <MapVeto encounterId={encounter.id} />
     </div>
   );
 };

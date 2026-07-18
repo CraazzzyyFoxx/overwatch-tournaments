@@ -47,114 +47,26 @@ import type {
   VetoPreset,
   VetoSequenceToken
 } from "@/types/tournament.types";
+import {
+  BO3_SEQUENCE,
+  BO5_SEQUENCE,
+  buildBo1Sequence,
+  buildToken,
+  getVetoLevelLabel,
+  getVetoPresetLabel,
+  tokenAction,
+  tokenLabel,
+  tokenSide,
+  validateVetoConfigForm,
+  type VetoLevelType,
+  type VetoStepAction,
+  type VetoStepSide
+} from "./mapVeto.helpers";
 
 interface TournamentMapVetoTabProps {
   tournamentId: number;
   stages: Stage[];
   canManage: boolean;
-}
-
-type VetoLevelType = "tournament" | "stage" | "stage_round";
-type StepAction = "ban" | "pick" | "decider";
-type StepSide = "first" | "second";
-
-const BO3_SEQUENCE: VetoSequenceToken[] = [
-  "ban_first",
-  "ban_second",
-  "pick_first",
-  "pick_second",
-  "decider"
-];
-
-const BO5_SEQUENCE: VetoSequenceToken[] = [
-  "ban_first",
-  "ban_second",
-  "pick_first",
-  "pick_second",
-  "pick_first",
-  "pick_second",
-  "decider"
-];
-
-/** Bo1: alternating bans (first team starts) until one map remains, then a decider. */
-function buildBo1Sequence(poolSize: number): VetoSequenceToken[] {
-  const sequence: VetoSequenceToken[] = [];
-  for (let index = 0; index < poolSize - 1; index += 1) {
-    sequence.push(index % 2 === 0 ? "ban_first" : "ban_second");
-  }
-  sequence.push("decider");
-  return sequence;
-}
-
-function tokenAction(token: VetoSequenceToken): StepAction {
-  if (token === "decider") return "decider";
-  return token.startsWith("ban") ? "ban" : "pick";
-}
-
-function tokenSide(token: VetoSequenceToken): StepSide | null {
-  if (token === "decider") return null;
-  return token.endsWith("_first") ? "first" : "second";
-}
-
-function buildToken(action: StepAction, side: StepSide): VetoSequenceToken {
-  if (action === "decider") return "decider";
-  return `${action}_${side}` as VetoSequenceToken;
-}
-
-function tokenLabel(token: VetoSequenceToken): string {
-  if (token === "decider") return "Decider";
-  const action = tokenAction(token) === "ban" ? "Ban" : "Pick";
-  return `${action} ${tokenSide(token) === "first" ? "1st" : "2nd"}`;
-}
-
-/** Mirrors backend config-upsert validation so errors surface before save. */
-function validateConfigForm(
-  sequence: VetoSequenceToken[],
-  mapIds: number[]
-): string[] {
-  const errors: string[] = [];
-  if (mapIds.length === 0) {
-    errors.push("Select at least one map for the pool.");
-  }
-  if (sequence.length === 0) {
-    errors.push("The sequence must contain at least one step.");
-  } else {
-    const deciderCount = sequence.filter((token) => token === "decider").length;
-    if (deciderCount > 1) {
-      errors.push("Only one decider step is allowed.");
-    } else if (deciderCount === 1 && sequence[sequence.length - 1] !== "decider") {
-      errors.push("The decider step must be the last step.");
-    }
-    if (!sequence.some((token) => tokenAction(token) !== "ban")) {
-      errors.push("The sequence needs at least one pick or a decider.");
-    }
-  }
-  if (mapIds.length > 0 && sequence.length > mapIds.length) {
-    errors.push(
-      `The sequence has ${sequence.length} steps but the pool only has ${mapIds.length} maps.`
-    );
-  }
-  return errors;
-}
-
-function getLevelLabel(config: MapVetoConfig, stagesById: Map<number, Stage>): string {
-  if (config.stage_id == null) return "Tournament default";
-  const stageName = stagesById.get(config.stage_id)?.name ?? `Stage #${config.stage_id}`;
-  if (config.round == null) return `Stage: ${stageName}`;
-  return `Stage: ${stageName} · Round ${config.round}`;
-}
-
-function getPresetLabel(preset: VetoPreset | null): string {
-  switch (preset) {
-    case "bo1":
-      return "Bo1";
-    case "bo3":
-      return "Bo3";
-    case "bo5":
-      return "Bo5";
-    default:
-      return "Custom";
-  }
 }
 
 interface VetoConfigFormState {
@@ -381,14 +293,14 @@ export function TournamentMapVetoTab({
     });
   };
 
-  const updateStep = (index: number, action: StepAction, side: StepSide) => {
+  const updateStep = (index: number, action: VetoStepAction, side: VetoStepSide) => {
     patchSequence((steps) => {
       steps[index] = buildToken(action, side);
       return steps;
     });
   };
 
-  const validationErrors = validateConfigForm(formState.sequence, formState.mapIds);
+  const validationErrors = validateVetoConfigForm(formState.sequence, formState.mapIds);
   const stageMissing = formState.levelType !== "tournament" && formState.stageId == null;
   const roundMissing = formState.levelType === "stage_round" && formState.round == null;
   const levelErrors: string[] = [];
@@ -463,8 +375,8 @@ export function TournamentMapVetoTab({
                 >
                   <div className="min-w-0 space-y-1.5">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-medium">{getLevelLabel(config, stagesById)}</span>
-                      <Badge variant="outline">{getPresetLabel(config.preset)}</Badge>
+                      <span className="font-medium">{getVetoLevelLabel(config, stagesById)}</span>
+                      <Badge variant="outline">{getVetoPresetLabel(config.preset)}</Badge>
                       {config.turn_timer_seconds != null ? (
                         <Badge variant="secondary">{config.turn_timer_seconds}s timer</Badge>
                       ) : null}
@@ -497,7 +409,7 @@ export function TournamentMapVetoTab({
                       <Button
                         variant="ghost"
                         size="icon"
-                        aria-label={`Edit ${getLevelLabel(config, stagesById)}`}
+                        aria-label={`Edit ${getVetoLevelLabel(config, stagesById)}`}
                         onClick={() => openEditEditor(config)}
                       >
                         <Pencil className="h-4 w-4" />
@@ -505,7 +417,7 @@ export function TournamentMapVetoTab({
                       <Button
                         variant="ghost"
                         size="icon"
-                        aria-label={`Delete ${getLevelLabel(config, stagesById)}`}
+                        aria-label={`Delete ${getVetoLevelLabel(config, stagesById)}`}
                         onClick={() => setConfigPendingDelete(config)}
                       >
                         <Trash2 className="h-4 w-4 text-destructive" />
@@ -685,7 +597,7 @@ export function TournamentMapVetoTab({
                           <Select
                             value={action}
                             onValueChange={(value) =>
-                              updateStep(index, value as StepAction, side ?? "first")
+                              updateStep(index, value as VetoStepAction, side ?? "first")
                             }
                           >
                             <SelectTrigger
@@ -704,7 +616,7 @@ export function TournamentMapVetoTab({
                             <Select
                               value={side ?? "first"}
                               onValueChange={(value) =>
-                                updateStep(index, action, value as StepSide)
+                                updateStep(index, action, value as VetoStepSide)
                               }
                             >
                               <SelectTrigger
@@ -861,7 +773,7 @@ export function TournamentMapVetoTab({
         title="Delete veto config?"
         description={
           configPendingDelete
-            ? `The "${getLevelLabel(configPendingDelete, stagesById)}" veto config will be removed. Matches fall back to the next config level; running veto sessions keep their snapshot.`
+            ? `The "${getVetoLevelLabel(configPendingDelete, stagesById)}" veto config will be removed. Matches fall back to the next config level; running veto sessions keep their snapshot.`
             : ""
         }
         isDeleting={deleteMutation.isPending}

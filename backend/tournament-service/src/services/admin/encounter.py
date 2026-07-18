@@ -12,6 +12,7 @@ from shared.core.errors import BaseAPIException as HTTPException
 from src import models
 from src.core import enums
 from src.schemas.admin import encounter as admin_schemas
+from src.services.encounter import veto_session as veto_session_service
 from src.services.encounter.finalize import finalize_encounter_score
 from src.services.tournament.cache_invalidation import invalidate_tournament_cache
 from src.services.tournament.events import (
@@ -272,8 +273,14 @@ async def update_encounter(
             )
 
     tournament_id = encounter.tournament_id
+    previous_teams = (encounter.home_team_id, encounter.away_team_id)
     for field, value in update_data.items():
         setattr(encounter, field, value)
+
+    if (encounter.home_team_id, encounter.away_team_id) != previous_teams:
+        # Admin re-assigned a team slot: sync the veto session (ensure when
+        # both teams are now known, reset a stale existing session).
+        await veto_session_service.sync_veto_session_after_team_change(session, encounter)
 
     completed_by_this_update = encounter.status == enums.EncounterStatus.COMPLETED
     if completed_by_this_update:

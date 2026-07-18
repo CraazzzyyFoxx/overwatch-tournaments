@@ -19,7 +19,8 @@ Commit semantics: every write service called here commits internally
 (captain.submit_result/submit_match_report/confirm_result/dispute_result,
 map_veto.perform_veto_action, reg_service.create/update/withdraw/check_in,
 encounter service.upsert_saved_view/delete_saved_view), so the handlers add no
-extra commit.
+extra commit. The map-pool state read also commits when it lazily creates the
+encounter's veto session (veto_session.ensure_veto_session).
 
 The gateway passes path params as ``data["<name>"]`` (and the primary id as
 ``data["id"]`` when the RouteSpec sets IDParam), query params as
