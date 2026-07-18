@@ -305,3 +305,35 @@ func equalInts(a, b []int) bool {
 	}
 	return true
 }
+
+func mintTokenWithExp(t *testing.T, sub string, exp time.Time) string {
+	t.Helper()
+	tok := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"sub": sub, "type": "access", "exp": exp.Unix(),
+	})
+	s, err := tok.SignedString([]byte(wsSecret))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return s
+}
+
+// TestWS_ClosesAtTokenExpiry asserts an authenticated connection is torn down
+// once its access token expires, rather than living until the idle timeout.
+func TestWS_ClosesAtTokenExpiry(t *testing.T) {
+	url := newServer(t, allowAuthorizer{allow: true}, fakeReplayer{cursor: 1})
+	ctx := context.Background()
+	token := mintTokenWithExp(t, "7", time.Now().Add(time.Second))
+	c := dial(t, ctx, url, token)
+
+	writeJSON(t, ctx, c, map[string]any{"op": "subscribe", "topic": "tournament:1:bracket"})
+	if m := readJSON(t, ctx, c); m["op"] != "subscribed" {
+		t.Fatalf("expected subscribed while the token is valid, got %v", m)
+	}
+
+	readCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	if _, _, err := c.Read(readCtx); err == nil {
+		t.Fatal("expected the connection to close at token expiry")
+	}
+}

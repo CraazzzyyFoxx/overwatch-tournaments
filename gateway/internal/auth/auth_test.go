@@ -50,6 +50,20 @@ func TestParseToken_Superuser(t *testing.T) {
 	}
 }
 
+func TestParseToken_PopulatesExpiry(t *testing.T) {
+	a := New(testSecret)
+	exp := time.Now().Add(30 * time.Minute).Truncate(time.Second)
+	c := accessClaims("42")
+	c["exp"] = exp.Unix()
+	u := a.parseToken(signHS256(t, c))
+	if u == nil {
+		t.Fatal("expected a user")
+	}
+	if !u.ExpiresAt.Equal(exp) {
+		t.Fatalf("ExpiresAt = %v, want %v", u.ExpiresAt, exp)
+	}
+}
+
 func TestParseToken_Rejected(t *testing.T) {
 	a := New(testSecret)
 

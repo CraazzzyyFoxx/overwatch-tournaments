@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 )
@@ -29,6 +30,12 @@ type User struct {
 	// per-workspace membership check in the topic ACL, exactly as the Python
 	// AuthUser.is_workspace_member does (`if self.is_superuser: return True`).
 	IsSuperuser bool
+	// ExpiresAt is the token's `exp` claim. The ws.Handler binds the connection
+	// lifetime to it so an authenticated socket cannot outlive its access token
+	// (a stale/expired session must stop receiving auth-gated events). Zero when
+	// the token carries no exp (never happens for a valid access token, which the
+	// parser already requires to be unexpired).
+	ExpiresAt time.Time
 }
 
 // Authenticator decodes and verifies access tokens with the shared secret.
@@ -83,7 +90,11 @@ func (a *Authenticator) parseToken(token string) *User {
 	}
 	// is_superuser is optional; a missing/non-bool claim safely yields false.
 	isSuperuser, _ := claims["is_superuser"].(bool)
-	return &User{ID: id, IsSuperuser: isSuperuser}
+	u := &User{ID: id, IsSuperuser: isSuperuser}
+	if exp, err := claims.GetExpirationTime(); err == nil && exp != nil {
+		u.ExpiresAt = exp.Time
+	}
+	return u
 }
 
 // extractToken pulls the bearer token from the query string, the Authorization

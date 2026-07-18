@@ -159,6 +159,19 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	// Bind an authenticated connection's lifetime to its access-token exp: once
+	// the token expires the read loop's context is done, the socket closes, and
+	// the client reconnects with whatever cookie is then current. The topic ACL
+	// and workspace membership are evaluated only at subscribe time, so without
+	// this a stale/expired session keeps its auth-gated stream until the socket
+	// happens to drop. Anonymous connections (nil user) have no exp and are
+	// unaffected.
+	if user != nil && !user.ExpiresAt.IsZero() {
+		var stop context.CancelFunc
+		ctx, stop = context.WithDeadline(ctx, user.ExpiresAt)
+		defer stop()
+	}
+
 	conn := newConn(ctx, c, user, connLog)
 	h.hub.add(conn)
 	defer h.cleanup(conn)
