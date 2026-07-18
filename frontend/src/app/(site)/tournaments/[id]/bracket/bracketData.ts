@@ -70,8 +70,8 @@ export function createBracketQueryPlan(
       queryFn: () =>
         tournamentService.getStandings(tournament.id, {
           workspaceId: tournament.workspace_id,
-          includeMatchesHistory: false,
-          includeTeamGroup: false
+          includeMatchesHistory: true,
+          includeTeamGroup: true
         }),
       enabled: hasTournament && hasStage,
       refetchInterval,

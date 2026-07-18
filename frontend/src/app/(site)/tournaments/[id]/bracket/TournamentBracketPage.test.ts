@@ -54,14 +54,14 @@ describe("TournamentBracketPage", () => {
     expect(bracketModule.getBracketRefetchInterval?.(status)).toBe(expected);
   });
 
-  it("uses canonical concurrent bracket queries with lean standings", () => {
+  it("uses canonical concurrent bracket queries with full standings data", () => {
     const source = readFileSync(join(import.meta.dir, "bracketData.ts"), "utf8");
 
     expect(source).toContain("tournamentQueryKeys.encounters(");
     expect(source).toContain("tournamentQueryKeys.bracketStandings(");
     expect(source).toContain("workspaceId: tournament.workspace_id");
-    expect(source).toContain("includeMatchesHistory: false");
-    expect(source).toContain("includeTeamGroup: false");
+    expect(source).toContain("includeMatchesHistory: true");
+    expect(source).toContain("includeTeamGroup: true");
     expect(source).toContain(
       "const refetchInterval = getBracketRefetchInterval(tournament.status)"
     );

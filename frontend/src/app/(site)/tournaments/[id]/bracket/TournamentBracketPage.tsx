@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 
 import { BracketView } from "@/components/BracketView";
+import StandingsTable from "@/components/StandingsTable";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { EncounterEditDialog } from "@/components/tournaments/EncounterEditDialog";
 import { MatchReportDialog } from "@/components/tournaments/MatchReportDialog";
@@ -22,7 +23,7 @@ import { useTranslations } from "next-intl";
 import { TournamentPageState } from "../_components/TournamentPageState";
 import { TournamentBracketSkeleton } from "../_components/TournamentSkeletons";
 import styles from "../TournamentDetail.module.css";
-import { BracketLeanStandings } from "./BracketLeanStandings";
+import { isTournamentStatusEnded } from "@/lib/tournament-status";
 import { createBracketQueryPlan, deriveBracketLoadState } from "./bracketData";
 
 const ADMIN_ROLES = new Set(["admin", "superadmin", "tournament_admin"]);
@@ -38,6 +39,7 @@ function GroupStagePanel({
   stageItem,
   encounters,
   standings,
+  stages,
   onEdit,
   onReport,
   canEdit,
@@ -48,6 +50,7 @@ function GroupStagePanel({
   stageItem?: StageItem;
   encounters: Encounter[];
   standings: Standings[];
+  stages: Stage[];
   onEdit?: (encounter: Encounter) => void;
   onReport?: (encounter: Encounter) => void;
   canEdit?: (encounter: Encounter) => boolean;
@@ -122,7 +125,7 @@ function GroupStagePanel({
       {hasStandings && (
         <TabsContent value="standings" className="mt-0">
           <div className="overflow-x-auto">
-            <BracketLeanStandings standings={standings} isGroups />
+            <StandingsTable standings={standings} stages={stages} is_groups />
           </div>
         </TabsContent>
       )}
@@ -404,6 +407,7 @@ export default function TournamentBracketPage({ tournament }: TournamentBracketP
                   stageItem={panel.stageItem}
                   encounters={panel.encounters}
                   standings={panel.standings}
+                  stages={stages}
                   onEdit={handleEdit}
                   onReport={handleReport}
                   canEdit={canEdit}
@@ -485,9 +489,11 @@ export default function TournamentBracketPage({ tournament }: TournamentBracketP
                     {hasPlayoffStandings && (
                       <TabsContent value="standings" className="mt-0">
                         <div className="overflow-x-auto">
-                          <BracketLeanStandings
+                          <StandingsTable
                             standings={stagePlayoffStandings}
-                            isGroups={false}
+                            stages={stages}
+                            is_groups={false}
+                            crownTop={isTournamentStatusEnded(tournament.status)}
                           />
                         </div>
                       </TabsContent>
