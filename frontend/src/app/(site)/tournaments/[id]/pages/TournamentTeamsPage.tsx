@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 import { useTranslations } from "next-intl";
 import { TournamentPageState } from "../_components/TournamentPageState";
 import { TournamentTeamsSkeleton } from "../_components/TournamentSkeletons";
+import styles from "../TournamentDetail.module.css";
 
 type SortBy = "placement" | "sr" | "name";
 type TeamsQueryPresentation = {
@@ -117,14 +118,10 @@ const TournamentTeamsPage = ({ tournament }: { tournament: Tournament }) => {
   }
 
   const content = (
-    <div className="space-y-4">
+    <div className={cn("space-y-4", styles.teamsContent)}>
       {presentation.showUpdating ? (
-        <p
-          className="text-right text-xs font-semibold uppercase tracking-[0.14em] text-[var(--aqt-teal)]"
-          role="status"
-          aria-live="polite"
-        >
-          {t("tournamentDetail.pageState.updating")}
+        <p className={styles.updatingRow} role="status" aria-live="polite">
+          <span className={styles.updating}>{t("tournamentDetail.pageState.updating")}</span>
         </p>
       ) : null}
       {presentation.contentState === "empty" ? (

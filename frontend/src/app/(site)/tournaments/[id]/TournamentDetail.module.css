@@ -361,16 +361,27 @@
 }
 
 .updatingRow {
+  position: absolute;
+  top: 0;
+  right: 0;
   margin: 0;
+  transform: translateY(-100%);
   text-align: end;
+  pointer-events: none;
+  z-index: 2;
 }
 
 .publicDataPage {
+  position: relative;
   display: grid;
   width: 100%;
   min-width: 0;
   max-width: 100%;
   gap: 1rem;
+}
+
+.teamsContent {
+  position: relative;
 }
 
 .controlRail,
