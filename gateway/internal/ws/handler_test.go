@@ -123,12 +123,26 @@ func TestWS_SubscribePublic(t *testing.T) {
 func TestWS_SubscribeForbidden(t *testing.T) {
 	url := newServer(t, allowAuthorizer{allow: false}, fakeReplayer{})
 	ctx := context.Background()
-	c := dial(t, ctx, url, "")
+	c := dial(t, ctx, url, mintToken(t, "7")) // authenticated but not permitted
 
 	writeJSON(t, ctx, c, map[string]any{"op": "subscribe", "topic": "tournament:1:balancer"})
 	m := readJSON(t, ctx, c)
 	if m["op"] != "error" || m["code"] != "forbidden" {
-		t.Fatalf("expected forbidden error, got %v", m)
+		t.Fatalf("expected forbidden error for an authenticated non-member, got %v", m)
+	}
+}
+
+// TestWS_SubscribeAuthRequired asserts an anonymous denial is surfaced as
+// auth_required (login may grant access), distinct from forbidden.
+func TestWS_SubscribeAuthRequired(t *testing.T) {
+	url := newServer(t, allowAuthorizer{allow: false}, fakeReplayer{})
+	ctx := context.Background()
+	c := dial(t, ctx, url, "") // anonymous
+
+	writeJSON(t, ctx, c, map[string]any{"op": "subscribe", "topic": "tournament:1:balancer"})
+	m := readJSON(t, ctx, c)
+	if m["op"] != "error" || m["code"] != "auth_required" {
+		t.Fatalf("expected auth_required error for an anonymous user, got %v", m)
 	}
 }
 

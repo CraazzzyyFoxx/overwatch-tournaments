@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 
 import { realtimeClient } from "@/services/realtime.service";
 import { useRealtimeStore } from "@/stores/realtime.store";
+import { useAuthModalStore } from "@/stores/auth-modal.store";
 import type { ServerRealtimeFrame } from "@/types/realtime.types";
 
 class MockWebSocket {
@@ -71,6 +72,7 @@ describe("realtime subscribed confirmations", () => {
       lastEventIdByTopic: {},
       topicErrors: {},
     });
+    useAuthModalStore.setState({ isOpen: false, nextPath: "/" });
   });
 
   afterEach(() => {
@@ -251,5 +253,23 @@ describe("realtime subscribed confirmations", () => {
 
     realtimeClient.reset();
     expect(useRealtimeStore.getState().connectionState).toBe("idle");
+  });
+
+  it("opens the login modal when a subscription is denied with auth_required", () => {
+    const topic = "tournament:1:balancer";
+    trackCleanup(realtimeClient.subscribe(topic, () => undefined));
+    currentSocket().open();
+
+    currentSocket().receive({ op: "error", topic, code: "auth_required", message: "Log in" });
+    expect(useAuthModalStore.getState().isOpen).toBe(true);
+  });
+
+  it("does not open the login modal on a plain forbidden error", () => {
+    const topic = "tournament:1:balancer";
+    trackCleanup(realtimeClient.subscribe(topic, () => undefined));
+    currentSocket().open();
+
+    currentSocket().receive({ op: "error", topic, code: "forbidden", message: "no" });
+    expect(useAuthModalStore.getState().isOpen).toBe(false);
   });
 });

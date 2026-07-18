@@ -479,7 +479,17 @@ func (h *Handler) handleSubscribe(ctx context.Context, conn *Conn, op *protocol.
 		return
 	}
 	if !allowed {
-		_ = conn.send(protocol.ErrorFrame("forbidden", "You are not allowed to subscribe to this topic", topicPtr))
+		// Differentiate the two denial cases so the client can react precisely:
+		// an anonymous user might gain access by logging in (auth_required),
+		// whereas an authenticated user who is genuinely not permitted must not
+		// be prompted to re-auth (forbidden). Denials of a public spectating
+		// topic to anonymous users (hidden tournament) are also auth_required —
+		// logging in as an insider may grant access.
+		if conn.user == nil {
+			_ = conn.send(protocol.ErrorFrame("auth_required", "Log in to subscribe to this topic", topicPtr))
+		} else {
+			_ = conn.send(protocol.ErrorFrame("forbidden", "You are not allowed to subscribe to this topic", topicPtr))
+		}
 		return
 	}
 

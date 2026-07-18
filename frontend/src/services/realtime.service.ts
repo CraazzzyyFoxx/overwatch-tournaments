@@ -1,6 +1,7 @@
 "use client";
 
 import { useRealtimeStore } from "@/stores/realtime.store";
+import { useAuthModalStore } from "@/stores/auth-modal.store";
 import type {
   ClientRealtimeFrame,
   EventFrame,
@@ -219,6 +220,12 @@ class RealtimeClient {
         useRealtimeStore
           .getState()
           .setTopicError(frame.topic, { code: frame.code, message: frame.message });
+      }
+      if (frame.code === "auth_required") {
+        // The gateway distinguishes an anonymous denial (login may grant
+        // access) from a genuine forbidden. Prompt login rather than leaving
+        // the subscription silently rejected.
+        useAuthModalStore.getState().open();
       }
       console.warn("Realtime subscription error", frame);
       return;
