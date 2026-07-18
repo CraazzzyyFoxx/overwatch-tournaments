@@ -1,10 +1,11 @@
 from dataclasses import replace
 
+from cashews import cache
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.repository import MapRepository
 from src import models, schemas
-from src.core import errors, pagination
+from src.core import config, errors, pagination
 from src.services.hero import flows as hero_flows
 from src.services.hero import service as hero_service
 from src.services.user import flows as user_flows
@@ -75,6 +76,16 @@ async def get_all(
     )
 
 
+@cache(
+    ttl=config.settings.users_cache_ttl,
+    key=(
+        "user_maps:{id}:{workspace_id}:{params.page}:{params.per_page}:{params.sort}:"
+        "{params.order}:{params.query}:{params.fields}:{params.min_count}:"
+        "{params.gamemode_id}:{params.tournament_id}:{params.entities}"
+    ),
+    prefix="backend:",
+    lock=True,
+)
 async def get_top_user(
     session: AsyncSession,
     id: int,

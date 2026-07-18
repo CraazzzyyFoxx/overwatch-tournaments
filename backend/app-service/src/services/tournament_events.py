@@ -10,7 +10,7 @@ from shared.observability import observe_message_processing
 from shared.schemas.events import TournamentChangedEvent
 from src.core import db
 from src.core.caching import CACHE_PREFIXES
-from src.services import hero_stats_refresh
+from src.services import hero_stats_refresh, user_cache
 
 
 def _with_prefixes(*suffixes: str) -> tuple[str, ...]:
@@ -30,15 +30,14 @@ def tournament_standings_cache_patterns(tournament_id: int) -> tuple[str, ...]:
     # separate standings pattern is redundant.
     return (
         *_with_prefixes(f"*tournaments/{tournament_id}*"),
-        # User-scoped flow caches aggregate across tournaments — we don't know
-        # which users touched this tournament, so invalidate them broadly.
-        # TTL is short (users_cache_ttl=60s) so the steady-state cost is low.
-        "backend:user_profile:*",
-        "backend:user_tournaments:*",
-        "backend:user_compare:v2:*",
-        "backend:user_hero_compare:v2:*",
+        # User-scoped flow caches (profile, tournaments, heroes, encounters,
+        # maps, teammates, compare, ...) aggregate across tournaments — we don't
+        # know which users this tournament touched, so drop them all. Bounded by
+        # users_cache_ttl regardless. Single source of truth: services.user_cache.
+        *user_cache.tournament_user_cache_patterns(),
         # Cached Users-Overview id order (H13) — a tournament change can reorder
         # the tournaments_count / achievements_count / avg_placement leaderboard.
+        # Workspace/sort-scoped (not per-user), so it lives outside user_cache.
         "backend:user_overview_order:*",
     )
 

@@ -1049,7 +1049,7 @@ async def get_roles(
 # (grid/normalizer are loaded fresh for the workspace). Workspace-level grid
 # changes are rare; a TournamentChangedEvent invalidates all user_* keys.
 @cache(
-    ttl=config.settings.users_cache_ttl,
+    ttl=config.settings.user_profile_cache_ttl,
     key="user_profile:{id}:{workspace_id}",
     prefix="backend:",
 )
@@ -1324,6 +1324,15 @@ async def get_tournaments(
     return output
 
 
+# ``grid`` is a pure function of ``tournament_id`` (a tournament pins its own
+# division_grid_version), so it stays out of the key; a grid change fires a
+# TournamentChangedEvent that broadly drops ``user_tournament_stats:*``.
+@cache(
+    ttl=config.settings.users_cache_ttl,
+    key="user_tournament_stats:{id}:{tournament_id}",
+    prefix="backend:",
+    lock=True,
+)
 async def get_tournament_with_stats(
     session: AsyncSession, id: int, tournament_id: int, *, grid: DivisionGrid
 ) -> schemas.UserTournamentWithStats | None:
@@ -1447,6 +1456,39 @@ async def get_heroes(
     tournament_id: int | None = None,
     workspace_id: int | None = None,
 ) -> pagination.Paginated[schemas.HeroWithUserStats]:
+    """Cache wrapper for a user's hero statistics.
+
+    Normalizes the requested-stats list (sort + dedup) into a stable cache key
+    before delegating to the cached implementation, so ``[Deaths, Elims]`` and
+    ``[Elims, Deaths, Elims]`` share one entry (mirrors the hero-compare cache).
+    """
+    stats_key = ",".join(sorted({stat.value for stat in (stats or [])}))
+    return await _get_heroes_cached(
+        session,
+        id,
+        params,
+        stats_key,
+        stats=stats,
+        tournament_id=tournament_id,
+        workspace_id=workspace_id,
+    )
+
+
+@cache(
+    ttl=config.settings.users_cache_ttl,
+    key="user_heroes:{id}:{workspace_id}:{tournament_id}:{stats_key}:{params.page}:{params.per_page}",
+    prefix="backend:",
+    lock=True,
+)
+async def _get_heroes_cached(
+    session: AsyncSession,
+    id: int,
+    params: pagination.PaginationParams,
+    stats_key: str,
+    stats: list[enums.LogStatsName] | None = None,
+    tournament_id: int | None = None,
+    workspace_id: int | None = None,
+) -> pagination.Paginated[schemas.HeroWithUserStats]:
     """
     Retrieves a user's hero statistics, including performance and comparisons with other users.
 
@@ -1458,6 +1500,7 @@ async def get_heroes(
     Returns:
         A list of `HeroWithUserStats` schemas representing the user's hero statistics.
     """
+    del stats_key  # participates in the cache key only
     user = await get(session, id, [])
     requested_stats = set(stats or [])
     stats_filter = list(requested_stats) if requested_stats else None
@@ -1539,6 +1582,11 @@ async def get_heroes(
     )
 
 
+@cache(
+    ttl=config.settings.users_cache_ttl,
+    key="user_teammates:{id}:{workspace_id}:{params.page}:{params.per_page}:{params.sort}:{params.order}",
+    prefix="backend:",
+)
 async def get_best_teammates(
     session: AsyncSession,
     id: int,
@@ -1579,6 +1627,15 @@ async def get_best_teammates(
     )
 
 
+@cache(
+    ttl=config.settings.users_cache_ttl,
+    key=(
+        "user_encounters:{user_id}:{workspace_id}:{params.page}:{params.per_page}:"
+        "{params.sort}:{params.order}:{result}:{stage}:{mvp1}:{has_logs}:{opponent}"
+    ),
+    prefix="backend:",
+    lock=True,
+)
 async def get_encounters_by_user(
     session: AsyncSession,
     user_id: int,
@@ -1657,6 +1714,11 @@ async def get_encounters_by_user(
     )
 
 
+@cache(
+    ttl=config.settings.users_cache_ttl,
+    key="user_matches_summary:{user_id}:{workspace_id}:{opponents_limit}",
+    prefix="backend:",
+)
 async def get_matches_summary(
     session: AsyncSession,
     user_id: int,

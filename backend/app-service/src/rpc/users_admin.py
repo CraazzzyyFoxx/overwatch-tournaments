@@ -33,6 +33,7 @@ from src import models, schemas
 from src.core import db
 from src.schemas.admin import user as admin_schemas
 from src.schemas.admin import user_merge as merge_schemas
+from src.services import user_cache
 from src.services.admin import user as admin_service
 from src.services.admin import user_csv as csv_service
 from src.services.admin import user_merge as merge_service
@@ -105,6 +106,27 @@ def _sheets_to_csv_url(url: str) -> str:
     return f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}/export?format=csv&gid={gid}"
 
 
+async def _envelope_and_invalidate(logger: Any, label: str, op: Any, data: dict) -> dict:
+    """Run a user-mutating op, then drop the subject user's read caches on success.
+
+    Profile/identity edits (name, avatar, socials) are not driven by
+    TournamentChangedEvent, so without this the subject's cached profile/heroes/
+    encounters/etc. would serve stale data until ``users_cache_ttl`` elapses.
+    Runs after the DB session closes and only on ``ok`` — a failed write leaves
+    the cache untouched. Cross-user cosmetic staleness (this user's name/avatar
+    embedded in other users' cached lists) is left to the TTL.
+    """
+    result = await c.envelope(logger, label, op, session_factory=_SF)
+    if result.get("ok"):
+        try:
+            user_id = c.require_id(data)
+        except HTTPException:
+            user_id = None
+        if user_id is not None:
+            await user_cache.invalidate_user_caches(user_id)
+    return result
+
+
 def register(broker: Any, logger: Any) -> None:
     # ── User CRUD ───────────────────────────────────────────────────────────
     @broker.subscriber("rpc.app.users.admin_list")
@@ -144,7 +166,7 @@ def register(broker: Any, logger: Any) -> None:
             )
             return await user_flows.to_pydantic(session, updated, _ENTITIES)
 
-        return await c.envelope(logger, "users.admin_update", op, session_factory=_SF)
+        return await _envelope_and_invalidate(logger, "users.admin_update", op, data)
 
     @broker.subscriber("rpc.app.users.admin_delete")
     async def _delete(data: dict, msg: RabbitMessage) -> dict:
@@ -153,7 +175,7 @@ def register(broker: Any, logger: Any) -> None:
             await admin_service.delete_user(session, c.require_id(data))
             return None
 
-        return await c.envelope(logger, "users.admin_delete", op, session_factory=_SF)
+        return await _envelope_and_invalidate(logger, "users.admin_delete", op, data)
 
     # ── Profile merge (superuser) ─────────────────────────────────────────────
     @broker.subscriber("rpc.app.users.merge_preview")
@@ -210,7 +232,7 @@ def register(broker: Any, logger: Any) -> None:
             await session.commit()
             return await _refresh_user(session, user_id)
 
-        return await c.envelope(logger, "users.social_add", op, session_factory=_SF)
+        return await _envelope_and_invalidate(logger, "users.social_add", op, data)
 
     @broker.subscriber("rpc.app.users.social_update")
     async def _social_update(data: dict, msg: RabbitMessage) -> dict:
@@ -234,7 +256,7 @@ def register(broker: Any, logger: Any) -> None:
             await session.commit()
             return await _refresh_user(session, user_id)
 
-        return await c.envelope(logger, "users.social_update", op, session_factory=_SF)
+        return await _envelope_and_invalidate(logger, "users.social_update", op, data)
 
     @broker.subscriber("rpc.app.users.social_delete")
     async def _social_delete(data: dict, msg: RabbitMessage) -> dict:
@@ -249,7 +271,7 @@ def register(broker: Any, logger: Any) -> None:
             await session.commit()
             return await _refresh_user(session, user_id)
 
-        return await c.envelope(logger, "users.social_delete", op, session_factory=_SF)
+        return await _envelope_and_invalidate(logger, "users.social_delete", op, data)
 
     @broker.subscriber("rpc.app.users.social_set_primary")
     async def _social_set_primary(data: dict, msg: RabbitMessage) -> dict:
@@ -262,7 +284,7 @@ def register(broker: Any, logger: Any) -> None:
             await session.commit()
             return await _refresh_user(session, user_id)
 
-        return await c.envelope(logger, "users.social_set_primary", op, session_factory=_SF)
+        return await _envelope_and_invalidate(logger, "users.social_set_primary", op, data)
 
     @broker.subscriber("rpc.app.users.social_set_visibility")
     async def _social_set_visibility(data: dict, msg: RabbitMessage) -> dict:
@@ -282,7 +304,7 @@ def register(broker: Any, logger: Any) -> None:
             await session.commit()
             return await _refresh_user(session, user_id)
 
-        return await c.envelope(logger, "users.social_set_visibility", op, session_factory=_SF)
+        return await _envelope_and_invalidate(logger, "users.social_set_visibility", op, data)
 
     # ── Self-service: a user manages their OWN player's social accounts ───────
     # Adding is OAuth-only (handled by identity-service link flow); here we only
@@ -316,6 +338,7 @@ def register(broker: Any, logger: Any) -> None:
                 raise HTTPException(status_code=400, detail="Only OAuth-verified accounts can be primary")
             await social_svc.set_primary(session, account_id=account.id, user_id=player_id)
             await session.commit()
+            await user_cache.invalidate_user_caches(player_id)
             return await _refresh_user(session, player_id)
 
         return await c.envelope(logger, "users.me_social_set_primary", op, session_factory=_SF)
@@ -341,6 +364,7 @@ def register(broker: Any, logger: Any) -> None:
                 visible=visible,
             )
             await session.commit()
+            await user_cache.invalidate_user_caches(player_id)
             return await _refresh_user(session, player_id)
 
         return await c.envelope(logger, "users.me_social_set_visibility", op, session_factory=_SF)
@@ -368,7 +392,7 @@ def register(broker: Any, logger: Any) -> None:
             player_user = await admin_service.get_user_or_404(session, user_id)
             return await user_flows.to_pydantic(session, player_user, _ENTITIES)
 
-        return await c.envelope(logger, "users.avatar_upload", op, session_factory=_SF)
+        return await _envelope_and_invalidate(logger, "users.avatar_upload", op, data)
 
     @broker.subscriber("rpc.app.users.avatar_delete")
     async def _avatar_delete(data: dict, msg: RabbitMessage) -> dict:
@@ -383,7 +407,7 @@ def register(broker: Any, logger: Any) -> None:
             player_user = await admin_service.get_user_or_404(session, user_id)
             return await user_flows.to_pydantic(session, player_user, _ENTITIES)
 
-        return await c.envelope(logger, "users.avatar_delete", op, session_factory=_SF)
+        return await _envelope_and_invalidate(logger, "users.avatar_delete", op, data)
 
     # ── CSV / Google-Sheets bulk import (admin role) ──────────────────────────
     @broker.subscriber("rpc.app.users.csv_import")
