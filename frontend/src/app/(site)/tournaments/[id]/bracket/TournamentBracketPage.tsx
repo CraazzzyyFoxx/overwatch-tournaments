@@ -252,7 +252,11 @@ export default function TournamentBracketPage({ tournament }: TournamentBracketP
             }
             await captainService.confirmResult(enc.id);
             notify.success(t("matchReport.confirmedSuccess"));
-            await Promise.all([encountersQuery.refetch(), standingsQuery.refetch()]);
+            // The encounter status flips synchronously, so refetch it now for
+            // instant feedback. Standings are rebuilt by an async recalc job —
+            // they refresh via the realtime `results_changed` event once the job
+            // finishes; refetching here would only re-fetch pre-recalc rows.
+            await encountersQuery.refetch();
           } catch (error) {
             if (isConfirmOwnSubmissionError(error)) {
               notify.error(t("matchReport.cannotConfirmOwnTitle"), {
