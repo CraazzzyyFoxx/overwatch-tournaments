@@ -1826,7 +1826,8 @@
       "back": "Назад к встречам",
       "tie": "Ничья",
       "winner": "Победитель",
-      "loser": "Проигравший"
+      "loser": "Проигравший",
+      "vetoRoom": "Комната вето"
     },
     "match": {
       "roundTab": "Раунд {round}",
@@ -1850,26 +1851,98 @@
       "assists": "Ассисты"
     },
     "veto": {
-      "title": "Вето карт",
-      "loading": "Загрузка вето карт...",
-      "loadError": "Не удалось загрузить вето карт",
-      "actionFailed": "Не удалось выполнить действие вето",
-      "mapNumber": "Карта №{id}",
-      "mapOrder": "Порядок карт",
-      "sending": "Отправка...",
-      "completed": "Завершено",
-      "deciderResolving": "Идёт определение решающей карты",
-      "turn": "Ход команды {side}: {action}",
-      "yourTurn": "Ваш ход как капитана {side}",
-      "ban": "Забанить {map}",
-      "pick": "Выбрать {map}",
-      "side": {
-        "home": "хозяев",
-        "away": "гостей"
-      },
-      "act": {
-        "ban": "забанить",
-        "pick": "выбрать"
+      "room": {
+        "title": "Комната вето",
+        "back": "К матчу",
+        "loadError": "Не удалось загрузить состояние вето",
+        "retry": "Повторить",
+        "statusChip": {
+          "active": "Идёт вето",
+          "completed": "Завершено",
+          "cancelled": "Отменено"
+        },
+        "firstBanner": "Первым ходит {team}",
+        "seedBadge": "Посев #{seed}",
+        "seedUnknown": "Посев —",
+        "seedSource": {
+          "bracket_slot": "по сетке",
+          "standings": "по таблице",
+          "fallback_home": "по умолчанию (хозяева)",
+          "admin": "назначено админом"
+        },
+        "side": {
+          "home": "хозяева",
+          "away": "гости"
+        },
+        "empty": {
+          "notConfiguredTitle": "Вето не настроено",
+          "notConfiguredHint": "Организатор ещё не задал правила вето для этого матча. Загляните позже.",
+          "teamsUnknownTitle": "Команды ещё не определены",
+          "teamsUnknownHint": "Комната вето откроется, когда обе команды матча станут известны."
+        },
+        "steps": {
+          "title": "Шаги вето",
+          "ban": "Бан",
+          "pick": "Пик",
+          "decider": "Решающая",
+          "done": "выполнено",
+          "current": "текущий шаг",
+          "pending": "ожидает"
+        },
+        "timer": {
+          "label": "Время на ход",
+          "expired": "Время вышло"
+        },
+        "maps": {
+          "title": "Пул карт",
+          "mapNumber": "Карта №{id}",
+          "status": {
+            "available": "Доступна",
+            "banned": "Забанена",
+            "picked": "Выбрана",
+            "played": "Сыграна"
+          },
+          "by": {
+            "home": "хозяева",
+            "away": "гости",
+            "decider": "решающая",
+            "admin": "админ"
+          }
+        },
+        "order": {
+          "title": "Порядок карт"
+        },
+        "turn": "Ход: {side} — {action}",
+        "action": {
+          "ban": "забанить",
+          "pick": "выбрать"
+        },
+        "deciderResolving": "Определяется решающая карта",
+        "completedBanner": "Вето завершено",
+        "captain": {
+          "yourTurn": "Ваш ход",
+          "selectHint": "Выберите карту из пула",
+          "confirmBan": "Забанить {map}",
+          "confirmPick": "Выбрать {map}",
+          "cancel": "Отмена",
+          "sending": "Отправка...",
+          "actionFailed": "Не удалось выполнить действие вето"
+        },
+        "admin": {
+          "title": "Управление вето (админ)",
+          "actForSide": "Ход за сторону",
+          "sideLabel": "Сторона",
+          "actionLabel": "Действие",
+          "confirm": "Выполнить ход",
+          "selectMapFirst": "Сначала выберите карту в пуле",
+          "actFailed": "Не удалось выполнить ход за сторону",
+          "reset": "Сбросить вето",
+          "resetConfirmTitle": "Сбросить сессию вето?",
+          "resetConfirmHint": "Сессия и пул карт будут удалены и созданы заново с пере-резолвом посева. Все сделанные ходы пропадут.",
+          "resetConfirmAction": "Сбросить",
+          "resetSuccess": "Сессия вето сброшена",
+          "resetFailed": "Не удалось сбросить сессию вето"
+        }
       }
     },
     "result": {

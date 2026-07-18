@@ -141,11 +141,36 @@ export interface EncounterMapPoolEntry {
   id: number;
   map_id: number;
   order: number;
+  /** Global veto-action order (bans AND picks); null while still available. */
+  action_index: number | null;
   picked_by: MapPickSide | null;
   status: MapPoolEntryStatus;
 }
 
+export type MapVetoSessionStatus = "active" | "completed" | "cancelled";
+export type VetoSeedSource = "bracket_slot" | "standings" | "fallback_home" | "admin";
+
+export interface EncounterVetoSession {
+  id: number;
+  status: MapVetoSessionStatus;
+  first_side: "home" | "away";
+  seed_source: VetoSeedSource;
+  home_seed: number | null;
+  away_seed: number | null;
+  turn_timer_seconds: number | null;
+  started_at: string | null;
+  current_step_started_at: string | null;
+}
+
+/** Reason the room has no session yet (state responses with `session: null`). */
+export type VetoUnavailableReason = "not_configured" | "teams_unknown";
+
 export interface EncounterMapPoolState {
+  session: EncounterVetoSession | null;
+  /** Set only when `session` is null. */
+  reason?: VetoUnavailableReason;
+  /** Step tokens already resolved to sides (e.g. "ban_home", "decider"). */
+  sequence: string[];
   pool: EncounterMapPoolEntry[];
   viewer_side: "home" | "away" | null;
   viewer_can_act: boolean;
@@ -157,12 +182,35 @@ export interface EncounterMapPoolState {
   is_complete: boolean;
 }
 
+/** Side-agnostic step tokens stored on veto configs. */
+export type VetoSequenceToken =
+  | "ban_first"
+  | "ban_second"
+  | "pick_first"
+  | "pick_second"
+  | "decider";
+
+export type VetoPreset = "bo1" | "bo3" | "bo5" | "custom";
+
 export interface MapVetoConfig {
   id: number;
   tournament_id: number;
   stage_id: number | null;
-  veto_sequence_json: string[];
-  map_pool_ids: number[];
+  round: number | null;
+  preset: VetoPreset | null;
+  first_pick_rule: "higher_seed";
+  turn_timer_seconds: number | null;
+  sequence: VetoSequenceToken[];
+  map_ids: number[];
+}
+
+export interface MapVetoConfigUpsertInput {
+  stage_id?: number | null;
+  round?: number | null;
+  preset?: VetoPreset | null;
+  turn_timer_seconds?: number | null;
+  sequence: VetoSequenceToken[];
+  map_ids: number[];
 }
 
 export interface OwalStandingDay {

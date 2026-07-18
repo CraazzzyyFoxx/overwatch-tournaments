@@ -1826,7 +1826,8 @@
       "back": "Back to encounters",
       "tie": "Tie",
       "winner": "Winner",
-      "loser": "Loser"
+      "loser": "Loser",
+      "vetoRoom": "Veto room"
     },
     "match": {
       "roundTab": "Round {round}",
@@ -1850,26 +1851,98 @@
       "assists": "Assists"
     },
     "veto": {
-      "title": "Map Veto",
-      "loading": "Loading map veto...",
-      "loadError": "Failed to load map veto",
-      "actionFailed": "Veto action failed",
-      "mapNumber": "Map #{id}",
-      "mapOrder": "Map order",
-      "sending": "Sending...",
-      "completed": "Completed",
-      "deciderResolving": "Decider map is being resolved",
-      "turn": "{side} team to {action}",
-      "yourTurn": "Your turn as {side} captain",
-      "ban": "Ban {map}",
-      "pick": "Pick {map}",
-      "side": {
-        "home": "home",
-        "away": "away"
-      },
-      "act": {
-        "ban": "ban",
-        "pick": "pick"
+      "room": {
+        "title": "Veto Room",
+        "back": "Back to match",
+        "loadError": "Failed to load veto state",
+        "retry": "Retry",
+        "statusChip": {
+          "active": "Veto in progress",
+          "completed": "Completed",
+          "cancelled": "Cancelled"
+        },
+        "firstBanner": "{team} goes first",
+        "seedBadge": "Seed #{seed}",
+        "seedUnknown": "Seed —",
+        "seedSource": {
+          "bracket_slot": "from bracket",
+          "standings": "from standings",
+          "fallback_home": "default (home)",
+          "admin": "set by admin"
+        },
+        "side": {
+          "home": "home",
+          "away": "away"
+        },
+        "empty": {
+          "notConfiguredTitle": "Veto is not configured",
+          "notConfiguredHint": "The organizer has not set veto rules for this match yet. Check back later.",
+          "teamsUnknownTitle": "Teams are not decided yet",
+          "teamsUnknownHint": "The veto room opens once both teams of this match are known."
+        },
+        "steps": {
+          "title": "Veto steps",
+          "ban": "Ban",
+          "pick": "Pick",
+          "decider": "Decider",
+          "done": "done",
+          "current": "current step",
+          "pending": "pending"
+        },
+        "timer": {
+          "label": "Turn timer",
+          "expired": "Time expired"
+        },
+        "maps": {
+          "title": "Map pool",
+          "mapNumber": "Map #{id}",
+          "status": {
+            "available": "Available",
+            "banned": "Banned",
+            "picked": "Picked",
+            "played": "Played"
+          },
+          "by": {
+            "home": "home",
+            "away": "away",
+            "decider": "decider",
+            "admin": "admin"
+          }
+        },
+        "order": {
+          "title": "Map order"
+        },
+        "turn": "Turn: {side} — {action}",
+        "action": {
+          "ban": "ban",
+          "pick": "pick"
+        },
+        "deciderResolving": "Decider map is being resolved",
+        "completedBanner": "Veto completed",
+        "captain": {
+          "yourTurn": "Your turn",
+          "selectHint": "Select a map from the pool",
+          "confirmBan": "Ban {map}",
+          "confirmPick": "Pick {map}",
+          "cancel": "Cancel",
+          "sending": "Sending...",
+          "actionFailed": "Veto action failed"
+        },
+        "admin": {
+          "title": "Veto controls (admin)",
+          "actForSide": "Act for side",
+          "sideLabel": "Side",
+          "actionLabel": "Action",
+          "confirm": "Perform action",
+          "selectMapFirst": "Select a map in the pool first",
+          "actFailed": "Failed to act for side",
+          "reset": "Reset veto",
+          "resetConfirmTitle": "Reset the veto session?",
+          "resetConfirmHint": "The session and map pool will be dropped and re-created with seeds re-resolved. All performed actions will be lost.",
+          "resetConfirmAction": "Reset",
+          "resetSuccess": "Veto session reset",
+          "resetFailed": "Failed to reset the veto session"
+        }
       }
     },
     "result": {

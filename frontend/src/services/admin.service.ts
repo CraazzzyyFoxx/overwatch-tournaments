@@ -6,7 +6,10 @@ import {
   Stage,
   StageItem,
   StageItemInput,
-  StageItemType
+  StageItemType,
+  MapVetoConfig,
+  MapVetoConfigUpsertInput,
+  EncounterMapPoolState
 } from "@/types/tournament.types";
 import { Team, Player } from "@/types/team.types";
 import { Encounter } from "@/types/encounter.types";
@@ -1349,6 +1352,53 @@ class AdminService {
     const response = await apiFetch(`/api/v1/admin/encounters/${encounterId}/map-pool`, {
       method: "POST",
       body: { map_ids: mapIds }
+    });
+    return response.json();
+  }
+
+  // ─── Map Veto Configs & Sessions ───────────────────────────────────────────
+
+  async listVetoConfigs(tournamentId: number): Promise<{ configs: MapVetoConfig[] }> {
+    const response = await apiFetch(`/api/v1/admin/tournaments/${tournamentId}/veto-configs`, {
+      method: "GET"
+    });
+    return response.json();
+  }
+
+  async upsertVetoConfig(
+    tournamentId: number,
+    data: MapVetoConfigUpsertInput
+  ): Promise<MapVetoConfig> {
+    const response = await apiFetch(`/api/v1/admin/tournaments/${tournamentId}/veto-configs`, {
+      method: "PUT",
+      body: data
+    });
+    return response.json();
+  }
+
+  async deleteVetoConfig(configId: number): Promise<{ deleted: boolean }> {
+    const response = await apiFetch(`/api/v1/admin/veto-configs/${configId}`, {
+      method: "DELETE"
+    });
+    return response.json();
+  }
+
+  /** Drop the encounter's veto session + pool and re-create them (re-resolves seeds). */
+  async resetVetoSession(encounterId: number): Promise<EncounterMapPoolState> {
+    const response = await apiFetch(`/api/v1/admin/encounters/${encounterId}/veto-session/reset`, {
+      method: "POST"
+    });
+    return response.json();
+  }
+
+  /** Perform a veto step on behalf of a side (admin override). */
+  async adminVetoAct(
+    encounterId: number,
+    data: { side: "home" | "away"; map_id: number; action: "pick" | "ban" }
+  ): Promise<{ id: number; map_id: number; status: string; picked_by: string | null }> {
+    const response = await apiFetch(`/api/v1/admin/encounters/${encounterId}/veto-act`, {
+      method: "POST",
+      body: data
     });
     return response.json();
   }

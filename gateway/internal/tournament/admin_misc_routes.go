@@ -16,6 +16,14 @@ var AdminMiscRoutes = []edge.RouteSpec{
 	{Method: "PATCH", Pattern: "/api/v1/admin/encounters/matches/{match_id}", Queue: "rpc.tournament.encounter_update_match", IDParam: "match_id", Body: true, Auth: edge.AuthRequired},
 	{Method: "POST", Pattern: "/api/v1/admin/encounters/{encounter_id}/confirm-result", Queue: "rpc.tournament.encounter_confirm_result", IDParam: "encounter_id", Auth: edge.AuthRequired},
 	{Method: "POST", Pattern: "/api/v1/admin/encounters/{encounter_id}/map-pool", Queue: "rpc.tournament.encounter_assign_map_pool", IDParam: "encounter_id", Body: true, Auth: edge.AuthRequired},
+	// map veto (docs/plans/map-veto-redesign.md) — config CRUD keyed by tournament
+	// (upsert key = tournament/stage/round in the body) plus per-encounter session
+	// reset and admin-forced actions. Worker enforces workspace "match"/"update".
+	{Method: "GET", Pattern: "/api/v1/admin/tournaments/{tournament_id}/veto-configs", Queue: "rpc.tournament.admin_veto_config_list", IDParam: "tournament_id", Auth: edge.AuthRequired},
+	{Method: "PUT", Pattern: "/api/v1/admin/tournaments/{tournament_id}/veto-configs", Queue: "rpc.tournament.admin_veto_config_upsert", IDParam: "tournament_id", Body: true, Auth: edge.AuthRequired},
+	{Method: "DELETE", Pattern: "/api/v1/admin/veto-configs/{config_id}", Queue: "rpc.tournament.admin_veto_config_delete", IDParam: "config_id", Auth: edge.AuthRequired},
+	{Method: "POST", Pattern: "/api/v1/admin/encounters/{encounter_id}/veto-session/reset", Queue: "rpc.tournament.admin_veto_session_reset", IDParam: "encounter_id", Auth: edge.AuthRequired},
+	{Method: "POST", Pattern: "/api/v1/admin/encounters/{encounter_id}/veto-act", Queue: "rpc.tournament.admin_veto_act", IDParam: "encounter_id", Body: true, Auth: edge.AuthRequired},
 	// tournament.py — finish (legacy toggle), status transition, and phase schedule replace.
 	{Method: "POST", Pattern: "/api/v1/admin/tournaments/{tournament_id}/finish", Queue: "rpc.tournament.tournament_finish", IDParam: "tournament_id", Auth: edge.AuthRequired},
 	{Method: "PATCH", Pattern: "/api/v1/admin/tournaments/{tournament_id}/status", Queue: "rpc.tournament.tournament_status", IDParam: "tournament_id", Body: true, Auth: edge.AuthRequired},
