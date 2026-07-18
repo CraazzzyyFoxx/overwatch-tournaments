@@ -11,6 +11,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { EditableAvatar } from "@/components/ui/editable-avatar";
@@ -365,18 +372,18 @@ export default function WorkspaceEditPage({ params }: { params: Promise<{ id: st
         </div>
         <div>
           <Label htmlFor="edit-timezone">Timezone</Label>
-          <select
-            id="edit-timezone"
-            className="mt-1.5 flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-            value={form.timezone}
-            onChange={(e) => patch({ timezone: e.target.value })}
-          >
-            {timezoneOptions.map((zone) => (
-              <option key={zone} value={zone}>
-                {zone} ({getUtcOffsetLabel(zone)})
-              </option>
-            ))}
-          </select>
+          <Select value={form.timezone} onValueChange={(value) => patch({ timezone: value })}>
+            <SelectTrigger id="edit-timezone" className="mt-1.5 w-full">
+              <SelectValue placeholder="Select timezone" />
+            </SelectTrigger>
+            <SelectContent>
+              {timezoneOptions.map((zone) => (
+                <SelectItem key={zone} value={zone}>
+                  {zone} ({getUtcOffsetLabel(zone)})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <p className="mt-1 text-xs text-muted-foreground">
             Tournament schedule times are entered and shown in this zone.
           </p>
