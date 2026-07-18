@@ -289,6 +289,23 @@ class MapPickSide(StrEnum):
     ADMIN = "admin"
 
 
+class MapVetoSessionStatus(StrEnum):
+    ACTIVE = "active"
+    COMPLETED = "completed"
+    CANCELLED = "cancelled"
+
+
+class VetoSeedSource(StrEnum):
+    BRACKET_SLOT = "bracket_slot"
+    STANDINGS = "standings"
+    FALLBACK_HOME = "fallback_home"
+    ADMIN = "admin"
+
+
+class FirstPickRule(StrEnum):
+    HIGHER_SEED = "higher_seed"
+
+
 class EncounterStatus(StrEnum):
     COMPLETED = "completed"
     PENDING = "pending"
@@ -362,6 +379,9 @@ __all__ = [
     "EncounterResultStatus",
     "MapPoolEntryStatus",
     "MapPickSide",
+    "MapVetoSessionStatus",
+    "VetoSeedSource",
+    "FirstPickRule",
     "EncounterStatus",
     "EncounterLinkRole",
     "EncounterLinkSlot",
