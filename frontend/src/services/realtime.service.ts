@@ -107,6 +107,42 @@ class RealtimeClient {
   }
 
   /**
+   * Drop the current connection and, if any topics are still subscribed,
+   * immediately reconnect. Call this when the authenticated identity changes
+   * (login/logout): the gateway authenticates the socket from the access-token
+   * cookie at handshake and never re-auths, so the principal only changes on a
+   * fresh connection. Topic registrations are kept (they re-subscribe with the
+   * new principal) and replay cursors are kept (no events missed or duplicated).
+   */
+  reset(): void {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    this.reconnectAttempt = 0;
+    this.clearReconnectTimer();
+    this.stopHeartbeat();
+
+    const socket = this.socket;
+    this.socket = null;
+    if (socket) {
+      // Detach handlers so the stale socket's close does not schedule its own
+      // reconnect; reset owns the reconnect decision below.
+      socket.onopen = null;
+      socket.onmessage = null;
+      socket.onerror = null;
+      socket.onclose = null;
+      socket.close();
+    }
+
+    if (this.handlersByTopic.size > 0) {
+      this.ensureSocket();
+    } else {
+      useRealtimeStore.getState().setConnectionState("idle");
+    }
+  }
+
+  /**
    * Publish an ephemeral frame to a topic (e.g. a live-drag overlay). Fire and
    * forget: silently dropped when the socket is not open, since these frames are
    * transient and losing one is harmless. The server stamps the actor, enforces

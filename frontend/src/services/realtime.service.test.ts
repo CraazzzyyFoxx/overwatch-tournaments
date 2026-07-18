@@ -224,4 +224,32 @@ describe("realtime subscribed confirmations", () => {
       console.error = originalError;
     }
   });
+
+  it("reset() drops the live socket and reconnects, re-subscribing open topics", () => {
+    const topic = "tournament:42:bracket";
+    trackCleanup(realtimeClient.subscribe(topic, () => undefined));
+    const first = currentSocket();
+    first.open();
+    expect(first.readyState).toBe(MockWebSocket.OPEN);
+
+    realtimeClient.reset();
+    expect(first.readyState).toBe(MockWebSocket.CLOSED);
+
+    const second = currentSocket();
+    expect(second).not.toBe(first);
+    second.open();
+    expect(
+      second.sent.some((f) => f.includes('"op":"subscribe"') && f.includes(topic)),
+    ).toBe(true);
+  });
+
+  it("reset() with no live subscriptions is a safe no-op and stays idle", () => {
+    const topic = "tournament:7:bracket";
+    const unsubscribe = realtimeClient.subscribe(topic, () => undefined);
+    currentSocket().open();
+    unsubscribe();
+
+    realtimeClient.reset();
+    expect(useRealtimeStore.getState().connectionState).toBe("idle");
+  });
 });
