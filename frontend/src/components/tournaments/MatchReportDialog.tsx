@@ -5,7 +5,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Star } from "lucide-react";
 
 import { EncounterScoreControls } from "@/components/admin/EncounterScoreControls";
-import { isResultLockedError } from "@/lib/api-error";
+import { getApiErrorMessage, isResultLockedError, isResultNotReportableError } from "@/lib/api-error";
 import { notify } from "@/lib/notify";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -95,17 +95,28 @@ function MatchReportDialogBody({ encounter, onOpenChange }: Omit<MatchReportDial
       onOpenChange(false);
     },
     onError: async (error) => {
-      if (isResultLockedError(error)) {
-        notify.error(t("matchReport.alreadyConfirmedTitle"), {
-          description: t("matchReport.alreadyConfirmedBody")
-        });
-        // Data was stale (result got confirmed after the dialog opened);
-        // refresh so the report action disappears, then close.
+      if (isResultNotReportableError(error)) {
+        const confirmed = isResultLockedError(error);
+        notify.error(
+          confirmed
+            ? t("matchReport.alreadyConfirmedTitle")
+            : t("matchReport.pendingSubmissionTitle"),
+          {
+            description: confirmed
+              ? t("matchReport.alreadyConfirmedBody")
+              : t("matchReport.pendingSubmissionBody")
+          }
+        );
+        // Data was stale (result got submitted/confirmed after the dialog
+        // opened); refresh so the report action disappears, then close.
         await refreshEncounterViews();
         onOpenChange(false);
         return;
       }
-      notify.apiError(error, { title: t("matchReport.submitErrorMessage") });
+      notify.apiError(error, {
+        title: t("matchReport.submitErrorMessage"),
+        description: getApiErrorMessage(error)
+      });
     }
   });
 

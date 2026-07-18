@@ -576,6 +576,8 @@
     "submitErrorMessage": "Failed to submit",
     "alreadyConfirmedTitle": "Result already confirmed",
     "alreadyConfirmedBody": "This match result has been confirmed and can no longer be changed. Contact an admin if a correction is needed.",
+    "pendingSubmissionTitle": "Result awaiting confirmation",
+    "pendingSubmissionBody": "A result has already been submitted for this match and is waiting for the other captain to confirm it. Dispute it from the match page if it's wrong.",
     "qualityDescriptions": {
       "1": "One-sided match",
       "2": "Almost one-sided",

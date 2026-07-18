@@ -177,7 +177,10 @@ export default function TournamentBracketPage({ tournament }: TournamentBracketP
 
   const canEdit = isAdmin ? () => true : undefined;
   const canReport =
-    isAuthenticated && !isAdmin ? (enc: Encounter) => enc.result_status !== "confirmed" : undefined;
+    isAuthenticated && !isAdmin
+      ? (enc: Encounter) =>
+          enc.result_status === "none" || enc.result_status === "disputed"
+      : undefined;
   const handleEdit = isAdmin ? (enc: Encounter) => setEditEncounter(enc) : undefined;
   const handleReport =
     isAuthenticated && !isAdmin
@@ -187,11 +190,21 @@ export default function TournamentBracketPage({ tournament }: TournamentBracketP
               encounterService.getEncounter(enc.id),
               captainService.getMyRole(enc.id)
             ]);
-            if (fresh.result_status === "confirmed") {
-              notify.error(t("matchReport.alreadyConfirmedTitle"), {
-                description: t("matchReport.alreadyConfirmedBody")
-              });
-              // Cached bracket data was stale; refresh so the report action hides.
+            if (fresh.result_status !== "none" && fresh.result_status !== "disputed") {
+              // The result was submitted/confirmed after this bracket data was
+              // cached; report is no longer valid. Tell the captain why, then
+              // refresh so the stale report action disappears.
+              const confirmed = fresh.result_status === "confirmed";
+              notify.error(
+                confirmed
+                  ? t("matchReport.alreadyConfirmedTitle")
+                  : t("matchReport.pendingSubmissionTitle"),
+                {
+                  description: confirmed
+                    ? t("matchReport.alreadyConfirmedBody")
+                    : t("matchReport.pendingSubmissionBody")
+                }
+              );
               void encountersQuery.refetch();
               return;
             }
