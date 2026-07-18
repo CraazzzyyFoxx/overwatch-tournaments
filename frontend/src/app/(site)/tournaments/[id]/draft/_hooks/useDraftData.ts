@@ -9,6 +9,7 @@ import { tournamentQueryKeys } from "@/lib/tournament-query-keys";
 import draftService from "@/services/draft.service";
 import { realtimeClient } from "@/services/realtime.service";
 import { useRealtimeStore } from "@/stores/realtime.store";
+import { applyResourcePatch, registerRealtimeResource } from "@/services/realtime-patch";
 import type {
   DraftBoard,
   DraftEventData,
@@ -46,6 +47,16 @@ function applyDraftEvents(
     ? next
     : { ...next, last_event_id: lastEventId };
 }
+
+const DRAFT_BOARD_RESOURCE = "draft.board";
+
+// Register the draft board as a patchable realtime resource: draft WS events
+// fold into the cached board in place instead of triggering a refetch. Mirrors
+// the backend resource tag emitted by publish_draft_event.
+registerRealtimeResource<DraftBoard, DraftEventData>(DRAFT_BOARD_RESOURCE, {
+  queryKey: (tournamentId) => tournamentQueryKeys.draftBoard(tournamentId),
+  reduce: (board, event) => applyDraftEvents(board, [event]),
+});
 
 export function useDraftBoardQuery(tournamentId: number) {
   return useQuery({
@@ -136,12 +147,13 @@ export function useDraftRealtime(
         return;
       }
 
-      queryClient.setQueryData<DraftBoard | null | undefined>(
-        queryKey,
-        (currentBoard) => (currentBoard ? applyDraftEvents(currentBoard, [event]) : currentBoard)
-      );
+      applyResourcePatch(queryClient, {
+        resource: DRAFT_BOARD_RESOURCE,
+        resourceId: tournamentId,
+        event,
+      });
     },
-    [queryClient, queryKey, topic]
+    [queryClient, queryKey, topic, tournamentId]
   );
 
   useEffect(() => {
@@ -161,11 +173,14 @@ export function useDraftRealtime(
     }
 
     pendingEventsRef.current = [];
-    queryClient.setQueryData<DraftBoard | null | undefined>(
-      queryKey,
-      (currentBoard) => (currentBoard ? applyDraftEvents(currentBoard, pending) : currentBoard)
-    );
-  }, [board, queryClient, queryKey, topic]);
+    for (const pendingEvent of pending) {
+      applyResourcePatch(queryClient, {
+        resource: DRAFT_BOARD_RESOURCE,
+        resourceId: tournamentId,
+        event: pendingEvent,
+      });
+    }
+  }, [board, queryClient, queryKey, topic, tournamentId]);
 
   // On reconnect, the client replays from the cursor; refetch the snapshot as a
   // safety net so the board converges even after a long disconnect.
