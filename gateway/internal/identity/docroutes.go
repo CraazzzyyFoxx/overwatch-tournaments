@@ -33,10 +33,15 @@ var PublicDocRoutes = []edge.RouteSpec{
 	{Method: "GET", Pattern: "/api/auth/oauth/providers", Queue: "rpc.identity.oauth_providers", Auth: edge.AuthNone},
 	{Method: "GET", Pattern: "/api/auth/oauth/connections", Queue: "rpc.identity.oauth_connections", Auth: edge.AuthRequired},
 	{Method: "GET", Pattern: "/api/auth/oauth/{provider}/url", Queue: "rpc.identity.oauth_url", Auth: edge.AuthOptional},
-	{Method: "GET", Pattern: "/api/auth/oauth/{provider}/callback", Queue: "rpc.identity.oauth_callback", Auth: edge.AuthNone},
 	{Method: "POST", Pattern: "/api/auth/oauth/{provider}/callback", Queue: "rpc.identity.oauth_callback", Body: true, Auth: edge.AuthNone},
-	{Method: "POST", Pattern: "/api/auth/oauth/{provider}/link", Queue: "rpc.identity.oauth_link", Body: true, Auth: edge.AuthRequired},
+	// Auth: AuthOptional -- identity-svc decides whether a bearer is
+	// required, branching on the signed OAuth state's origin (Task 10R).
+	{Method: "POST", Pattern: "/api/auth/oauth/{provider}/link", Queue: "rpc.identity.oauth_link", Body: true, Auth: edge.AuthOptional},
 	{Method: "DELETE", Pattern: "/api/auth/oauth/{provider}/unlink", Queue: "rpc.identity.oauth_unlink", Auth: edge.AuthRequired, Success: 204},
+	{Method: "POST", Pattern: "/api/auth/sso/exchange", Queue: "rpc.identity.sso_exchange", Body: true, Auth: edge.AuthNone},
+	// Custom-domain account-linking end-ticket (Task 10R) -- unlike
+	// sso/exchange above, this one IS authenticated (bearer required).
+	{Method: "POST", Pattern: "/api/auth/link/complete", Queue: "rpc.identity.link_complete", Body: true, Auth: edge.AuthRequired},
 	// API keys
 	{Method: "GET", Pattern: "/api/auth/api-keys", Queue: "rpc.identity.list_api_keys", Auth: edge.AuthRequired},
 	{Method: "POST", Pattern: "/api/auth/api-keys", Queue: "rpc.identity.create_api_key", Body: true, Auth: edge.AuthRequired, Success: 201},
@@ -71,6 +76,7 @@ var AdminDocRoutes = []edge.RouteSpec{
 	{Method: "POST", Pattern: "/api/auth/rbac/users/assign-role", Queue: "rpc.identity.rbac.assign_role", Body: true, Auth: edge.AuthRequired},
 	{Method: "POST", Pattern: "/api/auth/rbac/users/remove-role", Queue: "rpc.identity.rbac.remove_role", Body: true, Auth: edge.AuthRequired},
 	{Method: "GET", Pattern: "/api/auth/rbac/users/{user_id}", Queue: "rpc.identity.rbac.get_auth_user", Auth: edge.AuthRequired},
+	{Method: "DELETE", Pattern: "/api/auth/rbac/users/{user_id}", Queue: "rpc.identity.rbac.delete_auth_user", Auth: edge.AuthRequired, Success: 204},
 	{Method: "GET", Pattern: "/api/auth/rbac/users/{user_id}/roles", Queue: "rpc.identity.rbac.get_user_roles", Auth: edge.AuthRequired},
 	{Method: "GET", Pattern: "/api/auth/rbac/users/{user_id}/denies", Queue: "rpc.identity.rbac.list_user_denies", Auth: edge.AuthRequired},
 	{Method: "POST", Pattern: "/api/auth/rbac/users/{user_id}/denies", Queue: "rpc.identity.rbac.add_user_deny", Body: true, Auth: edge.AuthRequired},

@@ -19,6 +19,49 @@ class WorkspaceRepository(BaseRepository[models.Workspace]):
     async def get_by_slug(self, session: AsyncSession, slug: str) -> models.Workspace | None:
         return await self.get_by(session, options=self.default_grid_options(), slug=slug)
 
+    async def get_by_subdomain(self, session: AsyncSession, subdomain: str) -> models.Workspace | None:
+        """Resolve a platform-zone subdomain label to its workspace (Phase 1).
+
+        Deliberately a bare lookup (no eager-loaded grid options): the
+        ``by_host`` RPC only needs ``id``/``slug`` for tenant resolution, and
+        this runs on the request-resolution hot path.
+        """
+        result = await session.execute(sa.select(models.Workspace).where(models.Workspace.subdomain == subdomain))
+        return result.scalar_one_or_none()
+
+    async def get_by_verified_custom_domain(self, session: AsyncSession, domain: str) -> models.Workspace | None:
+        """Resolve a custom domain to its workspace, but only once verified (Phase 2).
+
+        Fail-closed: an unverified (or unclaimed) ``custom_domain`` never
+        resolves, so a domain mid-verification can't be used to spoof a
+        workspace. Bare lookup, mirroring ``get_by_subdomain``, for the same
+        request-resolution hot path.
+        """
+        result = await session.execute(
+            sa.select(models.Workspace).where(
+                models.Workspace.custom_domain == domain,
+                models.Workspace.custom_domain_verified_at.is_not(None),
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def get_by_custom_domain_any(self, session: AsyncSession, domain: str) -> models.Workspace | None:
+        """Resolve a custom domain to its owning workspace regardless of
+        verification state — the best-effort duplicate-claim pre-check for
+        ``set_custom_domain``.
+
+        Unlike ``get_by_verified_custom_domain``, this also matches an
+        unverified claim: the unique index ``ix_workspace_custom_domain``
+        blocks ANY two workspaces from holding the same ``custom_domain``
+        string, verified or not, so the pre-check has to look at the same
+        population the index guards. Still just a best-effort check — a
+        concurrent claim between this read and the write is a genuine TOCTOU
+        gap, closed authoritatively by catching the index's ``IntegrityError``
+        at write time (see ``set_custom_domain``).
+        """
+        result = await session.execute(sa.select(models.Workspace).where(models.Workspace.custom_domain == domain))
+        return result.scalar_one_or_none()
+
     async def get_with_default_grid(self, session: AsyncSession, workspace_id: int) -> models.Workspace | None:
         return await self.get(session, workspace_id, options=self.default_grid_options())
 

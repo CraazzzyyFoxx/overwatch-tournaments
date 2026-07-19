@@ -132,7 +132,7 @@ export default function RegistrationRowActions({
           <Button
             variant="ghost"
             size="icon"
-            className="h-8 w-8 rounded-lg border border-white/10 text-white/55 hover:bg-white/5 hover:text-white"
+            className="h-8 w-8 rounded-lg border border-[color:var(--aqt-border-2)] text-[color:var(--aqt-fg-muted)] hover:bg-white/5 hover:text-[color:var(--aqt-fg)]"
           >
             <MoreHorizontal className="h-4 w-4" />
             <span className="sr-only">Registration actions</span>

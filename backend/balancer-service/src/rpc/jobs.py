@@ -14,6 +14,7 @@ long-lived stream does not fit the request/reply RPC model.
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import io
 from typing import Any
@@ -52,12 +53,13 @@ def _opt_int(value: Any) -> int | None:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="invalid integer value") from exc
 
 
-def _build_upload(data: dict[str, Any]) -> UploadFile:
+async def _build_upload(data: dict[str, Any]) -> UploadFile:
     raw = data.get("content_b64")
     if not isinstance(raw, str):
         raise HTTPException(status_code=422, detail="player_data_file is required")
     try:
-        file_bytes = base64.b64decode(raw)
+        # Uploads can reach 25MB of base64; decode off the event loop.
+        file_bytes = await asyncio.to_thread(base64.b64decode, raw)
     except (ValueError, TypeError) as exc:
         raise HTTPException(status_code=400, detail="invalid base64 content") from exc
     content_type = data.get("content_type") or "application/json"
@@ -79,7 +81,7 @@ def register(broker: Any, logger: Any) -> None:
                 raise HTTPException(status_code=422, detail="workspace_id is required")
             try:
                 return await jobs.create_job(
-                    uploaded_file=_build_upload(data),
+                    uploaded_file=await _build_upload(data),
                     raw_config=data.get("config_overrides"),
                     workspace_id=workspace_id,
                     user=user,

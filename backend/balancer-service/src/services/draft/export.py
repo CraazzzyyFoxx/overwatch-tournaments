@@ -140,6 +140,6 @@ async def export(session: AsyncSession, draft_session: DraftSession) -> tuple[Dr
 
     draft_session.exported_at = datetime.now(UTC)
     draft_session.export_status = "success"
-    await session.flush()
-    await session.refresh(draft_session)
+    # Python-side mutations only (expire_on_commit=False): the caller's commit
+    # persists the backfill; no flush+refresh round-trip needed here.
     return draft_session, removed, len(payload)

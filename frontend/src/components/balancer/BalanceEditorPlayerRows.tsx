@@ -120,7 +120,7 @@ function BalanceEditorPlayerTableRow({
       ref={rowRef}
       style={style}
       className={cn(
-        "cursor-grab border-white/5 active:cursor-grabbing",
+        "cursor-grab border-[color:var(--aqt-border)] active:cursor-grabbing",
         dragging && "opacity-40",
         dropActive && "bg-white/[0.05]",
         isSelected
@@ -143,13 +143,13 @@ function BalanceEditorPlayerTableRow({
         <div className="flex min-w-0 flex-col gap-0.5">
           <div className="flex min-w-0 items-center gap-2">
             {player.is_captain ? <Crown className="h-3.5 w-3.5 shrink-0 text-amber-300" /> : null}
-            <span className="truncate text-sm font-semibold text-white/88" title={player.name}>
+            <span className="truncate text-sm font-semibold text-[color:var(--aqt-fg)]" title={player.name}>
               {player.name}
             </span>
           </div>
           {subRoleLabel ? (
             <span
-              className="truncate text-[10px] font-medium uppercase tracking-[0.12em] text-white/40"
+              className="truncate text-[10px] font-medium uppercase tracking-[0.12em] text-[color:var(--aqt-fg-dim)]"
               title={subRoleLabel}
             >
               {subRoleLabel}
@@ -164,7 +164,7 @@ function BalanceEditorPlayerTableRow({
               <PlayerDivisionIcon division={division} width={26} height={26} />
             </span>
           ) : (
-            <span className="text-xs text-white/25">-</span>
+            <span className="text-xs text-[color:var(--aqt-fg-faint)]">-</span>
           )}
         </div>
       </TableCell>
@@ -191,7 +191,7 @@ function BalanceEditorPlayerTableRow({
               );
             })
           ) : (
-            <span className="text-xs text-white/25">-</span>
+            <span className="text-xs text-[color:var(--aqt-fg-faint)]">-</span>
           )}
         </div>
       </TableCell>
@@ -332,10 +332,10 @@ export function DroppableRoleSection({
       ))}
 
       {players.length === 0 ? (
-        <TableRow className="border-white/5 hover:bg-transparent">
+        <TableRow className="border-[color:var(--aqt-border)] hover:bg-transparent">
           <TableCell
             colSpan={4}
-            className="px-3 py-2.5 text-center text-[11px] uppercase tracking-[0.14em] text-white/24"
+            className="px-3 py-2.5 text-center text-[11px] uppercase tracking-[0.14em] text-[color:var(--aqt-fg-faint)]"
           >
             Drop {roleKey.toLowerCase()} here
           </TableCell>

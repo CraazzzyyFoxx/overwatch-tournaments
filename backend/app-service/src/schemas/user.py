@@ -31,6 +31,8 @@ __all__ = (
     "UserMapsSearchParams",
     "UserMapsSearchQueryParams",
     "UserTournamentStat",
+    "LobbyLeaderboardEntry",
+    "LobbyLeaderboard",
     "HeroStat",
     "HeroWithUserStats",
     "HeroStatBest",
@@ -113,6 +115,14 @@ class UserTournamentPlayer(BaseModel):
     is_newcomer_role: bool
     related_player_id: int | None = None
     relative_player: int | None = None
+    # Average MVP placement (1 = best) across this player's matches in THIS
+    # tournament. Mirrors the dossier "Avg MVP" metric: per match take
+    # COALESCE(ImpactRank, Performance); ImpactRank preferred, Performance the
+    # legacy fallback. `None` when the player has no such stat rows.
+    avg_mvp: float | None = None
+    # This player's top heroes by playtime in THIS tournament (same hero-read
+    # shape used elsewhere on the response). Empty when none recorded.
+    heroes: list[schemas.HeroRead] = Field(default_factory=list)
 
 
 class UserEncounterTournament(BaseModel):
@@ -176,6 +186,10 @@ class MatchReadWithUserStats(BaseModel):
     code: str | None = None
     map: MapRead | None = None
     performance: int | None = None
+    impact_rank: int | None = None
+    impact_points: float | None = None
+    overperformance_score: float | None = None
+    overperformance_badge: bool = False
     heroes: list[schemas.HeroRead] = Field(default_factory=list)
 
 
@@ -252,6 +266,28 @@ class UserTournamentWithStats(BaseModel):
     playtime: float
 
     stats: dict[enums.LogStatsName | typing.Literal["winrate"], UserTournamentStat]
+
+
+class LobbyLeaderboardEntry(BaseModel):
+    """One player's ranked value for a single stat inside a tournament lobby."""
+
+    rank: int
+    player_id: int  # user id (models.User.id)
+    name: str
+    value: float
+
+
+class LobbyLeaderboard(BaseModel):
+    """Full ranked list of every player in a tournament for one stat.
+
+    Exposes the whole ranked population behind a single user's
+    ``UserTournamentWithStats.stats[stat].{rank,total}`` so the frontend can
+    render a per-stat "lobby leaderboard" modal.
+    """
+
+    stat: enums.LogStatsName
+    total_players: int
+    entries: list[LobbyLeaderboardEntry]
 
 
 class UserMapHeroStats(BaseModel):

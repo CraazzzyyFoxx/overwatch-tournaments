@@ -67,6 +67,12 @@ func (c *Conn) hasTopic(topic string) bool {
 	return ok
 }
 
+func (c *Conn) topicCount() int {
+	c.topicsMu.RLock()
+	defer c.topicsMu.RUnlock()
+	return len(c.topics)
+}
+
 func (c *Conn) subscribedTopics() []string {
 	c.topicsMu.RLock()
 	defer c.topicsMu.RUnlock()
@@ -205,15 +211,25 @@ func (h *Hub) Route(topic string, payload []byte, exclude *Conn) {
 // presenceUserIDs returns the distinct authenticated user ids currently
 // subscribed to topic, sorted ascending. Anonymous connections are excluded.
 func (h *Hub) presenceUserIDs(topic string) []int64 {
+	ids, _ := h.presenceStats(topic)
+	return ids
+}
+
+// presenceStats returns distinct authenticated users and the exact number of
+// anonymous connections subscribed to a topic.
+func (h *Hub) presenceStats(topic string) ([]int64, int) {
 	h.mu.RLock()
 	seen := make(map[int64]struct{})
+	anonymous := 0
 	for c := range h.conns {
-		if c.user == nil {
+		if !c.hasTopic(topic) {
 			continue
 		}
-		if c.hasTopic(topic) {
-			seen[c.user.ID] = struct{}{}
+		if c.user == nil {
+			anonymous++
+			continue
 		}
+		seen[c.user.ID] = struct{}{}
 	}
 	h.mu.RUnlock()
 
@@ -222,5 +238,5 @@ func (h *Hub) presenceUserIDs(topic string) []int64 {
 		ids = append(ids, id)
 	}
 	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
-	return ids
+	return ids, anonymous
 }

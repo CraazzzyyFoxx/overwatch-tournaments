@@ -17,15 +17,14 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { GripVertical } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 import {
   STAGE_WINDOW_KIND,
-  parseLookbackInput,
   stageWindowValue
 } from "@/app/balancer/components/rank-autofill-stages";
-import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/components/ui/number-input";
 import { Switch } from "@/components/ui/switch";
-import { useTranslation } from "@/i18n/LanguageContext";
 import { cn } from "@/lib/utils";
 import type {
   RankAutofillSourceKey,
@@ -55,7 +54,7 @@ function SortableStageRow({
   onToggle,
   onLookbackChange
 }: SortableStageRowProps) {
-  const { t } = useTranslation();
+  const t = useTranslations();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: stage.source
   });
@@ -74,14 +73,14 @@ function SortableStageRow({
       ref={setNodeRef}
       style={style}
       className={cn(
-        "flex items-center gap-3 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2.5",
+        "flex items-center gap-3 rounded-lg border border-[color:var(--aqt-border-2)] bg-white/[0.03] px-3 py-2.5",
         isDragging && "z-10 opacity-80 shadow-lg shadow-black/40",
         !stage.enabled && "opacity-55"
       )}
     >
       <button
         type="button"
-        className="cursor-grab touch-none text-white/30 hover:text-white/60 disabled:cursor-not-allowed"
+        className="cursor-grab touch-none text-[color:var(--aqt-fg-dim)] hover:text-[color:var(--aqt-fg-muted)] disabled:cursor-not-allowed"
         aria-label={t("rankAutofill.dragAria")}
         disabled={disabled}
         {...attributes}
@@ -90,28 +89,27 @@ function SortableStageRow({
         <GripVertical className="h-4 w-4" />
       </button>
 
-      <span className="w-4 shrink-0 text-center text-xs font-semibold tabular-nums text-white/35">
+      <span className="w-4 shrink-0 text-center text-xs font-semibold tabular-nums text-[color:var(--aqt-fg-dim)]">
         {index + 1}
       </span>
 
       <div className="min-w-0 flex-1">
-        <div className="text-sm font-medium text-white/85">{label}</div>
-        <div className="truncate text-[11px] text-white/40">{description}</div>
+        <div className="text-sm font-medium text-[color:var(--aqt-fg)]">{label}</div>
+        <div className="truncate text-[11px] text-[color:var(--aqt-fg-dim)]">{description}</div>
       </div>
 
       <label className="flex shrink-0 items-center gap-1.5">
-        <Input
-          type="number"
+        <NumberInput
+          integer
           min={1}
-          inputMode="numeric"
-          value={windowValue ?? ""}
+          value={windowValue}
           placeholder={t(`rankAutofill.window.${windowKind}Placeholder`)}
           disabled={disabled}
-          onChange={(event) => onLookbackChange(stage.source, parseLookbackInput(event.target.value))}
+          onValueChange={(next) => onLookbackChange(stage.source, next)}
           className="h-8 w-16 text-right text-xs"
           aria-label={t("rankAutofill.windowAria", { label })}
         />
-        <span className="w-9 text-[11px] text-white/40">
+        <span className="w-9 text-[11px] text-[color:var(--aqt-fg-dim)]">
           {t(`rankAutofill.window.${windowKind}Suffix`)}
         </span>
       </label>

@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import { Check, ChevronsUpDown } from "lucide-react";
+import { useTranslations } from "next-intl";
 import type { BuiltInFieldConfig } from "@/types/registration.types";
 
 import {
@@ -45,6 +46,7 @@ export default function AccountCombobox({
   config,
   onValidationChange,
 }: AccountComboboxProps) {
+  const t = useTranslations();
   const [open, setOpen] = useState(false);
   const [inputValue, setInputValue] = useState(value);
   const [contentWidth, setContentWidth] = useState<number>();
@@ -129,13 +131,13 @@ export default function AccountCombobox({
               aria-controls={listboxId}
               aria-expanded={open}
               className={cn(
-                "flex h-9 w-full items-center justify-between rounded-lg border border-white/10 bg-white/3 px-3 text-sm transition-colors hover:border-white/15",
-                value ? "text-white" : "text-white/30",
+                "flex h-9 w-full items-center justify-between rounded-lg border border-[color:var(--aqt-border-2)] bg-white/3 px-3 text-sm transition-colors hover:border-[color:var(--aqt-border-2)]",
+                value ? "text-[color:var(--aqt-fg)]" : "text-[color:var(--aqt-fg-dim)]",
                 validationError && "border-red-500/70 text-red-100 hover:border-red-500/70",
               )}
             >
               <span className="truncate">{value || placeholder}</span>
-              <ChevronsUpDown className="ml-2 size-3.5 shrink-0 text-white/30" />
+              <ChevronsUpDown className="ml-2 size-3.5 shrink-0 text-[color:var(--aqt-fg-dim)]" />
             </button>
           </PopoverTrigger>
           <PopoverContent
@@ -152,9 +154,11 @@ export default function AccountCombobox({
               />
               <CommandList>
                 <CommandEmpty>
-                  {inputValue ? "Type to use custom value" : "No linked accounts"}
+                  {inputValue
+                    ? t("registration.accounts.typeToUseCustom")
+                    : t("registration.accounts.noLinkedAccounts")}
                 </CommandEmpty>
-                <CommandGroup heading="Linked accounts">
+                <CommandGroup heading={t("registration.accounts.linkedAccounts")}>
                   {filtered.map((s) => (
                     <CommandItem key={s} value={s} onSelect={() => handleSelect(s)}>
                       <span className="flex-1 truncate">{s}</span>
@@ -163,9 +167,9 @@ export default function AccountCombobox({
                   ))}
                 </CommandGroup>
                 {inputValue && !suggestions.includes(inputValue) && !validationError && (
-                  <CommandGroup heading="Custom">
+                  <CommandGroup heading={t("registration.accounts.custom")}>
                     <CommandItem value={normalizedInputValue} onSelect={() => handleSelect(inputValue)}>
-                      Use &quot;{normalizedInputValue}&quot;
+                      {t("registration.accounts.useValue", { value: normalizedInputValue })}
                     </CommandItem>
                   </CommandGroup>
                 )}
@@ -180,7 +184,7 @@ export default function AccountCombobox({
           value={inputValue}
           onChange={(e) => handleInputChange(e.target.value)}
           className={cn(
-            "h-9 w-full rounded-lg border border-white/10 bg-white/3 px-3 text-sm text-white placeholder-white/30 outline-none transition-colors focus:border-white/20",
+            "h-9 w-full rounded-lg border border-[color:var(--aqt-border-2)] bg-white/3 px-3 text-sm text-[color:var(--aqt-fg)] placeholder-white/30 outline-none transition-colors focus:border-[color:var(--aqt-border-2)]",
             validationError && "border-red-500/70 text-red-100 placeholder:text-red-200/60 focus:border-red-500/70",
           )}
         />

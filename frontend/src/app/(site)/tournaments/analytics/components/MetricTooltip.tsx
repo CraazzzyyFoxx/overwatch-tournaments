@@ -10,7 +10,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { useTranslation } from "@/i18n/LanguageContext";
+import { useTranslations } from "next-intl";
 import { GlossaryTerm } from "../analytics-glossary";
 
 interface MetricTooltipProps {
@@ -40,7 +40,7 @@ export default function MetricTooltip({
   showIcon,
   focusable = true,
 }: MetricTooltipProps) {
-  const { t } = useTranslation();
+  const t = useTranslations();
   const label = t(`analytics.glossary.${term}.label`);
   const plain = t(`analytics.glossary.${term}.plain`);
   const isPlainLabel = children == null;

@@ -8,13 +8,13 @@
   --enc-muted: hsl(215 12% 60%);
   --enc-dim: hsl(215 12% 40%);
   --enc-faint: hsl(215 12% 30%);
-  --enc-teal: hsl(174 72% 46%);
+  --enc-teal: hsl(172 70% 49%);
   --enc-emerald: hsl(142 70% 50%);
   --enc-amber: hsl(38 95% 55%);
   --enc-rose: hsl(340 75% 58%);
   --enc-violet: hsl(270 70% 62%);
   --enc-blue: hsl(210 80% 60%);
-  --enc-display: var(--font-barlow-condensed), "Barlow Condensed", Inter, system-ui, sans-serif;
+  --enc-display: var(--font-onest), var(--font-inter), Inter, system-ui, sans-serif;
   --enc-mono: ui-monospace, "JetBrains Mono", SFMono-Regular, Menlo, monospace;
   color: var(--enc-fg);
   display: flex;
@@ -23,81 +23,8 @@
 }
 
 /* ============ Hero ============ */
-.hero {
-  position: relative;
-  overflow: hidden;
-  border: 1px solid var(--enc-border);
-  border-radius: 14px;
-  padding: 36px 40px;
-  background: var(--enc-bg);
-}
-
-.hex {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='92.4'%3E%3Cpolygon points='40,1 79,23.2 79,69.2 40,91.4 1,69.2 1,23.2' fill='none' stroke='white' stroke-width='0.8' opacity='0.055'/%3E%3C/svg%3E");
-  background-size: 80px 92.4px;
-}
-
-.glow1 {
-  position: absolute;
-  top: -15%;
-  left: -5%;
-  width: 65%;
-  height: 130%;
-  background: radial-gradient(ellipse at 30% 50%, hsl(174 72% 46% / 0.18), transparent 62%);
-  pointer-events: none;
-}
-
-.glow2 {
-  position: absolute;
-  top: -25%;
-  right: 0;
-  width: 55%;
-  height: 100%;
-  background: radial-gradient(ellipse at 70% 30%, hsl(210 80% 55% / 0.1), transparent 58%);
-  pointer-events: none;
-}
-
-.heroGrid {
-  position: relative;
-  z-index: 1;
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 48px;
-  align-items: end;
-}
-
-.crumb {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--enc-faint);
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-}
-
-.title {
-  font-family: var(--enc-display);
-  font-weight: 700;
-  font-size: 52px;
-  line-height: 1.05;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-  margin: 8px 0 12px;
-}
-
-.titleAccent {
-  font-style: normal;
-  color: var(--enc-teal);
-}
-
-.subtitle {
-  color: var(--enc-muted);
-  max-width: 42rem;
-  font-size: 14px;
-}
-
+/* Hero shell + title moved to the shared <PageHero> (Editorial Tactical).
+   Only the stat blocks below are still rendered here, as the hero aside. */
 .heroStats {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -229,8 +156,8 @@
 }
 
 .viewTabActive {
-  background: hsl(174 72% 46% / 0.12);
-  border-color: hsl(174 72% 46% / 0.3);
+  background: hsl(172 70% 49% / 0.12);
+  border-color: hsl(172 70% 49% / 0.3);
   color: var(--enc-teal);
 }
 
@@ -257,7 +184,7 @@
 }
 
 .viewTabActive .viewCount {
-  background: hsl(174 72% 46% / 0.18);
+  background: hsl(172 70% 49% / 0.18);
   color: var(--enc-teal);
 }
 
@@ -271,8 +198,8 @@
   align-items: center;
   gap: 6px;
   flex-shrink: 0;
-  background: hsl(174 72% 46% / 0.1);
-  border: 1px dashed hsl(174 72% 46% / 0.3);
+  background: hsl(172 70% 49% / 0.1);
+  border: 1px dashed hsl(172 70% 49% / 0.3);
   color: var(--enc-teal);
   font-size: 12px;
   font-weight: 600;
@@ -283,7 +210,7 @@
 }
 
 .viewSave:hover:not(:disabled) {
-  background: hsl(174 72% 46% / 0.18);
+  background: hsl(172 70% 49% / 0.18);
 }
 
 .viewSave:disabled {
@@ -360,8 +287,8 @@
 }
 
 .filterChipActive {
-  background: hsl(174 72% 46% / 0.12);
-  border-color: hsl(174 72% 46% / 0.35);
+  background: hsl(172 70% 49% / 0.12);
+  border-color: hsl(172 70% 49% / 0.35);
   color: var(--enc-teal);
 }
 
@@ -375,7 +302,7 @@
 }
 
 .filterChipActive .filterChipCount {
-  background: hsl(174 72% 46% / 0.16);
+  background: hsl(172 70% 49% / 0.16);
   color: var(--enc-teal);
 }
 
@@ -533,7 +460,7 @@
 
 .histBar {
   flex: 1;
-  background: linear-gradient(180deg, var(--enc-teal), hsl(174 72% 46% / 0.4));
+  background: linear-gradient(180deg, var(--enc-teal), hsl(172 70% 49% / 0.4));
   border-radius: 4px 4px 2px 2px;
   position: relative;
   cursor: pointer;
@@ -594,7 +521,7 @@
   color: var(--enc-fg);
   font-weight: 600;
   font-size: 11px;
-  background: hsl(174 72% 46% / var(--alpha, 0.12));
+  background: hsl(172 70% 49% / var(--alpha, 0.12));
 }
 
 .scoreCellEmpty {
@@ -616,7 +543,7 @@
   flex: 1;
   height: 6px;
   border-radius: 3px;
-  background: linear-gradient(90deg, hsl(174 72% 46% / 0.08), hsl(174 72% 46% / 0.7));
+  background: linear-gradient(90deg, hsl(172 70% 49% / 0.08), hsl(172 70% 49% / 0.7));
 }
 
 /* Donut chart */
@@ -749,9 +676,9 @@
 }
 
 .tgTeal {
-  background: hsl(174 72% 46% / 0.18);
+  background: hsl(172 70% 49% / 0.18);
   color: var(--enc-teal);
-  border: 1px solid hsl(174 72% 46% / 0.3);
+  border: 1px solid hsl(172 70% 49% / 0.3);
 }
 
 .tgAmber {
@@ -817,8 +744,8 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  background: hsl(174 72% 46% / 0.12);
-  border: 1px solid hsl(174 72% 46% / 0.3);
+  background: hsl(172 70% 49% / 0.12);
+  border: 1px solid hsl(172 70% 49% / 0.3);
   color: var(--enc-teal);
   font-size: 10px;
   font-weight: 700;
@@ -1060,7 +987,7 @@
 
 .closenessFill {
   height: 100%;
-  background: linear-gradient(90deg, hsl(174 72% 46%), hsl(38 95% 55%));
+  background: linear-gradient(90deg, hsl(172 70% 49%), hsl(38 95% 55%));
   border-radius: 2px;
 }
 
@@ -1214,8 +1141,8 @@
 }
 
 .pageBtnActive {
-  background: hsl(174 72% 46% / 0.12);
-  border-color: hsl(174 72% 46% / 0.3);
+  background: hsl(172 70% 49% / 0.12);
+  border-color: hsl(172 70% 49% / 0.3);
   color: var(--enc-teal);
   cursor: default;
 }

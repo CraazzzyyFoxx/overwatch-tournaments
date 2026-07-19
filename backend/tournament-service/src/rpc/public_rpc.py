@@ -19,7 +19,8 @@ Commit semantics: every write service called here commits internally
 (captain.submit_result/submit_match_report/confirm_result/dispute_result,
 map_veto.perform_veto_action, reg_service.create/update/withdraw/check_in,
 encounter service.upsert_saved_view/delete_saved_view), so the handlers add no
-extra commit.
+extra commit. The map-pool state read also commits when it lazily creates the
+encounter's veto session (veto_session.ensure_veto_session).
 
 The gateway passes path params as ``data["<name>"]`` (and the primary id as
 ``data["id"]`` when the RouteSpec sets IDParam), query params as
@@ -30,6 +31,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from faststream.rabbit import Channel
 from faststream.rabbit.annotations import RabbitMessage
 
 from shared.balancer_registration_statuses import get_status_metas_map
@@ -37,6 +39,7 @@ from shared.balancer_subrole_catalog import resolve_subrole_catalog
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.rpc.identity import rehydrate_user
 from shared.services.profile_visibility import resolve_profiles_open
+from shared.services.tournament_visibility import assert_tournament_viewable
 from src import models, schemas
 from src.rpc._helpers import (
     _dump,
@@ -64,6 +67,7 @@ from src.schemas.registration_build import (
     _reg_to_read,
     _resolve_tournament_workspace,
 )
+from src.services import visibility_resolvers
 from src.services.encounter import captain as captain_service
 from src.services.encounter import flows as encounter_flows
 from src.services.encounter import map_veto as map_veto_service
@@ -192,8 +196,10 @@ def register(broker: Any, logger: Any) -> None:
     @broker.subscriber("rpc.tournament.captain_map_pool")
     async def _captain_map_pool(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
-            # Public route — no identity required.
+            # Public route — no identity required, but hidden tournaments 404.
             encounter_id = _require_id(data)
+            tournament_id = await visibility_resolvers.tournament_id_for_encounter(session, encounter_id)
+            await assert_tournament_viewable(session, _optional_identity(data), tournament_id)
             pool = await map_veto_service.get_map_pool(session, encounter_id)
             return [map_veto_service.serialize_map_pool_entry(entry) for entry in pool]
 
@@ -206,6 +212,8 @@ def register(broker: Any, logger: Any) -> None:
             # viewer_side=None (the pool serializes identically either way).
             encounter_id = _require_id(data)
             user = _optional_identity(data)
+            tournament_id = await visibility_resolvers.tournament_id_for_encounter(session, encounter_id)
+            await assert_tournament_viewable(session, user, tournament_id)
             encounter = await captain_service._load_encounter(session, encounter_id)
             viewer_side = await resolve_optional_viewer_side(session, user, encounter)
             return await map_veto_service.get_map_pool_state(
@@ -246,8 +254,9 @@ def register(broker: Any, logger: Any) -> None:
     @broker.subscriber("rpc.tournament.reg_pub_form")
     async def _reg_pub_form(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
-            # Public route — no identity required.
+            # Public route — no identity required, but hidden tournaments 404.
             tournament_id = _path_int(data, "tournament_id")
+            await assert_tournament_viewable(session, _optional_identity(data), tournament_id)
             form = await reg_service.get_registration_form(session, tournament_id)
             if form is None:
                 return None
@@ -261,6 +270,7 @@ def register(broker: Any, logger: Any) -> None:
         async def op(session: Any) -> Any:
             user = _identity(data)
             tournament_id = _path_int(data, "tournament_id")
+            await assert_tournament_viewable(session, user, tournament_id)
             body = RegistrationCreate.model_validate(_payload(data))
             # Full use-case (validation, duplicate check, create, serialize)
             # lives in the service layer; commits internally.
@@ -277,17 +287,29 @@ def register(broker: Any, logger: Any) -> None:
         async def op(session: Any) -> Any:
             user = _identity(data)
             tournament_id = _path_int(data, "tournament_id")
+            await assert_tournament_viewable(session, user, tournament_id)
             reg = await reg_service.get_registration(session, tournament_id, user.id)
             if reg is None:
                 return None
             form = await reg_service.get_registration_form(session, tournament_id)
             show_ranks = form.show_ranks if form is not None else False
+            profiles_open = (
+                (await resolve_profiles_open(session, [reg], scope=form.open_profile_scope)).get(reg.id)
+                if form is not None and form.require_open_profile
+                else None
+            )
             workspace_id = (
                 form.workspace_id if form is not None else await _resolve_tournament_workspace(session, tournament_id)
             )
             status_meta_map = await get_status_metas_map(session, workspace_id=workspace_id)
             return _dump(
-                _reg_to_read(reg, workspace_id=workspace_id, status_meta_map=status_meta_map, show_ranks=show_ranks)
+                _reg_to_read(
+                    reg,
+                    workspace_id=workspace_id,
+                    status_meta_map=status_meta_map,
+                    show_ranks=show_ranks,
+                    profiles_open=profiles_open,
+                )
             )
 
         return await _run(logger, op)
@@ -297,6 +319,7 @@ def register(broker: Any, logger: Any) -> None:
         async def op(session: Any) -> Any:
             user = _identity(data)
             tournament_id = _path_int(data, "tournament_id")
+            await assert_tournament_viewable(session, user, tournament_id)
             body = RegistrationUpdate.model_validate(_payload(data))
 
             form = await reg_service.get_registration_form(session, tournament_id)
@@ -343,6 +366,7 @@ def register(broker: Any, logger: Any) -> None:
         async def op(session: Any) -> Any:
             user = _identity(data)
             tournament_id = _path_int(data, "tournament_id")
+            await assert_tournament_viewable(session, user, tournament_id)
             reg = await reg_service.get_registration(session, tournament_id, user.id)
             if reg is None:
                 raise HTTPException(status_code=404, detail="No registration found")
@@ -357,6 +381,7 @@ def register(broker: Any, logger: Any) -> None:
         async def op(session: Any) -> Any:
             user = _identity(data)
             tournament_id = _path_int(data, "tournament_id")
+            await assert_tournament_viewable(session, user, tournament_id)
             reg = await reg_service.get_registration(session, tournament_id, user.id)
             if reg is None:
                 raise HTTPException(status_code=404, detail="No registration found")
@@ -391,13 +416,20 @@ def register(broker: Any, logger: Any) -> None:
 
         return await _run(logger, op)
 
-    @broker.subscriber("rpc.tournament.reg_pub_list")
+    # Isolated QoS: the participants list is the heaviest public read and fans
+    # out to every connected viewer after each registration mutation (the
+    # realtime invalidation herd). On its own channel a burst of list rebuilds
+    # can no longer occupy the default channel's RPC_PREFETCH_COUNT slots and
+    # starve the write RPCs (check-in/register) queued behind it — mirrors
+    # recalculation_events._EVENTS_CHANNEL.
+    @broker.subscriber("rpc.tournament.reg_pub_list", channel=Channel(prefetch_count=8))
     async def _reg_pub_list(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
             # Public route — no identity required. Read-model assembly lives in
             # the service layer (always-live data; see its docstring for the
             # cache.disabling() warning).
             tournament_id = _path_int(data, "tournament_id")
+            await assert_tournament_viewable(session, _optional_identity(data), tournament_id)
             return _dump(await reg_service.build_public_registration_list(session, tournament_id=tournament_id))
 
         return await _run(logger, op)

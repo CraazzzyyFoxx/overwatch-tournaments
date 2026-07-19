@@ -17,6 +17,7 @@ import (
 	"io"
 	"log/slog"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
@@ -32,6 +33,12 @@ import (
 const (
 	contentTypeJSON   = "application/json"
 	maxReconnectDelay = 30 * time.Second
+	// publishChannels is the size of the publish-only channel pool. amqp091-go
+	// serializes writes per channel under an internal mutex, so with a single
+	// channel every concurrent Call queues behind one network writer. A small
+	// pool spreads publishes across channels on the same connection; the reply
+	// consumer keeps its own dedicated channel.
+	publishChannels = 4
 )
 
 // ErrNotConnected is returned when a call is made before the client has
@@ -41,6 +48,18 @@ var ErrNotConnected = errors.New("rpc: not connected")
 // ErrDisconnected is returned when the connection drops while a call is in flight.
 var ErrDisconnected = errors.New("rpc: connection lost during call")
 
+// ErrOverloaded is returned when the per-queue in-flight cap is reached. The
+// caller should shed the request immediately (HTTP 503) instead of adding it
+// to the broker backlog — that backlog growth is what feeds the avalanche.
+var ErrOverloaded = errors.New("rpc: queue overloaded")
+
+// IsUnavailable reports whether err should map to an immediate 503: the client
+// is not connected, the connection dropped mid-call, or the request was shed
+// by the per-queue in-flight cap.
+func IsUnavailable(err error) bool {
+	return errors.Is(err, ErrNotConnected) || errors.Is(err, ErrDisconnected) || errors.Is(err, ErrOverloaded)
+}
+
 // Client owns an AMQP connection, a reply queue, and correlates replies back to
 // in-flight calls by correlation_id. It is safe for concurrent use.
 type Client struct {
@@ -49,21 +68,38 @@ type Client struct {
 
 	mu         sync.RWMutex
 	conn       *amqp.Connection
-	ch         *amqp.Channel
+	ch         *amqp.Channel   // reply-queue channel (declare + consume only)
+	pubChs     []*amqp.Channel // publish-only pool; recreated on each connect
 	replyQueue string
 	connected  bool
 	disconnect chan struct{} // closed on disconnect; replaced on each connect
 
+	pubSeq atomic.Uint64 // round-robin cursor over pubChs
+
 	pendingMu sync.Mutex
 	pending   map[string]chan amqp.Delivery
+
+	limiter *limiter
+	onShed  func(queue string)
 
 	closeCh   chan struct{}
 	closeOnce sync.Once
 }
 
+// Option configures a Client at construction time.
+type Option func(*Client)
+
+// WithMaxInFlight caps concurrent in-flight calls per queue (bulkhead).
+// n <= 0 disables the cap.
+func WithMaxInFlight(n int) Option { return func(c *Client) { c.limiter = newLimiter(n) } }
+
+// WithShedHook registers a callback invoked with the queue name every time a
+// call is rejected by the in-flight cap — used to feed metrics.
+func WithShedHook(fn func(queue string)) Option { return func(c *Client) { c.onShed = fn } }
+
 // New creates a client and starts its background connect/reconnect loop. It
 // never blocks: calls made before the first connection return ErrNotConnected.
-func New(url string, log *slog.Logger) *Client {
+func New(url string, log *slog.Logger, opts ...Option) *Client {
 	if log == nil {
 		log = slog.New(slog.NewTextHandler(io.Discard, nil))
 	}
@@ -73,6 +109,10 @@ func New(url string, log *slog.Logger) *Client {
 		pending:    make(map[string]chan amqp.Delivery),
 		closeCh:    make(chan struct{}),
 		disconnect: make(chan struct{}),
+		limiter:    newLimiter(0),
+	}
+	for _, opt := range opts {
+		opt(c)
 	}
 	close(c.disconnect) // start in the disconnected state
 	safego.Go(c.run)    // recover panics so a bad reply can't crash the process
@@ -165,10 +205,24 @@ func (c *Client) connect() (chan *amqp.Error, error) {
 		return nil, fmt.Errorf("consume reply queue: %w", err)
 	}
 
+	// Publish-only channel pool on the same connection (see publishChannels).
+	// They live and die with the connection: NotifyClose on the connection
+	// covers them, and onDisconnect drops the pool wholesale.
+	pubChs := make([]*amqp.Channel, 0, publishChannels)
+	for range publishChannels {
+		pch, err := conn.Channel()
+		if err != nil {
+			_ = conn.Close()
+			return nil, fmt.Errorf("amqp publish channel: %w", err)
+		}
+		pubChs = append(pubChs, pch)
+	}
+
 	notify := conn.NotifyClose(make(chan *amqp.Error, 1))
 	c.mu.Lock()
 	c.conn = conn
 	c.ch = ch
+	c.pubChs = pubChs
 	c.replyQueue = replyQ.Name
 	c.connected = true
 	c.disconnect = make(chan struct{})
@@ -187,6 +241,7 @@ func (c *Client) onDisconnect() {
 	conn := c.conn
 	c.conn = nil
 	c.ch = nil
+	c.pubChs = nil
 	c.mu.Unlock()
 	if conn != nil {
 		_ = conn.Close()
@@ -216,15 +271,26 @@ func (c *Client) dispatchReplies(deliveries <-chan amqp.Delivery) {
 // content-type application/json.
 func (c *Client) Call(ctx context.Context, queue string, body []byte) ([]byte, error) {
 	c.mu.RLock()
-	ch := c.ch
+	pubChs := c.pubChs
 	replyQ := c.replyQueue
 	connected := c.connected
 	discCh := c.disconnect
 	c.mu.RUnlock()
 
-	if !connected || ch == nil {
+	if !connected || len(pubChs) == 0 {
 		return nil, ErrNotConnected
 	}
+	// Round-robin over the publish pool; amqp091-go channels are safe for
+	// concurrent use, the pool only spreads the per-channel write lock.
+	ch := pubChs[c.pubSeq.Add(1)%uint64(len(pubChs))]
+
+	if !c.limiter.acquire(queue) {
+		if c.onShed != nil {
+			c.onShed(queue)
+		}
+		return nil, fmt.Errorf("rpc to %q: %w", queue, ErrOverloaded)
+	}
+	defer c.limiter.release(queue)
 
 	id, err := newCorrelationID()
 	if err != nil {
@@ -264,16 +330,7 @@ func (c *Client) Call(ctx context.Context, queue string, body []byte) ([]byte, e
 		c.pendingMu.Unlock()
 	}()
 
-	pub := amqp.Publishing{
-		ContentType:   contentTypeJSON,
-		CorrelationId: id,
-		ReplyTo:       replyQ,
-		Body:          body,
-	}
-	if len(headers) > 0 {
-		pub.Headers = headers
-	}
-	if err := ch.PublishWithContext(ctx, "", queue, false, false, pub); err != nil {
+	if err := ch.PublishWithContext(ctx, "", queue, false, false, buildPublishing(ctx, id, replyQ, body, headers)); err != nil {
 		err = fmt.Errorf("publish rpc request to %q: %w", queue, err)
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "publish failed")

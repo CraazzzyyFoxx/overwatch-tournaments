@@ -12,14 +12,17 @@ import {
   CalendarDays,
   Wrench,
   Award,
-  Network
+  Network,
+  EyeOff
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/components/ui/number-input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -35,12 +38,28 @@ import { notify } from "@/lib/notify";
 import adminService from "@/services/admin.service";
 import { normalizeChallongeSlug } from "@/lib/challonge";
 import { hasUnsavedChanges } from "@/lib/form-change";
+import { DEFAULT_WORKSPACE_TIMEZONE, getUtcOffsetLabel } from "@/lib/timezone";
+import { useWorkspaceStore } from "@/stores/workspace.store";
 import type { Tournament } from "@/types/tournament.types";
 import type { DivisionGridVersion } from "@/types/workspace.types";
-import type { TournamentUpdateInput } from "@/types/admin.types";
-import { getTournamentForm, type TournamentFormState } from "./tournamentWorkspace.helpers";
+import type { TournamentPhaseScheduleEntryInput, TournamentUpdateInput } from "@/types/admin.types";
+import {
+  getPhaseSchedulePayload,
+  getTournamentForm,
+  SCHEDULABLE_PHASES,
+  type SchedulablePhase,
+  type TournamentFormState
+} from "./tournamentWorkspace.helpers";
+import { TournamentPreviewAllowlist } from "./TournamentPreviewAllowlist";
 import { invalidateTournamentWorkspace } from "./tournamentWorkspace.queryKeys";
 import { cn } from "@/lib/utils";
+
+const PHASE_LABELS: Record<SchedulablePhase, string> = {
+  registration: "Registration",
+  draft: "Draft",
+  check_in: "Check-in",
+  live: "Live"
+};
 
 interface TournamentSettingsTabProps {
   tournament: Tournament;
@@ -60,19 +79,37 @@ export function TournamentSettingsTab({
   const router = useRouter();
   const queryClient = useQueryClient();
 
-  const [formData, setFormData] = useState<TournamentFormState>(getTournamentForm(tournament));
+  // Schedule times are entered/shown in the tournament workspace's zone;
+  // storage and the API stay UTC.
+  const workspaces = useWorkspaceStore((s) => s.workspaces);
+  const timezone =
+    workspaces.find((ws) => ws.id === tournament.workspace_id)?.timezone ??
+    DEFAULT_WORKSPACE_TIMEZONE;
+
+  const [formData, setFormData] = useState<TournamentFormState>(
+    getTournamentForm(tournament, timezone)
+  );
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
-  const initialFormData = getTournamentForm(tournament);
+  const initialFormData = getTournamentForm(tournament, timezone);
   const isDirty = hasUnsavedChanges(formData, initialFormData);
 
-  // Sync state if tournament updates in background
+  // Sync state if tournament updates in background (or the zone loads in).
   useEffect(() => {
-    setFormData(getTournamentForm(tournament));
-  }, [tournament]);
+    setFormData(getTournamentForm(tournament, timezone));
+  }, [tournament, timezone]);
 
   const updateMutation = useMutation({
-    mutationFn: (data: TournamentUpdateInput) => adminService.updateTournament(tournamentId, data),
+    mutationFn: async ({
+      payload,
+      schedule
+    }: {
+      payload: TournamentUpdateInput;
+      schedule: TournamentPhaseScheduleEntryInput[];
+    }) => {
+      await adminService.updateTournament(tournamentId, payload);
+      return adminService.setTournamentSchedule(tournamentId, schedule);
+    },
     onSuccess: () => {
       invalidateTournamentWorkspace(queryClient, tournamentId);
       notify.success("Tournament settings updated successfully");
@@ -93,6 +130,23 @@ export function TournamentSettingsTab({
     notify.info("Changes discarded", { description: "Form reset to current tournament settings." });
   };
 
+  const setPhaseField = (
+    phase: SchedulablePhase,
+    field: "starts_at" | "ends_at",
+    nextValue: string
+  ) =>
+    setFormData({
+      ...formData,
+      phase_schedule: {
+        ...formData.phase_schedule,
+        [phase]: { ...formData.phase_schedule[phase], [field]: nextValue }
+      }
+    });
+
+  const visiblePhases = SCHEDULABLE_PHASES.filter(
+    (phase) => phase !== "draft" || formData.team_formation === "draft"
+  );
+
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();
 
@@ -105,20 +159,22 @@ export function TournamentSettingsTab({
         : null,
       is_league: formData.is_league,
       is_finished: formData.is_finished,
+      is_hidden: formData.is_hidden,
       start_date: formData.start_date,
       end_date: formData.end_date,
       win_points: formData.win_points,
       draw_points: formData.draw_points,
       loss_points: formData.loss_points,
-      registration_opens_at: formData.registration_opens_at || null,
-      registration_closes_at: formData.registration_closes_at || null,
-      check_in_opens_at: formData.check_in_opens_at || null,
-      check_in_closes_at: formData.check_in_closes_at || null,
+      auto_transitions_enabled: formData.auto_transitions_enabled,
+      allow_late_registration: formData.allow_late_registration,
       division_grid_version_id: formData.division_grid_version_id,
       team_formation: formData.team_formation
     };
 
-    updateMutation.mutate(payload);
+    updateMutation.mutate({
+      payload,
+      schedule: getPhaseSchedulePayload(formData.phase_schedule, timezone)
+    });
   };
 
   return (
@@ -181,16 +237,11 @@ export function TournamentSettingsTab({
                   <Label htmlFor="settings-number" className="text-xs">
                     Number
                   </Label>
-                  <Input
+                  <NumberInput
                     id="settings-number"
-                    type="number"
-                    value={formData.number ?? ""}
-                    onChange={(event) =>
-                      setFormData({
-                        ...formData,
-                        number: event.target.value ? Number(event.target.value) : null
-                      })
-                    }
+                    integer
+                    value={formData.number}
+                    onValueChange={(next) => setFormData({ ...formData, number: next })}
                     className="mt-1.5 bg-background/50"
                   />
                 </div>
@@ -245,61 +296,89 @@ export function TournamentSettingsTab({
                 </Field>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 border-t border-border/30 pt-4">
-                <div className="space-y-3">
+              <div className="space-y-4 border-t border-border/30 pt-4">
+                <div>
                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                    Registration Period
+                    Phase Schedule
                   </p>
-                  <div className="grid gap-3">
-                    <DateTimePicker
-                      id="settings-registration-opens"
-                      timeId="settings-registration-opens-time"
-                      dateLabel="Opens at"
-                      timeLabel="Time"
-                      value={formData.registration_opens_at}
-                      onChange={(nextValue) =>
-                        setFormData({ ...formData, registration_opens_at: nextValue })
-                      }
-                    />
-                    <DateTimePicker
-                      id="settings-registration-closes"
-                      timeId="settings-registration-closes-time"
-                      dateLabel="Closes at"
-                      timeLabel="Time"
-                      value={formData.registration_closes_at}
-                      onChange={(nextValue) =>
-                        setFormData({ ...formData, registration_closes_at: nextValue })
-                      }
-                    />
-                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Each phase starts automatically at its start time when automatic transitions
+                    are enabled. An end time only closes that phase&apos;s action window early —
+                    it never changes the tournament status.
+                  </p>
+                  <p className="mt-1 text-xs font-medium text-foreground/80">
+                    Time zone: {timezone} ({getUtcOffsetLabel(timezone)})
+                  </p>
                 </div>
 
-                <div className="space-y-3">
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                    Check-in Period
-                  </p>
-                  <div className="grid gap-3">
-                    <DateTimePicker
-                      id="settings-check-in-opens"
-                      timeId="settings-check-in-opens-time"
-                      dateLabel="Opens at"
-                      timeLabel="Time"
-                      value={formData.check_in_opens_at}
-                      onChange={(nextValue) =>
-                        setFormData({ ...formData, check_in_opens_at: nextValue })
-                      }
-                    />
-                    <DateTimePicker
-                      id="settings-check-in-closes"
-                      timeId="settings-check-in-closes-time"
-                      dateLabel="Closes at"
-                      timeLabel="Time"
-                      value={formData.check_in_closes_at}
-                      onChange={(nextValue) =>
-                        setFormData({ ...formData, check_in_closes_at: nextValue })
-                      }
-                    />
+                {visiblePhases.map((phase) => (
+                  <div key={phase} className="space-y-2">
+                    <p className="text-xs font-medium text-foreground">{PHASE_LABELS[phase]}</p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <DateTimePicker
+                        id={`settings-phase-${phase}-starts`}
+                        timeId={`settings-phase-${phase}-starts-time`}
+                        dateLabel="Starts at"
+                        timeLabel="Time"
+                        value={formData.phase_schedule[phase].starts_at}
+                        onChange={(nextValue) => setPhaseField(phase, "starts_at", nextValue)}
+                      />
+                      <DateTimePicker
+                        id={`settings-phase-${phase}-ends`}
+                        timeId={`settings-phase-${phase}-ends-time`}
+                        dateLabel="Ends at (optional)"
+                        timeLabel="Time"
+                        value={formData.phase_schedule[phase].ends_at}
+                        onChange={(nextValue) => setPhaseField(phase, "ends_at", nextValue)}
+                      />
+                    </div>
                   </div>
+                ))}
+              </div>
+
+              <div className="flex flex-col gap-4 bg-muted/20 border border-border/50 rounded-lg p-3.5">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="space-y-0.5">
+                    <Label
+                      htmlFor="settings-auto-transitions"
+                      className="cursor-pointer text-sm font-medium"
+                    >
+                      Automatic phase transitions
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      Re-enabling immediately catches up any overdue phases. Manual status changes
+                      switch this off.
+                    </p>
+                  </div>
+                  <Switch
+                    id="settings-auto-transitions"
+                    checked={formData.auto_transitions_enabled}
+                    onCheckedChange={(checked) =>
+                      setFormData({ ...formData, auto_transitions_enabled: checked })
+                    }
+                  />
+                </div>
+
+                <div className="flex items-center justify-between gap-4">
+                  <div className="space-y-0.5">
+                    <Label
+                      htmlFor="settings-allow-late-registration"
+                      className="cursor-pointer text-sm font-medium"
+                    >
+                      Allow late registration
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      Keep registration open after the registration phase, until the tournament is
+                      completed.
+                    </p>
+                  </div>
+                  <Switch
+                    id="settings-allow-late-registration"
+                    checked={formData.allow_late_registration}
+                    onCheckedChange={(checked) =>
+                      setFormData({ ...formData, allow_late_registration: checked })
+                    }
+                  />
                 </div>
               </div>
             </CardContent>
@@ -412,6 +491,46 @@ export function TournamentSettingsTab({
             </CardContent>
           </Card>
 
+          {/* Card: Visibility (hidden / preview) */}
+          <Card className="border-border/40 bg-card/50">
+            <CardHeader className="pb-4">
+              <div className="flex items-center gap-2">
+                <EyeOff className="size-4 text-primary" />
+                <CardTitle className="text-sm font-semibold">Visibility</CardTitle>
+              </div>
+              <CardDescription className="text-xs">
+                Hide this tournament and all its data from the public site. Only workspace admins
+                and the preview allowlist below can see a hidden tournament.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center gap-2 bg-muted/20 border border-border/50 rounded-lg p-3.5">
+                <Checkbox
+                  id="settings-is-hidden"
+                  checked={formData.is_hidden}
+                  onCheckedChange={(checked) =>
+                    setFormData({ ...formData, is_hidden: checked === true })
+                  }
+                />
+                <Label htmlFor="settings-is-hidden" className="cursor-pointer text-sm font-medium">
+                  Hidden (preview) — not visible to the public
+                </Label>
+              </div>
+
+              {formData.is_hidden && (
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    Preview allowlist
+                  </p>
+                  <TournamentPreviewAllowlist
+                    tournamentId={tournamentId}
+                    workspaceId={tournament.workspace_id}
+                  />
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
           {/* Scoring and Integrations side-by-side */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Card 4: Scoring */}
@@ -431,13 +550,11 @@ export function TournamentSettingsTab({
                     <Label htmlFor="settings-win-points" className="text-xs">
                       Win
                     </Label>
-                    <Input
+                    <NumberInput
                       id="settings-win-points"
-                      type="number"
-                      step="0.5"
                       value={formData.win_points}
-                      onChange={(event) =>
-                        setFormData({ ...formData, win_points: Number(event.target.value) })
+                      onValueChange={(next) =>
+                        setFormData({ ...formData, win_points: next ?? 0 })
                       }
                       className="mt-1.5 bg-background/50"
                     />
@@ -446,13 +563,11 @@ export function TournamentSettingsTab({
                     <Label htmlFor="settings-draw-points" className="text-xs">
                       Draw
                     </Label>
-                    <Input
+                    <NumberInput
                       id="settings-draw-points"
-                      type="number"
-                      step="0.5"
                       value={formData.draw_points}
-                      onChange={(event) =>
-                        setFormData({ ...formData, draw_points: Number(event.target.value) })
+                      onValueChange={(next) =>
+                        setFormData({ ...formData, draw_points: next ?? 0 })
                       }
                       className="mt-1.5 bg-background/50"
                     />
@@ -461,13 +576,11 @@ export function TournamentSettingsTab({
                     <Label htmlFor="settings-loss-points" className="text-xs">
                       Loss
                     </Label>
-                    <Input
+                    <NumberInput
                       id="settings-loss-points"
-                      type="number"
-                      step="0.5"
                       value={formData.loss_points}
-                      onChange={(event) =>
-                        setFormData({ ...formData, loss_points: Number(event.target.value) })
+                      onValueChange={(next) =>
+                        setFormData({ ...formData, loss_points: next ?? 0 })
                       }
                       className="mt-1.5 bg-background/50"
                     />

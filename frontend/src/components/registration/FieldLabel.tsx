@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { useTranslations } from "next-intl";
 
 import { cn } from "@/lib/utils";
 
@@ -17,15 +18,16 @@ export default function FieldLabel({
   icon,
   className,
 }: FieldLabelProps) {
+  const t = useTranslations();
   return (
     <span className={cn("inline-flex items-center gap-2", className)}>
       {icon ? <span className="flex shrink-0 items-center justify-center">{icon}</span> : null}
-      <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-white/55">
+      <span className="text-[11px] font-medium uppercase tracking-[0.14em] text-[color:var(--aqt-fg-muted)]">
         {label}
       </span>
       {required && (
         <span className="rounded-full border border-amber-400/20 bg-amber-500/[0.08] px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide text-amber-200/90">
-          Required
+          {t("common.required")}
         </span>
       )}
     </span>

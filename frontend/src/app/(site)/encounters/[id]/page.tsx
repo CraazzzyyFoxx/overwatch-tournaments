@@ -1,14 +1,15 @@
 import React from "react";
+import { getTranslations } from "next-intl/server";
 import encounterService from "@/services/encounter.service";
 import EncounterTeamCard from "@/app/(site)/encounters/[id]/components/EncounterTeamCard";
 import { Metadata } from "next";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import EncounterMatch from "@/app/(site)/encounters/[id]/components/EncounterMatch";
 import { Swords, ArrowLeft } from "lucide-react";
-import { SITE_NAME } from "@/config/site";
+import { SITE_NAME, SITE_URL } from "@/config/site";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { MapVeto } from "@/app/(site)/encounters/[id]/components/MapVeto";
+import { VetoRoomLink } from "@/app/(site)/encounters/[id]/components/VetoRoomLink";
 
 export const dynamic = 'force-dynamic';
 
@@ -17,14 +18,26 @@ export async function generateMetadata(props: {
 }): Promise<Metadata> {
   const params = await props.params;
   const encounter = await encounterService.getEncounter(params.id);
+  const t = await getTranslations();
+
+  const metaTitle = t("encounters.detail.metaTitle", {
+    home: encounter.home_team.name,
+    away: encounter.away_team.name
+  });
+  const title = `${metaTitle} | ${SITE_NAME}`;
+  const description = t("encounters.detail.metaDescription", {
+    home: encounter.home_team.name,
+    away: encounter.away_team.name,
+    siteName: SITE_NAME
+  });
 
   return {
-    title: `${encounter.home_team.name} vs ${encounter.away_team.name} | ${SITE_NAME}`,
-    description: `Overview for ${encounter.home_team.name} vs ${encounter.away_team.name} on ${SITE_NAME}.`,
+    title,
+    description,
     openGraph: {
-      title: `${encounter.home_team.name} vs ${encounter.away_team.name} | ${SITE_NAME}`,
-      description: `Overview for ${encounter.home_team.name} vs ${encounter.away_team.name} on ${SITE_NAME}.`,
-      url: "https://aqt.craazzzyyfoxx.me",
+      title,
+      description,
+      url: SITE_URL,
       type: "website",
       siteName: SITE_NAME,
       locale: "en_US"
@@ -35,23 +48,24 @@ export async function generateMetadata(props: {
 const EncounterPage = async (props: { params: Promise<{ id: number }> }) => {
   const params = await props.params;
   const encounter = await encounterService.getEncounter(params.id);
+  const t = await getTranslations();
   const homeTeamState =
     encounter.score.home === encounter.score.away
-      ? "Tie"
+      ? t("encounters.detail.tie")
       : encounter.score.home > encounter.score.away
-        ? "Winner"
-        : "Loser";
+        ? t("encounters.detail.winner")
+        : t("encounters.detail.loser");
   const awayTeamState =
     encounter.score.home === encounter.score.away
-      ? "Tie"
+      ? t("encounters.detail.tie")
       : encounter.score.home < encounter.score.away
-        ? "Winner"
-        : "Loser";
+        ? t("encounters.detail.winner")
+        : t("encounters.detail.loser");
   let name = `${encounter.tournament.number}`;
   if (encounter.tournament.is_league) {
     name = encounter.tournament.name;
   }
-  const stageLabel = encounter.stage_item?.name ?? encounter.stage?.name ?? "Unassigned";
+  const stageLabel = encounter.stage_item?.name ?? encounter.stage?.name ?? t("encounters.unassigned");
   const tournamentGrid = encounter.tournament.division_grid_version ?? null;
 
   return (
@@ -60,24 +74,27 @@ const EncounterPage = async (props: { params: Promise<{ id: number }> }) => {
         <Button variant="outline" asChild>
           <Link href="/encounters">
             <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to encounters
+            {t("encounters.detail.back")}
           </Link>
         </Button>
       </div>
       <Card>
-        <CardContent className="flex flex-row gap-8 p-4">
+        <CardContent className="flex flex-row flex-wrap items-center gap-8 p-4">
           <div className="flex flex-row gap-4 items-center">
             <Swords height={40} width={40} />
             <div className="flex flex-col">
-              <p className="leading-7 ">Tournament</p>
+              <p className="leading-7 ">{t("common.tournament")}</p>
               <h4 className="scroll-m-20 text-xl font-semibold tracking-tight">{name}</h4>
             </div>
             <div className="flex flex-col">
-              <p className="leading-7 ">Stage</p>
+              <p className="leading-7 ">{t("common.stage")}</p>
               <h4 className="scroll-m-20 text-xl font-semibold tracking-tight">
                 {stageLabel}
               </h4>
             </div>
+          </div>
+          <div className="ml-auto">
+            <VetoRoomLink encounterId={encounter.id} tournamentId={encounter.tournament_id} />
           </div>
         </CardContent>
       </Card>
@@ -91,10 +108,10 @@ const EncounterPage = async (props: { params: Promise<{ id: number }> }) => {
           <CardHeader>
             <div className="flex gap-4">
               <div className="flex-1 text-right">
-                <p className="scroll-m-20 text-2xl font-semibold tracking-tight text-[#16e5b4]">
+                <p className="scroll-m-20 text-2xl font-semibold tracking-tight text-[color:var(--aqt-teal)]">
                   {homeTeamState}
                 </p>
-                <h4 className="scroll-m-20 text-xl font-semibold tracking-tight text-[#16e5b4]">
+                <h4 className="scroll-m-20 text-xl font-semibold tracking-tight text-[color:var(--aqt-teal)]">
                   {encounter.score.home}
                 </h4>
               </div>
@@ -102,10 +119,10 @@ const EncounterPage = async (props: { params: Promise<{ id: number }> }) => {
                 <h4 className="scroll-m-20 text-xl font-semibold tracking-tight">:</h4>
               </div>
               <div className="flex-1 text-left">
-                <p className="scroll-m-20 text-2xl font-semibold tracking-tight text-[#ff4655]">
+                <p className="scroll-m-20 text-2xl font-semibold tracking-tight text-[color:var(--aqt-rose)]">
                   {awayTeamState}
                 </p>
-                <h4 className="scroll-m-20 text-xl font-semibold tracking-tight text-[#ff4655]">
+                <h4 className="scroll-m-20 text-xl font-semibold tracking-tight text-[color:var(--aqt-rose)]">
                   {encounter.score.away}
                 </h4>
               </div>
@@ -123,7 +140,6 @@ const EncounterPage = async (props: { params: Promise<{ id: number }> }) => {
           tournamentGrid={tournamentGrid}
         />
       </div>
-      <MapVeto encounterId={encounter.id} />
     </div>
   );
 };

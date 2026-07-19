@@ -40,6 +40,20 @@ export default class workspaceService {
       description?: string;
       icon_url?: string | null;
       is_active?: boolean;
+      branding_enabled?: boolean;
+      brand_primary?: string | null;
+      brand_secondary?: string | null;
+      brand_background?: string | null;
+      brand_surface?: string | null;
+      brand_accent?: string | null;
+      brand_foreground?: string | null;
+      brand_muted?: string | null;
+      brand_border?: string | null;
+      brand_ring?: string | null;
+      brand_destructive?: string | null;
+      subdomain?: string | null;
+      seo_title?: string | null;
+      seo_description?: string | null;
       default_division_grid_version_id?: number | null;
     }
   ): Promise<Workspace> {
@@ -111,6 +125,28 @@ export default class workspaceService {
     await apiFetch(`/api/v1/workspaces/${workspaceId}/members/${authUserId}`, {
       method: "DELETE"
     });
+  }
+
+  /** Store a normalized custom domain + a fresh DNS TXT verification token (unverified). */
+  static async setCustomDomain(workspaceId: number, customDomain: string): Promise<Workspace> {
+    return apiFetch(`/api/v1/workspaces/${workspaceId}/custom-domain`, {
+      method: "POST",
+      body: { custom_domain: customDomain }
+    }).then((r) => r.json());
+  }
+
+  /** Check the `_owt-verify.<domain>` DNS TXT record against the stored token. */
+  static async verifyCustomDomain(workspaceId: number): Promise<Workspace> {
+    return apiFetch(`/api/v1/workspaces/${workspaceId}/custom-domain/verify`, {
+      method: "POST"
+    }).then((r) => r.json());
+  }
+
+  /** Remove the custom domain, its token, and its verification state. */
+  static async clearCustomDomain(workspaceId: number): Promise<Workspace> {
+    return apiFetch(`/api/v1/workspaces/${workspaceId}/custom-domain`, {
+      method: "DELETE"
+    }).then((r) => r.json());
   }
 
   static async uploadIcon(workspaceId: number, file: File): Promise<Workspace> {

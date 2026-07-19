@@ -1,6 +1,7 @@
 "use client";
 
 import { useRealtimeStore } from "@/stores/realtime.store";
+import { useAuthModalStore } from "@/stores/auth-modal.store";
 import type {
   ClientRealtimeFrame,
   EventFrame,
@@ -12,7 +13,12 @@ type RealtimeHandler<TData = Record<string, unknown>> = (
   event: RealtimeEventEnvelope<TData>
 ) => void;
 
-type TopicHandlers = Map<number, RealtimeHandler>;
+type RealtimeSubscription = {
+  onEvent: RealtimeHandler;
+  onSubscribed?: () => void;
+};
+
+type TopicHandlers = Map<number, RealtimeSubscription>;
 
 const HEARTBEAT_INTERVAL_MS = 25_000;
 const PONG_TIMEOUT_MS = 10_000;
@@ -47,7 +53,8 @@ class RealtimeClient {
 
   subscribe<TData>(
     topic: string,
-    handler: RealtimeHandler<TData>
+    handler: RealtimeHandler<TData>,
+    onSubscribed?: () => void
   ): () => void {
     if (typeof window === "undefined") {
       return () => undefined;
@@ -61,7 +68,10 @@ class RealtimeClient {
     }
 
     const handlerId = this.nextHandlerId++;
-    topicHandlers.set(handlerId, handler as RealtimeHandler);
+    topicHandlers.set(handlerId, {
+      onEvent: handler as RealtimeHandler,
+      onSubscribed,
+    });
 
     this.ensureSocket();
     if (isNewTopic && this.socket?.readyState === WebSocket.OPEN) {
@@ -95,6 +105,42 @@ class RealtimeClient {
       return;
     }
     this.sendSubscribe(topic);
+  }
+
+  /**
+   * Drop the current connection and, if any topics are still subscribed,
+   * immediately reconnect. Call this when the authenticated identity changes
+   * (login/logout): the gateway authenticates the socket from the access-token
+   * cookie at handshake and never re-auths, so the principal only changes on a
+   * fresh connection. Topic registrations are kept (they re-subscribe with the
+   * new principal) and replay cursors are kept (no events missed or duplicated).
+   */
+  reset(): void {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    this.reconnectAttempt = 0;
+    this.clearReconnectTimer();
+    this.stopHeartbeat();
+
+    const socket = this.socket;
+    this.socket = null;
+    if (socket) {
+      // Detach handlers so the stale socket's close does not schedule its own
+      // reconnect; reset owns the reconnect decision below.
+      socket.onopen = null;
+      socket.onmessage = null;
+      socket.onerror = null;
+      socket.onclose = null;
+      socket.close();
+    }
+
+    if (this.handlersByTopic.size > 0) {
+      this.ensureSocket();
+    } else {
+      useRealtimeStore.getState().setConnectionState("idle");
+    }
   }
 
   /**
@@ -175,6 +221,12 @@ class RealtimeClient {
           .getState()
           .setTopicError(frame.topic, { code: frame.code, message: frame.message });
       }
+      if (frame.code === "auth_required") {
+        // The gateway distinguishes an anonymous denial (login may grant
+        // access) from a genuine forbidden. Prompt login rather than leaving
+        // the subscription silently rejected.
+        useAuthModalStore.getState().open();
+      }
       console.warn("Realtime subscription error", frame);
       return;
     }
@@ -183,6 +235,18 @@ class RealtimeClient {
       useRealtimeStore.getState().setLastEventId(frame.topic, frame.cursor);
       // A successful (re)subscribe clears any prior rejection for this topic.
       useRealtimeStore.getState().setTopicError(frame.topic, null);
+      const handlers = this.handlersByTopic.get(frame.topic);
+      if (handlers) {
+        for (const subscription of Array.from(handlers.values())) {
+          if (subscription.onSubscribed) {
+            this.invokeSubscriber(
+              subscription.onSubscribed,
+              frame.topic,
+              "subscription confirmation",
+            );
+          }
+        }
+      }
       return;
     }
 
@@ -200,8 +264,24 @@ class RealtimeClient {
       return;
     }
 
-    for (const handler of Array.from(handlers.values())) {
-      handler(frame.event);
+    for (const subscription of Array.from(handlers.values())) {
+      this.invokeSubscriber(
+        () => subscription.onEvent(frame.event),
+        frame.topic,
+        "event",
+      );
+    }
+  }
+
+  private invokeSubscriber(
+    callback: () => void,
+    topic: string,
+    callbackType: string,
+  ): void {
+    try {
+      callback();
+    } catch (error) {
+      console.error(`Realtime ${callbackType} subscriber failed for ${topic}`, error);
     }
   }
 

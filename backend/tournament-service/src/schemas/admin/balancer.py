@@ -74,6 +74,8 @@ __all__ = (
     "BalancerRegistrationUpdateRequest",
     "BulkApproveResponse",
     "BulkBalancerStatusResponse",
+    "BulkExclusionRequest",
+    "BulkExclusionResponse",
     "CheckInRequest",
     "SetBalancerStatusRequest",
 )
@@ -400,6 +402,9 @@ class BalancerRegistrationCreateRequest(BaseModel):
     notes: str | None = None
     admin_notes: str | None = None
     roles: list[BalancerRegistrationRoleInput] = Field(default_factory=list)
+    # Site account to anchor this manual registration on (its player/member).
+    # None = unlinked (the historical behavior).
+    auth_user_id: int | None = None
 
 
 class BalancerRegistrationUpdateRequest(BaseModel):
@@ -414,6 +419,13 @@ class BalancerRegistrationUpdateRequest(BaseModel):
     status: RegistrationStatus | None = None
     balancer_status: BalancerStatus | None = None
     roles: list[BalancerRegistrationRoleInput] | None = None
+    # When set, (re)anchor the registration on this site account's player.
+    auth_user_id: int | None = None
+    # When set, apply the same semantics as the dedicated exclusion endpoint
+    # (set_registration_exclusion); exclude_reason only applies together with
+    # exclude_from_balancer.
+    exclude_from_balancer: bool | None = None
+    exclude_reason: str | None = None
 
 
 class BalancerRegistrationExclusionRequest(BaseModel):
@@ -430,6 +442,17 @@ class CheckInRequest(BaseModel):
 
 
 class BulkBalancerStatusResponse(BaseModel):
+    updated: int
+    skipped: int
+
+
+class BulkExclusionRequest(BaseModel):
+    registration_ids: list[int] = Field(..., max_length=500)
+    exclude_from_balancer: bool
+    exclude_reason: str | None = None
+
+
+class BulkExclusionResponse(BaseModel):
     updated: int
     skipped: int
 

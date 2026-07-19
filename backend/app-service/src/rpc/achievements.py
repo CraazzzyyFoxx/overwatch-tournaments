@@ -45,6 +45,7 @@ def register(broker: Any, logger: Any) -> None:
                         )
                     ],
                 )
+            await c.gate_tournament(session, data, tournament_id)
             return await achievements_flows.get_user_achievements(
                 session,
                 c.require_id(data),

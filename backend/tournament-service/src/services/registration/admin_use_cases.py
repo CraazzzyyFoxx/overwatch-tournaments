@@ -38,8 +38,6 @@ class UpsertRegistrationForm:
                 workspace_id=tournament.workspace_id,
                 is_open=payload.is_open,
                 auto_approve=payload.auto_approve,
-                opens_at=payload.opens_at,
-                closes_at=payload.closes_at,
                 built_in_fields_json=built_in_fields_json,
                 custom_fields_json=custom_fields_json,
             )
@@ -47,8 +45,6 @@ class UpsertRegistrationForm:
         else:
             form.is_open = payload.is_open
             form.auto_approve = payload.auto_approve
-            form.opens_at = payload.opens_at
-            form.closes_at = payload.closes_at
             form.built_in_fields_json = built_in_fields_json
             form.custom_fields_json = custom_fields_json
 
@@ -121,6 +117,8 @@ class UpdateRegistration:
             status_value=payload.status,
             balancer_status_value=payload.balancer_status,
             roles=[role.model_dump() for role in payload.roles] if payload.roles is not None else None,
+            exclude_from_balancer=payload.exclude_from_balancer,
+            exclude_reason=payload.exclude_reason,
         )
 
 

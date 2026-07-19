@@ -27,6 +27,9 @@ os.environ.setdefault("CHALLONGE_API_KEY", "x")
 scheduler = importlib.import_module("src.services.overwatch_rank.scheduler")
 service = importlib.import_module("src.services.overwatch_rank.service")
 
+from shared.core import enums  # noqa: E402
+from shared.schemas.settings import RankCollectionConfig  # noqa: E402
+
 
 class ComputePerTickTests(TestCase):
     """Self-pacing: how many tags to claim per tick."""
@@ -128,3 +131,93 @@ class SelectAndClaimLeaseTests(IsolatedAsyncioTestCase):
         )
         for row in rows:
             self.assertEqual(row.next_eligible_at, now + timedelta(seconds=900))
+
+
+class RecordFailureTransientTests(IsolatedAsyncioTestCase):
+    """Transient upstream failures back off but must never auto-disable a tag."""
+
+    def _session(self, state):
+        return SimpleNamespace(scalar=AsyncMock(return_value=state), flush=AsyncMock())
+
+    def _state(self, *, consecutive_failures=0):
+        return SimpleNamespace(
+            consecutive_failures=consecutive_failures,
+            priority_tier=0,
+            status=None,
+            next_eligible_at="unset",
+            last_checked_at=None,
+            last_error=None,
+            last_success_at=None,
+        )
+
+    async def _run(self, *, transient, consecutive_failures):
+        cfg = RankCollectionConfig()  # max_consecutive_failures=5, backoff_base_seconds=60
+        state = self._state(consecutive_failures=consecutive_failures)
+        now = datetime(2026, 1, 1, tzinfo=UTC)
+        await service.record_failure(
+            self._session(state),
+            social_account_id=1,
+            battle_tag="Name#1234",
+            status=enums.RankCollectionStatus.error,
+            error="OverFast 502 for Name-1234",
+            config=cfg,
+            transient=transient,
+            now=now,
+        )
+        return state, now
+
+    async def test_transient_at_threshold_does_not_disable(self) -> None:
+        # 4 prior + this one = 5 = max_consecutive_failures. Permanent would disable here.
+        state, _ = await self._run(transient=True, consecutive_failures=4)
+        self.assertEqual(state.consecutive_failures, 5)
+        self.assertEqual(state.status, enums.RankCollectionStatus.error.value)
+        self.assertNotEqual(state.status, enums.RankCollectionStatus.disabled.value)
+        self.assertNotIn(state.next_eligible_at, (None, "unset"))
+
+    async def test_permanent_at_threshold_disables(self) -> None:
+        state, _ = await self._run(transient=False, consecutive_failures=4)
+        self.assertEqual(state.status, enums.RankCollectionStatus.disabled.value)
+        self.assertIsNone(state.next_eligible_at)
+
+    async def test_transient_backoff_is_capped(self) -> None:
+        # A long outage drives failures high; exponent is capped and backoff
+        # clamps to MAX_BACKOFF_SECONDS (no overflow, no disable).
+        state, now = await self._run(transient=True, consecutive_failures=999)
+        self.assertNotEqual(state.status, enums.RankCollectionStatus.disabled.value)
+        self.assertEqual(state.next_eligible_at, now + timedelta(seconds=service.MAX_BACKOFF_SECONDS))
+
+
+class CollectionStatsAssemblyTests(IsolatedAsyncioTestCase):
+    """get_collection_stats merges DB aggregates + config into the dashboard shape."""
+
+    async def test_assembles_rates_tiers_and_validates(self) -> None:
+        from unittest.mock import patch
+
+        from src.schemas.admin.rank_collection import RankCollectionStats
+        from src.services.overwatch_rank import admin
+
+        raw = {
+            "total": 100,
+            "never_checked": 5,
+            "by_status": {"ok": 60, "disabled": 10, "error": 30},
+            "by_tier": {0: 90, 2: 10},  # tier 1 absent -> defaults to 0
+            "last_success_at": None,
+            "coverage_24h": 40,
+            "coverage_7d": 70,
+            "fetch_24h": {"ok": 70, "error": 20, "rate_limited": 10},
+        }
+        cfg = RankCollectionConfig(enabled=True, scope="all")
+        with (
+            patch.object(admin.service, "collection_stats", AsyncMock(return_value=raw)),
+            patch.object(admin.settings_provider, "get_rank_collection_config", AsyncMock(return_value=cfg)),
+        ):
+            result = await admin.get_collection_stats(object())
+
+        self.assertEqual((result["tier0"], result["tier1"], result["tier2"]), (90, 0, 10))
+        self.assertEqual(result["fetch_24h_total"], 100)
+        self.assertEqual(result["error_rate_24h"], 0.3)  # (error 20 + rate_limited 10) / 100
+        self.assertEqual(result["scope"], "all")
+        # Coerces nested dicts into RankStatusCounts and ignores the extra keys.
+        model = RankCollectionStats.model_validate(result)
+        self.assertEqual(model.by_status.disabled, 10)
+        self.assertEqual(model.fetch_24h.error, 20)

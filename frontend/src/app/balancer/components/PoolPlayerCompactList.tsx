@@ -104,7 +104,7 @@ function getStatusName(statusOptions: StatusOptionGroups | undefined, value: str
 
 function RoleIconStrip({ roleCodes }: { roleCodes: BalancerRoleCode[] }) {
   if (roleCodes.length === 0) {
-    return <span className="text-[11px] text-white/28">No roles</span>;
+    return <span className="text-[11px] text-[color:var(--aqt-fg-faint)]">No roles</span>;
   }
 
   return (
@@ -141,7 +141,7 @@ function StatusMenu({
           variant="ghost"
           size="sm"
           disabled={disabled}
-          className="h-7 max-w-[110px] justify-start rounded-lg border border-white/8 bg-black/15 px-2 text-[11px] text-white/60 hover:bg-white/5 hover:text-white"
+          className="h-7 max-w-[110px] justify-start rounded-lg border border-[color:var(--aqt-border)] bg-black/15 px-2 text-[11px] text-[color:var(--aqt-fg-muted)] hover:bg-white/5 hover:text-[color:var(--aqt-fg)]"
           title={`Balancer status: ${getStatusName(statusOptions, value)}`}
         >
           <span className="truncate">{getStatusName(statusOptions, value)}</span>
@@ -225,10 +225,10 @@ export function PoolPlayerCompactList({
 }: PoolPlayerCompactListProps) {
   if (playerStates.length === 0) {
     return (
-      <div className="flex flex-1 items-center justify-center rounded-2xl border border-dashed border-white/10 bg-white/[0.02] px-4 py-8 text-center">
+      <div className="flex flex-1 items-center justify-center rounded-2xl border border-dashed border-[color:var(--aqt-border-2)] bg-white/[0.02] px-4 py-8 text-center">
         <div className="space-y-1.5">
-          <p className="text-sm font-medium text-white/88">{emptyTitle}</p>
-          <p className="text-xs text-white/38">{emptyDescription}</p>
+          <p className="text-sm font-medium text-[color:var(--aqt-fg)]">{emptyTitle}</p>
+          <p className="text-xs text-[color:var(--aqt-fg-dim)]">{emptyDescription}</p>
         </div>
       </div>
     );
@@ -267,7 +267,7 @@ export function PoolPlayerCompactList({
                   }}
                   className={cn(
                     "group grid w-full cursor-pointer grid-cols-[24px_minmax(0,1fr)] items-start gap-2 rounded-xl border px-2.5 py-2 text-left transition-all",
-                    "border-white/6 bg-white/[0.02] hover:border-white/12 hover:bg-white/[0.04]",
+                    "border-[color:var(--aqt-border)] bg-white/[0.02] hover:border-[color:var(--aqt-border-2)] hover:bg-white/[0.04]",
                     isSelected && "border-primary/45 bg-primary/[0.08]",
                     isBulkSelected && !isSelected && "border-cyan-400/35 bg-cyan-500/[0.06]",
                   )}
@@ -282,7 +282,7 @@ export function PoolPlayerCompactList({
                       "mt-0.5 flex h-5 w-5 items-center justify-center rounded-md border text-[10px] transition",
                       isBulkSelected
                         ? "border-cyan-300/50 bg-cyan-500/18 text-cyan-100"
-                        : "border-white/10 bg-black/15 text-white/45 hover:border-white/18 hover:text-white/75",
+                        : "border-[color:var(--aqt-border-2)] bg-black/15 text-[color:var(--aqt-fg-dim)] hover:border-[color:var(--aqt-border-2)] hover:text-[color:var(--aqt-fg-muted)]",
                     )}
                   >
                     {isBulkSelected ? <Check className="h-3 w-3" /> : <Circle className="h-2.5 w-2.5 fill-current stroke-none" />}
@@ -292,8 +292,8 @@ export function PoolPlayerCompactList({
                     <div className="flex items-center gap-2">
                       <div className="flex min-w-0 flex-1 items-center gap-1.5">
                         <RoleIconStrip roleCodes={rankedRoleCodes} />
-                        <span className="truncate text-[13px] font-medium text-white/88">{name}</span>
-                        {suffix ? <span className="shrink-0 text-[12px] text-white/28">{suffix}</span> : null}
+                        <span className="truncate text-[13px] font-medium text-[color:var(--aqt-fg)]">{name}</span>
+                        {suffix ? <span className="shrink-0 text-[12px] text-[color:var(--aqt-fg-faint)]">{suffix}</span> : null}
                       </div>
 
                       <div className="flex shrink-0 items-center gap-1" data-card-action>
@@ -313,7 +313,7 @@ export function PoolPlayerCompactList({
                               {primaryEntry.rank_value}
                             </span>
                           ) : (
-                            <span className="text-[12px] text-white/24">-</span>
+                            <span className="text-[12px] text-[color:var(--aqt-fg-faint)]">-</span>
                           )}
                         </div>
 
@@ -332,7 +332,7 @@ export function PoolPlayerCompactList({
                           size="icon"
                           disabled={actionsDisabled || !onSetPoolMembership}
                           className={cn(
-                            "h-7 w-7 rounded-lg border border-white/8 bg-black/15 text-white/45 hover:bg-white/5 hover:text-white",
+                            "h-7 w-7 rounded-lg border border-[color:var(--aqt-border)] bg-black/15 text-[color:var(--aqt-fg-dim)] hover:bg-white/5 hover:text-[color:var(--aqt-fg)]",
                             !player.is_in_pool && "text-emerald-200/70",
                           )}
                           title={player.is_in_pool ? "Exclude from balancer" : "Include in balancer"}

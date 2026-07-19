@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ColumnDef } from "@tanstack/react-table";
 import { Plus, Pencil, Trash2, CheckCircle, XCircle } from "lucide-react";
@@ -27,12 +28,6 @@ interface WorkspaceFormData {
   description: string;
 }
 
-interface WorkspaceUpdateFormData {
-  name?: string;
-  description?: string;
-  is_active?: boolean;
-}
-
 const emptyForm: WorkspaceFormData = {
   slug: "",
   name: "",
@@ -44,16 +39,14 @@ const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2 MB
 
 export default function WorkspacesPage() {
   const { isSuperuser, isWorkspaceAdmin } = usePermissions();
+  const router = useRouter();
   const queryClient = useQueryClient();
   const fetchWorkspaces = useWorkspaceStore((s) => s.fetchWorkspaces);
 
   const [createOpen, setCreateOpen] = useState(false);
-  const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [selected, setSelected] = useState<Workspace | null>(null);
-  const [formData, setFormData] = useState<WorkspaceFormData | WorkspaceUpdateFormData>({
-    ...emptyForm
-  });
+  const [formData, setFormData] = useState<WorkspaceFormData>({ ...emptyForm });
   const [iconFile, setIconFile] = useState<File | null>(null);
   const [iconPreview, setIconPreview] = useState<string | null>(null);
 
@@ -84,22 +77,6 @@ export default function WorkspacesPage() {
     }
   });
 
-  const updateMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: number; data: WorkspaceUpdateFormData }) => {
-      await workspaceService.update(id, data);
-      if (iconFile) {
-        await workspaceService.uploadIcon(id, iconFile);
-      }
-    },
-    onSuccess: () => {
-      invalidate();
-      setEditOpen(false);
-      setIconFile(null);
-      setIconPreview(null);
-      notify.success("Workspace updated");
-    }
-  });
-
   const deleteMutation = useMutation({
     mutationFn: (id: number) =>
       fetch(`/api/v1/workspaces/${id}`, { method: "DELETE" }).then((r) => {
@@ -112,36 +89,11 @@ export default function WorkspacesPage() {
     }
   });
 
-  const uploadIconMutation = useMutation({
-    mutationFn: ({ id, file }: { id: number; file: File }) => workspaceService.uploadIcon(id, file),
-    onSuccess: () => {
-      invalidate();
-      notify.success("Icon uploaded");
-    }
-  });
-
-  const deleteIconMutation = useMutation({
-    mutationFn: (id: number) => workspaceService.deleteIcon(id),
-    onSuccess: () => {
-      invalidate();
-      setIconPreview(null);
-      notify.success("Icon removed");
-    }
-  });
-
   const handleCreate = () => {
     setFormData({ ...emptyForm });
     setIconFile(null);
     setIconPreview(null);
     setCreateOpen(true);
-  };
-
-  const handleEdit = (ws: Workspace) => {
-    setSelected(ws);
-    setFormData({ name: ws.name, description: ws.description || "" });
-    setIconFile(null);
-    setIconPreview(ws.icon_url || null);
-    setEditOpen(true);
   };
 
   const handleIconSelect = (file: File) => {
@@ -205,7 +157,12 @@ export default function WorkspacesPage() {
 
         return (
           <div className="flex items-center gap-1">
-            <Button variant="ghost" size="icon" onClick={() => handleEdit(ws)} aria-label="Edit">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => router.push(`/admin/workspaces/${ws.id}`)}
+              aria-label="Edit"
+            >
               <Pencil className="h-4 w-4" />
             </Button>
             {isSuperuser ? (
@@ -274,7 +231,7 @@ export default function WorkspacesPage() {
         description="Create a new isolated workspace for tournaments"
         onSubmit={(e) => {
           e.preventDefault();
-          createMutation.mutate(formData as WorkspaceFormData);
+          createMutation.mutate(formData);
         }}
         isSubmitting={createMutation.isPending}
         submittingLabel="Creating..."
@@ -286,7 +243,7 @@ export default function WorkspacesPage() {
             <Label htmlFor="slug">Slug *</Label>
             <Input
               id="slug"
-              value={(formData as WorkspaceFormData).slug ?? ""}
+              value={formData.slug}
               onChange={(e) =>
                 setFormData({
                   ...formData,
@@ -304,7 +261,7 @@ export default function WorkspacesPage() {
             <Label htmlFor="name">Name *</Label>
             <Input
               id="name"
-              value={formData.name ?? ""}
+              value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               placeholder="My Workspace"
               required
@@ -314,7 +271,7 @@ export default function WorkspacesPage() {
             <Label htmlFor="description">Description</Label>
             <Textarea
               id="description"
-              value={formData.description ?? ""}
+              value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               placeholder="Optional description"
             />
@@ -333,71 +290,6 @@ export default function WorkspacesPage() {
                     ? () => {
                         setIconFile(null);
                         setIconPreview(null);
-                      }
-                    : undefined
-                }
-                accept={ACCEPTED_IMAGE_TYPES}
-                maxSizeBytes={MAX_FILE_SIZE}
-                onError={(message) => notify.error(message)}
-              />
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">PNG, JPEG, WebP or GIF, max 2 MB</p>
-          </div>
-        </div>
-      </EntityFormDialog>
-
-      {/* Edit Dialog */}
-      <EntityFormDialog
-        open={editOpen}
-        onOpenChange={setEditOpen}
-        title="Edit Workspace"
-        description={`Editing "${selected?.name}"`}
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (selected) {
-            updateMutation.mutate({ id: selected.id, data: formData as WorkspaceUpdateFormData });
-          }
-        }}
-        isSubmitting={updateMutation.isPending}
-        submittingLabel="Saving..."
-        errorMessage={updateMutation.isError ? updateMutation.error.message : undefined}
-      >
-        <div className="space-y-4">
-          <div>
-            <Label htmlFor="edit-name">Name</Label>
-            <Input
-              id="edit-name"
-              value={formData.name ?? ""}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-            />
-          </div>
-          <div>
-            <Label htmlFor="edit-description">Description</Label>
-            <Textarea
-              id="edit-description"
-              value={formData.description ?? ""}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-            />
-          </div>
-          <div>
-            <Label>Icon</Label>
-            <div className="mt-1.5">
-              <EditableAvatar
-                src={iconPreview}
-                name={formData.name}
-                size={64}
-                shape="rounded"
-                busy={deleteIconMutation.isPending}
-                onSelectFile={handleIconSelect}
-                onDelete={
-                  iconPreview
-                    ? () => {
-                        if (selected?.icon_url && !iconFile) {
-                          deleteIconMutation.mutate(selected.id);
-                        } else {
-                          setIconFile(null);
-                          setIconPreview(selected?.icon_url || null);
-                        }
                       }
                     : undefined
                 }

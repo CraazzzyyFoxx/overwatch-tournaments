@@ -15,13 +15,14 @@ import (
 )
 
 const (
-	// rpcTimeout matches the old Kong edge allowance (up to 120s). Some app-service
-	// reads (e.g. /users/{id}/compare, hero stats on a cold cache) legitimately run
-	// ~20-30s; a tighter cap would turn slow-but-successful responses into 504s that
-	// the HTTP edge returned as 200/500. The gateway server has no write timeout for
-	// the same reason (long WS + long balancer requests).
-	rpcTimeout = 120 * time.Second
-	maxBody    = 12 << 20 // 12 MiB request-body cap before buffering into the RPC message
+	// defaultRPCTimeout matches the old Kong edge allowance (up to 120s). Some
+	// app-service reads (e.g. /users/{id}/compare, hero stats on a cold cache)
+	// legitimately run ~20-30s; a tighter cap would turn slow-but-successful
+	// responses into 504s that the HTTP edge returned as 200/500. The gateway
+	// server has no write timeout for the same reason (long WS + long balancer
+	// requests). Cheap reads override this per route via RouteSpec.Timeout.
+	defaultRPCTimeout = 120 * time.Second
+	maxBody           = 12 << 20 // 12 MiB request-body cap before buffering into the RPC message
 )
 
 // RPCCaller is the subset of rpc.Client the dispatcher needs (eases testing).
@@ -30,8 +31,11 @@ type RPCCaller interface {
 }
 
 // IdentityResolver returns the validated RBAC identity payload for a request
-// (user_id/is_superuser/roles/permissions/workspaces), or ok=false if absent.
-type IdentityResolver func(r *http.Request) (map[string]any, bool)
+// (user_id/is_superuser/roles/permissions/workspaces), ok=false if absent, and
+// a non-nil error when the identity backend itself was unavailable (shed,
+// disconnected, or timed out). Callers must treat a non-nil error as a 503,
+// never as "not authenticated".
+type IdentityResolver func(r *http.Request) (map[string]any, bool, error)
 
 // Dispatcher turns RouteSpecs into http handlers that call RPC and relay the envelope.
 type Dispatcher struct {
@@ -77,8 +81,16 @@ func (d *Dispatcher) serve(w http.ResponseWriter, r *http.Request, spec RouteSpe
 	}
 
 	if spec.Auth != AuthNone {
-		id, ok := d.resolveIdentity(r)
+		id, ok, err := d.resolveIdentity(r)
 		switch {
+		case err != nil:
+			// Identity backend unavailable (shed/disconnected/timeout): this is
+			// a 503, not a 401 — treating it as "not authenticated" makes
+			// clients drop valid sessions and retry-storm during overload.
+			httplog.From(r.Context()).Error("identity resolution unavailable", "err", err)
+			w.Header().Set("Retry-After", "1")
+			writeDetail(w, http.StatusServiceUnavailable, "service unavailable")
+			return
 		case ok:
 			data["identity"] = id
 		case spec.Auth == AuthRequired:
@@ -123,7 +135,7 @@ func (d *Dispatcher) serve(w http.ResponseWriter, r *http.Request, spec RouteSpe
 	}
 
 	raw, _ := json.Marshal(data)
-	d.call(w, r, spec.Queue, raw, spec.successStatus())
+	d.call(w, r, spec.Queue, raw, spec.successStatus(), spec.callTimeout())
 }
 
 // Subtree returns an http.Handler that matches an ORDERED list of RouteSpecs by
@@ -190,24 +202,35 @@ func matchPattern(pattern string, segs []string) (map[string]string, bool) {
 	return pp, true
 }
 
-func (d *Dispatcher) resolveIdentity(r *http.Request) (map[string]any, bool) {
+func (d *Dispatcher) resolveIdentity(r *http.Request) (map[string]any, bool, error) {
 	if d.identity == nil {
-		return nil, false
+		return nil, false, nil
 	}
 	return d.identity(r)
 }
 
 // call performs the RPC and maps the reply envelope to an HTTP response.
-func (d *Dispatcher) call(w http.ResponseWriter, r *http.Request, queue string, body []byte, success int) {
-	ctx, cancel := context.WithTimeout(r.Context(), rpcTimeout)
+func (d *Dispatcher) call(w http.ResponseWriter, r *http.Request, queue string, body []byte, success int, timeout time.Duration) {
+	ctx, cancel := context.WithTimeout(r.Context(), timeout)
 	defer cancel()
 
 	log := httplog.From(r.Context())
 	raw, err := d.rpc.Call(ctx, queue, body)
 	if err != nil {
-		if errors.Is(err, rpc.ErrNotConnected) || errors.Is(err, rpc.ErrDisconnected) {
+		if rpc.IsUnavailable(err) {
 			log.Error("rpc unavailable", "queue", queue, "err", err)
+			w.Header().Set("Retry-After", "1")
 			writeDetail(w, http.StatusServiceUnavailable, "service unavailable")
+			return
+		}
+		// The caller disconnected before the RPC completed: r.Context() was
+		// canceled and propagated through the timeout ctx as context.Canceled
+		// (our own per-route deadline surfaces as context.DeadlineExceeded instead).
+		// This is not a server fault — the client is gone, so no response can
+		// be delivered and there is nothing to fix. Log at info (stdout/Loki
+		// only, never a Sentry Issue) and skip the 504.
+		if errors.Is(err, context.Canceled) {
+			log.Info("rpc canceled by client", "queue", queue)
 			return
 		}
 		log.Error("rpc failed", "queue", queue, "err", err)

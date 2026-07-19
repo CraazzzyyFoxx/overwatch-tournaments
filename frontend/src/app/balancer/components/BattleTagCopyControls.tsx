@@ -60,7 +60,7 @@ export function BattleTagCopyButton({
       variant="ghost"
       size="icon"
       className={cn(
-        "h-7 w-7 rounded-lg border border-white/8 bg-black/15 text-white/45 hover:bg-white/5 hover:text-cyan-100",
+        "h-7 w-7 rounded-lg border border-[color:var(--aqt-border)] bg-black/15 text-[color:var(--aqt-fg-dim)] hover:bg-white/5 hover:text-cyan-100",
         className
       )}
       title={`Copy ${label}`}

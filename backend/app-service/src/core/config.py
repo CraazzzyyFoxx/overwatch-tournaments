@@ -19,7 +19,20 @@ class Settings(BaseServiceSettings):
     rabbitmq_url: str
 
     # Cache TTLs
-    users_cache_ttl: int = 60
+    # ``users_cache_ttl`` covers the *tournament-derived* /users/* read caches
+    # (tournaments, tournament_stats, heroes, encounters, maps, teammates,
+    # matches_summary, compare, ...). Their inputs only change on tournament
+    # ingestion, which fires a TournamentChangedEvent that broadly drops every
+    # user_* key (see services.tournament_events). The TTL is just a safety net,
+    # so it is aligned with the sibling read domains at 5 minutes.
+    users_cache_ttl: int = 60 * 5
+    # ``user_profile`` is *identity-derived* (name/avatar/socials). App-side
+    # profile edits invalidate it precisely (see services.user_cache), but
+    # identity-service self-service avatar/name edits propagate to the player
+    # WITHOUT a cross-service invalidation hook, so this TTL is the only bound on
+    # that staleness. Kept short deliberately — do not fold it into
+    # ``users_cache_ttl`` without wiring identity-service invalidation first.
+    user_profile_cache_ttl: int = 60
     tournaments_cache_ttl: int = 60 * 5
     gamemodes_cache_ttl: int = 60 * 5
     maps_cache_ttl: int = 60 * 5

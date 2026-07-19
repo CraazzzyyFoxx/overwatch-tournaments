@@ -4,11 +4,13 @@ import { useQuery } from "@tanstack/react-query";
 
 import { tournamentQueryKeys } from "@/lib/tournament-query-keys";
 import tournamentService from "@/services/tournament.service";
+import { tournamentOverviewQueryOptions } from "../_queries/tournamentOverview";
+
+export { tournamentOverviewQueryOptions };
 
 export function useTournamentQuery(tournamentId: number) {
   return useQuery({
-    queryKey: tournamentQueryKeys.detail(tournamentId),
-    queryFn: () => tournamentService.get(tournamentId),
+    ...tournamentOverviewQueryOptions(tournamentId),
     enabled: Number.isFinite(tournamentId) && tournamentId > 0,
   });
 }

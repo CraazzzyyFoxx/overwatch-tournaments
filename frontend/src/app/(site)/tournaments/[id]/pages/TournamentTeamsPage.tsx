@@ -2,28 +2,53 @@
 
 import React, { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Loader2 } from "lucide-react";
 
 import { Tournament } from "@/types/tournament.types";
 import { Team } from "@/types/team.types";
 import teamService from "@/services/team.service";
-import { TournamentTeamCard, TournamentTeamCardSkeleton } from "@/components/TournamentTeamCard";
+import { TournamentTeamCard } from "@/components/TournamentTeamCard";
 import { tournamentQueryKeys } from "@/lib/tournament-query-keys";
 import { cn } from "@/lib/utils";
 
-import { useTranslation } from "@/i18n/LanguageContext";
+import { useTranslations } from "next-intl";
+import { TournamentPageState } from "../_components/TournamentPageState";
+import { TournamentTeamsSkeleton } from "../_components/TournamentSkeletons";
+import styles from "../TournamentDetail.module.css";
 
 type SortBy = "placement" | "sr" | "name";
+type TeamsQueryPresentation = {
+  initialState: "skeleton" | "error" | null;
+  contentState: "empty" | "teams" | null;
+  showUpdating: boolean;
+  showRefreshError: boolean;
+};
+
+export function getTeamsQueryPresentation({
+  data,
+  teamCount,
+  isPending,
+  isError,
+  isFetching
+}: {
+  data: unknown;
+  teamCount: number;
+  isPending: boolean;
+  isError: boolean;
+  isFetching: boolean;
+}): TeamsQueryPresentation {
+  const hasCachedData = data !== undefined;
+
+  return {
+    initialState: hasCachedData ? null : isError ? "error" : isPending ? "skeleton" : null,
+    contentState: hasCachedData ? (teamCount === 0 ? "empty" : "teams") : null,
+    showUpdating: hasCachedData && isFetching && !isError,
+    showRefreshError: hasCachedData && isError
+  };
+}
 
 export const TournamentTeamsPageSkeleton = () => {
-  return (
-    <div className="space-y-4">
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        {Array.from({ length: 6 }).map((_, index) => (
-          <TournamentTeamCardSkeleton key={index} />
-        ))}
-      </div>
-    </div>
-  );
+  return <TournamentTeamsSkeleton />;
 };
 
 function sortTeams(teams: Team[], sortBy: SortBy): Team[] {
@@ -45,10 +70,14 @@ function sortTeams(teams: Team[], sortBy: SortBy): Team[] {
 }
 
 const TournamentTeamsPage = ({ tournament }: { tournament: Tournament }) => {
-  const { t } = useTranslation();
+  const t = useTranslations();
   const teamsQuery = useQuery({
-    queryKey: tournamentQueryKeys.teams(tournament.id),
-    queryFn: () => teamService.getAll(tournament.id),
+    queryKey: tournamentQueryKeys.teams(tournament.id, tournament.workspace_id),
+    queryFn: () =>
+      teamService.getAll({
+        tournamentId: tournament.id,
+        workspaceId: tournament.workspace_id
+      })
   });
 
   const [groupFilter, setGroupFilter] = useState<string>("all");
@@ -73,63 +102,98 @@ const TournamentTeamsPage = ({ tournament }: { tournament: Tournament }) => {
     return sortTeams(filtered, sortBy);
   }, [teams, groupFilter, sortBy]);
 
-  if (teamsQuery.isLoading) {
+  const presentation = getTeamsQueryPresentation({
+    data: teamsQuery.data,
+    teamCount: teams.length,
+    isPending: teamsQuery.isPending,
+    isError: teamsQuery.isError,
+    isFetching: teamsQuery.isFetching
+  });
+
+  if (presentation.initialState === "error") {
+    return <TournamentPageState state="initial-error" onRetry={() => void teamsQuery.refetch()} />;
+  }
+
+  if (presentation.initialState === "skeleton" || presentation.contentState === null) {
     return <TournamentTeamsPageSkeleton />;
   }
 
-  return (
+  const content = (
     <div className="space-y-4">
-      <div className="section-head">
-        <h2>
-          {t("common.teams")} <span className="count-tag">{teams.length}</span>
-        </h2>
-      </div>
-
-      <div className="filters">
-        <button
-          type="button"
-          className={cn("filter-chip", groupFilter === "all" && "active")}
-          onClick={() => setGroupFilter("all")}
+      {presentation.showUpdating ? (
+        <span
+          className={styles.updatingBadge}
+          role="status"
+          aria-live="polite"
+          aria-label={t("tournamentDetail.pageState.updating")}
+          title={t("tournamentDetail.pageState.updating")}
         >
-          {t("common.all")} <span className="count">{teams.length}</span>
-        </button>
-        {groups.map(([name, count]) => (
-          <button
-            key={name}
-            type="button"
-            className={cn("filter-chip", groupFilter === name && "active")}
-            onClick={() => setGroupFilter(name)}
-          >
-            {t("common.group")} {name} <span className="count">{count}</span>
-          </button>
-        ))}
-
-        <select
-          className="filter-sort"
-          style={{ marginLeft: "auto" }}
-          value={sortBy}
-          onChange={(event) => setSortBy(event.target.value as SortBy)}
-          aria-label="Sort teams"
-        >
-          <option value="placement">{t("common.byPlacement")}</option>
-          <option value="sr">{t("common.byAvgSr")}</option>
-          <option value="name">{t("common.byName")}</option>
-        </select>
-      </div>
-
-      {visibleTeams.length === 0 ? (
-        <div className="tn-card" style={{ padding: "48px 24px", textAlign: "center", color: "var(--fg-dim)" }}>
-          {t("common.noTeams")}
-        </div>
+          <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden />
+        </span>
+      ) : null}
+      {presentation.contentState === "empty" ? (
+        <TournamentPageState state="empty" />
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {visibleTeams.map((team) => (
-            <TournamentTeamCard key={team.id} team={team} />
-          ))}
-        </div>
+        <>
+          <div className="filters">
+            <button
+              type="button"
+              className={cn("filter-chip", groupFilter === "all" && "active")}
+              onClick={() => setGroupFilter("all")}
+            >
+              {t("common.all")} <span className="count">{teams.length}</span>
+            </button>
+            {groups.map(([name, count]) => (
+              <button
+                key={name}
+                type="button"
+                className={cn("filter-chip", groupFilter === name && "active")}
+                onClick={() => setGroupFilter(name)}
+              >
+                {t("common.group")} {name} <span className="count">{count}</span>
+              </button>
+            ))}
+
+            <select
+              className="filter-sort"
+              style={{ marginLeft: "auto" }}
+              value={sortBy}
+              onChange={(event) => setSortBy(event.target.value as SortBy)}
+              aria-label={t("tournamentDetail.sortTeams")}
+            >
+              <option value="placement">{t("common.byPlacement")}</option>
+              <option value="sr">{t("common.byAvgSr")}</option>
+              <option value="name">{t("common.byName")}</option>
+            </select>
+          </div>
+
+          {visibleTeams.length === 0 ? (
+            <TournamentPageState state="filtered-empty" onReset={() => setGroupFilter("all")} />
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {visibleTeams.map((team) => (
+                <TournamentTeamCard key={team.id} team={team} />
+              ))}
+            </div>
+          )}
+        </>
       )}
     </div>
   );
+
+  if (presentation.showRefreshError) {
+    return (
+      <TournamentPageState
+        state="refresh-error"
+        onRetry={() => void teamsQuery.refetch()}
+        isUpdating={teamsQuery.isFetching}
+      >
+        {content}
+      </TournamentPageState>
+    );
+  }
+
+  return content;
 };
 
 export default TournamentTeamsPage;

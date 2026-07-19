@@ -1,6 +1,7 @@
 import { authServiceBase } from "@/lib/api-routes";
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
+import { getAccessToken } from "@/lib/auth-cookies";
 
 const AUTH_SERVICE_URL = authServiceBase();
 
@@ -17,7 +18,7 @@ function authHeaders(accessToken: string): HeadersInit {
 
 export async function PATCH(request: NextRequest, context: RouteContext) {
   const cookieStore = await cookies();
-  const accessToken = cookieStore.get("aqt_access_token")?.value;
+  const accessToken = getAccessToken(cookieStore);
   const { apiKeyId } = await context.params;
 
   if (!accessToken) {
@@ -40,7 +41,7 @@ export async function PATCH(request: NextRequest, context: RouteContext) {
 
 export async function DELETE(_request: NextRequest, context: RouteContext) {
   const cookieStore = await cookies();
-  const accessToken = cookieStore.get("aqt_access_token")?.value;
+  const accessToken = getAccessToken(cookieStore);
   const { apiKeyId } = await context.params;
 
   if (!accessToken) {

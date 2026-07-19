@@ -90,11 +90,11 @@ function ParticipantCell({ registration }: { registration: AdminRegistration }) 
 
   return (
     <div className="min-w-0 space-y-1">
-      <div className="truncate font-medium text-white/90" title={primary}>
+      <div className="truncate font-medium text-[color:var(--aqt-fg)]" title={primary}>
         {primary}
       </div>
       <div
-        className="truncate text-xs text-white/40"
+        className="truncate text-xs text-[color:var(--aqt-fg-dim)]"
         title={secondaryParts.length > 0 ? secondaryParts.join(" · ") : undefined}
       >
         {secondaryParts.length > 0
@@ -115,7 +115,7 @@ function RolesCell({
   catalog?: SubroleCatalog;
 }) {
   if (!roles || roles.length === 0) {
-    return <span className="text-white/30">—</span>;
+    return <span className="text-[color:var(--aqt-fg-dim)]">—</span>;
   }
 
   const sortedRoles = roles
@@ -124,7 +124,7 @@ function RolesCell({
     .sort((left, right) => left.priority - right.priority);
 
   if (sortedRoles.length === 0) {
-    return <span className="text-white/30">—</span>;
+    return <span className="text-[color:var(--aqt-fg-dim)]">—</span>;
   }
 
   return (
@@ -149,12 +149,12 @@ function RolesCell({
                 "relative inline-flex h-8 w-8 items-center justify-center p-1",
                 role.is_primary
                   ? "after:absolute after:bottom-0 after:left-1/2 after:h-0.5 after:w-4 after:-translate-x-1/2 after:rounded-full after:bg-emerald-300/90"
-                  : "text-white/70",
+                  : "text-[color:var(--aqt-fg-muted)]",
               )}
             >
               <PlayerRoleIcon role={getRoleIconName(role.role)} size={20} />
             </span>
-            <span className="text-center text-[9px] font-semibold uppercase leading-none tracking-[0.12em] text-white/45">
+            <span className="text-center text-[9px] font-semibold uppercase leading-none tracking-[0.12em] text-[color:var(--aqt-fg-dim)]">
               {subroleLabel ?? role.rank_value ?? ""}
             </span>
           </div>
@@ -172,7 +172,7 @@ function SourceCell({ source }: { source: AdminRegistration["source"] }) {
         "inline-flex items-center rounded-md border px-1.5 py-0.5 text-[11px] font-medium",
         isSheets
           ? "border-sky-500/20 bg-sky-500/10 text-sky-300"
-          : "border-white/10 bg-white/5 text-white/55",
+          : "border-[color:var(--aqt-border-2)] bg-white/5 text-[color:var(--aqt-fg-muted)]",
       )}
     >
       {isSheets ? "Sheets" : "Manual"}
@@ -182,7 +182,7 @@ function SourceCell({ source }: { source: AdminRegistration["source"] }) {
 
 function CompactListCell({ values }: { values: string[] }) {
   if (values.length === 0) {
-    return <span className="text-white/30">—</span>;
+    return <span className="text-[color:var(--aqt-fg-dim)]">—</span>;
   }
 
   const visibleValues = values.slice(0, 2);
@@ -191,7 +191,7 @@ function CompactListCell({ values }: { values: string[] }) {
   return (
     <div className="max-w-[220px] space-y-1">
       {visibleValues.map((value, index) => (
-        <div key={`${value}-${index}`} className="truncate text-xs text-white/55" title={value}>
+        <div key={`${value}-${index}`} className="truncate text-xs text-[color:var(--aqt-fg-muted)]" title={value}>
           {value}
         </div>
       ))}
@@ -206,11 +206,11 @@ function CompactListCell({ values }: { values: string[] }) {
 
 function TextBlockCell({ value }: { value: string | null | undefined }) {
   if (!value) {
-    return <span className="text-white/30">—</span>;
+    return <span className="text-[color:var(--aqt-fg-dim)]">—</span>;
   }
 
   return (
-    <span className="block max-w-[240px] truncate text-xs text-white/55" title={value}>
+    <span className="block max-w-[240px] truncate text-xs text-[color:var(--aqt-fg-muted)]" title={value}>
       {value}
     </span>
   );
@@ -223,7 +223,7 @@ function SubmittedCell({ submittedAt }: { submittedAt: string | null }) {
   const fullValue = formatFullTimestamp(submittedAt);
 
   return (
-    <span title={fullValue ?? undefined} className="whitespace-nowrap text-xs tabular-nums text-white/50">
+    <span title={fullValue ?? undefined} className="whitespace-nowrap text-xs tabular-nums text-[color:var(--aqt-fg-muted)]">
       {shortValue ?? "—"}
     </span>
   );
@@ -232,12 +232,12 @@ function SubmittedCell({ submittedAt }: { submittedAt: string | null }) {
 function ReviewedCell({ registration }: { registration: AdminRegistration }) {
   const reviewedAt = formatTimestamp(registration.reviewed_at);
   if (!reviewedAt && !registration.reviewed_by_username) {
-    return <span className="text-white/30">—</span>;
+    return <span className="text-[color:var(--aqt-fg-dim)]">—</span>;
   }
 
   const summary = [registration.reviewed_by_username, reviewedAt].filter(Boolean).join(" · ");
   return (
-    <span className="block max-w-[220px] truncate text-xs text-white/55" title={summary}>
+    <span className="block max-w-[220px] truncate text-xs text-[color:var(--aqt-fg-muted)]" title={summary}>
       {summary}
     </span>
   );
@@ -245,7 +245,7 @@ function ReviewedCell({ registration }: { registration: AdminRegistration }) {
 
 function ExclusionCell({ registration }: { registration: AdminRegistration }) {
   if (!registration.exclude_from_balancer) {
-    return <span className="text-white/30">—</span>;
+    return <span className="text-[color:var(--aqt-fg-dim)]">—</span>;
   }
 
   const reason = registration.exclude_reason ?? "Excluded";
@@ -373,7 +373,7 @@ export function buildBalancerRegistrationColumns(
         registration.profiles_open != null ? (
           <ProfileStatusBadge profilesOpen={registration.profiles_open} />
         ) : (
-          <span className="text-white/25">—</span>
+          <span className="text-[color:var(--aqt-fg-faint)]">—</span>
         ),
       searchValue: (registration) =>
         registration.profiles_open === false

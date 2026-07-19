@@ -12,6 +12,7 @@ import {
 } from "@/app/(site)/users/pages/UserEncountersPage";
 import type { MatchesFilters } from "@/app/(site)/users/components/matches/MatchesTable";
 import { Metadata } from "next";
+import { getTranslations } from "next-intl/server";
 import {
   UserTournamentsPage,
   UserTournamentsPageSkeleton
@@ -64,11 +65,12 @@ export async function generateMetadata(props: {
   params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
   const params = await props.params;
+  const t = await getTranslations();
   try {
     const user = await userService.getUserByName(decodePlayerSlug(params.slug));
 
-    const title = `${user.name} — Player Profile | ${SITE_NAME}`;
-    const description = `${user.name}'s Overwatch tournament profile on ${SITE_NAME}: match history, heroes, maps, teammates, achievements and career stats.`;
+    const title = t("users.profile.meta.title", { name: user.name, siteName: SITE_NAME });
+    const description = t("users.profile.meta.description", { name: user.name, siteName: SITE_NAME });
     const canonical = new URL(`/users/${params.slug}`, SITE_URL_OBJ).toString();
 
     // OG/Twitter images are supplied by the colocated opengraph-image route
@@ -95,8 +97,8 @@ export async function generateMetadata(props: {
   } catch (error) {
     if (isNotFoundError(error)) {
       return {
-        title: `User Not Found | ${SITE_NAME}`,
-        description: `The requested user profile could not be found on ${SITE_NAME}.`
+        title: t("users.profile.meta.notFoundTitle", { siteName: SITE_NAME }),
+        description: t("users.profile.meta.notFoundDescription", { siteName: SITE_NAME })
       };
     }
     throw error;

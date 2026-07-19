@@ -8,7 +8,6 @@ DB-resumable: absolute ``clock_expires_at`` while live, frozen
 
 from __future__ import annotations
 
-import random
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 
@@ -24,6 +23,7 @@ from shared.core.enums import (
     DraftPlayerStatus,
     DraftRole,
     DraftStatus,
+    TournamentStatus,
 )
 from shared.core.errors import ApiExc, ApiHTTPException
 from shared.models.balancer.draft import (
@@ -40,7 +40,9 @@ from shared.models.registration.registration import (
     BalancerRegistrationRoleHero,
 )
 from shared.models.tenancy.workspace import WorkspaceMember
+from shared.models.tournament import Tournament
 from shared.repository.workspace import get_or_create_workspace_member
+from src.services.draft import feasibility
 
 _ACTIVE_STATUSES = (
     DraftStatus.SETUP.value,
@@ -85,6 +87,32 @@ class PlayerSeed:
 
 def _err(code: str, msg: str, status_code: int = 409) -> ApiHTTPException:
     return ApiHTTPException(status_code=status_code, detail=[ApiExc(code=code, msg=msg)])
+
+
+def validate_roster_shape(*, rounds: int, team_size: int) -> None:
+    if rounds != team_size - 1:
+        raise _err(
+            "invalid_roster_shape",
+            "rounds must equal team_size - 1 because the captain already fills one roster slot",
+            status_code=422,
+        )
+
+
+def validate_seed_version(draft_session: DraftSession, *, expected_version: int | None) -> None:
+    if expected_version is not None and draft_session.version != expected_version:
+        raise _err("draft_session_stale", "Draft setup changed; reload the seed preview", status_code=409)
+
+
+def bump_seed_version(draft_session: DraftSession) -> None:
+    draft_session.version = (draft_session.version or 0) + 1
+
+
+def _role_shortage_error(report: feasibility.DraftFeasibilityReport) -> ApiHTTPException:
+    details = feasibility.describe_role_deficits(report)
+    message = "Draft pool cannot fill every team role"
+    if details:
+        message = f"{message}: {details}"
+    return _err("role_shortage", message, status_code=422)
 
 
 def _build_hero_rows(entries: list[dict] | None) -> list[DraftPlayerRoleHero]:
@@ -165,6 +193,7 @@ async def create_session(
     allow_admin_override: bool = True,
     settings: dict | None = None,
 ) -> DraftSession:
+    validate_roster_shape(rounds=rounds, team_size=team_size)
     await assert_no_active_draft(session, tournament_id)
     draft = DraftSession(
         tournament_id=tournament_id,
@@ -231,7 +260,20 @@ async def seed(
     player_ids = {c.user_id for c in ordered_captains if c.user_id is not None}
     player_ids |= {p.user_id for p in players if p.user_id is not None}
     member_by_player: dict[int, int] = {}
-    for player_id in player_ids:
+    if player_ids:
+        # Batch-prefetch existing membership rows (the common case on re-seed)
+        # instead of one INSERT..ON CONFLICT round-trip per player.
+        rows = await session.execute(
+            sa.select(WorkspaceMember.player_id, WorkspaceMember.id).where(
+                WorkspaceMember.workspace_id == draft_session.workspace_id,
+                WorkspaceMember.player_id.in_(player_ids),
+            )
+        )
+        member_by_player = dict(rows.tuples().all())
+    # get_or_create also autofills the baseline RBAC role for a brand-new
+    # auth-linked member — keep that side effect, but only pay for it on
+    # players that genuinely have no membership row yet.
+    for player_id in player_ids - member_by_player.keys():
         member = await get_or_create_workspace_member(
             session, workspace_id=draft_session.workspace_id, player_id=player_id
         )
@@ -345,8 +387,11 @@ async def seed(
             overall_no += 1
 
     draft_session.status = DraftStatus.READY.value
+    draft_session.blocked_reason = None
+    bump_seed_version(draft_session)
+    # expire_on_commit=False and all mutations above are Python-side: the
+    # in-memory session row is already current, no refresh round-trip needed.
     await session.flush()
-    await session.refresh(draft_session)
     return draft_session
 
 
@@ -497,9 +542,18 @@ def order_captain_ids(
     if strategy == DraftCaptainOrder.MANUAL:
         return [rid for rid, _ in entries]
     if strategy == DraftCaptainOrder.RANDOM:
-        rng = random.Random(seed if seed is not None else 0)
         shuffled = list(entries)
-        rng.shuffle(shuffled)
+        # Mulberry32 + Fisher-Yates is intentionally mirrored by the browser
+        # preview so a stored seed produces the exact same seat order.
+        state = (seed if seed is not None else 0) & 0xFFFFFFFF
+        for index in range(len(shuffled) - 1, 0, -1):
+            state = (state + 0x6D2B79F5) & 0xFFFFFFFF
+            value = state
+            value = ((value ^ (value >> 15)) * (value | 1)) & 0xFFFFFFFF
+            value ^= (value + (((value ^ (value >> 7)) * (value | 61)) & 0xFFFFFFFF)) & 0xFFFFFFFF
+            random_value = ((value ^ (value >> 14)) & 0xFFFFFFFF) / 4294967296
+            target = int(random_value * (index + 1))
+            shuffled[index], shuffled[target] = shuffled[target], shuffled[index]
         return [rid for rid, _ in shuffled]
     reverse = strategy == DraftCaptainOrder.STRONGEST_FIRST
     ordered = sorted(
@@ -618,15 +672,26 @@ async def _first_upcoming(session: AsyncSession, draft_session_id: int) -> Draft
 
 async def start(session: AsyncSession, draft_session: DraftSession) -> DraftSession:
     draft_state.validate_transition(DraftStatus(draft_session.status), DraftStatus.LIVE)
+    tournament_status = await session.scalar(
+        sa.select(Tournament.status).where(Tournament.id == draft_session.tournament_id)
+    )
+    if tournament_status != TournamentStatus.DRAFT.value:
+        raise _err(
+            "tournament_not_in_draft_phase",
+            "Draft can only start while the tournament is in the draft phase",
+        )
     first = await _first_upcoming(session, draft_session.id)
     if first is None:
         raise _err("draft_no_picks", "Draft has no picks to start")
+    report = await feasibility.analyze_session(session, draft_session)
+    if not report.is_feasible:
+        raise _role_shortage_error(report)
     now = datetime.now(UTC)
     _arm_clock(first, draft_session.pick_time_seconds, now)
     draft_session.status = DraftStatus.LIVE.value
+    draft_session.blocked_reason = None
     draft_session.current_pick_id = first.id
     await session.flush()
-    await session.refresh(draft_session)
     return draft_session
 
 
@@ -639,13 +704,16 @@ async def pause(session: AsyncSession, draft_session: DraftSession) -> DraftSess
         current.clock_remaining_ms = max(0, int(remaining))
         current.clock_expires_at = None
     draft_session.status = DraftStatus.PAUSED.value
+    draft_session.blocked_reason = None
     await session.flush()
-    await session.refresh(draft_session)
     return draft_session
 
 
 async def resume(session: AsyncSession, draft_session: DraftSession) -> DraftSession:
     draft_state.validate_transition(DraftStatus(draft_session.status), DraftStatus.LIVE)
+    report = await feasibility.analyze_session(session, draft_session)
+    if not report.is_feasible:
+        raise _role_shortage_error(report)
     now = datetime.now(UTC)
     current = await session.get(DraftPick, draft_session.current_pick_id) if draft_session.current_pick_id else None
     if current is not None:
@@ -658,16 +726,16 @@ async def resume(session: AsyncSession, draft_session: DraftSession) -> DraftSes
         current.clock_expires_at = now + timedelta(milliseconds=remaining_ms)
         current.clock_remaining_ms = None
     draft_session.status = DraftStatus.LIVE.value
+    draft_session.blocked_reason = None
     await session.flush()
-    await session.refresh(draft_session)
     return draft_session
 
 
 async def cancel(session: AsyncSession, draft_session: DraftSession) -> DraftSession:
     draft_state.validate_transition(DraftStatus(draft_session.status), DraftStatus.CANCELLED)
     draft_session.status = DraftStatus.CANCELLED.value
+    draft_session.blocked_reason = None
     await session.flush()
-    await session.refresh(draft_session)
     return draft_session
 
 
@@ -741,10 +809,10 @@ async def rollback(session: AsyncSession, draft_session: DraftSession) -> DraftS
             pick.clock_expires_at = None
 
     draft_session.status = DraftStatus.PAUSED.value
+    draft_session.blocked_reason = None
     draft_session.current_pick_id = last_resolved.id
     draft_session.export_status = None
     draft_session.exported_at = None
 
     await session.flush()
-    await session.refresh(draft_session)
     return draft_session

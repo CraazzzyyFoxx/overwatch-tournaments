@@ -345,7 +345,7 @@ func (b *builder) components() map[string]any {
 				"type":         "http",
 				"scheme":       "bearer",
 				"bearerFormat": "JWT",
-				"description":  "JWT access token. Also accepted via the `aqt_access_token` cookie or a `?token=Bearer <jwt>` query parameter.",
+				"description":  "JWT access token. Also accepted via the `owt_access_token` cookie (legacy `aqt_access_token` still read as a fallback) or a `?token=Bearer <jwt>` query parameter.",
 			},
 		},
 		"schemas": schemas,

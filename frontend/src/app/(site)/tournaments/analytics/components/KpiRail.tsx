@@ -3,7 +3,7 @@
 import React from "react";
 
 import { cn } from "@/lib/utils";
-import { useTranslation } from "@/i18n/LanguageContext";
+import { useTranslations } from "next-intl";
 import { KpiId, KpiTone, KpiVM } from "@/app/(site)/tournaments/analytics/analytics.helpers";
 import { GlossaryTerm } from "@/app/(site)/tournaments/analytics/analytics-glossary";
 import InfoDot from "@/app/(site)/tournaments/analytics/components/InfoDot";
@@ -32,7 +32,7 @@ const TONE_CLASS: Record<KpiTone, string> = {
  * upsets, new faces) — each a value tinted by tone with an info-dot explainer.
  */
 export default function KpiRail({ kpis, onExplain, onSelect }: KpiRailProps) {
-  const { t } = useTranslation();
+  const t = useTranslations();
 
   return (
     <div className={styles.cKpiRail}>

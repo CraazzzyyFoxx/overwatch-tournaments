@@ -202,6 +202,7 @@ async def process_fetch_rank(
                     status=enums.RankCollectionStatus.rate_limited,
                     error="429 rate limited",
                     config=cfg,
+                    transient=True,
                 )
                 await service.log_fetch(
                     session,
@@ -235,6 +236,11 @@ async def process_fetch_rank(
             )
             await session.commit()
     except OverFastError as exc:
+        # Transient upstream failure (OverFast 5xx / timeout). It is fully handled
+        # here: recorded with exponential backoff (transient=True never disables the
+        # tag) and logged. Retries are scheduler-driven via ``next_eligible_at`` — the
+        # message needs no RabbitMQ redelivery, so we swallow it instead of re-raising.
+        # Re-raising only escalated an expected outage to a FastStream/Sentry error.
         logger.warning("OverFast error for {}: {}", event.battle_tag, exc)
         async with session_factory() as session:
             cfg = await settings_provider.get_rank_collection_config(session)
@@ -245,6 +251,7 @@ async def process_fetch_rank(
                 status=enums.RankCollectionStatus.error,
                 error=str(exc),
                 config=cfg,
+                transient=True,
             )
             await service.log_fetch(
                 session,
@@ -255,7 +262,6 @@ async def process_fetch_rank(
                 error=str(exc),
             )
             await session.commit()
-        raise
     finally:
         await redis_client.delete(inflight)
         await redis_client.delete(_pending_key(event.social_account_id))

@@ -1,11 +1,16 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from json import JSONDecodeError
 
 from pydantic import ValidationError
 
 from src.services.balancer.config.public_contract import normalize_persisted_config_payload
+
+
+def _parse_json_bytes(content: bytes) -> dict:
+    return json.loads(content.decode("utf-8"))
 
 
 class BalancerRequestParser:
@@ -15,7 +20,8 @@ class BalancerRequestParser:
 
         content = await uploaded_file.read()
         try:
-            return json.loads(content.decode("utf-8"))
+            # Uploads can reach 25MB; decode + parse off the event loop.
+            return await asyncio.to_thread(_parse_json_bytes, content)
         except json.JSONDecodeError as exc:
             raise ValueError(f"Invalid JSON in uploaded file: {exc}") from exc
 

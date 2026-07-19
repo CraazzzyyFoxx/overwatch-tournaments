@@ -23,10 +23,12 @@ import {
   NavigationMenuTrigger
 } from "@/components/ui/navigation-menu";
 import { cn } from "@/lib/utils";
+import { useTranslations } from "next-intl";
 import { SITE_ICON, SITE_NAME } from "@/config/site";
 import UserMenu from "@/components/UserMenu";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
 import WorkspaceSwitcher from "@/components/WorkspaceSwitcher";
+import WorkspaceBrandIcon from "@/components/WorkspaceBrandIcon";
 import ActiveEvents from "@/components/ActiveEvents";
 import { adminEntryPermissions } from "@/components/admin/admin-navigation";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
@@ -36,93 +38,55 @@ import { getAuthProfileHref } from "@/lib/auth-profile-links";
 import { useAuthModalStore } from "@/stores/auth-modal.store";
 import { useWorkspaceStore } from "@/stores/workspace.store";
 
-const tournament_components: { title: string; href: string; description: string }[] = [
-  {
-    title: "Tournaments",
-    href: "/tournaments",
-    description: "Place where all tournaments are listed"
-  },
-  {
-    title: "Teams",
-    href: "/teams",
-    description: "Place where all teams are listed"
-  },
-  // {
-  //   title: "OWAL",
-  //   href: "/owal",
-  //   description: "Place where all OWAL tournaments are listed"
-  // },
-  {
-    title: "Analytics",
-    href: "/tournaments/analytics",
-    description: "Page with analytics for tournaments"
-  }
-];
-
-const users_components: { title: string; href: string; description: string }[] = [
-  {
-    title: "Users",
-    href: "/users",
-    description: "Place where all users are listed"
-  },
-  {
-    title: "Compare",
-    href: "/users/compare",
-    description: "Page where you can compare users"
-  },
-  {
-    title: "Heroes Leaderboard",
-    href: "/users/heroes-compare",
-    description: "Per-hero performance leaderboard across all players"
-  },
-  {
-    title: "Achievements",
-    href: "/achievements",
-    description: "Page where all achievements are listed"
-  }
-];
-
-const matches_components: { title: string; href: string; description: string }[] = [
-  {
-    title: "Encounters",
-    href: "/encounters",
-    description: "Place where all encounters are listed"
-  },
-  {
-    title: "Matches",
-    href: "/matches",
-    description: "Page where all matches are listed"
-  }
-];
-
-const organization_components: {
-  title: string;
+// Navigation is data-driven by stable keys; the visible text (group labels,
+// item titles + descriptions) is resolved from the `nav.*` message namespace at
+// render time — module scope has no `t()`. `href` drives active-state matching,
+// `key` drives translation lookup.
+type NavItem = {
+  key: string;
   href: string;
-  description: string;
-  roles?: ("admin" | "organizer")[];
   requiresAdminAccess?: boolean;
   requiresBalancerAccess?: boolean;
-}[] = [
+};
+
+type NavGroup = {
+  key: "tournaments" | "users" | "matches" | "organization";
+  items: readonly NavItem[];
+};
+
+const NAV_GROUPS = [
   {
-    title: "Balancer",
-    href: "/balancer",
-    description: "Tool for balancing teams by player roles and ratings",
-    requiresBalancerAccess: true,
+    key: "tournaments",
+    items: [
+      { key: "tournaments", href: "/tournaments" },
+      { key: "teams", href: "/teams" },
+      { key: "analytics", href: "/tournaments/analytics" }
+    ]
   },
   {
-    title: "Admin",
-    href: "/admin",
-    description: "Workspace for tournaments, access, and operations management",
-    requiresAdminAccess: true,
+    key: "users",
+    items: [
+      { key: "users", href: "/users" },
+      { key: "compare", href: "/users/compare" },
+      { key: "heroesLeaderboard", href: "/users/heroes-compare" },
+      { key: "achievements", href: "/achievements" }
+    ]
+  },
+  {
+    key: "matches",
+    items: [
+      { key: "encounters", href: "/encounters" },
+      { key: "matches", href: "/matches" }
+    ]
+  },
+  {
+    key: "organization",
+    items: [
+      { key: "balancer", href: "/balancer", requiresBalancerAccess: true },
+      { key: "admin", href: "/admin", requiresAdminAccess: true }
+    ]
   }
-];
-
-const components: Record<string, { title: string; href: string; description: string }[]> = {
-  Tournaments: tournament_components,
-  Users: users_components,
-  Matches: matches_components,
-  Organization: organization_components
-};
+] as const satisfies readonly NavGroup[];
 
 // Redesign nav-link look (flat, teal-active) — overrides the shared
 // navigationMenuTriggerStyle() via twMerge conflict resolution.
@@ -133,13 +97,13 @@ const navTriggerClass =
   "data-[state=open]:bg-[hsl(0_0%_100%/0.04)] data-[state=open]:text-[var(--aqt-fg)]";
 
 const navTriggerActiveClass =
-  "bg-[hsl(174_72%_46%/0.1)] text-[var(--aqt-teal)] " +
-  "hover:bg-[hsl(174_72%_46%/0.16)] hover:text-[var(--aqt-teal)] " +
-  "focus:bg-[hsl(174_72%_46%/0.16)] focus:text-[var(--aqt-teal)] " +
-  "data-[state=open]:bg-[hsl(174_72%_46%/0.16)] data-[state=open]:text-[var(--aqt-teal)]";
+  "bg-[hsl(172_70%_49%/0.1)] text-[var(--aqt-teal)] " +
+  "hover:bg-[hsl(172_70%_49%/0.16)] hover:text-[var(--aqt-teal)] " +
+  "focus:bg-[hsl(172_70%_49%/0.16)] focus:text-[var(--aqt-teal)] " +
+  "data-[state=open]:bg-[hsl(172_70%_49%/0.16)] data-[state=open]:text-[var(--aqt-teal)]";
 
 function isNavGroupActive(
-  items: { href: string }[],
+  items: readonly { href: string }[],
   pathname: string
 ): boolean {
   return items.some((item) => {
@@ -148,7 +112,23 @@ function isNavGroupActive(
   });
 }
 
-const Header = () => {
+interface HeaderProps {
+  /**
+   * True on a tenant (white-label) host — injected server-side from the
+   * `x-owt-host-mode` header (Task 6). The whole site is locked to one
+   * workspace there, so cross-workspace UI (the workspace switcher) is
+   * hidden. Absent/false on the apex/platform host.
+   */
+  tenantMode?: boolean;
+  /**
+   * The host workspace (name + icon) on a tenant host, resolved server-side.
+   * Rendered as a branded logo linking home in place of the switcher.
+   */
+  tenantWorkspace?: { name: string; iconUrl: string | null };
+}
+
+const Header = ({ tenantMode, tenantWorkspace }: HeaderProps) => {
+  const t = useTranslations();
   const { user } = useAuthProfile();
   const pathname = usePathname() ?? "";
   const openAuthModal = useAuthModalStore((state) => state.open);
@@ -172,107 +152,136 @@ const Header = () => {
     openAuthModal(nextPath);
   };
 
-  const getVisibleItems = (
-    items: {
-      title: string;
-      href: string;
-      description: string;
-      roles?: ("admin" | "organizer")[];
-      requiresAdminAccess?: boolean;
-      requiresBalancerAccess?: boolean;
-    }[]
-  ) =>
+  const getVisibleItems = (items: readonly NavItem[]) =>
     items.filter((item) => {
       if (item.requiresAdminAccess) return canAccessAdmin;
       if (item.requiresBalancerAccess) return canAccessBalancer;
-      if (!item.roles?.length) return true;
-      if (item.roles.includes("organizer") && isOrganizer) return true;
-      return false;
+      return true;
     });
 
   return (
-    <header className="sticky top-0 z-50 flex h-14 items-center gap-4 border-b border-border/70 bg-background/75 px-4 backdrop-blur-xl supports-[backdrop-filter]:bg-background/60 md:px-6">
-      <WorkspaceSwitcher />
+    <header className="sticky top-0 z-50 flex h-14 items-center gap-4 border-b border-border/70 px-4 backdrop-blur-xl md:px-6">
+      {tenantMode ? (
+        tenantWorkspace ? (
+          <Link
+            href="/"
+            aria-label={`${tenantWorkspace.name} — home`}
+            className="flex items-center gap-2 rounded-lg outline-none transition-opacity hover:opacity-80 focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <WorkspaceBrandIcon
+              name={tenantWorkspace.name}
+              iconUrl={tenantWorkspace.iconUrl}
+              className="size-7 rounded-md text-xs"
+            />
+            <span className="hidden max-w-48 truncate text-sm font-semibold sm:inline">
+              {tenantWorkspace.name}
+            </span>
+          </Link>
+        ) : null
+      ) : (
+        <WorkspaceSwitcher />
+      )}
       <NavigationMenu className="hidden md:flex">
-        {Object.keys(components)
-          .filter((title) => title !== "Organization" || canAccessOrganization)
-          .map((title) => (
-            <NavigationMenuList key={title}>
-              <NavigationMenuItem>
-                <NavigationMenuTrigger
-                  className={cn(
-                    navTriggerClass,
-                    isNavGroupActive(components[title], pathname) && navTriggerActiveClass
-                  )}
-                >
-                  {title}
-                </NavigationMenuTrigger>
-                <NavigationMenuContent>
-                  <ul className="grid w-100 gap-3 p-4 md:w-125 md:grid-cols-2 lg:w-150 ">
-                    {getVisibleItems(components[title]).map((component) => (
-                      <ListItem key={component.title} title={component.title} href={component.href}>
-                        {component.description}
-                      </ListItem>
-                    ))}
-                  </ul>
-                </NavigationMenuContent>
-              </NavigationMenuItem>
-            </NavigationMenuList>
-          ))}
+        {NAV_GROUPS.filter(
+          (group) => group.key !== "organization" || canAccessOrganization
+        ).map((group) => (
+          <NavigationMenuList key={group.key}>
+            <NavigationMenuItem>
+              <NavigationMenuTrigger
+                className={cn(
+                  navTriggerClass,
+                  isNavGroupActive(group.items, pathname) && navTriggerActiveClass
+                )}
+              >
+                {t(`nav.groups.${group.key}`)}
+              </NavigationMenuTrigger>
+              <NavigationMenuContent>
+                <ul className="grid w-100 gap-3 p-4 md:w-125 md:grid-cols-2 lg:w-150 ">
+                  {getVisibleItems(group.items).map((item) => (
+                    <ListItem
+                      key={item.key}
+                      title={t(`nav.items.${item.key}.title` as Parameters<typeof t>[0])}
+                      href={item.href}
+                    >
+                      {t(`nav.items.${item.key}.desc` as Parameters<typeof t>[0])}
+                    </ListItem>
+                  ))}
+                </ul>
+              </NavigationMenuContent>
+            </NavigationMenuItem>
+          </NavigationMenuList>
+        ))}
       </NavigationMenu>
       <Sheet>
         <SheetTrigger asChild>
           <Button variant="outline" size="icon" className="shrink-0 md:hidden">
             <Menu className="h-5 w-5" />
-            <span className="sr-only">Toggle navigation menu</span>
+            <span className="sr-only">{t("nav.toggleMenu")}</span>
           </Button>
         </SheetTrigger>
         <SheetContent side="left">
           <nav className="grid gap-2 text-lg font-medium">
-            <Link href="#" className="flex items-center gap-2 text-lg font-semibold mb-4">
-              <Image src={SITE_ICON} alt={SITE_NAME} width={32} height={32} />
-              <span className="sr-only">{SITE_NAME}</span>
+            <Link href="/" className="flex items-center gap-2 text-lg font-semibold mb-4">
+              {tenantMode && tenantWorkspace ? (
+                <>
+                  <WorkspaceBrandIcon
+                    name={tenantWorkspace.name}
+                    iconUrl={tenantWorkspace.iconUrl}
+                    className="size-8 rounded-md text-sm"
+                  />
+                  <span className="max-w-48 truncate text-base font-semibold">
+                    {tenantWorkspace.name}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <Image src={SITE_ICON} alt={SITE_NAME} width={32} height={32} />
+                  <span className="sr-only">{SITE_NAME}</span>
+                </>
+              )}
             </Link>
             <Accordion type="single" collapsible className="w-full">
-              {Object.entries(components)
-                .filter(([category]) => category !== "Organization" || canAccessOrganization)
-                .map(([category, items]) => (
-                  <AccordionItem key={category} value={category}>
-                    <AccordionTrigger className="text-base hover:text-foreground">
-                      {category}
-                    </AccordionTrigger>
-                    <AccordionContent>
-                      <div className="grid gap-4 pl-4">
-                        {getVisibleItems(items).map((item) => (
-                          <Link
-                            key={item.title}
-                            href={item.href}
-                            className="text-muted-foreground hover:text-foreground text-sm"
-                          >
-                            {item.title}
-                          </Link>
-                        ))}
-                      </div>
-                    </AccordionContent>
-                  </AccordionItem>
-                ))}
+              {NAV_GROUPS.filter(
+                (group) => group.key !== "organization" || canAccessOrganization
+              ).map((group) => (
+                <AccordionItem key={group.key} value={group.key}>
+                  <AccordionTrigger className="text-base hover:text-foreground">
+                    {t(`nav.groups.${group.key}`)}
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    <div className="grid gap-4 pl-4">
+                      {getVisibleItems(group.items).map((item) => (
+                        <Link
+                          key={item.key}
+                          href={item.href}
+                          className="text-muted-foreground hover:text-foreground text-sm"
+                        >
+                          {t(`nav.items.${item.key}.title` as Parameters<typeof t>[0])}
+                        </Link>
+                      ))}
+                    </div>
+                  </AccordionContent>
+                </AccordionItem>
+              ))}
             </Accordion>
           </nav>
         </SheetContent>
       </Sheet>
-      <div className="flex w-full items-center md:ml-auto gap-4 lg:gap-4">
-        <ActiveEvents />
-        <div className="ml-auto flex-1 sm:flex-initial">
+      <div className="flex min-w-0 flex-1 items-center gap-1 md:ml-auto md:gap-4">
+        <div className="hidden min-[360px]:block">
+          <ActiveEvents />
+        </div>
+        <div className="hidden min-w-0 md:ml-auto md:block md:flex-initial">
           <UserSearch />
         </div>
         {username ? (
           <UserMenu username={username} avatarUrl={avatarUrl} profileHref={profileHref} />
         ) : (
-          <div className="flex items-center gap-3">
+          <div className="ml-auto flex min-w-0 items-center gap-1 sm:gap-3 md:ml-0">
             <LanguageSwitcher />
             <Button variant="outline" className="text-base" onClick={handleLoginClick}>
               <LogIn className="h-5 w-5" />
-              <span className="hidden sm:inline">Login</span>
+              <span className="hidden sm:inline">{t("nav.login")}</span>
             </Button>
           </div>
         )}

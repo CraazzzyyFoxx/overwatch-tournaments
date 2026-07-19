@@ -3,7 +3,7 @@
         {
             "path": "."
         },
-                {
+        {
             "path": "backend/shared"
         },
         {
@@ -13,7 +13,7 @@
             "path": "backend/app-service"
         },
         {
-            "path": "backend/auth-service",
+            "path": "backend/identity-service"
         },
         {
             "path": "backend/discord-service"
@@ -22,9 +22,6 @@
             "path": "backend/parser-service"
         },
         {
-            "path": "backend/twitch-service"
-        },
-                {
             "path": "backend/balancer-service"
         },
         {
@@ -32,12 +29,15 @@
         },
         {
             "path": "backend/analytics-service"
-        }
+        },
         {
             "path": "frontend"
         },
         {
             "path": "backend/env"
+        },
+        {
+            "path": "loadtests"
         }
     ]
 }

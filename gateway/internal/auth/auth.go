@@ -13,12 +13,15 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 )
 
-// CookieName is where the frontend stores the access token.
-const CookieName = "aqt_access_token"
+// CookieName is the canonical access-token cookie; LegacyCookieName is read as a
+// fallback during the aqt->owt rename so existing sessions are not logged out.
+const CookieName = "owt_access_token"
+const LegacyCookieName = "aqt_access_token"
 
 // User is an authenticated WebSocket/HTTP principal. A nil *User means anonymous.
 type User struct {
@@ -27,6 +30,12 @@ type User struct {
 	// per-workspace membership check in the topic ACL, exactly as the Python
 	// AuthUser.is_workspace_member does (`if self.is_superuser: return True`).
 	IsSuperuser bool
+	// ExpiresAt is the token's `exp` claim. The ws.Handler binds the connection
+	// lifetime to it so an authenticated socket cannot outlive its access token
+	// (a stale/expired session must stop receiving auth-gated events). Zero when
+	// the token carries no exp (never happens for a valid access token, which the
+	// parser already requires to be unexpired).
+	ExpiresAt time.Time
 }
 
 // Authenticator decodes and verifies access tokens with the shared secret.
@@ -81,7 +90,11 @@ func (a *Authenticator) parseToken(token string) *User {
 	}
 	// is_superuser is optional; a missing/non-bool claim safely yields false.
 	isSuperuser, _ := claims["is_superuser"].(bool)
-	return &User{ID: id, IsSuperuser: isSuperuser}
+	u := &User{ID: id, IsSuperuser: isSuperuser}
+	if exp, err := claims.GetExpirationTime(); err == nil && exp != nil {
+		u.ExpiresAt = exp.Time
+	}
+	return u
 }
 
 // extractToken pulls the bearer token from the query string, the Authorization
@@ -100,8 +113,10 @@ func extractToken(r *http.Request) string {
 		}
 	}
 
-	if c, err := r.Cookie(CookieName); err == nil && c.Value != "" {
-		return strings.TrimSpace(strings.TrimPrefix(c.Value, "Bearer "))
+	for _, name := range []string{CookieName, LegacyCookieName} {
+		if c, err := r.Cookie(name); err == nil && c.Value != "" {
+			return strings.TrimSpace(strings.TrimPrefix(c.Value, "Bearer "))
+		}
 	}
 	return ""
 }

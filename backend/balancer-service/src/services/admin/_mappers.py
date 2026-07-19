@@ -18,12 +18,24 @@ def loaded_relationship_or_none(instance: object, attribute: str):
 
 def serialize_balance(
     balance: models.BalancerBalance,
+    *,
+    already_normalized: bool = False,
 ) -> admin_schemas.BalanceRead:
+    """Map a ``BalancerBalance`` row to its read schema.
+
+    ``already_normalized=True`` skips the config/result normalization passes:
+    ``save_balance`` stores exactly ``serialize_saved_config_payload`` /
+    ``normalize_balance_response_payload`` output, so re-running them on the
+    just-saved multi-MB result is pure waste. Reads from the DB (which may
+    hold older-format rows) keep the default normalizing path.
+    """
     return admin_schemas.BalanceRead(
         id=balance.id,
         tournament_id=balance.tournament_id,
-        config_json=serialize_saved_config_payload(balance.config_json),
-        result_json=normalize_balance_response_payload(balance.result_json),
+        config_json=balance.config_json if already_normalized else serialize_saved_config_payload(balance.config_json),
+        result_json=(
+            balance.result_json if already_normalized else normalize_balance_response_payload(balance.result_json)
+        ),
         saved_by=balance.saved_by,
         saved_at=balance.saved_at,
         exported_at=balance.exported_at,

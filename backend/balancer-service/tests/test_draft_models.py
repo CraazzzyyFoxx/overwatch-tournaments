@@ -4,6 +4,8 @@ import os
 import sys
 from pathlib import Path
 
+import pytest
+
 REPO_BACKEND_ROOT = Path(__file__).resolve().parents[2]
 BALANCER_SERVICE_ROOT = REPO_BACKEND_ROOT / "balancer-service"
 
@@ -23,6 +25,7 @@ from sqlalchemy.orm import configure_mappers  # noqa: E402
 
 import src.models  # noqa: E402,F401  (import registers all models)
 from shared.core.enums import DraftRole  # noqa: E402
+from shared.models.balancer import draft as draft_models  # noqa: E402
 from shared.models.balancer.draft import (  # noqa: E402
     DraftPick,
     DraftPlayer,
@@ -31,6 +34,7 @@ from shared.models.balancer.draft import (  # noqa: E402
     DraftTeam,
 )
 from shared.models.tenancy.workspace import WorkspaceMember  # noqa: E402
+from src.services.draft import selection  # noqa: E402
 from src.services.draft.selection import _role_is_legal  # noqa: E402
 
 
@@ -52,6 +56,46 @@ def test_session_has_partial_unique_active_index() -> None:
 def test_pick_has_version_and_clock_columns() -> None:
     cols = set(DraftPick.__table__.columns.keys())
     assert {"version", "clock_started_at", "clock_expires_at", "clock_remaining_ms"} <= cols
+
+
+def test_player_has_version_for_role_edit_concurrency() -> None:
+    version = DraftPlayer.__table__.c.version
+    assert version.nullable is False
+    assert str(version.server_default.arg) == "0"
+
+
+def test_session_has_version_for_reseed_concurrency() -> None:
+    version = DraftSession.__table__.c.version
+    assert version.nullable is False
+    assert str(version.server_default.arg) == "0"
+
+
+def test_session_persists_structured_pause_reason() -> None:
+    column = DraftSession.__table__.c.blocked_reason
+
+    assert column.nullable is True
+
+
+def test_draft_audit_event_keeps_private_before_after_reason() -> None:
+    DraftAuditEvent = getattr(draft_models, "DraftAuditEvent", None)
+    if DraftAuditEvent is None:
+        pytest.fail("DraftAuditEvent model is not implemented")
+    table = DraftAuditEvent.__table__
+    assert table.schema == "balancer"
+    assert {
+        "session_id",
+        "actor_auth_user_id",
+        "action",
+        "entity_type",
+        "entity_id",
+        "reason",
+        "before_json",
+        "after_json",
+    } <= set(table.columns.keys())
+    index_names = {index.name for index in table.indexes}
+    assert "ix_draft_audit_session_created" in index_names
+    assert table.c.session_id.foreign_keys.pop().ondelete == "CASCADE"
+    assert table.c.actor_auth_user_id.foreign_keys.pop().ondelete == "SET NULL"
 
 
 def test_session_pick_circular_relationship_resolves() -> None:
@@ -132,3 +176,29 @@ def test_team_and_pick_compat_properties() -> None:
     assert pick.picked_by_user_id == 5
     pick_none = DraftPick(session_id=1, overall_no=2, round_no=1, pick_in_round=2, draft_team_id=1)
     assert pick_none.picked_by_user_id is None
+
+
+def test_role_shortage_pauses_without_resolving_the_current_pick() -> None:
+    draft = DraftSession(id=1, tournament_id=1, workspace_id=1, status="live", current_pick_id=9)
+    pick = DraftPick(
+        id=9,
+        session_id=1,
+        overall_no=1,
+        round_no=1,
+        pick_in_round=1,
+        draft_team_id=10,
+        status="on_clock",
+        clock_remaining_ms=None,
+    )
+
+    result = selection.mark_role_shortage_paused(draft, pick)
+
+    assert draft.status == "paused"
+    assert pick.status == "on_clock"
+    assert pick.picked_player_id is None
+    assert pick.clock_expires_at is None
+    assert pick.clock_remaining_ms == 0
+    assert result.pick is pick
+    assert result.next_pick is None
+    assert result.completed is False
+    assert result.blocked_reason == "role_shortage"

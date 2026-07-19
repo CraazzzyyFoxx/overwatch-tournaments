@@ -9,6 +9,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { AdminDataTable } from "@/components/admin/AdminDataTable";
 import { DeleteConfirmDialog } from "@/components/admin/DeleteConfirmDialog";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { PROVIDER_META, ProviderBadge } from "@/components/admin/OAuthProviderBadge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -25,45 +26,6 @@ import { rbacService } from "@/services/rbac.service";
 import type { OAuthConnectionAdmin, OAuthProvider } from "@/types/rbac.types";
 
 const PAGE_SIZE = 20;
-
-const PROVIDER_META: Record<
-  OAuthProvider,
-  { label: string; icon: string | null; iconClass?: string }
-> = {
-  discord: { label: "Discord", icon: "/discord.png" },
-  twitch: { label: "Twitch", icon: "/twitch.png" },
-  battlenet: { label: "Battle.net", icon: "/battlenet.svg", iconClass: "invert grayscale" },
-  google: { label: "Google", icon: null },
-  github: { label: "GitHub", icon: null }
-};
-
-const PROVIDER_COLORS: Record<OAuthProvider, string> = {
-  discord: "bg-[#5865F2]/15 text-[#7289da] border-[#5865F2]/30",
-  twitch: "bg-[#9146FF]/15 text-[#b380ff] border-[#9146FF]/30",
-  battlenet: "bg-[#148EFF]/15 text-[#60b0ff] border-[#148EFF]/30",
-  google: "bg-red-500/15 text-red-400 border-red-500/30",
-  github: "bg-zinc-500/15 text-zinc-300 border-zinc-500/30"
-};
-
-function ProviderBadge({ provider }: { provider: OAuthProvider }) {
-  const meta = PROVIDER_META[provider];
-  return (
-    <Badge variant="outline" className={`gap-1.5 ${PROVIDER_COLORS[provider]}`}>
-      {meta?.icon ? (
-        <Image
-          src={meta.icon}
-          alt={meta.label}
-          width={14}
-          height={14}
-          className={meta.iconClass ?? ""}
-        />
-      ) : (
-        <Globe className="h-3.5 w-3.5" />
-      )}
-      {meta?.label ?? provider}
-    </Badge>
-  );
-}
 
 function formatDate(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString("en-US", {
@@ -136,17 +98,18 @@ export default function OAuthConnectionsAdminPage() {
       header: "Auth User",
       cell: ({ row }) => {
         const conn = row.original;
+        const nick = conn.auth_user_username ?? conn.auth_user_email ?? "";
         return (
           <div className="min-w-0">
-            <div className="flex items-center gap-1.5">
-              <p className="truncate text-sm font-medium">{conn.auth_user_username}</p>
-              <a
-                href={`/admin/access/users`}
-                className="text-muted-foreground hover:text-foreground"
-              >
-                <ExternalLink className="h-3 w-3" />
-              </a>
-            </div>
+            <a
+              href={`/admin/access/users?search=${encodeURIComponent(nick)}`}
+              className="flex items-center gap-1.5 text-muted-foreground hover:text-foreground"
+            >
+              <span className="truncate text-sm font-medium text-foreground">
+                {conn.auth_user_username}
+              </span>
+              <ExternalLink className="h-3 w-3 shrink-0" />
+            </a>
             <p className="truncate text-xs text-muted-foreground">{conn.auth_user_email}</p>
           </div>
         );

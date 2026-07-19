@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useTranslations } from "next-intl";
 
 import heroService from "@/services/hero.service";
 import mapService from "@/services/map.service";
@@ -11,7 +12,13 @@ import { UserRoleType, UserCompareBaselineMode } from "@/types/user.types";
 import { CompareRow } from "@/app/(site)/users/compare/types";
 import { getHumanizedStats } from "@/utils/stats";
 import { HERO_COMPARE_STATS } from "@/app/(site)/users/compare/constants";
-import { getMapIconSrc, normalizeNumber } from "@/app/(site)/users/compare/utils";
+import { getMapIconSrc, normalizeNumber, roleLabelKey } from "@/app/(site)/users/compare/utils";
+import {
+  buildHeroCompareQueryOptions,
+  buildOverallCompareQueryOptions,
+  getCompareActivity,
+  shouldLoadHeroCatalogs
+} from "@/app/(site)/users/compare/hooks/compare-query-options";
 
 interface UseUserCompareDataParams {
   isHeroScope: boolean;
@@ -40,19 +47,21 @@ export const useUserCompareData = ({
   rightHeroId,
   mapId
 }: UseUserCompareDataParams) => {
-  const compareQuery = useQuery({
-    queryKey: ["user-compare", subjectUserId, effectiveBaseline, targetUserId, role, divMin, divMax, tournamentId],
-    enabled: !isHeroScope && subjectUserId !== undefined,
-    queryFn: () =>
-      userService.getUserCompare(subjectUserId!, {
-        baseline: effectiveBaseline,
-        targetUserId,
-        role,
-        divMin,
-        divMax,
-        tournamentId
-      })
-  });
+  const t = useTranslations();
+
+  const compareQuery = useQuery(
+    buildOverallCompareQueryOptions({
+      isHeroScope,
+      subjectUserId,
+      baseline: effectiveBaseline,
+      targetUserId,
+      role,
+      divMin,
+      divMax,
+      tournamentId,
+      fetchCompare: userService.getUserCompare
+    })
+  );
 
   const heroesQuery = useQuery({
     queryKey: ["heroes-select-options"],
@@ -62,7 +71,8 @@ export const useUserCompareData = ({
         sort: "name",
         order: "asc"
       }),
-    staleTime: 5 * 60 * 1000
+    staleTime: 5 * 60 * 1000,
+    enabled: shouldLoadHeroCatalogs(isHeroScope)
   });
 
   const mapsQuery = useQuery({
@@ -73,7 +83,8 @@ export const useUserCompareData = ({
         sort: "name",
         order: "asc"
       }),
-    staleTime: 5 * 60 * 1000
+    staleTime: 5 * 60 * 1000,
+    enabled: shouldLoadHeroCatalogs(isHeroScope)
   });
 
   const tournamentsQuery = useQuery({
@@ -82,11 +93,11 @@ export const useUserCompareData = ({
     staleTime: 5 * 60 * 1000
   });
 
-  const heroCompareQuery = useQuery({
-    queryKey: [
-      "user-hero-compare",
+  const heroCompareQuery = useQuery(
+    buildHeroCompareQueryOptions({
+      isHeroScope,
       subjectUserId,
-      effectiveBaseline,
+      baseline: effectiveBaseline,
       targetUserId,
       role,
       divMin,
@@ -94,23 +105,11 @@ export const useUserCompareData = ({
       tournamentId,
       leftHeroId,
       rightHeroId,
-      mapId
-    ],
-    enabled: isHeroScope && subjectUserId !== undefined,
-    queryFn: () =>
-      userService.getUserHeroCompare(subjectUserId!, {
-        baseline: effectiveBaseline,
-        targetUserId,
-        leftHeroId,
-        rightHeroId,
-        mapId,
-        role,
-        divMin,
-        divMax,
-        tournamentId,
-        stats: HERO_COMPARE_STATS
-      })
-  });
+      mapId,
+      stats: HERO_COMPARE_STATS,
+      fetchCompare: userService.getUserHeroCompare
+    })
+  );
 
   const heroes = heroesQuery.data?.results ?? [];
   const maps = mapsQuery.data?.results ?? [];
@@ -123,22 +122,26 @@ export const useUserCompareData = ({
   const rightHero = rightHeroId ? heroMapById.get(rightHeroId) : undefined;
   const selectedMap = mapId ? mapById.get(mapId) : undefined;
 
-  const selectedSubjectName = compareQuery.data?.subject.name ?? heroCompareQuery.data?.subject.name;
-  const selectedTargetName = compareQuery.data?.baseline.target_user?.name ?? heroCompareQuery.data?.target?.name;
+  const selectedSubjectName =
+    compareQuery.data?.subject.name ?? heroCompareQuery.data?.subject.name;
+  const selectedTargetName =
+    compareQuery.data?.baseline.target_user?.name ?? heroCompareQuery.data?.target?.name;
 
   const baselineSummary = useMemo(() => {
     if (effectiveBaseline === "target_user") {
-      return selectedTargetName ? `Comparing against ${selectedTargetName}` : "Comparing against selected user";
+      return selectedTargetName
+        ? t("users.compare.comparingAgainstUser", { name: selectedTargetName })
+        : t("users.compare.comparingAgainstSelected");
     }
 
     if (effectiveBaseline === "cohort") {
-      const roleText = role ?? "All roles";
-      const rangeText = `${divMin ?? "Any"} - ${divMax ?? "Any"}`;
-      return `Comparing against cohort averages (${roleText}, division ${rangeText})`;
+      const roleText = role ? t(roleLabelKey(role)) : t("users.compare.allRoles");
+      const rangeText = `${divMin ?? t("common.any")} - ${divMax ?? t("common.any")}`;
+      return t("users.compare.comparingAgainstCohort", { role: roleText, range: rangeText });
     }
 
-    return "Comparing against global all-players averages";
-  }, [effectiveBaseline, selectedTargetName, role, divMin, divMax]);
+    return t("users.compare.comparingAgainstGlobal");
+  }, [effectiveBaseline, selectedTargetName, role, divMin, divMax, t]);
 
   const rows = useMemo<CompareRow[]>(() => {
     if (isHeroScope) {
@@ -171,21 +174,26 @@ export const useUserCompareData = ({
   }, [isHeroScope, compareQuery.data, heroCompareQuery.data]);
 
   const activeLoading = isHeroScope ? heroCompareQuery.isLoading : compareQuery.isLoading;
+  const activeFetching = isHeroScope ? heroCompareQuery.isFetching : compareQuery.isFetching;
+  const { isRefreshing: activeRefreshing } = getCompareActivity({
+    isLoading: activeLoading,
+    isFetching: activeFetching
+  });
   const activeError = isHeroScope ? heroCompareQuery.error : compareQuery.error;
   const activeErrorMessage =
-    activeError instanceof Error ? activeError.message : "Failed to load compare data.";
+    activeError instanceof Error ? activeError.message : t("users.compare.loadError");
 
   const compareDisplayName = useMemo(() => {
     if (effectiveBaseline === "target_user") {
-      return selectedTargetName ?? "Selected user";
+      return selectedTargetName ?? t("users.compare.selectedUser");
     }
 
     if (effectiveBaseline === "cohort") {
-      return "Cohort average";
+      return t("users.compare.cohortAverage");
     }
 
-    return "All players average";
-  }, [effectiveBaseline, selectedTargetName]);
+    return t("users.compare.allPlayersAverage");
+  }, [effectiveBaseline, selectedTargetName, t]);
 
   const selectedMapIcon = getMapIconSrc(selectedMap);
 
@@ -207,6 +215,7 @@ export const useUserCompareData = ({
     baselineSummary,
     rows,
     activeLoading,
+    activeRefreshing,
     activeError,
     activeErrorMessage,
     compareDisplayName

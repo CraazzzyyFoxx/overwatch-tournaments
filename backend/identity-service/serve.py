@@ -84,7 +84,7 @@ logger = setup_logging(
     json_output=settings.json_logging,
 )
 
-broker = make_rabbit_broker(settings.rabbitmq_url, logger=logger)
+broker = make_rabbit_broker(settings.rabbitmq_url, logger=logger, prefetch_count=settings.rpc_prefetch_count)
 app = FastStream(broker)
 
 
@@ -346,11 +346,31 @@ async def rpc_oauth_providers(data: dict, msg: RabbitMessage) -> dict:
 
 @broker.subscriber("rpc.identity.oauth_url")
 async def rpc_oauth_url(data: dict, msg: RabbitMessage) -> dict:
-    provider = (data or {}).get("provider")
+    data = data or {}
+    provider = data.get("provider")
     if not provider or not isinstance(provider, str):
         return rpc_error("bad_request", "provider is required")
+    origin, redirect, action = data.get("origin"), data.get("redirect"), data.get("action")
+    if not origin or not isinstance(origin, str):
+        return rpc_error("bad_request", "origin is required")
+    if not isinstance(redirect, str) or not redirect:
+        redirect = "/"
+    if not action or not isinstance(action, str):
+        return rpc_error("bad_request", "action is required")
+    csrf = data.get("csrf")
+    if not csrf or not isinstance(csrf, str):
+        return rpc_error("bad_request", "csrf is required")
+    # Optional (Task 10R fix 1): only the frontend's custom-domain apex bounce
+    # supplies this (see oauth-login.ts). Anything not a non-empty string is
+    # treated as absent -- get_url signs it into the state only when present.
+    guard_hash = data.get("guard_hash")
+    if not isinstance(guard_hash, str) or not guard_hash:
+        guard_hash = None
     try:
-        return rpc_ok(oauth_flows.get_url(provider).model_dump(mode="json"))
+        result = oauth_flows.get_url(
+            provider, origin=origin, redirect=redirect, action=action, csrf=csrf, guard_hash=guard_hash
+        )
+        return rpc_ok(result.model_dump(mode="json"))
     except HTTPException as exc:
         return rpc_error(status_to_code(exc.status_code), str(exc.detail))
     except Exception:  # pragma: no cover - defensive worker guard
@@ -367,7 +387,13 @@ async def rpc_oauth_callback(data: dict, msg: RabbitMessage) -> dict:
     try:
         async with db.async_session_maker() as session:
             token = await oauth_flows.callback(
-                session, provider, code, state, data.get("user_agent"), data.get("ip_address")
+                session,
+                provider,
+                code,
+                state,
+                data.get("user_agent"),
+                data.get("ip_address"),
+                data.get("csrf"),
             )
         return rpc_ok(token.model_dump(mode="json"))
     except HTTPException as exc:
@@ -377,15 +403,102 @@ async def rpc_oauth_callback(data: dict, msg: RabbitMessage) -> dict:
         return rpc_error("internal", f"OAuth authentication failed for {provider}")
 
 
+@broker.subscriber("rpc.identity.sso_exchange")
+async def rpc_sso_exchange(data: dict, msg: RabbitMessage) -> dict:
+    """Redeem a one-time SSO ticket (custom-domain OAuth callback handoff).
+
+    Called by the custom domain's own frontend route -- never by the apex --
+    after `oauth_flows.callback` returned `mode="ticket"` (see `sso_tickets`).
+    The ticket is single-use (Redis GETDEL); a missing, expired, already-
+    redeemed, or unknown ticket all look identical from here.
+
+    ``guard`` (Task 10R fix 1) is the RAW value of the caller's
+    ``owt_xdomain_guard`` cookie, forwarded by the frontend's `/auth/sso`
+    route. `oauth_flows.sso_exchange` fails closed (returns ``None``, no
+    tokens) on a missing/mismatched guard exactly like an invalid ticket --
+    see its docstring.
+    """
+    data = data or {}
+    ticket = data.get("ticket")
+    if not ticket or not isinstance(ticket, str):
+        return rpc_error("bad_request", "ticket is required")
+
+    result = await oauth_flows.sso_exchange(data.get("guard"), ticket)
+    if result is None:
+        return rpc_error("bad_request", "invalid or expired ticket")
+
+    return rpc_ok(result)
+
+
 @broker.subscriber("rpc.identity.oauth_link")
 async def rpc_oauth_link(data: dict, msg: RabbitMessage) -> dict:
+    """Custom-domain-aware account-link callback (Task 10R re-architecture).
+
+    Unlike every OTHER authenticated RPC method here, a missing bearer is
+    NOT rejected up front (no ``_with_active_user``) -- ``oauth_flows.link``
+    decides whether one is required, branching on the signed OAuth state's
+    origin: a platform-host link still requires a resolvable user (unchanged
+    -- same "Not authenticated" signal as before this task), but a
+    custom-domain link never does; it can only ever mint a single-use
+    provider-identity ticket (``mode="link_ticket"``) for a LIVE session on
+    the custom domain itself to redeem later (``rpc.identity.link_complete``).
+
+    A *present but invalid* access_token is treated the same as a missing
+    one (best-effort resolution, mirroring the gateway's own
+    fail-safe-to-anonymous posture for this route) so a stale platform
+    cookie can never block an otherwise-valid custom-domain ticket issuance;
+    on the platform-host branch this still surfaces as the same generic
+    "Not authenticated" the caller would have seen from a missing bearer.
+    """
     data = data or {}
     provider, code, state = data.get("provider"), data.get("code"), data.get("state")
+    if not (provider and code and state):
+        return rpc_error("unprocessable", "provider, code and state are required")
+
+    access_token = data.get("access_token")
+    try:
+        async with db.async_session_maker() as session:
+            user = None
+            if access_token:
+                try:
+                    user = await auth_flows.resolve_active_user(session, access_token)
+                except HTTPException:
+                    user = None
+            result = await oauth_flows.link(session, user, provider, code, state, data.get("csrf"))
+        return rpc_ok(result.model_dump(mode="json"))
+    except HTTPException as exc:
+        return rpc_error(status_to_code(exc.status_code), str(exc.detail))
+    except Exception:  # pragma: no cover - defensive worker guard
+        logger.exception("oauth_link RPC failed")
+        return rpc_error("internal", "internal error")
+
+
+@broker.subscriber("rpc.identity.link_complete")
+async def rpc_link_complete(data: dict, msg: RabbitMessage) -> dict:
+    """Redeem a pending-link ticket (custom-domain account linking, Task
+    10R) and attach the PROVIDER identity it carries to the bearer-
+    authenticated caller.
+
+    Uses ``_with_active_user`` like every other authenticated RPC method --
+    UNLIKE ``rpc_oauth_link`` above, a bearer is mandatory here (SECURITY
+    INVARIANT #4): this is the step that actually resolves the linked-to
+    site account, and that resolution must come from nothing but the live
+    session presented on THIS call.
+
+    ``guard`` (Task 10R fix 1) is the RAW value of the caller's
+    ``owt_xdomain_guard`` cookie, forwarded by the frontend's
+    `/auth/link/complete` route. `oauth_flows.link_complete` fails closed on
+    a missing/mismatched guard EVEN THOUGH the bearer above is valid -- see
+    its docstring.
+    """
+    data = data or {}
+    ticket = data.get("ticket")
+    guard = data.get("guard")
 
     async def op(session: Any, user: Any) -> dict:
-        if not (provider and code and state):
-            raise HTTPException(status_code=422, detail="provider, code and state are required")
-        return await oauth_flows.link(session, user, provider, code, state)
+        if not ticket or not isinstance(ticket, str):
+            raise HTTPException(status_code=422, detail="ticket is required")
+        return await oauth_flows.link_complete(session, user, ticket, guard)
 
     return await _with_active_user(data.get("access_token"), op)
 
@@ -687,6 +800,19 @@ async def rpc_rbac_remove_linked_player(data: dict, msg: RabbitMessage) -> dict:
         if player_id is None:
             raise HTTPException(status_code=422, detail="player_id is required")
         await rbac_flows.remove_linked_player_from_auth_user(session, user, user_id, player_id)
+
+    return await _with_active_user(data.get("access_token"), op)
+
+
+@broker.subscriber("rpc.identity.rbac.delete_auth_user")
+async def rpc_rbac_delete_auth_user(data: dict, msg: RabbitMessage) -> dict:
+    data = data or {}
+
+    async def op(session: Any, user: Any) -> None:
+        user_id = _opt_int(data, "user_id")
+        if user_id is None:
+            raise HTTPException(status_code=422, detail="user_id is required")
+        await rbac_flows.delete_auth_user(session, user, user_id)
 
     return await _with_active_user(data.get("access_token"), op)
 

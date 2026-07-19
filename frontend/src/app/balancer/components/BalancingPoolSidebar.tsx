@@ -90,7 +90,7 @@ function BulkStatusMenu({
           variant="outline"
           size="sm"
           disabled={disabled}
-          className="h-7 rounded-lg border-white/10 bg-black/15 px-2 text-[11px] text-white/70 hover:bg-white/5 hover:text-white"
+          className="h-7 rounded-lg border-[color:var(--aqt-border-2)] bg-black/15 px-2 text-[11px] text-[color:var(--aqt-fg-muted)] hover:bg-white/5 hover:text-[color:var(--aqt-fg)]"
         >
           <Tag className="mr-1 h-3 w-3" />
           Status
@@ -309,22 +309,22 @@ export const BalancingPoolSidebar = forwardRef<BalancingPoolSidebarHandle, Balan
             type="button"
             variant="ghost"
             size="icon"
-            className="h-9 w-9 rounded-xl border border-white/8 bg-black/15 text-white/60 hover:bg-white/5 hover:text-white"
+            className="h-9 w-9 rounded-xl border border-[color:var(--aqt-border)] bg-black/15 text-[color:var(--aqt-fg-muted)] hover:bg-white/5 hover:text-[color:var(--aqt-fg)]"
             onClick={onToggleCollapsed}
           >
             <PanelLeftOpen className="h-4 w-4" />
             <span className="sr-only">Expand Balancing Pool sidebar</span>
           </Button>
           <div className="flex flex-1 flex-col items-center gap-2 pt-1">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/8 bg-black/15 text-white/70">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-[color:var(--aqt-border)] bg-black/15 text-[color:var(--aqt-fg-muted)]">
               <Columns3 className="h-4 w-4" />
             </div>
-            <div className="text-center text-[10px] uppercase tracking-[0.16em] text-white/30 [writing-mode:vertical-rl]">
+            <div className="text-center text-[10px] uppercase tracking-[0.16em] text-[color:var(--aqt-fg-dim)] [writing-mode:vertical-rl]">
               Pool
             </div>
           </div>
           <div className="flex flex-col items-center gap-1.5">
-            <div className="rounded-lg border border-white/8 bg-black/15 px-2 py-1 text-[10px] text-white/55">
+            <div className="rounded-lg border border-[color:var(--aqt-border)] bg-black/15 px-2 py-1 text-[10px] text-[color:var(--aqt-fg-muted)]">
               {poolPlayers.length}
             </div>
             {invalidPlayers.length > 0 ? (
@@ -341,10 +341,10 @@ export const BalancingPoolSidebar = forwardRef<BalancingPoolSidebarHandle, Balan
       <div className={cn(PANEL_CLASS, "flex min-h-0 flex-col p-4")}>
         <div className="mb-2 flex items-center justify-between gap-2">
           <div>
-            <div className="text-[11px] uppercase tracking-[0.16em] text-white/28">
+            <div className="text-[11px] uppercase tracking-[0.16em] text-[color:var(--aqt-fg-faint)]">
               Balancing Pool
             </div>
-            <div className="mt-1 text-sm text-white/72">
+            <div className="mt-1 text-sm text-[color:var(--aqt-fg-muted)]">
               {poolPlayers.length} players
             </div>
           </div>
@@ -354,7 +354,7 @@ export const BalancingPoolSidebar = forwardRef<BalancingPoolSidebarHandle, Balan
                 type="button"
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8 rounded-lg border border-white/8 bg-black/15 text-white/55 hover:bg-white/5 hover:text-white"
+                className="h-8 w-8 rounded-lg border border-[color:var(--aqt-border)] bg-black/15 text-[color:var(--aqt-fg-muted)] hover:bg-white/5 hover:text-[color:var(--aqt-fg)]"
                 title="Pool rank-delta settings"
                 onClick={() => setConfigDialogOpen(true)}
               >
@@ -366,7 +366,7 @@ export const BalancingPoolSidebar = forwardRef<BalancingPoolSidebarHandle, Balan
               type="button"
               variant="ghost"
               size="sm"
-              className="h-8 rounded-lg border border-white/8 bg-black/15 px-2 text-[11px] text-white/60 hover:bg-white/5 hover:text-white"
+              className="h-8 rounded-lg border border-[color:var(--aqt-border)] bg-black/15 px-2 text-[11px] text-[color:var(--aqt-fg-muted)] hover:bg-white/5 hover:text-[color:var(--aqt-fg)]"
               onClick={onToggleCollapsed}
             >
               <PanelLeftClose className="mr-1 h-3.5 w-3.5" />
@@ -419,7 +419,7 @@ export const BalancingPoolSidebar = forwardRef<BalancingPoolSidebarHandle, Balan
 
           {/* Pool / Add mode toggle */}
           <div className="flex items-center justify-between">
-            <div className="flex rounded-lg border border-white/8 bg-black/15 p-0.5">
+            <div className="flex rounded-lg border border-[color:var(--aqt-border)] bg-black/15 p-0.5">
               <button
                 type="button"
                 onClick={() => {
@@ -429,8 +429,8 @@ export const BalancingPoolSidebar = forwardRef<BalancingPoolSidebarHandle, Balan
                 className={cn(
                   "rounded-md px-2.5 py-1 text-[11px] font-medium transition",
                   sidebarSearchMode === "default"
-                    ? "bg-white/10 text-white"
-                    : "text-white/45 hover:text-white/70",
+                    ? "bg-white/10 text-[color:var(--aqt-fg)]"
+                    : "text-[color:var(--aqt-fg-dim)] hover:text-[color:var(--aqt-fg-muted)]",
                 )}
               >
                 Pool
@@ -444,8 +444,8 @@ export const BalancingPoolSidebar = forwardRef<BalancingPoolSidebarHandle, Balan
                 className={cn(
                   "rounded-md px-2.5 py-1 text-[11px] font-medium transition",
                   sidebarSearchMode === "applications"
-                    ? "bg-white/10 text-white"
-                    : "text-white/45 hover:text-white/70",
+                    ? "bg-white/10 text-[color:var(--aqt-fg)]"
+                    : "text-[color:var(--aqt-fg-dim)] hover:text-[color:var(--aqt-fg-muted)]",
                 )}
               >
                 Add{addableApplications.length > 0 ? ` (${addableApplications.length})` : ""}
@@ -457,13 +457,13 @@ export const BalancingPoolSidebar = forwardRef<BalancingPoolSidebarHandle, Balan
                 variant="ghost"
                 size="sm"
                 disabled={allPlayerValidationStates.length === 0}
-                className="h-7 rounded-lg border border-white/8 bg-black/15 px-2 text-[11px] text-white/55 hover:bg-white/5 hover:text-white"
+                className="h-7 rounded-lg border border-[color:var(--aqt-border)] bg-black/15 px-2 text-[11px] text-[color:var(--aqt-fg-muted)] hover:bg-white/5 hover:text-[color:var(--aqt-fg)]"
                 onClick={() => setIsTriageBoardOpen(true)}
               >
                 <Columns3 className="mr-1 h-3 w-3" />
                 Board
               </Button>
-              <span className="text-[10px] text-white/30">
+              <span className="text-[10px] text-[color:var(--aqt-fg-dim)]">
                 {addableApplications.length} available
               </span>
             </div>
@@ -484,25 +484,25 @@ export const BalancingPoolSidebar = forwardRef<BalancingPoolSidebarHandle, Balan
                   className={cn(
                     "rounded-lg px-2.5 py-1.5 text-xs font-medium transition",
                     isActive
-                      ? "bg-white/10 text-white"
-                      : "bg-white/3 text-white/45 hover:bg-white/6 hover:text-white/80",
+                      ? "bg-white/10 text-[color:var(--aqt-fg)]"
+                      : "bg-white/3 text-[color:var(--aqt-fg-dim)] hover:bg-white/6 hover:text-[color:var(--aqt-fg)]",
                   )}
                 >
                   {option.label}
-                  <span className="ml-1 text-[10px] text-white/30">{option.count}</span>
+                  <span className="ml-1 text-[10px] text-[color:var(--aqt-fg-dim)]">{option.count}</span>
                 </button>
               );
             })}
-            <span className="ml-auto text-[10px] text-white/30">
+            <span className="ml-auto text-[10px] text-[color:var(--aqt-fg-dim)]">
               {filteredPoolPlayerStates.length} / {sidebarPlayerCount}
             </span>
           </div>
 
           {sidebarSearchMode === "default" ? (
-            <div className="flex flex-wrap items-center gap-1.5 rounded-xl border border-white/8 bg-black/15 p-1.5">
+            <div className="flex flex-wrap items-center gap-1.5 rounded-xl border border-[color:var(--aqt-border)] bg-black/15 p-1.5">
               {selectedCount > 0 ? (
                 <>
-                  <div className="flex items-center gap-1.5 px-1.5 text-[11px] font-medium text-white/75">
+                  <div className="flex items-center gap-1.5 px-1.5 text-[11px] font-medium text-[color:var(--aqt-fg-muted)]">
                     <Check className="h-3.5 w-3.5 text-cyan-200" />
                     {selectedCount} selected
                   </div>
@@ -511,7 +511,7 @@ export const BalancingPoolSidebar = forwardRef<BalancingPoolSidebarHandle, Balan
                     variant="outline"
                     size="sm"
                     disabled={quickActionsDisabled || !onBulkPoolMembership}
-                    className="h-7 rounded-lg border-white/10 bg-black/15 px-2 text-[11px] text-white/70 hover:bg-white/5 hover:text-white"
+                    className="h-7 rounded-lg border-[color:var(--aqt-border-2)] bg-black/15 px-2 text-[11px] text-[color:var(--aqt-fg-muted)] hover:bg-white/5 hover:text-[color:var(--aqt-fg)]"
                     onClick={() => runBulkPoolMembership(true)}
                   >
                     <PlusCircle className="mr-1 h-3 w-3" />
@@ -522,7 +522,7 @@ export const BalancingPoolSidebar = forwardRef<BalancingPoolSidebarHandle, Balan
                     variant="outline"
                     size="sm"
                     disabled={quickActionsDisabled || !onBulkPoolMembership}
-                    className="h-7 rounded-lg border-white/10 bg-black/15 px-2 text-[11px] text-white/70 hover:bg-white/5 hover:text-white"
+                    className="h-7 rounded-lg border-[color:var(--aqt-border-2)] bg-black/15 px-2 text-[11px] text-[color:var(--aqt-fg-muted)] hover:bg-white/5 hover:text-[color:var(--aqt-fg)]"
                     onClick={() => runBulkPoolMembership(false)}
                   >
                     <ShieldX className="mr-1 h-3 w-3" />
@@ -537,7 +537,7 @@ export const BalancingPoolSidebar = forwardRef<BalancingPoolSidebarHandle, Balan
                     type="button"
                     variant="ghost"
                     size="icon"
-                    className="ml-auto h-7 w-7 rounded-lg border border-white/8 bg-black/15 text-white/45 hover:bg-white/5 hover:text-white"
+                    className="ml-auto h-7 w-7 rounded-lg border border-[color:var(--aqt-border)] bg-black/15 text-[color:var(--aqt-fg-dim)] hover:bg-white/5 hover:text-[color:var(--aqt-fg)]"
                     onClick={clearSelection}
                   >
                     <X className="h-3.5 w-3.5" />
@@ -546,13 +546,13 @@ export const BalancingPoolSidebar = forwardRef<BalancingPoolSidebarHandle, Balan
                 </>
               ) : (
                 <>
-                  <span className="px-1.5 text-[11px] text-white/35">Select players for bulk actions</span>
+                  <span className="px-1.5 text-[11px] text-[color:var(--aqt-fg-dim)]">Select players for bulk actions</span>
                   <Button
                     type="button"
                     variant="ghost"
                     size="sm"
                     disabled={filteredPoolPlayerStates.length === 0}
-                    className="ml-auto h-7 rounded-lg border border-white/8 bg-black/15 px-2 text-[11px] text-white/45 hover:bg-white/5 hover:text-white"
+                    className="ml-auto h-7 rounded-lg border border-[color:var(--aqt-border)] bg-black/15 px-2 text-[11px] text-[color:var(--aqt-fg-dim)] hover:bg-white/5 hover:text-[color:var(--aqt-fg)]"
                     onClick={selectVisiblePlayers}
                   >
                     Select visible
@@ -577,14 +577,14 @@ export const BalancingPoolSidebar = forwardRef<BalancingPoolSidebarHandle, Balan
                       className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition hover:bg-white/5 disabled:opacity-50"
                     >
                       <Plus className="h-3.5 w-3.5 shrink-0 text-primary" />
-                      <span className="min-w-0 flex-1 truncate text-sm text-white/80">{application.battle_tag}</span>
-                      <span className="shrink-0 text-[10px] text-white/30">Include</span>
+                      <span className="min-w-0 flex-1 truncate text-sm text-[color:var(--aqt-fg)]">{application.battle_tag}</span>
+                      <span className="shrink-0 text-[10px] text-[color:var(--aqt-fg-dim)]">Include</span>
                     </button>
                   ))
                 ) : (
                   <div className="flex flex-col items-center justify-center gap-1.5 py-10 text-center">
-                    <p className="text-sm font-medium text-white/50">No available registrations</p>
-                    <p className="text-xs text-white/30">All approved registrations are already in the pool.</p>
+                    <p className="text-sm font-medium text-[color:var(--aqt-fg-muted)]">No available registrations</p>
+                    <p className="text-xs text-[color:var(--aqt-fg-dim)]">All approved registrations are already in the pool.</p>
                   </div>
                 )}
               </div>

@@ -1,11 +1,12 @@
+import { useTranslations } from "next-intl";
+
 import type { RegistrationForm } from "@/types/registration.types";
 import type { SocialAccount } from "@/types/user.types";
-import { useTranslation } from "@/i18n/LanguageContext";
 import AccountCombobox from "./AccountCombobox";
 import VerifiedAccountSelect from "./VerifiedAccountSelect";
 import SmurfTagsInput from "./SmurfTagsInput";
 import FieldLabel from "./FieldLabel";
-import { UserRound } from "lucide-react";
+import { ArrowRight, Link2, UserRound } from "lucide-react";
 
 interface AccountStepProps {
   values: Record<string, string>;
@@ -24,6 +25,8 @@ interface AccountStepProps {
   accounts?: readonly SocialAccount[];
   /** Per-field `require_verified` errors, computed by the parent. */
   verifiedErrors?: Record<string, string | null>;
+  /** Public mode only: open profile settings so the user can link accounts. */
+  onLinkAccounts?: () => void;
 }
 
 export default function AccountStep({
@@ -41,8 +44,9 @@ export default function AccountStep({
   onDisplayNameChange,
   accounts = [],
   verifiedErrors = {},
+  onLinkAccounts,
 }: AccountStepProps) {
-  const { t } = useTranslation();
+  const t = useTranslations();
   const fields = form.built_in_fields;
   const showBattleTag = fields?.battle_tag?.enabled !== false;
   const showSmurfTags = fields?.smurf_tags?.enabled !== false;
@@ -56,15 +60,37 @@ export default function AccountStep({
   return (
     <div className="grid gap-4">
       <div className="space-y-1">
-        <h3 className="text-xs font-medium uppercase tracking-[0.14em] text-white/55">
+        <h3 className="text-xs font-medium uppercase tracking-[0.14em] text-[color:var(--aqt-fg-muted)]">
           {mode === "admin" ? "Identity and Contact Handles" : t("registration.accounts.title")}
         </h3>
-        <p className="text-xs leading-5 text-white/42">
+        <p className="text-xs leading-5 text-[color:var(--aqt-fg-dim)]">
           {mode === "admin"
             ? "Only the registration identity fields that matter in admin editing."
             : t("registration.accounts.desc")}
         </p>
       </div>
+
+      {mode === "public" && accounts.length === 0 && onLinkAccounts && (
+        <button
+          type="button"
+          onClick={onLinkAccounts}
+          className="flex w-full items-start gap-3 rounded-lg border border-[color:var(--aqt-border-2)] bg-white/3 p-3 text-left transition-colors hover:bg-white/6"
+        >
+          <Link2 className="mt-0.5 size-4 shrink-0 text-[color:var(--aqt-fg-muted)]" />
+          <div className="space-y-0.5">
+            <div className="text-sm font-medium text-[color:var(--aqt-fg)]">
+              {t("registration.accounts.noAccountsHint")}
+            </div>
+            <div className="text-xs leading-5 text-[color:var(--aqt-fg-dim)]">
+              {t("registration.accounts.noAccountsHintDesc")}
+            </div>
+            <div className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-[color:var(--aqt-fg)]">
+              {t("registration.accounts.noAccountsHintCta")}
+              <ArrowRight className="size-3" />
+            </div>
+          </div>
+        </button>
+      )}
 
       {mode === "admin" && onDisplayNameChange && (
         <div className="space-y-1.5">
@@ -74,7 +100,7 @@ export default function AccountStep({
             placeholder="Display name"
             value={displayName ?? ""}
             onChange={(e) => onDisplayNameChange(e.target.value)}
-            className="h-9 w-full rounded-lg border border-white/10 bg-white/3 px-3 text-sm text-white placeholder-white/30 outline-none transition-colors focus:border-white/20"
+            className="h-9 w-full rounded-lg border border-[color:var(--aqt-border-2)] bg-white/3 px-3 text-sm text-[color:var(--aqt-fg)] placeholder-white/30 outline-none transition-colors focus:border-[color:var(--aqt-border-2)]"
           />
         </div>
       )}
@@ -133,7 +159,7 @@ export default function AccountStep({
         ) : (
           <AccountCombobox
             label={t("registration.accounts.discord")}
-            placeholder="username"
+            placeholder={t("registration.accounts.discordPlaceholder")}
             value={values.discord_nick ?? ""}
             onChange={(v) => onUpdate("discord_nick", v)}
             suggestions={discordSuggestions}
@@ -160,7 +186,7 @@ export default function AccountStep({
         ) : (
           <AccountCombobox
             label={t("registration.accounts.twitch")}
-            placeholder="channel_name"
+            placeholder={t("registration.accounts.twitchPlaceholder")}
             value={values.twitch_nick ?? ""}
             onChange={(v) => onUpdate("twitch_nick", v)}
             suggestions={twitchSuggestions}

@@ -36,6 +36,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/components/ui/number-input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -1061,14 +1062,14 @@ export function TournamentMatchesTab({
 
           <div>
             <Label htmlFor="workspace-encounter-round">Round</Label>
-            <Input
+            <NumberInput
               id="workspace-encounter-round"
-              type="number"
+              integer
               value={encounterFormData.round}
-              onChange={(event) =>
+              onValueChange={(next) =>
                 setEncounterFormData((current) => ({
                   ...current,
-                  round: event.target.value ? Number(event.target.value) : 1
+                  round: next ?? 1
                 }))
               }
             />
@@ -1139,75 +1140,73 @@ export function TournamentMatchesTab({
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <div>
             <Label htmlFor="workspace-standing-position">Position</Label>
-            <Input
+            <NumberInput
               id="workspace-standing-position"
-              type="number"
-              min="1"
+              integer
+              min={1}
               value={standingFormData.position}
-              onChange={(event) =>
+              onValueChange={(next) =>
                 setStandingFormData((current) => ({
                   ...current,
-                  position: event.target.value ? Number(event.target.value) : 0
+                  position: next ?? 0
                 }))
               }
             />
           </div>
           <div>
             <Label htmlFor="workspace-standing-points">Points</Label>
-            <Input
+            <NumberInput
               id="workspace-standing-points"
-              type="number"
-              step="0.1"
               value={standingFormData.points}
-              onChange={(event) =>
+              onValueChange={(next) =>
                 setStandingFormData((current) => ({
                   ...current,
-                  points: event.target.value ? Number(event.target.value) : 0
+                  points: next ?? 0
                 }))
               }
             />
           </div>
           <div>
             <Label htmlFor="workspace-standing-win">Wins</Label>
-            <Input
+            <NumberInput
               id="workspace-standing-win"
-              type="number"
-              min="0"
+              integer
+              min={0}
               value={standingFormData.win}
-              onChange={(event) =>
+              onValueChange={(next) =>
                 setStandingFormData((current) => ({
                   ...current,
-                  win: event.target.value ? Number(event.target.value) : 0
+                  win: next ?? 0
                 }))
               }
             />
           </div>
           <div>
             <Label htmlFor="workspace-standing-draw">Draws</Label>
-            <Input
+            <NumberInput
               id="workspace-standing-draw"
-              type="number"
-              min="0"
+              integer
+              min={0}
               value={standingFormData.draw}
-              onChange={(event) =>
+              onValueChange={(next) =>
                 setStandingFormData((current) => ({
                   ...current,
-                  draw: event.target.value ? Number(event.target.value) : 0
+                  draw: next ?? 0
                 }))
               }
             />
           </div>
           <div>
             <Label htmlFor="workspace-standing-lose">Losses</Label>
-            <Input
+            <NumberInput
               id="workspace-standing-lose"
-              type="number"
-              min="0"
+              integer
+              min={0}
               value={standingFormData.lose}
-              onChange={(event) =>
+              onValueChange={(next) =>
                 setStandingFormData((current) => ({
                   ...current,
-                  lose: event.target.value ? Number(event.target.value) : 0
+                  lose: next ?? 0
                 }))
               }
             />

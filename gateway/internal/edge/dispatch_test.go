@@ -3,12 +3,14 @@ package edge
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/rpc"
 )
@@ -70,7 +72,7 @@ func TestDispatch_TypedSuccess(t *testing.T) {
 func TestDispatch_GenericCrudUpdate(t *testing.T) {
 	m := &mockCaller{reply: []byte(`{"ok":true,"data":{"id":5,"name":"X"}}`)}
 	identity := map[string]any{"user_id": 1.0, "is_superuser": true}
-	d := newTestDispatcher(m, func(*http.Request) (map[string]any, bool) { return identity, true })
+	d := newTestDispatcher(m, func(*http.Request) (map[string]any, bool, error) { return identity, true, nil })
 	spec := RouteSpec{
 		Method: "PATCH", Pattern: "/api/v1/admin/teams/{id}", Queue: "rpc.tournament.admin.update",
 		Entity: "team", Action: "update", IDParam: "id", Body: true, Auth: AuthRequired,
@@ -97,11 +99,52 @@ func TestDispatch_GenericCrudUpdate(t *testing.T) {
 
 func TestDispatch_AuthRequiredNoIdentity(t *testing.T) {
 	m := &mockCaller{}
-	d := newTestDispatcher(m, func(*http.Request) (map[string]any, bool) { return nil, false })
+	d := newTestDispatcher(m, func(*http.Request) (map[string]any, bool, error) { return nil, false, nil })
 	spec := RouteSpec{Method: "GET", Pattern: "/api/v1/admin/x", Queue: "q", Auth: AuthRequired}
 	w := serve(d, spec, "GET", "/api/v1/admin/x", "")
 	if w.Code != 401 {
 		t.Fatalf("code=%d", w.Code)
+	}
+	if m.calls != 0 {
+		t.Fatalf("rpc must not be called, calls=%d", m.calls)
+	}
+}
+
+// TestDispatch_IdentityUnavailable_503WithRetryAfter is the regression for the
+// finding: when the identity backend is unavailable (bulkhead shed,
+// disconnected, or timed out), the dispatcher must surface a 503 with
+// Retry-After, never a 401 — and must never call the route's own RPC.
+func TestDispatch_IdentityUnavailable_503WithRetryAfter(t *testing.T) {
+	m := &mockCaller{}
+	resolverErr := fmt.Errorf("rpc to %q: %w", "rpc.identity.validate_token", rpc.ErrOverloaded)
+	d := newTestDispatcher(m, func(*http.Request) (map[string]any, bool, error) { return nil, false, resolverErr })
+	spec := RouteSpec{Method: "GET", Pattern: "/api/v1/admin/x", Queue: "q", Auth: AuthRequired}
+	w := serve(d, spec, "GET", "/api/v1/admin/x", "")
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("code=%d, want 503", w.Code)
+	}
+	if got := w.Header().Get("Retry-After"); got != "1" {
+		t.Fatalf("Retry-After=%q, want \"1\"", got)
+	}
+	if m.calls != 0 {
+		t.Fatalf("rpc must not be called, calls=%d", m.calls)
+	}
+}
+
+// TestDispatch_IdentityUnavailable_AuthOptional_503 asserts the same 503
+// behavior holds for AuthOptional routes — an unavailable identity backend is
+// still a 503, not a silent fall-through to anonymous.
+func TestDispatch_IdentityUnavailable_AuthOptional_503(t *testing.T) {
+	m := &mockCaller{}
+	resolverErr := fmt.Errorf("rpc to %q: %w", "rpc.identity.validate_token", rpc.ErrOverloaded)
+	d := newTestDispatcher(m, func(*http.Request) (map[string]any, bool, error) { return nil, false, resolverErr })
+	spec := RouteSpec{Method: "GET", Pattern: "/api/v1/x", Queue: "q", Auth: AuthOptional}
+	w := serve(d, spec, "GET", "/api/v1/x", "")
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("code=%d, want 503", w.Code)
+	}
+	if got := w.Header().Get("Retry-After"); got != "1" {
+		t.Fatalf("Retry-After=%q, want \"1\"", got)
 	}
 	if m.calls != 0 {
 		t.Fatalf("rpc must not be called, calls=%d", m.calls)
@@ -130,6 +173,24 @@ func TestDispatch_RPCUnavailable(t *testing.T) {
 	w := serve(d, spec, "GET", "/x", "")
 	if w.Code != 503 {
 		t.Fatalf("code=%d", w.Code)
+	}
+}
+
+// TestDispatch_ClientCanceled_NoTimeout is the regression for OWT-TOURNAMENTS-20K:
+// when the caller disconnects mid-RPC, rpc.Call returns context.Canceled. The
+// dispatcher must not treat that as a service fault — no 504 (the client is
+// gone) and no Error-level log (which would open a Sentry Issue). We can only
+// assert the response side here: it must not emit a gateway timeout.
+func TestDispatch_ClientCanceled_NoTimeout(t *testing.T) {
+	m := &mockCaller{err: fmt.Errorf("rpc to %q: %w", "q", context.Canceled)}
+	d := newTestDispatcher(m, nil)
+	spec := RouteSpec{Method: "GET", Pattern: "/x", Queue: "q", Auth: AuthNone}
+	w := serve(d, spec, "GET", "/x", "")
+	if w.Code == http.StatusGatewayTimeout {
+		t.Fatalf("client cancellation must not produce a 504")
+	}
+	if w.Body.Len() != 0 {
+		t.Fatalf("client cancellation must not write a body, got %q", w.Body.String())
 	}
 }
 
@@ -183,5 +244,82 @@ func TestDispatch_NullData_WritesLiteralNull(t *testing.T) {
 	}
 	if ct := w.Header().Get("Content-Type"); ct != "application/json" {
 		t.Fatalf("content-type=%q", ct)
+	}
+}
+
+func TestDispatch_Overloaded_503WithRetryAfter(t *testing.T) {
+	m := &mockCaller{err: fmt.Errorf("rpc to %q: %w", "q", rpc.ErrOverloaded)}
+	d := newTestDispatcher(m, nil)
+	spec := RouteSpec{Method: "GET", Pattern: "/x", Queue: "q", Auth: AuthNone}
+	w := serve(d, spec, "GET", "/x", "")
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("code=%d, want 503", w.Code)
+	}
+	if got := w.Header().Get("Retry-After"); got != "1" {
+		t.Fatalf("Retry-After=%q, want \"1\"", got)
+	}
+}
+
+func TestDispatch_Unavailable_HasRetryAfter(t *testing.T) {
+	m := &mockCaller{err: rpc.ErrNotConnected}
+	d := newTestDispatcher(m, nil)
+	spec := RouteSpec{Method: "GET", Pattern: "/x", Queue: "q", Auth: AuthNone}
+	w := serve(d, spec, "GET", "/x", "")
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("code=%d, want 503", w.Code)
+	}
+	if got := w.Header().Get("Retry-After"); got != "1" {
+		t.Fatalf("Retry-After=%q, want \"1\"", got)
+	}
+}
+
+// deadlineCaller records the context deadline the dispatcher applied to the RPC.
+type deadlineCaller struct {
+	reply    []byte
+	deadline time.Time
+	hasDL    bool
+}
+
+func (m *deadlineCaller) Call(ctx context.Context, _ string, _ []byte) ([]byte, error) {
+	m.deadline, m.hasDL = ctx.Deadline()
+	return m.reply, nil
+}
+
+// TestDispatch_PerRouteTimeout asserts RouteSpec.Timeout overrides the blanket
+// 120s default for the RPC context deadline (which also drives the AMQP TTL +
+// x-deadline-ms propagation, see rpc/deadline.go), and that a zero Timeout
+// keeps the default.
+func TestDispatch_PerRouteTimeout(t *testing.T) {
+	cases := []struct {
+		name     string
+		timeout  time.Duration
+		min, max time.Duration
+	}{
+		{name: "override", timeout: 15 * time.Second, min: 10 * time.Second, max: 16 * time.Second},
+		{name: "default", timeout: 0, min: 115 * time.Second, max: defaultRPCTimeout + time.Second},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			m := &deadlineCaller{reply: []byte(`{"ok":true,"data":{}}`)}
+			d := New(m, slog.New(slog.NewTextHandler(io.Discard, nil)), nil)
+			spec := RouteSpec{Method: "GET", Pattern: "/api/v1/things", Queue: "rpc.q", Timeout: tc.timeout}
+
+			mux := http.NewServeMux()
+			d.Register(mux, []RouteSpec{spec})
+			start := time.Now()
+			w := httptest.NewRecorder()
+			mux.ServeHTTP(w, httptest.NewRequest("GET", "/api/v1/things", nil))
+
+			if w.Code != http.StatusOK {
+				t.Fatalf("status = %d", w.Code)
+			}
+			if !m.hasDL {
+				t.Fatal("rpc context must carry a deadline")
+			}
+			got := m.deadline.Sub(start)
+			if got < tc.min || got > tc.max {
+				t.Fatalf("deadline %v outside [%v, %v]", got, tc.min, tc.max)
+			}
+		})
 	}
 }

@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
+import { Loader2 } from "lucide-react";
 
 import { BracketView } from "@/components/BracketView";
 import StandingsTable from "@/components/StandingsTable";
@@ -10,24 +11,29 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { EncounterEditDialog } from "@/components/tournaments/EncounterEditDialog";
 import { MatchReportDialog } from "@/components/tournaments/MatchReportDialog";
 import { notify } from "@/lib/notify";
+import { getApiErrorMessage, isConfirmOwnSubmissionError } from "@/lib/api-error";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
 import { usePermissions } from "@/hooks/usePermissions";
 import captainService from "@/services/captain.service";
 import encounterService from "@/services/encounter.service";
-import tournamentService from "@/services/tournament.service";
 import type { Encounter } from "@/types/encounter.types";
 import type { Standings, Tournament, Stage, StageItem } from "@/types/tournament.types";
 
 import Link from "next/link";
 import { cn } from "@/lib/utils";
-import { useTranslation } from "@/i18n/LanguageContext";
+import { useTranslations } from "next-intl";
+import { TournamentPageState } from "../_components/TournamentPageState";
+import { TournamentBracketSkeleton } from "../_components/TournamentSkeletons";
+import styles from "../TournamentDetail.module.css";
+import { isTournamentStatusEnded } from "@/lib/tournament-status";
+import { createBracketQueryPlan, deriveBracketLoadState } from "./bracketData";
 
 const ADMIN_ROLES = new Set(["admin", "superadmin", "tournament_admin"]);
-const BRACKET_REFRESH_INTERVAL_MS = 60_000;
+
+export { getBracketRefetchInterval } from "./bracketData";
 
 interface TournamentBracketPageProps {
   tournament: Tournament;
-  stages: Stage[];
 }
 
 function GroupStagePanel({
@@ -35,20 +41,26 @@ function GroupStagePanel({
   stageItem,
   encounters,
   standings,
+  stages,
   onEdit,
   onReport,
+  onConfirm,
   canEdit,
   canReport,
+  canConfirm,
   bracketTabs
 }: {
   stage: Stage;
   stageItem?: StageItem;
   encounters: Encounter[];
   standings: Standings[];
+  stages: Stage[];
   onEdit?: (encounter: Encounter) => void;
   onReport?: (encounter: Encounter) => void;
+  onConfirm?: (encounter: Encounter) => void;
   canEdit?: (encounter: Encounter) => boolean;
   canReport?: (encounter: Encounter) => boolean;
+  canConfirm?: (encounter: Encounter) => boolean;
   bracketTabs?: Array<{
     key: string;
     href: string;
@@ -56,7 +68,7 @@ function GroupStagePanel({
     isActive: boolean;
   }>;
 }) {
-  const { t } = useTranslation();
+  const t = useTranslations();
   const hasStandings = standings.length > 0;
   const title = stageItem?.name ?? stage.name;
   const subtitle = stageItem
@@ -102,14 +114,14 @@ function GroupStagePanel({
           {hasStandings && (
             <TabsTrigger
               value="standings"
-              className="rounded-lg px-4 py-2 text-sm data-[state=active]:bg-[hsl(174_72%_46%/0.14)] data-[state=active]:text-[var(--aqt-teal)] data-[state=active]:shadow-none"
+              className="rounded-lg px-4 py-2 text-sm data-[state=active]:bg-[color:color-mix(in_srgb,var(--aqt-teal)_14%,transparent)] data-[state=active]:text-[var(--aqt-teal)] data-[state=active]:shadow-none"
             >
               {t("common.standings")}
             </TabsTrigger>
           )}
           <TabsTrigger
             value="matches"
-            className="rounded-lg px-4 py-2 text-sm data-[state=active]:bg-[hsl(174_72%_46%/0.14)] data-[state=active]:text-[var(--aqt-teal)] data-[state=active]:shadow-none"
+            className="rounded-lg px-4 py-2 text-sm data-[state=active]:bg-[color:color-mix(in_srgb,var(--aqt-teal)_14%,transparent)] data-[state=active]:text-[var(--aqt-teal)] data-[state=active]:shadow-none"
           >
             {t("common.bracket")}
           </TabsTrigger>
@@ -119,7 +131,7 @@ function GroupStagePanel({
       {hasStandings && (
         <TabsContent value="standings" className="mt-0">
           <div className="overflow-x-auto">
-            <StandingsTable standings={[...standings]} is_groups={true} />
+            <StandingsTable standings={standings} stages={stages} is_groups />
           </div>
         </TabsContent>
       )}
@@ -130,19 +142,17 @@ function GroupStagePanel({
           type={stage.stage_type}
           onEdit={onEdit}
           onReport={onReport}
+          onConfirm={onConfirm}
           canEdit={canEdit}
           canReport={canReport}
+          canConfirm={canConfirm}
         />
       </TabsContent>
     </Tabs>
   );
 }
 
-function getGroupScopeCount(stages: Stage[]) {
-  return stages.reduce((count, stage) => count + Math.max(stage.items.length, 1), 0);
-}
-
-export default function TournamentBracketPage({ tournament, stages }: TournamentBracketPageProps) {
+export default function TournamentBracketPage({ tournament }: TournamentBracketPageProps) {
   const searchParams = useSearchParams();
   const selectedStageParam = searchParams.get("stage");
   const viewParam = searchParams.get("view");
@@ -156,26 +166,109 @@ export default function TournamentBracketPage({ tournament, stages }: Tournament
       isWorkspaceAdmin(tournament.workspace_id) ||
       (authUser?.roles ?? []).some((r) => ADMIN_ROLES.has(r)));
 
-  const { t } = useTranslation();
+  const t = useTranslations();
   const [editEncounter, setEditEncounter] = useState<Encounter | null>(null);
   const [reportEncounter, setReportEncounter] = useState<Encounter | null>(null);
 
+  const initialQueryPlan = useMemo(
+    () => createBracketQueryPlan(tournament, selectedStageParam),
+    [selectedStageParam, tournament]
+  );
+  const stagesQuery = useQuery(initialQueryPlan.stages);
+  const queryPlan = useMemo(
+    () => createBracketQueryPlan(tournament, selectedStageParam, stagesQuery.data),
+    [selectedStageParam, stagesQuery.data, tournament]
+  );
+  const encountersQuery = useQuery(queryPlan.encounters);
+  const standingsQuery = useQuery(queryPlan.standings);
+  const stages = stagesQuery.data ?? [];
+
   const canEdit = isAdmin ? () => true : undefined;
   const canReport =
-    isAuthenticated && !isAdmin ? (enc: Encounter) => enc.result_status !== "confirmed" : undefined;
+    isAuthenticated && !isAdmin
+      ? (enc: Encounter) =>
+          enc.result_status === "none" || enc.result_status === "disputed"
+      : undefined;
   const handleEdit = isAdmin ? (enc: Encounter) => setEditEncounter(enc) : undefined;
   const handleReport =
     isAuthenticated && !isAdmin
       ? async (enc: Encounter) => {
           try {
-            const { side } = await captainService.getMyRole(enc.id);
-            if (side === null) {
+            const [fresh, role] = await Promise.all([
+              encounterService.getEncounter(enc.id),
+              captainService.getMyRole(enc.id)
+            ]);
+            if (fresh.result_status !== "none" && fresh.result_status !== "disputed") {
+              // The result was submitted/confirmed after this bracket data was
+              // cached; report is no longer valid. Tell the captain why, then
+              // refresh so the stale report action disappears.
+              const confirmed = fresh.result_status === "confirmed";
+              notify.error(
+                confirmed
+                  ? t("matchReport.alreadyConfirmedTitle")
+                  : t("matchReport.pendingSubmissionTitle"),
+                {
+                  description: confirmed
+                    ? t("matchReport.alreadyConfirmedBody")
+                    : t("matchReport.pendingSubmissionBody")
+                }
+              );
+              void encountersQuery.refetch();
+              return;
+            }
+            if (role.side === null) {
               notify.error(t("common.noAccess"), { description: t("common.notCaptain") });
               return;
             }
-            setReportEncounter(enc);
+            setReportEncounter(fresh);
           } catch {
             notify.error(t("common.error"), { description: t("common.roleVerificationFailed") });
+          }
+        }
+      : undefined;
+
+  const canConfirm =
+    isAuthenticated && !isAdmin
+      ? (enc: Encounter) => enc.result_status === "pending_confirmation"
+      : undefined;
+  const handleConfirm =
+    isAuthenticated && !isAdmin
+      ? async (enc: Encounter) => {
+          try {
+            const [fresh, role] = await Promise.all([
+              encounterService.getEncounter(enc.id),
+              captainService.getMyRole(enc.id)
+            ]);
+            if (fresh.result_status !== "pending_confirmation") {
+              // Bracket data was stale — nothing pending to confirm anymore.
+              notify.error(t("matchReport.nothingToConfirmTitle"), {
+                description: t("matchReport.nothingToConfirmBody")
+              });
+              void encountersQuery.refetch();
+              return;
+            }
+            if (role.side === null) {
+              notify.error(t("common.noAccess"), { description: t("common.notCaptain") });
+              return;
+            }
+            await captainService.confirmResult(enc.id);
+            notify.success(t("matchReport.confirmedSuccess"));
+            // The encounter status flips synchronously, so refetch it now for
+            // instant feedback. Standings are rebuilt by an async recalc job —
+            // they refresh via the realtime `results_changed` event once the job
+            // finishes; refetching here would only re-fetch pre-recalc rows.
+            await encountersQuery.refetch();
+          } catch (error) {
+            if (isConfirmOwnSubmissionError(error)) {
+              notify.error(t("matchReport.cannotConfirmOwnTitle"), {
+                description: t("matchReport.cannotConfirmOwnBody")
+              });
+              return;
+            }
+            notify.apiError(error, {
+              title: t("matchReport.confirmErrorMessage"),
+              description: getApiErrorMessage(error)
+            });
           }
         }
       : undefined;
@@ -191,8 +284,7 @@ export default function TournamentBracketPage({ tournament, stages }: Tournament
 
   const activeStage = stages.find((stage) => stage.is_active);
   const fallbackStage = activeStage ?? eliminationStages[0] ?? stages[0];
-  const requestedStageId = selectedStageParam ? Number(selectedStageParam) : null;
-  const requestedStage = stages.find((stage) => stage.id === requestedStageId);
+  const requestedStage = stages.find((stage) => stage.id === queryPlan.initialStageId);
   const primaryStage = requestedStage ?? fallbackStage;
   const shouldShowGroupStage =
     viewParam === "groups" ||
@@ -223,7 +315,7 @@ export default function TournamentBracketPage({ tournament, stages }: Tournament
       0
     );
 
-    const activeStageId = selectedStageParam ? Number(selectedStageParam) : fallbackStage?.id;
+    const activeStageId = queryPlan.initialStageId ?? fallbackStage?.id;
 
     const isGroupViewActive =
       viewParam === "groups" ||
@@ -266,34 +358,14 @@ export default function TournamentBracketPage({ tournament, stages }: Tournament
     groupStages,
     eliminationStages,
     fallbackStage?.id,
-    selectedStageParam,
+    queryPlan.initialStageId,
     viewParam,
     tournament.id,
     t
   ]);
 
-  const { data: allEncounters } = useQuery({
-    queryKey: ["encounters", "tournament", tournament.id, tournament.workspace_id],
-    queryFn: () =>
-      encounterService.getAll(
-        1,
-        "",
-        tournament.id,
-        -1,
-        undefined,
-        undefined,
-        tournament.workspace_id
-      ),
-    refetchInterval: BRACKET_REFRESH_INTERVAL_MS,
-    refetchIntervalInBackground: true
-  });
-
-  const { data: allStandings = [] } = useQuery({
-    queryKey: ["standings", tournament.id, tournament.workspace_id],
-    queryFn: () => tournamentService.getStandings(tournament.id, tournament.workspace_id),
-    refetchInterval: BRACKET_REFRESH_INTERVAL_MS,
-    refetchIntervalInBackground: true
-  });
+  const allEncounters = encountersQuery.data;
+  const allStandings = standingsQuery.data ?? [];
 
   const groupStagePanels = useMemo(() => {
     const encounters = allEncounters?.results ?? [];
@@ -346,8 +418,56 @@ export default function TournamentBracketPage({ tournament, stages }: Tournament
     [allStandings]
   );
 
-  return (
-    <div className="space-y-5">
+  const retryQueries = () => {
+    const requests: Array<Promise<unknown>> = [stagesQuery.refetch()];
+    if (queryPlan.initialStageId != null) {
+      requests.push(encountersQuery.refetch(), standingsQuery.refetch());
+    }
+    void Promise.all(requests);
+  };
+  const loadState = deriveBracketLoadState({
+    hasStageId: queryPlan.initialStageId != null,
+    stages: {
+      hasData: stagesQuery.data !== undefined,
+      isPending: stagesQuery.isPending,
+      isError: stagesQuery.isError,
+      isFetching: stagesQuery.isFetching
+    },
+    encounters: {
+      hasData: encountersQuery.data !== undefined,
+      isPending: encountersQuery.isPending,
+      isError: encountersQuery.isError,
+      isFetching: encountersQuery.isFetching
+    },
+    standings: {
+      hasData: standingsQuery.data !== undefined,
+      isPending: standingsQuery.isPending,
+      isError: standingsQuery.isError,
+      isFetching: standingsQuery.isFetching
+    }
+  });
+
+  if (loadState.kind === "initial-error") {
+    return <TournamentPageState state="initial-error" onRetry={retryQueries} />;
+  }
+
+  if (loadState.kind === "initial-loading") {
+    return <TournamentBracketSkeleton />;
+  }
+
+  const content = (
+    <div className={styles.publicDataPage} data-page-section="bracket">
+      {loadState.isUpdating && loadState.kind !== "refresh-error" ? (
+        <span
+          className={styles.updatingBadge}
+          role="status"
+          aria-live="polite"
+          aria-label={t("tournamentDetail.pageState.updating")}
+          title={t("tournamentDetail.pageState.updating")}
+        >
+          <Loader2 className="size-4 animate-spin motion-reduce:animate-none" aria-hidden />
+        </span>
+      ) : null}
       {activeStages.length > 0 ? (
         <div className="space-y-6">
           {shouldShowGroupStage
@@ -358,10 +478,13 @@ export default function TournamentBracketPage({ tournament, stages }: Tournament
                   stageItem={panel.stageItem}
                   encounters={panel.encounters}
                   standings={panel.standings}
+                  stages={stages}
                   onEdit={handleEdit}
                   onReport={handleReport}
+                  onConfirm={handleConfirm}
                   canEdit={canEdit}
                   canReport={canReport}
+                  canConfirm={canConfirm}
                   bracketTabs={index === 0 ? bracketTabs : undefined}
                 />
               ))
@@ -422,14 +545,14 @@ export default function TournamentBracketPage({ tournament, stages }: Tournament
                         {hasPlayoffStandings && (
                           <TabsTrigger
                             value="standings"
-                            className="rounded-lg px-4 py-2 text-sm data-[state=active]:bg-[hsl(174_72%_46%/0.14)] data-[state=active]:text-[var(--aqt-teal)] data-[state=active]:shadow-none"
+                            className="rounded-lg px-4 py-2 text-sm data-[state=active]:bg-[color:color-mix(in_srgb,var(--aqt-teal)_14%,transparent)] data-[state=active]:text-[var(--aqt-teal)] data-[state=active]:shadow-none"
                           >
                             {t("common.standings")}
                           </TabsTrigger>
                         )}
                         <TabsTrigger
                           value="bracket"
-                          className="rounded-lg px-4 py-2 text-sm data-[state=active]:bg-[hsl(174_72%_46%/0.14)] data-[state=active]:text-[var(--aqt-teal)] data-[state=active]:shadow-none"
+                          className="rounded-lg px-4 py-2 text-sm data-[state=active]:bg-[color:color-mix(in_srgb,var(--aqt-teal)_14%,transparent)] data-[state=active]:text-[var(--aqt-teal)] data-[state=active]:shadow-none"
                         >
                           {t("common.bracket")}
                         </TabsTrigger>
@@ -440,8 +563,10 @@ export default function TournamentBracketPage({ tournament, stages }: Tournament
                       <TabsContent value="standings" className="mt-0">
                         <div className="overflow-x-auto">
                           <StandingsTable
-                            standings={[...stagePlayoffStandings]}
+                            standings={stagePlayoffStandings}
+                            stages={stages}
                             is_groups={false}
+                            crownTop={isTournamentStatusEnded(tournament.status)}
                           />
                         </div>
                       </TabsContent>
@@ -458,8 +583,10 @@ export default function TournamentBracketPage({ tournament, stages }: Tournament
                           type={stage.stage_type}
                           onEdit={handleEdit}
                           onReport={handleReport}
+                          onConfirm={handleConfirm}
                           canEdit={canEdit}
                           canReport={canReport}
+                          canConfirm={canConfirm}
                         />
                       )}
                     </TabsContent>
@@ -468,9 +595,7 @@ export default function TournamentBracketPage({ tournament, stages }: Tournament
               })}
         </div>
       ) : (
-        <div className="py-12 text-center text-muted-foreground">
-          {stages.length === 0 ? t("common.noStages") : t("common.noBracketMatches")}
-        </div>
+        <TournamentPageState state="empty" />
       )}
 
       {editEncounter && (
@@ -494,4 +619,18 @@ export default function TournamentBracketPage({ tournament, stages }: Tournament
       )}
     </div>
   );
+
+  if (loadState.kind === "refresh-error") {
+    return (
+      <TournamentPageState
+        state="refresh-error"
+        onRetry={retryQueries}
+        isUpdating={loadState.isUpdating}
+      >
+        {content}
+      </TournamentPageState>
+    );
+  }
+
+  return content;
 }

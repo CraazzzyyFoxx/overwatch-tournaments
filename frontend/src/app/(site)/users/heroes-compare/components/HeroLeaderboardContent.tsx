@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { Sword } from "lucide-react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
+import { useTranslations } from "next-intl";
 
 import heroService from "@/services/hero.service";
 import tournamentService from "@/services/tournament.service";
@@ -20,6 +21,7 @@ import HeroLeaderboardFiltersCard from "./HeroLeaderboardFiltersCard";
 import HeroLeaderboardTable from "./HeroLeaderboardTable";
 
 const HeroLeaderboardContent = () => {
+  const t = useTranslations();
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
@@ -146,7 +148,7 @@ const HeroLeaderboardContent = () => {
         <div className="flex flex-col items-center justify-center gap-3.5 rounded-[var(--aqt-radius)] border border-[var(--aqt-border)] bg-[var(--aqt-card)] py-[90px] text-center">
           <Sword className="h-10 w-10 text-[var(--aqt-fg-faint)] opacity-50" />
           <p className="max-w-sm text-sm leading-relaxed text-[var(--aqt-fg-dim)]">
-            Select a hero above to rank every player who&apos;s logged time on it.
+            {t("users.heroesCompare.selectHeroPrompt")}
           </p>
         </div>
       ) : (

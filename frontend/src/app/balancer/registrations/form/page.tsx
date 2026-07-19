@@ -292,127 +292,131 @@ export default function RegistrationFormConfigPage() {
   const formExists = formQuery.data != null;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Form Configuration</h1>
-          <p className="text-sm text-muted-foreground">
-            Configure registration form fields, admission rules, sub-roles, and custom inputs.
-          </p>
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight">Form Configuration</h1>
+            <p className="text-sm text-muted-foreground">
+              Configure registration form fields, admission rules, sub-roles, and custom inputs.
+            </p>
+          </div>
+          <Button variant="outline" asChild>
+            <Link href={registrationsHref}>
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back to registrations
+            </Link>
+          </Button>
         </div>
-        <Button variant="outline" asChild>
-          <Link href={registrationsHref}>
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to registrations
-          </Link>
-        </Button>
+
+        <Tabs defaultValue="status" className="flex min-h-0 flex-1 flex-col">
+          <TabsList className="self-start">
+            <TabsTrigger value="status">Status</TabsTrigger>
+            <TabsTrigger value="fields">Fields</TabsTrigger>
+            <TabsTrigger value="subroles">Subroles</TabsTrigger>
+            <TabsTrigger value="custom">Custom Fields</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="status">
+            <div className="space-y-4">
+              <RegistrationStatusCard
+                isOpen={isOpen}
+                autoApprove={autoApprove}
+                onChangeOpen={(value) => {
+                  setIsOpen(value);
+                  setHasChanges(true);
+                }}
+                onChangeAutoApprove={(value) => {
+                  setAutoApprove(value);
+                  setHasChanges(true);
+                }}
+              />
+
+              <div className="space-y-3 rounded-lg border p-4">
+                <div className="font-medium">Admission</div>
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={requireOpenProfile}
+                    onChange={(event) => {
+                      setRequireOpenProfile(event.target.checked);
+                      setHasChanges(true);
+                    }}
+                  />
+                  Require open Overwatch profile
+                </label>
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="text-muted-foreground">Scope</span>
+                  <select
+                    className="rounded-md border border-border bg-background px-2 py-1 text-sm disabled:opacity-50"
+                    value={openProfileScope}
+                    disabled={!requireOpenProfile}
+                    onChange={(event) => {
+                      setOpenProfileScope(event.target.value as "main" | "all");
+                      setHasChanges(true);
+                    }}
+                  >
+                    <option value="main">Main account only</option>
+                    <option value="all">All accounts (incl. smurfs)</option>
+                  </select>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  When enabled, players whose Overwatch profile is private are not admitted (blocked
+                  at check-in). Unranked players are already excluded separately.
+                </p>
+              </div>
+
+              <div className="space-y-3 rounded-lg border p-4">
+                <div className="font-medium">Display Options</div>
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={showRanks}
+                    onChange={(event) => {
+                      setShowRanks(event.target.checked);
+                      setHasChanges(true);
+                    }}
+                  />
+                  Show player ranks on participants page
+                </label>
+                <p className="text-xs text-muted-foreground">
+                  When enabled, player rank values will be displayed on the public participants
+                  page. When disabled, rank values are completely hidden and omitted from backend
+                  payloads.
+                </p>
+              </div>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="fields">
+            <BuiltInFieldsCard builtInFields={builtInFields} onUpdate={updateBuiltIn} />
+          </TabsContent>
+
+          <TabsContent value="subroles">
+            <SubrolesTab
+              catalog={subroleCatalog}
+              selection={subroleSelection}
+              onToggleOffered={handleToggleSubrole}
+              onCreate={(role, label) => createSubroleMutation.mutate({ role, label })}
+              onDelete={(entry) => deleteSubroleMutation.mutate(entry.id)}
+              isLoading={catalogQuery.isLoading}
+              isMutating={createSubroleMutation.isPending || deleteSubroleMutation.isPending}
+            />
+          </TabsContent>
+
+          <TabsContent value="custom">
+            <CustomFieldsCard
+              customFields={customFields}
+              onAdd={addCustomField}
+              onUpdate={updateCustomField}
+              onRemove={removeCustomField}
+            />
+          </TabsContent>
+        </Tabs>
       </div>
 
-      <Tabs defaultValue="status" className="flex min-h-0 flex-1 flex-col">
-        <TabsList className="self-start">
-          <TabsTrigger value="status">Status</TabsTrigger>
-          <TabsTrigger value="fields">Fields</TabsTrigger>
-          <TabsTrigger value="subroles">Subroles</TabsTrigger>
-          <TabsTrigger value="custom">Custom Fields</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="status">
-          <div className="space-y-4">
-            <RegistrationStatusCard
-              isOpen={isOpen}
-              autoApprove={autoApprove}
-              onChangeOpen={(value) => {
-                setIsOpen(value);
-                setHasChanges(true);
-              }}
-              onChangeAutoApprove={(value) => {
-                setAutoApprove(value);
-                setHasChanges(true);
-              }}
-            />
-
-            <div className="space-y-3 rounded-lg border p-4">
-              <div className="font-medium">Admission</div>
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={requireOpenProfile}
-                  onChange={(event) => {
-                    setRequireOpenProfile(event.target.checked);
-                    setHasChanges(true);
-                  }}
-                />
-                Require open Overwatch profile
-              </label>
-              <div className="flex items-center gap-2 text-sm">
-                <span className="text-muted-foreground">Scope</span>
-                <select
-                  className="rounded-md border border-border bg-background px-2 py-1 text-sm disabled:opacity-50"
-                  value={openProfileScope}
-                  disabled={!requireOpenProfile}
-                  onChange={(event) => {
-                    setOpenProfileScope(event.target.value as "main" | "all");
-                    setHasChanges(true);
-                  }}
-                >
-                  <option value="main">Main account only</option>
-                  <option value="all">All accounts (incl. smurfs)</option>
-                </select>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                When enabled, players whose Overwatch profile is private are not admitted (blocked
-                at check-in). Unranked players are already excluded separately.
-              </p>
-            </div>
-
-            <div className="space-y-3 rounded-lg border p-4">
-              <div className="font-medium">Display Options</div>
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={showRanks}
-                  onChange={(event) => {
-                    setShowRanks(event.target.checked);
-                    setHasChanges(true);
-                  }}
-                />
-                Show player ranks on participants page
-              </label>
-              <p className="text-xs text-muted-foreground">
-                When enabled, player rank values will be displayed on the public participants page.
-                When disabled, rank values are completely hidden and omitted from backend payloads.
-              </p>
-            </div>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="fields">
-          <BuiltInFieldsCard builtInFields={builtInFields} onUpdate={updateBuiltIn} />
-        </TabsContent>
-
-        <TabsContent value="subroles">
-          <SubrolesTab
-            catalog={subroleCatalog}
-            selection={subroleSelection}
-            onToggleOffered={handleToggleSubrole}
-            onCreate={(role, label) => createSubroleMutation.mutate({ role, label })}
-            onDelete={(entry) => deleteSubroleMutation.mutate(entry.id)}
-            isLoading={catalogQuery.isLoading}
-            isMutating={createSubroleMutation.isPending || deleteSubroleMutation.isPending}
-          />
-        </TabsContent>
-
-        <TabsContent value="custom">
-          <CustomFieldsCard
-            customFields={customFields}
-            onAdd={addCustomField}
-            onUpdate={updateCustomField}
-            onRemove={removeCustomField}
-          />
-        </TabsContent>
-      </Tabs>
-
-      <div className="flex justify-end pb-4">
+      <div className="flex items-center justify-end gap-3 border-t bg-background/95 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+        {hasChanges ? <span className="text-xs text-muted-foreground">Unsaved changes</span> : null}
         <Button
           size="lg"
           onClick={() => saveMutation.mutate()}

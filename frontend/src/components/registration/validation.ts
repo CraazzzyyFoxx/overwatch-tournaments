@@ -4,6 +4,9 @@ import type {
   FieldValidationConfig,
 } from "@/types/registration.types";
 import type { SocialAccount, SocialProvider } from "@/types/user.types";
+import { useTranslations } from "next-intl";
+
+type Translate = ReturnType<typeof useTranslations<never>>;
 
 const BUILT_IN_LABELS: Record<string, string> = {
   battle_tag: "BattleTag",
@@ -82,7 +85,7 @@ function resolveBuiltInValidation(
 function getErrorMessage(
   validation: FieldValidationConfig | null | undefined,
   label: string,
-  t?: (key: string, variables?: Record<string, string | number>) => string,
+  t?: Translate,
 ): string {
   return validation?.error_message?.trim() || (t ? t("registration.wizard.validation.invalidFormat", { label }) : `${label} format is invalid.`);
 }
@@ -91,7 +94,7 @@ export function getBuiltInFieldValidationError(
   fieldKey: string,
   value: string,
   config?: BuiltInFieldConfig,
-  t?: (key: string, variables?: Record<string, string | number>) => string,
+  t?: Translate,
 ): string | null {
   return getBuiltInValueValidationError(fieldKey, value, config, t);
 }
@@ -100,7 +103,7 @@ export function getBuiltInValueValidationError(
   fieldKey: string,
   value: string,
   config?: BuiltInFieldConfig,
-  t?: (key: string, variables?: Record<string, string | number>) => string,
+  t?: Translate,
 ): string | null {
   const validation = resolveBuiltInValidation(fieldKey, config?.validation);
   const regex = buildRegex(validation);
@@ -113,7 +116,7 @@ export function getBuiltInValueValidationError(
   }
 
   const labelKey = BUILT_IN_LABEL_KEYS[fieldKey];
-  const localizedLabel = (t && labelKey) ? t(labelKey) : (BUILT_IN_LABELS[fieldKey] ?? fieldKey);
+  const localizedLabel = (t && labelKey) ? t(labelKey as Parameters<typeof t>[0]) : (BUILT_IN_LABELS[fieldKey] ?? fieldKey);
   return getErrorMessage(validation, localizedLabel, t);
 }
 
@@ -121,7 +124,7 @@ export function getBuiltInListValidationError(
   fieldKey: string,
   values: string[],
   config?: BuiltInFieldConfig,
-  t?: (key: string, variables?: Record<string, string | number>) => string,
+  t?: Translate,
 ): string | null {
   if (values.length === 0) {
     return null;
@@ -159,7 +162,7 @@ export function getVerifiedFieldError(
   value: string,
   config: BuiltInFieldConfig | undefined,
   verifiedAccounts: readonly SocialAccount[],
-  t?: (key: string, variables?: Record<string, string | number>) => string,
+  t?: Translate,
 ): string | null {
   if (!config || config.enabled === false || !config.require_verified) {
     return null;
@@ -170,7 +173,7 @@ export function getVerifiedFieldError(
   }
 
   const labelKey = BUILT_IN_LABEL_KEYS[fieldKey];
-  const label = (t && labelKey) ? t(labelKey) : (BUILT_IN_LABELS[fieldKey] ?? fieldKey);
+  const label = (t && labelKey) ? t(labelKey as Parameters<typeof t>[0]) : (BUILT_IN_LABELS[fieldKey] ?? fieldKey);
 
   const candidates = verifiedAccounts.filter((a) => a.provider === provider && a.is_verified);
   if (candidates.length === 0) {
@@ -205,7 +208,7 @@ export function supportsCustomFieldValidation(
 export function getCustomFieldValidationError(
   field: CustomFieldDefinition,
   value: string,
-  t?: (key: string, variables?: Record<string, string | number>) => string,
+  t?: Translate,
 ): string | null {
   if (!supportsCustomFieldValidation(field)) {
     return null;

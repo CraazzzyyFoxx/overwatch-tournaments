@@ -113,7 +113,7 @@ export function PresetRunPanel({
       ) : null}
       <div className="min-w-[140px] sm:w-[170px]">
         <Select value={selectedPreset} onValueChange={onSelectPreset}>
-          <SelectTrigger className="h-8 rounded-lg border-white/10 bg-black/15 text-sm text-white/82">
+          <SelectTrigger className="h-8 rounded-lg border-[color:var(--aqt-border-2)] bg-black/15 text-sm text-[color:var(--aqt-fg)]">
             <SelectValue placeholder="Preset" />
           </SelectTrigger>
           <SelectContent>
@@ -129,7 +129,7 @@ export function PresetRunPanel({
         type="button"
         variant="outline"
         onClick={onOpenSettings}
-        className="h-8 rounded-lg border-white/10 bg-black/15 px-3 text-sm text-white/72 hover:bg-white/[0.05] hover:text-white"
+        className="h-8 rounded-lg border-[color:var(--aqt-border-2)] bg-black/15 px-3 text-sm text-[color:var(--aqt-fg-muted)] hover:bg-white/[0.05] hover:text-[color:var(--aqt-fg)]"
       >
         <SlidersHorizontal className="mr-1.5 h-3.5 w-3.5" />
         Settings{settingsDirty ? "*" : ""}
@@ -162,7 +162,7 @@ export function PresetRunPanel({
         variant="outline"
         onClick={() => importFileRef.current?.click()}
         disabled={isImportPending}
-        className="h-8 rounded-lg border-white/10 bg-black/15 px-3 text-sm text-white/72 hover:bg-white/[0.05] hover:text-white"
+        className="h-8 rounded-lg border-[color:var(--aqt-border-2)] bg-black/15 px-3 text-sm text-[color:var(--aqt-fg-muted)] hover:bg-white/[0.05] hover:text-[color:var(--aqt-fg)]"
       >
         {isImportPending ? (
           <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
@@ -176,7 +176,7 @@ export function PresetRunPanel({
         variant="outline"
         onClick={onExportPlayers}
         disabled={isExportPlayersPending}
-        className="h-8 shrink-0 rounded-lg border-white/10 bg-black/15 px-2 text-sm text-white/72 hover:bg-white/[0.05] hover:text-white sm:px-3"
+        className="h-8 shrink-0 rounded-lg border-[color:var(--aqt-border-2)] bg-black/15 px-2 text-sm text-[color:var(--aqt-fg-muted)] hover:bg-white/[0.05] hover:text-[color:var(--aqt-fg)] sm:px-3"
         aria-label="Export players"
         title="Export players"
       >
@@ -196,11 +196,11 @@ export function PresetRunPanel({
 
       {jobStatus ? (
         <div className={cn(PANEL_CLASS, "px-3 py-2")}>
-          <div className="rounded-lg border border-white/8 bg-black/15 p-2.5">
+          <div className="rounded-lg border border-[color:var(--aqt-border)] bg-black/15 p-2.5">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
-                <div className="text-sm font-medium text-white/88">Balance job</div>
-                {jobMessage ? <div className="text-xs text-white/40">{jobMessage}</div> : null}
+                <div className="text-sm font-medium text-[color:var(--aqt-fg)]">Balance job</div>
+                {jobMessage ? <div className="text-xs text-[color:var(--aqt-fg-dim)]">{jobMessage}</div> : null}
               </div>
               <Badge
                 className={cn(
@@ -209,7 +209,7 @@ export function PresetRunPanel({
                     ? "border-red-400/20 bg-red-500/10 text-red-200"
                     : jobStatus === "succeeded"
                       ? "border-emerald-400/20 bg-emerald-500/10 text-emerald-200"
-                      : "border-white/10 bg-white/4 text-white/70"
+                      : "border-[color:var(--aqt-border-2)] bg-white/4 text-[color:var(--aqt-fg-muted)]"
                 )}
               >
                 {jobStatus}

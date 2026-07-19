@@ -7,6 +7,7 @@ from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.clients.s3 import S3Client
+from shared.core import impact as impact_consts
 from shared.messaging.config import (
     TOURNAMENT_CHANGED_EXCHANGE,
     TOURNAMENT_EVENTS_EXCHANGE,
@@ -20,10 +21,12 @@ from shared.schemas.events import (
 from src import models
 from src.core import enums, errors, pagination
 from src.core.config import settings
+from src.services.baselines import service as baselines_service
 from src.services.encounter import flows as encounter_flows
 from src.services.encounter import service as encounter_service
 from src.services.hero import service as hero_service
 from src.services.map import flows as map_flows
+from src.services.match_logs import impact
 from src.services.match_logs.event_models import KillEvent, MatchEventRow, PlayerStatRow
 from src.services.s3 import service as s3_service
 from src.services.team import service as team_service
@@ -445,13 +448,9 @@ class MatchLogProcessor:
         if not kill_feed_objects:
             return []
 
-        current_fight_id = 1
-        kill_feed_objects[0].fight = current_fight_id
-        for i in range(1, len(kill_feed_objects)):
-            if kill_feed_objects[i].time - kill_feed_objects[i - 1].time > 15:
-                current_fight_id += 1
-            kill_feed_objects[i].fight = current_fight_id
-
+        # Cluster kills into fights (new round OR >15s lull). Shared with the
+        # history backfill so live and backfilled first_picks/impact agree.
+        impact.assign_fights(kill_feed_objects)
         return kill_feed_objects
 
     def _format_match_event_generic(
@@ -610,7 +609,13 @@ class MatchLogProcessor:
 
         return pd.DataFrame(stat_records)
 
-    def _calculate_and_add_derived_stats(self, match: models.Match, df: pd.DataFrame, is_mvp_calc: bool = False):
+    def _calculate_and_add_derived_stats(
+        self,
+        match: models.Match,
+        df: pd.DataFrame,
+        is_mvp_calc: bool = False,
+        impact_ctx: "impact.ImpactContext | None" = None,
+    ):
         required_cols = [
             enums.LogStatsName.Eliminations,
             enums.LogStatsName.Deaths,
@@ -689,6 +694,47 @@ class MatchLogProcessor:
                 for r in rank_records
             )
 
+            if impact_ctx is not None and impact_ctx.baselines is not None:
+                df = impact.add_impact_scores(
+                    df,
+                    players=impact_ctx.players,
+                    baselines=impact_ctx.baselines,
+                    has_killfeed=impact_ctx.has_killfeed,
+                )
+                for stat_member in (
+                    enums.LogStatsName.ImpactPoints,
+                    enums.LogStatsName.OverperformanceScore,
+                ):
+                    impact_records = df[["player_model", "round", "hero_id", stat_member]].to_dict(orient="records")
+                    temp_derived_stats.extend(
+                        self._create_stat_object(
+                            match, stat_member, r["player_model"], r["round"], r.get("hero_id"), r[stat_member]
+                        )
+                        for r in impact_records
+                    )
+
+                df_impact_rank = df.sort_values(by=["round", enums.LogStatsName.ImpactPoints], ascending=[True, False])
+                df_impact_rank["_impact_rank"] = df_impact_rank.groupby("round").cumcount() + 1
+                impact_rank_records = df_impact_rank[["player_model", "round", "hero_id", "_impact_rank"]].to_dict(
+                    orient="records"
+                )
+                temp_derived_stats.extend(
+                    self._create_stat_object(
+                        match,
+                        enums.LogStatsName.ImpactRank,
+                        r["player_model"],
+                        r["round"],
+                        r.get("hero_id"),
+                        r["_impact_rank"],
+                    )
+                    for r in impact_rank_records
+                )
+            elif impact_ctx is not None:
+                logger.warning(
+                    f"Impact baselines missing for match {match.id} — skipping impact stats "
+                    f"({enums.LogStatsName.ImpactPoints.value})"
+                )
+
         return temp_derived_stats
 
     async def create_stats(
@@ -696,6 +742,7 @@ class MatchLogProcessor:
         session: AsyncSession,
         match: models.Match,
         players_map: dict[str, models.Player],
+        kill_feed: list[models.MatchKillFeed] | None = None,
     ) -> list[models.MatchStatistics]:
         cumulative_stats_df = await self._get_player_stat_base_df(players_map)
         if cumulative_stats_df.empty:
@@ -781,10 +828,107 @@ class MatchLogProcessor:
         for df in [hero_derived_df, round_derived_df, match_hero_derived_df, match_derived_df]:
             df["player_model"] = df["player_id"].map(player_id_to_model_map)
 
+        # --- MVP impact scoring inputs (spec 2026-07-10) --------------------
+        # Event stats derived from the kill feed (FirstPicks/FirstDeaths/…) are
+        # emitted as their own MatchStatistics rows AND merged into the two MVP
+        # pivots so add_impact_scores can read them. Kill feed is keyed by
+        # workspace_member.player_id (== user_id on the stat rows); the pivots
+        # are keyed by roster player.id, so we bridge via user_to_player.
+        hero_types = {h.id: h.type for h in self.heroes_map.values()}
+        user_to_player = {p.workspace_member.player_id: p for p in players_map.values()}
+        has_killfeed = bool(kill_feed)
+
+        events_df = impact.build_event_counts(kill_feed or [], hero_types)
+        if not events_df.empty:
+            events_df["player_id"] = events_df["user_id"].map(
+                lambda uid: user_to_player[uid].id if uid in user_to_player else None
+            )
+            events_df = events_df.dropna(subset=["player_id"])
+            events_df["player_id"] = events_df["player_id"].astype(int)
+            # Round 0 is the synthetic match-total sentinel in the pivots; the
+            # per-round pivot only holds round > 0, and the match total is the
+            # sum across those real rounds (mirrors the stat pipeline).
+            events_df = events_df[events_df["round"] > 0]
+
+        if not events_df.empty:
+            for stat_name in impact_consts.EVENT_STATS:
+                member = enums.LogStatsName[stat_name]
+                for r in events_df.itertuples(index=False):
+                    all_stat_objects.append(
+                        self._create_stat_object(
+                            match,
+                            member,
+                            user_to_player[r.user_id],
+                            int(r.round),
+                            None,
+                            float(getattr(r, stat_name)),
+                        )
+                    )
+
+            totals = events_df.groupby(["player_id", "user_id"], as_index=False)[list(impact_consts.EVENT_STATS)].sum()
+            for stat_name in impact_consts.EVENT_STATS:
+                member = enums.LogStatsName[stat_name]
+                for r in totals.itertuples(index=False):
+                    all_stat_objects.append(
+                        self._create_stat_object(
+                            match,
+                            member,
+                            user_to_player[r.user_id],
+                            0,
+                            None,
+                            float(getattr(r, stat_name)),
+                        )
+                    )
+
+            event_cols = ["player_id", "round", *impact_consts.EVENT_STATS]
+            round_derived_df = round_derived_df.merge(
+                events_df[event_cols].rename(columns={s: enums.LogStatsName[s] for s in impact_consts.EVENT_STATS}),
+                on=["player_id", "round"],
+                how="left",
+            )
+            match_events = totals.assign(round=0)
+            match_derived_df = match_derived_df.merge(
+                match_events[event_cols].rename(columns={s: enums.LogStatsName[s] for s in impact_consts.EVENT_STATS}),
+                on=["player_id", "round"],
+                how="left",
+            )
+
+        # Ensure every event column exists and is NaN-free on both MVP pivots,
+        # so add_impact_scores never sees a NaN (matches with no kill feed hit
+        # this path directly).
+        for df_ in (round_derived_df, match_derived_df):
+            for s in impact_consts.EVENT_STATS:
+                member = enums.LogStatsName[s]
+                if member not in df_.columns:
+                    df_[member] = 0.0
+                df_[member] = df_[member].fillna(0.0)
+
+        playtime_df = final_cumulative_df[final_cumulative_df["stat_name"] == enums.LogStatsName.HeroTimePlayed][
+            ["player_id", "hero_id", "value"]
+        ].rename(columns={"value": "seconds"})
+        roles = impact.dominant_roles(playtime_df, hero_types)
+
+        player_refs = {
+            p.id: impact.PlayerRef(
+                player_id=p.id,
+                user_id=p.workspace_member.player_id,
+                team_id=p.team_id,
+                role=roles.get(p.id) or p.role,
+                rank=p.rank,
+            )
+            for p in players_map.values()
+        }
+        baselines = await baselines_service.get_active(session)
+        impact_ctx = impact.ImpactContext(players=player_refs, baselines=baselines, has_killfeed=has_killfeed)
+
         all_stat_objects.extend(self._calculate_and_add_derived_stats(match, hero_derived_df, is_mvp_calc=False))
-        all_stat_objects.extend(self._calculate_and_add_derived_stats(match, round_derived_df, is_mvp_calc=True))
+        all_stat_objects.extend(
+            self._calculate_and_add_derived_stats(match, round_derived_df, is_mvp_calc=True, impact_ctx=impact_ctx)
+        )
         all_stat_objects.extend(self._calculate_and_add_derived_stats(match, match_hero_derived_df, is_mvp_calc=False))
-        all_stat_objects.extend(self._calculate_and_add_derived_stats(match, match_derived_df, is_mvp_calc=True))
+        all_stat_objects.extend(
+            self._calculate_and_add_derived_stats(match, match_derived_df, is_mvp_calc=True, impact_ctx=impact_ctx)
+        )
 
         return all_stat_objects
 
@@ -868,7 +1012,7 @@ class MatchLogProcessor:
         events = await self.process_events(session, match_model, players_map)
 
         logger.info(f"Processing stats for match {match_model.id}")
-        stats = await self.create_stats(session, match_model, players_map)
+        stats = await self.create_stats(session, match_model, players_map, kill_feed=kill_feed_db_objects)
 
         all_objects = kill_feed_db_objects + events + stats
         try:

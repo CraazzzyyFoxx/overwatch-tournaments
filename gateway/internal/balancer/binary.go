@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -120,7 +119,13 @@ func (b *Binary) identityInto(w http.ResponseWriter, r *http.Request, data map[s
 		writeDetail(w, http.StatusUnauthorized, "Not authenticated")
 		return nil, false
 	}
-	id, ok := b.identity(r)
+	id, ok, err := b.identity(r)
+	if err != nil {
+		b.log.Error("identity resolution unavailable", "err", err)
+		w.Header().Set("Retry-After", "1")
+		writeDetail(w, http.StatusServiceUnavailable, "service unavailable")
+		return nil, false
+	}
 	if !ok {
 		writeDetail(w, http.StatusUnauthorized, "Not authenticated")
 		return nil, false
@@ -137,8 +142,9 @@ func (b *Binary) relayJSON(w http.ResponseWriter, r *http.Request, queue string,
 
 	reply, err := b.rpc.Call(ctx, queue, body)
 	if err != nil {
-		if errors.Is(err, rpc.ErrNotConnected) || errors.Is(err, rpc.ErrDisconnected) {
+		if rpc.IsUnavailable(err) {
 			b.log.Error("rpc unavailable", "queue", queue, "err", err)
+			w.Header().Set("Retry-After", "1")
 			writeDetail(w, http.StatusServiceUnavailable, "service unavailable")
 			return
 		}

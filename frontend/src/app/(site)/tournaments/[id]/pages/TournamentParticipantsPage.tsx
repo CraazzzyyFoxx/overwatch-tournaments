@@ -1,23 +1,31 @@
 "use client";
 
-import { Fragment, useMemo, useState, createElement } from "react";
-import Image from "next/image";
+import {
+  createElement,
+  Fragment,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore
+} from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   AlertTriangle,
+  Check,
   CheckCircle2,
   Clock,
   Loader2,
   Search,
   ShieldBan,
-  UserPlus,
+  X,
   XCircle,
-  Gamepad2,
   Tv,
   Twitch,
-  MessageSquare,
   ChevronDown,
-  ChevronUp,
+  ChevronUp
 } from "lucide-react";
 
 import {
@@ -28,12 +36,11 @@ import {
   AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogHeader,
-  AlertDialogTitle,
+  AlertDialogTitle
 } from "@/components/ui/alert-dialog";
 import { cn, hexToRgba } from "@/lib/utils";
+import { isPhaseWindowActive } from "@/lib/tournament-status";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
-import { useColumnVisibility } from "@/hooks/useColumnVisibility";
-import { useLocalStorageState } from "@/hooks/useLocalStorageState";
 import { tournamentQueryKeys } from "@/lib/tournament-query-keys";
 import registrationService from "@/services/registration.service";
 import type { Tournament } from "@/types/tournament.types";
@@ -41,88 +48,90 @@ import type { Registration, RegistrationStatus } from "@/types/registration.type
 
 import ColumnPicker from "./_components/ColumnPicker";
 import { buildParticipantColumns } from "./_components/participantsColumns";
-import { useTranslation } from "@/i18n/LanguageContext";
+import {
+  PARTICIPANT_SEARCH_MAX_LENGTH,
+  isMandatoryParticipantColumnId,
+  parseStoredParticipantColumnIds,
+  participantColumnsStorageKey,
+  participantDefaultColumnIds,
+  participantResultsScrollTarget,
+  participantResultsTransitionSignature,
+  readParticipantUrlState,
+  shouldScrollParticipantResults,
+  subscribeParticipantColumnsStorage,
+  updateParticipantUrlState,
+  writeStoredParticipantColumnIds,
+  type ParticipantUrlUpdate
+} from "./_components/participants-url-state";
+import { useParticipantSearchInput } from "./_components/useParticipantSearchInput";
+import VirtualParticipantsList from "./_components/VirtualParticipantsList";
+import { useTranslations, useLocale } from "next-intl";
 import { useDivisionGrid } from "@/hooks/useCurrentWorkspace";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
-import BattleTagRankHistory from "@/components/BattleTagRankHistory";
 import { getStatusIcon } from "@/lib/status-icons";
 import { formatSubroleSlug } from "@/lib/roles";
-
-// ---------------------------------------------------------------------------
-// Responsive class helper
-// ---------------------------------------------------------------------------
-
-const RESPONSIVE_CLASS: Record<string, string> = {
-  always: "",
-  sm: "hidden sm:table-cell",
-  md: "hidden md:table-cell",
-  lg: "hidden lg:table-cell",
-};
-
-const ALIGN_CLASS: Record<"left" | "center", string> = {
-  left: "text-left",
-  center: "text-center",
-};
+import { TournamentParticipantsSkeleton } from "../_components/TournamentSkeletons";
+import { TournamentPageState } from "../_components/TournamentPageState";
+import styles from "../TournamentDetail.module.css";
 
 // ---------------------------------------------------------------------------
 // My registration status bar / card configs
 // ---------------------------------------------------------------------------
 
-
-
-const STATUS_BAR_CONFIG: Record<
-  RegistrationStatus,
-  { icon: typeof Clock; color: string }
-> = {
+const STATUS_BAR_CONFIG: Record<RegistrationStatus, { icon: typeof Clock; color: string }> = {
   pending: {
     icon: Clock,
-    color: "text-amber-400 border-amber-500/20 bg-amber-500/10",
+    color: "text-amber-400 border-amber-500/20 bg-amber-500/10"
   },
   approved: {
     icon: CheckCircle2,
-    color: "text-emerald-400 border-emerald-500/20 bg-emerald-500/10",
+    color: "text-emerald-400 border-emerald-500/20 bg-emerald-500/10"
   },
   rejected: {
     icon: XCircle,
-    color: "text-red-400 border-red-500/20 bg-red-500/10",
+    color: "text-red-400 border-red-500/20 bg-red-500/10"
   },
   withdrawn: {
     icon: XCircle,
-    color: "text-white/40 border-white/10 bg-white/5",
+    color: "text-[color:var(--aqt-fg-dim)] border-[color:var(--aqt-border-2)] bg-white/5"
   },
   banned: {
     icon: ShieldBan,
-    color: "text-red-400 border-red-500/20 bg-red-500/10",
+    color: "text-red-400 border-red-500/20 bg-red-500/10"
   },
   insufficient_data: {
     icon: AlertTriangle,
-    color: "text-orange-400 border-orange-500/20 bg-orange-500/10",
-  },
+    color: "text-orange-400 border-orange-500/20 bg-orange-500/10"
+  }
 };
 
 const ROLE_ACCENT_CLASSES: Record<string, { bg: string; text: string; border: string }> = {
   tank: { bg: "bg-sky-500/10", text: "text-sky-300", border: "border-sky-500/20" },
   dps: { bg: "bg-orange-500/10", text: "text-orange-300", border: "border-orange-500/20" },
   support: { bg: "bg-emerald-500/10", text: "text-emerald-300", border: "border-emerald-500/20" },
-  flex: { bg: "bg-violet-500/10", text: "text-violet-300", border: "border-violet-500/20" },
+  flex: { bg: "bg-violet-500/10", text: "text-violet-300", border: "border-violet-500/20" }
 };
 
 const ROLE_TO_ICON: Record<string, string> = {
   tank: "Tank",
   dps: "Damage",
   support: "Support",
-  flex: "Flex",
+  flex: "Flex"
 };
 
-const ROLE_DISPLAY_NAMES: Record<string, string> = {
-  tank: "Tank",
-  dps: "DPS",
-  support: "Support",
-  flex: "Flex",
-};
-
-function getRoleLabel(role: string): string {
-  return ROLE_DISPLAY_NAMES[role.toLowerCase()] ?? role.charAt(0).toUpperCase() + role.slice(1);
+function getRoleLabel(role: string, t: ReturnType<typeof useTranslations<never>>): string {
+  switch (role.toLowerCase()) {
+    case "tank":
+      return t("common.roles.tank");
+    case "dps":
+      return t("common.roles.dps");
+    case "support":
+      return t("common.roles.support");
+    case "flex":
+      return t("common.roles.flex");
+    default:
+      return role.charAt(0).toUpperCase() + role.slice(1);
+  }
 }
 
 const DiscordIcon = (props: React.SVGProps<SVGSVGElement>) => (
@@ -137,7 +146,7 @@ const STATUS_FILTER_META: Record<RegistrationStatus, { dot: string }> = {
   insufficient_data: { dot: "var(--aqt-amber)" },
   rejected: { dot: "var(--aqt-rose)" },
   banned: { dot: "var(--aqt-rose)" },
-  withdrawn: { dot: "var(--aqt-fg-dim)" },
+  withdrawn: { dot: "var(--aqt-fg-dim)" }
 };
 
 const STATUS_FILTER_ORDER: RegistrationStatus[] = [
@@ -146,12 +155,91 @@ const STATUS_FILTER_ORDER: RegistrationStatus[] = [
   "insufficient_data",
   "rejected",
   "banned",
-  "withdrawn",
+  "withdrawn"
 ];
 
 // localeKeyMap removed to support DB status names without hardcoded translation
 
 type StatusFilter = "all" | RegistrationStatus;
+
+type RegistrationStepTone = "done" | "active" | "failed" | "idle";
+
+interface RegistrationStep {
+  key: string;
+  label: string;
+  tone: RegistrationStepTone;
+}
+
+/** Statuses that permanently take the registration out of the tournament. */
+const TERMINAL_REGISTRATION_STATUSES = new Set<string>(["rejected", "banned", "withdrawn"]);
+
+const CHECK_IN_OVER_TOURNAMENT_STATUSES = new Set<string>([
+  "live",
+  "playoffs",
+  "completed",
+  "archived"
+]);
+
+function RegistrationStepMarker({ tone }: { tone: RegistrationStepTone }) {
+  switch (tone) {
+    case "done":
+      return (
+        <span className="flex size-6 shrink-0 items-center justify-center rounded-full border border-emerald-500/40 bg-emerald-500/15 text-emerald-400">
+          <Check className="size-3.5" strokeWidth={3} />
+        </span>
+      );
+    case "failed":
+      return (
+        <span className="flex size-6 shrink-0 items-center justify-center rounded-full border border-red-500/40 bg-red-500/15 text-red-400">
+          <X className="size-3.5" strokeWidth={3} />
+        </span>
+      );
+    case "active":
+      return (
+        <span className="flex size-6 shrink-0 items-center justify-center rounded-full border border-amber-400/50 bg-amber-500/10">
+          <span className="size-2 animate-pulse rounded-full bg-amber-400" />
+        </span>
+      );
+    default:
+      return (
+        <span className="flex size-6 shrink-0 items-center justify-center rounded-full border border-[color:var(--aqt-border-2)] bg-white/5">
+          <span className="size-1.5 rounded-full bg-[color:var(--aqt-fg-dim)]" />
+        </span>
+      );
+  }
+}
+
+function RegistrationRoleChip({
+  role,
+  showPrimaryMark,
+  t
+}: {
+  role: Registration["roles"][number];
+  showPrimaryMark: boolean;
+  t: ReturnType<typeof useTranslations<never>>;
+}) {
+  return (
+    <div
+      className={cn(
+        "inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-xs font-medium",
+        ROLE_ACCENT_CLASSES[role.role]?.bg,
+        ROLE_ACCENT_CLASSES[role.role]?.border,
+        ROLE_ACCENT_CLASSES[role.role]?.text
+      )}
+    >
+      <PlayerRoleIcon role={ROLE_TO_ICON[role.role] ?? role.role} size={12} />
+      <span>{getRoleLabel(role.role, t)}</span>
+      {role.subrole && (
+        <span className="text-[10px] opacity-60">({formatSubroleSlug(role.subrole)})</span>
+      )}
+      {showPrimaryMark && (
+        <span className="text-[10px] uppercase tracking-wide opacity-70">
+          · {t("registration.myCard.primaryRole")}
+        </span>
+      )}
+    </div>
+  );
+}
 
 function MyRegistrationCard({
   registration,
@@ -161,6 +249,7 @@ function MyRegistrationCard({
   isCheckingIn,
   isWithdrawing,
   tournament,
+  requireOpenProfile
 }: {
   registration: Registration;
   canCheckIn: boolean;
@@ -169,298 +258,339 @@ function MyRegistrationCard({
   isCheckingIn: boolean;
   isWithdrawing: boolean;
   tournament: Tournament;
+  requireOpenProfile: boolean;
 }) {
-  const { t } = useTranslation();
+  const t = useTranslations();
   const [isExpanded, setIsExpanded] = useState(false);
-  
+
   const primaryRole = registration.roles.find((r) => r.is_primary);
   const secondaryRoles = registration.roles
     .filter((r) => !r.is_primary)
     .sort((a, b) => a.priority - b.priority);
 
-  const statusConfig =
-    STATUS_BAR_CONFIG[registration.status] ?? STATUS_BAR_CONFIG.pending;
-  
-  const statusMeta = registration.status_meta;
-  const statusName = statusMeta?.name ?? (
-    registration.status.charAt(0).toUpperCase() + registration.status.slice(1).replace(/_/g, " ")
-  );
+  const statusConfig = STATUS_BAR_CONFIG[registration.status] ?? STATUS_BAR_CONFIG.pending;
 
-  let StatusIcon = Clock;
+  const statusMeta = registration.status_meta;
+  const statusName =
+    statusMeta?.name ??
+    registration.status.charAt(0).toUpperCase() + registration.status.slice(1).replace(/_/g, " ");
+
+  let StatusIcon = statusConfig.icon ?? Clock;
   if (statusMeta?.icon_slug) {
     try {
       StatusIcon = getStatusIcon(statusMeta.icon_slug);
     } catch {
       StatusIcon = statusConfig.icon ?? Clock;
     }
-  } else {
-    StatusIcon = statusConfig.icon ?? Clock;
   }
 
-  // Color styles
-  let statusBadgeStyle: React.CSSProperties | undefined = undefined;
-  let statusBadgeClass = cn(
-    "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-medium",
-    statusConfig.color
-  );
-
+  // Custom statuses carry their own accent color; builtin ones use the
+  // Tailwind classes from STATUS_BAR_CONFIG.
+  let statusChipStyle: React.CSSProperties | undefined = undefined;
   if (statusMeta?.icon_color) {
     const color = statusMeta.icon_color;
-    statusBadgeClass = "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-medium";
-    statusBadgeStyle = {
+    statusChipStyle = {
       color: color,
       borderColor: hexToRgba(color, 0.35) ?? color,
-      backgroundColor: hexToRgba(color, 0.12) ?? "transparent",
+      backgroundColor: hexToRgba(color, 0.12) ?? "transparent"
     };
   }
 
   const isCheckedIn = registration.checked_in === true;
+  const isApproved = registration.status === "approved";
+  const isTerminal = TERMINAL_REGISTRATION_STATUSES.has(registration.status);
+  const checkInPhaseOver =
+    !isCheckedIn && !canCheckIn && CHECK_IN_OVER_TOURNAMENT_STATUSES.has(tournament.status);
+  const canWithdraw = registration.status === "pending" || registration.status === "approved";
+  // "ready" is the terminal balancer state: the organizers added the player to
+  // the pool and assigned a rank. Anything else (not_in_balancer, incomplete,
+  // custom slugs, missing field) means the rank is still pending.
+  const balancerReady = registration.balancer_status === "ready";
 
-  let checkInBadgeClass = "bg-white/5 border-white/10 text-white/50";
-  let checkInBadgeText = t("registration.myCard.checkInNotStarted");
+  // Registration journey: submitted -> review/approved -> profile visibility
+  // (when required) -> balancing (rank assignment) -> check-in.
+  const profileStep: RegistrationStep | null = requireOpenProfile
+    ? {
+        key: "profile",
+        label:
+          registration.profiles_open === true
+            ? t("common.profileOpen")
+            : registration.profiles_open === false
+              ? t("common.profileClosed")
+              : t("common.profileNotChecked"),
+        tone:
+          registration.profiles_open === true
+            ? "done"
+            : registration.profiles_open === false
+              ? "failed"
+              : isTerminal
+                ? "idle"
+                : "active"
+      }
+    : null;
 
+  const steps: RegistrationStep[] = [
+    {
+      key: "submitted",
+      label: t("registration.myCard.steps.submitted"),
+      tone: "done"
+    },
+    {
+      key: "review",
+      label:
+        isApproved || isCheckedIn
+          ? t("registration.myCard.steps.approved")
+          : isTerminal
+            ? statusName
+            : t("registration.myCard.steps.review"),
+      tone: isApproved || isCheckedIn ? "done" : isTerminal ? "failed" : "active"
+    },
+    ...(profileStep ? [profileStep] : []),
+    {
+      key: "balancing",
+      label: t("registration.myCard.steps.balancing"),
+      tone: balancerReady
+        ? "done"
+        : isTerminal
+          ? "idle"
+          : isApproved || isCheckedIn
+            ? "active"
+            : "idle"
+    },
+    {
+      key: "checkIn",
+      label: t("registration.myCard.steps.checkIn"),
+      tone: isCheckedIn
+        ? "done"
+        : isTerminal
+          ? "idle"
+          : canCheckIn
+            ? "active"
+            : checkInPhaseOver
+              ? "failed"
+              : "idle"
+    }
+  ];
+
+  // Single "what happens next" line next to the actions.
+  let hintText: string;
+  let hintClass = "text-[color:var(--aqt-fg-muted)]";
   if (isCheckedIn) {
-    checkInBadgeClass = "bg-emerald-500/10 border-emerald-500/20 text-emerald-400";
-    checkInBadgeText = t("registration.myCard.checkedIn");
+    hintText = t("registration.myCard.checkInSuccess");
+    hintClass = "text-emerald-400 font-medium";
   } else if (canCheckIn) {
-    checkInBadgeClass = "bg-amber-500/10 border-amber-500/20 text-amber-400 animate-pulse";
-    checkInBadgeText = t("registration.myCard.checkInRequired");
-  } else if (
-    tournament.status === "live" ||
-    tournament.status === "completed" ||
-    tournament.status === "playoffs" ||
-    tournament.status === "archived"
-  ) {
-    checkInBadgeClass = "bg-red-500/10 border-red-500/20 text-red-400";
-    checkInBadgeText = t("registration.myCard.checkInClosed");
+    hintText = t("registration.myCard.checkInOpenDesc");
+    hintClass = "text-amber-400 font-medium";
+  } else if (isTerminal) {
+    hintText = statusMeta?.description || t("registration.myCard.inactiveDesc");
+    hintClass = "text-[color:var(--aqt-fg-dim)]";
+  } else if (isApproved && checkInPhaseOver) {
+    hintText = t("registration.myCard.checkInClosedDesc");
+    hintClass = "text-red-400/90";
+  } else if (isApproved && !balancerReady) {
+    hintText = t("registration.myCard.balancerWaitingDesc");
+  } else if (isApproved) {
+    hintText = t("registration.myCard.pendingCheckInDesc");
+  } else {
+    hintText = statusMeta?.description || t("registration.myCard.pendingReviewDesc");
   }
 
   return (
-    <div className="relative overflow-hidden rounded-xl border border-white/[0.08] bg-white/[0.02] shadow-md backdrop-blur-md transition-all duration-200">
+    <div className="relative overflow-hidden rounded-xl border border-[color:var(--aqt-border)] bg-white/[0.02] shadow-md backdrop-blur-md">
       {/* Decorative gradient blurs */}
       <div className="absolute -right-16 -top-16 -z-10 size-32 rounded-full bg-blue-500/5 blur-2xl" />
       <div className="absolute -bottom-16 -left-16 -z-10 size-32 rounded-full bg-violet-500/5 blur-2xl" />
 
-      {/* Main Bar (Always Visible) */}
-      <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
-        {/* Left Side: Title, Status, Primary Role */}
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold text-white/90 uppercase tracking-wider">
+      {/* Hero header: big status icon, headline, next-step hint, actions */}
+      <div className="flex flex-wrap items-start justify-between gap-3 p-4 sm:p-5">
+        <div className="flex min-w-0 items-center gap-3.5">
+          <span
+            className={cn(
+              "flex size-11 shrink-0 items-center justify-center rounded-xl border",
+              statusChipStyle ? undefined : statusConfig.color
+            )}
+            style={statusChipStyle}
+          >
+            {createElement(StatusIcon, { className: "size-5" })}
+          </span>
+          <div className="min-w-0">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[color:var(--aqt-fg-dim)]">
               {t("registration.myCard.title")}
-            </span>
-            <span
-              className={statusBadgeClass}
-              style={statusBadgeStyle}
-            >
-              {createElement(StatusIcon, { className: "size-3" })}
+            </p>
+            <h3 className="mt-0.5 text-lg font-bold leading-tight text-[color:var(--aqt-fg)]">
               {statusName}
-            </span>
+            </h3>
+            <p className={cn("mt-0.5 text-xs", hintClass)}>{hintText}</p>
           </div>
-
-          {/* Primary Role indicator */}
-          {primaryRole && (
-            <div className="flex items-center gap-2 border-l border-white/10 pl-4 text-xs">
-              <span className="text-white/40">{t("registration.myCard.primaryRole")}:</span>
-              <div
-                className={cn(
-                  "inline-flex items-center gap-1.5 rounded px-2 py-0.5 font-medium border",
-                  ROLE_ACCENT_CLASSES[primaryRole.role]?.bg,
-                  ROLE_ACCENT_CLASSES[primaryRole.role]?.border,
-                  ROLE_ACCENT_CLASSES[primaryRole.role]?.text,
-                )}
-              >
-                <PlayerRoleIcon
-                  role={ROLE_TO_ICON[primaryRole.role] ?? primaryRole.role}
-                  size={12}
-                />
-                <span>{getRoleLabel(primaryRole.role)}</span>
-                {primaryRole.subrole && (
-                  <span className="opacity-60 text-[10px]">
-                    ({formatSubroleSlug(primaryRole.subrole)})
-                  </span>
-                )}
-              </div>
-            </div>
-          )}
         </div>
 
-        {/* Right Side: Check-in button/badge and toggle */}
-        <div className="flex flex-wrap items-center gap-3">
-          {/* Check-in status indicator */}
-          <div className="flex items-center gap-2 text-xs">
-            <span className="text-white/40">{t("registration.myCard.checkInStatus")}:</span>
-            <span
-              className={cn(
-                "inline-flex items-center gap-1 rounded-md border px-2 py-0.5 font-semibold uppercase tracking-wide text-[10px]",
-                checkInBadgeClass,
-              )}
-            >
-              {checkInBadgeText}
-            </span>
-          </div>
-
-          {/* Inline Check-in Button if required */}
+        <div className="flex items-center gap-2">
           {canCheckIn && (
             <button
               type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onCheckIn();
-              }}
+              onClick={onCheckIn}
               disabled={isCheckingIn}
-              className="inline-flex items-center justify-center gap-1 rounded-md bg-emerald-500 px-3 py-1 text-xs font-semibold text-white shadow shadow-emerald-500/20 transition-all hover:bg-emerald-400 hover:shadow-emerald-500/30 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50"
+              className="inline-flex items-center justify-center gap-1 rounded-md bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-[color:var(--aqt-fg)] shadow shadow-emerald-500/20 transition-all hover:bg-emerald-400 hover:shadow-emerald-500/30 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50"
             >
               {isCheckingIn && <Loader2 className="size-3 animate-spin" />}
               {isCheckingIn ? t("common.checkingIn") : t("common.checkIn")}
             </button>
           )}
-
-          {/* Toggle details */}
+          {canWithdraw && (
+            <button
+              type="button"
+              onClick={onWithdraw}
+              disabled={isWithdrawing || isCheckingIn}
+              className="inline-flex items-center justify-center rounded-md border border-red-500/20 bg-red-500/5 px-2.5 py-1.5 text-[11px] font-semibold text-red-400/90 transition-all hover:border-red-500/40 hover:bg-red-500/10 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50"
+            >
+              {isWithdrawing && <Loader2 className="mr-1 size-3 animate-spin" />}
+              {isWithdrawing ? t("common.withdrawing") : t("common.withdraw")}
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setIsExpanded(!isExpanded)}
-            className="inline-flex items-center gap-1 rounded-md border border-white/10 bg-white/[0.03] px-2.5 py-1 text-xs font-medium text-white/70 hover:bg-white/[0.06] hover:text-white/95 transition-colors"
+            aria-expanded={isExpanded}
+            aria-label={
+              isExpanded
+                ? t("registration.myCard.hideDetails")
+                : t("registration.myCard.showDetails")
+            }
+            title={
+              isExpanded
+                ? t("registration.myCard.hideDetails")
+                : t("registration.myCard.showDetails")
+            }
+            className="flex size-8 shrink-0 items-center justify-center text-[color:var(--aqt-fg-dim)] transition-colors hover:text-[color:var(--aqt-fg)]"
           >
-            <span>{isExpanded ? t("registration.myCard.hideDetails") : t("registration.myCard.showDetails")}</span>
-            {isExpanded ? <ChevronUp className="size-3" /> : <ChevronDown className="size-3" />}
+            {isExpanded ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
           </button>
         </div>
       </div>
 
-      {/* Expanded Content Details */}
-      {isExpanded && (
-        <div className="border-t border-white/[0.06] bg-white/[0.01] p-4 transition-all duration-200">
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-            {/* Left Column: Fallbacks & Accounts */}
-            <div className="space-y-4">
-              {/* Secondary roles */}
-              <div className="space-y-1.5">
-                <h4 className="text-[10px] font-medium uppercase tracking-wider text-white/40">
-                  {t("registration.myCard.secondaryRoles")}
-                </h4>
-                {secondaryRoles.length > 0 ? (
-                  <div className="flex flex-wrap gap-1.5">
-                    {secondaryRoles.map((r) => (
-                      <div
-                        key={r.role}
-                        className={cn(
-                          "inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-xs font-medium",
-                          ROLE_ACCENT_CLASSES[r.role]?.bg,
-                          ROLE_ACCENT_CLASSES[r.role]?.border,
-                          ROLE_ACCENT_CLASSES[r.role]?.text,
-                        )}
-                      >
-                        <PlayerRoleIcon
-                          role={ROLE_TO_ICON[r.role] ?? r.role}
-                          size={11}
-                        />
-                        <span>{getRoleLabel(r.role)}</span>
-                        {r.subrole && (
-                          <span className="text-[10px] opacity-60">
-                            ({formatSubroleSlug(r.subrole)})
-                          </span>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-xs italic text-white/30">
-                    {t("registration.myCard.noSecondaryRoles")}
-                  </p>
+      {/* Progress stepper */}
+      <div className="flex items-start px-4 pb-4 sm:px-6">
+        {steps.map((step, index) => (
+          <Fragment key={step.key}>
+            {index > 0 && (
+              <div
+                aria-hidden="true"
+                className={cn(
+                  "mx-2 mt-3 h-px flex-1",
+                  steps[index - 1].tone === "done"
+                    ? "bg-emerald-500/40"
+                    : "bg-[color:var(--aqt-border-2)]"
                 )}
-              </div>
+              />
+            )}
+            <div className="flex min-w-0 max-w-40 flex-col items-center gap-1.5 text-center">
+              <RegistrationStepMarker tone={step.tone} />
+              <span
+                className={cn(
+                  "text-[11px] leading-tight",
+                  step.tone === "done" && "text-emerald-300/90",
+                  step.tone === "active" && "font-medium text-amber-300/90",
+                  step.tone === "failed" && "text-red-400/90",
+                  step.tone === "idle" && "text-[color:var(--aqt-fg-dim)]"
+                )}
+              >
+                {step.label}
+              </span>
+            </div>
+          </Fragment>
+        ))}
+      </div>
 
-              {/* Linked accounts */}
-              <div className="space-y-1.5">
-                <h4 className="text-[10px] font-medium uppercase tracking-wider text-white/40">
-                  {t("registration.myCard.accounts")}
-                </h4>
-                <div className="flex flex-wrap gap-x-4 gap-y-2 text-xs">
-                  {registration.battle_tag && (
-                    <div className="flex items-center gap-1.5 rounded border border-white/[0.05] bg-white/[0.02] px-2 py-1">
-                      <Gamepad2 className="size-3.5 text-white/40" />
-                      <span className="font-semibold text-white/85">{registration.battle_tag}</span>
-                    </div>
-                  )}
-                  {registration.discord_nick && (
-                    <div className="flex items-center gap-1.5 rounded border border-white/[0.05] bg-white/[0.02] px-2 py-1">
-                      <DiscordIcon className="size-3.5 text-[#5865F2]" />
-                      <span className="text-white/70">{registration.discord_nick}</span>
-                    </div>
-                  )}
-                  {registration.twitch_nick && (
-                    <div className="flex items-center gap-1.5 rounded border border-white/[0.05] bg-white/[0.02] px-2 py-1">
-                      <Twitch className="size-3.5 text-[#9146FF]" />
-                      <span className="text-white/70">{registration.twitch_nick}</span>
-                    </div>
-                  )}
+      {/* Expanded details: even groups in one row, notes as a quote below */}
+      {isExpanded && (
+        <div className="border-t border-[color:var(--aqt-border)] bg-white/[0.01] p-4 sm:px-5">
+          <div className="grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="space-y-2">
+              <h4 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[color:var(--aqt-fg-dim)]">
+                {t("common.rolesList")}
+              </h4>
+              {primaryRole || secondaryRoles.length > 0 ? (
+                <div className="flex flex-wrap gap-1.5">
+                  {primaryRole && <RegistrationRoleChip role={primaryRole} showPrimaryMark t={t} />}
+                  {secondaryRoles.map((r) => (
+                    <RegistrationRoleChip
+                      key={`${r.role}-${r.subrole ?? "base"}-${r.priority}`}
+                      role={r}
+                      showPrimaryMark={false}
+                      t={t}
+                    />
+                  ))}
                 </div>
+              ) : (
+                <p className="text-xs italic text-[color:var(--aqt-fg-dim)]">
+                  {t("registration.myCard.noSecondaryRoles")}
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <h4 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[color:var(--aqt-fg-dim)]">
+                {t("registration.myCard.accounts")}
+              </h4>
+              <div className="flex flex-wrap gap-1.5 text-xs">
+                {registration.battle_tag && (
+                  <div className="flex items-center gap-1.5 rounded-md border border-[color:var(--aqt-border)] bg-white/[0.02] px-2 py-1">
+                    {/* eslint-disable-next-line @next/next/no-img-element -- small static asset from /public */}
+                    <img alt="Battle.net" className="size-3.5" src="/battlenet.svg" />
+                    <span className="font-semibold text-[color:var(--aqt-fg)]">
+                      {registration.battle_tag}
+                    </span>
+                  </div>
+                )}
+                {registration.discord_nick && (
+                  <div className="flex items-center gap-1.5 rounded-md border border-[color:var(--aqt-border)] bg-white/[0.02] px-2 py-1">
+                    <DiscordIcon className="size-3.5 text-[#5865F2]" />
+                    <span className="text-[color:var(--aqt-fg-muted)]">
+                      {registration.discord_nick}
+                    </span>
+                  </div>
+                )}
+                {registration.twitch_nick && (
+                  <div className="flex items-center gap-1.5 rounded-md border border-[color:var(--aqt-border)] bg-white/[0.02] px-2 py-1">
+                    <Twitch className="size-3.5 text-[#9146FF]" />
+                    <span className="text-[color:var(--aqt-fg-muted)]">
+                      {registration.twitch_nick}
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
 
-            {/* Right Column: POV, Notes & Cancel Action */}
-            <div className="space-y-4 flex flex-col justify-between">
-              {/* POV and Notes */}
-              <div className="space-y-2.5">
-                <div className="flex items-center gap-2 text-xs">
-                  <Tv className="size-3.5 text-white/40" />
-                  <span
-                    className={cn(
-                      "font-medium",
-                      registration.stream_pov ? "text-emerald-400" : "text-white/50",
-                    )}
-                  >
-                    {registration.stream_pov
-                      ? t("registration.myCard.streamPovActive")
-                      : t("registration.myCard.streamPovInactive")}
-                  </span>
-                </div>
-
-                <div className="rounded-lg border border-white/[0.04] bg-white/[0.02] p-2.5 text-xs">
-                  {registration.notes ? (
-                    <p className="italic text-white/60 leading-normal">
-                      &ldquo;{registration.notes}&rdquo;
-                    </p>
-                  ) : (
-                    <span className="italic text-white/30">
-                      {t("registration.myCard.noNotes")}
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {/* Action row at bottom of details */}
-              <div className="flex items-center justify-between border-t border-white/[0.04] pt-3 mt-2">
-                {/* Pending check-in state helper text */}
-                <div className="text-[11px] text-white/40">
-                  {isCheckedIn ? (
-                    <span className="text-emerald-400 font-medium">
-                      {t("registration.myCard.checkInSuccess")}
-                    </span>
-                  ) : registration.status === "approved" ? (
-                    <span>{t("registration.myCard.pendingCheckInDesc")}</span>
-                  ) : (
-                    <span>{t("registration.myCard.pendingReviewDesc")}</span>
-                  )}
-                </div>
-
-                {/* Withdraw button */}
-                {(registration.status === "pending" ||
-                  registration.status === "approved") && (
-                  <button
-                    type="button"
-                    onClick={onWithdraw}
-                    disabled={isWithdrawing || isCheckingIn}
-                    className="inline-flex items-center justify-center rounded-md border border-red-500/20 bg-red-500/5 px-2.5 py-1.5 text-[11px] font-semibold text-red-400/90 transition-all hover:border-red-500/40 hover:bg-red-500/10 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50"
-                  >
-                    {isWithdrawing && <Loader2 className="size-3 animate-spin mr-1" />}
-                    {isWithdrawing ? t("common.withdrawing") : t("common.withdraw")}
-                  </button>
+            <div className="space-y-2">
+              <h4 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[color:var(--aqt-fg-dim)]">
+                {t("registration.details.streamPov")}
+              </h4>
+              <span
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium",
+                  registration.stream_pov
+                    ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-400"
+                    : "border-[color:var(--aqt-border)] bg-white/[0.02] text-[color:var(--aqt-fg-dim)]"
                 )}
-              </div>
+              >
+                <Tv className="size-3.5" />
+                {registration.stream_pov
+                  ? t("registration.myCard.streamPovActive")
+                  : t("registration.myCard.streamPovInactive")}
+              </span>
             </div>
           </div>
+
+          {registration.notes ? (
+            <div className="mt-4 space-y-1.5">
+              <h4 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[color:var(--aqt-fg-dim)]">
+                {t("registration.details.notes")}
+              </h4>
+              <p className="border-l-2 border-[color:var(--aqt-border-2)] pl-3 text-xs italic leading-relaxed text-[color:var(--aqt-fg-muted)]">
+                &ldquo;{registration.notes}&rdquo;
+              </p>
+            </div>
+          ) : null}
         </div>
       )}
     </div>
@@ -468,39 +598,24 @@ function MyRegistrationCard({
 }
 
 function isCheckInWindowActive(tournament: Tournament) {
-  if (tournament.status !== "check_in") return false;
-
-  const now = Date.now();
-  const opensAt = tournament.check_in_opens_at
-    ? new Date(tournament.check_in_opens_at).getTime()
-    : null;
-  const closesAt = tournament.check_in_closes_at
-    ? new Date(tournament.check_in_closes_at).getTime()
-    : null;
-
-  return (opensAt === null || opensAt <= now) && (closesAt === null || now <= closesAt);
+  return isPhaseWindowActive(tournament, "check_in");
 }
 
 // ---------------------------------------------------------------------------
 // Main page
 // ---------------------------------------------------------------------------
 
-export default function TournamentParticipantsPage({
-  tournament,
-}: {
-  tournament: Tournament;
-}) {
-  const { t, locale } = useTranslation();
+export default function TournamentParticipantsPage({ tournament }: { tournament: Tournament }) {
+  const t = useTranslations();
+  const locale = useLocale();
   const { user, status: authStatus } = useAuthProfile();
   const queryClient = useQueryClient();
-  const [searchQuery, setSearchQuery] = useLocalStorageState<string>(
-    `tournament-participants-${tournament.id}-search`,
-    "",
-  );
-  const [statusFilter, setStatusFilter] = useLocalStorageState<StatusFilter>(
-    `tournament-participants-${tournament.id}-status`,
-    "all",
-  );
+  const pathname = usePathname();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const searchParamsString = searchParams.toString();
+  const resultsHeadingRef = useRef<HTMLDivElement>(null);
+  const previousResultsSignatureRef = useRef<string | null>(null);
   const [isWithdrawDialogOpen, setIsWithdrawDialogOpen] = useState(false);
   const [isCheckInDialogOpen, setIsCheckInDialogOpen] = useState(false);
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
@@ -521,17 +636,17 @@ export default function TournamentParticipantsPage({
   const myRegQuery = useQuery({
     queryKey: tournamentQueryKeys.registration(tournament.workspace_id, tournament.id),
     queryFn: () => registrationService.getMyRegistration(tournament.id),
-    enabled: isAuthenticated,
+    enabled: isAuthenticated
   });
 
   const listQuery = useQuery({
     queryKey: tournamentQueryKeys.registrationsList(tournament.workspace_id, tournament.id),
-    queryFn: () => registrationService.listRegistrations(tournament.id),
+    queryFn: () => registrationService.listRegistrations(tournament.id)
   });
 
   const formQuery = useQuery({
     queryKey: tournamentQueryKeys.registrationForm(tournament.workspace_id, tournament.id),
-    queryFn: () => registrationService.getForm(tournament.id),
+    queryFn: () => registrationService.getForm(tournament.id)
   });
 
   const withdrawMutation = useMutation({
@@ -540,31 +655,35 @@ export default function TournamentParticipantsPage({
       setIsWithdrawDialogOpen(false);
       await Promise.all([
         queryClient.invalidateQueries({
-          queryKey: tournamentQueryKeys.registration(tournament.workspace_id, tournament.id),
+          queryKey: tournamentQueryKeys.registration(tournament.workspace_id, tournament.id)
         }),
         queryClient.invalidateQueries({
-          queryKey: tournamentQueryKeys.registrationsList(tournament.workspace_id, tournament.id),
+          queryKey: tournamentQueryKeys.registrationsList(tournament.workspace_id, tournament.id)
         }),
         queryClient.invalidateQueries({
-          queryKey: tournamentQueryKeys.registrationForm(tournament.workspace_id, tournament.id),
-        }),
+          queryKey: tournamentQueryKeys.registrationForm(tournament.workspace_id, tournament.id)
+        })
       ]);
-    },
+    }
   });
 
   const checkInMutation = useMutation({
     mutationFn: () => registrationService.checkInMyRegistration(tournament.id),
-    onSuccess: async () => {
+    onSuccess: (updated) => {
       setIsCheckInDialogOpen(false);
-      await Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: tournamentQueryKeys.registration(tournament.workspace_id, tournament.id),
-        }),
-        queryClient.invalidateQueries({
-          queryKey: tournamentQueryKeys.registrationsList(tournament.workspace_id, tournament.id),
-        }),
-      ]);
-    },
+      // The response IS the updated registration: write it into the cache
+      // instead of refetching. The list refetch is fire-and-forget — our own
+      // commit just invalidated the gateway entry, so awaiting it kept the
+      // button spinning through the post-invalidation rebuild (and the WS
+      // structure_changed event refreshes the list anyway).
+      queryClient.setQueryData(
+        tournamentQueryKeys.registration(tournament.workspace_id, tournament.id),
+        updated
+      );
+      void queryClient.invalidateQueries({
+        queryKey: tournamentQueryKeys.registrationsList(tournament.workspace_id, tournament.id)
+      });
+    }
   });
 
   const registrations = listQuery.data ?? [];
@@ -581,10 +700,8 @@ export default function TournamentParticipantsPage({
   // Dynamic columns
   const allColumns = useMemo(
     () => buildParticipantColumns(form, t, locale, divisionGrid),
-    [form, t, locale, divisionGrid],
+    [form, t, locale, divisionGrid]
   );
-  const { visibleColumns, visibility, toggleColumn, resetToDefaults } =
-    useColumnVisibility("participants-table-columns", allColumns);
 
   // Status counts + chips present in the data.
   const statusCounts = useMemo(() => {
@@ -598,22 +715,26 @@ export default function TournamentParticipantsPage({
   const presentStatuses = useMemo(() => {
     // Collect all unique statuses actually present in registrations
     const uniqueStatuses = Array.from(new Set(registrations.map((r) => r.status)));
-    
+
     // Sort them so that built-in ones in STATUS_FILTER_ORDER come first, and any others (custom) come after
     return uniqueStatuses.sort((a, b) => {
       const idxA = STATUS_FILTER_ORDER.indexOf(a);
       const idxB = STATUS_FILTER_ORDER.indexOf(b);
-      
+
       if (idxA !== -1 && idxB !== -1) {
         return idxA - idxB;
       }
       if (idxA !== -1) return -1;
       if (idxB !== -1) return 1;
-      
+
       // Both are custom, sort alphabetically
       return a.localeCompare(b);
     });
   }, [registrations]);
+  const allowedStatuses = useMemo(
+    () => Array.from(new Set([...STATUS_FILTER_ORDER, ...presentStatuses])),
+    [presentStatuses]
+  );
 
   const statusMetaMap = useMemo(() => {
     const map: Record<string, { name: string; dot: string }> = {};
@@ -637,6 +758,149 @@ export default function TournamentParticipantsPage({
     return map;
   }, [registrations]);
 
+  const defaultColumnIds = useMemo(() => participantDefaultColumnIds(allColumns), [allColumns]);
+  // Optional column ids persisted per tournament. localStorage is an external
+  // store: the raw entry is read via useSyncExternalStore (server snapshot is
+  // null, so SSR/hydration never touches it) and writers notify subscribers.
+  const storedColumnsRaw = useSyncExternalStore(
+    subscribeParticipantColumnsStorage,
+    () => {
+      try {
+        return window.localStorage.getItem(participantColumnsStorageKey(tournament.id));
+      } catch {
+        return null;
+      }
+    },
+    () => null
+  );
+  const storedColumnIds = useMemo(
+    () => parseStoredParticipantColumnIds(storedColumnsRaw),
+    [storedColumnsRaw]
+  );
+  const persistColumns = useCallback(
+    (visibleIds: readonly string[]) => {
+      writeStoredParticipantColumnIds(
+        typeof window === "undefined" ? null : window.localStorage,
+        tournament.id,
+        visibleIds,
+        defaultColumnIds
+      );
+    },
+    [defaultColumnIds, tournament.id]
+  );
+  const participantUrl = useMemo(
+    () =>
+      readParticipantUrlState(
+        new URLSearchParams(searchParamsString),
+        allowedStatuses,
+        allColumns,
+        storedColumnIds
+      ),
+    [allColumns, allowedStatuses, searchParamsString, storedColumnIds]
+  );
+  const latestParamsRef = useRef(searchParamsString);
+  const searchQuery = participantUrl.state.search;
+  const statusFilter = participantUrl.state.status as StatusFilter;
+  const displayedStatuses = useMemo(
+    () =>
+      statusFilter !== "all" && !presentStatuses.includes(statusFilter)
+        ? [...presentStatuses, statusFilter]
+        : presentStatuses,
+    [presentStatuses, statusFilter]
+  );
+  const visibleColumnIds = participantUrl.state.visibleColumnIds;
+  const visibleColumnIdSet = useMemo(() => new Set(visibleColumnIds), [visibleColumnIds]);
+  const visibleColumns = useMemo(
+    () => allColumns.filter((column) => visibleColumnIdSet.has(column.id)),
+    [allColumns, visibleColumnIdSet]
+  );
+  const visibility = useMemo(
+    () =>
+      Object.fromEntries(
+        allColumns.map((column) => [column.id, visibleColumnIdSet.has(column.id)])
+      ),
+    [allColumns, visibleColumnIdSet]
+  );
+
+  useEffect(() => {
+    latestParamsRef.current = searchParamsString;
+  }, [searchParamsString]);
+
+  const navigateParticipantUrl = useCallback(
+    (update: ParticipantUrlUpdate) => {
+      const result = updateParticipantUrlState(
+        new URLSearchParams(latestParamsRef.current),
+        update
+      );
+      const query = result.params.toString();
+      const href = query ? `${pathname}?${query}` : pathname;
+      latestParamsRef.current = query;
+      if (result.history === "replace") router.replace(href, { scroll: false });
+      else router.push(href, { scroll: false });
+    },
+    [pathname, router]
+  );
+  const commitSearch = useCallback(
+    (value: string) => navigateParticipantUrl({ type: "search", value }),
+    [navigateParticipantUrl]
+  );
+  const { inputRef: participantSearchInputRef, onChange: handleParticipantSearchChange } =
+    useParticipantSearchInput({
+      canonicalSearch: searchQuery,
+      canonicalUrl: searchParamsString,
+      onCommit: commitSearch
+    });
+
+  useEffect(() => {
+    if (!listQuery.isFetched || !formQuery.isFetched || !participantUrl.needsNormalization) {
+      return;
+    }
+    const query = participantUrl.params.toString();
+    const href = query ? `${pathname}?${query}` : pathname;
+    latestParamsRef.current = query;
+    router.replace(href, { scroll: false });
+  }, [
+    formQuery.isFetched,
+    listQuery.isFetched,
+    participantUrl.needsNormalization,
+    participantUrl.params,
+    pathname,
+    router
+  ]);
+
+  const toggleColumn = useCallback(
+    (columnId: string) => {
+      if (isMandatoryParticipantColumnId(columnId)) return;
+      const nextIds = visibleColumnIdSet.has(columnId)
+        ? visibleColumnIds.filter((id) => id !== columnId)
+        : allColumns
+            .filter((column) => column.id === columnId || visibleColumnIdSet.has(column.id))
+            .map((column) => column.id);
+      persistColumns(nextIds);
+      navigateParticipantUrl({
+        type: "columns",
+        value: nextIds,
+        defaultValue: defaultColumnIds
+      });
+    },
+    [
+      allColumns,
+      defaultColumnIds,
+      navigateParticipantUrl,
+      persistColumns,
+      visibleColumnIdSet,
+      visibleColumnIds
+    ]
+  );
+  const resetToDefaults = useCallback(() => {
+    persistColumns(defaultColumnIds);
+    navigateParticipantUrl({
+      type: "columns",
+      value: defaultColumnIds,
+      defaultValue: defaultColumnIds
+    });
+  }, [defaultColumnIds, navigateParticipantUrl, persistColumns]);
+
   // Status filter + dynamic search across all searchable columns.
   const filtered = useMemo(() => {
     const byStatus =
@@ -651,12 +915,62 @@ export default function TournamentParticipantsPage({
         if (!col.searchValue) return false;
         const val = col.searchValue(r);
         return val?.toLowerCase().includes(q) ?? false;
-      }),
+      })
     );
   }, [registrations, searchQuery, statusFilter, visibleColumns]);
 
+  const resultsSignature = useMemo(
+    () =>
+      participantResultsTransitionSignature({
+        search: searchQuery,
+        status: statusFilter,
+        visibleColumnIds
+      }),
+    [searchQuery, statusFilter, visibleColumnIds]
+  );
+  useEffect(() => {
+    if (previousResultsSignatureRef.current === null) {
+      previousResultsSignatureRef.current = resultsSignature;
+      return;
+    }
+    if (previousResultsSignatureRef.current === resultsSignature) return;
+    previousResultsSignatureRef.current = resultsSignature;
+
+    const frame = window.requestAnimationFrame(() => {
+      const heading = resultsHeadingRef.current;
+      if (!heading) return;
+      const headingDocumentTop = heading.getBoundingClientRect().top + window.scrollY;
+      const stickyOffset = 112;
+      if (
+        shouldScrollParticipantResults({
+          scrollY: window.scrollY,
+          headingDocumentTop,
+          stickyOffset
+        })
+      ) {
+        window.scrollTo({
+          top: participantResultsScrollTarget(headingDocumentTop, stickyOffset),
+          behavior: "auto"
+        });
+      }
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [resultsSignature]);
+
+  const trueEmpty = listQuery.data !== undefined && registrations.length === 0;
+  const filteredEmpty = !trueEmpty && filtered.length === 0;
+
+  if (listQuery.isPending && listQuery.data === undefined) {
+    return <TournamentParticipantsSkeleton />;
+  }
+
+  if (listQuery.isError && listQuery.data === undefined) {
+    return <TournamentPageState state="initial-error" onRetry={() => void listQuery.refetch()} />;
+  }
+
   return (
-    <div className="space-y-5">
+    <div className="space-y-5" data-participant-layout="true">
       {/* My registration status */}
       {myRegistration && (
         <MyRegistrationCard
@@ -667,19 +981,15 @@ export default function TournamentParticipantsPage({
           isCheckingIn={checkInMutation.isPending}
           isWithdrawing={withdrawMutation.isPending}
           tournament={tournament}
+          requireOpenProfile={formQuery.data?.require_open_profile ?? false}
         />
       )}
 
-      <AlertDialog
-        open={isCheckInDialogOpen}
-        onOpenChange={setIsCheckInDialogOpen}
-      >
+      <AlertDialog open={isCheckInDialogOpen} onOpenChange={setIsCheckInDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>{t("common.confirmCheckIn")}</AlertDialogTitle>
-            <AlertDialogDescription>
-              {t("common.checkInDesc")}
-            </AlertDialogDescription>
+            <AlertDialogDescription>{t("common.checkInDesc")}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={checkInMutation.isPending}>
@@ -691,7 +1001,7 @@ export default function TournamentParticipantsPage({
                 checkInMutation.mutate();
               }}
               disabled={checkInMutation.isPending}
-              className="border border-emerald-500/30 bg-emerald-600 text-white hover:bg-emerald-500"
+              className="border border-emerald-500/30 bg-emerald-600 text-[color:var(--aqt-fg)] hover:bg-emerald-500"
             >
               {checkInMutation.isPending ? t("common.checkingIn") : t("common.checkIn")}
             </AlertDialogAction>
@@ -699,16 +1009,11 @@ export default function TournamentParticipantsPage({
         </AlertDialogContent>
       </AlertDialog>
 
-      <AlertDialog
-        open={isWithdrawDialogOpen}
-        onOpenChange={setIsWithdrawDialogOpen}
-      >
+      <AlertDialog open={isWithdrawDialogOpen} onOpenChange={setIsWithdrawDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>{t("common.withdrawReg")}</AlertDialogTitle>
-            <AlertDialogDescription>
-              {t("common.withdrawDesc")}
-            </AlertDialogDescription>
+            <AlertDialogDescription>{t("common.withdrawDesc")}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={withdrawMutation.isPending}>
@@ -720,7 +1025,7 @@ export default function TournamentParticipantsPage({
                 withdrawMutation.mutate();
               }}
               disabled={withdrawMutation.isPending}
-              className="bg-red-600 text-white hover:bg-red-500"
+              className="bg-red-600 text-[color:var(--aqt-fg)] hover:bg-red-500"
             >
               {withdrawMutation.isPending ? t("common.withdrawing") : t("common.confirmWithdraw")}
             </AlertDialogAction>
@@ -728,44 +1033,48 @@ export default function TournamentParticipantsPage({
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Header */}
-      <div className="section-head">
-        <h2>
-          {t("common.participants")} <span className="count-tag">{registrations.length}</span>
-        </h2>
-      </div>
+      <p aria-atomic="true" aria-live="polite" className="sr-only">
+        {t("tournamentDetail.participants.resultCount", { count: filtered.length })}
+      </p>
 
       {/* Status filter chips + search + column picker */}
-      {registrations.length > 0 && (
-        <div className="filters">
+      {!trueEmpty && (
+        <div className="filters" ref={resultsHeadingRef}>
           <button
             type="button"
             className={cn("filter-chip", statusFilter === "all" && "active")}
-            onClick={() => setStatusFilter("all")}
+            onClick={() => navigateParticipantUrl({ type: "status", value: "all" })}
           >
             {t("common.all")} <span className="count">{registrations.length}</span>
           </button>
-          {presentStatuses.map((status) => {
+          {displayedStatuses.map((status) => {
             const meta = statusMetaMap[status];
             return (
               <button
                 key={status}
                 type="button"
                 className={cn("filter-chip", statusFilter === status && "active")}
-                onClick={() => setStatusFilter(statusFilter === status ? "all" : status)}
+                onClick={() =>
+                  navigateParticipantUrl({
+                    type: "status",
+                    value: statusFilter === status ? "all" : status
+                  })
+                }
               >
                 <span className="dot" style={{ background: meta?.dot ?? "var(--aqt-fg-dim)" }} />
-                {meta?.name ?? status}{" "}
-                <span className="count">{statusCounts[status] ?? 0}</span>
+                {meta?.name ?? status} <span className="count">{statusCounts[status] ?? 0}</span>
               </button>
             );
           })}
           <div className="filter-search">
             <Search size={13} />
             <input
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              aria-label={t("common.searchParticipants")}
+              defaultValue={searchQuery}
+              maxLength={PARTICIPANT_SEARCH_MAX_LENGTH}
+              onChange={handleParticipantSearchChange}
               placeholder={t("common.searchParticipants")}
+              ref={participantSearchInputRef}
             />
           </div>
           <ColumnPicker
@@ -778,127 +1087,46 @@ export default function TournamentParticipantsPage({
       )}
 
       {/* Participants list */}
-      {listQuery.isLoading ? (
-        <div className="tn-card" style={{ padding: "48px 24px", textAlign: "center" }}>
-          <Loader2 className="mx-auto size-6 animate-spin text-white/30" />
-        </div>
-      ) : filtered.length > 0 ? (
-        <div className="tn-card">
-          <div className="data-scroll">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th className="w-10" aria-hidden />
-                  {visibleColumns.map((col) => (
-                    <th
-                      key={col.id}
-                      className={cn(
-                        RESPONSIVE_CLASS[col.responsive ?? "always"],
-                        ALIGN_CLASS[col.align ?? "left"],
-                        col.widthClass,
-                      )}
-                    >
-                      {col.label}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((reg, idx) => {
-                  const isExpanded = expandedIds.has(reg.id);
-                  const hiddenColumns = allColumns.filter(
-                    (col) => col.id !== "_index" && !visibleColumns.some((vc) => vc.id === col.id)
-                  );
-                  return (
-                    <Fragment key={reg.id}>
-                      <tr>
-                        <td className="align-middle">
-                          <button
-                            type="button"
-                            onClick={() => toggleExpanded(reg.id)}
-                            className="inline-flex size-6 items-center justify-center rounded text-white/40 transition-colors hover:bg-white/5 hover:text-white"
-                            aria-label={isExpanded ? "Collapse" : "Expand"}
-                            aria-expanded={isExpanded}
-                          >
-                            {isExpanded ? (
-                              <ChevronUp className="size-4" />
-                            ) : (
-                              <ChevronDown className="size-4" />
-                            )}
-                          </button>
-                        </td>
-                        {visibleColumns.map((col) => (
-                          <td
-                            key={col.id}
-                            className={cn(
-                              RESPONSIVE_CLASS[col.responsive ?? "always"],
-                              ALIGN_CLASS[col.align ?? "left"],
-                              col.widthClass,
-                            )}
-                          >
-                            {col.render(reg, idx)}
-                          </td>
-                        ))}
-                      </tr>
-                      {isExpanded && (
-                        <tr>
-                          <td
-                            colSpan={visibleColumns.length + 1}
-                            className="border-t border-white/[0.06] bg-white/[0.015] p-4"
-                          >
-                            <div className="grid gap-4 lg:grid-cols-4">
-                              <div className="space-y-2 lg:col-span-3">
-                                <div className="text-[11px] font-semibold uppercase tracking-wider text-white/45">
-                                  Rank history
-                                </div>
-                                <BattleTagRankHistory
-                                  userId={reg.user_id}
-                                  battleTag={reg.battle_tag}
-                                />
-                              </div>
-                              <div className="rounded-xl border border-white/[0.05] bg-black/10 p-4 space-y-3.5 text-xs lg:col-span-1">
-                                <div className="text-[11px] font-bold uppercase tracking-widest text-white/80 border-b border-white/[0.06] pb-1.5 mb-2">
-                                  {t("registration.myCard.details")}
-                                </div>
-                                {hiddenColumns.length === 0 ? (
-                                  <div className="text-white/30 italic py-1 text-center">
-                                    {locale.startsWith("ru") ? "Все поля видны в таблице" : "All fields visible in table"}
-                                  </div>
-                                ) : (
-                                  <div className="grid grid-cols-2 gap-x-4 gap-y-3 lg:grid-cols-1">
-                                    {hiddenColumns.map((col) => (
-                                      <div key={col.id} className="space-y-1">
-                                        <div className="text-[10px] font-semibold uppercase tracking-wider text-white/40">
-                                          {col.label}
-                                        </div>
-                                        <div className="text-white/80">
-                                          {col.render(reg, idx)}
-                                        </div>
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                    </Fragment>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
+      {filtered.length > 0 ? (
+        <VirtualParticipantsList
+          allColumns={allColumns}
+          expandedIds={expandedIds}
+          onToggleExpanded={toggleExpanded}
+          registrations={filtered}
+          visibleColumns={visibleColumns}
+        />
+      ) : filteredEmpty ? (
+        <TournamentPageState
+          state="filtered-empty"
+          onReset={() => {
+            persistColumns(defaultColumnIds);
+            navigateParticipantUrl({ type: "reset" });
+          }}
+        />
       ) : (
-        <div className="tn-card" style={{ padding: "56px 24px", textAlign: "center" }}>
-          <UserPlus className="mx-auto size-9 text-white/15" />
-          <p className="mt-3 text-sm" style={{ color: "var(--fg-dim)" }}>
-            {t("common.noParticipants")}
-          </p>
-        </div>
+        <TournamentPageState
+          state="empty"
+          title={t("tournamentDetail.participants.empty.title")}
+          description={t("tournamentDetail.participants.empty.description")}
+        />
       )}
+
+      {listQuery.isError && listQuery.data !== undefined ? (
+        <div className={styles.refreshMessage} role="alert">
+          <span>
+            <strong>{t("tournamentDetail.pageState.refreshError.title")}</strong>
+            {" — "}
+            {t("tournamentDetail.pageState.refreshError.description")}
+          </span>
+          <button
+            className={styles.stateAction}
+            onClick={() => void listQuery.refetch()}
+            type="button"
+          >
+            {t("tournamentDetail.pageState.retry")}
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }
-

@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { Save, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { NumberInput } from "@/components/ui/number-input";
 import {
   Select,
   SelectContent,
@@ -57,102 +57,6 @@ function formatValue(value: unknown): string {
   return String(value);
 }
 
-function normalizeNumericText(value: string, field: BalancerConfigField): string | null {
-  const normalized = value.replace(",", ".");
-  const pattern = field.type === "integer" ? /^\d*$/ : /^\d*(?:\.\d*)?$/;
-
-  return pattern.test(normalized) ? normalized : null;
-}
-
-function clampNumber(value: number, field: BalancerConfigField): number {
-  const min = field.limits?.min;
-  const max = field.limits?.max;
-  let nextValue = field.type === "integer" ? Math.round(value) : value;
-
-  if (typeof min === "number" && nextValue < min) {
-    nextValue = min;
-  }
-  if (typeof max === "number" && nextValue > max) {
-    nextValue = max;
-  }
-
-  return nextValue;
-}
-
-function NumericConfigInput({
-  field,
-  value,
-  onChange,
-}: {
-  field: BalancerConfigField;
-  value: unknown;
-  onChange: (value: unknown) => void;
-}) {
-  const [rawValue, setRawValue] = useState(() =>
-    value === undefined || value === null ? "" : String(value)
-  );
-  const [isFocused, setIsFocused] = useState(false);
-
-  /* eslint-disable react-hooks/set-state-in-effect -- Keep the editable string in sync with preset/reset changes while preserving in-progress typing. */
-  useEffect(() => {
-    if (!isFocused) {
-      setRawValue(value === undefined || value === null ? "" : String(value));
-    }
-  }, [isFocused, value]);
-  /* eslint-enable react-hooks/set-state-in-effect */
-
-  const handleChange = (nextRawValue: string) => {
-    const normalized = normalizeNumericText(nextRawValue, field);
-    if (normalized === null) {
-      return;
-    }
-
-    setRawValue(normalized);
-
-    if (normalized === "" || normalized === ".") {
-      onChange("");
-      return;
-    }
-
-    if (normalized.endsWith(".")) {
-      onChange(normalized);
-      return;
-    }
-
-    onChange(Number(normalized));
-  };
-
-  const handleBlur = () => {
-    setIsFocused(false);
-    if (rawValue === "" || rawValue === ".") {
-      onChange("");
-      return;
-    }
-
-    const numericValue = Number(rawValue);
-    if (!Number.isFinite(numericValue)) {
-      return;
-    }
-
-    const clampedValue = clampNumber(numericValue, field);
-    setRawValue(String(clampedValue));
-    onChange(clampedValue);
-  };
-
-  return (
-    <Input
-      id={`config-${field.key}`}
-      value={rawValue}
-      type="text"
-      inputMode={field.type === "integer" ? "numeric" : "decimal"}
-      onFocus={() => setIsFocused(true)}
-      onBlur={handleBlur}
-      onChange={(event) => handleChange(event.target.value)}
-      className="h-9 rounded-lg"
-    />
-  );
-}
-
 function ConfigMapEditor({
   id,
   value,
@@ -199,13 +103,21 @@ function ConfigMapEditor({
             className="h-8 rounded-lg"
             aria-label="Config key"
           />
-          <Input
-            value={String(currentValue)}
-            type={valueType}
-            onChange={(event) => updateEntry(index, key, event.target.value)}
-            className="h-8 rounded-lg"
-            aria-label="Config value"
-          />
+          {valueType === "number" ? (
+            <NumberInput
+              value={typeof currentValue === "number" ? currentValue : Number(currentValue) || 0}
+              onValueChange={(next) => updateEntry(index, key, String(next ?? 0))}
+              className="h-8 rounded-lg"
+              aria-label="Config value"
+            />
+          ) : (
+            <Input
+              value={String(currentValue)}
+              onChange={(event) => updateEntry(index, key, event.target.value)}
+              className="h-8 rounded-lg"
+              aria-label="Config value"
+            />
+          )}
           <Button
             type="button"
             variant="outline"
@@ -285,17 +197,32 @@ function ConfigFieldControl({
           value={[numeric]}
           onValueChange={(next) => onChange(next[0])}
         />
-        <div className="flex justify-between text-[11px] text-white/45">
+        <div className="flex justify-between text-[11px] text-[color:var(--aqt-fg-dim)]">
           <span>balance</span>
-          <span className="tabular-nums text-white/70">{numeric.toFixed(2)}</span>
+          <span className="tabular-nums text-[color:var(--aqt-fg-muted)]">{numeric.toFixed(2)}</span>
           <span>comfort</span>
         </div>
       </div>
     );
   }
 
+  const numericValue =
+    typeof value === "number"
+      ? value
+      : typeof value === "string" && value.trim() !== "" && Number.isFinite(Number(value))
+        ? Number(value)
+        : null;
+
   return (
-    <NumericConfigInput field={field} value={value} onChange={onChange} />
+    <NumberInput
+      id={`config-${field.key}`}
+      value={numericValue}
+      onValueChange={onChange}
+      min={field.limits?.min}
+      max={field.limits?.max}
+      integer={field.type === "integer"}
+      className="h-9 rounded-lg"
+    />
   );
 }
 
@@ -318,10 +245,10 @@ export function BalancerConfigDrawer({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="flex w-full flex-col gap-0 overflow-hidden border-border bg-popover p-0 text-white sm:max-w-2xl">
-        <SheetHeader className="border-b border-white/10 px-5 py-4">
-          <SheetTitle className="text-white">Balancer settings</SheetTitle>
-          <SheetDescription className="text-white/52">
+      <SheetContent className="flex w-full flex-col gap-0 overflow-hidden border-border bg-popover p-0 text-[color:var(--aqt-fg)] sm:max-w-2xl">
+        <SheetHeader className="border-b border-[color:var(--aqt-border-2)] px-5 py-4">
+          <SheetTitle className="text-[color:var(--aqt-fg)]">Balancer settings</SheetTitle>
+          <SheetDescription className="text-[color:var(--aqt-fg-muted)]">
             Active preset: {selectedPresetLabel}. Changes are saved for this tournament.
           </SheetDescription>
         </SheetHeader>
@@ -330,7 +257,7 @@ export function BalancerConfigDrawer({
           <div className="space-y-5">
             {fieldsByGroup.map(({ group, fields: groupFields }) => (
               <section key={group} className="space-y-3">
-                <div className="text-xs font-semibold uppercase tracking-[0.14em] text-white/40">
+                <div className="text-xs font-semibold uppercase tracking-[0.14em] text-[color:var(--aqt-fg-dim)]">
                   {group}
                 </div>
                 <div className="space-y-3">
@@ -339,17 +266,17 @@ export function BalancerConfigDrawer({
                     return (
                       <div
                         key={field.key}
-                        className="rounded-lg border border-white/10 bg-black/15 p-3"
+                        className="rounded-lg border border-[color:var(--aqt-border-2)] bg-black/15 p-3"
                       >
                         <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_220px]">
                           <div>
-                            <Label htmlFor={`config-${field.key}`} className="text-sm text-white/90">
+                            <Label htmlFor={`config-${field.key}`} className="text-sm text-[color:var(--aqt-fg)]">
                               {field.label}
                             </Label>
-                            <p className="mt-1 text-xs leading-5 text-white/48">
+                            <p className="mt-1 text-xs leading-5 text-[color:var(--aqt-fg-dim)]">
                               {field.description}
                             </p>
-                            <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-white/35">
+                            <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-[color:var(--aqt-fg-dim)]">
                               <span>Default: {formatValue(field.default)}</span>
                               {field.limits ? (
                                 <span>
@@ -375,9 +302,9 @@ export function BalancerConfigDrawer({
           </div>
         </div>
 
-        <SheetFooter className="border-t border-white/10 px-5 py-4">
+        <SheetFooter className="border-t border-[color:var(--aqt-border-2)] px-5 py-4">
           <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div className="text-xs text-white/42">
+            <div className="text-xs text-[color:var(--aqt-fg-dim)]">
               {dirty ? "Unsaved settings will be saved before the next run." : "Settings are saved."}
             </div>
             <div className="flex gap-2">

@@ -19,7 +19,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { useTranslation } from "@/i18n/LanguageContext";
+import { useTranslations } from "next-intl";
 import styles from "@/app/(site)/tournaments/analytics/components/AnalyticsRedesign.module.css";
 
 interface AnalyticsPickerProps {
@@ -91,7 +91,7 @@ export default function AnalyticsPicker({
   onTournamentChange,
   onAlgorithmChange,
 }: AnalyticsPickerProps) {
-  const { t } = useTranslation();
+  const t = useTranslations();
 
   return (
     <div className={styles.cPickerRow}>

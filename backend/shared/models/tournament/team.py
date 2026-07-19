@@ -10,9 +10,13 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    and_,
+    cast,
+    func,
+    select,
     text,
 )
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, column_property, mapped_column, relationship
 
 from shared.core import db, enums
 from shared.models.identity.user import User
@@ -31,8 +35,12 @@ class Team(db.TimeStampIntegerMixin):
 
     balancer_name: Mapped[str] = mapped_column(String())
     name: Mapped[str] = mapped_column(String())
-    avg_sr: Mapped[float] = mapped_column(Float())
-    total_sr: Mapped[int] = mapped_column(Integer())
+
+    if typing.TYPE_CHECKING:
+        # Computed roster aggregates over non-substitute players; mapped via
+        # ``column_property`` after ``Player`` is defined (see module tail).
+        avg_sr: Mapped[float]
+        total_sr: Mapped[int]
 
     captain_id: Mapped[int | None] = mapped_column(
         ForeignKey("players.user.id", ondelete="SET NULL"), nullable=True, index=True
@@ -90,6 +98,24 @@ class Player(db.TimeStampIntegerMixin):
 
     def __repr__(self):
         return f"<Player name={self.name} role={self.role}>"
+
+
+# ``avg_sr``/``total_sr`` are computed from the roster (non-substitute players
+# only) instead of being stored: substitutes are extra rows linked to the slot
+# they cover via ``related_player_id``, so including them would double-count
+# replaced slots. The correlated subquery ships in every ``SELECT team`` and is
+# usable in SQL expressions (e.g. ``func.avg(Team.avg_sr)``).
+_active_roster = and_(Player.team_id == Team.id, Player.is_substitution.is_(False))
+
+Team.avg_sr = column_property(
+    select(cast(func.coalesce(func.avg(Player.rank), 0.0), Float()))
+    .where(_active_roster)
+    .correlate_except(Player)
+    .scalar_subquery()
+)
+Team.total_sr = column_property(
+    select(func.coalesce(func.sum(Player.rank), 0)).where(_active_roster).correlate_except(Player).scalar_subquery()
+)
 
 
 class PlayerSubRole(db.TimeStampIntegerMixin):

@@ -66,3 +66,42 @@ def test_inverted_top_division_produces_ow_rank_value_for_delta() -> None:
     grid = _grid_with_inverted_top()
     mapped = normalize_ow_ranks_to_grid({42: {"support": 4900}}, grid)
     assert mapped == {42: {"support": 2000}}
+
+
+def _grid_without_ow_mapping() -> DivisionGrid:
+    # A grid cloned from the default OW2 scale where the admin never configured
+    # the per-tier OW ranges (ow_rank_min/max all NULL) — the common real case.
+    tiers = [
+        DivisionTier(id=n, slug=f"d{n}", number=n, name=f"D{n}", rank_min=rank_min, rank_max=rank_max, icon_url="")
+        for n, (rank_min, rank_max) in enumerate(
+            [(4900, None), (3000, 3099), (1000, 1099)],
+            start=1,
+        )
+    ]
+    return DivisionGrid(version_id=None, tiers=tiers)
+
+
+def test_unconfigured_grid_falls_back_to_native_rank_containment() -> None:
+    # No tier has an OW range: the OW rank_value shares the grid scale (the
+    # parser's default mapping is SR-aligned), so it resolves by rank_min/max.
+    grid = _grid_without_ow_mapping()
+    assert grid.resolve_division_from_ow_rank(3050).number == 2  # inside 3000-3099
+    assert grid.resolve_division_from_ow_rank(5200).number == 1  # unbounded top tier
+
+
+def test_partially_configured_grid_does_not_fall_back() -> None:
+    # One configured tier means the admin owns the OW mapping: ranks outside the
+    # configured ranges return None instead of being misread as native-scale.
+    tiers = list(_grid_without_ow_mapping().tiers)
+    tiers[0] = _tier(1, "Top", rank_min=4900, ow_lo=4500, ow_hi=5000)
+    grid = DivisionGrid(version_id=None, tiers=tiers)
+    assert grid.resolve_division_from_ow_rank(4700).number == 1  # configured range wins
+    assert grid.resolve_division_from_ow_rank(3050) is None  # unconfigured tier stays unreachable
+
+
+def test_unconfigured_default_scale_maps_ow_ranks() -> None:
+    # End-to-end with the shared normalizer: an unconfigured grid no longer
+    # drops every OW rank (the regression behind the empty rank-autofill).
+    grid = _grid_without_ow_mapping()
+    mapped = normalize_ow_ranks_to_grid({42: {"support": 3050}}, grid)
+    assert mapped == {42: {"support": 3000}}

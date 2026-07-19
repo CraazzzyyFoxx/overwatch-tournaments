@@ -25,7 +25,7 @@ export const DivisionHex = ({ division, role, variant, size = 30, className }: D
         className="relative aqt-display font-extrabold leading-none"
         style={{
           fontSize: size * 0.45,
-          color: "hsl(220 30% 8%)"
+          color: "var(--aqt-bg)"
         }}
       >
         {division}

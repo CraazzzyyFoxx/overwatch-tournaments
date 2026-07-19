@@ -2,13 +2,13 @@ export const SITE_NAME = process.env.NEXT_PUBLIC_SITE_NAME ?? "Anakq Tournaments
 
 // Public base URL for the frontend (used in metadata like Open Graph).
 // Must be an absolute URL including protocol, e.g. "https://example.com".
-export const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://aqt.craazzzyyfoxx.me";
+export const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://owt.craazzzyyfoxx.me";
 
 export const SITE_URL_OBJ = (() => {
 	try {
 		return new URL(SITE_URL);
 	} catch {
-		return new URL("https://aqt.craazzzyyfoxx.me");
+		return new URL("https://owt.craazzzyyfoxx.me");
 	}
 })();
 

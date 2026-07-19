@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import { useQuery } from "@tanstack/react-query";
 import { useDebounce } from "use-debounce";
 import { cn } from "@/lib/utils";
@@ -25,6 +26,7 @@ type SortKey = "winrate" | "count" | "name";
 type OrderKey = "asc" | "desc";
 
 const MapsView = ({ userId }: Props) => {
+  const t = useTranslations();
   const [modeFilter, setModeFilter] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [debouncedSearch] = useDebounce(search, 300);
@@ -91,7 +93,7 @@ const MapsView = ({ userId }: Props) => {
       { mode: string; maps: Set<number>; games: number; win: number; loss: number; draw: number }
     >();
     allMaps.forEach((row) => {
-      const mode = row.map.gamemode?.name ?? "Unknown";
+      const mode = row.map.gamemode?.name ?? t("common.unknown");
       const b = buckets.get(mode) ?? { mode, maps: new Set<number>(), games: 0, win: 0, loss: 0, draw: 0 };
       b.maps.add(row.map.id);
       b.games += row.count;
@@ -105,7 +107,7 @@ const MapsView = ({ userId }: Props) => {
       const bi = MODE_ORDER.findIndex((m) => m === b.mode);
       return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
     });
-  }, [allMaps]);
+  }, [allMaps, t]);
 
   const sortedMaps = useMemo(() => {
     let rows = [...allMaps];
@@ -141,46 +143,65 @@ const MapsView = ({ userId }: Props) => {
       {/* Top KPI row */}
       <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 xl:grid-cols-4">
         <KPI
-          label="Overall winrate"
+          label={t("users.maps.overallWinrate")}
           value={overall ? `${(overall.win_rate * 100).toFixed(1)}` : "—"}
           unit="%"
           color={overall ? getWinrateColor(overall.win_rate) : undefined}
-          sub={overall ? `${overall.win}-${overall.loss}-${overall.draw} · ${overall.total_games} games` : "—"}
+          sub={overall ? `${overall.win}-${overall.loss}-${overall.draw} · ${t("users.maps.gamesCount", { count: overall.total_games })}` : "—"}
         />
         <KPI
-          label="Most played"
+          label={t("users.maps.mostPlayed")}
           value={summary?.most_played ? `${summary.most_played.count}` : "—"}
-          unit=" games"
+          unit={t("users.maps.gamesUnit")}
           sub={summary?.most_played ? `${summary.most_played.map.name} · ${summary.most_played.map.gamemode?.name ?? ""}` : "—"}
         />
         <KPI
-          label="Best map"
+          label={t("users.maps.bestMap")}
           value={summary?.best ? `${(summary.best.win_rate * 100).toFixed(0)}` : "—"}
           unit="%"
           color={summary?.best ? getWinrateColor(summary.best.win_rate) : undefined}
-          sub={summary?.best ? `${summary.best.map.name} · ${summary.best.count} g` : "—"}
+          sub={summary?.best ? `${summary.best.map.name} · ${t("users.maps.gamesShort", { count: String(summary.best.count) })}` : "—"}
         />
         <KPI
-          label="Weakest"
+          label={t("users.maps.weakest")}
           value={summary?.worst ? `${(summary.worst.win_rate * 100).toFixed(0)}` : "—"}
           unit="%"
           color={summary?.worst ? getWinrateColor(summary.worst.win_rate) : undefined}
-          sub={summary?.worst ? `${summary.worst.map.name} · ${summary.worst.count} g` : "—"}
+          sub={summary?.worst ? `${summary.worst.map.name} · ${t("users.maps.gamesShort", { count: String(summary.worst.count) })}` : "—"}
         />
       </div>
 
       {/* Mode breakdown */}
       <CardSurface
-        title="By mode"
+        title={t("users.maps.byMode")}
         icon={<LayoutGrid size={15} />}
-        subtitle={`Winrate by game mode · ${modeStats.length} modes · ${allMaps.reduce((s, m) => s + m.count, 0)} games`}
+        subtitle={t("users.maps.byModeSubtitle", {
+          modes: modeStats.length,
+          games: allMaps.reduce((s, m) => s + m.count, 0)
+        })}
       >
         <div className="aqt-mode-grid">
           {modeStats.map((b) => {
             const totalDecisive = b.win + b.loss;
             const wr = totalDecisive > 0 ? (b.win / totalDecisive) * 100 : 0;
+            const active = modeFilter === b.mode;
             return (
-              <div key={b.mode} className={cn("aqt-mode-card", modeClass(b.mode))}>
+              <button
+                key={b.mode}
+                type="button"
+                onClick={() => setModeFilter(active ? null : b.mode)}
+                aria-pressed={active}
+                title={active ? t("users.maps.clearModeFilter") : t("users.maps.filterByMode", { mode: b.mode })}
+                className={cn(
+                  "aqt-mode-card w-full cursor-pointer text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--aqt-teal)]",
+                  modeClass(b.mode)
+                )}
+                style={
+                  active
+                    ? { borderColor: "var(--aqt-teal)", background: "color-mix(in srgb, var(--aqt-teal) 10%, transparent)" }
+                    : undefined
+                }
+              >
                 <div className="aqt-l">{b.mode}</div>
                 <div className="flex items-baseline justify-between gap-2">
                   <div className="aqt-display text-[30px] font-bold leading-none">{wr.toFixed(0)}%</div>
@@ -192,10 +213,10 @@ const MapsView = ({ userId }: Props) => {
                   <div className="aqt-fill" style={{ width: `${wr}%` }} />
                 </div>
                 <div className="aqt-mono flex items-center justify-between text-[12px] text-[color:var(--aqt-fg-dim)]">
-                  <span>{b.maps.size} maps</span>
-                  <span>{b.games} games</span>
+                  <span>{t("users.maps.mapsCount", { count: b.maps.size })}</span>
+                  <span>{t("users.maps.gamesCount", { count: b.games })}</span>
                 </div>
-              </div>
+              </button>
             );
           })}
         </div>
@@ -203,9 +224,6 @@ const MapsView = ({ userId }: Props) => {
 
       {/* Filter chips + controls */}
       <MapsFilters
-        modes={modeStats.map((b) => b.mode)}
-        modeFilter={modeFilter}
-        onModeFilterChange={setModeFilter}
         tournamentId={tournamentId}
         onTournamentIdChange={setTournamentId}
         tournamentOptions={tournamentOptions}
@@ -227,18 +245,18 @@ const MapsView = ({ userId }: Props) => {
       <CardSurface flush>
         <div className="grid grid-cols-[64px_1fr_1fr_minmax(0,1.2fr)_60px_50px] items-center gap-3.5 border-b border-[color:var(--aqt-border)] px-[18px] py-3 text-[11px] font-bold uppercase tracking-[0.14em] text-[color:var(--aqt-fg-faint)]">
           <div />
-          <div>Map</div>
-          <div>Winrate</div>
-          <div>Heroes</div>
-          <div className="text-right">Record</div>
-          <div className="text-right">Games</div>
+          <div>{t("users.maps.colMap")}</div>
+          <div>{t("users.maps.colWinrate")}</div>
+          <div>{t("common.heroes")}</div>
+          <div className="text-right">{t("users.maps.colRecord")}</div>
+          <div className="text-right">{t("users.maps.colGames")}</div>
         </div>
         {pageMaps.map((row) => (
           <MapRow key={row.map.id} row={row} />
         ))}
         {pageMaps.length === 0 ? (
           <div className="py-10 text-center text-[color:var(--aqt-fg-dim)]">
-            {mapsQuery.isLoading ? "Loading…" : "No maps match the filters"}
+            {mapsQuery.isLoading ? t("common.loading") : t("users.maps.noMaps")}
           </div>
         ) : null}
 
@@ -246,7 +264,11 @@ const MapsView = ({ userId }: Props) => {
         {perPage !== -1 && totalCount > 0 ? (
           <div className="flex items-center justify-between border-t border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.012)] px-[18px] py-3.5">
             <span className="aqt-mono text-[13px] text-[color:var(--aqt-fg-dim)]">
-              Showing {(page - 1) * perPage + 1}–{Math.min(page * perPage, totalCount)} of {totalCount}
+              {t("common.showingRange", {
+                start: String((page - 1) * perPage + 1),
+                end: String(Math.min(page * perPage, totalCount)),
+                total: String(totalCount)
+              })}
             </span>
             <div className="flex gap-1">
               <PageBtn disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>‹</PageBtn>

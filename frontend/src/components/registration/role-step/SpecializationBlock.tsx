@@ -1,7 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { useTranslation } from "@/i18n/LanguageContext";
+import { useTranslations } from "next-intl";
 
 export interface SpecializationOption {
   value: string;
@@ -25,7 +25,7 @@ export function SpecializationBlock({
   onDisabledSelect?: (nextValue: string) => void;
   hideLabel?: boolean;
 }) {
-  const { t } = useTranslation();
+  const t = useTranslations();
   const handleSelect = (nextValue: string) => {
     if (disabled) {
       onDisabledSelect?.(nextValue);
@@ -41,7 +41,7 @@ export function SpecializationBlock({
         <p
           className={cn(
             "text-[11px] font-medium uppercase tracking-[0.12em]",
-            disabled ? "text-white/28" : "text-white/42",
+            disabled ? "text-[color:var(--aqt-fg-faint)]" : "text-[color:var(--aqt-fg-dim)]",
           )}
         >
           {label}
@@ -99,8 +99,8 @@ function SubrolePill({
         muted && !disabled && "opacity-45",
         !disabled && active
           ? "border-blue-400/60 bg-blue-500/18 text-blue-100"
-          : "border-white/10 bg-white/[0.03] text-white/55",
-        !disabled && !active && "hover:bg-white/[0.06] hover:text-white/75",
+          : "border-[color:var(--aqt-border-2)] bg-white/[0.03] text-[color:var(--aqt-fg-muted)]",
+        !disabled && !active && "hover:bg-white/[0.06] hover:text-[color:var(--aqt-fg-muted)]",
       )}
     >
       {label}

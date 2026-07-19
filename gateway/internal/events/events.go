@@ -25,6 +25,19 @@ type Broadcaster interface {
 	Broadcast(topic string, payload []byte)
 }
 
+// Fanout composes several Broadcasters into one: every message is delivered
+// to each in order. Used to feed the realtime bus to both the WebSocket hub
+// and the gateway response cache's invalidator from a single subscription.
+func Fanout(bs ...Broadcaster) Broadcaster { return fanout(bs) }
+
+type fanout []Broadcaster
+
+func (f fanout) Broadcast(topic string, payload []byte) {
+	for _, b := range f {
+		b.Broadcast(topic, payload)
+	}
+}
+
 // Subscriber consumes the realtime Redis bus and feeds the hub.
 type Subscriber struct {
 	client *redis.Client

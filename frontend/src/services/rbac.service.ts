@@ -94,6 +94,7 @@ type PermissionListParams = ListParams & {
 type OAuthConnectionListParams = ListParams & {
   search?: string;
   provider?: string;
+  auth_user_id?: number;
 };
 
 type SessionListParams = ListParams & {
@@ -117,6 +118,13 @@ export const rbacService = {
 
   getUser(userId: number) {
     return rbacFetch<AuthAdminUserDetail>(`/rbac/users/${userId}`).then(normalizeAuthAdminUserDetail);
+  },
+
+  /** Permanently delete an auth account (superuser only; self-delete rejected server-side). */
+  deleteUser(userId: number) {
+    return rbacFetch<void>(`/rbac/users/${userId}`, {
+      method: "DELETE",
+    });
   },
 
   listRoles(params?: RoleListParams): Promise<PaginatedResponse<RbacRole>> {

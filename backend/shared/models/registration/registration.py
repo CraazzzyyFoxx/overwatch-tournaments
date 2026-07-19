@@ -38,8 +38,6 @@ class BalancerRegistrationForm(db.TimeStampIntegerMixin):
     workspace_id: Mapped[int] = mapped_column(ForeignKey("workspace.id", ondelete="CASCADE"), index=True)
     is_open: Mapped[bool] = mapped_column(Boolean(), nullable=False, server_default="false", default=False)
     auto_approve: Mapped[bool] = mapped_column(Boolean(), nullable=False, server_default="false", default=False)
-    opens_at: Mapped[db.DateTime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    closes_at: Mapped[db.DateTime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     built_in_fields_json: Mapped[dict[str, Any]] = mapped_column(
         JSON, nullable=False, server_default="{}", default=dict
     )

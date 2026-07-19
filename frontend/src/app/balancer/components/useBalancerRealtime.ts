@@ -26,6 +26,10 @@ export function balancerRealtimeTopic(tournamentId: number | null): string | nul
 const PRESENCE_EVENT = "balancer.presence";
 const JOB_EVENT_PREFIX = "balancer_job.";
 const DATA_EVENT_PREFIX = "balancer.";
+// Trailing debounce for data-change refetches: bulk edits emit one event per
+// row and the actor's own edit echoes straight back, so a burst of identical
+// signals must cost one list refetch, not N.
+const DATA_EVENT_INVALIDATE_DEBOUNCE_MS = 400;
 
 type BalancerJobEventData = {
   tournament_id?: number;
@@ -79,6 +83,34 @@ export function useBalancerRealtime({
   const jobContextRef = useRef<Map<string, JobResultContext>>(new Map());
   // Guard against applying the same job result twice (e.g. live event + replay).
   const appliedJobsRef = useRef<Set<string>>(new Set());
+  // Per-query-key debounce timers for data-change invalidations.
+  const invalidateTimersRef = useRef<Map<string, number>>(new Map());
+
+  const scheduleInvalidate = useCallback(
+    (queryKey: unknown[]) => {
+      const timers = invalidateTimersRef.current;
+      const key = JSON.stringify(queryKey);
+      clearTimeout(timers.get(key));
+      timers.set(
+        key,
+        window.setTimeout(() => {
+          timers.delete(key);
+          void queryClient.invalidateQueries({ queryKey });
+        }, DATA_EVENT_INVALIDATE_DEBOUNCE_MS)
+      );
+    },
+    [queryClient]
+  );
+
+  useEffect(() => {
+    const timers = invalidateTimersRef.current;
+    return () => {
+      for (const timer of timers.values()) {
+        clearTimeout(timer);
+      }
+      timers.clear();
+    };
+  }, []);
 
   const registerLocalJob = useCallback((jobId: string, context: JobResultContext) => {
     jobContextRef.current.set(jobId, context);
@@ -105,10 +137,10 @@ export function useBalancerRealtime({
           return;
       }
       for (const queryKey of keys) {
-        void queryClient.invalidateQueries({ queryKey });
+        scheduleInvalidate(queryKey);
       }
     },
-    [queryClient, tournamentId]
+    [scheduleInvalidate, tournamentId]
   );
 
   const handleJobSucceeded = useCallback(

@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import date
 
 from pydantic import BaseModel
 
@@ -19,13 +19,9 @@ class TournamentCreate(BaseModel):
     name: str
     description: str | None = None
     is_league: bool = False
-    status: TournamentStatus = TournamentStatus.DRAFT
+    status: TournamentStatus = TournamentStatus.REGISTRATION
     start_date: date
     end_date: date
-    registration_opens_at: datetime | None = None
-    registration_closes_at: datetime | None = None
-    check_in_opens_at: datetime | None = None
-    check_in_closes_at: datetime | None = None
     win_points: float = 1.0
     draw_points: float = 0.5
     loss_points: float = 0.0
@@ -43,10 +39,6 @@ class TournamentUpdate(BaseModel):
     is_finished: bool | None = None
     start_date: date | None = None
     end_date: date | None = None
-    registration_opens_at: datetime | None = None
-    registration_closes_at: datetime | None = None
-    check_in_opens_at: datetime | None = None
-    check_in_closes_at: datetime | None = None
     win_points: float | None = None
     draw_points: float | None = None
     loss_points: float | None = None

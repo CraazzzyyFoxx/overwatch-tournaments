@@ -26,6 +26,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/components/ui/number-input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import {
@@ -248,7 +249,7 @@ export function StageManager({ tournamentId }: StageManagerProps) {
 
   const { data: teamsData, isLoading: isTeamsLoading } = useQuery({
     queryKey: ["admin", "tournament", "teams", tournamentId],
-    queryFn: () => teamService.getAll(tournamentId, "name", "asc")
+    queryFn: () => teamService.getAll({ tournamentId, sort: "name", order: "asc" })
   });
 
   const { data: stageProgress = [] } = useQuery({
@@ -1428,17 +1429,16 @@ export function StageManager({ tournamentId }: StageManagerProps) {
                                 {selectedStageTypeDraft === "swiss" ? (
                                   <div>
                                     <Label className="text-[10px] text-muted-foreground">Swiss Max Rounds</Label>
-                                    <Input
+                                    <NumberInput
                                       aria-label="Swiss max rounds"
                                       className="h-9 w-full sm:w-[120px]"
+                                      integer
                                       min={1}
-                                      step={1}
-                                      type="number"
-                                      value={selectedStageMaxRoundDraft}
-                                      onChange={(event) =>
+                                      value={Number(selectedStageMaxRoundDraft)}
+                                      onValueChange={(next) =>
                                         setStageMaxRoundDrafts((current) => ({
                                           ...current,
-                                          [selectedStage.id]: event.target.value
+                                          [selectedStage.id]: next == null ? "" : String(next)
                                         }))
                                       }
                                     />
@@ -1503,17 +1503,20 @@ export function StageManager({ tournamentId }: StageManagerProps) {
 
                                   <div>
                                     <Label className="text-[10px] text-muted-foreground">Teams Advancing to Playoff (per group)</Label>
-                                    <Input
-                                      type="number"
+                                    <NumberInput
+                                      integer
                                       min={1}
-                                      step={1}
                                       placeholder="Auto (derive from bracket)"
                                       className="h-9 w-full sm:w-[280px]"
-                                      value={selectedStageAdvanceCountDraft}
-                                      onChange={(event) =>
+                                      value={
+                                        selectedStageAdvanceCountDraft === ""
+                                          ? null
+                                          : Number(selectedStageAdvanceCountDraft)
+                                      }
+                                      onValueChange={(next) =>
                                         setStageAdvanceCountDrafts((current) => ({
                                           ...current,
-                                          [selectedStage.id]: event.target.value
+                                          [selectedStage.id]: next == null ? "" : String(next)
                                         }))
                                       }
                                     />
@@ -1544,16 +1547,18 @@ export function StageManager({ tournamentId }: StageManagerProps) {
                                     {selectedStageTypeDraft === "swiss" ? (
                                       <div>
                                         <Label className="text-[10px] text-muted-foreground">Swiss Bye Points</Label>
-                                        <Input
-                                          type="number"
-                                          step="0.5"
+                                        <NumberInput
                                           placeholder={String(selectedStageScoringWinDraft || tournament?.win_points || 1.0)}
                                           className="h-9 w-full"
-                                          value={selectedStageSwissByePointsDraft}
-                                          onChange={(event) =>
+                                          value={
+                                            selectedStageSwissByePointsDraft === ""
+                                              ? null
+                                              : Number(selectedStageSwissByePointsDraft)
+                                          }
+                                          onValueChange={(next) =>
                                             setStageSwissByePointsDrafts((current) => ({
                                               ...current,
-                                              [selectedStage.id]: event.target.value
+                                              [selectedStage.id]: next == null ? "" : String(next)
                                             }))
                                           }
                                         />
@@ -1564,48 +1569,54 @@ export function StageManager({ tournamentId }: StageManagerProps) {
                                   <div className="grid grid-cols-3 gap-3">
                                     <div>
                                       <Label className="text-[10px] text-muted-foreground">Win Points Override</Label>
-                                      <Input
-                                        type="number"
-                                        step="0.5"
+                                      <NumberInput
                                         placeholder={String(tournament?.win_points ?? 1.0)}
                                         className="h-9 w-full bg-background/30"
-                                        value={selectedStageScoringWinDraft}
-                                        onChange={(event) =>
+                                        value={
+                                          selectedStageScoringWinDraft === ""
+                                            ? null
+                                            : Number(selectedStageScoringWinDraft)
+                                        }
+                                        onValueChange={(next) =>
                                           setStageScoringWinDrafts((current) => ({
                                             ...current,
-                                            [selectedStage.id]: event.target.value
+                                            [selectedStage.id]: next == null ? "" : String(next)
                                           }))
                                         }
                                       />
                                     </div>
                                     <div>
                                       <Label className="text-[10px] text-muted-foreground">Draw Points Override</Label>
-                                      <Input
-                                        type="number"
-                                        step="0.5"
+                                      <NumberInput
                                         placeholder={String(tournament?.draw_points ?? 0.5)}
                                         className="h-9 w-full bg-background/30"
-                                        value={selectedStageScoringDrawDraft}
-                                        onChange={(event) =>
+                                        value={
+                                          selectedStageScoringDrawDraft === ""
+                                            ? null
+                                            : Number(selectedStageScoringDrawDraft)
+                                        }
+                                        onValueChange={(next) =>
                                           setStageScoringDrawDrafts((current) => ({
                                             ...current,
-                                            [selectedStage.id]: event.target.value
+                                            [selectedStage.id]: next == null ? "" : String(next)
                                           }))
                                         }
                                       />
                                     </div>
                                     <div>
                                       <Label className="text-[10px] text-muted-foreground">Loss Points Override</Label>
-                                      <Input
-                                        type="number"
-                                        step="0.5"
+                                      <NumberInput
                                         placeholder={String(tournament?.loss_points ?? 0.0)}
                                         className="h-9 w-full bg-background/30"
-                                        value={selectedStageScoringLossDraft}
-                                        onChange={(event) =>
+                                        value={
+                                          selectedStageScoringLossDraft === ""
+                                            ? null
+                                            : Number(selectedStageScoringLossDraft)
+                                        }
+                                        onValueChange={(next) =>
                                           setStageScoringLossDrafts((current) => ({
                                             ...current,
-                                            [selectedStage.id]: event.target.value
+                                            [selectedStage.id]: next == null ? "" : String(next)
                                           }))
                                         }
                                       />
@@ -1806,13 +1817,12 @@ export function StageManager({ tournamentId }: StageManagerProps) {
           {newStageType === "swiss" ? (
             <div className="flex flex-col gap-2">
               <Label htmlFor="new-stage-max-rounds">Swiss max rounds</Label>
-              <Input
+              <NumberInput
                 id="new-stage-max-rounds"
+                integer
                 min={1}
-                step={1}
-                type="number"
-                value={newStageMaxRounds}
-                onChange={(event) => setNewStageMaxRounds(event.target.value)}
+                value={newStageMaxRounds === "" ? null : Number(newStageMaxRounds)}
+                onValueChange={(next) => setNewStageMaxRounds(next == null ? "" : String(next))}
               />
             </div>
           ) : null}

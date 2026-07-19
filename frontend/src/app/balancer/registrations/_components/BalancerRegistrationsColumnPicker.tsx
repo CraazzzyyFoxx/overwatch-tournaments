@@ -39,7 +39,7 @@ export default function BalancerRegistrationsColumnPicker({
       <PopoverTrigger asChild>
         <button
           type="button"
-          className="flex h-9 items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.03] px-3 text-xs text-white/55 transition-colors hover:border-white/20 hover:text-white/80"
+          className="flex h-9 items-center gap-1.5 rounded-lg border border-[color:var(--aqt-border-2)] bg-white/[0.03] px-3 text-xs text-[color:var(--aqt-fg-muted)] transition-colors hover:border-[color:var(--aqt-border-2)] hover:text-[color:var(--aqt-fg)]"
         >
           <Settings2 className="size-3.5" />
           Columns
@@ -55,14 +55,14 @@ export default function BalancerRegistrationsColumnPicker({
 
             return (
               <div key={category}>
-                <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-white/30">
+                <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-[color:var(--aqt-fg-dim)]">
                   {CATEGORY_LABELS[category]}
                 </p>
                 <div className="space-y-1">
                   {items.map((column) => (
                     <label
                       key={column.id}
-                      className="flex cursor-pointer items-center gap-2 rounded px-1 py-0.5 text-xs text-white/60 hover:bg-white/5 hover:text-white/80"
+                      className="flex cursor-pointer items-center gap-2 rounded px-1 py-0.5 text-xs text-[color:var(--aqt-fg-muted)] hover:bg-white/5 hover:text-[color:var(--aqt-fg)]"
                     >
                       <Checkbox
                         checked={visibility[column.id] !== false}
@@ -79,7 +79,7 @@ export default function BalancerRegistrationsColumnPicker({
           <button
             type="button"
             onClick={onReset}
-            className="w-full rounded px-2 py-1 text-[11px] text-white/40 transition-colors hover:bg-white/5 hover:text-white/60"
+            className="w-full rounded px-2 py-1 text-[11px] text-[color:var(--aqt-fg-dim)] transition-colors hover:bg-white/5 hover:text-[color:var(--aqt-fg-muted)]"
           >
             Reset to defaults
           </button>

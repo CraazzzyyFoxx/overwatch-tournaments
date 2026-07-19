@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { ChevronDown, ArrowUp, ArrowDown } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 import {
   DropdownMenu,
@@ -35,6 +36,7 @@ const SelectableStatColumn = ({
   onSelect,
   onToggleSort,
 }: SelectableStatColumnProps) => {
+  const t = useTranslations();
   const sorted = useMemo(
     () =>
       [...data].sort((a, b) => {
@@ -59,16 +61,16 @@ const SelectableStatColumn = ({
 
   return (
     <div className="min-w-[286px] flex-1">
-      <div className="flex flex-col items-center gap-2 border-b border-[var(--aqt-border)] bg-white/[0.008] px-3.5 pb-3 pt-3.5">
+      <div className="flex flex-col items-center gap-2 border-b border-[var(--aqt-border)] bg-[hsl(0_0%_100%/0.008)] px-3.5 pb-3 pt-3.5">
         <div className={`h-[3px] w-[34px] rounded-full ${def.accentColor}`} />
         <div className="flex items-center gap-1">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
-                className="flex cursor-pointer items-center gap-1.5 rounded-md px-2 py-1 text-[11.5px] font-bold uppercase tracking-[0.12em] text-[var(--aqt-fg)] transition-colors hover:bg-white/[0.05]"
+                className="flex cursor-pointer items-center gap-1.5 rounded-md px-2 py-1 text-[11.5px] font-bold uppercase tracking-[0.12em] text-[var(--aqt-fg)] transition-colors hover:bg-[hsl(0_0%_100%/0.05)]"
               >
-                {def.shortLabel}
+                {t(def.labelKey)}
                 <ChevronDown className="h-3 w-3 text-[var(--aqt-fg-faint)]" />
               </button>
             </DropdownMenuTrigger>
@@ -77,10 +79,10 @@ const SelectableStatColumn = ({
                 <DropdownMenuItem
                   key={opt.key}
                   onSelect={() => onSelect(opt.key)}
-                  className={`cursor-pointer gap-2 ${opt.key === def.key ? "bg-white/[0.06] font-semibold" : ""}`}
+                  className={`cursor-pointer gap-2 ${opt.key === def.key ? "bg-[hsl(0_0%_100%/0.06)] font-semibold" : ""}`}
                 >
                   <span className={`h-2 w-2 shrink-0 rounded-full ${opt.accentColor}`} />
-                  {opt.shortLabel}
+                  {t(opt.labelKey)}
                 </DropdownMenuItem>
               ))}
             </DropdownMenuContent>
@@ -88,8 +90,8 @@ const SelectableStatColumn = ({
           <button
             type="button"
             onClick={onToggleSort}
-            className="inline-flex h-[26px] w-[26px] items-center justify-center rounded-md border border-transparent text-[var(--aqt-fg-faint)] transition-colors hover:border-[var(--aqt-border-2)] hover:bg-white/[0.05] hover:text-[var(--aqt-fg)]"
-            title={sortDir === "asc" ? "Sort descending" : "Sort ascending"}
+            className="inline-flex h-[26px] w-[26px] items-center justify-center rounded-md border border-transparent text-[var(--aqt-fg-faint)] transition-colors hover:border-[var(--aqt-border-2)] hover:bg-[hsl(0_0%_100%/0.05)] hover:text-[var(--aqt-fg)]"
+            title={sortDir === "asc" ? t("users.heroesCompare.sortDescending") : t("users.heroesCompare.sortAscending")}
           >
             {sortDir === "asc" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
           </button>

@@ -213,6 +213,7 @@ def register(broker: Any, logger: Any) -> None:
                 notes=body.notes,
                 admin_notes=body.admin_notes,
                 roles=[role.model_dump() for role in body.roles],
+                auth_user_id=body.auth_user_id,
             )
             status_meta_map = await get_status_metas_map(session, workspace_id=ws_id)
             await emit_balancer_registrations_changed(
@@ -249,6 +250,9 @@ def register(broker: Any, logger: Any) -> None:
                 status_value=body.status,
                 balancer_status_value=body.balancer_status,
                 roles=[role.model_dump() for role in body.roles] if body.roles is not None else None,
+                auth_user_id=body.auth_user_id,
+                exclude_from_balancer=body.exclude_from_balancer,
+                exclude_reason=body.exclude_reason,
             )
             status_meta_map = await get_status_metas_map(session, workspace_id=ws_id)
             await emit_balancer_registrations_changed(
@@ -468,6 +472,36 @@ def register(broker: Any, logger: Any) -> None:
             if updated:
                 await emit_balancer_registrations_changed(tournament_id, actor_user_id=user.id)
             return _dump(admin_schemas.BulkBalancerStatusResponse(updated=updated, skipped=skipped))
+
+        return await _run(logger, op)
+
+    # POST /balancer/tournaments/{tournament_id}/registrations/bulk-exclusion
+    #   dep: require_tournament_permission("team", "update")
+    @broker.subscriber("rpc.tournament.reg_bulk_exclusion")
+    async def _reg_bulk_exclusion(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            user = _identity(data)
+            tournament_id = _require_id(data)
+            ws_id = await auth.get_tournament_workspace_id(session, tournament_id)
+            ensure_workspace_permission(user, ws_id, "team", "update")
+            payload = _payload(data)
+            registration_ids = _bulk_ids(payload)
+            exclude_from_balancer = payload.get("exclude_from_balancer")
+            if not isinstance(exclude_from_balancer, bool):
+                raise HTTPException(status_code=422, detail="exclude_from_balancer must be a boolean")
+            exclude_reason = payload.get("exclude_reason")
+            if exclude_reason is not None and not isinstance(exclude_reason, str):
+                raise HTTPException(status_code=422, detail="exclude_reason must be a string")
+            updated, skipped = await registration_service.bulk_set_exclusion(
+                session,
+                tournament_id,
+                registration_ids,
+                exclude_from_balancer=exclude_from_balancer,
+                exclude_reason=exclude_reason,
+            )
+            if updated:
+                await emit_balancer_registrations_changed(tournament_id, actor_user_id=user.id)
+            return _dump(admin_schemas.BulkExclusionResponse(updated=updated, skipped=skipped))
 
         return await _run(logger, op)
 

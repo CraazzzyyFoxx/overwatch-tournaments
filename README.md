@@ -1,13 +1,13 @@
-# Anak`s Tournaments Statistics
+# Overwatch Tournament Platform
 
 [![Lint Backend](https://github.com/CraazzzyyFoxx/overwatch-tournaments/actions/workflows/lint-backend.yml/badge.svg)](https://github.com/CraazzzyyFoxx/overwatch-tournaments/actions/workflows/lint-backend.yml)
 [![Test Backend](https://github.com/CraazzzyyFoxx/overwatch-tournaments/actions/workflows/test-backend.yml/badge.svg)](https://github.com/CraazzzyyFoxx/overwatch-tournaments/actions/workflows/test-backend.yml)
 [![Coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/CraazzzyyFoxx/e00b7692443a542b0e505c090cf83d35/raw/owt-coverage.json)](https://github.com/CraazzzyyFoxx/overwatch-tournaments/actions/workflows/test-backend.yml)
 [![Issues](https://img.shields.io/github/issues/CraazzzyyFoxx/overwatch-tournaments)](https://github.com/CraazzzyyFoxx/overwatch-tournaments/issues)
-[![Documentation](https://img.shields.io/badge/documentation-yes-brightgreen.svg)](https://anakq.xyz/api/redoc)
+[![Documentation](https://img.shields.io/badge/documentation-yes-brightgreen.svg)](https://owt.craazzzyyfoxx.me/api/redoc)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://github.com/CraazzzyyFoxx/overwatch-tournaments/blob/master/LICENSE)
 
-> **OWT** provides comprehensive statistics about Anakq's sub-tournaments —
+> **OWT** provides comprehensive statistics about Overwatch Tournaments —
 > the history of past tournaments and player statistics such as tournaments participated in, divisions, teams,
 > heroes, and performance metrics.
 > The backend is a Python microservices platform (FastAPI, SQLAlchemy, PostgreSQL, Redis, RabbitMQ) and the
@@ -24,21 +24,21 @@
 * [🙏 Credits](#-credits)
 * [📝 License](#-license)
 
-## ✨ [Live instance](https://anakq.xyz/)
+## ✨ [Live instance](https://owt.craazzzyyfoxx.me/)
 
 **Backend**
 > The backend is built with FastAPI and provides the core API functionality, including data retrieval, caching, and processing.
 > You can explore the backend API documentation using the following links:
 >
-> Redoc Documentation: https://anakq.xyz/api/v1/redoc
-> Swagger UI: https://anakq.xyz/api/v1/docs
+> Redoc Documentation: https://owt.craazzzyyfoxx.me/api/v1/redoc
+> Swagger UI: https://owt.craazzzyyfoxx.me/api/v1/docs
 
 **Frontend**
 > The frontend is built with Next.js and provides a user-friendly interface for interacting with the OWT API.
 > It displays tournament history, player statistics, and other relevant data in an intuitive and visually appealing way.
 > You can access the live frontend instance here:
 >
-> Frontend Live Instance: https://anakq.xyz
+> Frontend Live Instance: https://owt.craazzzyyfoxx.me
 
 ### Pre-commit
 

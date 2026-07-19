@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
-import { useTranslation } from "@/i18n/LanguageContext";
+import { useTranslations } from "next-intl";
 import {
   GROUP_STAGE_SCORE_PRESETS,
   clampScoreValue,
@@ -32,7 +32,7 @@ export function EncounterScoreControls({
   onScoreChange,
   onPresetSelect,
 }: EncounterScoreControlsProps) {
-  const { t } = useTranslation();
+  const t = useTranslations();
   const selectedPreset = getMatchingScorePreset(homeScore, awayScore);
   const resolvedPresetLabel = presetLabel ?? t("matchEdit.resultPresets");
 
@@ -92,7 +92,7 @@ export function EncounterScoreControls({
           <p className="text-xs font-semibold text-zinc-400">{resolvedPresetLabel}</p>
           {selectedPreset ? (
             <span className="text-xs font-semibold text-zinc-300">
-              {t(`matchEdit.presetDescriptions.${selectedPreset.description}`)}
+              {t(`matchEdit.presetDescriptions.${selectedPreset.description}` as Parameters<typeof t>[0])}
             </span>
           ) : null}
         </div>
@@ -112,7 +112,7 @@ export function EncounterScoreControls({
                     : "bg-zinc-900/40 border border-zinc-800/80 text-zinc-200 hover:bg-zinc-800 hover:text-white hover:border-zinc-700"
                 )}
                 aria-pressed={isSelected}
-                title={t(`matchEdit.presetDescriptions.${preset.description}`)}
+                title={t(`matchEdit.presetDescriptions.${preset.description}` as Parameters<typeof t>[0])}
                 onClick={() =>
                   applyPreset({
                     homeScore: preset.homeScore,

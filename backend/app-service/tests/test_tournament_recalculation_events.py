@@ -39,11 +39,14 @@ class TournamentStandingsCacheInvalidationTests(IsolatedAsyncioTestCase):
             cache.setup("mem://", prefix=prefix)
 
     def test_every_pattern_is_routable(self) -> None:
-        for pattern in events.tournament_standings_cache_patterns(42):
+        patterns = events.tournament_standings_cache_patterns(42)
+        for pattern in patterns:
             self.assertTrue(
                 pattern.startswith(_CONFIGURED_PREFIXES),
                 msg=f"pattern {pattern!r} has no configured cache backend prefix",
             )
+        self.assertIn("backend:user_compare:v2:*", patterns)
+        self.assertIn("backend:user_hero_compare:v2:*", patterns)
 
     async def test_invalidate_does_not_raise_not_configured(self) -> None:
         await events.invalidate_tournament_standings_cache(42)

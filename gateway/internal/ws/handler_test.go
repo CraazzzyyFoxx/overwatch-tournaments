@@ -45,9 +45,13 @@ func (f fakeReplayer) EventsSince(context.Context, string, *int64, int64) ([]pro
 }
 
 func newServer(t *testing.T, authz Authorizer, rep Replayer) string {
+	return newServerLimits(t, authz, rep, Limits{})
+}
+
+func newServerLimits(t *testing.T, authz Authorizer, rep Replayer, limits Limits) string {
 	t.Helper()
 	h := NewHandler(NewHub(), auth.New(wsSecret), authz, rep, 30*time.Second,
-		slog.New(slog.NewTextHandler(io.Discard, nil)), nil, nil)
+		slog.New(slog.NewTextHandler(io.Discard, nil)), nil, nil, nil, nil, limits)
 	mux := http.NewServeMux()
 	mux.Handle("/ws", h)
 	srv := httptest.NewServer(mux)
@@ -119,12 +123,26 @@ func TestWS_SubscribePublic(t *testing.T) {
 func TestWS_SubscribeForbidden(t *testing.T) {
 	url := newServer(t, allowAuthorizer{allow: false}, fakeReplayer{})
 	ctx := context.Background()
-	c := dial(t, ctx, url, "")
+	c := dial(t, ctx, url, mintToken(t, "7")) // authenticated but not permitted
 
 	writeJSON(t, ctx, c, map[string]any{"op": "subscribe", "topic": "tournament:1:balancer"})
 	m := readJSON(t, ctx, c)
 	if m["op"] != "error" || m["code"] != "forbidden" {
-		t.Fatalf("expected forbidden error, got %v", m)
+		t.Fatalf("expected forbidden error for an authenticated non-member, got %v", m)
+	}
+}
+
+// TestWS_SubscribeAuthRequired asserts an anonymous denial is surfaced as
+// auth_required (login may grant access), distinct from forbidden.
+func TestWS_SubscribeAuthRequired(t *testing.T) {
+	url := newServer(t, allowAuthorizer{allow: false}, fakeReplayer{})
+	ctx := context.Background()
+	c := dial(t, ctx, url, "") // anonymous
+
+	writeJSON(t, ctx, c, map[string]any{"op": "subscribe", "topic": "tournament:1:balancer"})
+	m := readJSON(t, ctx, c)
+	if m["op"] != "error" || m["code"] != "auth_required" {
+		t.Fatalf("expected auth_required error for an anonymous user, got %v", m)
 	}
 }
 
@@ -239,14 +257,46 @@ func TestWS_FanoutAndPresence(t *testing.T) {
 	}
 }
 
+func TestWS_DraftPresenceIncludesAuthenticatedUsersAndAnonymousViewerCount(t *testing.T) {
+	url := newServer(t, allowAuthorizer{allow: true}, fakeReplayer{cursor: 0})
+	ctx := context.Background()
+	const topic = "tournament:1:draft"
+
+	authenticated := dial(t, ctx, url, mintToken(t, "7"))
+	writeJSON(t, ctx, authenticated, map[string]any{"op": "subscribe", "topic": topic})
+	readJSON(t, ctx, authenticated) // subscribed
+	first := readJSON(t, ctx, authenticated)
+	if ids := presenceIDsFor(t, first, "draft.presence"); !equalInts(ids, []int{7}) {
+		t.Fatalf("expected authenticated presence [7], got %v", ids)
+	}
+	if count := presenceAnonymousCount(t, first); count != 0 {
+		t.Fatalf("expected zero anonymous viewers, got %d", count)
+	}
+
+	anonymous := dial(t, ctx, url, "")
+	writeJSON(t, ctx, anonymous, map[string]any{"op": "subscribe", "topic": topic})
+	readJSON(t, ctx, anonymous) // subscribed
+	updated := readJSON(t, ctx, anonymous)
+	if ids := presenceIDsFor(t, updated, "draft.presence"); !equalInts(ids, []int{7}) {
+		t.Fatalf("expected authenticated presence [7], got %v", ids)
+	}
+	if count := presenceAnonymousCount(t, updated); count != 1 {
+		t.Fatalf("expected one anonymous viewer, got %d", count)
+	}
+}
+
 func presenceIDs(t *testing.T, m map[string]any) []int {
+	return presenceIDsFor(t, m, "balancer.presence")
+}
+
+func presenceIDsFor(t *testing.T, m map[string]any, eventType string) []int {
 	t.Helper()
 	if m["op"] != "event" {
 		t.Fatalf("expected event frame for presence, got %v", m)
 	}
 	ev := m["event"].(map[string]any)
-	if ev["event_type"] != "balancer.presence" {
-		t.Fatalf("expected balancer.presence, got %v", ev["event_type"])
+	if ev["event_type"] != eventType {
+		t.Fatalf("expected %s, got %v", eventType, ev["event_type"])
 	}
 	raw := ev["data"].(map[string]any)["user_ids"].([]any)
 	ids := make([]int, len(raw))
@@ -254,6 +304,12 @@ func presenceIDs(t *testing.T, m map[string]any) []int {
 		ids[i] = int(v.(float64))
 	}
 	return ids
+}
+
+func presenceAnonymousCount(t *testing.T, m map[string]any) int {
+	t.Helper()
+	ev := m["event"].(map[string]any)
+	return int(ev["data"].(map[string]any)["anonymous_viewer_count"].(float64))
 }
 
 func equalInts(a, b []int) bool {
@@ -266,4 +322,73 @@ func equalInts(a, b []int) bool {
 		}
 	}
 	return true
+}
+
+func mintTokenWithExp(t *testing.T, sub string, exp time.Time) string {
+	t.Helper()
+	tok := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"sub": sub, "type": "access", "exp": exp.Unix(),
+	})
+	s, err := tok.SignedString([]byte(wsSecret))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return s
+}
+
+// TestWS_ClosesAtTokenExpiry asserts an authenticated connection is torn down
+// once its access token expires, rather than living until the idle timeout.
+func TestWS_ClosesAtTokenExpiry(t *testing.T) {
+	url := newServer(t, allowAuthorizer{allow: true}, fakeReplayer{cursor: 1})
+	ctx := context.Background()
+	token := mintTokenWithExp(t, "7", time.Now().Add(time.Second))
+	c := dial(t, ctx, url, token)
+
+	writeJSON(t, ctx, c, map[string]any{"op": "subscribe", "topic": "tournament:1:bracket"})
+	if m := readJSON(t, ctx, c); m["op"] != "subscribed" {
+		t.Fatalf("expected subscribed while the token is valid, got %v", m)
+	}
+
+	readCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	if _, _, err := c.Read(readCtx); err == nil {
+		t.Fatal("expected the connection to close at token expiry")
+	}
+}
+
+// TestWS_TopicSubscriptionCap asserts a connection cannot exceed its topic
+// budget (tighter for anonymous clients).
+func TestWS_TopicSubscriptionCap(t *testing.T) {
+	url := newServerLimits(t, allowAuthorizer{allow: true}, fakeReplayer{cursor: 1}, Limits{MaxTopicsAnon: 1})
+	ctx := context.Background()
+	c := dial(t, ctx, url, "")
+
+	writeJSON(t, ctx, c, map[string]any{"op": "subscribe", "topic": "tournament:1:bracket"})
+	if m := readJSON(t, ctx, c); m["op"] != "subscribed" {
+		t.Fatalf("first subscribe should succeed, got %v", m)
+	}
+
+	writeJSON(t, ctx, c, map[string]any{"op": "subscribe", "topic": "tournament:2:bracket"})
+	if m := readJSON(t, ctx, c); m["op"] != "error" || m["code"] != "too_many_topics" {
+		t.Fatalf("second subscribe should hit the topic cap, got %v", m)
+	}
+}
+
+// TestWS_AnonConnectionCapPerIP asserts a second anonymous connection from the
+// same IP is rejected at the handshake with a 429 while one is already open.
+func TestWS_AnonConnectionCapPerIP(t *testing.T) {
+	url := newServerLimits(t, allowAuthorizer{allow: true}, fakeReplayer{}, Limits{MaxAnonConnsPerIP: 1})
+	ctx := context.Background()
+
+	dial(t, ctx, url, "") // first anonymous connection holds the only slot
+
+	u := "ws" + strings.TrimPrefix(url, "http") + "/ws"
+	conn, resp, err := websocket.Dial(ctx, u, nil)
+	if err == nil {
+		conn.CloseNow()
+		t.Fatal("expected the second anonymous connection to be rejected")
+	}
+	if resp == nil || resp.StatusCode != http.StatusTooManyRequests {
+		t.Fatalf("expected 429, got resp=%v err=%v", resp, err)
+	}
 }

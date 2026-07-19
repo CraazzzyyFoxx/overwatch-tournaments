@@ -2,6 +2,7 @@
 
 import React, { useEffect, useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Loader2, Search, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useDebounce } from "use-debounce";
@@ -19,6 +20,7 @@ import { cn } from "@/lib/utils";
 import { getPlayerSlug } from "@/utils/player";
 
 const UserSearch = () => {
+  const t = useTranslations();
   const inputId = useId();
   const listId = useId();
   const [isOpen, setIsOpen] = useState<boolean>(false);
@@ -127,10 +129,10 @@ const UserSearch = () => {
   }, [activeIndex]);
 
   const emptyMessage = isSearching
-    ? "Searching users..."
+    ? t("nav.search.searching")
     : canShowResults
-      ? "No users found."
-      : "Type at least 2 characters.";
+      ? t("nav.search.empty")
+      : t("nav.search.minChars");
 
   const handleSelect = (user: MinimizedUser) => {
     setIsOpen(false);
@@ -226,7 +228,7 @@ const UserSearch = () => {
               aria-expanded={isOpen}
               aria-controls={listId}
               aria-activedescendant={activeIndex >= 0 ? `${listId}-item-${activeIndex}` : undefined}
-              placeholder="Search users..."
+              placeholder={t("nav.search.placeholder")}
               className={cn(
                 "h-10 rounded-xl border-border/60 bg-background/15 pl-9 pr-10 shadow-sm transition-all duration-200 hover:bg-background/20 focus-visible:ring-2 focus-visible:ring-ring/30 sm:w-[300px] md:w-[200px] lg:w-[300px]",
                 isOpen && "border-ring/40 bg-background/20 shadow-lg"
@@ -237,7 +239,7 @@ const UserSearch = () => {
             ) : searchValue.length > 0 ? (
               <button
                 type="button"
-                aria-label="Clear search"
+                aria-label={t("nav.search.clear")}
                 className="absolute right-2.5 top-1/2 inline-flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-foreground/10 hover:text-foreground"
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={handleClear}
@@ -254,7 +256,7 @@ const UserSearch = () => {
           style={contentWidth ? { width: `${contentWidth}px` } : undefined}
         >
           <Command className="liquid-glass-surface rounded-xl">
-            <CommandList id={listId} role="listbox" aria-label="User search results">
+            <CommandList id={listId} role="listbox" aria-label={t("nav.search.resultsLabel")}>
               <CommandEmpty>{emptyMessage}</CommandEmpty>
               <CommandGroup>
                 {searchData.map((item, index) => (

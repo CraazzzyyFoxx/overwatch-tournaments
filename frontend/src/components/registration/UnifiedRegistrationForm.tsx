@@ -4,7 +4,8 @@ import { useEffect, useReducer, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, ArrowRight, Loader2 } from "lucide-react";
 import heroService from "@/services/hero.service";
-import { useTranslation } from "@/i18n/LanguageContext";
+import { useTranslations } from "next-intl";
+import { useAccountSettingsModalStore } from "@/stores/account-settings-modal.store";
 import type {
   RegistrationForm,
   RoleInput,
@@ -13,6 +14,8 @@ import type { AdditionalRole } from "./types";
 import type { User } from "@/types/user.types";
 import type { AdminRegistration, BalancerRoleCode, BalancerRoleSubtype } from "@/types/balancer-admin.types";
 
+import { AuthUserSearchCombobox, type AuthUserOption } from "@/components/admin/AuthUserSearchCombobox";
+import { rbacService } from "@/services/rbac.service";
 import StepIndicator from "@/components/registration/StepIndicator";
 import AccountStep from "@/components/registration/AccountStep";
 import RoleStep from "@/components/registration/RoleStep";
@@ -149,10 +152,35 @@ export default function UnifiedRegistrationForm({
   onCancel,
   submitPending = false,
 }: UnifiedRegistrationFormProps) {
-  const { t } = useTranslation();
+  const t = useTranslations();
+  const openAccountSettings = useAccountSettingsModalStore((s) => s.open);
   const [state, dispatch] = useReducer(formReducer, initialState);
   const [error, setError] = useState<string | null>(null);
   const [liveValidationErrors, setLiveValidationErrors] = useState<Record<string, string | null>>({});
+  // Admin-only: site account to anchor this registration on. Prefills empty
+  // identity handles from the account's OAuth-verified logins on select.
+  const [authUserId, setAuthUserId] = useState<number | undefined>(undefined);
+  const [authUserLabel, setAuthUserLabel] = useState<string | undefined>(undefined);
+
+  const handleSelectAuthUser = async (authUser: AuthUserOption | undefined) => {
+    setAuthUserId(authUser?.id);
+    setAuthUserLabel(authUser?.label);
+    if (!authUser) return;
+    try {
+      const page = await rbacService.listOAuthConnections({ auth_user_id: authUser.id, per_page: -1 });
+      const handleFor = (provider: string) => page.results.find((c) => c.provider === provider)?.username;
+      const prefill: Array<[keyof UnifiedFormState, string | undefined, string]> = [
+        ["battleTag", handleFor("battlenet"), state.battleTag],
+        ["discordNick", handleFor("discord"), state.discordNick],
+        ["twitchNick", handleFor("twitch"), state.twitchNick],
+      ];
+      for (const [key, handle, current] of prefill) {
+        if (handle && !current.trim()) dispatch({ type: "SET_FIELD", key, value: handle });
+      }
+    } catch {
+      // Best-effort prefill (e.g. missing auth_user:read); linking still works.
+    }
+  };
 
   const isEnabled = (fieldKey: string) => formConfig.built_in_fields?.[fieldKey]?.enabled !== false;
   const isRequired = (fieldKey: string) =>
@@ -286,8 +314,10 @@ export default function UnifiedRegistrationForm({
     discord_nick: state.discordNick,
     twitch_nick: state.twitchNick,
   };
+  // ``require_verified`` gates the registrant's own OAuth accounts; admin editing
+  // is unconstrained (matches AccountStep, which renders a plain input in admin).
   const getVerifiedError = (fieldKey: string): string | null =>
-    isEnabled(fieldKey)
+    mode === "public" && isEnabled(fieldKey)
       ? getVerifiedFieldError(
           fieldKey,
           verifiedFieldValues[fieldKey] ?? "",
@@ -539,6 +569,7 @@ export default function UnifiedRegistrationForm({
           status: state.status,
           balancer_status: state.balancerStatus,
           roles: buildAdminRolePayload(),
+          auth_user_id: authUserId ?? null,
         };
         onSubmit(payload);
       }
@@ -625,12 +656,12 @@ export default function UnifiedRegistrationForm({
     <div className="flex flex-col gap-5 sm:min-h-[560px] lg:min-h-[640px]">
       {mode === "public" && (
         <div>
-          <h2 className="text-lg font-semibold text-white">
+          <h2 className="text-lg font-semibold text-[color:var(--aqt-fg)]">
             {tournamentName
               ? t("registration.wizard.titleFor", { name: tournamentName })
               : t("registration.wizard.title")}
           </h2>
-          <p className="mt-1 text-sm text-white/50">
+          <p className="mt-1 text-sm text-[color:var(--aqt-fg-muted)]">
             {state.step === 0 && t("registration.wizard.step1Desc")}
             {state.step === 1 && t("registration.wizard.step2Desc")}
             {state.step === 2 && t("registration.wizard.step3Desc")}
@@ -641,6 +672,22 @@ export default function UnifiedRegistrationForm({
       <StepIndicator steps={STEPS} current={state.step} />
 
       <div className="flex-1">
+        {state.step === 0 && mode === "admin" && (
+          <div className="mb-4 space-y-1.5">
+            <h3 className="text-xs font-medium uppercase tracking-[0.14em] text-[color:var(--aqt-fg-muted)]">
+              Linked Site Account
+            </h3>
+            <AuthUserSearchCombobox
+              value={authUserId}
+              selectedLabel={authUserLabel}
+              onSelect={handleSelectAuthUser}
+            />
+            <p className="text-xs leading-5 text-[color:var(--aqt-fg-dim)]">
+              Optional. Anchors this registration on the selected account; empty handles are prefilled
+              from its verified logins.
+            </p>
+          </div>
+        )}
         {state.step === 0 && (
           <AccountStep
             mode={mode}
@@ -665,6 +712,17 @@ export default function UnifiedRegistrationForm({
               discord_nick: getVerifiedError("discord_nick"),
               twitch_nick: getVerifiedError("twitch_nick"),
             }}
+            onLinkAccounts={
+              mode === "public"
+                ? () => {
+                    // Close registration and open profile settings on the
+                    // "My Account" tab. Linking there redirects through OAuth
+                    // and returns via ?settings=profile (AccountSettingsModal).
+                    onCancel();
+                    openAccountSettings("profile");
+                  }
+                : undefined
+            }
           />
         )}
 
@@ -720,12 +778,12 @@ export default function UnifiedRegistrationForm({
         <p className="text-sm text-red-400">{error ?? footerValidationError}</p>
       )}
 
-      <div className="flex items-center justify-between border-t border-white/8 pt-4">
+      <div className="flex items-center justify-between border-t border-[color:var(--aqt-border)] pt-4">
         {state.step > 0 ? (
           <button
             type="button"
             onClick={handleBack}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-2 text-sm font-medium text-white/60 transition-colors hover:bg-white/4"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-[color:var(--aqt-border-2)] px-3 py-2 text-sm font-medium text-[color:var(--aqt-fg-muted)] transition-colors hover:bg-white/4"
           >
             <ArrowLeft className="size-3.5" />
             {mode === "admin" ? "Back" : t("common.back")}
@@ -734,7 +792,7 @@ export default function UnifiedRegistrationForm({
           <button
             type="button"
             onClick={onCancel}
-            className="rounded-lg border border-white/10 px-3 py-2 text-sm font-medium text-white/60 transition-colors hover:bg-white/4"
+            className="rounded-lg border border-[color:var(--aqt-border-2)] px-3 py-2 text-sm font-medium text-[color:var(--aqt-fg-muted)] transition-colors hover:bg-white/4"
           >
             {mode === "admin" ? "Cancel" : t("common.cancel")}
           </button>

@@ -1,6 +1,7 @@
 import { authServiceBase } from "@/lib/api-routes";
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
+import { getAccessToken } from "@/lib/auth-cookies";
 
 const AUTH_SERVICE_URL = authServiceBase();
 
@@ -13,7 +14,7 @@ function authHeaders(accessToken: string): HeadersInit {
 
 export async function GET(request: NextRequest) {
   const cookieStore = await cookies();
-  const accessToken = cookieStore.get("aqt_access_token")?.value;
+  const accessToken = getAccessToken(cookieStore);
   const workspaceId = request.nextUrl.searchParams.get("workspace_id");
 
   if (!accessToken) {
@@ -40,7 +41,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   const cookieStore = await cookies();
-  const accessToken = cookieStore.get("aqt_access_token")?.value;
+  const accessToken = getAccessToken(cookieStore);
 
   if (!accessToken) {
     return NextResponse.json({ detail: "Unauthorized" }, { status: 401 });

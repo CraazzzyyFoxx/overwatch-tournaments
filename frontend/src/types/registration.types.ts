@@ -43,8 +43,6 @@ export interface RegistrationForm {
   tournament_id: number;
   workspace_id: number;
   is_open: boolean;
-  opens_at: string | null;
-  closes_at: string | null;
   require_open_profile?: boolean;
   open_profile_scope?: "main" | "all";
   show_ranks?: boolean;

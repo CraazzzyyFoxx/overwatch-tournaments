@@ -1,10 +1,17 @@
+"use client";
+
 import React from "react";
 import { LineChart } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { CardSurface } from "@/app/(site)/users/components/shared/atoms";
 import { UserTournament } from "@/types/user.types";
 
 interface Props {
   tournaments: UserTournament[];
+  /** Tournament ids that belong to the currently-selected dossier event. */
+  selectedIds?: number[];
+  /** Selecting a point selects that event in the dossier (and scrolls to it). */
+  onSelect?: (tournamentId: number) => void;
 }
 
 const colorClass = (placement: number, field: number): "gold" | "silver" | "bronze" | "mid" | "bottom" => {
@@ -14,12 +21,14 @@ const colorClass = (placement: number, field: number): "gold" | "silver" | "bron
   return placement / field < 0.5 ? "mid" : "bottom";
 };
 
-const TournamentsPlacementTimeline = ({ tournaments }: Props) => {
+const TournamentsPlacementTimeline = ({ tournaments, selectedIds = [], onSelect }: Props) => {
+  const tr = useTranslations();
   const valid = tournaments
     .filter((t) => t.number && t.placement && t.count_teams)
     .sort((a, b) => a.number - b.number);
   if (valid.length === 0) return null;
 
+  const selected = new Set(selectedIds);
   const minN = valid[0].number;
   const maxN = valid[valid.length - 1].number;
   const range = maxN - minN || 1;
@@ -32,16 +41,16 @@ const TournamentsPlacementTimeline = ({ tournaments }: Props) => {
 
   return (
     <CardSurface
-      title="Placement timeline"
+      title={tr("users.tournaments.timeline.title")}
       icon={<LineChart size={15} />}
-      subtitle={`${valid.length} tournaments · finish position vs field size`}
+      subtitle={tr("users.tournaments.timeline.subtitle", { count: valid.length })}
     >
       <div className="aqt-timeline">
         <div className="aqt-y-axis">
-          <span>top</span>
+          <span>{tr("users.tournaments.timeline.axisTop")}</span>
           <span>33%</span>
           <span>66%</span>
-          <span>last</span>
+          <span>{tr("users.tournaments.timeline.axisLast")}</span>
         </div>
         <div className="aqt-ln">
           {valid.map((t) => {
@@ -49,14 +58,32 @@ const TournamentsPlacementTimeline = ({ tournaments }: Props) => {
             const left = ((t.number - minN) / range) * 100;
             const top = ratio * 100;
             const cls = colorClass(t.placement, t.count_teams);
-            return (
-              <div
-                key={t.id}
-                className={`aqt-dot ${cls}`}
-                style={{ left: `${left}%`, top: `${top}%` }}
-                title={`T#${t.number} · placed ${t.placement}/${t.count_teams}`}
-              />
-            );
+            const isSelected = selected.has(t.id);
+            const label = tr("users.tournaments.timeline.dotTitle", {
+              number: String(t.number),
+              placement: String(t.placement),
+              count: String(t.count_teams)
+            });
+            const style: React.CSSProperties = {
+              left: `${left}%`,
+              top: `${top}%`,
+              ...(isSelected ? { boxShadow: "0 0 0 3px var(--aqt-teal)", zIndex: 4 } : null)
+            };
+            if (onSelect) {
+              return (
+                <button
+                  key={t.id}
+                  type="button"
+                  className={`aqt-dot ${cls} appearance-none p-0`}
+                  style={style}
+                  title={label}
+                  aria-label={label}
+                  aria-pressed={isSelected}
+                  onClick={() => onSelect(t.id)}
+                />
+              );
+            }
+            return <div key={t.id} className={`aqt-dot ${cls}`} style={style} title={label} />;
           })}
         </div>
         <div className="aqt-x-axis">
@@ -68,19 +95,19 @@ const TournamentsPlacementTimeline = ({ tournaments }: Props) => {
       <div className="flex flex-wrap gap-3.5 border-t border-[color:var(--aqt-border)] px-[18px] py-3.5 text-[12px] text-[color:var(--aqt-fg-muted)]">
         <span className="inline-flex items-center gap-1.5">
           <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: "linear-gradient(135deg,#fcd34d,#d97706)" }} />
-          1st place
+          {tr("users.tournaments.timeline.legend.first")}
         </span>
         <span className="inline-flex items-center gap-1.5">
           <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: "linear-gradient(135deg,#e5e7eb,#9ca3af)" }} />
-          Podium
+          {tr("users.tournaments.timeline.legend.podium")}
         </span>
         <span className="inline-flex items-center gap-1.5">
           <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: "var(--aqt-teal)" }} />
-          Top half
+          {tr("users.tournaments.timeline.legend.topHalf")}
         </span>
         <span className="inline-flex items-center gap-1.5">
           <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: "var(--aqt-rose)" }} />
-          Bottom half
+          {tr("users.tournaments.timeline.legend.bottomHalf")}
         </span>
       </div>
     </CardSurface>

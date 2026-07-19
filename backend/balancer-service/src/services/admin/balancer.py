@@ -29,15 +29,6 @@ async def ensure_tournament_exists(session: AsyncSession, tournament_id: int) ->
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tournament not found")
 
 
-async def get_tournament_workspace_id(session: AsyncSession, tournament_id: int) -> int:
-    workspace_id = await session.scalar(
-        sa.select(models.Tournament.workspace_id).where(models.Tournament.id == tournament_id)
-    )
-    if workspace_id is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tournament not found")
-    return int(workspace_id)
-
-
 async def get_tournament_config(
     session: AsyncSession,
     tournament_id: int,
@@ -51,10 +42,12 @@ async def get_tournament_config(
 async def upsert_tournament_config(
     session: AsyncSession,
     tournament_id: int,
+    workspace_id: int,
     config_json: dict[str, Any] | None,
     auth_user: models.AuthUser,
 ) -> models.BalancerTournamentConfig:
-    workspace_id = await get_tournament_workspace_id(session, tournament_id)
+    # workspace_id is resolved by the caller (the RPC handler already fetched
+    # it for the permission check) — no second Tournament lookup here.
     normalized_config = normalize_tournament_config_payload(config_json)
     tournament_config = await get_tournament_config(session, tournament_id)
 
@@ -110,7 +103,8 @@ async def upsert_workspace_balancer_config(
         config.config_json = payload
         config.updated_by = updated_by
     await session.commit()
-    await session.refresh(config)
+    # expire_on_commit=False keeps attributes (incl. the flushed PK) live after
+    # commit, so no refresh round-trip is needed.
     return config
 
 
@@ -189,11 +183,10 @@ async def save_balance(
     await sync_balance_variants_and_slots(session, balance, payload, algorithm=algorithm)
 
     await session.commit()
-
-    saved_balance = await get_balance(session, tournament_id)
-    if saved_balance is None:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to save balance")
-    return saved_balance
+    # expire_on_commit=False keeps the instance usable after commit, and the
+    # response (``serialize_balance``) never touches the teams relationship —
+    # no refetch needed.
+    return balance
 
 
 async def export_balance(session: AsyncSession, balance_id: int) -> tuple[models.BalancerBalance, int, int]:
@@ -217,7 +210,9 @@ async def export_balance(session: AsyncSession, balance_id: int) -> tuple[models
         await session.execute(sa.delete(models.Team).where(models.Team.id.in_(linked_team_ids)))
         for team in balance.teams:
             team.exported_team_id = None
-        await session.commit()
+        # No commit here: the pending deletes ride along with the next commit
+        # (``bulk_create_from_balancer`` commits internally; the failure path
+        # below commits too), so the final state is identical either way.
 
     try:
         balancer_teams = [team.to_balancer_team() for team in payload.teams]
@@ -250,9 +245,6 @@ async def export_balance(session: AsyncSession, balance_id: int) -> tuple[models
         await session.commit()
         raise
 
-    refreshed = await get_balance(session, balance.tournament_id)
-    if refreshed is None:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to refresh exported balance"
-        )
-    return refreshed, removed_teams, len(payload.teams)
+    # expire_on_commit=False: ``balance`` (with its teams loaded above) is
+    # still current after the commits — no refetch needed.
+    return balance, removed_teams, len(payload.teams)

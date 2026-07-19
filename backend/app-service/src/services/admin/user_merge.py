@@ -16,6 +16,7 @@ from shared.core.social import normalize_social_handle
 from shared.repository import get_or_create_workspace_member
 from src import models
 from src.schemas.admin import user_merge as merge_schemas
+from src.services import user_cache
 
 PLAYER_WORKSPACE_MEMBER_REFERENCE_KEY = "tournament.player.workspace_member_id"
 EVALUATION_RESULT_MEMBER_REFERENCE_KEY = "achievements.evaluation_result.workspace_member_id"
@@ -779,6 +780,10 @@ async def _invalidate_merge_caches(
 ) -> None:
     patterns = {
         "backend:get_statistics_by_heroes_all_values*",
+        # Global/cohort baselines can change even when the merged user is not
+        # the subject, so compare responses need broad short-TTL invalidation.
+        "backend:user_compare:v2:*",
+        "backend:user_hero_compare:v2:*",
     }
     for user_id in (source_user_id, target_user_id):
         patterns.update(
@@ -793,6 +798,10 @@ async def _invalidate_merge_caches(
                 f"backend:*teammates*{user_id}*",
             }
         )
+        # Precise per-user coverage for every registered user read-cache prefix
+        # (incl. user_tournament_stats / user_matches_summary, which the broad
+        # keyword patterns above miss). Single source of truth: services.user_cache.
+        patterns.update(user_cache.user_cache_patterns(user_id))
     for identity in preview.source.social_accounts + preview.target.social_accounts:
         patterns.add(f"backend:*{identity.value}*")
         patterns.add(f"backend:*{identity.value.replace('#', '-')}*")

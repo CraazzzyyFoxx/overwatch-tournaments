@@ -1,3 +1,4 @@
+import type { DraftRole } from "@/types/draft.types";
 import type {
   RegistrationForm,
   SubroleCatalog,
@@ -99,6 +100,13 @@ const ROLE_ICON_NAMES: Record<string, "Tank" | "Damage" | "Support"> = {
 export function getRoleIconName(roleCode: string): "Tank" | "Damage" | "Support" {
   return ROLE_ICON_NAMES[roleCode] ?? "Support";
 }
+
+/** Draft role accent colors (CSS custom properties) shared across the draft-room UI. */
+export const ROLE_ACCENT: Record<DraftRole, string> = {
+  tank: "var(--aqt-tank)",
+  dps: "var(--aqt-damage)",
+  support: "var(--aqt-support)"
+};
 
 const SUBROLE_ACRONYMS = new Set(["dps", "pov", "vk"]);
 

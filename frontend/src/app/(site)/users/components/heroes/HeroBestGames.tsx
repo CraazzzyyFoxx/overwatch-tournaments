@@ -3,6 +3,7 @@
 import React from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { Crown, Trophy } from "lucide-react";
 import { LogStatsName } from "@/types/stats.types";
 import type { HeroBestStat, HeroWithUserStats } from "@/types/hero.types";
@@ -37,6 +38,7 @@ interface Record {
  *  `HeroStat.best`. Each record links to the encounter where it happened and
  *  shows the map/tournament on hover; a crown marks an all-time (global) best. */
 const HeroBestGames = ({ hero }: { hero: HeroWithUserStats }) => {
+  const t = useTranslations();
   const records: Record[] = RECORD_STATS.map((name) => {
     const stat = hero.stats.find((s) => s.name === name);
     if (!stat || !stat.best || !Number.isFinite(stat.best.value) || stat.best.value <= 0) return null;
@@ -50,7 +52,7 @@ const HeroBestGames = ({ hero }: { hero: HeroWithUserStats }) => {
   if (records.length === 0) return null;
 
   return (
-    <CardSurface title="Career-best games" icon={<Trophy size={15} />} subtitle={`${hero.hero.name} · personal records`}>
+    <CardSurface title={t("users.heroes.careerBest")} icon={<Trophy size={15} />} subtitle={t("users.heroes.bestGamesSubtitle", { hero: hero.hero.name })}>
       <TooltipProvider delayDuration={120}>
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {records.map(({ name, best, isGlobalRecord }) => (
@@ -62,7 +64,7 @@ const HeroBestGames = ({ hero }: { hero: HeroWithUserStats }) => {
                 >
                   <span className="flex items-center gap-1.5 text-[10.5px] font-bold uppercase tracking-[0.12em] text-[color:var(--aqt-fg-faint)]">
                     {getHumanizedStats(name)}
-                    {isGlobalRecord ? <Crown className="h-3 w-3" style={{ color: "var(--aqt-amber)" }} aria-label="All-time best" /> : null}
+                    {isGlobalRecord ? <Crown className="h-3 w-3" style={{ color: "var(--aqt-amber)" }} aria-label={t("users.heroes.allTimeBest")} /> : null}
                   </span>
                   <span className="aqt-display text-[24px] font-bold leading-none text-[color:var(--aqt-fg)]">
                     {formatStatValue(name, best.value)}

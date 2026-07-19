@@ -7,6 +7,7 @@ only the fields the frontend actually renders on user-scoped pages.
 
 from __future__ import annotations
 
+from shared.core.impact import BADGE_THRESHOLD
 from shared.division_grid import DivisionGrid
 from shared.services.division_grid_resolution import resolve_tournament_division
 from src import models, schemas
@@ -49,8 +50,19 @@ def to_user_tournament_summary(
     )
 
 
-def to_user_tournament_player(player: models.Player, *, grid: DivisionGrid) -> schemas.UserTournamentPlayer:
-    """Player card inside UserTournament.players."""
+def to_user_tournament_player(
+    player: models.Player,
+    *,
+    grid: DivisionGrid,
+    avg_mvp: float | None = None,
+    heroes: list[dict] | None = None,
+) -> schemas.UserTournamentPlayer:
+    """Player card inside UserTournament.players.
+
+    ``avg_mvp`` and ``heroes`` are supplied by the caller from bulk lookups
+    keyed by (tournament_id, user_id) — see ``_repositories`` — so this stays a
+    pure ORM→DTO conversion with no per-player queries.
+    """
     return schemas.UserTournamentPlayer(
         id=player.id,
         name=player.name,
@@ -66,6 +78,8 @@ def to_user_tournament_player(player: models.Player, *, grid: DivisionGrid) -> s
         is_newcomer_role=player.is_newcomer_role,
         related_player_id=player.related_player_id,
         relative_player=getattr(player, "relative_player", None),
+        avg_mvp=avg_mvp,
+        heroes=[schemas.HeroRead.model_validate(h) for h in (heroes or [])],
     )
 
 
@@ -74,8 +88,18 @@ def to_match_with_user_stats(
     *,
     performance: int | None,
     heroes: list[dict] | None,
+    impact_rank: int | float | None = None,
+    impact_points: float | None = None,
+    overperformance_score: float | None = None,
+    overperf_pos: int | None = None,
 ) -> schemas.MatchReadWithUserStats:
-    """One match in a user-scoped encounter — includes the viewer's stats."""
+    """One match in a user-scoped encounter — includes the viewer's stats.
+
+    ``overperf_pos`` is the viewer's rank (1 = best) among all match
+    participants by OverperformanceScore (match-wide window, not scoped to the
+    viewer) — used only to compute ``overperformance_badge`` and not exposed
+    on the schema itself.
+    """
     map_read = schemas.MapRead.model_validate(match.map, from_attributes=True) if match.map is not None else None
     hero_objs = [schemas.HeroRead.model_validate(h) for h in (heroes or [])]
     return schemas.MatchReadWithUserStats(
@@ -90,6 +114,12 @@ def to_match_with_user_stats(
         code=getattr(match, "code", None),
         map=map_read,
         performance=performance,
+        impact_rank=int(impact_rank) if impact_rank is not None else None,
+        impact_points=impact_points,
+        overperformance_score=overperformance_score,
+        overperformance_badge=(
+            overperf_pos == 1 and overperformance_score is not None and overperformance_score >= BADGE_THRESHOLD
+        ),
         heroes=hero_objs,
     )
 

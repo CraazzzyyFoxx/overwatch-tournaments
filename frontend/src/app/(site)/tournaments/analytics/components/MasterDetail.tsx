@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { ChevronLeft } from "lucide-react";
 
-import { useTranslation } from "@/i18n/LanguageContext";
+import { useTranslations } from "next-intl";
 import { PerformanceV2, StandingsDistribution } from "@/types/analytics.types";
 import { TeamVM } from "@/app/(site)/tournaments/analytics/useAnalyticsViewModel";
 import { useMasterDetailSelection } from "@/app/(site)/tournaments/analytics/useMasterDetailSelection";
@@ -59,7 +59,7 @@ export default function MasterDetail({
   distributionByTeam,
   onExplain,
 }: MasterDetailProps) {
-  const { t } = useTranslation();
+  const t = useTranslations();
   const isDesktop = useMediaQuery("(min-width: 860px)");
   const [view, setView] = useState<"list" | "table">("list");
   const defaultTeamId = teams[0]?.id ?? null;

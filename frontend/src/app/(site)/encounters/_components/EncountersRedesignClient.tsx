@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
+import { useTranslations } from "next-intl";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bookmark, FileText, Loader2, Pin, Play, Save, Search, Trash2, Tv } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
@@ -24,6 +25,7 @@ import {
   SelectValue
 } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { PageHero, HeroCoord } from "@/components/site/PageHero";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
 import { notify } from "@/lib/notify";
 import { useAuthModalStore } from "@/stores/auth-modal.store";
@@ -51,10 +53,44 @@ import {
   getTeamColor,
   getTeamInitials,
   getWinnerSide,
+  type MediaSlot,
   type MediaSlotKey,
   type TeamColor
 } from "./encounters-redesign.helpers";
 import styles from "./EncountersRedesign.module.css";
+
+// Loose translator alias matching next-intl's `useTranslations()` return type so
+// module-level helpers can accept `t` straight through (strictFunctionTypes-safe).
+type Translate = ReturnType<typeof useTranslations<never>>;
+
+// Maps the raw English state SENTINEL from `getEncounterStateLabel` to its
+// translation key. The sentinel itself is preserved for control flow; only the
+// rendered label is translated.
+const STATE_LABEL_KEYS = {
+  Live: "encounters.state.live",
+  Upcoming: "encounters.state.upcoming",
+  Final: "encounters.state.final",
+  Pending: "encounters.state.pending",
+  Open: "encounters.state.open"
+} as const;
+
+type StateLabelKey = (typeof STATE_LABEL_KEYS)[keyof typeof STATE_LABEL_KEYS];
+
+function stateLabelKey(sentinel: string): StateLabelKey {
+  return STATE_LABEL_KEYS[sentinel as keyof typeof STATE_LABEL_KEYS] ?? "encounters.state.open";
+}
+
+type MediaTooltipKey =
+  | "encounters.media.logsAvailable"
+  | "encounters.media.noLogs"
+  | "encounters.media.comingTwitch";
+
+function mediaTooltipKey(slot: MediaSlot): MediaTooltipKey {
+  if (slot.key === "logs") {
+    return slot.enabled ? "encounters.media.logsAvailable" : "encounters.media.noLogs";
+  }
+  return "encounters.media.comingTwitch";
+}
 
 type EncountersRedesignClientProps = {
   initialData: PaginatedResponse<Encounter>;
@@ -79,18 +115,18 @@ const STAGE_PILL_CLASS: Record<string, string> = {
 };
 
 const VIEW_SWATCH_HSL: Record<TeamColor, string> = {
-  teal: "hsl(174 72% 46%)",
-  amber: "hsl(38 95% 55%)",
-  rose: "hsl(340 75% 58%)",
-  violet: "hsl(270 70% 62%)",
-  blue: "hsl(210 80% 60%)"
+  teal: "var(--aqt-teal)",
+  amber: "var(--aqt-amber)",
+  rose: "var(--aqt-rose)",
+  violet: "var(--aqt-violet)",
+  blue: "var(--aqt-blue)"
 };
 
 const STAGE_DONUT_COLORS = [
   "hsl(210 80% 60%)",
   "hsl(38 95% 55%)",
   "hsl(340 75% 58%)",
-  "hsl(174 72% 46%)",
+  "hsl(172 70% 49%)",
   "hsl(270 70% 62%)"
 ];
 
@@ -98,15 +134,15 @@ function countLabel(value?: number): string {
   return typeof value === "number" ? value.toLocaleString("en") : "-";
 }
 
-function tournamentLabel(encounter: Encounter): string {
-  if (!encounter.tournament) return "Tournament";
+function tournamentLabel(encounter: Encounter, t: Translate): string {
+  if (!encounter.tournament) return t("common.tournament");
   return encounter.tournament.is_league
     ? encounter.tournament.name
-    : `Tournament ${encounter.tournament.number}`;
+    : t("encounters.tournamentNumber", { number: encounter.tournament.number });
 }
 
-function stageLabel(encounter: Encounter): string {
-  return encounter.stage_item?.name ?? encounter.stage?.name ?? "Unassigned";
+function stageLabel(encounter: Encounter, t: Translate): string {
+  return encounter.stage_item?.name ?? encounter.stage?.name ?? t("encounters.unassigned");
 }
 
 function selectedViewId(filters: EncounterFilterState): BuiltInViewId {
@@ -173,6 +209,7 @@ export default function EncountersRedesignClient({
   initialPage,
   initialError
 }: EncountersRedesignClientProps) {
+  const t = useTranslations();
   const pathname = usePathname();
   const queryClient = useQueryClient();
   const { user } = useAuthProfile();
@@ -271,7 +308,7 @@ export default function EncountersRedesignClient({
       queryClient.invalidateQueries({
         queryKey: ["encounters-saved-views", currentWorkspaceId, userKey]
       });
-      notify.success("View saved");
+      notify.success(t("encounters.savedView.saved"));
     }
   });
 
@@ -281,7 +318,7 @@ export default function EncountersRedesignClient({
       queryClient.invalidateQueries({
         queryKey: ["encounters-saved-views", currentWorkspaceId, userKey]
       });
-      notify.success("View deleted");
+      notify.success(t("encounters.savedView.deleted"));
     }
   });
 
@@ -300,12 +337,7 @@ export default function EncountersRedesignClient({
   const liveOrUpcoming = overview.featured.live.length
     ? overview.featured.live
     : overview.featured.upcoming;
-  const sortLabel =
-    effectiveFilters.sort === "closeness"
-      ? "Closeness"
-      : effectiveFilters.sort === "upcoming"
-        ? "Upcoming"
-        : "Date";
+  const sortLabel = t(`encounters.sort.${effectiveFilters.sort}`);
 
   const setFilterPatch = (patch: Partial<EncounterFilterState>) => {
     setPage(1);
@@ -318,7 +350,10 @@ export default function EncountersRedesignClient({
       openAuthModal(nextPath);
       return;
     }
-    const name = window.prompt("Saved view name", "Current view");
+    const name = window.prompt(
+      t("encounters.savedView.promptName"),
+      t("encounters.savedView.promptDefault")
+    );
     if (!name?.trim()) return;
     saveViewMutation.mutate({ name: name.trim() });
   };
@@ -336,7 +371,7 @@ export default function EncountersRedesignClient({
   }> = [
     {
       id: "all",
-      label: "All",
+      label: t("common.all"),
       count: overview.preset_counts.all ?? overview.kpis.total_encounters,
       active:
         effectiveFilters.status == null &&
@@ -353,7 +388,7 @@ export default function EncountersRedesignClient({
     },
     {
       id: "live",
-      label: "Live",
+      label: t("common.live"),
       count: overview.kpis.live_now_count,
       active: effectiveFilters.status === "live",
       onClick: () =>
@@ -363,7 +398,7 @@ export default function EncountersRedesignClient({
     },
     {
       id: "upcoming",
-      label: "Upcoming",
+      label: t("encounters.state.upcoming"),
       count: overview.kpis.upcoming_count,
       active: effectiveFilters.status === "pending",
       onClick: () =>
@@ -373,7 +408,7 @@ export default function EncountersRedesignClient({
     },
     {
       id: "with_logs",
-      label: "With logs",
+      label: t("encounters.filter.withLogs"),
       count: overview.kpis.with_logs_count,
       active: effectiveFilters.has_logs === true,
       onClick: () => setFilterPatch({ has_logs: effectiveFilters.has_logs === true ? null : true })
@@ -387,10 +422,10 @@ export default function EncountersRedesignClient({
 
         {initialError ? <div className={styles.notice}>{initialError}</div> : null}
 
-        <section aria-label="Encounter views">
+        <section aria-label={t("encounters.aria.views")}>
           <div className={styles.views}>
             <span className={styles.viewsLabel}>
-              <Bookmark className="h-3 w-3" /> Views
+              <Bookmark className="h-3 w-3" /> {t("encounters.views")}
             </span>
             {BUILT_IN_VIEWS.map((view) => (
               <button
@@ -412,7 +447,7 @@ export default function EncountersRedesignClient({
                     style={{ background: VIEW_SWATCH_HSL[view.swatch] }}
                   />
                 ) : null}
-                <span>{view.label}</span>
+                <span>{t(view.labelKey)}</span>
                 <span className={styles.viewCount}>
                   {countLabel(overview.preset_counts[view.id])}
                 </span>
@@ -436,10 +471,11 @@ export default function EncountersRedesignClient({
                 <button
                   type="button"
                   className={styles.savedViewDelete}
-                  aria-label={`Delete saved view ${view.name}`}
+                  aria-label={t("encounters.savedView.deleteAria", { name: view.name })}
                   disabled={deleteViewMutation.isPending}
                   onClick={() => {
-                    if (!window.confirm(`Delete saved view "${view.name}"?`)) return;
+                    if (!window.confirm(t("encounters.savedView.confirmDelete", { name: view.name })))
+                      return;
                     deleteViewMutation.mutate({ id: view.id });
                   }}
                 >
@@ -459,12 +495,12 @@ export default function EncountersRedesignClient({
               ) : (
                 <Save className="h-3 w-3" />
               )}
-              <span>Save current view</span>
+              <span>{t("encounters.savedView.saveCurrent")}</span>
             </button>
           </div>
         </section>
 
-        <section aria-label="Encounter filters">
+        <section aria-label={t("encounters.aria.filters")}>
           <div className={styles.filters}>
             {quickFilters.map((chip) => (
               <button
@@ -479,53 +515,57 @@ export default function EncountersRedesignClient({
             ))}
             <span className={styles.filterDivider} />
             <FilterSelect
-              label="Tournament"
+              label={t("common.tournament")}
               value={filters.tournament_id == null ? "all" : String(filters.tournament_id)}
               onValueChange={(value) =>
                 setFilterPatch({ tournament_id: value === "all" ? null : Number(value) })
               }
               items={[
-                ["all", "Tournament: Any"] as [string, string],
+                ["all", t("encounters.filter.tournamentAny")] as [string, string],
                 ...(tournamentsLookupQuery.data ?? []).map(
-                  (item) => [String(item.id), `Tournament: ${item.name}`] as [string, string]
+                  (item) =>
+                    [
+                      String(item.id),
+                      t("encounters.filter.tournamentNamed", { name: item.name })
+                    ] as [string, string]
                 )
               ]}
             />
             <FilterSelect
-              label="Best-of"
+              label={t("encounters.filter.bestOf")}
               value={filters.best_of == null ? "all" : String(filters.best_of)}
               onValueChange={(value) =>
                 setFilterPatch({ best_of: value === "all" ? null : Number(value) })
               }
               items={[
-                ["all", "Best-of: Any"],
-                ["3", "Best-of: 3"],
-                ["5", "Best-of: 5"],
-                ["7", "Best-of: 7"]
+                ["all", t("encounters.filter.bestOfAny")],
+                ["3", t("encounters.filter.bestOfValue", { count: "3" })],
+                ["5", t("encounters.filter.bestOfValue", { count: "5" })],
+                ["7", t("encounters.filter.bestOfValue", { count: "7" })]
               ]}
             />
             <FilterSelect
-              label="Closeness"
+              label={t("encounters.col.closeness")}
               value={filters.closeness_min == null ? "all" : String(filters.closeness_min)}
               onValueChange={(value) =>
                 setFilterPatch({ closeness_min: value === "all" ? null : Number(value) })
               }
               items={[
-                ["all", "Closeness: Any"],
-                ["0.4", "Closeness ≥ 40%"],
-                ["0.6", "Closeness ≥ 60%"],
-                ["0.8", "Closeness ≥ 80%"]
+                ["all", t("encounters.filter.closenessAny")],
+                ["0.4", t("encounters.filter.closenessMin", { pct: "40" })],
+                ["0.6", t("encounters.filter.closenessMin", { pct: "60" })],
+                ["0.8", t("encounters.filter.closenessMin", { pct: "80" })]
               ]}
             />
             <FilterSelect
-              label="Status"
+              label={t("common.status")}
               value={filters.status ?? "all"}
               onValueChange={(value) => setFilterPatch({ status: value === "all" ? null : value })}
               items={[
-                ["all", "Status: All"],
-                ["open", "Status: Open"],
-                ["pending", "Status: Pending"],
-                ["completed", "Status: Final"]
+                ["all", t("encounters.filter.statusAll")],
+                ["open", t("encounters.filter.statusOpen")],
+                ["pending", t("encounters.filter.statusPending")],
+                ["completed", t("encounters.filter.statusFinal")]
               ]}
             />
             <div className={styles.filterSearch}>
@@ -536,42 +576,44 @@ export default function EncountersRedesignClient({
                   setPage(1);
                   setSearchValue(event.target.value);
                 }}
-                placeholder="Search by team, player, or matchup…"
+                placeholder={t("encounters.searchPlaceholder")}
               />
             </div>
             <FilterSelect
-              label="Sort"
+              label={t("common.sortBy")}
               value={filters.sort}
               onValueChange={(value) =>
                 setFilterPatch({ sort: value as EncounterFilterState["sort"] })
               }
               items={[
-                ["date", `Sort: Date`],
-                ["closeness", `Sort: Closeness`],
-                ["upcoming", `Sort: Upcoming`]
+                ["date", t("encounters.filter.sortDate")],
+                ["closeness", t("encounters.filter.sortCloseness")],
+                ["upcoming", t("encounters.filter.sortUpcoming")]
               ]}
-              triggerLabel={`Sort: ${sortLabel}`}
+              triggerLabel={t("encounters.filter.sortTrigger", { label: sortLabel })}
               className={styles.filterSelectSort}
             />
           </div>
         </section>
 
-        <section aria-label="Insights">
+        <section aria-label={t("encounters.insights.title")}>
           <div className={styles.sectionHead}>
-            <h2 className={styles.sectionTitle}>Insights</h2>
+            <h2 className={styles.sectionTitle}>{t("encounters.insights.title")}</h2>
             <span className={styles.sectionMeta}>
-              Past 30 days · {countLabel(overview.pulse.completed_series_count)} series
+              {t("encounters.insights.meta", {
+                count: overview.pulse.completed_series_count
+              })}
             </span>
           </div>
           <div className={styles.grid3}>
             <div className={styles.card}>
               <div className={styles.cardHead}>
                 <div>
-                  <div className={styles.cardTitle}>Closeness distribution</div>
-                  <div className={styles.cardSub}>Series binned by how competitive they were</div>
+                  <div className={styles.cardTitle}>{t("encounters.insights.closenessTitle")}</div>
+                  <div className={styles.cardSub}>{t("encounters.insights.closenessSub")}</div>
                 </div>
                 <span className={styles.pill}>
-                  Avg{" "}
+                  {t("encounters.insights.avg")}{" "}
                   <span className={cn(styles.mono, styles.pillAccent)}>
                     {formatPercent(overview.kpis.avg_closeness)}
                   </span>
@@ -604,11 +646,11 @@ export default function EncountersRedesignClient({
             <div className={styles.card}>
               <div className={styles.cardHead}>
                 <div>
-                  <div className={styles.cardTitle}>Score distribution</div>
-                  <div className={styles.cardSub}>Final series scores · Bo3 / Bo5</div>
+                  <div className={styles.cardTitle}>{t("encounters.insights.scoreTitle")}</div>
+                  <div className={styles.cardSub}>{t("encounters.insights.scoreSub")}</div>
                 </div>
                 <span className={styles.pill}>
-                  Max{" "}
+                  {t("encounters.insights.max")}{" "}
                   <span className={cn(styles.mono, styles.pillAccent)}>
                     {countLabel(heatmap.max)}
                   </span>
@@ -633,9 +675,9 @@ export default function EncountersRedesignClient({
                   ))}
                 </div>
                 <div className={styles.scoreLegend}>
-                  <span>fewer</span>
+                  <span>{t("encounters.insights.fewer")}</span>
                   <span className={styles.scoreLegendGrad} />
-                  <span>more</span>
+                  <span>{t("encounters.insights.more")}</span>
                 </div>
               </div>
             </div>
@@ -643,8 +685,8 @@ export default function EncountersRedesignClient({
             <div className={styles.card}>
               <div className={styles.cardHead}>
                 <div>
-                  <div className={styles.cardTitle}>By stage</div>
-                  <div className={styles.cardSub}>Where series happen</div>
+                  <div className={styles.cardTitle}>{t("encounters.insights.byStageTitle")}</div>
+                  <div className={styles.cardSub}>{t("encounters.insights.byStageSub")}</div>
                 </div>
               </div>
               <div className={styles.cardBody}>
@@ -677,7 +719,7 @@ export default function EncountersRedesignClient({
                     </svg>
                     <div className={styles.donutCenter}>
                       <span className={styles.donutValue}>{countLabel(stageDonut.total)}</span>
-                      <span className={styles.donutLabel}>Series</span>
+                      <span className={styles.donutLabel}>{t("encounters.insights.series")}</span>
                     </div>
                   </div>
                   <div className={styles.donutLegend}>
@@ -695,7 +737,7 @@ export default function EncountersRedesignClient({
                         </div>
                       ))
                     ) : (
-                      <span className={styles.dim}>No stage data yet.</span>
+                      <span className={styles.dim}>{t("encounters.insights.noStageData")}</span>
                     )}
                   </div>
                 </div>
@@ -704,32 +746,36 @@ export default function EncountersRedesignClient({
           </div>
         </section>
 
-        <section aria-label="Featured series">
+        <section aria-label={t("encounters.featured.title")}>
           <div className={styles.sectionHead}>
-            <h2 className={styles.sectionTitle}>Featured series</h2>
-            <span className={styles.sectionMeta}>Auto-curated · Current filter scope</span>
+            <h2 className={styles.sectionTitle}>{t("encounters.featured.title")}</h2>
+            <span className={styles.sectionMeta}>{t("encounters.featured.meta")}</span>
           </div>
           <div className={styles.grid2}>
             <FeaturedPanel
-              title="Closest fights"
-              subtitle="Highest closeness reports"
+              title={t("encounters.featured.closestTitle")}
+              subtitle={t("encounters.featured.closestSub")}
               encounters={overview.featured.closest}
               variant="closest"
             />
             <FeaturedPanel
-              title="Happening now"
-              subtitle="Live & upcoming series"
+              title={t("encounters.featured.liveTitle")}
+              subtitle={t("encounters.featured.liveSub")}
               encounters={liveOrUpcoming}
               variant="live"
             />
           </div>
         </section>
 
-        <section aria-label="All encounters">
+        <section aria-label={t("encounters.list.title")}>
           <div className={styles.sectionHead}>
-            <h2 className={styles.sectionTitle}>All encounters</h2>
+            <h2 className={styles.sectionTitle}>{t("encounters.list.title")}</h2>
             <span className={styles.sectionMeta}>
-              Page {page} of {totalPages} · sorted by {sortLabel.toLowerCase()}
+              {t("encounters.list.pageMeta", {
+                page: String(page),
+                total: String(totalPages),
+                sort: effectiveFilters.sort
+              })}
             </span>
           </div>
           <div className={styles.gridTable}>
@@ -738,23 +784,23 @@ export default function EncountersRedesignClient({
                 <table className={styles.table}>
                   <thead>
                     <tr>
-                      <th>Matchup</th>
-                      <th>Tournament</th>
-                      <th>Stage</th>
-                      <th>Round</th>
-                      <th className={styles.scoreAlign}>Score</th>
-                      <th>Maps</th>
-                      <th>Closeness</th>
-                      <th>Media</th>
-                      <th>Status</th>
-                      <th>Played</th>
+                      <th>{t("encounters.col.matchup")}</th>
+                      <th>{t("common.tournament")}</th>
+                      <th>{t("common.stage")}</th>
+                      <th>{t("encounters.col.round")}</th>
+                      <th className={styles.scoreAlign}>{t("encounters.col.score")}</th>
+                      <th>{t("encounters.col.maps")}</th>
+                      <th>{t("encounters.col.closeness")}</th>
+                      <th>{t("encounters.col.media")}</th>
+                      <th>{t("common.status")}</th>
+                      <th>{t("encounters.col.played")}</th>
                     </tr>
                   </thead>
                   <tbody>
                     {listQuery.isFetching && !rows.length ? (
                       <tr>
                         <td colSpan={10} className={styles.empty}>
-                          Loading encounters…
+                          {t("encounters.list.loading")}
                         </td>
                       </tr>
                     ) : rows.length ? (
@@ -764,7 +810,7 @@ export default function EncountersRedesignClient({
                     ) : (
                       <tr>
                         <td colSpan={10} className={styles.empty}>
-                          No encounters found.
+                          {t("encounters.list.empty")}
                         </td>
                       </tr>
                     )}
@@ -773,7 +819,11 @@ export default function EncountersRedesignClient({
               </div>
               <div className={styles.pagination}>
                 <span className={styles.pageInfo}>
-                  Showing {showingStart} – {showingEnd} of {countLabel(encounters.total)} series
+                  {t("encounters.list.showing", {
+                    start: String(showingStart),
+                    end: String(showingEnd),
+                    total: countLabel(encounters.total)
+                  })}
                 </span>
                 <div className={styles.pageControls}>
                   <button
@@ -782,7 +832,7 @@ export default function EncountersRedesignClient({
                     disabled={page === 1}
                     onClick={() => setPage(Math.max(1, page - 1))}
                   >
-                    ‹ Prev
+                    ‹ {t("common.prev")}
                   </button>
                   {pageList.map((entry, index) =>
                     entry === "ellipsis" ? (
@@ -810,7 +860,7 @@ export default function EncountersRedesignClient({
                     disabled={page >= totalPages}
                     onClick={() => setPage(Math.min(totalPages, page + 1))}
                   >
-                    Next ›
+                    {t("common.next")} ›
                   </button>
                 </div>
               </div>
@@ -819,26 +869,31 @@ export default function EncountersRedesignClient({
             <aside className={styles.rail}>
               <div className={styles.card}>
                 <div className={styles.cardHead}>
-                  <div className={styles.cardTitle}>This week’s pulse</div>
+                  <div className={styles.cardTitle}>{t("encounters.pulse.title")}</div>
                 </div>
                 <div className={styles.insightList}>
                   <Insight
-                    label="Avg series length"
+                    label={t("encounters.pulse.avgLength")}
                     value={formatDuration(overview.pulse.avg_series_seconds)}
-                    meta={`across ${countLabel(overview.pulse.completed_series_count)} completed series`}
+                    meta={t("encounters.pulse.avgLengthMeta", {
+                      count: countLabel(overview.pulse.completed_series_count)
+                    })}
                   />
                   <Insight
-                    label="Sweep rate"
+                    label={t("encounters.pulse.sweepRate")}
                     value={`${overview.pulse.sweep_rate}%`}
-                    meta={`${countLabel(overview.pulse.sweep_count)} sweeps · ${countLabel(overview.pulse.went_distance_count)} went distance`}
+                    meta={t("encounters.pulse.sweepMeta", {
+                      sweeps: countLabel(overview.pulse.sweep_count),
+                      distance: countLabel(overview.pulse.went_distance_count)
+                    })}
                   />
                   <Insight
-                    label="Reverse-sweep rate"
+                    label={t("encounters.pulse.reverseSweepRate")}
                     value={`${overview.pulse.reverse_sweep_rate}%`}
-                    meta="series that came back from match point"
+                    meta={t("encounters.pulse.reverseSweepMeta")}
                   />
                   <Insight
-                    label="Most-decisive map"
+                    label={t("encounters.pulse.mostDecisiveMap")}
                     value={overview.pulse.most_decisive_map ?? "—"}
                     valueClassName={styles.insightValueSmall}
                   />
@@ -847,8 +902,8 @@ export default function EncountersRedesignClient({
 
               <div className={styles.card}>
                 <div className={styles.cardHead}>
-                  <div className={styles.cardTitle}>Hot maps</div>
-                  <span className={styles.cardSub}>Current filter scope</span>
+                  <div className={styles.cardTitle}>{t("encounters.hotMaps.title")}</div>
+                  <span className={styles.cardSub}>{t("encounters.hotMaps.sub")}</span>
                 </div>
                 <div>
                   {overview.hot_maps.length ? (
@@ -865,15 +920,15 @@ export default function EncountersRedesignClient({
                       </div>
                     ))
                   ) : (
-                    <div className={styles.empty}>No map data yet.</div>
+                    <div className={styles.empty}>{t("encounters.hotMaps.empty")}</div>
                   )}
                 </div>
               </div>
 
               <div className={styles.card}>
                 <div className={styles.cardHead}>
-                  <div className={styles.cardTitle}>Side balance</div>
-                  <span className={styles.cardSub}>Home vs. away winner</span>
+                  <div className={styles.cardTitle}>{t("encounters.sideBalance.title")}</div>
+                  <span className={styles.cardSub}>{t("encounters.sideBalance.sub")}</span>
                 </div>
                 <div className={styles.cardBody}>
                   <div className={styles.balance}>
@@ -892,10 +947,11 @@ export default function EncountersRedesignClient({
                   </div>
                   <div className={styles.balanceLegend}>
                     <span>
-                      <span className={styles.balanceLegendHome}>● </span>Home wins
+                      <span className={styles.balanceLegendHome}>● </span>
+                      {t("encounters.sideBalance.homeWins")}
                     </span>
                     <span>
-                      Away wins <span className={styles.dim}>●</span>
+                      {t("encounters.sideBalance.awayWins")} <span className={styles.dim}>●</span>
                     </span>
                   </div>
                 </div>
@@ -909,49 +965,45 @@ export default function EncountersRedesignClient({
 }
 
 function Hero({ overview }: { overview: EncounterOverview }) {
+  const t = useTranslations();
   return (
-    <section className={styles.hero}>
-      <div className={styles.hex} />
-      <div className={styles.glow1} />
-      <div className={styles.glow2} />
-      <div className={styles.heroGrid}>
-        <div>
-          <p className={styles.crumb}>All tournaments · Encounters</p>
-          <h1 className={styles.title}>
-            Every fight, <em className={styles.titleAccent}>quantified</em>
-          </h1>
-          <p className={styles.subtitle}>
-            All series across all tournaments and leagues on the platform — sliceable by stage,
-            tournament, closeness and logs availability.
-          </p>
-        </div>
+    <PageHero
+      eyebrow={<HeroCoord>{t("encounters.hero.eyebrow")}</HeroCoord>}
+      title={t.rich("encounters.hero.title", {
+        em: (chunks) => <em>{chunks}</em>
+      })}
+      lede={t("encounters.hero.lede")}
+      aside={
         <div className={styles.heroStats}>
           <HeroStat
-            label="Total encounters"
+            label={t("encounters.hero.totalLabel")}
             value={countLabel(overview.kpis.total_encounters)}
             foot={
               overview.kpis.recent_count ? (
                 <>
                   <span className={styles.delta}>▲ {countLabel(overview.kpis.recent_count)}</span>{" "}
-                  last 7 days
+                  {t("encounters.hero.last7Days")}
                 </>
               ) : (
-                "All time"
+                t("encounters.hero.allTime")
               )
             }
           />
           <HeroStat
-            label="With game logs"
+            label={t("encounters.hero.withLogsLabel")}
             value={
               <>
                 {overview.kpis.with_logs_pct}
                 <em>%</em>
               </>
             }
-            foot={`${countLabel(overview.kpis.with_logs_count)} of ${countLabel(overview.kpis.total_encounters)} series`}
+            foot={t("encounters.hero.ofSeries", {
+              count: countLabel(overview.kpis.with_logs_count),
+              total: countLabel(overview.kpis.total_encounters)
+            })}
           />
           <HeroStat
-            label="Avg closeness"
+            label={t("encounters.hero.avgClosenessLabel")}
             value={
               overview.kpis.avg_closeness != null ? (
                 <>
@@ -962,16 +1014,18 @@ function Hero({ overview }: { overview: EncounterOverview }) {
                 "—"
               )
             }
-            foot="Across reported series"
+            foot={t("encounters.hero.acrossReported")}
           />
           <HeroStat
-            label="Live now"
+            label={t("encounters.hero.liveNowLabel")}
             value={countLabel(overview.kpis.live_now_count)}
-            foot={`${countLabel(overview.kpis.upcoming_count)} upcoming`}
+            foot={t("encounters.hero.upcomingCount", {
+              count: countLabel(overview.kpis.upcoming_count)
+            })}
           />
         </div>
-      </div>
-    </section>
+      }
+    />
   );
 }
 
@@ -1066,6 +1120,7 @@ function FeaturedPanel({
   encounters: Encounter[];
   variant: "closest" | "live";
 }) {
+  const t = useTranslations();
   const router = useRouter();
   return (
     <div className={styles.card}>
@@ -1078,8 +1133,8 @@ function FeaturedPanel({
       <div>
         {encounters.length ? (
           encounters.slice(0, 4).map((encounter) => {
-            const homeName = encounter.home_team?.name ?? "TBD";
-            const awayName = encounter.away_team?.name ?? "TBD";
+            const homeName = encounter.home_team?.name ?? t("common.tbd");
+            const awayName = encounter.away_team?.name ?? t("common.tbd");
             const winner = getWinnerSide(encounter);
             const state = getEncounterStateLabel(encounter);
             const isLive = variant === "live" && state === "Live";
@@ -1096,23 +1151,27 @@ function FeaturedPanel({
                 <div>
                   <div className={styles.matchup}>
                     {isLive ? (
-                      <span className={cn(styles.statusDot, styles.statusLive)}>Live</span>
+                      <span className={cn(styles.statusDot, styles.statusLive)}>
+                        {t("encounters.state.live")}
+                      </span>
                     ) : null}
                     {isUpcoming ? (
                       <span className={cn(styles.statusDot, styles.statusUpcoming)}>
-                        {state === "Upcoming" ? "Soon" : state}
+                        {state === "Upcoming"
+                          ? t("encounters.state.soon")
+                          : t(stateLabelKey(state))}
                       </span>
                     ) : null}
                     <TeamChip name={homeName} />
-                    <span className={styles.vs}>VS</span>
+                    <span className={styles.vs}>{t("common.vs")}</span>
                     <TeamChip name={awayName} />
                   </div>
                   <div className={styles.featMeta}>
                     {[
-                      tournamentLabel(encounter),
-                      stageLabel(encounter),
-                      `Round ${encounter.round}`,
-                      `${encounter.matches?.length ?? 0} maps`,
+                      tournamentLabel(encounter, t),
+                      stageLabel(encounter, t),
+                      t("encounters.roundNum", { round: encounter.round }),
+                      t("encounters.mapsCount", { count: encounter.matches?.length ?? 0 }),
                       formatDuration(getSeriesDuration(encounter))
                     ]
                       .filter(Boolean)
@@ -1146,13 +1205,15 @@ function FeaturedPanel({
                   {variant === "closest" && closenessPct != null ? (
                     <span className={styles.badgeCloseness}>⚡ {closenessPct}%</span>
                   ) : null}
-                  {isLive ? <span className={styles.featTime}>Live</span> : null}
+                  {isLive ? (
+                    <span className={styles.featTime}>{t("encounters.state.live")}</span>
+                  ) : null}
                 </div>
               </div>
             );
           })
         ) : (
-          <div className={styles.empty}>No featured series in this slice.</div>
+          <div className={styles.empty}>{t("encounters.featured.empty")}</div>
         )}
       </div>
     </div>
@@ -1170,13 +1231,14 @@ function TeamChip({ name }: { name: string }) {
 }
 
 function EncounterRow({ encounter }: { encounter: Encounter }) {
+  const t = useTranslations();
   const router = useRouter();
   const winner = getWinnerSide(encounter);
   const stateLabel = getEncounterStateLabel(encounter);
-  const homeName = encounter.home_team?.name ?? "TBD";
-  const awayName = encounter.away_team?.name ?? "TBD";
+  const homeName = encounter.home_team?.name ?? t("common.tbd");
+  const awayName = encounter.away_team?.name ?? t("common.tbd");
   const sortedMatches = [...(encounter.matches ?? [])].sort((a, b) => a.id - b.id);
-  const stageName = stageLabel(encounter);
+  const stageName = stageLabel(encounter, t);
   const stageBucket = getStageBucket(stageName);
   const closenessPct = encounter.closeness != null ? Math.round(encounter.closeness * 100) : null;
   const homeColor = getTeamColor(homeName);
@@ -1222,11 +1284,13 @@ function EncounterRow({ encounter }: { encounter: Encounter }) {
           </div>
         </div>
       </td>
-      <td className={styles.dim}>{tournamentLabel(encounter)}</td>
+      <td className={styles.dim}>{tournamentLabel(encounter, t)}</td>
       <td>
         <span className={cn(styles.stagePill, STAGE_PILL_CLASS[stageBucket])}>{stageName}</span>
       </td>
-      <td className={cn(styles.dim, styles.mono)}>R{encounter.round}</td>
+      <td className={cn(styles.dim, styles.mono)}>
+        {t("encounters.roundShort", { round: encounter.round })}
+      </td>
       <td className={cn(styles.mono, styles.scoreAlign)}>
         <span
           className={cn(
@@ -1278,7 +1342,7 @@ function EncounterRow({ encounter }: { encounter: Encounter }) {
       </td>
       <td>
         <span className={cn(styles.statusDot, statusVariant)}>
-          {isUpset ? "Upset" : stateLabel}
+          {isUpset ? t("encounters.state.upset") : t(stateLabelKey(stateLabel))}
         </span>
       </td>
       <td className={cn(styles.dim, styles.mono)}>{formatCompactDate(getPlayedAt(encounter))}</td>
@@ -1293,6 +1357,7 @@ const MEDIA_ICON_VARIANT: Record<MediaSlotKey, string> = {
 };
 
 function MediaIcons({ hasLogs }: { hasLogs: boolean }) {
+  const t = useTranslations();
   return (
     <div className={styles.media}>
       {getMediaSlots(hasLogs).map((slot) => {
@@ -1317,7 +1382,7 @@ function MediaIcons({ hasLogs }: { hasLogs: boolean }) {
                 {slot.key === "cast" && slot.enabled ? <span className={styles.liveDot} /> : null}
               </span>
             </TooltipTrigger>
-            <TooltipContent>{slot.label}</TooltipContent>
+            <TooltipContent>{t(mediaTooltipKey(slot))}</TooltipContent>
           </Tooltip>
         );
       })}

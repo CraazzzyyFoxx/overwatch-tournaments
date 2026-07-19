@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import { Activity } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { HeroWithUserStats } from "@/types/hero.types";
@@ -25,8 +26,7 @@ import {
 } from "@/app/(site)/users/components/heroes/utils";
 import HeroRadar, { RADAR_STATS, type RadarPoint } from "@/app/(site)/users/components/heroes/HeroRadar";
 import HeroSpotlight, {
-  QUICK_CANDIDATES,
-  QUICK_LABELS
+  QUICK_CANDIDATES
 } from "@/app/(site)/users/components/heroes/HeroSpotlight";
 import HeroStatsTable, {
   type StatSortKey
@@ -44,7 +44,27 @@ interface Props {
 }
 
 const HeroesView = ({ heroes, filterSlot, maps }: Props) => {
+  const t = useTranslations();
   const safeHeroes = Array.isArray(heroes) ? heroes : [];
+
+  // Compact label for spotlight quick-stats (falls back to humanized stat name).
+  const quickLabel = useCallback(
+    (name: LogStatsName): string => {
+      switch (name) {
+        case LogStatsName.Winrate:
+          return t("users.heroes.quick.winrate");
+        case LogStatsName.KDA:
+          return t("users.heroes.quick.kda");
+        case LogStatsName.HeroDamageDealt:
+          return t("users.heroes.quick.dmg10");
+        case LogStatsName.Eliminations:
+          return t("users.heroes.quick.elims10");
+        default:
+          return getHumanizedStats(name);
+      }
+    },
+    [t]
+  );
 
   const items = useMemo(() => {
     return safeHeroes
@@ -189,11 +209,11 @@ const HeroesView = ({ heroes, filterSlot, maps }: Props) => {
             ? formatPercent(stat.avg_10, 0)
             : `${stat.avg_10.toFixed(0)}%`
           : formatStatValue(name, stat.avg_10);
-      out.push({ name, label: QUICK_LABELS[name] ?? getHumanizedStats(name), value, delta });
-      if (out.length === 3) break;
+      out.push({ name, label: quickLabel(name), value, delta });
+      if (out.length === 4) break;
     }
     return out;
-  }, [selected]);
+  }, [selected, quickLabel]);
 
   // Full per-stat comparison table (All stats mode).
   const allStatsRows = useMemo(() => {
@@ -271,7 +291,7 @@ const HeroesView = ({ heroes, filterSlot, maps }: Props) => {
     return (
       <div className="aqt-player">
         <CardSurface>
-          <div className="py-10 text-center text-(--aqt-fg-dim)">No hero stats available yet.</div>
+          <div className="py-10 text-center text-(--aqt-fg-dim)">{t("users.heroes.noStats")}</div>
         </CardSurface>
       </div>
     );
@@ -316,16 +336,16 @@ const HeroesView = ({ heroes, filterSlot, maps }: Props) => {
 
       {/* Sticky hero rail (cross-hero compare) + detail, side by side so
           switching heroes never requires a long scroll up/down. */}
-      <div className="grid grid-cols-1 gap-3.5 xl:grid-cols-[1fr_340px] xl:items-start">
+      <div className="grid grid-cols-1 gap-3.5 xl:grid-cols-[1fr_360px] xl:items-start">
         <div className="flex min-w-0 flex-col gap-3.5">
           {/* Spotlight */}
           <HeroSpotlight selected={selected} heroVariant={heroVariant} quickStats={quickStats} />
 
           {/* Radar + insights */}
           <CardSurface
-            title="Insights"
+            title={t("users.heroes.insights")}
             icon={<Activity size={15} />}
-            subtitle={`${selected.hero.hero.name} · vs global avg/10`}
+            subtitle={t("users.heroes.insightsSubtitle", { hero: selected.hero.hero.name })}
             action={
               <div className="aqt-filters mb-0!">
                 <>
@@ -337,7 +357,7 @@ const HeroesView = ({ heroes, filterSlot, maps }: Props) => {
                   tabIndex={0}
                   onClick={() => setInsightsMode("highlights")}
                 >
-                  Highlights
+                  {t("users.heroes.highlights")}
                 </span>
                 <span
                   className={cn("aqt-filter-chip", insightsMode === "all" && "active")}
@@ -345,7 +365,7 @@ const HeroesView = ({ heroes, filterSlot, maps }: Props) => {
                   tabIndex={0}
                   onClick={() => setInsightsMode("all")}
                 >
-                  All stats
+                  {t("users.heroes.allStats")}
                   <span className="aqt-count">{allStatsRows.length}</span>
                 </span>
               </div>
@@ -358,7 +378,7 @@ const HeroesView = ({ heroes, filterSlot, maps }: Props) => {
                 {radarCandidates.length > 0 ? (
                   <div className="flex flex-col gap-1.5">
                     <span className="text-center text-[10px] font-bold uppercase tracking-[0.14em] text-(--aqt-fg-faint)">
-                      Radar axes · 3–8
+                      {t("users.heroes.radarAxes")}
                     </span>
                     <RadarAxisPicker selected={radarStats} candidates={radarCandidates} onToggle={toggleRadarStat} />
                   </div>
@@ -382,7 +402,7 @@ const HeroesView = ({ heroes, filterSlot, maps }: Props) => {
                 ))}
                 {insightsRows.length === 0 ? (
                   <div className="col-span-2 py-6 text-center text-[13px] text-(--aqt-fg-dim)">
-                    Not enough data for comparisons
+                    {t("users.heroes.notEnoughData")}
                   </div>
                 ) : null}
               </div>

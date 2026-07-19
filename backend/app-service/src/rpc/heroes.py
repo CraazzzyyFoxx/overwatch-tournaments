@@ -34,6 +34,7 @@ def register(broker: Any, logger: Any) -> None:
     @broker.subscriber("rpc.app.heroes.playtime")
     async def _playtime(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
+            await c.gate_tournament(session, data, c.q1(data, "tournament_id", int))
             qp = build_query_model(schemas.HeroPlaytimeQueryPaginationParams, data.get("query"))
             return await hero_flows.get_playtime(
                 session,
@@ -46,6 +47,7 @@ def register(broker: Any, logger: Any) -> None:
     @broker.subscriber("rpc.app.heroes.leaderboard")
     async def _leaderboard(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
+            await c.gate_tournament(session, data, c.q1(data, "tournament_id", int))
             ws = await resolve_workspace_context(session, c.q1(data, "workspace_id", int))
             qp = build_query_model(schemas.HeroLeaderboardQueryParams, data.get("query"))
             return await hero_flows.get_hero_leaderboard(

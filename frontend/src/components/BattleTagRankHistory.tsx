@@ -8,7 +8,7 @@ import RankHistoryChart, { RankHistorySkeleton } from "@/components/RankHistoryC
 import { useUserRankHistory } from "@/hooks/useRankHistory";
 import { useLocalStorageState } from "@/hooks/useLocalStorageState";
 import userService from "@/services/user.service";
-import { useTranslation } from "@/i18n/LanguageContext";
+import { useTranslations } from "next-intl";
 
 type Granularity = "date" | "hour" | "raw";
 
@@ -38,7 +38,7 @@ export default function BattleTagRankHistory({
   battleTag = null,
   className
 }: BattleTagRankHistoryProps) {
-  const { locale } = useTranslation();
+  const t = useTranslations();
   const resolve = useQuery({
     queryKey: ["rank-user-resolve", userId, battleTag],
     queryFn: async () => {
@@ -65,33 +65,27 @@ export default function BattleTagRankHistory({
     return <RankHistorySkeleton className={className} />;
   }
   if (resolvedUserId == null) {
-    const isRu = locale.startsWith("ru");
     return (
       <div className={`flex flex-col items-center justify-center text-center p-6 rounded-xl border border-white/[0.06] bg-zinc-950/20 ${className || ""}`}>
         <Link2Off className="h-5 w-5 text-white/30 mb-2" />
         <h4 className="text-xs font-semibold text-white/70 mb-1">
-          {isRu ? "Нет привязанного профиля" : "No linked player profile"}
+          {t("rankHistory.noProfileTitle")}
         </h4>
         <p className="text-[11px] text-white/45 max-w-xs leading-normal">
-          {isRu
-            ? "История рангов недоступна, так как этот BattleTag не связан с зарегистрированным аккаунтом на сайте."
-            : "Rank history is unavailable because this BattleTag is not linked to a registered site account."}
+          {t("rankHistory.noProfileBody")}
         </p>
       </div>
     );
   }
   if (history.isError) {
-    const isRu = locale.startsWith("ru");
     return (
       <div className={`flex flex-col items-center justify-center text-center p-6 rounded-xl border border-rose-500/10 bg-rose-500/[0.02] ${className || ""}`}>
         <AlertCircle className="h-5 w-5 text-rose-400/50 mb-2" />
         <h4 className="text-xs font-semibold text-rose-300/70 mb-1">
-          {isRu ? "Ошибка загрузки" : "Failed to load"}
+          {t("rankHistory.errorTitle")}
         </h4>
         <p className="text-[11px] text-rose-400/40 max-w-xs leading-normal">
-          {isRu
-            ? "Не удалось загрузить историю рангов. Пожалуйста, попробуйте позже."
-            : "Failed to load rank history. Please try again later."}
+          {t("rankHistory.errorBody")}
         </p>
       </div>
     );

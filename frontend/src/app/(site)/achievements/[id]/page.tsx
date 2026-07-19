@@ -1,34 +1,27 @@
 import React from "react";
-import Image from "next/image";
-import achievementsService from "@/services/achievements.service";
-import AchievementUsers from "@/app/(site)/achievements/[id]/components/AchiementUsers";
 
-export const dynamic = 'force-dynamic';
+import achievementsService from "@/services/achievements.service";
+import { cn } from "@/lib/utils";
+import { classifyRarity, rarityVarClass } from "@/app/(site)/users/components/achievements/rarity";
+import AchievementUsers from "@/app/(site)/achievements/[id]/components/AchiementUsers";
+import AchievementDetailHeader from "@/app/(site)/achievements/[id]/components/AchievementDetailHeader";
+import AchievementConditionsCard from "@/app/(site)/achievements/[id]/components/AchievementConditionsCard";
+
+export const dynamic = "force-dynamic";
 
 const AchievementPage = async (props: { params: Promise<{ id: number }> }) => {
   const params = await props.params;
   const data = await achievementsService.getOne(params.id);
+  const rarity = classifyRarity(data.rarity * 100);
 
   return (
-    <div>
-      <div className="lg:ml-5 flex flex-row gap-4 items-center mb-8">
-        <Image
-          className="rounded-xl"
-          src={data.image_url ?? `/achievements/${data.slug}.webp`}
-          width={100}
-          height={100}
-          alt={data.slug}
-        />
-        <div className="flex flex-col">
-          <h3 className="scroll-m-20 xs:text-lg xs1:text-2xl font-semibold tracking-tight">
-            {data.name}
-          </h3>
-          <div className="flex gap-2">
-            <p className="text-muted-foreground text-sm">{data.description_ru}</p>
-          </div>
-        </div>
+    <div className={cn("aqt-player space-y-6", rarityVarClass(rarity))}>
+      <AchievementDetailHeader achievement={data} />
+
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,340px)_minmax(0,1fr)]">
+        <AchievementConditionsCard achievement={data} />
+        <AchievementUsers achievement={data} />
       </div>
-      <AchievementUsers achievement={data} />
     </div>
   );
 };

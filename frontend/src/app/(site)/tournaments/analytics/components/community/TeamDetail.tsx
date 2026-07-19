@@ -4,7 +4,7 @@ import React, { useMemo } from "react";
 import { ArrowRight } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { useTranslation } from "@/i18n/LanguageContext";
+import { useTranslations, useLocale } from "next-intl";
 import { sortTeamPlayers } from "@/utils/player";
 import { StandingsDistribution } from "@/types/analytics.types";
 import { formatPlace } from "@/app/(site)/tournaments/analytics/analytics.helpers";
@@ -34,7 +34,7 @@ function percent(value: number): string {
 
 /** Compact Monte-Carlo block — woven into the team detail for organizers. */
 function MonteCarlo({ distribution }: { distribution: StandingsDistribution }) {
-  const { t } = useTranslation();
+  const t = useTranslations();
   const bars = useMemo(() => {
     const entries = Object.entries(distribution.position_histogram)
       .map(([pos, count]) => ({ pos: Number(pos), count }))
@@ -85,7 +85,8 @@ export default function TeamDetail({
   onSelectPlayer,
   onExplain,
 }: TeamDetailProps) {
-  const { t, locale } = useTranslation();
+  const t = useTranslations();
+  const locale = useLocale();
   const tournamentGrid = team.tournament?.division_grid_version;
   const players = useMemo(() => sortTeamPlayers(team.players), [team.players]);
   const groupName = team.group?.name ?? "—";

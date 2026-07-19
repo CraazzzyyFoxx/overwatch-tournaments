@@ -33,6 +33,12 @@ export enum LogStatsName {
   WeaponAccuracy = "weapon_accuracy",
   HeroTimePlayed = "hero_time_played",
 
+  // Derived from kill_feed (parser writes them like any other stat).
+  FirstPicks = "first_picks",
+  FirstDeaths = "first_deaths",
+  UltimateKills = "ultimate_kills",
+  SupportKills = "support_kills",
+
   Performance = "performance",
   PerformancePoints = "performance_points",
   KD = "kd",
@@ -41,6 +47,9 @@ export enum LogStatsName {
   FBE = "fbe",
   DamageFB = "damage_fb",
   Assists = "assists",
+  ImpactPoints = "impact_points",
+  ImpactRank = "impact_rank",
+  OverperformanceScore = "overperformance_score",
 
   Winrate = "winrate"
 }

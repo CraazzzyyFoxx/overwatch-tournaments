@@ -1,11 +1,20 @@
 import type { Metadata } from "next";
-import { Inter, JetBrains_Mono, Barlow_Condensed } from "next/font/google";
+import { Inter, JetBrains_Mono, Onest } from "next/font/google";
 import "./globals.css";
 import React from "react";
 
 const inter = Inter({
-  subsets: ["latin"],
+  subsets: ["latin", "cyrillic"],
   variable: "--font-inter",
+  display: "swap"
+});
+
+// Editorial Tactical display face (design-book): cyrillic-native geometric
+// grotesk used for page-hero titles. Mixed-case, never condensed-caps.
+const onest = Onest({
+  subsets: ["latin", "cyrillic"],
+  weight: ["500", "600", "700"],
+  variable: "--font-onest",
   display: "swap"
 });
 
@@ -16,67 +25,76 @@ const jetbrainsMono = JetBrains_Mono({
   display: "swap"
 });
 
-const barlowCondensed = Barlow_Condensed({
-  subsets: ["latin"],
-  weight: ["600", "700", "800"],
-  variable: "--font-barlow-condensed",
-  display: "swap"
-});
 import { Providers } from "@/app/providers";
 import { GoogleAnalytics } from "@next/third-parties/google";
-import { SITE_FAVICON, SITE_NAME } from "@/config/site";
 import { cn } from "@/lib/utils";
 import AuthModal from "@/components/AuthModal";
 import AccountSettingsModal from "@/components/AccountSettingsModal";
 import LoginModalTrigger from "@/components/LoginModalTrigger";
 import { Toaster } from "@/components/ui/sonner";
 import { Suspense } from "react";
+import { resolveSiteMetadata } from "@/lib/site-metadata";
+import { resolveTenantWorkspace } from "@/lib/tenant-host";
+import { NextIntlClientProvider } from "next-intl";
+import { getLocale } from "next-intl/server";
 
-export const metadata: Metadata = {
-  title: SITE_NAME,
-  description: `${SITE_NAME} is a tool for analyzing Anak's tournaments.`,
-  metadataBase: new URL("https://aqt.craazzzyyfoxx.me"),
-  icons: {
-    icon: SITE_FAVICON
-  },
-  openGraph: {
-    title: SITE_NAME,
-    description: `${SITE_NAME} is a tool for analyzing Anak's tournaments.`,
-    url: "https://aqt.craazzzyyfoxx.me",
-    type: "website",
-    siteName: SITE_NAME,
-    locale: "en_US"
-  }
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const [{ name, description, origin, icon }, locale] = await Promise.all([
+    resolveSiteMetadata(),
+    getLocale()
+  ]);
+  return {
+    title: name,
+    description,
+    metadataBase: new URL(origin),
+    icons: {
+      icon
+    },
+    openGraph: {
+      title: name,
+      description,
+      url: origin,
+      type: "website",
+      siteName: name,
+      locale: locale === "ru" ? "ru_RU" : "en_US"
+    }
+  };
+}
 
-export default function RootLayout({
+export default async function RootLayout({
   children
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const [locale, tenantWorkspace] = await Promise.all([
+    getLocale(),
+    resolveTenantWorkspace()
+  ]);
   return (
-    <html lang="en">
+    <html lang={locale}>
       <body
         className={cn(
           inter.className,
           inter.variable,
           jetbrainsMono.variable,
-          barlowCondensed.variable,
+          onest.variable,
           "dark"
         )}
       >
         <GoogleAnalytics gaId="G-6TYE0K6SQM" />
-        <Providers>
-          <Suspense fallback={null}>
-            <LoginModalTrigger />
-          </Suspense>
-          <AuthModal />
-          <Suspense fallback={null}>
-            <AccountSettingsModal />
-          </Suspense>
-          <Toaster />
-          {children}
-        </Providers>
+        <NextIntlClientProvider>
+          <Providers>
+            <Suspense fallback={null}>
+              <LoginModalTrigger />
+            </Suspense>
+            <AuthModal tenantWorkspace={tenantWorkspace ?? undefined} />
+            <Suspense fallback={null}>
+              <AccountSettingsModal />
+            </Suspense>
+            <Toaster />
+            {children}
+          </Providers>
+        </NextIntlClientProvider>
       </body>
     </html>
   );

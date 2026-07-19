@@ -4,12 +4,14 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { useQuery } from "@tanstack/react-query";
 import { useDebounce } from "use-debounce";
 import { BarChart3, ChevronDown, ChevronUp, LayoutGrid, Search, Trophy } from "lucide-react";
 
 import DivisionIcon from "@/components/DivisionIcon";
 import { HeroStrip } from "@/components/hero/HeroImage";
+import { PageHero, HeroCoord } from "@/components/site/PageHero";
 import { useCurrentWorkspaceId, useDivisionGrid } from "@/hooks/useCurrentWorkspace";
 import { clampDivisionToGrid, getDivisionLabel, getDivisionOptions } from "@/lib/division-grid";
 import { cn } from "@/lib/utils";
@@ -35,29 +37,55 @@ import {
 
 import styles from "./UsersRedesign.module.css";
 
+// Loose translator alias matching next-intl's `useTranslations()` return type so
+// module-scope helpers can accept the caller's `t` (strictFunctionTypes-safe).
+type Translate = ReturnType<typeof useTranslations<never>>;
+
 type SortValue = "name" | "tournaments_count" | "achievements_count" | "avg_placement";
 type OrderValue = "asc" | "desc";
 type ViewMode = "analytics" | "catalog";
 
-const SORT_OPTIONS: Array<{ value: SortValue; label: string }> = [
-  { value: "name", label: "Name" },
-  { value: "tournaments_count", label: "Tournaments" },
-  { value: "achievements_count", label: "Achievements" },
-  { value: "avg_placement", label: "Avg placement" }
+type SortLabelKey =
+  | "users.list.sort.name"
+  | "users.list.sort.tournaments"
+  | "users.list.sort.achievements"
+  | "users.list.sort.avgPlacement";
+
+const SORT_OPTIONS: Array<{ value: SortValue; labelKey: SortLabelKey }> = [
+  { value: "name", labelKey: "users.list.sort.name" },
+  { value: "tournaments_count", labelKey: "users.list.sort.tournaments" },
+  { value: "achievements_count", labelKey: "users.list.sort.achievements" },
+  { value: "avg_placement", labelKey: "users.list.sort.avgPlacement" }
 ];
 
-const HERO_METRIC_LABELS: Record<string, string> = {
-  [LogStatsName.Eliminations]: "Elims",
-  [LogStatsName.FinalBlows]: "FB",
-  [LogStatsName.HeroDamageDealt]: "Dmg",
-  [LogStatsName.HealingDealt]: "Heal"
+type HeroMetricLabelKey =
+  | "users.list.heroMetrics.elims"
+  | "users.list.heroMetrics.fb"
+  | "users.list.heroMetrics.dmg"
+  | "users.list.heroMetrics.heal";
+
+const HERO_METRIC_LABEL_KEYS: Record<string, HeroMetricLabelKey> = {
+  [LogStatsName.Eliminations]: "users.list.heroMetrics.elims",
+  [LogStatsName.FinalBlows]: "users.list.heroMetrics.fb",
+  [LogStatsName.HeroDamageDealt]: "users.list.heroMetrics.dmg",
+  [LogStatsName.HealingDealt]: "users.list.heroMetrics.heal"
 };
 
-const ROLE_FILTERS: Array<{ value: "all" | UserRoleType; label: string }> = [
-  { value: "all", label: "All" },
-  { value: "Tank", label: "Tank" },
-  { value: "Damage", label: "Damage" },
-  { value: "Support", label: "Support" }
+// Maps a role type to its shared `common.roles.*` message key (dps = "Damage").
+const ROLE_LABEL_KEY: Record<
+  UserRoleType,
+  "common.roles.tank" | "common.roles.dps" | "common.roles.support"
+> = {
+  Tank: "common.roles.tank",
+  Damage: "common.roles.dps",
+  Support: "common.roles.support"
+};
+
+const ROLE_FILTERS: Array<{ value: "all" | UserRoleType; labelKey: "common.all" | (typeof ROLE_LABEL_KEY)[UserRoleType] }> = [
+  { value: "all", labelKey: "common.all" },
+  { value: "Tank", labelKey: "common.roles.tank" },
+  { value: "Damage", labelKey: "common.roles.dps" },
+  { value: "Support", labelKey: "common.roles.support" }
 ];
 
 const ALPHABET = ["#", ..."ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("")];
@@ -91,12 +119,16 @@ const parseView = (value: string | null): ViewMode => {
 
 const toUserSlug = (name: string): string => name.replace("#", "-");
 
-const formatPlaytime = (seconds: number): string => {
+const formatPlaytime = (seconds: number, t: Translate): string => {
   const total = Math.max(0, Math.floor(seconds));
   const hours = Math.floor(total / 3600);
   const minutes = Math.floor((total % 3600) / 60);
   const secs = total % 60;
-  return `${hours}h ${minutes}m ${secs}s`;
+  return t("users.list.hero.playtimeFormat", {
+    h: String(hours),
+    m: String(minutes),
+    s: String(secs)
+  });
 };
 
 const formatOptional = (value: number | null): string => {
@@ -123,10 +155,11 @@ function initials(name: string): string {
   return (parts[0][0] + parts[1][0]).toUpperCase();
 }
 
-function primaryRoleLabel(roles: UserOverviewRoleDivision[]): string {
-  if (roles.length === 0) return "Unranked";
-  if (roles.length === 1) return roles[0].role;
-  return `Flex · ${roles.map((r) => r.role.slice(0, 3).toUpperCase()).join(" / ")}`;
+function primaryRoleLabel(roles: UserOverviewRoleDivision[], t: Translate): string {
+  if (roles.length === 0) return t("users.list.roleLabel.unranked");
+  if (roles.length === 1) return t(ROLE_LABEL_KEY[roles[0].role]);
+  const abbr = roles.map((r) => t(ROLE_LABEL_KEY[r.role]).slice(0, 3).toUpperCase()).join(" / ");
+  return `${t("common.roles.flex")} · ${abbr}`;
 }
 
 function placementWidth(placement: number | null): { width: number; warn: boolean } {
@@ -182,6 +215,7 @@ type DivisionHexProps = {
 };
 
 const DivisionHex = ({ role, division, title, size = 36 }: DivisionHexProps) => {
+  const t = useTranslations();
   return (
     <div
       className={styles.divisionBadge}
@@ -190,7 +224,12 @@ const DivisionHex = ({ role, division, title, size = 36 }: DivisionHexProps) => 
     >
       <DivisionIcon division={division} width={size} height={size} className="h-full w-full" />
       <div className={styles.divisionRoleDot}>
-        <Image src={`/roles/${role}.png`} alt={`${role} role`} width={12} height={12} />
+        <Image
+          src={`/roles/${role}.png`}
+          alt={t("users.list.a11y.roleAlt", { role: t(ROLE_LABEL_KEY[role]) })}
+          width={12}
+          height={12}
+        />
       </div>
     </div>
   );
@@ -203,6 +242,7 @@ const UsersRedesignClient = () => {
   const searchParams = useSearchParams();
   const divisionGrid = useDivisionGrid();
   const workspaceId = useCurrentWorkspaceId();
+  const t = useTranslations();
 
   const page = parsePositiveInt(searchParams.get("page"), 1);
   const perPage = parsePositiveInt(searchParams.get("per_page"), 20);
@@ -393,7 +433,13 @@ const UsersRedesignClient = () => {
   );
 
   const divisionOptions = useMemo(() => getDivisionOptions(divisionGrid), [divisionGrid]);
-  const sortLabel = SORT_OPTIONS.find((option) => option.value === sort)?.label ?? "Name";
+  const sortLabelKey = SORT_OPTIONS.find((option) => option.value === sort)?.labelKey ?? "users.list.sort.name";
+  const sortLabel = t(sortLabelKey);
+  const divisionTitle = (roleType: UserRoleType, division: number): string =>
+    t("users.list.division.badgeTitle", {
+      role: t(ROLE_LABEL_KEY[roleType]),
+      tier: getDivisionLabel(divisionGrid, division) ?? t("common.divisionWithId", { id: String(division) })
+    });
   const showLoadingRows = isLoading && !data;
   const availableLetters = useMemo(
     () => new Set(catalogQuery.data?.available_letters ?? []),
@@ -403,70 +449,73 @@ const UsersRedesignClient = () => {
   return (
     <div className={styles.surface}>
       {/* ===== Hero ===== */}
-      <section className={styles.hero}>
-        <div className={styles.hex} />
-        <div className={styles.glow1} />
-        <div className={styles.glow2} />
-        <div className={styles.heroGrid}>
-          <div>
-            <p className={styles.crumb}>
-              <Link href="/">Roster</Link> · Users
-            </p>
-            <h1 className={styles.title}>
-              The <em className={styles.titleAccent}>players</em> behind the tags
-            </h1>
-            <p className={styles.subtitle}>
-              Every competitor across every tournament — sliceable by role, division and hero
-              pool. Switch between deep analytics and a fast browsing catalog.
-            </p>
-          </div>
+      <PageHero
+        eyebrow={
+          <HeroCoord>
+            <Link href="/" className="transition-colors hover:text-[color:var(--aqt-teal)]">
+              {t("users.list.hero.eyebrowRoster")}
+            </Link>{" "}
+            · {t("users.list.hero.eyebrowCurrent")}
+          </HeroCoord>
+        }
+        title={t.rich("users.list.hero.title", { em: (chunks) => <em>{chunks}</em> })}
+        lede={t("users.list.hero.lede")}
+        aside={
           <div className={styles.heroStats}>
             <div className={styles.heroStat}>
-              <span className={styles.statLabel}>Total players</span>
+              <span className={styles.statLabel}>{t("users.list.stats.totalPlayers")}</span>
               <span className={styles.statValue}>
                 {stats ? stats.total_players.toLocaleString("en") : "-"}
               </span>
               <span className={styles.statSub}>
                 {stats
-                  ? `Tank ${stats.tank_count} · Dmg ${stats.damage_count} · Sup ${stats.support_count}`
-                  : "Loading…"}
+                  ? t("users.list.stats.roleBreakdown", {
+                      tank: String(stats.tank_count),
+                      dps: String(stats.damage_count),
+                      support: String(stats.support_count)
+                    })
+                  : t("common.loading")}
               </span>
             </div>
             <div className={styles.heroStat}>
-              <span className={styles.statLabel}>With logs</span>
+              <span className={styles.statLabel}>{t("users.list.stats.withLogs")}</span>
               <span className={styles.statValue}>
                 {stats ? Math.round(stats.with_logs_pct) : "-"}
                 <em>%</em>
               </span>
               <span className={styles.statSub}>
-                {stats ? `${stats.with_logs_count.toLocaleString("en")} with parsed games` : "—"}
+                {stats
+                  ? t("users.list.stats.withParsedGames", { count: stats.with_logs_count.toLocaleString("en") })
+                  : "—"}
               </span>
             </div>
             <div className={styles.heroStat}>
-              <span className={styles.statLabel}>Avg tournaments / player</span>
+              <span className={styles.statLabel}>{t("users.list.stats.avgTournamentsPerPlayer")}</span>
               <span className={styles.statValue}>
                 {stats ? stats.avg_tournaments_per_player.toFixed(1) : "-"}
               </span>
               <span className={styles.statSub}>
-                {stats ? `median ${stats.median_tournaments_per_player.toFixed(0)}` : "—"}
+                {stats
+                  ? t("users.list.stats.median", { value: stats.median_tournaments_per_player.toFixed(0) })
+                  : "—"}
               </span>
             </div>
             <div className={styles.heroStat}>
-              <span className={styles.statLabel}>Active last 30d</span>
+              <span className={styles.statLabel}>{t("users.list.stats.activeLast30d")}</span>
               <span className={styles.statValue}>
                 {stats ? stats.active_last_30d.toLocaleString("en") : "-"}
               </span>
               <span className={styles.statSub}>
-                {stats ? `${Math.round(stats.active_last_30d_pct)}% of roster` : "—"}
+                {stats ? t("users.list.stats.ofRoster", { pct: String(Math.round(stats.active_last_30d_pct)) }) : "—"}
               </span>
             </div>
           </div>
-        </div>
-      </section>
+        }
+      />
 
       {/* ===== View switcher + toolbar ===== */}
       <section className={styles.toolbar}>
-        <div className={styles.viewSwitch} role="tablist" aria-label="View mode">
+        <div className={styles.viewSwitch} role="tablist" aria-label={t("users.list.a11y.viewMode")}>
           <button
             type="button"
             role="tab"
@@ -474,8 +523,8 @@ const UsersRedesignClient = () => {
             className={cn(view === "analytics" && styles.viewSwitchActive)}
             onClick={() => handleViewChange("analytics")}
           >
-            <BarChart3 size={14} aria-hidden /> Analytics
-            <span className={styles.countBadge}>deep dive</span>
+            <BarChart3 size={14} aria-hidden /> {t("users.list.view.analytics")}
+            <span className={styles.countBadge}>{t("users.list.view.analyticsBadge")}</span>
           </button>
           <button
             type="button"
@@ -484,13 +533,13 @@ const UsersRedesignClient = () => {
             className={cn(view === "catalog" && styles.viewSwitchActive)}
             onClick={() => handleViewChange("catalog")}
           >
-            <LayoutGrid size={14} aria-hidden /> Catalog
-            <span className={styles.countBadge}>fast browse</span>
+            <LayoutGrid size={14} aria-hidden /> {t("users.list.view.catalog")}
+            <span className={styles.countBadge}>{t("users.list.view.catalogBadge")}</span>
           </button>
         </div>
         <div className={styles.toolbarActions}>
           <span className={styles.pill}>
-            <Trophy size={11} aria-hidden /> Roster · live
+            <Trophy size={11} aria-hidden /> {t("users.list.view.rosterLive")}
           </span>
         </div>
       </section>
@@ -513,13 +562,13 @@ const UsersRedesignClient = () => {
                 count={count}
                 onClick={() => handleRoleChange(option.value)}
               >
-                {option.label}
+                {t(option.labelKey)}
               </FilterChip>
             );
           })}
 
           {stats && stats.flex_count > 0 ? (
-            <FilterChip count={stats.flex_count}>Flex</FilterChip>
+            <FilterChip count={stats.flex_count}>{t("common.roles.flex")}</FilterChip>
           ) : null}
 
           <span className={styles.filterDivider} />
@@ -531,18 +580,20 @@ const UsersRedesignClient = () => {
                 className={cn(styles.filterChip, divMin != null && styles.filterChipActive)}
               >
                 <span>
-                  Div min: {divMin != null ? getDivisionLabel(divisionGrid, divMin) : "Any"}
+                  {t("users.list.filters.divMin", {
+                    value: divMin != null ? getDivisionLabel(divisionGrid, divMin) ?? t("common.any") : t("common.any")
+                  })}
                 </span>
                 <ChevronDown size={10} aria-hidden />
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="max-h-80 overflow-y-auto">
-              <DropdownMenuLabel>Minimum division</DropdownMenuLabel>
+              <DropdownMenuLabel>{t("users.list.filters.minDivision")}</DropdownMenuLabel>
               <DropdownMenuRadioGroup
                 value={divMin != null ? String(divMin) : "all"}
                 onValueChange={handleDivMinChange}
               >
-                <DropdownMenuRadioItem value="all">All divisions</DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="all">{t("users.list.filters.allDivisions")}</DropdownMenuRadioItem>
                 {divisionOptions.map((division) => (
                   <DropdownMenuRadioItem key={`min-${division}`} value={String(division)}>
                     {getDivisionLabel(divisionGrid, division)}
@@ -559,18 +610,20 @@ const UsersRedesignClient = () => {
                 className={cn(styles.filterChip, divMax != null && styles.filterChipActive)}
               >
                 <span>
-                  Div max: {divMax != null ? getDivisionLabel(divisionGrid, divMax) : "Any"}
+                  {t("users.list.filters.divMax", {
+                    value: divMax != null ? getDivisionLabel(divisionGrid, divMax) ?? t("common.any") : t("common.any")
+                  })}
                 </span>
                 <ChevronDown size={10} aria-hidden />
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="max-h-80 overflow-y-auto">
-              <DropdownMenuLabel>Maximum division</DropdownMenuLabel>
+              <DropdownMenuLabel>{t("users.list.filters.maxDivision")}</DropdownMenuLabel>
               <DropdownMenuRadioGroup
                 value={divMax != null ? String(divMax) : "all"}
                 onValueChange={handleDivMaxChange}
               >
-                <DropdownMenuRadioItem value="all">All divisions</DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="all">{t("users.list.filters.allDivisions")}</DropdownMenuRadioItem>
                 {divisionOptions.map((division) => (
                   <DropdownMenuRadioItem key={`max-${division}`} value={String(division)}>
                     {getDivisionLabel(divisionGrid, division)}
@@ -586,8 +639,8 @@ const UsersRedesignClient = () => {
               type="search"
               value={searchInput}
               onChange={(event) => setSearchInput(event.target.value)}
-              placeholder="Search by name or BattleTag…"
-              aria-label="Search players"
+              placeholder={t("users.list.filters.searchPlaceholder")}
+              aria-label={t("users.list.a11y.searchPlayers")}
             />
           </div>
 
@@ -596,36 +649,38 @@ const UsersRedesignClient = () => {
               <DropdownMenuTrigger asChild>
                 <button type="button" className={cn(styles.filterChip, styles.filterSort)}>
                   <span>
-                    Sort: {sortLabel} {order === "desc" ? "▾" : "▴"}
+                    {t("users.list.filters.sortValue", {
+                      value: `${sortLabel} ${order === "desc" ? "▾" : "▴"}`
+                    })}
                   </span>
                   <ChevronDown size={10} aria-hidden />
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuLabel>Sort by</DropdownMenuLabel>
+                <DropdownMenuLabel>{t("common.sortBy")}</DropdownMenuLabel>
                 <DropdownMenuRadioGroup
                   value={sort}
                   onValueChange={(value) => handleSortChange(value as SortValue)}
                 >
                   {SORT_OPTIONS.map((option) => (
                     <DropdownMenuRadioItem key={option.value} value={option.value}>
-                      {option.label}
+                      {t(option.labelKey)}
                     </DropdownMenuRadioItem>
                   ))}
                 </DropdownMenuRadioGroup>
                 <DropdownMenuSeparator />
-                <DropdownMenuLabel>Order</DropdownMenuLabel>
+                <DropdownMenuLabel>{t("common.order")}</DropdownMenuLabel>
                 <DropdownMenuCheckboxItem
                   checked={order === "asc"}
                   onCheckedChange={() => handleOrderChange("asc")}
                 >
-                  Ascending
+                  {t("common.ascending")}
                 </DropdownMenuCheckboxItem>
                 <DropdownMenuCheckboxItem
                   checked={order === "desc"}
                   onCheckedChange={() => handleOrderChange("desc")}
                 >
-                  Descending
+                  {t("common.descending")}
                 </DropdownMenuCheckboxItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -637,31 +692,35 @@ const UsersRedesignClient = () => {
       <div className={cn(styles.viewBlock, view === "analytics" && styles.viewBlockActive)}>
         <section>
           <div className={styles.sectionHead}>
-            <h2>All players</h2>
+            <h2>{t("users.list.table.allPlayers")}</h2>
             <span className={styles.sectionMeta}>
               {data
-                ? `Page ${data.page} of ${maxPage} · sorted by ${sortLabel.toLowerCase()} ${order === "asc" ? "▴" : "▾"}`
-                : "Loading…"}
+                ? t("users.list.table.pageMeta", {
+                    page: String(data.page),
+                    maxPage: String(maxPage),
+                    x: `${sortLabel.toLowerCase()} ${order === "asc" ? "▴" : "▾"}`
+                  })
+                : t("common.loading")}
             </span>
           </div>
 
           <div className={styles.card}>
             {isError ? (
               <p className={styles.errorMsg}>
-                {(error as Error)?.message || "Failed to load users overview."}
+                {(error as Error)?.message || t("users.list.errors.overview")}
               </p>
             ) : (
               <div className={styles.tableScroll}>
                 <table className={styles.table}>
                   <thead>
                     <tr>
-                      <th style={{ width: "22%" }}>Player</th>
-                      <th className="center">Divisions</th>
-                      <th className="center">Tournaments</th>
-                      <th className="center">Achievements</th>
-                      <th>Avg placement</th>
-                      <th className={cn(styles.hideMd, "center")}>Top heroes</th>
-                      <th className="center">Details</th>
+                      <th style={{ width: "22%" }}>{t("users.list.table.player")}</th>
+                      <th className="center">{t("users.list.table.divisions")}</th>
+                      <th className="center">{t("common.tournaments")}</th>
+                      <th className="center">{t("users.list.table.achievements")}</th>
+                      <th>{t("users.list.table.avgPlacement")}</th>
+                      <th className={cn(styles.hideMd, "center")}>{t("users.list.table.topHeroes")}</th>
+                      <th className="center">{t("users.list.table.details")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -700,7 +759,7 @@ const UsersRedesignClient = () => {
                                       {tag ? <span className="tag">{tag}</span> : null}
                                     </Link>
                                     <span className={styles.playerSub}>
-                                      {primaryRoleLabel(user.roles)}
+                                      {primaryRoleLabel(user.roles, t)}
                                     </span>
                                   </div>
                                 </div>
@@ -716,7 +775,7 @@ const UsersRedesignClient = () => {
                                         key={`${user.id}-${roleRow.role}-${roleRow.division}`}
                                         role={roleRow.role}
                                         division={roleRow.division}
-                                        title={`${roleRow.role} • ${getDivisionLabel(divisionGrid, roleRow.division) ?? `Division ${roleRow.division}`}`}
+                                        title={divisionTitle(roleRow.role, roleRow.division)}
                                       />
                                     ))}
                                   </div>
@@ -759,8 +818,8 @@ const UsersRedesignClient = () => {
                                   type="button"
                                   aria-label={
                                     isExpanded
-                                      ? "Collapse user details"
-                                      : "Expand user details"
+                                      ? t("users.list.a11y.collapseDetails")
+                                      : t("users.list.a11y.expandDetails")
                                   }
                                   onClick={() => toggleRow(user.id)}
                                   className={styles.expandButton}
@@ -779,36 +838,36 @@ const UsersRedesignClient = () => {
                                 <td colSpan={7}>
                                   <div className={styles.exGrid}>
                                     <div className={styles.exStat}>
-                                      <span className={styles.exStatLabel}>Avg placement</span>
+                                      <span className={styles.exStatLabel}>{t("users.list.expanded.avgPlacement")}</span>
                                       <span className={styles.exStatValue}>
                                         {formatOptional(user.averages.avg_placement)}
                                       </span>
                                     </div>
                                     <div className={styles.exStat}>
-                                      <span className={styles.exStatLabel}>Avg playoff</span>
+                                      <span className={styles.exStatLabel}>{t("users.list.expanded.avgPlayoff")}</span>
                                       <span className={styles.exStatValue}>
                                         {formatOptional(user.averages.avg_playoff_placement)}
                                       </span>
                                     </div>
                                     <div className={styles.exStat}>
-                                      <span className={styles.exStatLabel}>Avg group</span>
+                                      <span className={styles.exStatLabel}>{t("users.list.expanded.avgGroup")}</span>
                                       <span className={styles.exStatValue}>
                                         {formatOptional(user.averages.avg_group_placement)}
                                       </span>
                                     </div>
                                     <div className={styles.exStat}>
-                                      <span className={styles.exStatLabel}>Avg closeness</span>
+                                      <span className={styles.exStatLabel}>{t("users.list.expanded.avgCloseness")}</span>
                                       <span className={styles.exStatValue}>
                                         {formatOptional(user.averages.avg_closeness)}
                                       </span>
                                     </div>
                                   </div>
-                                  <div className={styles.exSectionTitle}>Top heroes details</div>
+                                  <div className={styles.exSectionTitle}>{t("users.list.expanded.topHeroesDetails")}</div>
                                   <p className={styles.exSectionNote}>
-                                    All hero metrics are averages per 10 minutes.
+                                    {t("users.list.expanded.metricsNote")}
                                   </p>
                                   {user.top_heroes.length === 0 ? (
-                                    <p className={styles.playerSub}>No hero data.</p>
+                                    <p className={styles.playerSub}>{t("users.list.expanded.noHeroData")}</p>
                                   ) : (
                                     <div className={styles.heroCards}>
                                       {user.top_heroes.map((heroRow) => (
@@ -831,27 +890,32 @@ const UsersRedesignClient = () => {
                                                 {heroRow.hero.name}
                                               </span>
                                               <span className={styles.heroCardPlaytime}>
-                                                Playtime: {formatPlaytime(heroRow.playtime_seconds)}
+                                                {t("users.list.expanded.playtime", {
+                                                  value: formatPlaytime(heroRow.playtime_seconds, t)
+                                                })}
                                               </span>
                                             </div>
                                           </div>
                                           <div className={styles.heroCardMetrics}>
                                             {heroRow.metrics.length === 0 ? (
-                                              <span className={styles.playerSub}>No metrics</span>
+                                              <span className={styles.playerSub}>{t("users.list.expanded.noMetrics")}</span>
                                             ) : (
-                                              heroRow.metrics.map((metric) => (
-                                                <span
-                                                  key={`${heroRow.hero.id}-${metric.name}`}
-                                                  className={styles.metricBadge}
-                                                >
-                                                  <span className={styles.metricBadgeKey}>
-                                                    {HERO_METRIC_LABELS[metric.name] ?? metric.name}
+                                              heroRow.metrics.map((metric) => {
+                                                const metricKey = HERO_METRIC_LABEL_KEYS[metric.name];
+                                                return (
+                                                  <span
+                                                    key={`${heroRow.hero.id}-${metric.name}`}
+                                                    className={styles.metricBadge}
+                                                  >
+                                                    <span className={styles.metricBadgeKey}>
+                                                      {metricKey ? t(metricKey) : metric.name}
+                                                    </span>
+                                                    <span className={styles.metricBadgeValue}>
+                                                      {metric.avg_10.toFixed(2)}
+                                                    </span>
                                                   </span>
-                                                  <span className={styles.metricBadgeValue}>
-                                                    {metric.avg_10.toFixed(2)}
-                                                  </span>
-                                                </span>
-                                              ))
+                                                );
+                                              })
                                             )}
                                           </div>
                                         </div>
@@ -867,7 +931,7 @@ const UsersRedesignClient = () => {
                     ) : (
                       <tr>
                         <td colSpan={7} className={styles.empty}>
-                          No users found for the current filters.
+                          {t("users.list.empty")}
                         </td>
                       </tr>
                     )}
@@ -879,8 +943,14 @@ const UsersRedesignClient = () => {
             {data && data.results.length > 0 ? (
               <div className={styles.paginationBar}>
                 <span className={styles.pageInfo}>
-                  {range ? `Showing ${range.start} – ${range.end} of ${data.total} players` : null}
-                  {isFetching ? " · refreshing…" : null}
+                  {range
+                    ? t("users.list.pagination.showingPlayers", {
+                        start: range.start,
+                        end: range.end,
+                        total: data.total
+                      })
+                    : null}
+                  {isFetching ? ` · ${t("users.list.pagination.refreshing")}` : null}
                 </span>
                 <div className={styles.pageControls}>
                   <button
@@ -889,7 +959,7 @@ const UsersRedesignClient = () => {
                     onClick={() => goToPage(page - 1)}
                     disabled={page <= 1}
                   >
-                    ‹ Prev
+                    ‹ {t("common.prev")}
                   </button>
                   {visiblePages(page, maxPage).map((entry, idx) =>
                     entry === "ellipsis" ? (
@@ -917,7 +987,7 @@ const UsersRedesignClient = () => {
                     onClick={() => goToPage(page + 1)}
                     disabled={page >= maxPage}
                   >
-                    Next ›
+                    {t("common.next")} ›
                   </button>
                 </div>
               </div>
@@ -930,13 +1000,13 @@ const UsersRedesignClient = () => {
       <div className={cn(styles.viewBlock, view === "catalog" && styles.viewBlockActive)}>
         <section>
           <div className={styles.alphaBar}>
-            <span className={styles.alphaLabel}>Jump to</span>
+            <span className={styles.alphaLabel}>{t("users.list.catalog.jumpTo")}</span>
             <button
               type="button"
               className={cn(styles.alphaLink, !letter && styles.alphaLinkActive)}
               onClick={() => handleLetterChange(null)}
             >
-              All
+              {t("common.all")}
             </button>
             {ALPHABET.map((alpha) => {
               const isAvailable = availableLetters.has(alpha);
@@ -961,7 +1031,7 @@ const UsersRedesignClient = () => {
 
           {catalogQuery.isError ? (
             <p className={styles.errorMsg}>
-              {(catalogQuery.error as Error)?.message || "Failed to load catalog."}
+              {(catalogQuery.error as Error)?.message || t("users.list.errors.catalog")}
             </p>
           ) : catalogQuery.data && catalogQuery.data.letters.length > 0 ? (
             <>
@@ -989,11 +1059,13 @@ const UsersRedesignClient = () => {
                 }}
               >
                 <span className={styles.pageInfo}>
-                  Showing {catalogQuery.data.letters.reduce((acc, b) => acc + b.users.length, 0)}{" "}
-                  of {catalogQuery.data.total} players
+                  {t("users.list.catalog.showing", {
+                    count: catalogQuery.data.letters.reduce((acc, b) => acc + b.users.length, 0),
+                    total: catalogQuery.data.total
+                  })}
                 </span>
                 <span className={styles.pageInfo}>
-                  {catalogQuery.isFetching ? "refreshing…" : null}
+                  {catalogQuery.isFetching ? t("users.list.pagination.refreshing") : null}
                 </span>
               </div>
             </>
@@ -1010,7 +1082,7 @@ const UsersRedesignClient = () => {
               </div>
             </div>
           ) : (
-            <div className={styles.empty}>No users found for the current filters.</div>
+            <div className={styles.empty}>{t("users.list.empty")}</div>
           )}
         </section>
       </div>
@@ -1024,6 +1096,7 @@ type CatalogCardProps = {
 };
 
 const CatalogCard = ({ user, divisionGrid }: CatalogCardProps) => {
+  const t = useTranslations();
   const { handle, tag } = splitTag(user.name);
   const topHeroes = user.top_heroes.slice(0, 3);
 
@@ -1038,7 +1111,7 @@ const CatalogCard = ({ user, divisionGrid }: CatalogCardProps) => {
             {handle}
             {tag ? <span className="tag">{tag}</span> : null}
           </div>
-          <div className={styles.catCardMeta}>{primaryRoleLabel(user.roles)}</div>
+          <div className={styles.catCardMeta}>{primaryRoleLabel(user.roles, t)}</div>
         </div>
         <div className={styles.catCardRoles}>
           {user.roles.map((roleRow) => (
@@ -1047,14 +1120,19 @@ const CatalogCard = ({ user, divisionGrid }: CatalogCardProps) => {
               role={roleRow.role}
               division={roleRow.division}
               size={28}
-              title={`${roleRow.role} • ${getDivisionLabel(divisionGrid, roleRow.division) ?? `Division ${roleRow.division}`}`}
+              title={t("users.list.division.badgeTitle", {
+                role: t(ROLE_LABEL_KEY[roleRow.role]),
+                tier:
+                  getDivisionLabel(divisionGrid, roleRow.division) ??
+                  t("common.divisionWithId", { id: String(roleRow.division) })
+              })}
             />
           ))}
         </div>
       </div>
 
       <div className={styles.catCardHeroes}>
-        <span>Top heroes</span>
+        <span>{t("users.list.table.topHeroes")}</span>
         <div className={styles.catCardHeroesStrip}>
           {topHeroes.length === 0 ? (
             <span className={styles.playerSub}>—</span>
@@ -1080,15 +1158,15 @@ const CatalogCard = ({ user, divisionGrid }: CatalogCardProps) => {
 
       <div className={styles.catStats}>
         <div className={styles.catStat}>
-          <span className={styles.catStatLabel}>Tourn.</span>
+          <span className={styles.catStatLabel}>{t("users.list.catalog.tournaments")}</span>
           <span className={styles.catStatValue}>{user.tournaments_count}</span>
         </div>
         <div className={styles.catStat}>
-          <span className={styles.catStatLabel}>Ach.</span>
+          <span className={styles.catStatLabel}>{t("users.list.catalog.achievements")}</span>
           <span className={styles.catStatValue}>{user.achievements_count}</span>
         </div>
         <div className={styles.catStat}>
-          <span className={styles.catStatLabel}>Avg pl.</span>
+          <span className={styles.catStatLabel}>{t("users.list.catalog.avgPlacement")}</span>
           <span className={styles.catStatValue}>{formatOptional(user.avg_placement)}</span>
         </div>
       </div>

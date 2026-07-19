@@ -3,6 +3,7 @@
 import React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { ArrowRight, Users } from "lucide-react";
 
 import {
@@ -21,6 +22,7 @@ const FeaturedTournamentCard = ({
   group: LiveTournamentGroup;
   small?: boolean;
 }) => {
+  const t = useTranslations();
   const router = useRouter();
   const { tournament, current, encounters } = group;
 
@@ -45,40 +47,43 @@ const FeaturedTournamentCard = ({
         <div>
           <span className="feat-id">
             #{tournament.number}
-            {tournament.is_league ? " · League" : ""}
-            {tournament.team_formation && ` · ${tournament.team_formation === "draft" ? "Draft" : "Balancer"}`}
+            {tournament.is_league ? ` · ${t("common.league")}` : ""}
+            {tournament.team_formation &&
+              ` · ${tournament.team_formation === "draft" ? t("common.draft") : t("common.balancer")}`}
           </span>
           <h3 className="feat-name">{tournament.name}</h3>
         </div>
         <span className="status-pill live">
           <span className="dot" />
-          {stageName ? `Live · ${stageName}` : "Live"}
+          {stageName ? `${t("common.live")} · ${stageName}` : t("common.live")}
         </span>
       </div>
 
       <div className="feat-meta">
         <span className="meta-pill">
           <Users width={11} height={11} />
-          <span className="v">{players}</span> players
+          <span className="v">{players}</span> {t("common.players")}
         </span>
         <span className="meta-pill">
-          <span className="v">{encounters.length}</span> live now
+          <span className="v">{encounters.length}</span> {t("tournamentsList.featured.liveNow")}
         </span>
       </div>
 
       <div className="feat-progress">
         <div className="feat-stat">
-          <span className="l">Matches</span>
+          <span className="l">{t("common.matches")}</span>
           <span className="v">
             {encounters.length}
-            <em> live</em>
+            <em> {t("tournamentsList.featured.liveWord")}</em>
           </span>
-          <span className="s">{players} players</span>
+          <span className="s">
+            {t("tournamentsList.featured.playersCount", { count: players })}
+          </span>
         </div>
         <div className="feat-stat">
-          <span className="l">Stage</span>
-          <span className="v">{stageName ?? "Live"}</span>
-          <span className="s">in progress</span>
+          <span className="l">{t("common.stage")}</span>
+          <span className="v">{stageName ?? t("common.live")}</span>
+          <span className="s">{t("tournamentsList.featured.inProgress")}</span>
         </div>
       </div>
 
@@ -89,14 +94,14 @@ const FeaturedTournamentCard = ({
               className="live-dot"
               style={{ marginRight: 4, width: 6, height: 6 }}
             />
-            NOW
+            {t("tournamentsList.featured.now")}
           </span>
           <span className="v">{stageName ?? `BO${current.best_of}`}</span>
         </div>
         <div className="vs">
           <div className="team">
             <span className="av t1">{teamInitials(current.home_team?.name)}</span>
-            <span className="nm">{current.home_team?.name ?? "TBD"}</span>
+            <span className="nm">{current.home_team?.name ?? t("common.tbd")}</span>
           </div>
           <span className="score">
             <span className="em">{current.score?.home ?? 0}</span>
@@ -105,7 +110,7 @@ const FeaturedTournamentCard = ({
           </span>
           <div className="team right">
             <span className="av t2">{teamInitials(current.away_team?.name)}</span>
-            <span className="nm">{current.away_team?.name ?? "TBD"}</span>
+            <span className="nm">{current.away_team?.name ?? t("common.tbd")}</span>
           </div>
         </div>
         {mapName && <span className="map-pill">{mapName}</span>}
@@ -114,7 +119,9 @@ const FeaturedTournamentCard = ({
       <div className="feat-foot">
         <div className="left">
           <span className="lead-team">
-            Started {relativeTime(current.started_at)}
+            {t("tournamentsList.featured.started", {
+              time: relativeTime(current.started_at, t)
+            })}
           </span>
         </div>
         <div className="right">
@@ -123,7 +130,7 @@ const FeaturedTournamentCard = ({
             className="tn-btn"
             onClick={stopPropagation}
           >
-            Bracket
+            {t("common.bracket")}
             <ArrowRight width={11} height={11} />
           </Link>
           <Link
@@ -131,7 +138,7 @@ const FeaturedTournamentCard = ({
             className="tn-btn primary"
             onClick={stopPropagation}
           >
-            Open
+            {t("common.open")}
             <ArrowRight width={11} height={11} />
           </Link>
         </div>
@@ -141,6 +148,8 @@ const FeaturedTournamentCard = ({
 };
 
 const FeaturedLive = ({ groups }: { groups: LiveTournamentGroup[] }) => {
+  const t = useTranslations();
+
   if (groups.length === 0) return null;
 
   const [first, second] = groups;
@@ -153,12 +162,12 @@ const FeaturedLive = ({ groups }: { groups: LiveTournamentGroup[] }) => {
             className="live-dot"
             style={{ width: 7, height: 7, marginRight: 0 }}
           />
-          Live right now
+          {t("tournamentsList.featured.liveRightNow")}
           <span className="count-tag">
-            {groups.length} event{groups.length === 1 ? "" : "s"}
+            {t("tournamentsList.featured.eventsCount", { count: groups.length })}
           </span>
         </h2>
-        <span className="meta">Auto-refresh · 30s</span>
+        <span className="meta">{t("tournamentsList.featured.autoRefresh")}</span>
       </div>
       <div className="featured-grid">
         <FeaturedTournamentCard group={first} />

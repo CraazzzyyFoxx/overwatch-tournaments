@@ -9,6 +9,7 @@ import {
   Shield,
   ShieldOff
 } from "lucide-react";
+import { useLocale, useTranslations } from "next-intl";
 
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -17,35 +18,25 @@ import { getApiErrorMessage } from "@/lib/api-error";
 import { notify } from "@/lib/notify";
 import type { AccountSession, AccountSessionStatus } from "@/types/auth.types";
 
-const STATUS_META: Record<
+const STATUS_CLASS: Record<
   AccountSessionStatus,
-  {
-    dotClassName: string;
-    label: string;
-    textClassName: string;
-  }
+  { dotClassName: string; textClassName: string }
 > = {
-  active: {
-    dotClassName: "bg-emerald-400",
-    label: "Active",
-    textClassName: "text-emerald-200"
-  },
-  revoked: {
-    dotClassName: "bg-amber-300",
-    label: "Revoked",
-    textClassName: "text-amber-100"
-  },
-  expired: {
-    dotClassName: "bg-slate-400",
-    label: "Expired",
-    textClassName: "text-slate-300"
-  }
+  active: { dotClassName: "bg-emerald-400", textClassName: "text-emerald-200" },
+  revoked: { dotClassName: "bg-amber-300", textClassName: "text-amber-100" },
+  expired: { dotClassName: "bg-slate-400", textClassName: "text-slate-300" }
 };
 
-function formatTimestamp(value: string | null | undefined): string {
-  if (!value) return "Unavailable";
+const STATUS_KEY: Record<AccountSessionStatus, "statusActive" | "statusRevoked" | "statusExpired"> = {
+  active: "statusActive",
+  revoked: "statusRevoked",
+  expired: "statusExpired"
+};
 
-  return new Date(value).toLocaleString("en-US", {
+function formatTimestamp(value: string | null | undefined, locale: string): string | null {
+  if (!value) return null;
+
+  return new Date(value).toLocaleString(locale === "ru" ? "ru-RU" : "en-US", {
     dateStyle: "medium",
     timeStyle: "short"
   });
@@ -69,26 +60,14 @@ function detectPlatform(userAgent: string): string | null {
   return null;
 }
 
-function formatDeviceLabel(userAgent: string | null | undefined): string {
-  if (!userAgent) return "Unknown device";
-
-  const browser = detectBrowser(userAgent);
-  const platform = detectPlatform(userAgent);
-
-  if (browser && platform) return `${browser} on ${platform}`;
-  if (browser) return browser;
-  if (platform) return platform;
-
-  return userAgent.length > 72 ? `${userAgent.slice(0, 72)}...` : userAgent;
-}
-
 function StatusText({ status }: { status: AccountSessionStatus }) {
-  const meta = STATUS_META[status];
+  const t = useTranslations("accountSettings.sessions");
+  const meta = STATUS_CLASS[status];
 
   return (
     <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${meta.textClassName}`}>
       <span className={`size-1.5 rounded-full ${meta.dotClassName}`} />
-      {meta.label}
+      {t(STATUS_KEY[status])}
     </span>
   );
 }
@@ -120,7 +99,18 @@ function SessionRow({
   isRevoking: boolean;
   onRevoke: (sessionId: string) => void;
 }) {
+  const t = useTranslations("accountSettings.sessions");
+  const locale = useLocale();
   const canRevoke = !session.is_current && session.status === "active";
+
+  const ua = session.user_agent;
+  const browser = ua ? detectBrowser(ua) : null;
+  const platform = ua ? detectPlatform(ua) : null;
+  const device = !ua
+    ? t("unknownDevice")
+    : browser && platform
+      ? t("deviceOn", { browser, platform })
+      : (browser ?? platform ?? (ua.length > 72 ? `${ua.slice(0, 72)}...` : ua));
 
   return (
     <li className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
@@ -131,15 +121,13 @@ function SessionRow({
               <LaptopMinimal className="size-4" />
             </div>
             <div className="min-w-0">
-              <p className="truncate text-sm font-semibold text-white">
-                {formatDeviceLabel(session.user_agent)}
-              </p>
+              <p className="truncate text-sm font-semibold text-white">{device}</p>
               <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-400">
                 <StatusText status={session.status} />
                 {session.is_current ? (
                   <span className="inline-flex items-center gap-1 text-sky-200">
                     <Shield className="size-3.5" />
-                    Current session
+                    {t("currentSession")}
                   </span>
                 ) : null}
                 {session.ip_address ? (
@@ -160,20 +148,20 @@ function SessionRow({
               onClick={() => onRevoke(session.session_id)}
             >
               <ShieldOff className="size-4" />
-              Revoke
+              {t("revoke")}
             </Button>
           ) : null}
         </div>
 
         <div className="grid gap-2 sm:grid-cols-2">
-          <DetailCell label="Signed in" value={formatTimestamp(session.login_at)} />
-          <DetailCell label="Last seen" value={formatTimestamp(session.last_seen_at)} />
-          <DetailCell label="Expires" value={formatTimestamp(session.expires_at)} />
+          <DetailCell label={t("signedIn")} value={formatTimestamp(session.login_at, locale) ?? t("unavailable")} />
+          <DetailCell label={t("lastSeen")} value={formatTimestamp(session.last_seen_at, locale) ?? t("unavailable")} />
+          <DetailCell label={t("expires")} value={formatTimestamp(session.expires_at, locale) ?? t("unavailable")} />
           <DetailCell
-            label={session.status === "revoked" ? "Revoked" : "Session"}
+            label={session.status === "revoked" ? t("revokedLabel") : t("sessionLabel")}
             value={
               session.status === "revoked"
-                ? formatTimestamp(session.revoked_at)
+                ? (formatTimestamp(session.revoked_at, locale) ?? t("unavailable"))
                 : session.session_id
             }
           />
@@ -191,6 +179,7 @@ function SessionRow({
 }
 
 export default function AccountSessionsSection() {
+  const t = useTranslations("accountSettings.sessions");
   const { data, isLoading, isError, error, refetch } = useAccountSessions();
   const revokeSessionMutation = useRevokeAccountSession();
 
@@ -206,8 +195,8 @@ export default function AccountSessionsSection() {
   const handleRevoke = (sessionId: string) => {
     revokeSessionMutation.mutate(sessionId, {
       onSuccess: () => {
-        notify.success("Session revoked", {
-          description: "The selected session was signed out."
+        notify.success(t("revokedToast"), {
+          description: t("revokedToastDesc")
         });
       }
     });
@@ -228,7 +217,7 @@ export default function AccountSessionsSection() {
       <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-200">
         <p className="flex items-center gap-2">
           <AlertCircle className="size-4" />
-          {getApiErrorMessage(error, "Failed to load sessions")}
+          {getApiErrorMessage(error, t("loadFailed"))}
         </p>
         <Button
           variant="outline"
@@ -239,7 +228,7 @@ export default function AccountSessionsSection() {
           }}
         >
           <RefreshCw className="size-4" />
-          Retry
+          {t("retry")}
         </Button>
       </div>
     );
@@ -248,15 +237,15 @@ export default function AccountSessionsSection() {
   return (
     <div className="flex flex-col gap-5">
       <div className="grid gap-2 sm:grid-cols-3">
-        <SummaryCell label="Current" value={currentSession ? 1 : 0} />
-        <SummaryCell label="Other active" value={otherActiveSessions.length} />
-        <SummaryCell label="History" value={sessionHistory.length} />
+        <SummaryCell label={t("summaryCurrent")} value={currentSession ? 1 : 0} />
+        <SummaryCell label={t("summaryOtherActive")} value={otherActiveSessions.length} />
+        <SummaryCell label={t("summaryHistory")} value={sessionHistory.length} />
       </div>
 
       {currentSession ? (
         <section className="flex flex-col gap-2">
           <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-            Current Session
+            {t("currentSectionTitle")}
           </h4>
           <ul className="flex flex-col gap-2">
             <SessionRow session={currentSession} isRevoking={false} onRevoke={handleRevoke} />
@@ -266,7 +255,7 @@ export default function AccountSessionsSection() {
 
       <section className="flex flex-col gap-2">
         <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-          Other Active Sessions
+          {t("otherActiveTitle")}
         </h4>
         {otherActiveSessions.length > 0 ? (
           <ul className="flex flex-col gap-2">
@@ -284,14 +273,14 @@ export default function AccountSessionsSection() {
           </ul>
         ) : (
           <div className="rounded-lg border border-dashed border-white/10 px-4 py-5 text-sm text-slate-400">
-            No other active sessions.
+            {t("noOtherActive")}
           </div>
         )}
       </section>
 
       <section className="flex flex-col gap-2">
         <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-          Session History
+          {t("historyTitle")}
         </h4>
         {sessionHistory.length > 0 ? (
           <ul className="flex flex-col gap-2">
@@ -306,7 +295,7 @@ export default function AccountSessionsSection() {
           </ul>
         ) : (
           <div className="rounded-lg border border-dashed border-white/10 px-4 py-5 text-sm text-slate-400">
-            No historical sessions yet.
+            {t("noHistory")}
           </div>
         )}
       </section>

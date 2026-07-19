@@ -14,26 +14,89 @@ import (
 	"time"
 )
 
+// defaultWSAllowedOrigins is the fallback for GATEWAY_WS_ALLOWED_ORIGINS. It
+// covers the platform apex plus every tenant subdomain (workspace white-label
+// hosts, see docs/superpowers/specs/2026-07-06-workspace-multidomain-design.md)
+// so that ws.NewHandler never receives an empty allow-list in a default
+// deployment and falls back to AcceptOptions.InsecureSkipVerify. Operators can
+// still override this with an explicit (possibly empty) CSV, but the default
+// itself must never leave production open.
+const defaultWSAllowedOrigins = "https://owt.craazzzyyfoxx.me,https://*.owt.craazzzyyfoxx.me"
+
+// DefaultWSAllowedOrigins is the parsed form of defaultWSAllowedOrigins,
+// exported so callers outside this package (e.g. ws package tests) can
+// assert against the exact production default without duplicating the
+// literal and risking drift.
+var DefaultWSAllowedOrigins = splitCSV(defaultWSAllowedOrigins)
+
 // Config holds all runtime settings for the gateway.
 type Config struct {
-	Port             string
-	MetricsPort      string
-	Environment      string
-	JWTSecret        string
-	RedisURL         string
-	RabbitMQURL      string
-	DatabaseURL      string
-	DBPgBouncer      bool
-	WSIdleTimeout    time.Duration
-	WSReplayLimit    int
-	WSAllowedOrigins []string
-	AuthRateLimit    int
-	AuthRateWindow   time.Duration
-	Upstreams        Upstreams
-	Sentry           Sentry
-	Tracing          Tracing
-	Log              Log
-	Docs             Docs
+	Port        string
+	MetricsPort string
+	Environment string
+	JWTSecret   string
+	RedisURL    string
+	RabbitMQURL string
+	DatabaseURL string
+	DBPgBouncer bool
+	// DBMaxConns caps the gateway's own Postgres pool (ACL / event-replay /
+	// custom-domain reads). Modest by default since the gateway shares Postgres
+	// with the workers; raise it if WS/ACL load starves the pool.
+	DBMaxConns int
+	// DBStatementTimeout is a server-side backstop cancelling any gateway query
+	// running longer, so a slow/hung Postgres can't pin pool connections against
+	// the unauthenticated /ws lookup path. Applied on direct Postgres only
+	// (pgBouncer rejects it as a startup parameter — set it on the role there).
+	// 0 disables.
+	DBStatementTimeout time.Duration
+	WSIdleTimeout      time.Duration
+	WSReplayLimit      int
+	WSAllowedOrigins   []string
+	// WSMaxAnonConnsPerIP caps concurrent anonymous /ws connections per client
+	// IP (0 = unlimited). /ws has no auth and no per-IP limiter in front of it,
+	// so this is the only bound on one IP opening sockets; keep it generous
+	// because shared NATs put many legitimate visitors behind one IP.
+	// WSMaxTopicsAnon/Auth cap simultaneous topic subscriptions per connection,
+	// tighter for anonymous clients (0 = unlimited).
+	WSMaxAnonConnsPerIP int
+	WSMaxTopicsAnon     int
+	WSMaxTopicsAuth     int
+	AuthRateLimit      int
+	AuthRateWindow     time.Duration
+	// WSCustomDomainRateLimit/Window bound how often ws.Handler's dynamic
+	// custom-domain Origin lookup (see acceptOptionsFor) may run per client
+	// IP. /ws carries neither auth nor the outer nginx-level limiter that
+	// guards /api/auth/*, so this is the only per-IP throttle on a lookup
+	// path that is otherwise reachable by anyone with distinct fake Origin
+	// headers. The default (30 requests / 10s) is generous relative to any
+	// realistic WS reconnect storm from a single IP.
+	WSCustomDomainRateLimit  int
+	WSCustomDomainRateWindow time.Duration
+	// AnonRateLimit/Window bound anonymous (no-bearer) API traffic per client
+	// IP across all /api paths — a global anonymous budget layered under the
+	// coarse nginx limit_req. Authenticated requests (Authorization: Bearer …)
+	// bypass it. Disabled by default (limit 0): set GATEWAY_ANON_RATE_LIMIT to
+	// enable. Keep it generous — a single anonymous page view fans out into many
+	// public API calls, so a tight limit would throttle legitimate visitors.
+	AnonRateLimit  int
+	AnonRateWindow time.Duration
+	// ResponseCacheTTL is the staleness backstop for the gateway's in-memory
+	// response cache on anonymous public tournament reads (internal/respcache).
+	// Invalidation is event-driven (the worker's tournament_changed consumer
+	// publishes realtime:tournament:{id}:bracket, which the cache consumes), so
+	// the TTL only bounds staleness for writes that emit no event (e.g. public
+	// registration counts) and for missed pub/sub messages. 0 disables the
+	// cache entirely (GATEWAY_RESPONSE_CACHE_TTL, seconds).
+	ResponseCacheTTL time.Duration
+	// RPCMaxInFlight caps concurrent in-flight RPC calls per queue (bulkhead).
+	// When a queue is saturated the gateway sheds the request with an immediate
+	// 503 instead of queueing it for up to the full RPC timeout. 0 disables.
+	RPCMaxInFlight int
+	Upstreams      Upstreams
+	Sentry         Sentry
+	Tracing        Tracing
+	Log            Log
+	Docs           Docs
 }
 
 // Tracing holds the OpenTelemetry settings. The variable names mirror the
@@ -117,19 +180,30 @@ func Load() (*Config, error) {
 	}
 
 	return &Config{
-		Port:             getenv("GATEWAY_PORT", "8080"),
-		MetricsPort:      getenv("GATEWAY_METRICS_PORT", "9110"),
-		Environment:      env,
-		JWTSecret:        secret,
-		RedisURL:         getenv("REDIS_URL", "redis://redis:6379"),
-		RabbitMQURL:      rabbitURL,
-		DatabaseURL:      dbURL,
-		DBPgBouncer:      getenvBool("DB_PGBOUNCER", false),
-		WSIdleTimeout:    time.Duration(getenvInt("WS_IDLE_TIMEOUT", 60)) * time.Second,
-		WSReplayLimit:    getenvInt("WS_REPLAY_LIMIT", 500),
-		WSAllowedOrigins: splitCSV(os.Getenv("GATEWAY_WS_ALLOWED_ORIGINS")),
-		AuthRateLimit:    getenvInt("GATEWAY_AUTH_RATE_LIMIT", 10),
-		AuthRateWindow:   time.Duration(getenvInt("GATEWAY_AUTH_RATE_WINDOW", 60)) * time.Second,
+		Port:                     getenv("GATEWAY_PORT", "8080"),
+		MetricsPort:              getenv("GATEWAY_METRICS_PORT", "9110"),
+		Environment:              env,
+		JWTSecret:                secret,
+		RedisURL:                 getenv("REDIS_URL", "redis://redis:6379"),
+		RabbitMQURL:              rabbitURL,
+		DatabaseURL:              dbURL,
+		DBPgBouncer:              getenvBool("DB_PGBOUNCER", false),
+		DBMaxConns:               getenvInt("GATEWAY_DB_MAX_CONNS", 16),
+		DBStatementTimeout:       time.Duration(getenvInt("GATEWAY_DB_STATEMENT_TIMEOUT_MS", 15000)) * time.Millisecond,
+		WSIdleTimeout:            time.Duration(getenvInt("WS_IDLE_TIMEOUT", 60)) * time.Second,
+		WSReplayLimit:            getenvInt("WS_REPLAY_LIMIT", 500),
+		WSAllowedOrigins:         splitCSV(getenv("GATEWAY_WS_ALLOWED_ORIGINS", defaultWSAllowedOrigins)),
+		WSMaxAnonConnsPerIP:      getenvInt("GATEWAY_WS_MAX_ANON_CONNS_PER_IP", 64),
+		WSMaxTopicsAnon:          getenvInt("GATEWAY_WS_MAX_TOPICS_ANON", 24),
+		WSMaxTopicsAuth:          getenvInt("GATEWAY_WS_MAX_TOPICS_AUTH", 128),
+		AuthRateLimit:            getenvInt("GATEWAY_AUTH_RATE_LIMIT", 10),
+		AuthRateWindow:           time.Duration(getenvInt("GATEWAY_AUTH_RATE_WINDOW", 60)) * time.Second,
+		WSCustomDomainRateLimit:  getenvInt("GATEWAY_WS_CUSTOM_DOMAIN_RATE_LIMIT", 30),
+		WSCustomDomainRateWindow: time.Duration(getenvInt("GATEWAY_WS_CUSTOM_DOMAIN_RATE_WINDOW", 10)) * time.Second,
+		AnonRateLimit:            getenvInt("GATEWAY_ANON_RATE_LIMIT", 0), // 0 = disabled (pass-through)
+		AnonRateWindow:           time.Duration(getenvInt("GATEWAY_ANON_RATE_WINDOW", 10)) * time.Second,
+		ResponseCacheTTL:         time.Duration(getenvInt("GATEWAY_RESPONSE_CACHE_TTL", 30)) * time.Second,
+		RPCMaxInFlight:           getenvInt("GATEWAY_RPC_MAX_INFLIGHT", 64),
 		Upstreams: Upstreams{
 			Parser:    getenv("UPSTREAM_PARSER", "http://parser:8002"),
 			Analytics: getenv("UPSTREAM_ANALYTICS", "http://analytics:8006"),

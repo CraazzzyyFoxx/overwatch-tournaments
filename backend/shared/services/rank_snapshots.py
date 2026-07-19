@@ -34,31 +34,33 @@ async def fetch_latest_ow_ranks_by_account(
     if not user_ids:
         return {}
 
-    subq = (
+    # Postgres DISTINCT ON keeps the first row per (user, account, role) after
+    # ordering by captured_at DESC — same result as the previous row_number()
+    # window, but resolved in a single pass without a subquery materialization.
+    query = (
         sa.select(
             UserRankSnapshot.user_id,
             UserRankSnapshot.battle_tag,
             UserRankSnapshot.role,
             UserRankSnapshot.rank_value,
-            sa.func.row_number()
-            .over(
-                partition_by=[
-                    UserRankSnapshot.user_id,
-                    UserRankSnapshot.social_account_id,
-                    UserRankSnapshot.role,
-                ],
-                order_by=UserRankSnapshot.captured_at.desc(),
-            )
-            .label("rn"),
+        )
+        .distinct(
+            UserRankSnapshot.user_id,
+            UserRankSnapshot.social_account_id,
+            UserRankSnapshot.role,
         )
         .where(
             UserRankSnapshot.user_id.in_(user_ids),
             UserRankSnapshot.rank_value.is_not(None),
             UserRankSnapshot.is_ranked.is_(True),
         )
-        .subquery()
+        .order_by(
+            UserRankSnapshot.user_id,
+            UserRankSnapshot.social_account_id,
+            UserRankSnapshot.role,
+            UserRankSnapshot.captured_at.desc(),
+        )
     )
-    query = sa.select(subq.c.user_id, subq.c.battle_tag, subq.c.role, subq.c.rank_value).where(subq.c.rn == 1)
     result = await session.execute(query)
 
     out: dict[int, dict[str, dict[str, int]]] = {}

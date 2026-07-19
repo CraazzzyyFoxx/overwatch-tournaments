@@ -3,16 +3,17 @@
 import React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { LayoutGrid, ArrowUpRight } from "lucide-react";
 
 import type { Tournament } from "@/types/tournament.types";
 import { cn, formatDateRange } from "@/lib/utils";
-import { TOURNAMENT_STATUS_META } from "@/lib/tournament-status";
 import { relativeTime, stageProgress } from "./tournaments-helpers";
 
 const stopPropagation = (event: React.MouseEvent) => event.stopPropagation();
 
 const TournamentRow = ({ tournament }: { tournament: Tournament }) => {
+  const t = useTranslations();
   const router = useRouter();
   const designClass =
     tournament.status === "live" || tournament.status === "playoffs"
@@ -22,8 +23,7 @@ const TournamentRow = ({ tournament }: { tournament: Tournament }) => {
         : tournament.status === "completed" || tournament.status === "archived"
           ? "finished"
           : "draft";
-  const statusMeta = TOURNAMENT_STATUS_META[tournament.status];
-  const stage = stageProgress(tournament, tournament.status);
+  const stage = stageProgress(tournament, tournament.status, t);
   const players = tournament.participants_count ?? 0;
 
   return (
@@ -38,7 +38,21 @@ const TournamentRow = ({ tournament }: { tournament: Tournament }) => {
             {(tournament.status === "live" || tournament.status === "playoffs") && (
               <span className="status-pill live" style={{ fontSize: "8.5px", padding: "2px 7px" }}>
                 <span className="dot" />
-                Live
+                {t("common.live")}
+              </span>
+            )}
+            {tournament.is_hidden && (
+              <span
+                className="status-pill"
+                style={{
+                  fontSize: "8.5px",
+                  padding: "2px 7px",
+                  background: "hsl(var(--muted) / 0.6)",
+                  color: "hsl(var(--muted-foreground))",
+                  border: "1px solid hsl(var(--border))"
+                }}
+              >
+                {t("common.previewBadge")}
               </span>
             )}
           </span>
@@ -46,13 +60,14 @@ const TournamentRow = ({ tournament }: { tournament: Tournament }) => {
             {formatDateRange(tournament.start_date, tournament.end_date)}
             {tournament.is_league && (
               <>
-                <span className="sep">·</span>League
+                <span className="sep">·</span>
+                {t("common.league")}
               </>
             )}
             {tournament.team_formation && (
               <>
                 <span className="sep">·</span>
-                {tournament.team_formation === "draft" ? "Draft" : "Balancer"}
+                {tournament.team_formation === "draft" ? t("common.draft") : t("common.balancer")}
               </>
             )}
           </span>
@@ -61,7 +76,7 @@ const TournamentRow = ({ tournament }: { tournament: Tournament }) => {
       <td>
         <span className={`tn-status ${designClass}`}>
           <span className="dot" />
-          {statusMeta.badgeLabel}
+          {t(`common.statusBadge.${tournament.status}`)}
         </span>
       </td>
       <td>
@@ -83,13 +98,13 @@ const TournamentRow = ({ tournament }: { tournament: Tournament }) => {
         <div className="tn-teams">
           <div className="stack">
             <span className="big">{players}</span>
-            <span className="sub">players</span>
+            <span className="sub">{t("common.players")}</span>
           </div>
         </div>
       </td>
       <td className="r">
         <span className="tn-id">
-          {relativeTime(tournament.updated_at ?? tournament.start_date)}
+          {relativeTime(tournament.updated_at ?? tournament.start_date, t)}
         </span>
       </td>
       <td className="r">
@@ -97,7 +112,7 @@ const TournamentRow = ({ tournament }: { tournament: Tournament }) => {
           <Link
             href={`/tournaments/${tournament.id}/bracket`}
             className="icon-btn"
-            title="Bracket"
+            title={t("common.bracket")}
             onClick={stopPropagation}
           >
             <LayoutGrid width={13} height={13} />
@@ -105,7 +120,7 @@ const TournamentRow = ({ tournament }: { tournament: Tournament }) => {
           <Link
             href={`/tournaments/${tournament.id}`}
             className="icon-btn"
-            title="Open"
+            title={t("common.open")}
             onClick={stopPropagation}
           >
             <ArrowUpRight width={13} height={13} />
@@ -124,6 +139,7 @@ interface TournamentsTableProps {
 }
 
 const TournamentsTable = ({ tournaments, page, pageSize, onPageChange }: TournamentsTableProps) => {
+  const t = useTranslations();
   const total = tournaments.length;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const safePage = Math.min(page, totalPages);
@@ -138,12 +154,12 @@ const TournamentsTable = ({ tournaments, page, pageSize, onPageChange }: Tournam
         <thead>
           <tr>
             <th style={{ width: 60 }}>#</th>
-            <th>Tournament</th>
-            <th style={{ width: 120 }}>Status</th>
-            <th style={{ width: 170 }}>Stage</th>
-            <th style={{ width: 110 }}>Players</th>
+            <th>{t("common.tournament")}</th>
+            <th style={{ width: 120 }}>{t("common.status")}</th>
+            <th style={{ width: 170 }}>{t("common.stage")}</th>
+            <th style={{ width: 110 }}>{t("common.playersLabel")}</th>
             <th className="r" style={{ width: 110 }}>
-              Updated
+              {t("common.updated")}
             </th>
             <th className="r" style={{ width: 80 }} />
           </tr>
@@ -157,7 +173,11 @@ const TournamentsTable = ({ tournaments, page, pageSize, onPageChange }: Tournam
 
       <div className="pagination">
         <span className="page-info">
-          Showing {rangeStart}–{rangeEnd} of {total}
+          {t("common.showingRange", {
+            start: String(rangeStart),
+            end: String(rangeEnd),
+            total: String(total)
+          })}
         </span>
         <div className="page-controls">
           <button

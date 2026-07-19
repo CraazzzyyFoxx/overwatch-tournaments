@@ -10,7 +10,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { useTranslation } from "@/i18n/LanguageContext";
+import { useTranslations } from "next-intl";
 import { confidenceWord, formatAnalyticsNumber } from "../analytics.helpers";
 
 export type ForecastDirection = "promote" | "demote" | "flat";
@@ -62,7 +62,7 @@ export default function ForecastChip({
   className,
   focusable = true,
 }: ForecastChipProps) {
-  const { t } = useTranslation();
+  const t = useTranslations();
   const meta = DIRECTION_META[direction];
   const { Icon } = meta;
   const label = t(`analytics.forecast.${meta.key}`);

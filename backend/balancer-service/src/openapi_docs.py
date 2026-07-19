@@ -69,6 +69,18 @@ DOCS: dict[str, dict] = {
         "summary": "Get pick suggestions",
         "description": "Ranks the top five available players by fit for the current pick (requires workspace team-read); 409 if the draft has no current pick.",
     },
+    "rpc.balancer.draft.feasibility": {
+        "summary": "Get draft feasibility",
+        "description": "Reports whether every remaining team-role slot can be filled. Requires workspace team-import permission.",
+    },
+    "rpc.balancer.draft.pick_options": {
+        "summary": "Get safe draft pick options",
+        "description": "Returns safe and blocked player-role choices for the current pick. Available only to the on-clock captain or a workspace admin.",
+    },
+    "rpc.balancer.draft.player_role_edit": {
+        "summary": "Preview or add a draft player role",
+        "description": "Previews or commits an emergency role addition to the draft snapshot with optimistic versioning and private audit reason. Requires workspace team-import permission.",
+    },
     "rpc.balancer.draft.session_create": {
         "summary": "Create draft session",
         "description": "Creates a new draft session for a tournament (requires workspace team-import) and publishes a session-updated realtime event.",

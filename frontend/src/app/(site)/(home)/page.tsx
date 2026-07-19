@@ -1,13 +1,16 @@
 import React, { Suspense } from "react";
 import Link from "next/link";
-import { Award, BarChart3, Calendar, Scale, Trophy, Users } from "lucide-react";
+import { getTranslations } from "next-intl/server";
+import { Award, BarChart3, Calendar, Inbox, Scale, Trophy, Users } from "lucide-react";
 
 import StatisticsCard from "@/components/StatisticsCard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { PageHero, HeroCoord } from "@/components/site/PageHero";
 import statisticsService from "@/services/statistics.service";
 import workspaceService from "@/services/workspace.service";
 import tournamentService from "@/services/tournament.service";
+import { isTenantHost } from "@/lib/tenant-host";
 import {
   ChartCardSkeleton,
   StatsGridSkeleton,
@@ -28,18 +31,21 @@ function getWorkspaceHue(id: number): number {
   return WORKSPACE_HUES[id % WORKSPACE_HUES.length];
 }
 
-// SVG hex-grid data URL used as a subtle background pattern
-const HEX_GRID_BG = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='92.4'%3E%3Cpolygon points='40%2C1 79%2C23.2 79%2C69.2 40%2C91.4 1%2C69.2 1%2C23.2' fill='none' stroke='white' stroke-width='0.8' opacity='0.055'/%3E%3C/svg%3E")`;
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Root page
 // ─────────────────────────────────────────────────────────────────────────────
 
-export default function Home() {
+export default async function Home() {
+  // On a tenant (white-label) host the whole site is locked to one
+  // workspace, so the cross-workspace "communities on this platform" list
+  // is hidden. See middleware.ts (Task 6) for the header injection.
+  const tenantMode = await isTenantHost();
+  const t = await getTranslations();
+
   return (
     <div className="space-y-8">
       {/* Cinematic page intro */}
-      <PageIntroSection />
+      <PageIntroSection tenantMode={tenantMode} />
 
       {/* Live / upcoming events */}
       <section>
@@ -51,7 +57,7 @@ export default function Home() {
       {/* Platform stats */}
       <section>
         <p className="mb-4 text-[11px] font-semibold tracking-[0.14em] uppercase text-muted-foreground/50">
-          By the numbers
+          {t("home.byTheNumbers")}
         </p>
         <Suspense fallback={<StatsGridSkeleton />}>
           <StatsGrid />
@@ -59,26 +65,28 @@ export default function Home() {
       </section>
 
       {/* Workspace / community cards */}
-      <section>
-        <p className="mb-1.5 text-[11px] font-semibold tracking-[0.14em] uppercase text-muted-foreground/50">
-          Workspaces
-        </p>
-        <h2 className="font-display text-3xl font-bold uppercase tracking-wide text-foreground mb-5">
-          Communities on this platform
-        </h2>
-        <Suspense fallback={<CommunitiesSkeleton />}>
-          <CommunitiesSection />
-        </Suspense>
-      </section>
+      {!tenantMode && (
+        <section>
+          <p className="mb-1.5 text-[11px] font-semibold tracking-[0.14em] uppercase text-muted-foreground/50">
+            {t("home.workspaces")}
+          </p>
+          <h2 className="font-display text-3xl font-bold uppercase tracking-wide text-foreground mb-5">
+            {t("home.communitiesOnPlatform")}
+          </h2>
+          <Suspense fallback={<CommunitiesSkeleton />}>
+            <CommunitiesSection />
+          </Suspense>
+        </section>
+      )}
 
       {/* Season dashboard */}
       <section className="pb-8 space-y-4">
         <div>
           <p className="mb-1.5 text-[11px] font-semibold tracking-[0.14em] uppercase text-muted-foreground/50">
-            Season overview
+            {t("home.seasonOverview")}
           </p>
           <h2 className="font-display text-3xl font-bold uppercase tracking-wide text-foreground">
-            Community Dashboard
+            {t("home.communityDashboard")}
           </h2>
         </div>
 
@@ -118,103 +126,31 @@ export default function Home() {
 // Page intro (cinematic header)
 // ─────────────────────────────────────────────────────────────────────────────
 
-function PageIntroSection() {
+async function PageIntroSection({ tenantMode }: { tenantMode: boolean }) {
+  const t = await getTranslations();
   return (
-    <div
-      className="relative overflow-hidden rounded-xl border border-white/[0.07] p-8 md:p-10"
-      style={{ background: "hsl(222 30% 6%)" }}
-    >
-      {/* Hex grid */}
-      <div
-        className="absolute inset-0 pointer-events-none"
-        style={{ backgroundImage: HEX_GRID_BG, backgroundSize: "80px 92.4px" }}
-      />
-      {/* Teal left spotlight */}
-      <div
-        className="absolute pointer-events-none"
-        style={{
-          top: "-15%",
-          left: "-5%",
-          width: "65%",
-          height: "130%",
-          background:
-            "radial-gradient(ellipse at 30% 50%, hsl(174 72% 46% / 0.18) 0%, transparent 62%)",
-        }}
-      />
-      {/* Blue top-right accent */}
-      <div
-        className="absolute pointer-events-none"
-        style={{
-          top: "-25%",
-          right: "0%",
-          width: "55%",
-          height: "100%",
-          background:
-            "radial-gradient(ellipse at 70% 30%, hsl(210 80% 55% / 0.1) 0%, transparent 58%)",
-        }}
-      />
-      {/* Subtle center glow */}
-      <div
-        className="absolute pointer-events-none"
-        style={{
-          top: "20%",
-          left: "25%",
-          width: "50%",
-          height: "60%",
-          background:
-            "radial-gradient(ellipse at 50% 50%, hsl(174 72% 46% / 0.05) 0%, transparent 70%)",
-        }}
-      />
-      {/* Bottom fade to page */}
-      <div
-        className="absolute bottom-0 left-0 right-0 h-16 pointer-events-none"
-        style={{
-          background: "linear-gradient(to bottom, transparent, hsl(222 30% 6% / 0.6))",
-        }}
-      />
-
-      <div className="relative z-10 flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
-        <div>
-          <p
-            className="text-[11px] font-semibold tracking-[0.14em] uppercase mb-3"
-            style={{ color: "hsl(215 12% 40%)" }}
-          >
-            Overwatch Tournament Platform
-          </p>
-          <h1
-            className="font-display font-bold uppercase mb-4"
-            style={{
-              fontSize: "clamp(2.4rem, 5vw, 3.5rem)",
-              lineHeight: 1.1,
-              letterSpacing: "0.03em",
-              color: "hsl(210 20% 95%)",
-            }}
-          >
-            What&apos;s happening{" "}
-            <span style={{ color: "hsl(162 72% 50%)" }}>now</span>
-          </h1>
-          <p className="text-sm leading-relaxed" style={{ color: "hsl(215 12% 52%)", maxWidth: "26rem" }}>
-            Tournaments, player stats and rankings across all communities on the
-            platform.
-          </p>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-3 shrink-0">
+    <PageHero
+      align="center"
+      eyebrow={<HeroCoord>{t("home.eyebrow")}</HeroCoord>}
+      title={t.rich("home.title", { em: (chunks) => <em>{chunks}</em> })}
+      lede={tenantMode ? t("home.ledeTenant") : t("home.ledePlatform")}
+      actions={
+        <>
           <Button asChild size="lg" className="shadow-lg shadow-primary/20">
             <Link href="/tournaments">
               <Trophy className="mr-2 h-5 w-5" />
-              Browse Tournaments
+              {t("home.browseTournaments")}
             </Link>
           </Button>
           <Button asChild variant="secondary" size="lg">
             <Link href="/tournaments/analytics">
               <BarChart3 className="mr-2 h-5 w-5" />
-              Analytics
+              {t("common.analytics")}
             </Link>
           </Button>
-        </div>
-      </div>
-    </div>
+        </>
+      }
+    />
   );
 }
 
@@ -225,17 +161,19 @@ function PageIntroSection() {
 type TournamentWithCount = Tournament & { registrations_count?: number };
 
 async function LiveEventsSection() {
+  const t = await getTranslations();
+  const tenantMode = await isTenantHost();
   let activeTournaments: TournamentWithCount[] = [];
   let workspaceMap = new Map<number, Workspace>();
 
   try {
     const [tournamentsData, workspaces] = await Promise.all([
-      tournamentService.getActive(),
+      tournamentService.getActive({ skipWorkspace: !tenantMode }),
       workspaceService.getAll(),
     ]);
 
     activeTournaments = (tournamentsData.results as TournamentWithCount[])
-      .filter((t) => isTournamentStatusActive(t.status))
+      .filter((tour) => isTournamentStatusActive(tour.status))
       .slice(0, 6);
 
     workspaceMap = new Map(workspaces.map((w) => [w.id, w]));
@@ -244,7 +182,7 @@ async function LiveEventsSection() {
   }
 
   const liveCount = activeTournaments.filter(
-    (t) => t.status === "live" || t.status === "playoffs"
+    (tour) => tour.status === "live" || tour.status === "playoffs"
   ).length;
   const upcomingCount = activeTournaments.length - liveCount;
 
@@ -260,18 +198,19 @@ async function LiveEventsSection() {
           <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400" />
         </span>
         <span className="text-[11px] font-bold tracking-[0.14em] uppercase text-emerald-400">
-          {liveCount > 0 && `${liveCount} Live`}
+          {liveCount > 0 && t("statistics.liveCount", { count: liveCount })}
           {liveCount > 0 && upcomingCount > 0 && " · "}
-          {upcomingCount > 0 && `${upcomingCount} Upcoming`}
+          {upcomingCount > 0 && t("statistics.upcomingCount", { count: upcomingCount })}
         </span>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-        {activeTournaments.map((t) => (
+        {activeTournaments.map((tour) => (
           <EventCard
-            key={t.id}
-            tournament={t}
-            workspace={workspaceMap.get(t.workspace_id)}
+            key={tour.id}
+            tournament={tour}
+            workspace={workspaceMap.get(tour.workspace_id)}
+            showWorkspaceBadge={!tenantMode}
           />
         ))}
       </div>
@@ -279,13 +218,16 @@ async function LiveEventsSection() {
   );
 }
 
-function EventCard({
+async function EventCard({
   tournament,
   workspace,
+  showWorkspaceBadge = true,
 }: {
   tournament: TournamentWithCount;
   workspace?: Workspace;
+  showWorkspaceBadge?: boolean;
 }) {
+  const t = await getTranslations();
   const isLive =
     tournament.status === "live" || tournament.status === "playoffs";
   const statusMeta = getTournamentStatusMeta(tournament.status);
@@ -315,7 +257,7 @@ function EventCard({
                   <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-400" />
                 </span>
                 <span className="text-[10px] font-bold tracking-[0.1em] uppercase text-emerald-400">
-                  Live
+                  {t("common.live")}
                 </span>
               </>
             ) : (
@@ -340,10 +282,10 @@ function EventCard({
                   color: "hsl(270 60% 72%)",
                 }}
               >
-                League
+                {t("common.league")}
               </span>
             )}
-            {workspace && (
+            {workspace && showWorkspaceBadge && (
               <span
                 className="text-[9px] font-bold tracking-[0.08em] uppercase px-1.5 py-0.5 rounded-full"
                 style={{
@@ -372,7 +314,7 @@ function EventCard({
           <div className="flex items-center gap-1.5 text-[12px] text-muted-foreground">
             <Users className="h-3 w-3 flex-shrink-0" />
             {tournament.registrations_count ?? 0}{" "}
-            {isLive ? "participants" : "registered"}
+            {isLive ? t("common.participants") : t("common.registered")}
           </div>
         </div>
 
@@ -382,7 +324,7 @@ function EventCard({
             className="text-[12px] font-semibold tracking-[0.02em]"
             style={{ color: `hsl(${hue} 72% 55%)` }}
           >
-            View →
+            {t("common.view")} →
           </span>
         </div>
       </div>
@@ -390,21 +332,21 @@ function EventCard({
   );
 }
 
-function NoEventsState() {
+async function NoEventsState() {
+  const t = await getTranslations();
   return (
     <div className="flex flex-col items-center gap-3 p-8 rounded-xl border border-dashed border-border/50 max-w-sm mx-auto text-center">
       <Calendar className="h-7 w-7 text-muted-foreground/30" />
       <div>
         <p className="text-sm font-semibold text-muted-foreground mb-1">
-          No active events right now
+          {t("home.noEventsTitle")}
         </p>
         <p className="text-xs text-muted-foreground/50 leading-relaxed">
-          Check back soon — tournaments are organized across multiple communities
-          on this platform.
+          {t("home.noEventsBody")}
         </p>
       </div>
       <Button variant="outline" size="sm" asChild className="mt-1">
-        <Link href="/tournaments">Browse past tournaments</Link>
+        <Link href="/tournaments">{t("home.browsePastTournaments")}</Link>
       </Button>
     </div>
   );
@@ -499,9 +441,11 @@ function CommunitiesSkeleton() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function StatsGrid() {
+  const t = await getTranslations();
+  const skipWorkspace = !(await isTenantHost());
   let overall = null;
   try {
-    overall = await statisticsService.getOverallStatistics({ skipWorkspace: true });
+    overall = await statisticsService.getOverallStatistics({ skipWorkspace });
   } catch {
     // Fail silently
   }
@@ -511,10 +455,10 @@ async function StatsGrid() {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card className="md:col-span-2 lg:col-span-4 border-destructive/50">
           <CardHeader>
-            <CardTitle>Overall statistics</CardTitle>
+            <CardTitle>{t("statistics.overallStatistics")}</CardTitle>
           </CardHeader>
           <CardContent className="text-sm text-muted-foreground">
-            Failed to load overall statistics.
+            {t("common.loadError")}
           </CardContent>
         </Card>
       </div>
@@ -524,25 +468,25 @@ async function StatsGrid() {
   return (
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
       <StatisticsCard
-        name="Tournaments Held"
+        name={t("statistics.statTournamentsHeld")}
         value={overall.tournaments}
         icon={<Trophy className="h-4 w-4" />}
         iconClassName="bg-indigo-500/10 text-indigo-400"
       />
       <StatisticsCard
-        name="Teams Balanced"
+        name={t("statistics.statTeamsBalanced")}
         value={overall.teams}
         icon={<Scale className="h-4 w-4" />}
         iconClassName="bg-blue-500/10 text-blue-400"
       />
       <StatisticsCard
-        name="Players Participated"
+        name={t("statistics.statPlayersParticipated")}
         value={overall.players}
         icon={<Users className="h-4 w-4" />}
         iconClassName="bg-emerald-500/10 text-emerald-400"
       />
       <StatisticsCard
-        name="Champions"
+        name={t("common.champions")}
         value={overall.champions}
         icon={<Award className="h-4 w-4" />}
         iconClassName="bg-amber-500/10 text-amber-400"
@@ -557,13 +501,7 @@ async function StatsGrid() {
 
 function DashCard({ children }: { children: React.ReactNode }) {
   return (
-    <div
-      className="rounded-xl overflow-hidden"
-      style={{
-        background: "hsl(215 22% 7%)",
-        border: "1px solid hsl(215 20% 11%)",
-      }}
-    >
+    <div className="overflow-hidden rounded-xl border border-border bg-card">
       {children}
     </div>
   );
@@ -571,11 +509,21 @@ function DashCard({ children }: { children: React.ReactNode }) {
 
 function DashCardHeader({ children }: { children: React.ReactNode }) {
   return (
-    <div
-      className="px-5 py-4 border-b font-display font-bold text-[15px] uppercase tracking-[0.04em]"
-      style={{ borderColor: "hsl(215 20% 10%)", color: "hsl(210 20% 88%)" }}
-    >
+    <div className="px-5 py-4 border-b border-border font-display font-bold text-[15px] uppercase tracking-[0.04em] text-foreground">
       {children}
+    </div>
+  );
+}
+
+// Empty-state placeholder for dashboard cards. Shown when a request succeeds
+// but the (workspace-scoped) result set is empty — e.g. a fresh tenant
+// community with no completed tournaments yet. Distinct from the load-error
+// note, which stays reserved for a genuine fetch failure.
+function DashCardEmpty({ message }: { message: string }) {
+  return (
+    <div className="flex flex-col items-center justify-center gap-2 px-5 py-10 text-center">
+      <Inbox className="h-6 w-6 text-muted-foreground/25" />
+      <p className="text-xs text-muted-foreground/60">{message}</p>
     </div>
   );
 }
@@ -586,7 +534,7 @@ function PlaceBadge({ n }: { n: number }) {
     2: { bg: "#99b0cc", color: "#121009" },
     3: { bg: "#a86243", color: "#fff" },
   };
-  const s = map[n] ?? { bg: "hsl(215 20% 14%)", color: "hsl(210 20% 65%)" };
+  const s = map[n] ?? { bg: "var(--aqt-border-2)", color: "var(--aqt-fg-muted)" };
   return (
     <span
       className="w-[22px] h-[22px] rounded-full shrink-0 inline-flex items-center justify-center text-[11px] font-bold"
@@ -602,32 +550,43 @@ function PlaceBadge({ n }: { n: number }) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function TournamentActivityCard() {
+  const t = await getTranslations();
+  const skipWorkspace = !(await isTenantHost());
   let visible = null;
   let max = 1;
   try {
-    const data = await statisticsService.getTournaments({ skipWorkspace: true });
-    if (data.length > 0) {
-      visible = data.slice(-24);
+    const data = await statisticsService.getTournaments({ skipWorkspace });
+    visible = data.slice(-24);
+    if (visible.length > 0) {
       max = Math.max(...visible.map((d) => d.players_count), 1);
     }
   } catch {
-    // Fail silently
+    // visible stays null on a genuine fetch error
   }
 
-  if (!visible) {
+  if (visible === null) {
     return (
       <>
-        <DashCardHeader>Tournament Activity</DashCardHeader>
+        <DashCardHeader>{t("statistics.tournamentActivity")}</DashCardHeader>
         <div className="px-5 py-4 text-sm text-muted-foreground">
-          Failed to load data.
+          {t("common.loadError")}
         </div>
+      </>
+    );
+  }
+
+  if (visible.length === 0) {
+    return (
+      <>
+        <DashCardHeader>{t("statistics.tournamentActivity")}</DashCardHeader>
+        <DashCardEmpty message={t("common.noData")} />
       </>
     );
   }
 
   return (
     <>
-      <DashCardHeader>Tournament Activity</DashCardHeader>
+      <DashCardHeader>{t("statistics.tournamentActivity")}</DashCardHeader>
       <div className="px-5 pb-3 pt-5">
         <div className="flex items-end gap-[4px]" style={{ height: 110 }}>
           {visible.map((t, i) => (
@@ -641,8 +600,8 @@ async function TournamentActivityCard() {
                   height: `${(t.players_count / max) * 100}%`,
                   background:
                     i === visible.length - 1
-                      ? "hsl(174 72% 46%)"
-                      : "hsl(174 72% 46% / 0.22)",
+                      ? "var(--aqt-teal)"
+                      : "color-mix(in srgb, var(--aqt-teal) 22%, transparent)",
                   borderRadius: "3px 3px 0 0",
                   minHeight: 3,
                 }}
@@ -655,7 +614,7 @@ async function TournamentActivityCard() {
             <span
               key={t.id}
               className="flex-1 text-center"
-              style={{ fontSize: 9, color: "hsl(215 12% 36%)" }}
+              style={{ fontSize: 9, color: "var(--aqt-fg-faint)" }}
             >
               {i % Math.ceil(visible.length / 8) === 0 ? `#${t.number}` : ""}
             </span>
@@ -667,11 +626,14 @@ async function TournamentActivityCard() {
 }
 
 async function DivisionRingsCard() {
-  let roles = null;
+  const t = await getTranslations();
+  const skipWorkspace = !(await isTenantHost());
+  let roles: { label: string; val: number; pct: number; color: string }[] | null = null;
   try {
     const data = await statisticsService.getTournamentsDivision({
-      skipWorkspace: true,
+      skipWorkspace,
     });
+    roles = [];
     if (data.length > 0) {
       const mean = (vals: (number | null)[]) => {
         const nums = vals.filter((v): v is number => v != null);
@@ -686,22 +648,31 @@ async function DivisionRingsCard() {
       const globalMax = Math.max(meanTank, meanDamage, meanSupport, 0.001);
 
       roles = [
-        { label: "Tank", val: meanTank, pct: (meanTank / globalMax) * 100, color: 210 },
-        { label: "Damage", val: meanDamage, pct: (meanDamage / globalMax) * 100, color: 38 },
-        { label: "Support", val: meanSupport, pct: (meanSupport / globalMax) * 100, color: 174 },
+        { label: t("statistics.roleTank"), val: meanTank, pct: (meanTank / globalMax) * 100, color: "var(--aqt-tank)" },
+        { label: t("statistics.roleDamage"), val: meanDamage, pct: (meanDamage / globalMax) * 100, color: "var(--aqt-damage)" },
+        { label: t("statistics.roleSupport"), val: meanSupport, pct: (meanSupport / globalMax) * 100, color: "var(--aqt-support)" },
       ];
     }
   } catch {
     // Fail silently
   }
 
-  if (!roles) {
+  if (roles === null) {
     return (
       <>
-        <DashCardHeader>Avg Division by Role</DashCardHeader>
+        <DashCardHeader>{t("statistics.avgDivisionByRole")}</DashCardHeader>
         <div className="px-5 py-4 text-sm text-muted-foreground">
-          Failed to load data.
+          {t("common.loadError")}
         </div>
+      </>
+    );
+  }
+
+  if (roles.length === 0) {
+    return (
+      <>
+        <DashCardHeader>{t("statistics.avgDivisionByRole")}</DashCardHeader>
+        <DashCardEmpty message={t("common.noData")} />
       </>
     );
   }
@@ -711,7 +682,7 @@ async function DivisionRingsCard() {
 
   return (
     <>
-      <DashCardHeader>Avg Division by Role</DashCardHeader>
+      <DashCardHeader>{t("statistics.avgDivisionByRole")}</DashCardHeader>
       <div className="px-5 py-5 flex gap-4 items-start flex-wrap">
         {roles.map((role) => (
           <div
@@ -723,13 +694,13 @@ async function DivisionRingsCard() {
               <circle
                 cx="36" cy="36" r={r}
                 fill="none"
-                stroke="hsl(215 20% 11%)"
+                stroke="var(--aqt-border)"
                 strokeWidth="7"
               />
               <circle
                 cx="36" cy="36" r={r}
                 fill="none"
-                stroke={`hsl(${role.color} 72% 46%)`}
+                stroke={role.color}
                 strokeWidth="7"
                 strokeDasharray={`${(circum * role.pct) / 100} ${circum}`}
                 strokeLinecap="round"
@@ -740,15 +711,15 @@ async function DivisionRingsCard() {
                 textAnchor="middle"
                 fontSize="12"
                 fontWeight="700"
-                fontFamily="Barlow Condensed, sans-serif"
-                fill={`hsl(${role.color} 72% 55%)`}
+                fill={role.color}
+                style={{ fontFamily: "var(--font-onest)" }}
               >
                 {role.val.toFixed(1)}
               </text>
             </svg>
             <span
               className="text-[12px] font-medium"
-              style={{ color: "hsl(215 12% 50%)" }}
+              style={{ color: "var(--aqt-fg-muted)" }}
             >
               {role.label}
             </span>
@@ -756,9 +727,9 @@ async function DivisionRingsCard() {
         ))}
         <p
           className="flex-[2] text-[12px] leading-relaxed self-center"
-          style={{ color: "hsl(215 12% 42%)", minWidth: 90 }}
+          style={{ color: "var(--aqt-fg-dim)", minWidth: 90 }}
         >
-          Average division rank per role across all tournaments.
+          {t("home.avgDivisionDesc")}
         </p>
       </div>
     </>
@@ -766,9 +737,11 @@ async function DivisionRingsCard() {
 }
 
 async function ChampionsCard() {
+  const t = await getTranslations();
+  const skipWorkspace = !(await isTenantHost());
   let top = null;
   try {
-    const data = await statisticsService.getChampions({ skipWorkspace: true });
+    const data = await statisticsService.getChampions({ skipWorkspace });
     top = data.results.slice(0, 5);
   } catch {
     // Fail silently
@@ -777,24 +750,33 @@ async function ChampionsCard() {
   if (!top) {
     return (
       <>
-        <DashCardHeader>Most Championships</DashCardHeader>
+        <DashCardHeader>{t("statistics.mostChampionships")}</DashCardHeader>
         <div className="px-5 py-4 text-sm text-muted-foreground">
-          Failed to load data.
+          {t("common.loadError")}
         </div>
+      </>
+    );
+  }
+
+  if (top.length === 0) {
+    return (
+      <>
+        <DashCardHeader>{t("statistics.mostChampionships")}</DashCardHeader>
+        <DashCardEmpty message={t("common.noData")} />
       </>
     );
   }
 
   return (
     <>
-      <DashCardHeader>Most Championships</DashCardHeader>
+      <DashCardHeader>{t("statistics.mostChampionships")}</DashCardHeader>
       {top.map((p, i) => (
         <div
           key={p.id}
           className="flex items-center justify-between px-5 py-2.5 text-[13px] border-b last:border-b-0 hover:bg-white/[0.02] transition-colors"
           style={{
-            borderColor: "hsl(215 20% 9%)",
-            color: "hsl(210 20% 80%)",
+            borderColor: "var(--aqt-border)",
+            color: "var(--aqt-fg-muted)",
           }}
         >
           <div className="flex items-center gap-2.5">
@@ -808,7 +790,7 @@ async function ChampionsCard() {
           </div>
           <span
             className="font-bold font-mono min-w-[28px] text-right"
-            style={{ color: "hsl(174 72% 55%)" }}
+            style={{ color: "var(--aqt-teal)" }}
           >
             {p.value}×
           </span>
@@ -819,10 +801,12 @@ async function ChampionsCard() {
 }
 
 async function TopWinRateCard() {
+  const t = await getTranslations();
+  const skipWorkspace = !(await isTenantHost());
   let top = null;
   try {
     const data = await statisticsService.getTopWinratePlayers({
-      skipWorkspace: true,
+      skipWorkspace,
     });
     top = data.results.slice(0, 5);
   } catch {
@@ -832,30 +816,39 @@ async function TopWinRateCard() {
   if (!top) {
     return (
       <>
-        <DashCardHeader>Top Win Rate</DashCardHeader>
+        <DashCardHeader>{t("statistics.topWinRate")}</DashCardHeader>
         <div className="px-5 py-4 text-sm text-muted-foreground">
-          Failed to load data.
+          {t("common.loadError")}
         </div>
+      </>
+    );
+  }
+
+  if (top.length === 0) {
+    return (
+      <>
+        <DashCardHeader>{t("statistics.topWinRate")}</DashCardHeader>
+        <DashCardEmpty message={t("common.noData")} />
       </>
     );
   }
 
   return (
     <>
-      <DashCardHeader>Top Win Rate</DashCardHeader>
+      <DashCardHeader>{t("statistics.topWinRate")}</DashCardHeader>
       {top.map((p, i) => (
         <div
           key={p.id}
           className="flex items-center justify-between px-5 py-2.5 text-[13px] border-b last:border-b-0 hover:bg-white/[0.02] transition-colors"
           style={{
-            borderColor: "hsl(215 20% 9%)",
-            color: "hsl(210 20% 80%)",
+            borderColor: "var(--aqt-border)",
+            color: "var(--aqt-fg-muted)",
           }}
         >
           <div className="flex items-center gap-2.5">
             <span
               className="font-mono text-[12px] min-w-[22px]"
-              style={{ color: "hsl(215 12% 38%)" }}
+              style={{ color: "var(--aqt-fg-dim)" }}
             >
               #{i + 1}
             </span>
@@ -868,7 +861,7 @@ async function TopWinRateCard() {
           </div>
           <span
             className="font-bold font-mono min-w-[44px] text-right"
-            style={{ color: "hsl(142 70% 55%)" }}
+            style={{ color: "var(--aqt-emerald)" }}
           >
             {(p.value * 100).toFixed(1)}%
           </span>

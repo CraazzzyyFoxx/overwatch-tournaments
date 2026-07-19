@@ -1,19 +1,35 @@
 import { Player } from "@/types/team.types";
+import { Hero } from "@/types/hero.types";
 import { User, UserProfile } from "@/types/user.types";
 
-/** Minimal shape required for `sortTeamPlayers` / TournamentTeamTable rendering. */
-export interface TeamRosterPlayer {
+/**
+ * Fields `sortTeamPlayers` actually reads. Display-only roster fields
+ * (`heroes`, `avg_mvp`, …) are intentionally excluded so callers whose row
+ * type reuses the `heroes` name for a different shape (e.g. `PlayerWithStats`
+ * with `heroes: Record<number, Hero[]>`) still satisfy the sort constraint.
+ */
+export interface SortableRosterPlayer {
   id: number;
-  name: string;
   role: string | null;
-  sub_role: string | null;
   rank: number;
-  division: number;
   is_substitution: boolean;
-  is_newcomer: boolean;
-  is_newcomer_role: boolean;
   related_player_id: number | null;
   relative_player?: number | null;
+}
+
+/** Minimal shape required for `sortTeamPlayers` / TournamentTeamTable rendering. */
+export interface TeamRosterPlayer extends SortableRosterPlayer {
+  name: string;
+  sub_role: string | null;
+  division: number;
+  is_newcomer: boolean;
+  is_newcomer_role: boolean;
+  /** Owning user id — set on user-scoped rosters so a table can flag "you". */
+  user_id?: number;
+  /** Average MVP placement across the player's matches (1 = MVP/best). */
+  avg_mvp?: number | null;
+  /** Player's top signature heroes (same shape as per-match `heroes`). */
+  heroes?: Hero[];
 }
 
 type PlayerRoleInfo = {
@@ -51,7 +67,7 @@ export const getPlayerType = (player: PlayerRoleInfo) => {
   return "ㅤ";
 };
 
-export const sortTeamPlayers = <P extends TeamRosterPlayer>(players: P[]): P[] => {
+export const sortTeamPlayers = <P extends SortableRosterPlayer>(players: P[]): P[] => {
   const getRolePriority = (role: string | null) => {
     if (role === "Tank") return 1;
     if (role === "Damage") return 2;

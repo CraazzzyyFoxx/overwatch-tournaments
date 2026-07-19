@@ -5,7 +5,7 @@ import { useState } from "react";
 
 import { useAuthProfile } from "@/hooks/useAuthProfile";
 import registrationService from "@/services/registration.service";
-import userService from "@/services/user.service";
+import meService from "@/services/me.service";
 import type { RegistrationForm } from "@/types/registration.types";
 
 import UnifiedRegistrationForm from "./UnifiedRegistrationForm";
@@ -29,10 +29,15 @@ export default function RegistrationWizard({
   const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
 
+  // Registrant's OWN social accounts — the authoritative self view, the same
+  // source the profile settings modal uses. getUserByName was a public/
+  // player-name lookup that could resolve to a different identity or omit
+  // accounts, so it wrongly reported "no linked accounts" here even when the
+  // profile showed them linked.
   const userQuery = useQuery({
-    queryKey: ["user-profile-full", authUser?.username],
-    queryFn: () => userService.getUserByName(authUser!.username),
-    enabled: !!authUser?.username,
+    queryKey: ["me", "social"],
+    queryFn: () => meService.getSocialAccounts(),
+    enabled: !!authUser,
     staleTime: 60_000,
   });
 

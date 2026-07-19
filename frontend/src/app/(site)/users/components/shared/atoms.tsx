@@ -1,7 +1,6 @@
 import React from "react";
+import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
-import { type AqtRoleKey } from "@/components/hero/heroRole";
-import { type ScoreKind } from "@/components/match/cells";
 
 // ─── Shared primitives promoted to global components/ (re-exported here so
 //     existing profile imports keep working; new pages import from the homes). ──
@@ -14,30 +13,12 @@ export { PlacementSpark } from "@/components/stats/PlacementSpark";
 
 // ─── Profile-only atoms (no cross-page consumer; kept local) ──────────────────
 
-interface HeroAvatarProps {
-  initials: string;
-  variant?: AqtRoleKey | "amber" | "violet" | "rose" | "cyan" | "lime";
-  size?: "sm" | "md" | "lg";
-  title?: string;
-  className?: string;
-}
-
-export const HeroAvatar = ({ initials, variant = "damage", size = "md", title, className }: HeroAvatarProps) => {
-  return (
-    <span
-      className={cn("aqt-hero-av", size === "sm" && "sm", size === "lg" && "lg", variant, className)}
-      title={title}
-    >
-      {initials}
-    </span>
-  );
-};
-
 export type FormResult = "W" | "L" | "D";
 
 export const FormStreak = ({ results, className }: { results: FormResult[]; className?: string }) => {
+  const t = useTranslations();
   return (
-    <span className={cn("inline-flex gap-[3px]", className)} aria-label="Recent form">
+    <span className={cn("inline-flex gap-[3px]", className)} aria-label={t("users.profile.atoms.recentForm")}>
       {results.map((r, i) => (
         <span key={i} className={cn("aqt-form-chip", r === "W" && "w", r === "L" && "l", r === "D" && "d")}>
           {r}
@@ -46,14 +27,6 @@ export const FormStreak = ({ results, className }: { results: FormResult[]; clas
     </span>
   );
 };
-
-export const PipRow = ({ results, tall = false, className }: { results: ScoreKind[]; tall?: boolean; className?: string }) => (
-  <span className={cn("inline-flex gap-[3px]", className)}>
-    {results.map((r, i) => (
-      <span key={i} className={cn(tall ? "aqt-pip-tall" : "aqt-pip", r === "win" && "win", r === "loss" && "loss", r === "draw" && "draw")} />
-    ))}
-  </span>
-);
 
 interface CardSurfaceProps {
   title?: React.ReactNode;
@@ -96,33 +69,6 @@ export const CardSurface = ({
         </div>
       ) : null}
       <div className={cn("aqt-card-body", flush && "aqt-flush", bodyClassName)}>{children}</div>
-    </div>
-  );
-};
-
-interface RolePyramidSegment {
-  role: AqtRoleKey;
-  maps: number;
-  label: string;
-}
-
-export const RolePyramid = ({ segments }: { segments: RolePyramidSegment[] }) => {
-  const total = segments.reduce((sum, s) => sum + s.maps, 0);
-  if (total === 0) return null;
-  return (
-    <div className="aqt-pyramid-bar">
-      {segments.map((seg) =>
-        seg.maps > 0 ? (
-          <div
-            key={seg.role}
-            className={cn("aqt-pyramid-seg", `aqt-bg-${seg.role}`)}
-            style={{ width: `${(seg.maps / total) * 100}%` }}
-            title={`${seg.label}: ${seg.maps} maps`}
-          >
-            {seg.label}
-          </div>
-        ) : null
-      )}
     </div>
   );
 };

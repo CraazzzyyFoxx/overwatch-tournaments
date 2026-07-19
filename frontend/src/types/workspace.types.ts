@@ -118,8 +118,49 @@ export interface Workspace {
   description: string | null;
   icon_url: string | null;
   is_active: boolean;
+  /** IANA zone tournament schedule forms display and parse times in. */
+  timezone: string;
+  /** Per-workspace main-site branding (see lib/workspace-theme). */
+  branding_enabled: boolean;
+  brand_primary: string | null;
+  brand_secondary: string | null;
+  brand_background: string | null;
+  brand_surface: string | null;
+  brand_accent: string | null;
+  brand_foreground: string | null;
+  brand_muted: string | null;
+  brand_border: string | null;
+  brand_ring: string | null;
+  brand_destructive: string | null;
+  subdomain: string | null;
+  seo_title: string | null;
+  seo_description: string | null;
+  /** White-label custom domain (Phase 2). Resolver serves it only once verified. */
+  custom_domain: string | null;
+  custom_domain_verified_at: string | null;
+  /** Required value of the `_owt-verify.<custom_domain>` TXT record; not secret. */
+  custom_domain_verification_token: string | null;
   default_division_grid_version_id: number | null;
   default_division_grid_version: DivisionGridVersion | null;
+}
+
+/**
+ * Organiser-controlled branding: 4 seed colours (primary/secondary/background/
+ * surface) that derive the full palette, plus 6 optional core-palette overrides
+ * (accent/foreground/muted/border/ring/destructive) that win when set.
+ */
+export interface WorkspaceBranding {
+  branding_enabled: boolean;
+  brand_primary: string | null;
+  brand_secondary: string | null;
+  brand_background: string | null;
+  brand_surface: string | null;
+  brand_accent?: string | null;
+  brand_foreground?: string | null;
+  brand_muted?: string | null;
+  brand_border?: string | null;
+  brand_ring?: string | null;
+  brand_destructive?: string | null;
 }
 
 export type WorkspaceSystemRole = "owner" | "admin" | "member" | "player";

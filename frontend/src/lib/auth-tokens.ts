@@ -1,4 +1,20 @@
 import { getTokenExpMs } from "./jwt";
+import { PLATFORM_ZONE, isPlatformHost } from "./host";
+
+// Canonical access-token cookie name. LEGACY_ACCESS_TOKEN_COOKIE is read as a
+// fallback during the aqt->owt rename so existing sessions are not logged out;
+// it is never written.
+const ACCESS_TOKEN_COOKIE = "owt_access_token";
+const LEGACY_ACCESS_TOKEN_COOKIE = "aqt_access_token";
+
+// Must match the Domain the server sets on login (oauth-callback.ts) /
+// refresh (auth/refresh/route.ts) in production. A client-side `Cookies.set`
+// without a matching Domain wouldn't overwrite that cookie — RFC 6265 keys a
+// cookie by (name, domain, path) — it would instead create a second,
+// host-only cookie with the same name, and which one a later request sends
+// first (stale domain-wide vs. fresh host-only) is undefined.
+const IS_PROD = process.env.NODE_ENV === "production";
+const COOKIE_DOMAIN = `.${PLATFORM_ZONE}`;
 
 // Outcome of an access-token refresh attempt. The distinction matters: only a
 // genuinely dead session ("unauthenticated" — the refresh endpoint returned 401)
@@ -31,6 +47,17 @@ export async function getTokenFromCookies(cookieName: string): Promise<string | 
   }
 }
 
+// Reads the access-token cookie, preferring the canonical `owt_access_token`
+// name and falling back to the legacy `aqt_access_token` name so existing
+// sessions survive the aqt->owt rename.
+export async function getAccessTokenCookie(): Promise<string | undefined> {
+  const token = await getTokenFromCookies(ACCESS_TOKEN_COOKIE);
+  if (token !== undefined) {
+    return token;
+  }
+  return getTokenFromCookies(LEGACY_ACCESS_TOKEN_COOKIE);
+}
+
 // Persist the access token in a JS-readable cookie whose lifetime matches the
 // token's own `exp`, so the client keeps the token exactly as long as it is
 // valid (and decides when to refresh by `exp`, instead of losing it early).
@@ -43,10 +70,16 @@ export async function setAccessTokenCookie(token: string): Promise<void> {
   try {
     const Cookies = (await import("js-cookie")).default;
     const expMs = getTokenExpMs(token);
-    Cookies.set("aqt_access_token", token, {
+    // Domain-wide (`.owt`) only on the platform apex/subdomains; host-only on a
+    // custom domain (the browser rejects a `.owt` cookie there, so a domain-wide
+    // write silently no-ops and the refreshed token is lost). Mirrors the
+    // server-side /auth/refresh route.
+    const domainAttr = IS_PROD && isPlatformHost(window.location.hostname) ? { domain: COOKIE_DOMAIN } : {};
+    Cookies.set(ACCESS_TOKEN_COOKIE, token, {
       path: "/",
       sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
+      secure: IS_PROD,
+      ...domainAttr,
       ...(expMs !== undefined ? { expires: new Date(expMs) } : {}),
     });
   } catch {

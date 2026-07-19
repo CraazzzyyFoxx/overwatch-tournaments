@@ -114,6 +114,7 @@ def test_captain_order_random_is_deterministic_for_seed() -> None:
     a = order_captain_ids(_ENTRIES, DraftCaptainOrder.RANDOM, seed=42)
     b = order_captain_ids(_ENTRIES, DraftCaptainOrder.RANDOM, seed=42)
     assert a == b
+    assert a == [10, 13, 11, 12]  # shared Mulberry32/Fisher-Yates browser contract
     assert sorted(a) == [10, 11, 12, 13]  # permutation of all ids
 
 

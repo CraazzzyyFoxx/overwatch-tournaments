@@ -39,6 +39,10 @@ DOCS: dict[str, dict] = {
         "summary": "Current user ranks",
         "description": "Returns a user's current OverFast ranks for the requested platform; public read.",
     },
+    "rpc.parser.rank.stats": {
+        "summary": "Rank collection health stats",
+        "description": "Aggregated OverFast rank-collection health: battle-tag state counts by status and priority tier, snapshot coverage over 24h/7d, last successful capture, last-24h fetch-outcome mix with error rate, and the active config; requires the global admin role.",
+    },
     "rpc.parser.rank.fetch_log": {
         "summary": "Rank fetch log",
         "description": "Lists OverFast rank-collection fetch-log entries filtered by status, source and cursor; requires the global admin role.",
@@ -50,6 +54,10 @@ DOCS: dict[str, dict] = {
     "rpc.parser.rank.collect": {
         "summary": "Trigger rank collection",
         "description": "Enqueues an OverFast rank-collection run for a user or specific battle tags and returns the enqueued count; requires the global admin role.",
+    },
+    "rpc.parser.rank.reenable_disabled": {
+        "summary": "Re-enable disabled rank collection",
+        "description": "Requeues battle tags that were auto-disabled by a transient OverFast outage (status disabled -> pending, failure counter reset), spreading them across the collection interval; optionally limited to tags that previously succeeded. Returns the re-enabled count; requires the global admin role.",
     },
     # ── achievement calculate ─────────────────────────────────────────────────
     "rpc.parser.ach.calculate": {

@@ -29,9 +29,11 @@ var Routes = []edge.RouteSpec{
 	{Method: "GET", Pattern: "/api/v1/battle-tags/{id}/rank-history", Queue: "rpc.parser.rank.battle_tag_history", IDParam: "id", AllQuery: true, Auth: edge.AuthNone},
 
 	// OverFast rank collection admin (src/routes/admin/rank_collection.py); admin role.
+	{Method: "GET", Pattern: "/api/v1/admin/rank/stats", Queue: "rpc.parser.rank.stats", Auth: edge.AuthRequired},
 	{Method: "GET", Pattern: "/api/v1/admin/rank/fetch-log", Queue: "rpc.parser.rank.fetch_log", AllQuery: true, Auth: edge.AuthRequired},
 	{Method: "GET", Pattern: "/api/v1/admin/rank/users/{id}/collection", Queue: "rpc.parser.rank.user_collection", IDParam: "id", Auth: edge.AuthRequired},
 	{Method: "POST", Pattern: "/api/v1/admin/rank/collect", Queue: "rpc.parser.rank.collect", Body: true, Auth: edge.AuthRequired},
+	{Method: "POST", Pattern: "/api/v1/admin/rank/reenable-disabled", Queue: "rpc.parser.rank.reenable_disabled", Body: true, Auth: edge.AuthRequired},
 
 	// Achievement calculate (src/routes/achievement.py); global admin role in the handler.
 	{Method: "POST", Pattern: "/api/v1/achievement/calculate", Queue: "rpc.parser.ach.calculate", Body: true, Auth: edge.AuthRequired},

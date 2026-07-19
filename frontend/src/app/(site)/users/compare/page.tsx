@@ -1,34 +1,34 @@
 "use client";
 
-import React, { Suspense, useEffect } from "react";
+import { Suspense, useEffect } from "react";
 import { Users } from "lucide-react";
+import { useTranslations } from "next-intl";
 
-import { Card } from "@/components/ui/card";
-import GlassGlow from "@/app/(site)/users/compare/components/GlassGlow";
-import ComparePageHeader from "@/app/(site)/users/compare/components/ComparePageHeader";
+import { CardSurface } from "@/app/(site)/users/components/shared/atoms";
+import ComparePageHero from "@/app/(site)/users/compare/components/ComparePageHero";
 import CompareFiltersPanel from "@/app/(site)/users/compare/components/CompareFiltersPanel";
-import CompareSummaryBadges from "@/app/(site)/users/compare/components/CompareSummaryBadges";
 import CompareUnifiedTable from "@/app/(site)/users/compare/components/CompareUnifiedTable";
 import { useUserCompareSearchParams } from "@/app/(site)/users/compare/hooks/useUserCompareSearchParams";
 import { useUserCompareData } from "@/app/(site)/users/compare/hooks/useUserCompareData";
 
 const PageContent = () => {
+  const t = useTranslations();
   const compareParams = useUserCompareSearchParams();
 
   const {
+    compareQuery,
     heroCompareQuery,
     heroes,
     maps,
     tournaments,
     leftHero,
     rightHero,
-    selectedMap,
-    selectedMapIcon,
     selectedSubjectName,
     selectedTargetName,
     baselineSummary,
     rows,
     activeLoading,
+    activeRefreshing,
     activeError,
     activeErrorMessage,
     compareDisplayName,
@@ -61,22 +61,27 @@ const PageContent = () => {
     compareParams.updateParams
   ]);
 
+  const activeData = compareParams.isHeroScope ? heroCompareQuery.data : compareQuery.data;
+  const sampleSize = activeData?.baseline.sample_size;
+  const retryActiveQuery = () => {
+    void (compareParams.isHeroScope ? heroCompareQuery.refetch() : compareQuery.refetch());
+  };
+
   return (
-    <div
-      className="liquid-glass space-y-6"
-      style={
-        {
-          "--lg-a": "16 185 129",
-          "--lg-b": "14 165 233",
-          "--lg-c": "245 158 11"
-        } as React.CSSProperties
-      }
-    >
-      <Card className="relative overflow-hidden">
-        <GlassGlow />
+    <div className="aqt-player space-y-3.5">
+      <ComparePageHero
+        hasSubject={compareParams.subjectUserId !== undefined}
+        hasData={activeData !== undefined}
+        isLoading={activeLoading}
+        isRefreshing={activeRefreshing}
+        scope={compareParams.scope}
+        baseline={compareParams.effectiveBaseline}
+        baselineSummary={baselineSummary}
+        sampleSize={sampleSize}
+        metricCount={rows.length}
+      />
 
-        <ComparePageHeader />
-
+      <CardSurface bodyClassName="space-y-5">
         <CompareFiltersPanel
           subjectUserId={compareParams.subjectUserId}
           targetUserId={compareParams.targetUserId}
@@ -92,7 +97,9 @@ const PageContent = () => {
           selectedSubjectName={selectedSubjectName}
           selectedTargetName={selectedTargetName}
           subjectNameLoading={activeLoading && !selectedSubjectName}
-          targetNameLoading={Boolean(compareParams.targetUserId) && activeLoading && !selectedTargetName}
+          targetNameLoading={
+            Boolean(compareParams.targetUserId) && activeLoading && !selectedTargetName
+          }
           heroes={heroes}
           maps={maps}
           tournaments={tournaments}
@@ -104,51 +111,55 @@ const PageContent = () => {
           isTournamentsError={tournamentsQuery.isError}
           updateParams={compareParams.updateParams}
         />
-
-        {/* <div className="relative px-6 pb-6">
-          <CompareSummaryBadges
-            effectiveBaseline={compareParams.effectiveBaseline}
-            baselineSummary={baselineSummary}
-            isHeroScope={compareParams.isHeroScope}
-            selectedMapName={heroCompareQuery.data?.map?.name}
-          />
-        </div> */}
-      </Card>
+      </CardSurface>
 
       {compareParams.subjectUserId ? (
         <CompareUnifiedTable
-          subjectName={selectedSubjectName ?? `User #${compareParams.subjectUserId}`}
+          subjectName={
+            selectedSubjectName ??
+            t("users.compare.userNumber", { id: String(compareParams.subjectUserId) })
+          }
           baselineName={compareDisplayName}
           rows={rows}
           loading={activeLoading}
+          refreshing={activeRefreshing}
           errorMessage={activeError ? activeErrorMessage : undefined}
+          onRetry={retryActiveQuery}
           isHeroScope={compareParams.isHeroScope}
           isTargetBaseline={compareParams.isTargetBaseline}
           subjectHero={{
-            name: heroCompareQuery.data?.subject_hero?.name ?? leftHero?.name ?? "All heroes",
+            name:
+              heroCompareQuery.data?.subject_hero?.name ??
+              leftHero?.name ??
+              t("users.compare.allHeroes"),
             imagePath: heroCompareQuery.data?.subject_hero?.image_path ?? leftHero?.image_path,
             dominantColor: heroCompareQuery.data?.subject_hero?.color ?? leftHero?.color,
             playtimeSeconds: heroCompareQuery.data?.left_playtime_seconds ?? 0,
-            playtimeLabel: "Playtime"
+            playtimeLabel: t("users.compare.playtime")
           }}
           baselineHero={{
-            name: heroCompareQuery.data?.target_hero?.name ?? rightHero?.name ?? "All heroes",
+            name:
+              heroCompareQuery.data?.target_hero?.name ??
+              rightHero?.name ??
+              t("users.compare.allHeroes"),
             imagePath: heroCompareQuery.data?.target_hero?.image_path ?? rightHero?.image_path,
             dominantColor: heroCompareQuery.data?.target_hero?.color ?? rightHero?.color,
             playtimeSeconds: heroCompareQuery.data?.right_playtime_seconds ?? 0,
-            playtimeLabel: "Avg playtime"
+            playtimeLabel: t("users.compare.avgPlaytime")
           }}
         />
       ) : (
-        <Card className="relative overflow-hidden">
-          <GlassGlow />
-          <div className="relative flex flex-col items-center justify-center gap-3 py-16 text-center">
-            <Users className="h-10 w-10 text-muted-foreground/50" />
-            <p className="text-sm text-muted-foreground">
-              Select a user above to start comparing
+        <CardSurface>
+          <div
+            aria-live="polite"
+            className="flex flex-col items-center justify-center gap-3 py-16 text-center"
+          >
+            <Users className="h-10 w-10 text-[color:var(--aqt-fg-dim)]" />
+            <p className="text-sm text-[color:var(--aqt-fg-muted)]">
+              {t("users.compare.selectUserPrompt")}
             </p>
           </div>
-        </Card>
+        </CardSurface>
       )}
     </div>
   );

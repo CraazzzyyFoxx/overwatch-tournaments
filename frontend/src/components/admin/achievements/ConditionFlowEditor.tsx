@@ -21,6 +21,7 @@ import { GripVertical, Maximize2, Minimize2, Plus, Search, Trash2, X } from "luc
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/components/ui/number-input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -355,6 +356,19 @@ function formatParamsSummary(type: string, params: Record<string, unknown>): str
 function LeafNode({ data, id }: NodeProps) {
   const d = data as unknown as FlatNode & { readOnly?: boolean; onChangeType?: (id: string, type: string) => void; onChangeParam?: (id: string, key: string, value: unknown) => void; onDelete?: (id: string) => void };
   const params = d.params ?? {};
+  const lostInRoundParam = params.lost_in_round;
+  const lostInRound =
+    lostInRoundParam !== null && typeof lostInRoundParam === "object"
+      ? lostInRoundParam
+      : null;
+  const lostInRoundOp =
+    lostInRound && "op" in lostInRound && typeof lostInRound.op === "string"
+      ? lostInRound.op
+      : undefined;
+  const lostInRoundValue =
+    lostInRound && "value" in lostInRound && typeof lostInRound.value === "number"
+      ? lostInRound.value
+      : 1;
 
   const setParam = (key: string, value: unknown) => d.onChangeParam?.(id, key, value);
   const label = CONDITION_TYPES.find((ct) => ct.value === d.conditionType)?.label ?? d.conditionType;
@@ -407,7 +421,7 @@ function LeafNode({ data, id }: NodeProps) {
                 <SelectTrigger className="h-7 text-xs w-16"><SelectValue /></SelectTrigger>
                 <SelectContent>{OPERATORS.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent>
               </Select>
-              <Input className="h-7 text-xs" type="number" value={(params.value as number) ?? 0} onChange={(e) => setParam("value", Number(e.target.value))} />
+              <NumberInput className="h-7 text-xs" value={(params.value as number) ?? 0} onValueChange={(next) => setParam("value", next ?? 0)} />
             </div>
           </>
         )}
@@ -425,7 +439,7 @@ function LeafNode({ data, id }: NodeProps) {
                 <SelectTrigger className="h-7 text-xs w-16"><SelectValue /></SelectTrigger>
                 <SelectContent>{OPERATORS.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent>
               </Select>
-              <Input className="h-7 text-xs" type="number" value={(params.value as number) ?? 0} onChange={(e) => setParam("value", Number(e.target.value))} />
+              <NumberInput className="h-7 text-xs" value={(params.value as number) ?? 0} onValueChange={(next) => setParam("value", next ?? 0)} />
             </div>
           </>
         )}
@@ -462,7 +476,7 @@ function LeafNode({ data, id }: NodeProps) {
               <SelectTrigger className="h-7 text-xs w-16"><SelectValue /></SelectTrigger>
               <SelectContent>{OPERATORS.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent>
             </Select>
-            <Input className="h-7 text-xs" type="number" value={(params.value as number) ?? 1} onChange={(e) => setParam("value", Number(e.target.value))} />
+            <NumberInput integer className="h-7 text-xs" value={(params.value as number) ?? 1} onValueChange={(next) => setParam("value", next ?? 1)} />
           </div>
         )}
         {/* ── op + value conditions ── */}
@@ -472,7 +486,7 @@ function LeafNode({ data, id }: NodeProps) {
               <SelectTrigger className="h-7 text-xs w-16"><SelectValue /></SelectTrigger>
               <SelectContent>{OPERATORS.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent>
             </Select>
-            <Input className="h-7 text-xs" type="number" value={(params.value as number) ?? 1} onChange={(e) => setParam("value", Number(e.target.value))} />
+            <NumberInput integer className="h-7 text-xs" value={(params.value as number) ?? 1} onValueChange={(next) => setParam("value", next ?? 1)} />
           </div>
         )}
         {/* ── standing_record: field + op + value ── */}
@@ -494,7 +508,7 @@ function LeafNode({ data, id }: NodeProps) {
                 <SelectTrigger className="h-7 text-xs w-16"><SelectValue /></SelectTrigger>
                 <SelectContent>{OPERATORS.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent>
               </Select>
-              <Input className="h-7 text-xs" type="number" value={(params.value as number) ?? 0} onChange={(e) => setParam("value", Number(e.target.value))} />
+              <NumberInput className="h-7 text-xs" value={(params.value as number) ?? 0} onValueChange={(next) => setParam("value", next ?? 0)} />
             </div>
           </>
         )}
@@ -508,7 +522,7 @@ function LeafNode({ data, id }: NodeProps) {
                 <SelectItem value="down">Down</SelectItem>
               </SelectContent>
             </Select>
-            <Input className="h-7 text-xs" type="number" placeholder="min shift" value={(params.min_shift as number) ?? 1} onChange={(e) => setParam("min_shift", Number(e.target.value))} />
+            <NumberInput integer className="h-7 text-xs" placeholder="min shift" value={(params.min_shift as number) ?? 1} onValueChange={(next) => setParam("min_shift", next ?? 1)} />
           </div>
         )}
         {/* ── hero_stat: hero + stat + op + value ── */}
@@ -524,7 +538,7 @@ function LeafNode({ data, id }: NodeProps) {
                 <SelectTrigger className="h-7 text-xs w-16"><SelectValue /></SelectTrigger>
                 <SelectContent>{OPERATORS.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent>
               </Select>
-              <Input className="h-7 text-xs" type="number" value={(params.value as number) ?? 0} onChange={(e) => setParam("value", Number(e.target.value))} />
+              <NumberInput className="h-7 text-xs" value={(params.value as number) ?? 0} onValueChange={(next) => setParam("value", next ?? 0)} />
             </div>
           </>
         )}
@@ -533,8 +547,8 @@ function LeafNode({ data, id }: NodeProps) {
           <>
             <Input className="h-7 text-xs" placeholder="hero slug" value={(params.hero_slug as string) ?? ""} onChange={(e) => setParam("hero_slug", e.target.value)} />
             <div className="flex gap-1">
-              <Input className="h-7 text-xs" type="number" placeholder="min time" value={(params.min_time as number) ?? 600} onChange={(e) => setParam("min_time", Number(e.target.value))} />
-              <Input className="h-7 text-xs" type="number" placeholder="min matches" value={(params.min_matches as number) ?? 3} onChange={(e) => setParam("min_matches", Number(e.target.value))} />
+              <NumberInput integer className="h-7 text-xs" placeholder="min time" value={(params.min_time as number) ?? 600} onValueChange={(next) => setParam("min_time", next ?? 600)} />
+              <NumberInput integer className="h-7 text-xs" placeholder="min matches" value={(params.min_matches as number) ?? 3} onValueChange={(next) => setParam("min_matches", next ?? 3)} />
             </div>
           </>
         )}
@@ -549,7 +563,7 @@ function LeafNode({ data, id }: NodeProps) {
                   <SelectItem value="asc">Bottom</SelectItem>
                 </SelectContent>
               </Select>
-              <Input className="h-7 text-xs" type="number" placeholder="limit" value={(params.limit as number) ?? 20} onChange={(e) => setParam("limit", Number(e.target.value))} />
+              <NumberInput integer className="h-7 text-xs" placeholder="limit" value={(params.limit as number) ?? 20} onValueChange={(next) => setParam("limit", next ?? 20)} />
             </div>
             <div className="flex gap-1">
               <Select value={(params.op as string) ?? "none"} onValueChange={(v) => setParam("op", v === "none" ? undefined : v)}>
@@ -559,7 +573,7 @@ function LeafNode({ data, id }: NodeProps) {
                   {OPERATORS.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}
                 </SelectContent>
               </Select>
-              {Boolean(params.op) && <Input className="h-7 text-xs w-16" type="number" step="0.01" placeholder="rate" value={(params.value as number) ?? 0.5} onChange={(e) => setParam("value", Number(e.target.value))} />}
+              {Boolean(params.op) && <NumberInput className="h-7 text-xs w-16" placeholder="rate" value={(params.value as number) ?? 0.5} onValueChange={(next) => setParam("value", next ?? 0.5)} />}
             </div>
           </>
         )}
@@ -574,7 +588,7 @@ function LeafNode({ data, id }: NodeProps) {
                   <SelectItem value="day_two">Day Two</SelectItem>
                 </SelectContent>
               </Select>
-              <Input className="h-7 text-xs" type="number" placeholder="streak" value={(params.min_streak as number) ?? 2} onChange={(e) => setParam("min_streak", Number(e.target.value))} />
+              <NumberInput integer className="h-7 text-xs" placeholder="streak" value={(params.min_streak as number) ?? 2} onValueChange={(next) => setParam("min_streak", next ?? 2)} />
             </div>
             {(params.metric as string) === "day_two" && (
               <div className="flex gap-1 items-center">
@@ -583,7 +597,7 @@ function LeafNode({ data, id }: NodeProps) {
                   <SelectTrigger className="h-7 text-xs w-16"><SelectValue /></SelectTrigger>
                   <SelectContent>{OPERATORS.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent>
                 </Select>
-                <Input className="h-7 text-xs w-14" type="number" value={(params.position_value as number) ?? 7} onChange={(e) => setParam("position_value", Number(e.target.value))} />
+                <NumberInput integer className="h-7 text-xs w-14" value={(params.position_value as number) ?? 7} onValueChange={(next) => setParam("position_value", next ?? 7)} />
               </div>
             )}
           </>
@@ -615,7 +629,7 @@ function LeafNode({ data, id }: NodeProps) {
                   <SelectTrigger className="h-7 text-xs w-16"><SelectValue /></SelectTrigger>
                   <SelectContent>{OPERATORS.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent>
                 </Select>
-                <Input className="h-7 text-xs w-14" type="number" value={(params.value as number) ?? 1} onChange={(e) => setParam("value", Number(e.target.value))} />
+                <NumberInput integer className="h-7 text-xs w-14" value={(params.value as number) ?? 1} onValueChange={(next) => setParam("value", next ?? 1)} />
               </>
             )}
           </div>
@@ -657,15 +671,15 @@ function LeafNode({ data, id }: NodeProps) {
               <p className="text-muted-foreground text-[10px]">Score patterns (home-away)</p>
               {((params.scores as number[][]) ?? [[2, 3]]).map((pair, i) => (
                 <div key={i} className="flex gap-1 items-center">
-                  <Input className="h-7 text-xs w-12" type="number" value={pair[0]} onChange={(e) => {
+                  <NumberInput integer className="h-7 text-xs w-12" value={pair[0]} onValueChange={(next) => {
                     const scores = [...((params.scores as number[][]) ?? [[2, 3]])];
-                    scores[i] = [Number(e.target.value), scores[i][1]];
+                    scores[i] = [next ?? 0, scores[i][1]];
                     setParam("scores", scores);
                   }} />
                   <span className="text-xs text-muted-foreground">-</span>
-                  <Input className="h-7 text-xs w-12" type="number" value={pair[1]} onChange={(e) => {
+                  <NumberInput integer className="h-7 text-xs w-12" value={pair[1]} onValueChange={(next) => {
                     const scores = [...((params.scores as number[][]) ?? [[2, 3]])];
-                    scores[i] = [scores[i][0], Number(e.target.value)];
+                    scores[i] = [scores[i][0], next ?? 0];
                     setParam("scores", scores);
                   }} />
                   <button type="button" className="text-destructive text-xs" onClick={() => {
@@ -700,13 +714,13 @@ function LeafNode({ data, id }: NodeProps) {
             </div>
             <div className="flex gap-1 items-center">
               <p className="text-muted-foreground text-[10px] shrink-0">Top</p>
-              <Input className="h-7 text-xs w-12" type="number" min={1} value={(params.top_n as number) ?? 3} onChange={(e) => setParam("top_n", Number(e.target.value))} />
+              <NumberInput integer className="h-7 text-xs w-12" min={1} value={(params.top_n as number) ?? 3} onValueChange={(next) => setParam("top_n", next ?? 3)} />
               <p className="text-muted-foreground text-[10px] shrink-0">team in top</p>
               <Select value={(params.op as string) ?? "=="} onValueChange={(v) => setParam("op", v)}>
                 <SelectTrigger className="h-7 text-xs w-16"><SelectValue /></SelectTrigger>
                 <SelectContent>{OPERATORS.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent>
               </Select>
-              <Input className="h-7 text-xs w-12" type="number" min={0} value={(params.value as number) ?? 0} onChange={(e) => setParam("value", Number(e.target.value))} />
+              <NumberInput integer className="h-7 text-xs w-12" min={0} value={(params.value as number) ?? 0} onValueChange={(next) => setParam("value", next ?? 0)} />
             </div>
           </>
         )}
@@ -737,19 +751,19 @@ function LeafNode({ data, id }: NodeProps) {
               <>
                 <div className="flex gap-1 items-center">
                   <p className="text-muted-foreground text-[10px] shrink-0">Min LB wins</p>
-                  <Input className="h-7 text-xs w-14" type="number" value={(params.min_lower_bracket_wins as number) ?? ""} placeholder="any" onChange={(e) => setParam("min_lower_bracket_wins", e.target.value ? Number(e.target.value) : undefined)} />
+                  <NumberInput integer className="h-7 text-xs w-14" value={(params.min_lower_bracket_wins as number) ?? null} placeholder="any" onValueChange={(next) => setParam("min_lower_bracket_wins", next ?? undefined)} />
                 </div>
                 <div className="flex gap-1 items-center">
                   <p className="text-muted-foreground text-[10px] shrink-0">Lost in round</p>
-                  <Select value={(params.lost_in_round as { op?: string })?.op ?? "any"} onValueChange={(v) => setParam("lost_in_round", v !== "any" ? { op: v, value: (params.lost_in_round as { value?: number })?.value ?? 1 } : undefined)}>
+                  <Select value={lostInRoundOp ?? "any"} onValueChange={(v) => setParam("lost_in_round", v !== "any" ? { op: v, value: lostInRoundValue } : undefined)}>
                     <SelectTrigger className="h-7 text-xs w-16"><SelectValue placeholder="any" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="any">Any</SelectItem>
                       {OPERATORS.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}
                     </SelectContent>
                   </Select>
-                  {(params.lost_in_round as { op?: string })?.op && (
-                    <Input className="h-7 text-xs w-14" type="number" value={(params.lost_in_round as { value?: number })?.value ?? 1} onChange={(e) => setParam("lost_in_round", { ...(params.lost_in_round as Record<string, unknown>), value: Number(e.target.value) })} />
+                  {lostInRoundOp && (
+                    <NumberInput integer className="h-7 text-xs w-14" value={lostInRoundValue} onValueChange={(next) => setParam("lost_in_round", { ...lostInRound, value: next ?? 1 })} />
                   )}
                 </div>
               </>
@@ -784,7 +798,7 @@ function LeafNode({ data, id }: NodeProps) {
                 <SelectTrigger className="h-7 text-xs w-16"><SelectValue /></SelectTrigger>
                 <SelectContent>{OPERATORS.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent>
               </Select>
-              <Input className="h-7 text-xs w-16" type="number" value={(params.value as number) ?? 1} onChange={(e) => setParam("value", Number(e.target.value))} />
+              <NumberInput integer className="h-7 text-xs w-16" value={(params.value as number) ?? 1} onValueChange={(next) => setParam("value", next ?? 1)} />
             </div>
             <div className="flex gap-1">
               <Select value={(params.scope as string) ?? "global"} onValueChange={(v) => setParam("scope", v)}>
@@ -795,7 +809,7 @@ function LeafNode({ data, id }: NodeProps) {
                 </SelectContent>
               </Select>
               {(params.field as string) === "hero" && (
-                <Input className="h-7 text-xs w-20" type="number" placeholder="min time (s)" value={(params.min_playtime as number) ?? ""} onChange={(e) => setParam("min_playtime", e.target.value ? Number(e.target.value) : undefined)} />
+                <NumberInput integer className="h-7 text-xs w-20" placeholder="min time (s)" value={(params.min_playtime as number) ?? null} onValueChange={(next) => setParam("min_playtime", next ?? undefined)} />
               )}
             </div>
           </>
@@ -826,7 +840,7 @@ function LeafNode({ data, id }: NodeProps) {
             </div>
             <div className="flex gap-1 items-center">
               <p className="text-muted-foreground shrink-0">Min streak</p>
-              <Input className="h-7 text-xs w-16" type="number" min={2} value={(params.min_streak as number) ?? 2} onChange={(e) => setParam("min_streak", Number(e.target.value))} />
+              <NumberInput integer className="h-7 text-xs w-16" min={2} value={(params.min_streak as number) ?? 2} onValueChange={(next) => setParam("min_streak", next ?? 2)} />
             </div>
           </>
         )}

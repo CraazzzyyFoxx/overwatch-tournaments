@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 
-import { getTokenFromCookies, refreshAccessToken } from "@/lib/auth-tokens";
+import { getAccessTokenCookie, refreshAccessToken } from "@/lib/auth-tokens";
 import { getTokenExpMs } from "@/lib/jwt";
 
 const REFRESH_SKEW_MS = 60_000; // refresh ~1 min before the token expires
@@ -54,7 +54,7 @@ export function useProactiveTokenRefresh(enabled: boolean, onSessionDead: () => 
     };
 
     void (async () => {
-      const token = await getTokenFromCookies("aqt_access_token");
+      const token = await getAccessTokenCookie();
       schedule(computeDelay(token));
     })();
 

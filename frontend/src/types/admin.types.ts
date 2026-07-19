@@ -71,6 +71,8 @@ export interface CollectTriggerResult {
 export interface RankFetchLogRow {
   id: number;
   social_account_id: number | null;
+  /** Owning player id, resolved via the social account; null when deleted. */
+  user_id: number | null;
   battle_tag: string;
   status: string;
   source: string;
@@ -84,6 +86,37 @@ export interface RankFetchLogQuery {
   source?: string;
   before_id?: number;
   limit?: number;
+}
+
+// ─── Rank collection health stats (parser admin) ───────────────────────────────
+
+export interface RankStatusCounts {
+  ok: number;
+  pending: number;
+  not_found: number;
+  private: number;
+  error: number;
+  rate_limited: number;
+  disabled: number;
+}
+
+export interface RankCollectionStats {
+  total: number;
+  never_checked: number;
+  by_status: RankStatusCounts;
+  tier0: number;
+  tier1: number;
+  tier2: number;
+  coverage_24h: number;
+  coverage_7d: number;
+  last_success_at: string | null;
+  fetch_24h: RankStatusCounts;
+  fetch_24h_total: number;
+  error_rate_24h: number;
+  enabled: boolean;
+  scope: string;
+  interval_seconds: number;
+  rate_limit_per_minute: number;
 }
 
 // ─── Tournament ──────────────────────────────────────────────────────────────
@@ -104,10 +137,8 @@ export interface TournamentCreateInput {
   status?: TournamentStatus;
   start_date: string;
   end_date: string;
-  registration_opens_at?: string | null;
-  registration_closes_at?: string | null;
-  check_in_opens_at?: string | null;
-  check_in_closes_at?: string | null;
+  auto_transitions_enabled?: boolean;
+  allow_late_registration?: boolean;
   win_points?: number;
   draw_points?: number;
   loss_points?: number;
@@ -121,17 +152,36 @@ export interface TournamentUpdateInput {
   challonge_slug?: string | null;
   is_league?: boolean;
   is_finished?: boolean;
+  is_hidden?: boolean;
   team_formation?: string;
   start_date?: string;
   end_date?: string;
-  registration_opens_at?: string | null;
-  registration_closes_at?: string | null;
-  check_in_opens_at?: string | null;
-  check_in_closes_at?: string | null;
+  auto_transitions_enabled?: boolean;
+  allow_late_registration?: boolean;
   win_points?: number;
   draw_points?: number;
   loss_points?: number;
   division_grid_version_id?: number | null;
+}
+
+export interface TournamentPhaseScheduleEntryInput {
+  status: TournamentStatus;
+  starts_at: string;
+  ends_at?: string | null;
+}
+
+export interface TournamentPreviewAccessUser {
+  id: number;
+  name: string;
+  avatar_url?: string | null;
+}
+
+export interface TournamentPreviewAccessEntry {
+  id: number;
+  tournament_id: number;
+  auth_user_id: number;
+  created_at: string;
+  user?: TournamentPreviewAccessUser | null;
 }
 
 export interface TournamentStatusTransitionInput {
@@ -211,15 +261,11 @@ export interface TeamCreateInput {
   name: string;
   tournament_id: number;
   captain_id?: number;
-  avg_sr?: number;
-  total_sr?: number;
 }
 
 export interface TeamUpdateInput {
   name?: string;
   captain_id?: number;
-  avg_sr?: number;
-  total_sr?: number;
 }
 
 export interface ChallongeTeamMapping {

@@ -29,7 +29,13 @@ os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
 import sqlalchemy as sa  # noqa: E402
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine  # noqa: E402
 
-from shared.core.enums import DraftPickStatus, DraftPlayerStatus, DraftRole, DraftStatus  # noqa: E402
+from shared.core.enums import (  # noqa: E402
+    DraftPickStatus,
+    DraftPlayerStatus,
+    DraftRole,
+    DraftStatus,
+    TournamentStatus,
+)
 from shared.core.errors import ApiHTTPException  # noqa: E402
 from shared.models.balancer.draft import DraftPick  # noqa: E402
 from shared.models.identity.user import User  # noqa: E402
@@ -137,10 +143,12 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
         ]
 
     def _players(self) -> list[lifecycle.PlayerSeed]:
-        roles = [DraftRole.TANK, DraftRole.DPS, DraftRole.SUPPORT]
+        # Captains default to TANK in this fixture. A 3-player roster therefore
+        # needs two DPS picks per team; keep enough DPS players for start preflight.
+        roles = [DraftRole.DPS] * 6 + [DraftRole.TANK, DraftRole.SUPPORT, DraftRole.SUPPORT]
         return [
-            lifecycle.PlayerSeed(primary_role=roles[i % 3], rank_value=3000 + i * 50, battle_tag=f"P{i}#1")
-            for i in range(9)
+            lifecycle.PlayerSeed(primary_role=role, rank_value=3000 + i * 50, battle_tag=f"P{i}#1")
+            for i, role in enumerate(roles)
         ]
 
     async def _new_session(self, s):
@@ -183,6 +191,28 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
             self.assertEqual(current.status, DraftPickStatus.ON_CLOCK.value)
             self.assertEqual(current.overall_no, 1)
             self.assertIsNotNone(current.clock_expires_at)
+
+    async def test_start_gated_on_tournament_draft_phase(self) -> None:
+        async def _set_status(s, status: TournamentStatus) -> None:
+            await s.execute(
+                sa.update(Tournament).values(status=status.value).where(Tournament.id == self.tournament_id)
+            )
+            await s.commit()
+
+        async with self.Session() as s:
+            draft = await self._new_session(s)
+            await _set_status(s, TournamentStatus.REGISTRATION)
+
+            with self.assertRaises(ApiHTTPException) as ctx:
+                await lifecycle.start(s, draft)
+            self.assertEqual(ctx.exception.status_code, 409)
+            self.assertEqual(ctx.exception.detail[0]["code"], "tournament_not_in_draft_phase")
+            self.assertEqual(draft.status, DraftStatus.READY.value)
+
+            await _set_status(s, TournamentStatus.DRAFT)
+            await lifecycle.start(s, draft)
+            await s.commit()
+            self.assertEqual(draft.status, DraftStatus.LIVE.value)
 
     async def test_select_advances_board(self) -> None:
         async with self.Session() as s:

@@ -1,3 +1,4 @@
+import { getTranslations } from "next-intl/server";
 import encounterService from "@/services/encounter.service";
 import type { Encounter, EncounterOverview } from "@/types/encounter.types";
 import type { PaginatedResponse } from "@/types/pagination.types";
@@ -96,6 +97,7 @@ function parseSearchParams(params: Record<string, string | undefined>): ParsedSe
 }
 
 async function EncountersContent({ page, filters }: ParsedSearchParams) {
+  const t = await getTranslations();
   const apiFilters = filtersToApiFilters(filters);
   let initialError: string | null = null;
   let data = emptyEncounters(page);
@@ -127,7 +129,7 @@ async function EncountersContent({ page, filters }: ParsedSearchParams) {
       encounterService.getOverview(filters.query, apiFilters),
     ]);
   } catch {
-    initialError = "Encounter data is temporarily unavailable. Retrying in the background.";
+    initialError = t("encounters.dataUnavailable");
   }
 
   return (

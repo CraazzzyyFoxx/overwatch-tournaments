@@ -60,8 +60,8 @@ function VariantCard({ variant, isActive, onSelect, onDelete, className }: Varia
       className={cn(
         "group rounded-xl border px-3 py-2 text-left transition",
         isActive
-          ? "border-primary/35 bg-primary/[0.12] text-white"
-          : "border-white/8 bg-white/[0.02] text-white/55 hover:bg-white/[0.05] hover:text-white",
+          ? "border-primary/35 bg-primary/[0.12] text-[color:var(--aqt-fg)]"
+          : "border-[color:var(--aqt-border)] bg-white/[0.02] text-[color:var(--aqt-fg-muted)] hover:bg-white/[0.05] hover:text-[color:var(--aqt-fg)]",
         className
       )}
     >
@@ -96,7 +96,7 @@ function VariantCard({ variant, isActive, onSelect, onDelete, className }: Varia
             className={cn(
               "flex items-center gap-1 text-[10px] font-semibold tabular-nums",
               offRoles === 0
-                ? "text-white/30"
+                ? "text-[color:var(--aqt-fg-dim)]"
                 : offRoleOptimal
                   ? "text-emerald-300/90"
                   : "text-orange-300/90"
@@ -113,7 +113,7 @@ function VariantCard({ variant, isActive, onSelect, onDelete, className }: Varia
             title="Sub-role collisions"
             className={cn(
               "flex items-center gap-1 text-[10px] font-semibold tabular-nums",
-              collisions > 0 ? "text-primary/90" : "text-white/30"
+              collisions > 0 ? "text-primary/90" : "text-[color:var(--aqt-fg-dim)]"
             )}
           >
             <Shuffle className="h-3 w-3" />
@@ -123,7 +123,7 @@ function VariantCard({ variant, isActive, onSelect, onDelete, className }: Varia
             title="Benched"
             className={cn(
               "flex items-center gap-1 text-[10px] font-semibold tabular-nums",
-              benched > 0 ? "text-rose-300/90" : "text-white/30"
+              benched > 0 ? "text-rose-300/90" : "text-[color:var(--aqt-fg-dim)]"
             )}
           >
             <UserX className="h-3 w-3" />
@@ -183,7 +183,7 @@ export function VariantSelector({
           variant="ghost"
           size="sm"
           onClick={() => setShowAll(true)}
-          className="shrink-0 self-center border border-white/8 bg-white/[0.02] text-white/70 hover:bg-white/[0.05] hover:text-white"
+          className="shrink-0 self-center border border-[color:var(--aqt-border)] bg-white/[0.02] text-[color:var(--aqt-fg-muted)] hover:bg-white/[0.05] hover:text-[color:var(--aqt-fg)]"
         >
           <LayoutGrid className="h-3.5 w-3.5" />
           Show all

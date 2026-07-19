@@ -1,0 +1,666 @@
+.room {
+  position: relative;
+  isolation: isolate;
+  min-height: 100svh;
+  overflow-x: clip;
+  color: var(--aqt-fg);
+  background:
+    radial-gradient(
+      circle at 78% -12%,
+      color-mix(in srgb, var(--aqt-teal) 9%, transparent),
+      transparent 34rem
+    ),
+    var(--aqt-bg);
+}
+
+.room::before {
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+  content: "";
+  opacity: 0.22;
+  background-image:
+    linear-gradient(var(--aqt-border) 1px, transparent 1px),
+    linear-gradient(90deg, var(--aqt-border) 1px, transparent 1px);
+  background-size: 64px 64px;
+  -webkit-mask-image: linear-gradient(to bottom, black, transparent 70%);
+  mask-image: linear-gradient(to bottom, black, transparent 70%);
+}
+
+.toolbar {
+  animation: toolbar-in 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.rail {
+  position: absolute;
+  inset-inline: 0;
+  bottom: -1px;
+  height: 1px;
+  overflow: hidden;
+  background: var(--aqt-border);
+}
+
+.rail::after {
+  position: absolute;
+  inset-block: 0;
+  left: -24%;
+  width: 24%;
+  content: "";
+  background: linear-gradient(90deg, transparent, var(--aqt-teal), transparent);
+  animation: signal-scan 4.8s ease-in-out infinite;
+}
+
+.stage {
+  /* `backwards` (not `both`): a forwards-filling animation that touches
+     `transform` keeps the element a containing block for `position: fixed`
+     descendants forever, which pinned the pick command bar to the bottom of
+     the page instead of the viewport. Backwards fill still hides the stage
+     during the 80ms delay, then releases the containing block on finish. */
+  animation: stage-in 650ms 80ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+
+.backArrow {
+  transition: transform 180ms ease;
+}
+
+.backLink:hover .backArrow,
+.backLink:focus-visible .backArrow {
+  transform: translateX(-3px);
+}
+
+.skeletonRoom {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: clip;
+}
+
+.skeletonToolbar {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  border-bottom: 1px solid var(--aqt-border);
+  background: color-mix(in srgb, var(--aqt-bg) 88%, transparent);
+  backdrop-filter: blur(20px);
+}
+
+.skeletonToolbarInner {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  max-width: 1600px;
+  min-height: 4rem;
+  align-items: center;
+  gap: 1rem;
+  margin-inline: auto;
+  padding-inline: clamp(1rem, 3vw, 2.5rem);
+}
+
+.skeletonBackAction {
+  display: flex;
+  width: 9.25rem;
+  min-width: 0;
+  min-height: 2.75rem;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 0.65rem;
+  padding-inline: 0.75rem;
+  border: 1px solid var(--aqt-border-2);
+  border-radius: 0.5rem;
+}
+
+.skeletonBackArrow {
+  width: 0.9rem;
+  height: 0.55rem;
+  flex: 0 0 auto;
+}
+
+.skeletonBackLabel {
+  width: 6rem;
+  height: 0.65rem;
+}
+
+.skeletonToolbarName {
+  display: grid;
+  min-width: 0;
+  gap: 0.4rem;
+  padding-left: 1rem;
+  border-left: 1px solid var(--aqt-border);
+}
+
+.skeletonMicrocopy,
+.skeletonMetricLabel {
+  width: 4.75rem;
+  height: 0.45rem;
+}
+
+.skeletonToolbarTitle {
+  width: min(15rem, 34vw);
+  height: 0.75rem;
+}
+
+.skeletonPublicIndicator {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: auto;
+}
+
+.skeletonSignal {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 999px;
+}
+
+.skeletonPublicLabel {
+  width: 5.75rem;
+  height: 0.5rem;
+}
+
+.skeletonStage {
+  width: 100%;
+  min-width: 0;
+  max-width: 1600px;
+  margin-inline: auto;
+  padding: clamp(1.25rem, 3vw, 2.5rem);
+}
+
+.skeletonBoardRegion {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.skeletonWorkspace {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  max-width: min(2000px, 96vw);
+  min-height: 44rem;
+  gap: 1.25rem;
+  margin-inline: auto;
+}
+
+.skeletonHero {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(20rem, 0.75fr);
+  min-width: 0;
+  gap: 2rem;
+  padding: 1.5rem 1.75rem;
+  overflow: hidden;
+  border-block: 1px solid var(--aqt-border);
+  background: color-mix(in srgb, var(--aqt-bg-2) 72%, transparent);
+}
+
+.skeletonHeroAccent {
+  position: absolute;
+  inset-block: 0;
+  left: 0;
+  width: 2px;
+  background: color-mix(in srgb, var(--aqt-teal) 45%, transparent);
+}
+
+.skeletonHeroCopy {
+  display: grid;
+  min-width: 0;
+  align-content: start;
+  gap: 0.65rem;
+}
+
+.skeletonHeroMeta,
+.skeletonHeroStamps,
+.skeletonCurrentPickActions,
+.skeletonFilterRail {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.skeletonEyebrow {
+  width: 8.5rem;
+  height: 0.5rem;
+}
+
+.skeletonStatusPill {
+  width: 4.5rem;
+  height: 1.75rem;
+  border-radius: 0.5rem;
+}
+
+.skeletonHeroTitle {
+  width: min(30rem, 84%);
+  height: clamp(2rem, 5vw, 3rem);
+}
+
+.skeletonHeroLede,
+.skeletonHeroLedeShort {
+  height: 0.7rem;
+}
+
+.skeletonHeroLede {
+  width: min(34rem, 92%);
+}
+
+.skeletonHeroLedeShort {
+  width: min(25rem, 68%);
+}
+
+.skeletonHeroStamps {
+  margin-top: 0.4rem;
+}
+
+.skeletonHeroStamps > * {
+  width: 5rem;
+  height: 1.5rem;
+}
+
+.skeletonStatusSummary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  min-width: 0;
+  align-items: end;
+  gap: 1rem;
+  padding-left: 1.75rem;
+  border-left: 1px solid var(--aqt-border);
+}
+
+.skeletonMetric {
+  display: grid;
+  min-width: 0;
+  gap: 0.65rem;
+}
+
+.skeletonMetricValue {
+  width: 70%;
+  height: 1.65rem;
+}
+
+.skeletonConnectionRail {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  min-height: 2.75rem;
+  padding-inline: 0.25rem;
+  border-block: 1px solid var(--aqt-border);
+}
+
+.skeletonConnectionState {
+  width: 8rem;
+  height: 0.65rem;
+}
+
+.skeletonConnectionMeta {
+  width: 10rem;
+  height: 0.55rem;
+}
+
+.skeletonCurrentPick {
+  display: flex;
+  min-width: 0;
+  min-height: 11rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  padding: 1.25rem;
+  border: 1px solid var(--aqt-border-2);
+  border-left: 2px solid color-mix(in srgb, var(--aqt-teal) 55%, transparent);
+  border-radius: 1rem;
+  background: var(--aqt-card);
+}
+
+.skeletonCurrentPickCopy {
+  display: grid;
+  min-width: 0;
+  flex: 1 1 auto;
+  gap: 0.75rem;
+}
+
+.skeletonCurrentPickTitle {
+  width: min(24rem, 76%);
+  height: 2rem;
+}
+
+.skeletonCurrentPickHint {
+  width: min(31rem, 90%);
+  height: 0.65rem;
+}
+
+.skeletonCurrentPickActions > * {
+  width: 6.5rem;
+  height: 2.25rem;
+}
+
+.skeletonTimer {
+  position: relative;
+  display: grid;
+  width: 5.5rem;
+  height: 5.5rem;
+  flex: 0 0 auto;
+  place-items: center;
+}
+
+.skeletonTimerRing {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0.4rem solid var(--aqt-border-2);
+  border-radius: 999px;
+  background: transparent;
+}
+
+.skeletonTimerValue {
+  width: 2rem;
+  height: 1.15rem;
+}
+
+.skeletonWorkspaceGrid {
+  display: grid;
+  grid-template-columns: minmax(12rem, 0.8fr) minmax(18rem, 1.4fr) minmax(12rem, 0.8fr);
+  grid-template-areas: "left board right";
+  min-width: 0;
+  gap: 1.25rem;
+}
+
+.skeletonWorkspaceColumn {
+  min-width: 0;
+  padding: 1rem;
+  border: 1px solid var(--aqt-border);
+  border-radius: 0.75rem;
+  background: color-mix(in srgb, var(--aqt-card) 88%, transparent);
+}
+
+.skeletonRosterColumn[data-draft-skeleton="roster-left"] {
+  grid-area: left;
+}
+
+.skeletonWorkspaceColumn[data-draft-skeleton="board"] {
+  grid-area: board;
+}
+
+.skeletonRosterColumn[data-draft-skeleton="roster-right"] {
+  grid-area: right;
+}
+
+.skeletonColumnHeading,
+.skeletonBoardHeading {
+  display: flex;
+  min-width: 0;
+  align-items: end;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding-bottom: 0.85rem;
+  border-bottom: 1px solid var(--aqt-border);
+}
+
+.skeletonColumnHeading > div,
+.skeletonBoardHeading > div {
+  display: grid;
+  min-width: 0;
+  gap: 0.45rem;
+}
+
+.skeletonColumnTitle,
+.skeletonBoardTitle {
+  width: 7rem;
+  height: 1rem;
+}
+
+.skeletonRosterPosition,
+.skeletonBoardCount {
+  width: 2.25rem;
+  height: 1.25rem;
+}
+
+.skeletonSlotStack,
+.skeletonBoardRows {
+  display: grid;
+}
+
+.skeletonPickSlot {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  min-width: 0;
+  min-height: 4.25rem;
+  align-items: center;
+  gap: 0.75rem;
+  padding-block: 0.65rem;
+  border-bottom: 1px solid var(--aqt-border);
+}
+
+.skeletonPickSlot:last-child {
+  border-bottom: 0;
+}
+
+.skeletonPickSlotCompact {
+  min-height: 3.75rem;
+}
+
+.skeletonSlotBadge {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+}
+
+.skeletonSlotCopy {
+  display: grid;
+  min-width: 0;
+  gap: 0.45rem;
+}
+
+.skeletonSlotName {
+  width: 82%;
+  height: 0.7rem;
+}
+
+.skeletonSlotMeta {
+  width: 56%;
+  height: 0.5rem;
+}
+
+.skeletonSlotRole {
+  width: 2.4rem;
+  height: 1.15rem;
+}
+
+.skeletonFilterRail {
+  padding-block: 0.85rem;
+  overflow: hidden;
+}
+
+.skeletonSearch {
+  width: min(16rem, 62%);
+  height: 2.25rem;
+}
+
+.skeletonFilter {
+  width: 4rem;
+  height: 2.25rem;
+}
+
+.skeletonBlock {
+  display: block;
+  min-width: 0;
+  border: 1px solid hsl(217 17% 21% / 0.45);
+  border-radius: 0.4rem;
+  background:
+    linear-gradient(105deg, transparent 32%, hsl(172 70% 49% / 0.08) 48%, transparent 64%),
+    hsl(220 22% 11% / 0.82);
+  background-size:
+    240% 100%,
+    100% 100%;
+  animation: draft-skeleton-sweep 1.8s ease-in-out infinite;
+}
+
+@keyframes toolbar-in {
+  from {
+    opacity: 0;
+    transform: translateY(-12px);
+  }
+}
+
+@keyframes stage-in {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+}
+
+@keyframes signal-scan {
+  0%,
+  16% {
+    transform: translateX(0);
+  }
+  70%,
+  100% {
+    transform: translateX(520%);
+  }
+}
+
+@keyframes draft-skeleton-sweep {
+  from {
+    background-position:
+      125% 0,
+      0 0;
+  }
+  to {
+    background-position:
+      -125% 0,
+      0 0;
+  }
+}
+
+@media (max-width: 960px) {
+  .skeletonHero {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .skeletonStatusSummary {
+    padding-top: 1.25rem;
+    padding-left: 0;
+    border-top: 1px solid var(--aqt-border);
+    border-left: 0;
+  }
+
+  .skeletonWorkspaceGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-areas:
+      "board board"
+      "left right";
+  }
+}
+
+@media (max-width: 640px) {
+  .skeletonToolbarInner {
+    gap: 1rem;
+    padding-inline: 1rem;
+  }
+
+  .skeletonBackAction {
+    width: 6rem;
+    min-width: 6rem;
+    flex: 0 0 6rem;
+    justify-content: flex-start;
+    gap: 0.5rem;
+    padding-inline: 0.75rem;
+  }
+
+  .skeletonBackLabel {
+    display: block;
+    width: 2.75rem;
+  }
+
+  .skeletonPublicIndicator {
+    display: none;
+  }
+
+  .skeletonToolbarName {
+    padding-left: 1rem;
+  }
+
+  .skeletonToolbarTitle {
+    width: min(10rem, 48vw);
+  }
+
+  .skeletonStage {
+    padding: 1rem;
+  }
+
+  .skeletonWorkspace {
+    min-height: 58rem;
+    gap: 1rem;
+  }
+
+  .skeletonHero {
+    gap: 1.25rem;
+    padding: 1.25rem 1rem;
+  }
+
+  .skeletonHeroTitle {
+    width: 88%;
+  }
+
+  .skeletonHeroStamps {
+    gap: 0.45rem;
+  }
+
+  .skeletonHeroStamps > * {
+    width: min(4.5rem, 27vw);
+  }
+
+  .skeletonStatusSummary {
+    gap: 0.65rem;
+  }
+
+  .skeletonConnectionMeta {
+    width: 6rem;
+  }
+
+  .skeletonCurrentPick {
+    align-items: flex-start;
+    padding: 1rem;
+  }
+
+  .skeletonCurrentPickActions > *:last-child {
+    display: none;
+  }
+
+  .skeletonTimer {
+    width: 4.5rem;
+    height: 4.5rem;
+  }
+
+  .skeletonWorkspaceGrid {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "board"
+      "left"
+      "right";
+  }
+
+  .skeletonWorkspaceColumn {
+    padding: 0.85rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toolbar,
+  .stage,
+  .rail::after {
+    animation: none;
+  }
+
+  .backArrow {
+    transition: none;
+  }
+
+  .skeletonBlock {
+    animation: none;
+    background: hsl(220 22% 11% / 0.82);
+  }
+}

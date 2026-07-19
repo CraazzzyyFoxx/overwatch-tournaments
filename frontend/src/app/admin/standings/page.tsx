@@ -17,7 +17,7 @@ import tournamentService from "@/services/tournament.service";
 import adminService from "@/services/admin.service";
 import { Standings } from "@/types/tournament.types";
 import { StandingUpdateInput } from "@/types/admin.types";
-import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/components/ui/number-input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -307,8 +307,8 @@ export default function StandingsPage() {
       accessorKey: "buchholz",
       header: "BH",
       cell: ({ row }) => {
-        const bh = row.getValue<number | null>("buchholz");
-        return bh !== null ? (
+        const bh = row.getValue<number | null | undefined>("buchholz");
+        return bh != null ? (
           <div className="text-center text-sm">{bh.toFixed(2)}</div>
         ) : (
           <div className="text-center">—</div>
@@ -319,8 +319,8 @@ export default function StandingsPage() {
       accessorKey: "tb",
       header: "TB",
       cell: ({ row }) => {
-        const tb = row.getValue<number | null>("tb");
-        return tb !== null ? (
+        const tb = row.getValue<number | null | undefined>("tb");
+        return tb != null ? (
           <div className="text-center text-sm">{tb}</div>
         ) : (
           <div className="text-center">—</div>
@@ -486,58 +486,56 @@ export default function StandingsPage() {
         <div className="space-y-4">
           <div>
             <Label htmlFor="position">Position</Label>
-            <Input
+            <NumberInput
               id="position"
-              type="number"
+              integer
               value={formData.position}
-              onChange={(e) => setFormData({ ...formData, position: parseInt(e.target.value) })}
-              min="1"
+              onValueChange={(next) => setFormData({ ...formData, position: next ?? 0 })}
+              min={1}
             />
           </div>
 
           <div>
             <Label htmlFor="points">Points</Label>
-            <Input
+            <NumberInput
               id="points"
-              type="number"
-              step="0.5"
               value={formData.points}
-              onChange={(e) => setFormData({ ...formData, points: parseFloat(e.target.value) })}
-              min="0"
+              onValueChange={(next) => setFormData({ ...formData, points: next ?? 0 })}
+              min={0}
             />
           </div>
 
           <div className="grid grid-cols-3 gap-4">
             <div>
               <Label htmlFor="win">Wins</Label>
-              <Input
+              <NumberInput
                 id="win"
-                type="number"
+                integer
                 value={formData.win}
-                onChange={(e) => setFormData({ ...formData, win: parseInt(e.target.value) })}
-                min="0"
+                onValueChange={(next) => setFormData({ ...formData, win: next ?? 0 })}
+                min={0}
               />
             </div>
 
             <div>
               <Label htmlFor="draw">Draws</Label>
-              <Input
+              <NumberInput
                 id="draw"
-                type="number"
+                integer
                 value={formData.draw}
-                onChange={(e) => setFormData({ ...formData, draw: parseInt(e.target.value) })}
-                min="0"
+                onValueChange={(next) => setFormData({ ...formData, draw: next ?? 0 })}
+                min={0}
               />
             </div>
 
             <div>
               <Label htmlFor="lose">Losses</Label>
-              <Input
+              <NumberInput
                 id="lose"
-                type="number"
+                integer
                 value={formData.lose}
-                onChange={(e) => setFormData({ ...formData, lose: parseInt(e.target.value) })}
-                min="0"
+                onValueChange={(next) => setFormData({ ...formData, lose: next ?? 0 })}
+                min={0}
               />
             </div>
           </div>
@@ -545,23 +543,21 @@ export default function StandingsPage() {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <Label htmlFor="buchholz">Buchholz (median)</Label>
-              <Input
+              <NumberInput
                 id="buchholz"
-                type="number"
-                step="0.01"
                 value={formData.buchholz ?? 0}
-                onChange={(e) => setFormData({ ...formData, buchholz: parseFloat(e.target.value) })}
+                onValueChange={(next) => setFormData({ ...formData, buchholz: next ?? 0 })}
               />
             </div>
 
             <div>
               <Label htmlFor="tb">Head-to-Head (TB)</Label>
-              <Input
+              <NumberInput
                 id="tb"
-                type="number"
+                integer
                 value={formData.tb ?? 0}
-                onChange={(e) => setFormData({ ...formData, tb: parseInt(e.target.value) })}
-                min="0"
+                onValueChange={(next) => setFormData({ ...formData, tb: next ?? 0 })}
+                min={0}
               />
             </div>
           </div>

@@ -1,9 +1,12 @@
 import React from "react";
+import { getTranslations } from "next-intl/server";
 import { Swords } from "lucide-react";
 import Link from "next/link";
 import { CardSurface } from "@/app/(site)/users/components/shared/atoms";
 import MatchLogIndicator from "@/components/match/MatchLogIndicator";
+import { HeroStrip } from "@/components/hero/HeroImage";
 import { EncounterWithUserStats, UserTournament } from "@/types/user.types";
+import { Hero } from "@/types/hero.types";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -18,38 +21,46 @@ const getStageLabel = (encounter: EncounterWithUserStats): string => {
 
 const getTeamLabels = (
   encounter: EncounterWithUserStats,
-  userTeamId: number | undefined
+  userTeamId: number | undefined,
+  homeFallback: string,
+  awayFallback: string
 ): { home: string; away: string; isUserHome: boolean } => {
   const homeTeam = encounter.home_team;
   const awayTeam = encounter.away_team;
-  const home = homeTeam?.name ?? "Home";
-  const away = awayTeam?.name ?? "Away";
+  const home = homeTeam?.name ?? homeFallback;
+  const away = awayTeam?.name ?? awayFallback;
   const isUserHome = userTeamId != null && encounter.home_team_id === userTeamId;
   return { home, away, isUserHome };
 };
 
-const OverviewRecentEncounters = ({ encounters, userName, tournaments }: Props) => {
+const OverviewRecentEncounters = async ({ encounters, userName, tournaments }: Props) => {
   if (encounters.length === 0) return null;
+  const t = await getTranslations();
   const userSlug = userName.replace("#", "-");
-  const teamIdByTournament = new Map(tournaments.map((t) => [t.id, t.team_id]));
+  const teamIdByTournament = new Map(tournaments.map((tour) => [tour.id, tour.team_id]));
 
   return (
     <CardSurface
       flush
-      title="Recent encounters"
+      title={t("users.overview.recent.title")}
       icon={<Swords size={15} />}
       action={
         <Link href={`/users/${userSlug}?tab=matches`} className="aqt-seeall">
-          All matches →
+          {t("users.overview.recent.allMatches")} →
         </Link>
       }
     >
       {encounters.map((enc) => {
         const userTeamId = enc.tournament ? teamIdByTournament.get(enc.tournament.id) : undefined;
-        const { home, away, isUserHome } = getTeamLabels(enc, userTeamId);
+        const { home, away, isUserHome } = getTeamLabels(
+          enc,
+          userTeamId,
+          t("common.homeTeam"),
+          t("common.awayTeam")
+        );
         const stage = getStageLabel(enc);
-        const t = enc.tournament;
-        const tournamentLabel = t ? (t.number ? `T${t.number}` : t.name.slice(0, 3)) : "T?";
+        const tour = enc.tournament;
+        const tournamentLabel = tour ? (tour.number ? `T${tour.number}` : tour.name.slice(0, 3)) : "T?";
         const score = enc.score;
         const scoreKind = score.home === score.away ? "draw" : (isUserHome ? score.home > score.away : score.away > score.home) ? "win" : "loss";
         const scoreStr = `${score.home} - ${score.away}`;
@@ -63,13 +74,27 @@ const OverviewRecentEncounters = ({ encounters, userName, tournaments }: Props) 
           return "draw";
         });
         const stageShort = stage ? stage.split(" ")[0] : "";
-        const subText = `${stage || "BO" + (enc.best_of || "?")} · ${enc.matches?.length || 0} maps`;
+        const subLabel = stage || `BO${enc.best_of || "?"}`;
+        const mapCount = enc.matches?.length || 0;
+
+        // The viewer's unique heroes across this encounter's matches
+        // (match `heroes` are already the viewer's). Deduped by image/name;
+        // no popover — match-history heroes have no per-hero user stats
+        // (design-book §11).
+        const heroMap = new Map<string, Hero>();
+        for (const m of enc.matches ?? []) {
+          for (const h of m.heroes ?? []) {
+            const heroKey = h.image_path || h.name;
+            if (!heroMap.has(heroKey)) heroMap.set(heroKey, h);
+          }
+        }
+        const encHeroes = Array.from(heroMap.values());
 
         return (
           <Link
             key={enc.id}
             href={`/encounters/${enc.id}`}
-            className="grid cursor-pointer grid-cols-[auto_1fr_auto_auto_auto] items-center gap-3 border-b border-[color:var(--aqt-border)] px-4 py-3 transition-colors last:border-b-0 hover:bg-[hsl(0_0%_100%/0.02)]"
+            className="grid cursor-pointer grid-cols-[auto_1fr_auto_auto_auto] items-center gap-3 border-b border-[color:var(--aqt-border)] px-4 py-3 transition-colors last:border-b-0 hover:bg-[hsl(0_0%_100%/0.02)] sm:grid-cols-[auto_1fr_auto_auto_auto_auto]"
           >
             <span className="aqt-mono min-w-[42px] text-[11px] uppercase tracking-[0.08em] text-[color:var(--aqt-fg-faint)]">
               {tournamentLabel}{stageShort ? `·${stageShort.charAt(0)}` : ""}
@@ -77,11 +102,18 @@ const OverviewRecentEncounters = ({ encounters, userName, tournaments }: Props) 
             <div className="flex flex-col gap-0.5 leading-tight">
               <div className="text-[14px] font-semibold text-[color:var(--aqt-fg)]">
                 {isUserHome ? <em className="not-italic" style={{ color: "var(--aqt-teal)" }}>{home}</em> : home}
-                {" vs "}
+                {" "}
+                {t("common.vs")}
+                {" "}
                 {!isUserHome ? <em className="not-italic" style={{ color: "var(--aqt-teal)" }}>{away}</em> : away}
               </div>
-              <div className="text-[12px] text-[color:var(--aqt-fg-dim)]">{subText}</div>
+              <div className="text-[12px] text-[color:var(--aqt-fg-dim)]">
+                {subLabel} · {t("users.overview.mapsCount", { count: mapCount })}
+              </div>
             </div>
+            <span className="hidden items-center sm:inline-flex">
+              {encHeroes.length > 0 ? <HeroStrip heroes={encHeroes} size="sm" limit={4} /> : null}
+            </span>
             <span className="inline-flex gap-[3px]">
               {pips.map((p, i) => (
                 <span key={i} className={cn("aqt-pip", p)} />

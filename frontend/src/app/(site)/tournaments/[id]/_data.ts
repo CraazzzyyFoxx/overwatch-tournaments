@@ -1,11 +1,36 @@
 import { cache } from "react";
 
+import { isNotFoundError } from "@/lib/api-error";
 import tournamentService from "@/services/tournament.service";
+import type { Tournament } from "@/types/tournament.types";
 
-export const getTournament = cache(async (tournamentId: number) => {
-  return tournamentService.get(tournamentId);
-});
+export type TournamentOverviewState =
+  { kind: "success"; overview: Tournament } | { kind: "not-found" } | { kind: "error" };
 
-export const getTournamentStages = cache(async (tournamentId: number) => {
-  return tournamentService.getStages(tournamentId);
+const CANONICAL_TOURNAMENT_ID = /^[1-9]\d*$/;
+
+export function parseCanonicalTournamentId(rawTournamentId: string): number | null {
+  if (!CANONICAL_TOURNAMENT_ID.test(rawTournamentId)) {
+    return null;
+  }
+
+  const tournamentId = Number(rawTournamentId);
+  return Number.isSafeInteger(tournamentId) ? tournamentId : null;
+}
+
+async function loadTournamentOverviewState(tournamentId: number): Promise<TournamentOverviewState> {
+  if (!Number.isSafeInteger(tournamentId) || tournamentId <= 0) {
+    return { kind: "not-found" };
+  }
+
+  try {
+    const overview = await tournamentService.getPublicOverview(tournamentId);
+    return { kind: "success", overview };
+  } catch (error) {
+    return isNotFoundError(error) ? { kind: "not-found" } : { kind: "error" };
+  }
+}
+
+export const getTournamentOverviewState = cache(async (tournamentId: number) => {
+  return loadTournamentOverviewState(tournamentId);
 });

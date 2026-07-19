@@ -9,8 +9,8 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { useTranslation } from "@/i18n/LanguageContext";
-import { isAnomalyGlossaryTerm } from "../analytics-glossary";
+import { useTranslations } from "next-intl";
+import { GlossaryTerm, isAnomalyGlossaryTerm } from "../analytics-glossary";
 
 interface AnomalyTooltipProps {
   /** Anomaly kind (``smurf`` / ``throw`` / ``troll`` / ``sandbag``); arbitrary strings fall back to a capitalized label. */
@@ -46,10 +46,10 @@ export default function AnomalyTooltip({
   focusable = true,
   side = "top",
 }: AnomalyTooltipProps) {
-  const { t } = useTranslation();
+  const t = useTranslations();
   const isKnown = isAnomalyGlossaryTerm(kind);
-  const label = isKnown ? t(`analytics.glossary.${kind}.label`) : capitalize(kind);
-  const plain = isKnown ? t(`analytics.glossary.${kind}.plain`) : null;
+  const label = isKnown ? t(`analytics.glossary.${kind as GlossaryTerm}.label`) : capitalize(kind);
+  const plain = isKnown ? t(`analytics.glossary.${kind as GlossaryTerm}.plain`) : null;
 
   // Backend emits reason CODES (e.g. "top_impact"); localise them. Legacy raw
   // dev-strings (e.g. "impact_score=82.3 >= p80", "deterministic review rule")
@@ -59,7 +59,9 @@ export default function AnomalyTooltip({
       const trimmed = (code ?? "").trim();
       if (!trimmed) return null;
       const key = `analytics.anomalyReason.${trimmed}`;
-      const localised = t(key);
+      // Runtime-dynamic reason code: assert it's a valid message key (next-intl
+      // types keys as literal unions; the missing-key fallback below still runs).
+      const localised = t(key as Parameters<typeof t>[0]);
       if (localised !== key) return localised;
       // Unknown / legacy: drop anything that looks like a raw metric expression.
       if (/[=<>]|\brule\b|\banomaly\b|\bmethod\b|changepoint|rolling|\bp\d/i.test(trimmed)) {

@@ -117,6 +117,9 @@ OPERATIONS: dict[str, Op] = {
     "rpc.tournament.tournament_status": Op(
         request=admin_tournament.TournamentStatusTransition, response=schemas.TournamentRead
     ),
+    "rpc.tournament.tournament_schedule_set": Op(
+        request=admin_tournament.TournamentScheduleSet, response=schemas.TournamentRead
+    ),
     "rpc.tournament.standing_recalculate": Op(response=TournamentComputationJobRead),
     # ── bespoke: stage workflow ────────────────────────────────────────────
     "rpc.tournament.stage_merge": Op(request=admin_stage.MergeGroupStagesRequest, response=schemas.StageRead),
@@ -186,6 +189,9 @@ OPERATIONS: dict[str, Op] = {
         request=admin_balancer.SetBalancerStatusRequest, response=admin_balancer.BalancerRegistrationRead
     ),
     "rpc.tournament.reg_bulk_add_balancer": Op(response=admin_balancer.BulkBalancerStatusResponse),
+    "rpc.tournament.reg_bulk_exclusion": Op(
+        request=admin_balancer.BulkExclusionRequest, response=admin_balancer.BulkExclusionResponse
+    ),
     "rpc.tournament.reg_rank_autofill_preview": Op(
         request=admin_balancer.BalancerRegistrationRankAutofillRequest,
         response=admin_balancer.BalancerRegistrationRankAutofillResponse,

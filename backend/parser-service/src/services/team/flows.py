@@ -244,39 +244,6 @@ async def create_player(
     )
 
 
-async def create(
-    session: AsyncSession,
-    *,
-    name: str,
-    balancer_name: str,
-    avg_sr: float,
-    total_sr: int,
-    tournament: models.Tournament,
-    captain: models.User,
-) -> models.Team:
-    if await service.get_by_name_and_tournament(session, tournament.id, name, []):
-        raise errors.ApiHTTPException(
-            status_code=400,
-            detail=[
-                errors.ApiExc(
-                    code="already_exists",
-                    msg=f"Team with name {name} already exists in tournament "
-                    f"[id={tournament.id}, number={tournament.number}].",
-                )
-            ],
-        )
-
-    return await service.create(
-        session,
-        name=name,
-        balancer_name=balancer_name,
-        avg_sr=avg_sr,
-        total_sr=total_sr,
-        tournament=tournament,
-        captain=captain,
-    )
-
-
 async def _bulk_resolve_users_by_battle_tags(session: AsyncSession, battle_tags: list[str]) -> dict[str, models.User]:
     """Resolve every tag in 1-2 queries and fail like ``find_by_battle_tag``.
 
@@ -369,8 +336,6 @@ async def bulk_create_from_balancer(
             team = models.Team(
                 name=name,
                 balancer_name=team_data.name,
-                avg_sr=team_data.avg_sr,
-                total_sr=team_data.total_sr,
                 tournament_id=tournament.id,
                 captain_id=captain.id,
             )

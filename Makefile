@@ -1,14 +1,26 @@
 .PHONY: help dev-build dev-up dev-up-full dev-down dev-restart dev-logs dev-ps dev-health dev-rebuild \
-	prod-build prod-up prod-down prod-logs migrate test clean \
+	prod-build prod-up prod-down prod-logs prod-scale migrate test clean \
 	build up down restart logs ps health build-prod up-prod down-prod logs-prod \
 	app-logs identity-logs parser-logs frontend-logs discord-logs balancer-logs \
 	app-restart identity-restart parser-restart frontend-restart \
 	monitoring-up monitoring-down monitoring-logs monitoring-ps \
-	app-rebuild identity-rebuild parser-rebuild frontend-rebuild
+	app-rebuild identity-rebuild parser-rebuild frontend-rebuild \
+	loadtest loadtest-ui
 
 COMPOSE = docker compose
 PROD_COMPOSE = docker compose -f docker-compose.production.yml
 MONITORING_COMPOSE = docker compose -f docker-compose.monitoring.yml
+
+# Workers safe to replicate: RabbitMQ competing-consumers spread RPC calls + jobs
+# across replicas automatically, cache lives in shared Redis, DB access goes via
+# pgBouncer. balancer-svc is safe too (its draft clock is guarded by a per-draft
+# Redis lock — shared/services/distributed_lock.py — so only one replica drives
+# each live draft); kept out of the default because each replica reserves ~4 CPU.
+# Do NOT scale analytics-worker: it starts an APScheduler on every replica
+# (scheduled jobs would multi-fire) and its jobs aren't idempotent — it needs
+# leader-election first. Override on the CLI, e.g.
+#   make prod-scale PROD_SCALE='app-svc=3 balancer-svc=2'
+PROD_SCALE ?= app-svc=2 identity-svc=2
 
 help:
 	@echo "Available commands:"
@@ -25,6 +37,7 @@ help:
 	@echo "  make prod-up        - Start production stack (app only, no monitoring)"
 	@echo "  make prod-down      - Stop production stack"
 	@echo "  make prod-logs      - Follow production logs"
+	@echo "  make prod-scale     - Scale stateless RPC workers (PROD_SCALE='app-svc=3 ...')"
 	@echo ""
 	@echo "  make monitoring-up  - Start monitoring stack (requires prod-up first)"
 	@echo "  make monitoring-down- Stop monitoring stack"
@@ -74,11 +87,34 @@ prod-down:
 prod-logs:
 	$(PROD_COMPOSE) logs -f
 
+# Horizontally scale the stateless RPC workers in $(PROD_SCALE). RabbitMQ
+# competing-consumers distribute RPC calls across replicas with no extra config.
+# PREREQUISITE: enable pgBouncer first (DB_PGBOUNCER=true, see
+# backend/env/common.env.example) or the replicas will exhaust Postgres
+# connections. Scale back down by passing =1, e.g. PROD_SCALE='app-svc=1'.
+prod-scale:
+	$(PROD_COMPOSE) up -d --wait $(foreach s,$(PROD_SCALE),--scale $(s))
+
 migrate:
 	$(COMPOSE) exec app-svc alembic upgrade head
 
 test:
 	$(COMPOSE) exec app-svc pytest
+
+
+# Locust load tests against the running edge (see loadtests/README.md).
+# loadtest-ui opens the web UI on :8089; loadtest runs headless.
+# Override e.g.: make loadtest LOAD_USERS=200 LOAD_TIME=10m LOAD_HOST=https://staging.example.com
+LOAD_USERS ?= 50
+LOAD_RATE ?= 5
+LOAD_TIME ?= 5m
+LOAD_HOST ?= http://localhost
+
+loadtest:
+	cd loadtests && uv run locust --headless -u $(LOAD_USERS) -r $(LOAD_RATE) -t $(LOAD_TIME) --host $(LOAD_HOST) --csv results --html report.html
+
+loadtest-ui:
+	cd loadtests && uv run locust --host $(LOAD_HOST)
 
 clean:
 	$(COMPOSE) down -v --remove-orphans

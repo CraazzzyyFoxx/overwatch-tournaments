@@ -1,11 +1,12 @@
 "use client";
 
-import Image from "next/image";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { RefreshCw } from "lucide-react";
+import { useTranslations } from "next-intl";
+import { CardSurface } from "@/app/(site)/users/components/shared/atoms";
+import HeroImage from "@/components/hero/HeroImage";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CompareRow } from "@/app/(site)/users/compare/types";
-import { formatDuration, formatMetricValue, formatPercent, getGlowVarsFromColor } from "@/app/(site)/users/compare/utils";
-import GlassGlow from "@/app/(site)/users/compare/components/GlassGlow";
+import { formatDuration, formatMetricValue } from "@/app/(site)/users/compare/utils";
 import TrendDelta from "@/app/(site)/users/compare/components/TrendDelta";
 
 interface HeroInfo {
@@ -21,7 +22,9 @@ interface CompareUnifiedTableProps {
   baselineName: string;
   rows: CompareRow[];
   loading: boolean;
+  refreshing?: boolean;
   errorMessage?: string;
+  onRetry?: () => void;
   isHeroScope: boolean;
   isTargetBaseline: boolean;
   subjectHero?: HeroInfo;
@@ -59,90 +62,80 @@ const getRowWinner = (row: CompareRow): "left" | "right" | "tie" => {
   return "tie";
 };
 
+/* Winner bar (emerald wash) vs neutral bar. */
+const WINNER_BAR = "bg-[color:color-mix(in_srgb,var(--aqt-emerald)_55%,transparent)]";
+const NEUTRAL_BAR = "bg-[hsl(0_0%_100%/0.14)]";
+
 /* ------------------------------------------------------------------ */
 /*  Metric row                                                         */
 /* ------------------------------------------------------------------ */
 
-const CompareMetricRow = ({
-  row,
-  showPercentile
-}: {
-  row: CompareRow;
-  showPercentile: boolean;
-}) => {
+const CompareMetricRow = ({ row }: { row: CompareRow }) => {
   const { leftPercent, rightPercent } = computeBarPercents(row.subjectValue, row.baselineValue);
   const winner = getRowWinner(row);
 
-  const leftBarColor =
-    winner === "left"
-      ? "bg-emerald-500/60"
-      : winner === "tie"
-        ? "bg-zinc-500/40"
-        : "bg-zinc-500/30";
+  const leftBarColor = winner === "left" ? WINNER_BAR : NEUTRAL_BAR;
+  const rightBarColor = winner === "right" ? WINNER_BAR : NEUTRAL_BAR;
 
-  const rightBarColor =
-    winner === "right"
-      ? "bg-emerald-500/60"
-      : winner === "tie"
-        ? "bg-zinc-500/40"
-        : "bg-zinc-500/30";
-
-  const leftValueClass = winner === "left" ? "text-emerald-400 font-semibold" : "text-foreground";
-  const rightValueClass = winner === "right" ? "text-emerald-400 font-semibold" : "text-foreground";
+  const leftValueStyle =
+    winner === "left" ? { color: "var(--aqt-emerald)" } : { color: "var(--aqt-fg)" };
+  const rightValueStyle =
+    winner === "right" ? { color: "var(--aqt-emerald)" } : { color: "var(--aqt-fg)" };
 
   return (
-    <div className="group flex items-center gap-3 rounded-lg px-3 py-3 transition-colors hover:bg-muted/20">
+    <tr className="border-b border-[color:var(--aqt-border)] last:border-b-0 hover:bg-[hsl(0_0%_100%/0.02)]">
       {/* Metric name */}
-      <span className="w-52 shrink-0 truncate text-base font-medium text-foreground" title={row.label}>
+      <td
+        className="px-3.5 py-2.5 text-[13.5px] font-medium text-[color:var(--aqt-fg)]"
+        title={row.label}
+      >
         {row.label}
-      </span>
+      </td>
 
-      {/* Bars */}
-      <div className="mx-auto flex w-full max-w-200 items-center gap-2">
-        {/* Left value */}
-        <span className={`w-18 shrink-0 text-right text-sm tabular-nums ${leftValueClass}`}>
-          {formatMetricValue(row.subjectValue)}
-        </span>
+      {/* Subject value */}
+      <td
+        className={`aqt-mono px-2 py-2.5 text-right text-[13px] tabular-nums whitespace-nowrap ${winner === "left" ? "font-bold" : ""}`}
+        style={leftValueStyle}
+      >
+        {formatMetricValue(row.subjectValue)}
+      </td>
 
-        {/* Left bar (grows right-to-left) */}
-        <div className="flex h-3.5 flex-1 justify-end overflow-hidden rounded-l-sm bg-muted/15">
-          <div
-            className={`h-full rounded-l-sm transition-all duration-500 ${leftBarColor}`}
-            style={{ width: `${leftPercent}%` }}
-          />
+      {/* Twin bars */}
+      <td className="px-2 py-2.5">
+        <div className="mx-auto flex w-full min-w-[140px] max-w-[240px] items-center gap-1.5">
+          <div className="flex h-2.5 flex-1 justify-end overflow-hidden rounded-l-sm bg-[hsl(0_0%_100%/0.04)]">
+            <div
+              className={`h-full rounded-l-sm transition-all duration-500 ${leftBarColor}`}
+              style={{ width: `${leftPercent}%` }}
+            />
+          </div>
+          <div className="h-2.5 w-px shrink-0 bg-[color:var(--aqt-border)]" />
+          <div className="flex h-2.5 flex-1 justify-start overflow-hidden rounded-r-sm bg-[hsl(0_0%_100%/0.04)]">
+            <div
+              className={`h-full rounded-r-sm transition-all duration-500 ${rightBarColor}`}
+              style={{ width: `${rightPercent}%` }}
+            />
+          </div>
         </div>
+      </td>
 
-        {/* Divider */}
-        <div className="h-3.5 w-px shrink-0 bg-border/60" />
+      {/* Baseline value */}
+      <td
+        className={`aqt-mono px-2 py-2.5 text-left text-[13px] tabular-nums whitespace-nowrap ${winner === "right" ? "font-bold" : ""}`}
+        style={rightValueStyle}
+      >
+        {formatMetricValue(row.baselineValue)}
+      </td>
 
-        {/* Right bar (grows left-to-right) */}
-        <div className="flex h-3.5 flex-1 justify-start overflow-hidden rounded-r-sm bg-muted/15">
-          <div
-            className={`h-full rounded-r-sm transition-all duration-500 ${rightBarColor}`}
-            style={{ width: `${rightPercent}%` }}
-          />
-        </div>
-
-        {/* Right value */}
-        <span className={`w-26 shrink-0 text-left text-sm tabular-nums ${rightValueClass}`}>
-          {formatMetricValue(row.baselineValue)}
-        </span>
-      </div>
-
-      {/* Delta + percentile */}
-      <div className="flex w-44 shrink-0 items-center justify-end gap-1.5">
-        {showPercentile && row.percentile !== null ? (
-          <span className="text-sm tabular-nums text-muted-foreground/70">
-            {formatPercent(row.percentile)}
-          </span>
-        ) : null}
+      {/* Delta */}
+      <td className="px-3.5 py-2.5 text-right whitespace-nowrap">
         <TrendDelta
           delta={row.delta}
           deltaPercent={row.deltaPercent}
           betterWorse={row.betterWorse}
         />
-      </div>
-    </div>
+      </td>
+    </tr>
   );
 };
 
@@ -154,154 +147,216 @@ const UnifiedSkeleton = ({ isHeroScope }: { isHeroScope: boolean }) => {
   const rowCount = isHeroScope ? 6 : 8;
 
   return (
-    <div className="space-y-0.5">
+    <tbody>
       {Array.from({ length: rowCount }).map((_, index) => (
-        <div key={`skeleton-row-${index}`} className="flex items-center gap-3 rounded-lg px-3 py-1.5">
-          <Skeleton className="h-4 w-52 shrink-0" />
-          <div className="mx-auto flex w-full max-w-sm items-center gap-2">
-            <Skeleton className="h-3.5 w-18 shrink-0" />
-            <div className="flex h-3.5 flex-1 justify-end">
-              <Skeleton className="h-3.5 w-3/4 rounded-l-sm" />
+        <tr
+          key={`skeleton-row-${index}`}
+          className="border-b border-[color:var(--aqt-border)] last:border-b-0"
+        >
+          <td className="px-3.5 py-2.5">
+            <Skeleton className="h-4 w-40" />
+          </td>
+          <td className="px-2 py-2.5">
+            <div className="flex justify-end">
+              <Skeleton className="h-4 w-12" />
             </div>
-            <div className="h-3.5 w-px bg-border/60" />
-            <div className="flex h-3.5 flex-1 justify-start">
-              <Skeleton className="h-3.5 w-2/3 rounded-r-sm" />
+          </td>
+          <td className="px-2 py-2.5">
+            <Skeleton className="mx-auto h-2.5 w-full min-w-[140px] max-w-[240px] rounded-sm" />
+          </td>
+          <td className="px-2 py-2.5">
+            <Skeleton className="h-4 w-12" />
+          </td>
+          <td className="px-3.5 py-2.5">
+            <div className="flex justify-end">
+              <Skeleton className="h-4 w-16" />
             </div>
-            <Skeleton className="h-3.5 w-18 shrink-0" />
-          </div>
-          <Skeleton className="h-4 w-44 shrink-0" />
-        </div>
+          </td>
+        </tr>
       ))}
+    </tbody>
+  );
+};
+
+/* ------------------------------------------------------------------ */
+/*  Identity band                                                      */
+/* ------------------------------------------------------------------ */
+
+const HeroBadge = ({
+  hero,
+  label,
+  align
+}: {
+  hero: HeroInfo;
+  label: string;
+  align: "left" | "right";
+}) => {
+  const t = useTranslations();
+  const durationUnits = {
+    h: t("users.compare.durationH"),
+    m: t("users.compare.durationM"),
+    s: t("users.compare.durationS")
+  };
+
+  return (
+    <div
+      className={`flex items-center gap-3 ${align === "right" ? "flex-row-reverse text-right" : ""}`}
+    >
+      {hero.imagePath ? (
+        <HeroImage
+          hero={{
+            name: hero.name ?? t("users.compare.allHeroes"),
+            image_path: hero.imagePath,
+            role: ""
+          }}
+          size={44}
+          rounded="lg"
+          title={hero.name ?? t("users.compare.allHeroes")}
+        />
+      ) : null}
+      <div className="flex flex-col gap-0.5">
+        <span className="text-sm font-semibold text-[color:var(--aqt-fg)]">{label}</span>
+        <span className="text-xs text-[color:var(--aqt-fg-muted)]">
+          {hero.name ?? t("users.compare.allHeroes")}
+        </span>
+        {hero.playtimeSeconds !== undefined ? (
+          <span className="aqt-mono text-[10px] uppercase tracking-[0.08em] text-[color:var(--aqt-fg-dim)]">
+            {hero.playtimeLabel ?? t("users.compare.playtime")}:{" "}
+            {formatDuration(hero.playtimeSeconds, durationUnits)}
+          </span>
+        ) : null}
+      </div>
     </div>
   );
 };
 
 /* ------------------------------------------------------------------ */
-/*  Header badges                                                      */
-/* ------------------------------------------------------------------ */
-
-const HeroBadge = ({ hero, label, align }: { hero: HeroInfo; label: string; align: "left" | "right" }) => (
-  <div className={`flex items-center gap-3 ${align === "right" ? "flex-row-reverse text-right" : ""}`}>
-    {hero.imagePath ? (
-      <Image
-        src={hero.imagePath}
-        alt={hero.name ?? "Hero"}
-        width={48}
-        height={48}
-        className="h-12 w-12 rounded-md object-cover"
-      />
-    ) : null}
-    <div className="flex flex-col gap-0.5">
-      <span className="text-sm font-medium">{label}</span>
-      <span className="text-xs text-muted-foreground">{hero.name ?? "All heroes"}</span>
-      {hero.playtimeSeconds !== undefined ? (
-        <span className="text-xs text-muted-foreground">
-          {hero.playtimeLabel ?? "Playtime"}: {formatDuration(hero.playtimeSeconds)}
-        </span>
-      ) : null}
-    </div>
-  </div>
-);
-
-/* ------------------------------------------------------------------ */
 /*  Main component                                                     */
 /* ------------------------------------------------------------------ */
+
+const headBase =
+  "aqt-mono border-b border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.015)] px-3.5 py-3 text-[11px] font-bold uppercase tracking-[0.12em] text-[color:var(--aqt-fg-faint)]";
 
 const CompareUnifiedTable = ({
   subjectName,
   baselineName,
   rows,
   loading,
+  refreshing = false,
   errorMessage,
+  onRetry,
   isHeroScope,
   isTargetBaseline,
   subjectHero,
   baselineHero
 }: CompareUnifiedTableProps) => {
-  const subjectGlow = isHeroScope ? getGlowVarsFromColor(subjectHero?.dominantColor) : null;
-  const baselineGlow = isHeroScope ? getGlowVarsFromColor(baselineHero?.dominantColor) : null;
-
-  const glowVars = subjectGlow ?? baselineGlow;
-  const showPercentile = !isHeroScope;
-  const rightLabel = isTargetBaseline ? baselineName : "Baseline";
+  const t = useTranslations();
+  const rightLabel = isTargetBaseline ? baselineName : t("users.compare.baseline");
+  const hasRows = !loading && rows.length > 0;
+  const showError = Boolean(errorMessage) && !hasRows;
 
   return (
-    <Card className="relative overflow-hidden" style={glowVars ? (glowVars as React.CSSProperties) : undefined}>
-      <GlassGlow />
-
-      <CardHeader className="relative pb-3">
-        {isHeroScope ? (
-          <div className="flex items-center gap-3 px-3">
-            <div className="flex w-52 shrink-0 justify-start">
+    <div
+      aria-busy={loading || refreshing}
+      className={refreshing ? "opacity-70 transition-opacity" : "transition-opacity"}
+    >
+      <CardSurface flush>
+        {/* Identity band: subject vs baseline */}
+        <div className="flex items-center gap-3 border-b border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.012)] px-[18px] py-4">
+          {isHeroScope ? (
+            <div className="flex w-full items-center justify-between gap-3">
               <HeroBadge hero={subjectHero ?? {}} label={subjectName} align="left" />
-            </div>
-            <div className="mx-auto flex w-full max-w-200 items-center gap-2">
-              <span className="w-18 shrink-0" />
-              <div className="flex-1" />
-              <span className="shrink-0 text-xs font-semibold tracking-widest uppercase text-muted-foreground">vs</span>
-              <div className="flex-1" />
-              <span className="w-18 shrink-0" />
-            </div>
-            <div className="flex w-52 shrink-0 justify-end">
+              <span className="aqt-mono shrink-0 text-[11px] font-bold uppercase tracking-[0.18em] text-[color:var(--aqt-fg-dim)]">
+                {t("common.vs")}
+              </span>
               <HeroBadge hero={baselineHero ?? {}} label={baselineName} align="right" />
             </div>
-          </div>
-        ) : (
-          <div className="flex items-center gap-3 px-3">
-            <div className="flex w-52 shrink-0 flex-col gap-0.5">
-              <span className="text-sm font-medium">{subjectName}</span>
-              <span className="text-xs text-muted-foreground">Selected User</span>
-            </div>
-            <div className="mx-auto flex w-full max-w-200 items-center gap-2">
-              <span className="w-18 shrink-0" />
-              <div className="flex-1" />
-              <span className="shrink-0 text-xs font-semibold tracking-widest uppercase text-muted-foreground">vs</span>
-              <div className="flex-1" />
-              <span className="w-18 shrink-0" />
-            </div>
-            <div className="flex w-44 shrink-0 flex-col items-end gap-0.5">
-              <span className="text-sm font-medium">{baselineName}</span>
-              <span className="text-xs text-muted-foreground">{isTargetBaseline ? "Compare against" : "Baseline"}</span>
-            </div>
-          </div>
-        )}
-      </CardHeader>
-
-      <CardContent className="relative">
-        {/* Column labels */}
-        {!loading && !errorMessage && rows.length > 0 ? (
-          <div className="mb-0.5 flex items-center gap-3 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            <span className="w-52 shrink-0" />
-            <div className="mx-auto flex w-full max-w-200 items-center gap-2">
-              <span className="relative w-18 shrink-0">
-                <span className="absolute right-0 top-1/2 -translate-y-1/2 whitespace-nowrap">{subjectName}</span>
+          ) : (
+            <div className="flex w-full items-center justify-between gap-3">
+              <div className="flex flex-col gap-0.5">
+                <span className="text-sm font-semibold text-[color:var(--aqt-fg)]">
+                  {subjectName}
+                </span>
+                <span className="aqt-mono text-[10px] uppercase tracking-[0.08em] text-[color:var(--aqt-fg-dim)]">
+                  {t("users.compare.selectedUserColumn")}
+                </span>
+              </div>
+              <span className="aqt-mono shrink-0 text-[11px] font-bold uppercase tracking-[0.18em] text-[color:var(--aqt-fg-dim)]">
+                {t("common.vs")}
               </span>
-              <div className="flex-1" />
-              <div className="w-px shrink-0" />
-              <div className="flex-1" />
-              <span className="relative w-26 shrink-0">
-                <span className="absolute left-0 top-1/2 -translate-y-1/2 whitespace-nowrap">{rightLabel}</span>
-              </span>
+              <div className="flex flex-col items-end gap-0.5 text-right">
+                <span className="text-sm font-semibold text-[color:var(--aqt-fg)]">
+                  {baselineName}
+                </span>
+                <span className="aqt-mono text-[10px] uppercase tracking-[0.08em] text-[color:var(--aqt-fg-dim)]">
+                  {isTargetBaseline
+                    ? t("users.compare.compareAgainst")
+                    : t("users.compare.baseline")}
+                </span>
+              </div>
             </div>
-            <span className="w-44 shrink-0" />
-          </div>
-        ) : null}
+          )}
+        </div>
 
-        {loading ? (
-          <UnifiedSkeleton isHeroScope={isHeroScope} />
-        ) : errorMessage ? (
-          <p className="text-sm text-destructive">{errorMessage}</p>
-        ) : rows.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No metrics available for current filters.</p>
-        ) : (
-          <div className="divide-y divide-border/30">
-            {rows.map((row) => (
-              <CompareMetricRow key={row.key} row={row} showPercentile={false} />
-            ))}
-          </div>
-        )}
-      </CardContent>
-    </Card>
+        <div className="overflow-x-auto">
+          <table className="aqt-tnum w-full border-collapse text-[13px]">
+            <thead>
+              <tr>
+                <th className={`${headBase} text-left`}>{t("users.compare.colMetric")}</th>
+                <th className={`${headBase} text-right`}>{subjectName}</th>
+                <th className={`${headBase} text-center`} aria-hidden />
+                <th className={`${headBase} text-left`}>{rightLabel}</th>
+                <th className={`${headBase} text-right`}>{t("users.compare.colDelta")}</th>
+              </tr>
+            </thead>
+
+            {loading ? (
+              <UnifiedSkeleton isHeroScope={isHeroScope} />
+            ) : showError ? (
+              <tbody>
+                <tr>
+                  <td
+                    colSpan={5}
+                    className="px-3.5 py-10 text-center text-sm text-[color:var(--aqt-rose)]"
+                  >
+                    <div className="flex flex-col items-center gap-3">
+                      <span>{errorMessage}</span>
+                      {onRetry ? (
+                        <button
+                          type="button"
+                          onClick={onRetry}
+                          className="inline-flex h-8 cursor-pointer items-center gap-2 rounded-md border border-[color:var(--aqt-border)] px-3 text-xs font-semibold text-[color:var(--aqt-fg-muted)] transition-colors hover:text-[color:var(--aqt-fg)]"
+                        >
+                          <RefreshCw className="h-3.5 w-3.5" />
+                          {t("users.compare.retry")}
+                        </button>
+                      ) : null}
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            ) : !hasRows ? (
+              <tbody>
+                <tr>
+                  <td
+                    colSpan={5}
+                    className="px-3.5 py-10 text-center text-sm text-[color:var(--aqt-fg-muted)]"
+                  >
+                    {t("users.compare.noMetrics")}
+                  </td>
+                </tr>
+              </tbody>
+            ) : (
+              <tbody>
+                {rows.map((row) => (
+                  <CompareMetricRow key={row.key} row={row} />
+                ))}
+              </tbody>
+            )}
+          </table>
+        </div>
+      </CardSurface>
+    </div>
   );
 };
 

@@ -1,9 +1,10 @@
 "use client";
 
+import { useTranslations } from "next-intl";
+
 import PlayerDivisionIcon from "@/components/PlayerDivisionIcon";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { Checkbox } from "@/components/ui/checkbox";
-import { useTranslation } from "@/i18n/LanguageContext";
 import { useDivisionGrid } from "@/hooks/useCurrentWorkspace";
 import { resolveDivisionFromRank } from "@/lib/division-grid";
 import { ROLE_LABELS, getRoleIconName } from "@/lib/roles";
@@ -70,7 +71,7 @@ function playerLabel(player: RegistrationRankAutofillPlayer): string {
 }
 
 export function RankAutofillRolePill({ role }: { role: RegistrationRankAutofillRole }) {
-  const { t } = useTranslation();
+  const t = useTranslations();
   const grid = useDivisionGrid();
   const roleLabel = ROLE_LABELS[role.role] ?? role.role;
   const source = formatRankSource(role);
@@ -104,7 +105,7 @@ export function RankAutofillRolePill({ role }: { role: RegistrationRankAutofillR
               ? "border-amber-400/25 bg-amber-500/10 text-amber-100"
               : isBlocked
                 ? "border-orange-400/25 bg-orange-500/10 text-orange-100"
-                : "border-white/10 bg-white/5 text-white/60"
+                : "border-[color:var(--aqt-border-2)] bg-white/5 text-[color:var(--aqt-fg-muted)]"
       )}
       title={[[role.reason, source].filter(Boolean).join(" / "), ...breakdown]
         .filter(Boolean)
@@ -158,11 +159,11 @@ export function RankAutofillPreviewTables({
   onToggle,
   onToggleAll
 }: RankAutofillPreviewTablesProps) {
-  const { t } = useTranslation();
+  const t = useTranslations();
 
   if (!preview && !loading) {
     return (
-      <div className="flex h-32 items-center justify-center text-sm text-white/30">
+      <div className="flex h-32 items-center justify-center text-sm text-[color:var(--aqt-fg-dim)]">
         {t("rankAutofill.previewNotLoaded")}
       </div>
     );
@@ -184,7 +185,7 @@ export function RankAutofillPreviewTables({
 
   if (visiblePlayers.length === 0) {
     return (
-      <div className="flex h-32 items-center justify-center text-sm text-white/30">
+      <div className="flex h-32 items-center justify-center text-sm text-[color:var(--aqt-fg-dim)]">
         {t("rankAutofill.noMatches")}
       </div>
     );
@@ -210,7 +211,7 @@ export function RankAutofillPreviewTables({
             disabled={selectableIds.length === 0 || loading}
             aria-label={t("rankAutofill.selectAllAria")}
           />
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-white/40">
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-[color:var(--aqt-fg-dim)]">
             {t("rankAutofill.sections.assign")}
           </span>
           <span className="rounded-full bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-300">
@@ -218,13 +219,13 @@ export function RankAutofillPreviewTables({
           </span>
         </div>
         {updatablePlayers.length === 0 ? (
-          <p className="text-xs text-white/30">{t("rankAutofill.noRanksToUpdate")}</p>
+          <p className="text-xs text-[color:var(--aqt-fg-dim)]">{t("rankAutofill.noRanksToUpdate")}</p>
         ) : (
           <div className="flex flex-col gap-2 md:min-h-0 md:flex-1 md:overflow-y-auto md:pr-1">
             {updatablePlayers.map((player) => (
               <label
                 key={player.registration_id}
-                className="flex min-w-0 cursor-pointer flex-col gap-1.5 rounded-lg border border-white/10 bg-white/[0.02] p-2.5 hover:bg-white/[0.04]"
+                className="flex min-w-0 cursor-pointer flex-col gap-1.5 rounded-lg border border-[color:var(--aqt-border-2)] bg-white/[0.02] p-2.5 hover:bg-white/[0.04]"
               >
                 <div className="flex min-w-0 items-center gap-2">
                   <Checkbox
@@ -234,7 +235,7 @@ export function RankAutofillPreviewTables({
                     disabled={loading}
                     aria-label={t("rankAutofill.selectAria", { name: playerLabel(player) })}
                   />
-                  <span className="min-w-0 flex-1 truncate text-sm font-medium text-white/85">
+                  <span className="min-w-0 flex-1 truncate text-sm font-medium text-[color:var(--aqt-fg)]">
                     {playerLabel(player)}
                   </span>
                   {player.partial && (
@@ -249,7 +250,7 @@ export function RankAutofillPreviewTables({
                   )}
                 </div>
                 <div className="flex min-w-0 flex-wrap items-center gap-1.5 pl-6">
-                  <span className="text-[11px] text-white/30">#{player.registration_id}</span>
+                  <span className="text-[11px] text-[color:var(--aqt-fg-dim)]">#{player.registration_id}</span>
                   {player.roles
                     .filter((role) => role.action === "set" || role.action === "overwrite")
                     .map((role) => (
@@ -265,7 +266,7 @@ export function RankAutofillPreviewTables({
       {/* Column 2 — Skipped */}
       <section className="flex min-w-0 flex-col md:min-h-0">
         <div className="mb-2 flex shrink-0 items-center gap-2">
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-white/40">
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-[color:var(--aqt-fg-dim)]">
             {t("rankAutofill.sections.skipped")}
           </span>
           {skippedPlayers.length > 0 && (
@@ -275,15 +276,15 @@ export function RankAutofillPreviewTables({
           )}
         </div>
         {skippedPlayers.length === 0 ? (
-          <p className="text-xs text-white/30">{t("rankAutofill.noneSkipped")}</p>
+          <p className="text-xs text-[color:var(--aqt-fg-dim)]">{t("rankAutofill.noneSkipped")}</p>
         ) : (
           <div className="flex flex-col gap-2 md:min-h-0 md:flex-1 md:overflow-y-auto md:pr-1">
             {skippedPlayers.map((player) => (
               <div
                 key={player.registration_id}
-                className="min-w-0 rounded-lg border border-white/10 bg-white/[0.02] p-2.5"
+                className="min-w-0 rounded-lg border border-[color:var(--aqt-border-2)] bg-white/[0.02] p-2.5"
               >
-                <div className="truncate text-xs font-medium text-white/75">{playerLabel(player)}</div>
+                <div className="truncate text-xs font-medium text-[color:var(--aqt-fg-muted)]">{playerLabel(player)}</div>
                 <div className="mt-0.5 text-[11px] leading-4 text-orange-200/70">
                   {player.reason ?? t("rankAutofill.skippedFallback")}
                 </div>
@@ -301,17 +302,17 @@ export function RankAutofillPreviewTables({
       {/* Column 3 — Already set */}
       <section className="flex min-w-0 flex-col md:min-h-0">
         <div className="mb-2 flex shrink-0 items-center gap-2">
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-white/40">
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-[color:var(--aqt-fg-dim)]">
             {t("rankAutofill.sections.alreadySet")}
           </span>
           {unchangedPlayers.length > 0 && (
-            <span className="rounded-full bg-white/10 px-1.5 py-0.5 text-[10px] font-semibold text-white/40">
+            <span className="rounded-full bg-white/10 px-1.5 py-0.5 text-[10px] font-semibold text-[color:var(--aqt-fg-dim)]">
               {unchangedPlayers.length}
             </span>
           )}
         </div>
         {unchangedPlayers.length === 0 ? (
-          <p className="text-xs text-white/30">{t("rankAutofill.noUnchanged")}</p>
+          <p className="text-xs text-[color:var(--aqt-fg-dim)]">{t("rankAutofill.noUnchanged")}</p>
         ) : (
           <div className="flex flex-col gap-2 md:min-h-0 md:flex-1 md:overflow-y-auto md:pr-1">
             {unchangedPlayers.map((player) => {
@@ -321,10 +322,10 @@ export function RankAutofillPreviewTables({
               return (
                 <div
                   key={player.registration_id}
-                  className="min-w-0 rounded-lg border border-white/10 bg-white/[0.02] p-2.5"
+                  className="min-w-0 rounded-lg border border-[color:var(--aqt-border-2)] bg-white/[0.02] p-2.5"
                 >
                   <div className="flex items-center gap-1.5">
-                    <span className="min-w-0 flex-1 truncate text-xs font-medium text-white/75">
+                    <span className="min-w-0 flex-1 truncate text-xs font-medium text-[color:var(--aqt-fg-muted)]">
                       {playerLabel(player)}
                     </span>
                     {hasUnverifiedRole(player) && (
@@ -338,7 +339,7 @@ export function RankAutofillPreviewTables({
                       </span>
                     )}
                   </div>
-                  <div className="mt-0.5 text-[11px] leading-4 text-white/35">
+                  <div className="mt-0.5 text-[11px] leading-4 text-[color:var(--aqt-fg-dim)]">
                     {player.reason ?? t("rankAutofill.unchangedFallback")}
                   </div>
                   {auditRoles.length > 0 && (

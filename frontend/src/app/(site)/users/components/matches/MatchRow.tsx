@@ -3,8 +3,10 @@
 import React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { ResTag, ScoreCell, StagePill } from "@/app/(site)/users/components/shared/atoms";
 import MvpMatchPill from "@/components/match/MvpMatchPill";
+import { resolveMvpPlacement } from "@/components/match/cells";
 import MatchLogIndicator from "@/components/match/MatchLogIndicator";
 import { HeroStrip } from "@/components/hero/HeroImage";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -29,6 +31,7 @@ interface MatchRowProps {
 
 const MatchRow = ({ enc, selfUserId }: MatchRowProps) => {
   const router = useRouter();
+  const t = useTranslations();
   const isUserHome = (enc.home_team?.players ?? []).some((p) => p.user_id === selfUserId);
   const userScore = isUserHome ? enc.score.home : enc.score.away;
   const oppScore = isUserHome ? enc.score.away : enc.score.home;
@@ -51,12 +54,12 @@ const MatchRow = ({ enc, selfUserId }: MatchRowProps) => {
     });
   });
 
-  const mvpMatches = (enc.matches ?? []).filter((m) => m.performance != null);
+  const mvpMatches = (enc.matches ?? []).filter((m) => resolveMvpPlacement(m) != null);
 
   return (
     <tr
       onClick={() => router.push(`/encounters/${enc.id}`)}
-      className="cursor-pointer border-b border-[hsl(215_20%_10%)] transition-colors last:border-b-0 hover:bg-[hsl(0_0%_100%/0.025)]"
+      className="cursor-pointer border-b border-[color:var(--aqt-border)] transition-colors last:border-b-0 hover:bg-[hsl(0_0%_100%/0.025)]"
     >
       <td className="px-3.5 py-3">
         <Link
@@ -64,12 +67,12 @@ const MatchRow = ({ enc, selfUserId }: MatchRowProps) => {
           onClick={(e) => e.stopPropagation()}
           className="aqt-mono inline-flex items-center gap-1.5 rounded-[5px] border px-2 py-0.5 text-[11.5px] font-bold"
           style={{
-            background: "hsl(174 72% 46% / 0.08)",
-            borderColor: "hsl(174 72% 46% / 0.25)",
+            background: "color-mix(in srgb, var(--aqt-teal) 8%, transparent)",
+            borderColor: "color-mix(in srgb, var(--aqt-teal) 25%, transparent)",
             color: "var(--aqt-teal)"
           }}
         >
-          T {tNum}
+          {t("users.matches.tTag", { number: String(tNum) })}
         </Link>
       </td>
       <td className="px-3.5 py-3">
@@ -83,7 +86,7 @@ const MatchRow = ({ enc, selfUserId }: MatchRowProps) => {
             onClick={(e) => e.stopPropagation()}
             className="hover:text-[color:var(--aqt-teal)]"
           >
-            {userTeamName} vs {opponentName}
+            {userTeamName} {t("common.vs")} {opponentName}
           </Link>
         </span>
       </td>
@@ -114,7 +117,10 @@ const MatchRow = ({ enc, selfUserId }: MatchRowProps) => {
           hasLogs={enc.has_logs}
           logs={
             enc.has_logs
-              ? (enc.matches ?? []).map((m, i) => ({ matchId: m.id, label: m.map?.name ?? `Map ${i + 1}` }))
+              ? (enc.matches ?? []).map((m, i) => ({
+                  matchId: m.id,
+                  label: m.map?.name ?? t("users.matches.mapLabel", { number: String(i + 1) })
+                }))
               : undefined
           }
         />

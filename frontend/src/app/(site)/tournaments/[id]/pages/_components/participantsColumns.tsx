@@ -33,7 +33,7 @@ import {
   RegistrationStatusBadge,
 } from "@/components/status/RegistrationBadges";
 import TournamentHistoryCell from "./TournamentHistoryCell";
-import { useTranslation } from "@/i18n/LanguageContext";
+import { useTranslations } from "next-intl";
 import { formatSubroleSlug } from "@/lib/roles";
 import { resolveDivisionFromRank, DEFAULT_DIVISION_GRID } from "@/lib/division-grid";
 import type { DivisionGrid } from "@/types/workspace.types";
@@ -43,6 +43,8 @@ import { getPlayerSlug } from "@/utils/player";
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
+
+type Translator = ReturnType<typeof useTranslations<never>>;
 
 export interface ColumnDefinition {
   id: string;
@@ -69,33 +71,44 @@ const ROLE_TO_ICON: Record<string, string> = {
   support: "Support",
 };
 
-const ROLE_LABELS: Record<string, string> = {
-  tank: "Tank",
-  dps: "DPS",
-  support: "Support",
-  flex: "Flex",
-};
-
-const SUBROLE_SHORT_LABELS: Record<string, string> = {
-  hitscan: "HS",
-  projectile: "PROJ",
-  main_heal: "MH",
-  light_heal: "LH",
-  main_tank: "MT",
-  off_tank: "OT",
-  flanker: "FLK",
-  flex_dps: "FD",
-  flex_support: "FS",
-  flex: "FLX",
-  main: "MAIN",
-};
-
-function getRoleLabel(role: string): string {
-  return ROLE_LABELS[role.toLowerCase()] ?? role.charAt(0).toUpperCase() + role.slice(1);
+function getRoleLabel(role: string, t: Translator): string {
+  switch (role.toLowerCase()) {
+    case "tank":
+      return t("common.roles.tank");
+    case "dps":
+      return t("common.roles.dps");
+    case "support":
+      return t("common.roles.support");
+    case "flex":
+      return t("common.roles.flex");
+    default:
+      return role.charAt(0).toUpperCase() + role.slice(1);
+  }
 }
 
-function getSubroleShortLabel(subrole: string): string {
-  return SUBROLE_SHORT_LABELS[subrole.toLowerCase()] ?? subrole.toUpperCase();
+function getSubroleShortLabel(subrole: string, t: Translator): string {
+  switch (subrole.toLowerCase()) {
+    case "hitscan":
+      return t("common.subrolesShort.hitscan");
+    case "projectile":
+      return t("common.subrolesShort.projectile");
+    case "main_heal":
+      return t("common.subrolesShort.main_heal");
+    case "light_heal":
+      return t("common.subrolesShort.light_heal");
+    case "main_tank":
+      return t("common.subrolesShort.main_tank");
+    case "off_tank":
+      return t("common.subrolesShort.off_tank");
+    case "flanker":
+      return t("common.subrolesShort.flanker");
+    case "flex_dps":
+      return t("common.subrolesShort.flex_dps");
+    case "flex_support":
+      return t("common.subrolesShort.flex_support");
+    default:
+      return subrole.toUpperCase();
+  }
 }
 
 function RolesCell({
@@ -107,17 +120,17 @@ function RolesCell({
   grid?: DivisionGrid | null;
   showRanks?: boolean;
 }) {
-  const { t } = useTranslation();
+  const t = useTranslations();
   const resolvedGrid = grid || DEFAULT_DIVISION_GRID;
   if (!roles || roles.length === 0)
-    return <span className="text-white/30">&mdash;</span>;
+    return <span className="text-[color:var(--aqt-fg-dim)]">&mdash;</span>;
 
   return (
     <div className="flex flex-wrap items-start justify-center gap-x-0.5 gap-y-2">
       {roles.map((r) => {
-        const roleLabel = getRoleLabel(r.role);
+        const roleLabel = getRoleLabel(r.role, t);
         const subroleLabel = r.subrole ? formatSubroleSlug(r.subrole) : null;
-        const subroleShortLabel = r.subrole ? getSubroleShortLabel(r.subrole) : null;
+        const subroleShortLabel = r.subrole ? getSubroleShortLabel(r.subrole, t) : null;
         const division = r.rank_value != null ? resolveDivisionFromRank(resolvedGrid, r.rank_value) : null;
 
         return (
@@ -138,7 +151,7 @@ function RolesCell({
                 "relative inline-flex h-8 w-8 items-center justify-center p-1",
                 r.is_primary
                   ? "after:absolute after:bottom-0 after:left-1/2 after:h-0.5 after:w-4 after:-translate-x-1/2 after:rounded-full after:bg-emerald-300/90"
-                  : "text-white/70",
+                  : "text-[color:var(--aqt-fg-muted)]",
               )}
             >
               <PlayerRoleIcon
@@ -147,7 +160,7 @@ function RolesCell({
               />
             </span>
             {subroleShortLabel ? (
-              <span className="text-center text-[8px] font-semibold leading-none tracking-[0.12em] text-white/45 uppercase">
+              <span className="text-center text-[8px] font-semibold leading-none tracking-[0.12em] text-[color:var(--aqt-fg-dim)] uppercase">
                 {subroleShortLabel}
               </span>
             ) : null}
@@ -257,7 +270,7 @@ function TopHeroesCell({ roles }: { roles: RegistrationRole[] }) {
   }, [heroesByRole]);
 
   if (topHeroesList.length === 0) {
-    return <span className="text-white/30">&mdash;</span>;
+    return <span className="text-[color:var(--aqt-fg-dim)]">&mdash;</span>;
   }
 
   return (
@@ -265,7 +278,7 @@ function TopHeroesCell({ roles }: { roles: RegistrationRole[] }) {
       {activeRoles.map((role) => (
         <div
           key={role}
-          className="flex items-center gap-1.5 bg-white/[0.02] border border-white/[0.04] rounded-full pl-2 pr-1 py-0.5 shadow-sm"
+          className="flex items-center gap-1.5 bg-white/[0.02] border border-[color:var(--aqt-border)] rounded-full pl-2 pr-1 py-0.5 shadow-sm"
         >
           <span
             className={cn("inline-flex items-center shrink-0", ROLE_COLORS[role])}
@@ -290,11 +303,11 @@ function SmurfTagsCell({
 }: {
   tags: string[] | null | undefined;
 }) {
-  const { t } = useTranslation();
+  const t = useTranslations();
   const smurfTags = tags?.filter(Boolean) ?? [];
 
   if (smurfTags.length === 0) {
-    return <span className="text-white/30">&mdash;</span>;
+    return <span className="text-[color:var(--aqt-fg-dim)]">&mdash;</span>;
   }
 
   const visibleTags = smurfTags.slice(0, MAX_VISIBLE_SMURF_TAGS);
@@ -305,7 +318,7 @@ function SmurfTagsCell({
       {visibleTags.map((tag, index) => (
         <span
           key={`${tag}-${index}`}
-          className="block max-w-full truncate text-xs leading-5 text-white/50"
+          className="block max-w-full truncate text-xs leading-5 text-[color:var(--aqt-fg-muted)]"
           title={tag}
         >
           {tag}
@@ -322,10 +335,10 @@ function SmurfTagsCell({
               +{hiddenCount} {t("common.more")}
             </button>
           </DialogTrigger>
-          <DialogContent className="border-white/[0.08] bg-[#111113] sm:max-w-md">
+          <DialogContent className="border-[color:var(--aqt-border)] bg-[#111113] sm:max-w-md">
             <DialogHeader>
-              <DialogTitle className="text-white">{t("common.smurfBattleTags")}</DialogTitle>
-              <DialogDescription className="text-white/50">
+              <DialogTitle className="text-[color:var(--aqt-fg)]">{t("common.smurfBattleTags")}</DialogTitle>
+              <DialogDescription className="text-[color:var(--aqt-fg-muted)]">
                 {t("common.smurfDesc")}
               </DialogDescription>
             </DialogHeader>
@@ -334,7 +347,7 @@ function SmurfTagsCell({
                 {smurfTags.map((tag, index) => (
                   <div
                     key={`${tag}-${index}`}
-                    className="rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm text-white/80"
+                    className="rounded-md border border-[color:var(--aqt-border-2)] bg-white/5 px-3 py-2 text-sm text-[color:var(--aqt-fg)]"
                   >
                     {tag}
                   </div>
@@ -349,21 +362,46 @@ function SmurfTagsCell({
 }
 
 // ---------------------------------------------------------------------------
+// Stream POV cell
+// ---------------------------------------------------------------------------
+
+function StreamPovCell({ value }: { value: boolean | null | undefined }) {
+  const t = useTranslations();
+  const label = value ? t("common.yes") : t("common.no");
+  return (
+    <span
+      title={label}
+      aria-label={label}
+      className={cn(
+        "inline-flex size-5 items-center justify-center",
+        value ? "text-emerald-400" : "text-red-400",
+      )}
+    >
+      {value ? (
+        <CheckCircle2 className="size-4" />
+      ) : (
+        <XCircle className="size-4" />
+      )}
+    </span>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Custom field value renderer
 // ---------------------------------------------------------------------------
 
 function renderCustomFieldValue(
   field: CustomFieldDefinition,
   value: unknown,
-  t: (key: string) => string,
+  t: Translator,
 ): ReactNode {
   if (value === null || value === undefined)
-    return <span className="text-white/30">&mdash;</span>;
+    return <span className="text-[color:var(--aqt-fg-dim)]">&mdash;</span>;
 
   switch (field.type) {
     case "checkbox":
       return (
-        <span className="text-white/60">{value ? t("common.yes") : t("common.no")}</span>
+        <span className="text-[color:var(--aqt-fg-muted)]">{value ? t("common.yes") : t("common.no")}</span>
       );
     case "url":
       return (
@@ -371,7 +409,7 @@ function renderCustomFieldValue(
           href={String(value)}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center gap-1 text-white/60 underline decoration-white/20 hover:text-white/80"
+          className="inline-flex items-center gap-1 text-[color:var(--aqt-fg-muted)] underline decoration-white/20 hover:text-[color:var(--aqt-fg)]"
         >
           <span className="max-w-[120px] truncate">{String(value)}</span>
           <ExternalLink className="size-3 shrink-0" />
@@ -379,12 +417,12 @@ function renderCustomFieldValue(
       );
     case "select":
       return (
-        <span className="inline-flex items-center rounded-md border border-white/10 bg-white/5 px-1.5 py-0.5 text-xs font-medium text-white/60">
+        <span className="inline-flex items-center rounded-md border border-[color:var(--aqt-border-2)] bg-white/5 px-1.5 py-0.5 text-xs font-medium text-[color:var(--aqt-fg-muted)]">
           {String(value)}
         </span>
       );
     default:
-      return <span className="text-white/60">{String(value)}</span>;
+      return <span className="text-[color:var(--aqt-fg-muted)]">{String(value)}</span>;
   }
 }
 
@@ -393,11 +431,11 @@ function renderCustomFieldValue(
 // ---------------------------------------------------------------------------
 
 function formatDate(iso: string | null, locale: string = "ru"): ReactNode {
-  if (!iso) return <span className="text-white/30">&mdash;</span>;
+  if (!iso) return <span className="text-[color:var(--aqt-fg-dim)]">&mdash;</span>;
   const d = new Date(iso);
   const formatLocale = locale.startsWith("ru") ? "ru-RU" : "en-GB";
   return (
-    <span className="text-white/50 tabular-nums text-xs">
+    <span className="text-[color:var(--aqt-fg-muted)] tabular-nums text-xs">
       {d.toLocaleDateString(formatLocale, {
         day: "2-digit",
         month: "short",
@@ -429,7 +467,7 @@ const BUILT_IN_FIELD_DEFS: Record<string, BuiltInFieldDef> = {
     defaultVisible: true,
     responsive: "always",
     render: (reg) => (
-      <span className="font-medium text-white/80">
+      <span className="font-medium text-[color:var(--aqt-fg)]">
         {reg.battle_tag ? (
           <a
             href={`/users/${getPlayerSlug(reg.battle_tag)}`}
@@ -460,7 +498,7 @@ const BUILT_IN_FIELD_DEFS: Record<string, BuiltInFieldDef> = {
     defaultVisible: false,
     responsive: "sm",
     render: (reg) => (
-      <span className="text-white/50">{reg.discord_nick ?? "\u2014"}</span>
+      <span className="text-[color:var(--aqt-fg-muted)]">{reg.discord_nick ?? "\u2014"}</span>
     ),
     searchValue: (reg) => reg.discord_nick,
   },
@@ -470,7 +508,7 @@ const BUILT_IN_FIELD_DEFS: Record<string, BuiltInFieldDef> = {
     defaultVisible: false,
     responsive: "md",
     render: (reg) => (
-      <span className="text-white/50">{reg.twitch_nick ?? "\u2014"}</span>
+      <span className="text-[color:var(--aqt-fg-muted)]">{reg.twitch_nick ?? "\u2014"}</span>
     ),
     searchValue: (reg) => reg.twitch_nick,
   },
@@ -494,35 +532,13 @@ const BUILT_IN_FIELD_DEFS: Record<string, BuiltInFieldDef> = {
     searchValue: (reg) =>
       reg.roles?.flatMap((r) => r.top_heroes).join(" ") ?? null,
   },
-  additional_roles: {
-    // Merged into primary_role column — skip as standalone
-    id: "_skip_additional_roles",
-    label: "Additional Roles",
-    defaultVisible: false,
-    render: () => null,
-  },
   stream_pov: {
     id: "stream_pov",
     label: "Stream POV",
     defaultVisible: false,
     responsive: "lg",
     align: "center",
-    render: (reg) => (
-       <span
-      title={reg.stream_pov ? "Yes" : "No"}
-      aria-label={reg.stream_pov ? "Yes" : "No"}
-      className={cn(
-        "inline-flex size-5 items-center justify-center",
-        reg.stream_pov ? "text-emerald-400" : "text-red-400",
-      )}
-    >
-      {reg.stream_pov ? (
-        <CheckCircle2 className="size-4" />
-      ) : (
-        <XCircle className="size-4" />
-      )}
-    </span>
-    ),
+    render: (reg) => <StreamPovCell value={reg.stream_pov} />,
   },
   notes: {
     id: "notes",
@@ -532,11 +548,14 @@ const BUILT_IN_FIELD_DEFS: Record<string, BuiltInFieldDef> = {
     widthClass: "max-w-50",
     render: (reg) =>
       reg.notes ? (
-        <span className="block max-w-50 whitespace-pre-wrap wrap-break-word text-xs text-white/50">
+        <span
+          className="line-clamp-3 max-w-50 wrap-break-word text-xs text-[color:var(--aqt-fg-muted)]"
+          title={reg.notes}
+        >
           {reg.notes}
         </span>
       ) : (
-        <span className="text-white/30">&mdash;</span>
+        <span className="text-[color:var(--aqt-fg-dim)]">&mdash;</span>
       ),
     searchValue: (reg) => reg.notes,
   },
@@ -548,7 +567,7 @@ const BUILT_IN_FIELD_DEFS: Record<string, BuiltInFieldDef> = {
 
 export function buildParticipantColumns(
   form: RegistrationForm | null,
-  t: (key: string, variables?: Record<string, string | number>) => string,
+  t: Translator,
   locale: string = "ru",
   grid?: DivisionGrid | null,
 ): ColumnDefinition[] {
@@ -567,6 +586,8 @@ export function buildParticipantColumns(
       case "primary_role":
       case "roles":
         return t("common.rolesList");
+      case "top_heroes":
+        return t("tournamentDetail.topHeroes");
       case "stream_pov":
         return t("registration.details.streamPov");
       case "notes":
@@ -584,51 +605,74 @@ export function buildParticipantColumns(
     defaultVisible: false,
     responsive: "always",
     render: (_reg, index) => (
-      <span className="text-white/30 tabular-nums">{index + 1}</span>
+      <span className="text-[color:var(--aqt-fg-dim)] tabular-nums">{index + 1}</span>
     ),
   });
 
-  // Built-in fields from form config
-  if (form?.built_in_fields) {
-    for (const [key, config] of Object.entries(form.built_in_fields)) {
-      if (!config.enabled) continue;
-      const def = BUILT_IN_FIELD_DEFS[key];
-      if (!def || def.id === "_skip_additional_roles") continue;
-      if (key === "additional_roles") continue;
+  // Built-in fields in a fixed canonical order: identity first, then gameplay
+  // (roles, heroes), then accounts and extras. The form's JSON key order is
+  // organizer input and must never drive the table layout.
+  const BUILT_IN_KEY_ORDER = [
+    "battle_tag",
+    "primary_role",
+    "top_heroes",
+    "smurf_tags",
+    "discord_nick",
+    "twitch_nick",
+    "stream_pov",
+    "notes",
+  ] as const;
+  const enabledBuiltInKeys = form?.built_in_fields
+    ? BUILT_IN_KEY_ORDER.filter((key) => form.built_in_fields[key]?.enabled)
+    : // Fallback when no form config
+      (["battle_tag", "primary_role", "top_heroes", "smurf_tags", "notes"] as const);
 
-      columns.push({
-        id: def.id,
-        label: getLocalizedLabel(key, def.label),
-        category: "built_in",
-        defaultVisible: def.defaultVisible,
-        responsive: def.responsive ?? "sm",
-        widthClass: def.widthClass,
-        align: def.align,
-        render: def.id === "roles"
-          ? (reg) => <RolesCell roles={reg.roles} grid={grid} showRanks={form?.show_ranks} />
-          : (reg) => def.render(reg),
-        searchValue: def.searchValue,
-      });
-    }
-  } else {
-    // Fallback when no form config
-    for (const key of ["battle_tag", "smurf_tags", "primary_role", "top_heroes", "notes"]) {
-      const def = BUILT_IN_FIELD_DEFS[key];
-      if (!def) continue;
-      columns.push({
-        id: def.id,
-        label: getLocalizedLabel(key, def.label),
-        category: "built_in",
-        defaultVisible: true,
-        responsive: def.responsive ?? "sm",
-        widthClass: def.widthClass,
-        align: def.align,
-        render: def.id === "roles"
-          ? (reg) => <RolesCell roles={reg.roles} grid={grid} showRanks={form?.show_ranks} />
-          : (reg) => def.render(reg),
-        searchValue: def.searchValue,
-      });
-    }
+  for (const key of enabledBuiltInKeys) {
+    const def = BUILT_IN_FIELD_DEFS[key];
+    if (!def) continue;
+    columns.push({
+      id: def.id,
+      label: getLocalizedLabel(key, def.label),
+      category: "built_in",
+      defaultVisible: form?.built_in_fields ? def.defaultVisible : true,
+      responsive: def.responsive ?? "sm",
+      widthClass: def.widthClass,
+      align: def.align,
+      render: def.id === "roles"
+        ? (reg) => <RolesCell roles={reg.roles} grid={grid} showRanks={form?.show_ranks} />
+        : (reg) => def.render(reg),
+      searchValue: def.searchValue,
+    });
+  }
+
+  if (!columns.some((column) => column.id === "battle_tag")) {
+    const identity = BUILT_IN_FIELD_DEFS.battle_tag;
+    columns.splice(1, 0, {
+      id: identity.id,
+      label: getLocalizedLabel("battle_tag", identity.label),
+      category: "built_in",
+      defaultVisible: true,
+      responsive: "always",
+      render: (reg) => identity.render(reg),
+      searchValue: identity.searchValue,
+    });
+  }
+
+  // Notes may hold data even when the form field is disabled (e.g. a Google
+  // Sheets sync maps a notes column), so the roster always offers it.
+  if (!columns.some((column) => column.id === "notes")) {
+    const notesDef = BUILT_IN_FIELD_DEFS.notes;
+    columns.push({
+      id: notesDef.id,
+      label: getLocalizedLabel("notes", notesDef.label),
+      category: "built_in",
+      defaultVisible: notesDef.defaultVisible,
+      responsive: notesDef.responsive ?? "sm",
+      widthClass: notesDef.widthClass,
+      align: notesDef.align,
+      render: (reg) => notesDef.render(reg),
+      searchValue: notesDef.searchValue,
+    });
   }
 
   // Custom fields from form config
@@ -720,7 +764,7 @@ export function buildParticipantColumns(
   if (form?.require_open_profile) {
     columns.push({
       id: "_profile",
-      label: "Profile",
+      label: t("common.profile"),
       category: "meta",
       defaultVisible: true,
       responsive: "always",

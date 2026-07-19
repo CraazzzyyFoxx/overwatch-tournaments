@@ -3,14 +3,14 @@ from __future__ import annotations
 from typing import Any
 
 from cashews import cache
-from faststream.rabbit import RabbitMessage
+from faststream.rabbit import Channel, RabbitMessage
 
 from shared.messaging.config import TOURNAMENT_CHANGED_APP_QUEUE, TOURNAMENT_CHANGED_EXCHANGE
 from shared.observability import observe_message_processing
 from shared.schemas.events import TournamentChangedEvent
 from src.core import db
 from src.core.caching import CACHE_PREFIXES
-from src.services import hero_stats_refresh
+from src.services import hero_stats_refresh, user_cache
 
 
 def _with_prefixes(*suffixes: str) -> tuple[str, ...]:
@@ -30,13 +30,14 @@ def tournament_standings_cache_patterns(tournament_id: int) -> tuple[str, ...]:
     # separate standings pattern is redundant.
     return (
         *_with_prefixes(f"*tournaments/{tournament_id}*"),
-        # User-scoped flow caches aggregate across tournaments — we don't know
-        # which users touched this tournament, so invalidate them broadly.
-        # TTL is short (users_cache_ttl=60s) so the steady-state cost is low.
-        "backend:user_profile:*",
-        "backend:user_tournaments:*",
+        # User-scoped flow caches (profile, tournaments, heroes, encounters,
+        # maps, teammates, compare, ...) aggregate across tournaments — we don't
+        # know which users this tournament touched, so drop them all. Bounded by
+        # users_cache_ttl regardless. Single source of truth: services.user_cache.
+        *user_cache.tournament_user_cache_patterns(),
         # Cached Users-Overview id order (H13) — a tournament change can reorder
         # the tournaments_count / achievements_count / avg_placement leaderboard.
+        # Workspace/sort-scoped (not per-user), so it lives outside user_cache.
         "backend:user_overview_order:*",
     )
 
@@ -65,6 +66,10 @@ async def handle_tournament_changed_event(data: dict[str, Any]) -> None:
     await invalidate_achievement_rarity_cache()
 
 
+# Isolated channel: cache-invalidation bursts must not compete with RPC QoS.
+_EVENTS_CHANNEL = Channel(prefetch_count=4)
+
+
 def register(broker: Any, logger: Any) -> None:
     """Register the cache-invalidation consumer on the headless worker's broker.
 
@@ -73,7 +78,7 @@ def register(broker: Any, logger: Any) -> None:
     invalidation messages between them.
     """
 
-    @broker.subscriber(TOURNAMENT_CHANGED_APP_QUEUE, exchange=TOURNAMENT_CHANGED_EXCHANGE)
+    @broker.subscriber(TOURNAMENT_CHANGED_APP_QUEUE, exchange=TOURNAMENT_CHANGED_EXCHANGE, channel=_EVENTS_CHANNEL)
     async def process_tournament_changed(data: dict[str, Any], msg: RabbitMessage) -> None:
         async with observe_message_processing(
             queue=TOURNAMENT_CHANGED_APP_QUEUE,

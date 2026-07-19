@@ -6,7 +6,7 @@ import { Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
-import { useTranslation } from "@/i18n/LanguageContext";
+import { useTranslations } from "next-intl";
 import { GlossaryTerm } from "@/app/(site)/tournaments/analytics/analytics-glossary";
 
 /** Anomaly kinds with the same hues as the chips elsewhere on the page. */
@@ -24,7 +24,7 @@ const ANOMALY_KINDS: { term: GlossaryTerm; hue: string }[] = [
  * entries, so it stays in sync with the inline tooltips.
  */
 export default function AnomalyLegend({ className }: { className?: string }) {
-  const { t } = useTranslation();
+  const t = useTranslations();
 
   return (
     <Popover>

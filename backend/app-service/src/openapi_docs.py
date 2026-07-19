@@ -123,6 +123,10 @@ DOCS: dict[str, dict] = {
         "summary": "User tournament stats",
         "description": "Returns a player's participation and stats for one tournament, resolved against that tournament's division grid (public).",
     },
+    "rpc.app.users.tournament_leaderboard": {
+        "summary": "Tournament stat leaderboard",
+        "description": "Returns every player in a tournament ranked by a single stat — the full ranked list behind a user's per-stat rank/total on the tournament-stats page. Inverse stats like Deaths rank ascending. The `stat` must be one of the ranked tournament stats (public).",
+    },
     "rpc.app.users.maps": {
         "summary": "User maps",
         "description": "Returns a player's paginated, sortable per-map record (win/loss/draw/winrate), optionally workspace-scoped (public).",
@@ -196,6 +200,19 @@ DOCS: dict[str, dict] = {
     "rpc.app.workspaces.member_remove": {
         "summary": "Remove workspace member",
         "description": "Removes a member from a workspace and busts their RBAC cache; requires workspace_member.delete, refuses to remove the last owner, returns 204.",
+    },
+    # ── workspace custom domain (white-label Phase 2) ───────────────────────────────
+    "rpc.app.workspaces.set_custom_domain": {
+        "summary": "Set workspace custom domain",
+        "description": "Normalizes and stores a custom domain plus a fresh DNS TXT verification token, resetting verification; requires workspace.update, 404 if workspace missing, 400 on an invalid domain.",
+    },
+    "rpc.app.workspaces.verify_custom_domain": {
+        "summary": "Verify workspace custom domain",
+        "description": "Checks the `_owt-verify.<domain>` DNS TXT record against the stored token and stamps verified_at on a match; requires workspace.update, 404 if workspace missing, 400 if no domain is set or the record doesn't match yet.",
+    },
+    "rpc.app.workspaces.clear_custom_domain": {
+        "summary": "Clear workspace custom domain",
+        "description": "Removes the custom domain, its verification token, and verified_at; requires workspace.update, 404 if workspace missing.",
     },
     # ── workspace icon (binary) ────────────────────────────────────────────────────
     "rpc.app.workspaces.icon_upload": {

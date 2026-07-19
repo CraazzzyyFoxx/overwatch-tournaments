@@ -2,16 +2,21 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { getForwardedClientHeaders } from "@/lib/forward-client-headers";
 import { authService } from "@/services/auth.service";
-
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+import { clearAuthCookies, getAccessToken, getRefreshToken } from "@/lib/auth-cookies";
+import { publicOrigin } from "@/lib/request-origin";
 
 export async function GET(request: Request) {
+  // Redirect back to the host the user is actually on (custom domain / subdomain
+  // / apex), derived from forwarded headers — not request.url (0.0.0.0:3000
+  // behind the edge) and not a fixed apex SITE_URL, which would kick a
+  // custom-domain user over to the platform apex on logout. See request-origin.ts.
+  const origin = publicOrigin(request);
   const url = new URL(request.url);
   const nextParam = url.searchParams.get("next");
 
   const cookieStore = await cookies();
-  const accessToken = cookieStore.get("aqt_access_token")?.value;
-  const refreshToken = cookieStore.get("aqt_refresh_token")?.value;
+  const accessToken = getAccessToken(cookieStore);
+  const refreshToken = getRefreshToken(cookieStore);
 
   // Best-effort server-side logout (revoke refresh token)
   try {
@@ -22,13 +27,12 @@ export async function GET(request: Request) {
     // ignore
   }
 
-  // Validate redirect target to prevent open redirects.
+  // Validate redirect target to prevent open redirects (must stay same-origin).
   let safeNext = "/";
   if (nextParam) {
     try {
-      const parsedNext = new URL(nextParam, SITE_URL);
-      const siteOrigin = new URL(SITE_URL).origin;
-      if (parsedNext.origin === siteOrigin) {
+      const parsedNext = new URL(nextParam, origin);
+      if (parsedNext.origin === origin) {
         safeNext = `${parsedNext.pathname}${parsedNext.search}`;
       }
     } catch {
@@ -38,10 +42,9 @@ export async function GET(request: Request) {
     }
   }
 
-  // Build redirect URL using SITE_URL to avoid 0.0.0.0 issues
-  const redirectUrl = new URL(safeNext, SITE_URL);
+  // Redirect back onto the current host (custom domain / subdomain / apex).
+  const redirectUrl = new URL(safeNext, origin);
   const response = NextResponse.redirect(redirectUrl);
-  response.cookies.delete("aqt_access_token");
-  response.cookies.delete("aqt_refresh_token");
+  clearAuthCookies(response);
   return response;
 }

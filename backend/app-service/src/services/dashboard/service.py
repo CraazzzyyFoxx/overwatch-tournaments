@@ -8,7 +8,10 @@ async def get_counts(
     session: AsyncSession,
     workspace_id: int | None = None,
 ) -> dict[str, int]:
-    ws_filters: list = []
+    # Hidden tournaments (issue #115) never contribute to the public dashboard —
+    # counts, issues, or the active-tournament pick — regardless of viewer. Every
+    # query below is Tournament-scoped, so this exclusion is safe across all.
+    ws_filters: list = [models.Tournament.is_hidden.is_(False)]
     if workspace_id is not None:
         ws_filters.append(models.Tournament.workspace_id == workspace_id)
 
@@ -64,7 +67,10 @@ async def get_issues(
     session: AsyncSession,
     workspace_id: int | None = None,
 ) -> dict[str, int]:
-    ws_filters: list = []
+    # Hidden tournaments (issue #115) never contribute to the public dashboard —
+    # counts, issues, or the active-tournament pick — regardless of viewer. Every
+    # query below is Tournament-scoped, so this exclusion is safe across all.
+    ws_filters: list = [models.Tournament.is_hidden.is_(False)]
     if workspace_id is not None:
         ws_filters.append(models.Tournament.workspace_id == workspace_id)
 
@@ -119,7 +125,10 @@ async def get_active_tournament_stats(
     session: AsyncSession,
     workspace_id: int | None = None,
 ) -> dict | None:
-    ws_filters: list = []
+    # Hidden tournaments (issue #115) never contribute to the public dashboard —
+    # counts, issues, or the active-tournament pick — regardless of viewer. Every
+    # query below is Tournament-scoped, so this exclusion is safe across all.
+    ws_filters: list = [models.Tournament.is_hidden.is_(False)]
     if workspace_id is not None:
         ws_filters.append(models.Tournament.workspace_id == workspace_id)
 

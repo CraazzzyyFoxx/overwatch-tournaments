@@ -39,6 +39,24 @@ export const mvpRank = (performance: number | null | undefined): MvpRank => {
   return "default";
 };
 
+/** Official MVP placement: impact rank when computed, legacy performance otherwise. */
+export const resolveMvpPlacement = (m: { impact_rank?: number | null; performance?: number | null }): number | null =>
+  m.impact_rank ?? m.performance ?? null;
+
+/**
+ * Signed, 1-decimal display for the overperformance score (z-composite vs the
+ * player's role×rank baseline): how much better/worse than expected they
+ * played. `raised` drives the up/down + positive/negative styling. Returns
+ * null when there is no score (legacy match / not computed).
+ */
+export const formatOverperformance = (
+  score: number | null | undefined
+): { text: string; raised: boolean } | null => {
+  if (score == null || Number.isNaN(score)) return null;
+  const raised = score >= 0;
+  return { text: `${raised ? "+" : "−"}${Math.abs(score).toFixed(1)}`, raised };
+};
+
 /** English ordinal for a positive integer (1 → "1st", 2 → "2nd", …). */
 export const ordinal = (n: number): string => {
   const mod100 = n % 100;

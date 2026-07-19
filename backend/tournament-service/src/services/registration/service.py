@@ -12,9 +12,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from shared.balancer_registration_statuses import build_unknown_status_meta, get_status_metas_map
+from shared.balancer_registration_statuses import get_status_metas_map
 from shared.balancer_subrole_catalog import resolve_subrole_catalog
-from shared.core import enums
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.core.social import SocialProvider, normalize_social_handle
 from shared.domain.player_sub_roles import REGISTRATION_ROLE_CODES, normalize_sub_role
@@ -38,6 +37,7 @@ from src.schemas.registration_build import (
     _resolve_tournament_workspace,
 )
 from src.services.registration.validation import validate_registration_input, validate_verified_identity
+from src.services.registration.windows import is_check_in_window_active, is_registration_open
 from src.services.tournament.events import enqueue_registration_approved
 from src.services.tournament.realtime_commit import register_tournament_realtime_update
 
@@ -55,26 +55,6 @@ def _normalize_battle_tag(value: str | None) -> str | None:
     if not cleaned:
         return None
     return cleaned.lower()
-
-
-def _as_utc(value: datetime) -> datetime:
-    if value.tzinfo is None:
-        return value.replace(tzinfo=UTC)
-    return value.astimezone(UTC)
-
-
-def is_check_in_window_active(
-    tournament: models.Tournament,
-    *,
-    now: datetime | None = None,
-) -> bool:
-    if tournament.status != enums.TournamentStatus.CHECK_IN:
-        return False
-
-    current_time = _as_utc(now or datetime.now(UTC))
-    opens_at = _as_utc(tournament.check_in_opens_at) if tournament.check_in_opens_at is not None else None
-    closes_at = _as_utc(tournament.check_in_closes_at) if tournament.check_in_closes_at is not None else None
-    return (opens_at is None or opens_at <= current_time) and (closes_at is None or current_time <= closes_at)
 
 
 async def get_registration_form(
@@ -660,7 +640,8 @@ async def submit_public_registration(
     serialized read model. Commits internally.
     """
     form = await get_registration_form(session, tournament_id)
-    if form is None or not form.is_open:
+    tournament = await session.get(models.Tournament, tournament_id)
+    if form is None or tournament is None or not is_registration_open(tournament, form):
         raise HTTPException(status_code=400, detail="Registration is not open for this tournament")
 
     workspace_id = form.workspace_id
@@ -809,14 +790,12 @@ async def build_public_registration_list(
                 workspace_id=workspace_id,
                 status_meta_map=status_meta_map,
                 show_ranks=show_ranks,
-                # Anonymous endpoint: strip smurf tags / notes / custom
-                # fields (PII + anti-smurf data meant for admins only).
+                # Anonymous endpoint: strip custom fields (may hold PII,
+                # admin-only). Notes and smurf tags stay public — see
+                # _reg_to_read.
                 include_private=False,
+                profiles_open=profiles_open_map.get(r.id),
             ).model_dump(),
-            balancer_status=r.balancer_status,
-            balancer_status_meta=status_meta_map["balancer"].get(r.balancer_status)
-            or build_unknown_status_meta("balancer", r.balancer_status),
-            profiles_open=profiles_open_map.get(r.id),
             tournament_history=history_map.get(r.id, []),
             tournament_history_count=history_count_map.get(r.id, 0),
         )
@@ -850,8 +829,6 @@ async def upsert_registration_form(
             workspace_id=workspace_id,
             is_open=body.is_open,
             auto_approve=body.auto_approve,
-            opens_at=body.opens_at,
-            closes_at=body.closes_at,
             require_open_profile=body.require_open_profile,
             open_profile_scope=body.open_profile_scope,
             show_ranks=body.show_ranks,
@@ -862,8 +839,6 @@ async def upsert_registration_form(
     else:
         form.is_open = body.is_open
         form.auto_approve = body.auto_approve
-        form.opens_at = body.opens_at
-        form.closes_at = body.closes_at
         form.require_open_profile = body.require_open_profile
         form.open_profile_scope = body.open_profile_scope
         form.show_ranks = body.show_ranks

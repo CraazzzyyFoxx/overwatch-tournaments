@@ -41,30 +41,37 @@
   }
 
   .dark {
-    --background: 0 0% 3.9%;
-    --foreground: 0 0% 98%;
-    --muted: 0 0% 14.9%;
-    --muted-foreground: 0 0% 63.9%;
-    --popover: 0 0% 3.9%;
-    --popover-foreground: 0 0% 98%;
-    --card: 0 0% 3.9%;
-    --card-foreground: 0 0% 98%;
-    --border: 0 0% 14.9%;
-    --input: 0 0% 14.9%;
-    --primary: 0 0% 98%;
-    --primary-foreground: 0 0% 9%;
-    --secondary: 0 0% 14.9%;
-    --secondary-foreground: 0 0% 98%;
-    --accent: 0 0% 14.9%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
-    --ring: 0 0% 83.1%;
-    --chart-1: 0 0% 98%;
-    --chart-2: 0 0% 14.9%;
-    --chart-3: 0 0% 14.9%;
-    --chart-4: 0 0% 17.9%;
-    --chart-5: 0 3% 98%;
+    /* Dark-only app: shadcn semantic tokens mapped onto the OWT "Editorial
+       Tactical" palette (mirrors the global --aqt-* set), so every shadcn
+       component (bg-background, bg-card, border-border, bg-primary, ring, …)
+       renders in-brand instead of the default neutral greyscale. */
+    --background: 220 21% 5%;
+    --foreground: 214 33% 96%;
+    --muted: 219 21% 13%;
+    --muted-foreground: 212 13% 65%;
+    --popover: 220 22% 8%;
+    --popover-foreground: 214 33% 96%;
+    --card: 220 22% 8%;
+    --card-foreground: 214 33% 96%;
+    --border: 219 19% 15%;
+    --input: 219 19% 15%;
+    --primary: 172 70% 49%;
+    --primary-foreground: 180 20% 8%;
+    --secondary: 217 17% 21%;
+    --secondary-foreground: 214 33% 96%;
+    --accent: 217 17% 21%;
+    --accent-foreground: 214 33% 96%;
+    /* Loss/live hue (349°) from the book, kept a touch darker than the raw
+       #f0506e so white text on destructive buttons stays legible. */
+    --destructive: 349 75% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --ring: 172 70% 49%;
+    /* Chart palette — design-book categorical hues (teal/amber/violet/gold/pink). */
+    --chart-1: 172 70% 49%;
+    --chart-2: 36 88% 65%;
+    --chart-3: 262 83% 58%;
+    --chart-4: 42 63% 60%;
+    --chart-5: 337 81% 66%;
     --sidebar-background: 240 5.9% 10%;
     --sidebar-foreground: 240 4.8% 95.9%;
     --sidebar-primary: 224.3 76.3% 48%;
@@ -73,15 +80,6 @@
     --sidebar-accent-foreground: 240 4.8% 95.9%;
     --sidebar-border: 240 3.7% 15.9%;
     --sidebar-ring: 217.2 91.2% 59.8%;
-  }
-}
-
-@layer base {
-  * {
-    @apply border-border;
-  }
-  body {
-    @apply bg-background text-foreground;
   }
 }
 
@@ -104,14 +102,6 @@
 ::-webkit-scrollbar-thumb:hover {
   background: #555;
 }
-
-/* *, *::before, *::after {
-  outline: 1px solid red;
-}
-
-body, html {
-  overflow-x: hidden;
-} */
 
 .user-map {
   position: relative;
@@ -194,16 +184,16 @@ body, html {
   --accent-foreground: 210 20% 95%;
   --secondary: 215 24% 20%;
   --secondary-foreground: 210 20% 95%;
-  --primary: 174 72% 46%;
+  --primary: 172 70% 49%;
   --primary-foreground: 180 20% 5%;
   --border: 215 16% 15%;
   --input: 215 16% 15%;
-  --ring: 174 72% 46%;
+  --ring: 172 70% 49%;
   --destructive: 0 72% 51%;
   --destructive-foreground: 0 0% 100%;
 
   /* Chart palette — OW2 inspired */
-  --chart-1: 174 72% 46%;
+  --chart-1: 172 70% 49%;
   --chart-2: 30 100% 50%;
   --chart-3: 262 83% 58%;
   --chart-4: 43 96% 56%;
@@ -211,38 +201,18 @@ body, html {
 
   --sidebar: hsl(225 30% 7%);
   --sidebar-foreground: hsl(210 20% 92%);
-  --sidebar-primary: hsl(174 72% 46%);
+  --sidebar-primary: hsl(172 70% 49%);
   --sidebar-primary-foreground: hsl(0 0% 100%);
   --sidebar-accent: hsl(215 20% 12%);
   --sidebar-accent-foreground: hsl(210 20% 92%);
   --sidebar-border: hsl(215 16% 13%);
-  --sidebar-ring: hsl(174 72% 46%);
+  --sidebar-ring: hsl(172 70% 49%);
 }
 
-/* ───── Player redesign (AQT) — scoped tokens ───── */
+/* Player-profile scope. The --aqt-* palette now lives globally on :root (see
+   "Redesign token layer" below), so this scope only sets the text colour — the
+   duplicated token block (and the unused --aqt-teal-soft) was removed. */
 .aqt-player {
-  --aqt-bg: hsl(222 30% 6%);
-  --aqt-bg-2: hsl(215 22% 7%);
-  --aqt-card: hsl(215 20% 8%);
-  --aqt-card-2: hsl(215 22% 9%);
-  --aqt-border: hsl(215 20% 12%);
-  --aqt-border-2: hsl(215 20% 16%);
-  --aqt-fg: hsl(210 20% 95%);
-  --aqt-fg-muted: hsl(215 12% 60%);
-  --aqt-fg-dim: hsl(215 12% 40%);
-  --aqt-fg-faint: hsl(215 12% 30%);
-  --aqt-teal: hsl(174 72% 46%);
-  --aqt-teal-soft: hsl(174 72% 46% / 0.18);
-  --aqt-emerald: hsl(142 70% 50%);
-  --aqt-amber: hsl(38 95% 55%);
-  --aqt-rose: hsl(340 75% 58%);
-  --aqt-violet: hsl(270 70% 62%);
-  --aqt-blue: hsl(210 80% 60%);
-  --aqt-tank: hsl(210 78% 60%);
-  --aqt-damage: hsl(340 78% 60%);
-  --aqt-support: hsl(142 60% 52%);
-  --aqt-display: "Barlow Condensed", Inter, system-ui, sans-serif;
-  --aqt-mono: "JetBrains Mono", ui-monospace, monospace;
   color: var(--aqt-fg);
 }
 
@@ -486,8 +456,8 @@ body, html {
   font-family: var(--aqt-mono);
 }
 .aqt-stage-pill.playoffs {
-  background: hsl(38 95% 55% / 0.08);
-  border-color: hsl(38 95% 55% / 0.25);
+  background: hsl(36 88% 65% / 0.08);
+  border-color: hsl(36 88% 65% / 0.25);
   color: var(--aqt-amber);
 }
 .aqt-stage-pill.group {
@@ -496,8 +466,8 @@ body, html {
   color: var(--aqt-blue);
 }
 .aqt-stage-pill.finals {
-  background: hsl(340 75% 58% / 0.08);
-  border-color: hsl(340 75% 58% / 0.25);
+  background: hsl(349 84% 63% / 0.08);
+  border-color: hsl(349 84% 63% / 0.25);
   color: var(--aqt-rose);
 }
 
@@ -604,8 +574,8 @@ body, html {
   color: var(--aqt-fg);
 }
 .aqt-filter-chip.active {
-  background: hsl(174 72% 46% / 0.12);
-  border-color: hsl(174 72% 46% / 0.35);
+  background: hsl(172 70% 49% / 0.12);
+  border-color: hsl(172 70% 49% / 0.35);
   color: var(--aqt-teal);
 }
 .aqt-filter-chip .aqt-count {
@@ -617,7 +587,7 @@ body, html {
   border-radius: 4px;
 }
 .aqt-filter-chip.active .aqt-count {
-  background: hsl(174 72% 46% / 0.16);
+  background: hsl(172 70% 49% / 0.16);
   color: var(--aqt-teal);
 }
 .aqt-filter-divider {
@@ -648,7 +618,7 @@ body, html {
 }
 .aqt-place-spark .aqt-bar {
   width: 100%;
-  background: linear-gradient(180deg, var(--aqt-teal), hsl(174 72% 46% / 0.35));
+  background: linear-gradient(180deg, var(--aqt-teal), hsl(172 70% 49% / 0.35));
   border-radius: 3px 3px 0 0;
   transition: 0.15s;
   min-height: 4px;
@@ -657,7 +627,7 @@ body, html {
   filter: brightness(1.2);
 }
 .aqt-place-spark .aqt-col.podium .aqt-bar {
-  background: linear-gradient(180deg, var(--aqt-amber), hsl(38 95% 55% / 0.4));
+  background: linear-gradient(180deg, var(--aqt-amber), hsl(36 88% 65% / 0.4));
 }
 .aqt-place-spark .aqt-col.first .aqt-bar {
   background: linear-gradient(180deg, hsl(45 95% 60%), hsl(38 90% 48%));
@@ -1082,8 +1052,311 @@ body, html {
 }
 .aqt-ach-card .aqt-stamp.x {
   color: var(--aqt-teal);
-  background: hsl(174 72% 46% / 0.12);
-  border-color: hsl(174 72% 46% / 0.28);
+  background: hsl(172 70% 49% / 0.12);
+  border-color: hsl(172 70% 49% / 0.28);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   Achievements catalog (redesign) — the public /achievements showcase.
+   Rarity is the organizing visual principle: a single `--rar` HSL triplet
+   per tier (shadcn-style, so `hsl(var(--rar) / a)` alpha tints work) drives
+   every hairline, badge, ring and glow. Image-forward tiles keep the badge
+   art as the hero, framed in the Editorial-Tactical language (mono numerals,
+   thin rarity edge, calm hover reveal).
+   ═══════════════════════════════════════════════════════════════════════ */
+.aqt-rar-mythic {
+  --rar: 40 96% 62%;
+}
+.aqt-rar-legendary {
+  --rar: 350 80% 64%;
+}
+.aqt-rar-epic {
+  --rar: 270 72% 68%;
+}
+.aqt-rar-rare {
+  --rar: 210 82% 64%;
+}
+.aqt-rar-uncommon {
+  --rar: 150 57% 55%;
+}
+.aqt-rar-common {
+  --rar: 215 14% 60%;
+}
+
+/* rarity-tinted text/dot helpers (used by section heads, pills, legends) */
+.aqt-rar-fg {
+  color: hsl(var(--rar));
+}
+
+/* ── image-forward tile grid ── */
+.aqt-ach-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+}
+@media (max-width: 520px) {
+  .aqt-ach-tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.aqt-ach-tile {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  border-radius: 12px;
+  overflow: hidden;
+  isolation: isolate;
+  border: 1px solid var(--aqt-border);
+  background: var(--aqt-card-2);
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+.aqt-ach-tile:hover {
+  transform: translateY(-3px);
+  border-color: hsl(var(--rar) / 0.5);
+  box-shadow:
+    0 16px 34px -18px hsl(0 0% 0% / 0.75),
+    0 0 0 1px hsl(var(--rar) / 0.22);
+}
+/* keyboard focus lands on the inner overlay link → show the ring on the tile */
+.aqt-ach-tile:focus-within {
+  border-color: hsl(var(--rar) / 0.6);
+  box-shadow: 0 0 0 2px hsl(var(--rar) / 0.5);
+}
+/* rarity top hairline */
+.aqt-ach-tile::before {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  top: 0;
+  height: 2px;
+  z-index: 6;
+  background: linear-gradient(90deg, hsl(var(--rar)), hsl(var(--rar) / 0.15));
+}
+.aqt-ach-tile__img {
+  object-fit: cover;
+  z-index: 0;
+}
+/* legibility scrim so the name (top) and stats (bottom) read on any art */
+.aqt-ach-tile__scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: linear-gradient(
+    180deg,
+    hsl(220 30% 4% / 0.72) 0%,
+    hsl(220 30% 4% / 0) 34%,
+    hsl(220 30% 4% / 0) 58%,
+    hsl(220 30% 4% / 0.78) 100%
+  );
+}
+.aqt-ach-tile__name {
+  position: absolute;
+  top: 10px;
+  left: 12px;
+  right: 12px;
+  z-index: 4;
+  font-family: var(--aqt-display);
+  font-weight: 700;
+  font-size: 13.5px;
+  line-height: 1.2;
+  color: hsl(0 0% 100%);
+  text-shadow: 0 1px 6px hsl(220 30% 4% / 0.9);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.aqt-ach-tile__rarity {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 5;
+  font-family: var(--aqt-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: hsl(var(--rar));
+  background: hsl(220 30% 4% / 0.55);
+  border: 1px solid hsl(var(--rar) / 0.4);
+  border-radius: 999px;
+  padding: 2px 7px;
+  backdrop-filter: blur(4px);
+  /* hidden until hover — the name owns the top edge at rest */
+  opacity: 0;
+  transform: translateY(-3px);
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+.aqt-ach-tile:hover .aqt-ach-tile__rarity,
+.aqt-ach-tile:focus-within .aqt-ach-tile__rarity {
+  opacity: 1;
+  transform: translateY(0);
+}
+.aqt-ach-tile__count {
+  position: absolute;
+  bottom: 9px;
+  right: 10px;
+  z-index: 4;
+  font-family: var(--aqt-mono);
+  font-size: 10.5px;
+  font-weight: 700;
+  color: hsl(210 20% 90%);
+  background: hsl(220 30% 4% / 0.5);
+  border: 1px solid hsl(0 0% 100% / 0.12);
+  border-radius: 999px;
+  padding: 2px 7px;
+  backdrop-filter: blur(4px);
+}
+/* hover description reveal */
+.aqt-ach-tile__desc {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px 16px 34px;
+  text-align: center;
+  background: hsl(220 30% 4% / 0.82);
+  opacity: 0;
+  transition: opacity 0.18s ease;
+  pointer-events: none;
+}
+.aqt-ach-tile:hover .aqt-ach-tile__desc,
+.aqt-ach-tile:focus-within .aqt-ach-tile__desc {
+  opacity: 1;
+}
+.aqt-ach-tile__desc p {
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: hsl(210 18% 88%);
+  display: -webkit-box;
+  -webkit-line-clamp: 6;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+/* rules button — sibling of the overlay link, kept clickable above it */
+.aqt-ach-tile__rules {
+  position: absolute;
+  bottom: 8px;
+  left: 10px;
+  z-index: 12;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  color: hsl(210 16% 82%);
+  background: hsl(220 30% 4% / 0.62);
+  border: 1px solid hsl(0 0% 100% / 0.14);
+  backdrop-filter: blur(4px);
+  opacity: 0;
+  transition: opacity 0.18s ease, color 0.18s ease, background 0.18s ease;
+}
+.aqt-ach-tile:hover .aqt-ach-tile__rules,
+.aqt-ach-tile:focus-within .aqt-ach-tile__rules {
+  opacity: 1;
+}
+.aqt-ach-tile__rules:hover {
+  color: hsl(var(--rar));
+  background: hsl(220 30% 4% / 0.85);
+  border-color: hsl(var(--rar) / 0.5);
+}
+
+/* ── detail-page crest (rarity-framed badge art) ── */
+.aqt-ach-crest {
+  position: relative;
+  width: clamp(96px, 12vw, 132px);
+  aspect-ratio: 1 / 1;
+  border-radius: 18px;
+  overflow: hidden;
+  flex-shrink: 0;
+  border: 1px solid hsl(var(--rar) / 0.5);
+  box-shadow:
+    0 0 0 1px hsl(var(--rar) / 0.14),
+    0 24px 48px -24px hsl(var(--rar) / 0.55);
+}
+.aqt-ach-crest::before {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  top: 0;
+  height: 3px;
+  z-index: 3;
+  background: linear-gradient(90deg, hsl(var(--rar)), hsl(var(--rar) / 0.2));
+}
+.aqt-ach-crest img {
+  object-fit: cover;
+}
+/* small rarity meta pill (detail + shared) */
+.aqt-meta-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--aqt-fg-muted);
+  background: hsl(0 0% 100% / 0.03);
+  border: 1px solid var(--aqt-border-2);
+  border-radius: 999px;
+  padding: 3px 10px;
+}
+.aqt-meta-pill.rar {
+  color: hsl(var(--rar));
+  border-color: hsl(var(--rar) / 0.4);
+  background: hsl(var(--rar) / 0.08);
+  font-family: var(--aqt-mono);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* ── earners list (detail page) ── */
+.aqt-earner-row {
+  display: grid;
+  grid-template-columns: 34px 1fr auto;
+  align-items: center;
+  gap: 14px;
+  padding: 11px 18px;
+  border-bottom: 1px solid var(--aqt-border);
+  transition: background 0.15s ease;
+}
+.aqt-earner-row:last-child {
+  border-bottom: 0;
+}
+.aqt-earner-row:hover {
+  background: hsl(0 0% 100% / 0.02);
+}
+.aqt-earner-rank {
+  font-family: var(--aqt-mono);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--aqt-fg-faint);
+  text-align: right;
+}
+.aqt-earner-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--aqt-fg-dim);
+}
+.aqt-earner-meta svg {
+  flex-shrink: 0;
+  opacity: 0.65;
+}
+.aqt-earner-meta a {
+  color: var(--aqt-fg-muted);
+  transition: color 0.15s ease;
+}
+.aqt-earner-meta a:hover {
+  color: var(--aqt-teal);
+}
+.aqt-earner-count {
+  font-family: var(--aqt-mono);
+  font-weight: 700;
+  color: var(--aqt-teal);
 }
 
 /* radar */
@@ -1100,7 +1373,7 @@ body, html {
   stroke-width: 1.2;
 }
 .aqt-radar-you {
-  fill: hsl(174 72% 46% / 0.22);
+  fill: hsl(172 70% 49% / 0.22);
   stroke: var(--aqt-teal);
   stroke-width: 1.8;
 }
@@ -1131,10 +1404,10 @@ body, html {
   border-left: 3px solid var(--aqt-amber);
 }
 .aqt-t-item.podium {
-  border-left: 3px solid hsl(38 95% 55% / 0.5);
+  border-left: 3px solid hsl(36 88% 65% / 0.5);
 }
 .aqt-t-item.expanded {
-  background: hsl(174 72% 46% / 0.04);
+  background: hsl(172 70% 49% / 0.04);
   border-bottom-color: transparent;
 }
 
@@ -1212,68 +1485,62 @@ body, html {
 }
 
 @layer utilities {
+  /* Former glassmorphism surfaces, cut to the flat Editorial-Tactical style:
+     solid token backgrounds + hairline borders, no blur or gradient mesh.
+     Class names are kept as thin aliases so consumers don't need editing. */
   .liquid-glass {
-    --lg-a: 34 197 94;
-    --lg-b: 56 189 248;
-    --lg-c: 245 158 11;
     isolation: isolate;
   }
 
   .liquid-glass-panel {
-    background: hsl(var(--background) / 0.9);
-    border-color: hsl(var(--border) / 0.65);
-    box-shadow:
-      0 1px 0 rgb(255 255 255 / 0.06) inset,
-      0 18px 50px rgb(0 0 0 / 0.45);
-  }
-
-  @supports (backdrop-filter: blur(10px)) {
-    .liquid-glass-panel {
-      background: hsl(var(--background) / 0.55);
-      backdrop-filter: blur(16px);
-      -webkit-backdrop-filter: blur(16px);
-    }
+    background: hsl(var(--popover));
+    border-color: hsl(var(--border));
+    box-shadow: 0 18px 50px rgb(0 0 0 / 0.45);
   }
 
   .liquid-glass-surface {
-    background: hsl(var(--background) / 0.94);
-  }
-
-  @supports (backdrop-filter: blur(10px)) {
-    .liquid-glass-surface {
-      background: hsl(var(--background) / 0.82);
-    }
+    background: hsl(var(--background));
   }
 
   .liquid-glass [data-ui="card"] {
-    background: radial-gradient(900px circle at 12% 6%, rgb(var(--lg-a) / 0.1), transparent 56%),
-      radial-gradient(900px circle at 88% 12%, rgb(var(--lg-b) / 0.08), transparent 60%),
-      radial-gradient(900px circle at 45% 110%, rgb(var(--lg-c) / 0.06), transparent 62%),
-      hsl(var(--card) / 0.55);
-    border-color: hsl(var(--border) / 0.65);
-    box-shadow:
-      0 1px 0 rgb(255 255 255 / 0.06) inset,
-      0 18px 50px rgb(0 0 0 / 0.45);
-  }
-
-  @supports (backdrop-filter: blur(10px)) {
-    .liquid-glass [data-ui="card"] {
-      backdrop-filter: blur(14px);
-      -webkit-backdrop-filter: blur(14px);
-    }
+    background: hsl(var(--card));
+    border-color: hsl(var(--border));
   }
 
   .liquid-glass [data-ui="tabs-list"] {
-    background: hsl(var(--muted) / 0.35);
-    border: 1px solid hsl(var(--border) / 0.65);
+    background: hsl(var(--muted));
+    border: 1px solid hsl(var(--border));
   }
+}
 
-  @supports (backdrop-filter: blur(10px)) {
-    .liquid-glass [data-ui="tabs-list"] {
-      backdrop-filter: blur(14px);
-      -webkit-backdrop-filter: blur(14px);
-    }
-  }
+/* ── Popover surface (design request) ──────────────────────────────────────
+   The shadcn <Popover> inherited the brand-tinted --popover / --border tokens,
+   which read teal ("бирюзовый") on branded workspaces. Repaint it from global
+   tokens only: fill = page background, white text, and a contrasting neutral
+   (non-teal) rim so the panel stays distinct against the page. Scoped to the
+   Popover via its unique transform-origin utility, so dropdown / select /
+   context-menu surfaces keep their own styling. No component-code
+   changes. Unlayered → wins over the @layer base/utilities token defaults and
+   over any inherited (.dark or .site-theme brand) --popover value. */
+.origin-\[--radix-popover-content-transform-origin\] {
+  --popover: var(--background);
+  --popover-foreground: 0 0% 100%;
+  border-color: hsl(0 0% 100% / 0.16);
+}
+
+/* ── Tooltip surface (design request) ──────────────────────────────────────
+   The default <Tooltip> fills with bg-primary (teal) + dark text; a few
+   analytics tooltips repaint with bg-popover. Unify to the same treatment as
+   the Popover: fill = page background, white text, contrasting neutral rim.
+   Set the paint properties directly (not via --popover) since tooltips key off
+   --primary, not the popover token. Scoped to the tooltip via its unique
+   transform-origin utility. Unlayered → beats bg-primary / bg-popover /
+   border-border utilities. */
+.origin-\[--radix-tooltip-content-transform-origin\] {
+  background-color: hsl(var(--background));
+  color: hsl(0 0% 100%);
+  border: 1px solid hsl(0 0% 100% / 0.16);
+  box-shadow: 0 10px 30px -12px hsl(0 0% 0% / 0.7);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
@@ -1284,31 +1551,60 @@ body, html {
    .aqt-* component library + new redesign pages can use them globally.
    ═══════════════════════════════════════════════════════════════════════ */
 :root {
-  --aqt-bg: hsl(222 30% 6%);
-  --aqt-bg-2: hsl(215 22% 7%);
-  --aqt-card: hsl(215 20% 8%);
-  --aqt-card-2: hsl(215 22% 9%);
-  --aqt-border: hsl(215 20% 12%);
-  --aqt-border-2: hsl(215 20% 16%);
-  --aqt-border-3: hsl(215 20% 20%);
-  --aqt-fg: hsl(210 20% 95%);
-  --aqt-fg-muted: hsl(215 12% 60%);
-  --aqt-fg-dim: hsl(215 12% 40%);
-  --aqt-fg-faint: hsl(215 12% 30%);
-  --aqt-teal: hsl(174 72% 46%);
-  --aqt-emerald: hsl(142 70% 50%);
-  --aqt-amber: hsl(38 95% 55%);
-  --aqt-rose: hsl(340 75% 58%);
+  /* Values are the design-book palette (public/docs/design-book.html :root),
+     converted hex→HSL. bg/surface/line ladder, text ramp, brand + role/result
+     hues all mirror the book. Note "Results ≠ roles": --aqt-damage (dps 337°)
+     is intentionally distinct from --aqt-rose (loss/live 349°). */
+  --aqt-bg: hsl(220 21% 5%);
+  --aqt-bg-2: hsl(220 22% 7%);
+  --aqt-card: hsl(220 22% 8%);
+  --aqt-card-2: hsl(222 24% 11%);
+  --aqt-border: hsl(219 19% 15%);
+  --aqt-border-2: hsl(217 17% 21%);
+  --aqt-border-3: hsl(216 16% 26%);
+  --aqt-fg: hsl(214 33% 96%);
+  --aqt-fg-muted: hsl(212 13% 65%);
+  --aqt-fg-dim: hsl(213 9% 46%);
+  --aqt-fg-faint: hsl(214 10% 34%);
+  --aqt-teal: hsl(172 70% 49%);
+  --aqt-teal-deep: hsl(173 81% 32%);
+  --aqt-emerald: hsl(150 57% 52%);
+  --aqt-amber: hsl(36 88% 65%);
+  --aqt-rose: hsl(349 84% 63%);
   --aqt-violet: hsl(270 70% 62%);
-  --aqt-blue: hsl(210 80% 60%);
-  --aqt-gold: hsl(45 90% 60%);
-  --aqt-tank: hsl(210 78% 60%);
-  --aqt-damage: hsl(340 78% 60%);
-  --aqt-support: hsl(142 60% 52%);
+  --aqt-blue: hsl(215 83% 66%);
+  --aqt-gold: hsl(42 63% 60%);
+  --aqt-silver: hsl(212 21% 73%);
+  --aqt-bronze: hsl(26 49% 54%);
+  --aqt-tank: hsl(209 82% 65%);
+  --aqt-damage: hsl(337 81% 66%);
+  --aqt-support: hsl(150 57% 52%);
+  --aqt-live: var(--aqt-rose);
+  --aqt-warm: var(--aqt-amber);
+  /* Achievement rarity accent (HSL triplet so `hsl(var(--rar) / a)` alpha tints
+     work). Global fallback = "common" grey; the `.aqt-rar-*` classes override
+     it per tier. Kept as a triplet, not a full color, on purpose. */
+  --rar: 215 14% 60%;
   --aqt-radius: 14px;
   --aqt-radius-sm: 8px;
-  --aqt-display: var(--font-barlow-condensed), "Barlow Condensed", Inter, system-ui, sans-serif;
+  --aqt-display: var(--font-onest), var(--font-inter), Inter, system-ui, sans-serif;
+  --aqt-onest: var(--font-onest), var(--font-inter), Inter, system-ui, sans-serif;
   --aqt-mono: var(--font-jetbrains-mono), "JetBrains Mono", ui-monospace, monospace;
+  /* Editorial Tactical hero (design-book): role-spectrum accent + ONE
+     restrained teal glow. The spectrum is the single sanctioned multi-hue
+     accent — everywhere else, one teal leads. */
+  --aqt-spectrum: linear-gradient(90deg, var(--aqt-tank), var(--aqt-damage), var(--aqt-support));
+  --aqt-hero-glow: radial-gradient(ellipse at 30% 45%, hsl(172 70% 49% / 0.1), transparent 60%);
+}
+
+/* Page-hero title accent — role-spectrum gradient text. Callers wrap the
+   emphasized word in <em>; kept as one rule so heroes stay declarative. */
+.aqt-hero-title em {
+  font-style: normal;
+  background: var(--aqt-spectrum);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
 
 @keyframes aqtPulse {
@@ -1403,7 +1699,7 @@ body, html {
   left: -5%;
   width: 65%;
   height: 130%;
-  background: radial-gradient(ellipse at 30% 50%, hsl(174 72% 46% / 0.18), transparent 62%);
+  background: radial-gradient(ellipse at 30% 50%, hsl(172 70% 49% / 0.18), transparent 62%);
   pointer-events: none;
 }
 .aqt-tn .glow-2 {
@@ -1412,7 +1708,7 @@ body, html {
   right: 0;
   width: 55%;
   height: 100%;
-  background: radial-gradient(ellipse at 70% 30%, hsl(340 75% 58% / 0.1), transparent 58%);
+  background: radial-gradient(ellipse at 70% 30%, hsl(349 84% 63% / 0.1), transparent 58%);
   pointer-events: none;
 }
 .aqt-tn .hero-grid {
@@ -1472,7 +1768,7 @@ body, html {
   height: 6px;
   border-radius: 50%;
   background: var(--rose);
-  box-shadow: 0 0 0 3px hsl(340 75% 58% / 0.18);
+  box-shadow: 0 0 0 3px hsl(349 84% 63% / 0.18);
   animation: aqtPulse 2s ease-in-out infinite;
   margin-right: 6px;
   vertical-align: middle;
@@ -1512,12 +1808,12 @@ body, html {
   color: var(--fg);
 }
 .aqt-tn .tn-btn.primary {
-  background: hsl(174 72% 46% / 0.14);
-  border-color: hsl(174 72% 46% / 0.3);
+  background: hsl(172 70% 49% / 0.14);
+  border-color: hsl(172 70% 49% / 0.3);
   color: var(--teal);
 }
 .aqt-tn .tn-btn.primary:hover {
-  background: hsl(174 72% 46% / 0.2);
+  background: hsl(172 70% 49% / 0.2);
 }
 .aqt-tn .tn-btn .kbd {
   font-family: var(--mono);
@@ -1558,8 +1854,8 @@ body, html {
   color: var(--fg);
 }
 .aqt-tn .filter-chip.active {
-  background: hsl(174 72% 46% / 0.12);
-  border-color: hsl(174 72% 46% / 0.35);
+  background: hsl(172 70% 49% / 0.12);
+  border-color: hsl(172 70% 49% / 0.35);
   color: var(--teal);
 }
 .aqt-tn .filter-chip .count {
@@ -1571,7 +1867,7 @@ body, html {
   border-radius: 4px;
 }
 .aqt-tn .filter-chip.active .count {
-  background: hsl(174 72% 46% / 0.16);
+  background: hsl(172 70% 49% / 0.16);
   color: var(--teal);
 }
 .aqt-tn .filter-chip .dot {
@@ -1581,7 +1877,7 @@ body, html {
 }
 .aqt-tn .filter-chip .dot.live {
   background: var(--rose);
-  box-shadow: 0 0 0 3px hsl(340 75% 58% / 0.18);
+  box-shadow: 0 0 0 3px hsl(349 84% 63% / 0.18);
 }
 .aqt-tn .filter-chip .dot.upcoming {
   background: var(--amber);
@@ -1698,21 +1994,21 @@ body, html {
   background: var(--card-2);
 }
 .aqt-tn .feat-card.live {
-  border-color: hsl(340 75% 58% / 0.25);
+  border-color: hsl(349 84% 63% / 0.25);
 }
 .aqt-tn .feat-card.live:hover {
-  border-color: hsl(340 75% 58% / 0.4);
+  border-color: hsl(349 84% 63% / 0.4);
 }
 .aqt-tn .feat-glow {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background: radial-gradient(ellipse at 0% 0%, hsl(340 75% 58% / 0.14), transparent 55%),
-    radial-gradient(ellipse at 100% 100%, hsl(174 72% 46% / 0.08), transparent 55%);
+  background: radial-gradient(ellipse at 0% 0%, hsl(349 84% 63% / 0.14), transparent 55%),
+    radial-gradient(ellipse at 100% 100%, hsl(172 70% 49% / 0.08), transparent 55%);
 }
 .aqt-tn .feat-card.upcoming .feat-glow {
-  background: radial-gradient(ellipse at 0% 0%, hsl(38 95% 55% / 0.1), transparent 55%),
-    radial-gradient(ellipse at 100% 100%, hsl(174 72% 46% / 0.06), transparent 60%);
+  background: radial-gradient(ellipse at 0% 0%, hsl(36 88% 65% / 0.1), transparent 55%),
+    radial-gradient(ellipse at 100% 100%, hsl(172 70% 49% / 0.06), transparent 60%);
 }
 .aqt-tn .feat-hex {
   position: absolute;
@@ -1764,22 +2060,22 @@ body, html {
   font-family: Inter, sans-serif;
 }
 .aqt-tn .status-pill.live {
-  background: hsl(340 75% 58% / 0.14);
+  background: hsl(349 84% 63% / 0.14);
   color: var(--rose);
-  border: 1px solid hsl(340 75% 58% / 0.3);
+  border: 1px solid hsl(349 84% 63% / 0.3);
 }
 .aqt-tn .status-pill.live .dot {
   width: 7px;
   height: 7px;
   border-radius: 50%;
   background: var(--rose);
-  box-shadow: 0 0 0 3px hsl(340 75% 58% / 0.18);
+  box-shadow: 0 0 0 3px hsl(349 84% 63% / 0.18);
   animation: aqtPulse 2s ease-in-out infinite;
 }
 .aqt-tn .status-pill.upcoming {
-  background: hsl(38 95% 55% / 0.12);
+  background: hsl(36 88% 65% / 0.12);
   color: var(--amber);
-  border: 1px solid hsl(38 95% 55% / 0.3);
+  border: 1px solid hsl(36 88% 65% / 0.3);
 }
 .aqt-tn .status-pill.finished {
   background: hsl(215 12% 40% / 0.18);
@@ -2106,7 +2402,7 @@ body, html {
   font-family: Inter, sans-serif;
 }
 .aqt-tn .tn-status.live {
-  background: hsl(340 75% 58% / 0.14);
+  background: hsl(349 84% 63% / 0.14);
   color: var(--rose);
 }
 .aqt-tn .tn-status.live .dot {
@@ -2114,11 +2410,11 @@ body, html {
   height: 6px;
   border-radius: 50%;
   background: var(--rose);
-  box-shadow: 0 0 0 2.5px hsl(340 75% 58% / 0.18);
+  box-shadow: 0 0 0 2.5px hsl(349 84% 63% / 0.18);
   animation: aqtPulse 2s ease-in-out infinite;
 }
 .aqt-tn .tn-status.upcoming {
-  background: hsl(38 95% 55% / 0.12);
+  background: hsl(36 88% 65% / 0.12);
   color: var(--amber);
 }
 .aqt-tn .tn-status.upcoming .dot {
@@ -2304,8 +2600,8 @@ body, html {
   color: var(--fg);
 }
 .aqt-tn .page-btn.active {
-  background: hsl(174 72% 46% / 0.12);
-  border-color: hsl(174 72% 46% / 0.3);
+  background: hsl(172 70% 49% / 0.12);
+  border-color: hsl(172 70% 49% / 0.3);
   color: var(--teal);
 }
 .aqt-tn .page-btn.disabled {
@@ -2343,7 +2639,7 @@ body, html {
 .aqt-tn .tn-hero {
   position: relative;
   overflow: hidden;
-  border: 1px solid hsl(340 75% 58% / 0.25);
+  border: 1px solid hsl(349 84% 63% / 0.25);
   border-radius: 14px;
   padding: 28px 36px 24px;
   background: var(--bg);
@@ -2352,7 +2648,7 @@ body, html {
   border-color: var(--border-2);
 }
 .aqt-tn .tn-hero.status-upcoming {
-  border-color: hsl(38 95% 55% / 0.28);
+  border-color: hsl(36 88% 65% / 0.28);
 }
 .aqt-tn .tn-hero.status-draft {
   border-color: hsl(210 80% 60% / 0.24);
@@ -2363,7 +2659,7 @@ body, html {
   left: -10%;
   width: 60%;
   height: 160%;
-  background: radial-gradient(ellipse at 30% 50%, hsl(340 75% 58% / 0.18), transparent 60%);
+  background: radial-gradient(ellipse at 30% 50%, hsl(349 84% 63% / 0.18), transparent 60%);
   pointer-events: none;
 }
 .aqt-tn .glow-teal {
@@ -2372,7 +2668,7 @@ body, html {
   right: -5%;
   width: 55%;
   height: 130%;
-  background: radial-gradient(ellipse at 70% 40%, hsl(174 72% 46% / 0.14), transparent 60%);
+  background: radial-gradient(ellipse at 70% 40%, hsl(172 70% 49% / 0.14), transparent 60%);
   pointer-events: none;
 }
 .aqt-tn .tn-hero-inner {
@@ -2525,14 +2821,14 @@ body, html {
 }
 .aqt-tn .tab.active .count {
   color: var(--teal);
-  background: hsl(174 72% 46% / 0.14);
+  background: hsl(172 70% 49% / 0.14);
 }
 .aqt-tn .tab .live-tag {
   width: 6px;
   height: 6px;
   border-radius: 50%;
   background: var(--rose);
-  box-shadow: 0 0 0 3px hsl(340 75% 58% / 0.18);
+  box-shadow: 0 0 0 3px hsl(349 84% 63% / 0.18);
   animation: aqtPulse 2s ease-in-out infinite;
   margin-left: 2px;
 }
@@ -2605,9 +2901,9 @@ body, html {
   color: var(--fg);
 }
 .aqt-tn .stage-tab.active {
-  background: hsl(174 72% 46% / 0.14);
+  background: hsl(172 70% 49% / 0.14);
   color: var(--teal);
-  box-shadow: inset 0 0 0 1px hsl(174 72% 46% / 0.3);
+  box-shadow: inset 0 0 0 1px hsl(172 70% 49% / 0.3);
 }
 .aqt-tn .stage-tab .count {
   font-family: var(--mono);
@@ -2619,7 +2915,7 @@ body, html {
 }
 .aqt-tn .stage-tab.active .count {
   color: var(--teal);
-  background: hsl(174 72% 46% / 0.18);
+  background: hsl(172 70% 49% / 0.18);
 }
 
 .aqt-tn .groups-layout {
@@ -2661,7 +2957,7 @@ body, html {
   width: 38px;
   height: 38px;
   border-radius: 8px;
-  background: hsl(174 72% 46% / 0.14);
+  background: hsl(172 70% 49% / 0.14);
   color: var(--teal);
   font-family: var(--display);
   font-weight: 800;
@@ -2800,8 +3096,8 @@ body, html {
   cursor: default;
 }
 .aqt-tn .st-footer .badge:hover {
-  background: hsl(174 72% 46% / 0.08);
-  border-color: hsl(174 72% 46% / 0.2);
+  background: hsl(172 70% 49% / 0.08);
+  border-color: hsl(172 70% 49% / 0.2);
   color: var(--teal);
 }
 @media (max-width: 640px) {
@@ -2827,10 +3123,10 @@ body, html {
   text-align: center;
 }
 .aqt-tn table.st tr.advance {
-  background: hsl(174 72% 46% / 0.05);
+  background: hsl(172 70% 49% / 0.05);
 }
 .aqt-tn table.st tr.advance:hover td {
-  background: hsl(174 72% 46% / 0.09);
+  background: hsl(172 70% 49% / 0.09);
 }
 .aqt-tn table.st tr.crown {
   background: hsl(45 90% 60% / 0.06);
@@ -2957,7 +3253,7 @@ body, html {
 }
 .aqt-tn .st-maps .bar .l {
   height: 100%;
-  background: hsl(340 75% 58% / 0.4);
+  background: hsl(349 84% 63% / 0.4);
 }
 .aqt-tn .st-diff {
   font-family: var(--mono);
@@ -2994,7 +3290,7 @@ body, html {
   background: var(--emerald);
 }
 .aqt-tn .form-chips .fc.l {
-  background: hsl(340 75% 58% / 0.7);
+  background: hsl(349 84% 63% / 0.7);
   color: hsl(0 0% 100%);
 }
 .aqt-tn .form-chips .fc.t {
@@ -3013,7 +3309,7 @@ body, html {
   font-family: Inter, sans-serif;
 }
 .aqt-tn .st-status.adv {
-  background: hsl(174 72% 46% / 0.14);
+  background: hsl(172 70% 49% / 0.14);
   color: var(--teal);
 }
 .aqt-tn .st-status.adv .arrow {
@@ -3041,7 +3337,7 @@ body, html {
   left: 14px;
   right: 14px;
   top: 0;
-  border-top: 1.5px dashed hsl(174 72% 46% / 0.4);
+  border-top: 1.5px dashed hsl(172 70% 49% / 0.4);
 }
 .aqt-tn .st-cut::after {
   content: attr(data-label);
@@ -3233,9 +3529,9 @@ body, html {
   --fg-muted: var(--aqt-fg-muted, hsl(215 12% 60%));
   --fg-dim: var(--aqt-fg-dim, hsl(215 12% 40%));
   --fg-faint: var(--aqt-fg-faint, hsl(215 12% 30%));
-  --teal: var(--aqt-teal, hsl(174 72% 46%));
-  --rose: var(--aqt-rose, hsl(340 75% 58%));
-  --amber: var(--aqt-amber, hsl(38 95% 55%));
+  --teal: var(--aqt-teal, hsl(172 70% 49%));
+  --rose: var(--aqt-rose, hsl(349 84% 63%));
+  --amber: var(--aqt-amber, hsl(36 88% 65%));
   --mono: var(--aqt-mono, "JetBrains Mono", ui-monospace, monospace);
   --display: var(--aqt-display, "Barlow Condensed", Inter, system-ui, sans-serif);
   color: var(--fg);
@@ -3315,10 +3611,10 @@ body, html {
   border-bottom: 0;
 }
 .aqt-matches table.m tbody tr.live td {
-  background: hsl(340 75% 58% / 0.045);
+  background: hsl(349 84% 63% / 0.045);
 }
 .aqt-matches table.m tbody tr.live:hover td {
-  background: hsl(340 75% 58% / 0.08);
+  background: hsl(349 84% 63% / 0.08);
 }
 .aqt-matches table.m td.r {
   text-align: right;
@@ -3364,7 +3660,7 @@ body, html {
   font-weight: 700;
 }
 .aqt-matches .m-up .row.winner .av {
-  box-shadow: 0 0 0 1.5px hsl(174 72% 46% / 0.6);
+  box-shadow: 0 0 0 1.5px hsl(172 70% 49% / 0.6);
 }
 .aqt-matches .m-up .row.loser .av {
   opacity: 0.6;
@@ -3470,8 +3766,8 @@ body, html {
 }
 .aqt-matches .m-media .pill.has {
   color: var(--teal);
-  background: hsl(174 72% 46% / 0.08);
-  border-color: hsl(174 72% 46% / 0.25);
+  background: hsl(172 70% 49% / 0.08);
+  border-color: hsl(172 70% 49% / 0.25);
 }
 .aqt-matches .m-media .pill.empty {
   opacity: 0.4;
@@ -3481,7 +3777,7 @@ body, html {
   height: 7px;
   border-radius: 50%;
   background: var(--rose);
-  box-shadow: 0 0 0 3px hsl(340 75% 58% / 0.18);
+  box-shadow: 0 0 0 3px hsl(349 84% 63% / 0.18);
   animation: aqtPulse 2s ease-in-out infinite;
   display: inline-block;
 }

@@ -2,6 +2,7 @@
 
 import React, { useMemo, useState } from "react";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { Users } from "lucide-react";
 import { UserBestTeammate } from "@/types/user.types";
 import { LogStatsName } from "@/types/stats.types";
@@ -17,7 +18,6 @@ import {
 
 interface Props {
   teammates: UserBestTeammate[];
-  selfName: string;
   totalCount: number;
   totalMaps: number;
 }
@@ -36,32 +36,34 @@ const playerSlug = (name: string) => name.replace(/#/g, "-");
 const formatStat = (value: number | null | undefined, digits: number) =>
   value != null && Number.isFinite(value) ? value.toFixed(digits) : "—";
 
-const OverviewTeammatesSynergy = ({ teammates, selfName, totalCount, totalMaps }: Props) => {
+const wrColorOf = (winrate: number): string =>
+  winrate >= 0.55 ? "var(--aqt-emerald)" : winrate < 0.45 ? "var(--aqt-rose)" : "var(--aqt-amber)";
+
+const OverviewTeammatesSynergy = ({ teammates, totalCount, totalMaps }: Props) => {
+  const t = useTranslations();
   const [search, setSearch] = useState("");
 
   const top = teammates.slice(0, 6);
   if (top.length === 0) return null;
 
-  const meInitials = heroInitials(selfName.split("#")[0]);
-
   return (
     <CardSurface
       flush
-      title="Best teammates"
+      title={t("users.overview.teammates.title")}
       icon={<Users size={15} />}
       action={
         <Dialog>
           <DialogTrigger asChild>
             <button type="button" className="aqt-seeall">
-              All →
+              {t("common.all")} →
             </button>
           </DialogTrigger>
           <DialogContent className="max-w-2xl border-[color:var(--aqt-border)] bg-[color:var(--aqt-bg)] p-0">
             <div className="aqt-player flex max-h-[80vh] flex-col">
               <DialogHeader className="border-b border-[color:var(--aqt-border)] px-5 py-4 text-left">
-                <DialogTitle className="text-[color:var(--aqt-fg)]">Best teammates</DialogTitle>
+                <DialogTitle className="text-[color:var(--aqt-fg)]">{t("users.overview.teammates.title")}</DialogTitle>
                 <DialogDescription className="text-[color:var(--aqt-fg-dim)]">
-                  {totalCount} unique stack-mates · {totalMaps} maps together
+                  {t("users.overview.teammates.dialogSubtitle", { count: totalCount, maps: totalMaps })}
                 </DialogDescription>
               </DialogHeader>
               <AllTeammatesTable teammates={teammates} search={search} onSearchChange={setSearch} />
@@ -70,127 +72,72 @@ const OverviewTeammatesSynergy = ({ teammates, selfName, totalCount, totalMaps }
         </Dialog>
       }
     >
-      <NetworkView top={top} meInitials={meInitials} totalCount={totalCount} totalMaps={totalMaps} />
+      <TeammateRows top={top} totalCount={totalCount} totalMaps={totalMaps} />
     </CardSurface>
   );
 };
 
-// ─── Radial synergy graph ───────────────────────────────────────────────────────
+// ─── Best-teammates rows (design-book §3f) ──────────────────────────────────────
+// One row per teammate: colour avatar + name + games/maps-together + a win-rate
+// mini-bar (fuller = higher). Marked `data-players` so hero-popover wiring skips
+// these player avatars (design-book §11).
 
-const NetworkView = ({
+const TeammateRows = ({
   top,
-  meInitials,
   totalCount,
   totalMaps
 }: {
   top: UserBestTeammate[];
-  meInitials: string;
   totalCount: number;
   totalMaps: number;
 }) => {
-  const nodes = useMemo(() => {
-    const n = top.length;
-    const maxApp = Math.max(...top.map((t) => t.tournaments), 1);
-    return top.map((tm, i) => {
-      // Evenly distribute around the centre, starting at the top.
-      const angle = (2 * Math.PI * i) / n - Math.PI / 2;
-      const left = 50 + Math.cos(angle) * 37;
-      const top_ = 50 + Math.sin(angle) * 36;
-      const strength = tm.tournaments / maxApp; // 0..1
-      return { tm, i, left, top: top_, strength };
-    });
-  }, [top]);
-
+  const t = useTranslations();
   return (
-    <>
-      <div className="relative h-[300px]">
-        <svg className="absolute inset-0 h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden>
-          <defs>
-            <linearGradient id="syn-edge" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0" stopColor="hsl(38 95% 55% / 0.85)" />
-              <stop offset="1" stopColor="hsl(174 72% 46% / 0.85)" />
-            </linearGradient>
-          </defs>
-          {nodes.map(({ tm, left, top: top_, strength }) => (
-            <line
-              key={tm.user.id}
-              x1={50}
-              y1={50}
-              x2={left}
-              y2={top_}
-              stroke="url(#syn-edge)"
-              strokeWidth={1.2 + strength * 2.4}
-              strokeLinecap="round"
-              opacity={0.4 + strength * 0.45}
-              vectorEffect="non-scaling-stroke"
-            />
-          ))}
-        </svg>
-
-        {/* Centre node (you) */}
-        <div
-          className="absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center"
-          style={{ left: "50%", top: "50%" }}
-        >
-          <div
-            className="flex h-[58px] w-[58px] items-center justify-center rounded-full aqt-display text-[17px] font-extrabold"
-            style={{
-              background: "linear-gradient(135deg, hsl(38 90% 62%), hsl(28 70% 42%))",
-              color: "hsl(30 35% 10%)",
-              boxShadow: "0 0 0 4px hsl(38 95% 55% / 0.22), 0 6px 18px hsl(220 60% 4% / 0.5)"
-            }}
+    <div data-players>
+      {top.map((tm, i) => {
+        const [nm, tag] = tm.user.name.split("#");
+        const wrPct = Math.max(0, Math.min(100, tm.winrate * 100));
+        const color = wrColorOf(tm.winrate);
+        return (
+          <Link
+            key={tm.user.id}
+            href={`/users/${playerSlug(tm.user.name)}`}
+            className="group grid grid-cols-[26px_minmax(0,1fr)_auto] items-center gap-2.5 border-b border-[color:var(--aqt-border)] px-[18px] py-2.5 transition-colors last:border-b-0 hover:bg-[hsl(0_0%_100%/0.02)]"
           >
-            {meInitials}
-          </div>
-          <span className="mt-1.5 text-[11px] font-bold uppercase tracking-[0.16em]" style={{ color: "var(--aqt-amber)" }}>
-            You
-          </span>
-        </div>
-
-        {/* Teammate nodes */}
-        {nodes.map(({ tm, i, left, top: top_, strength }) => {
-          const [nm, tag] = tm.user.name.split("#");
-          const size = 40 + strength * 12;
-          return (
-            <Link
-              key={tm.user.id}
-              href={`/users/${playerSlug(tm.user.name)}`}
-              className="group absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-1 text-center"
-              style={{ left: `${left}%`, top: `${top_}%` }}
-              title={tag ? `${nm}#${tag}` : nm}
+            <span
+              className="aqt-display flex h-[26px] w-[26px] items-center justify-center rounded-full text-[10px] font-extrabold"
+              style={{ background: TEAMMATE_COLORS[i % TEAMMATE_COLORS.length], color: "hsl(220 30% 8%)" }}
+              aria-hidden
             >
-              <div
-                className="flex items-center justify-center rounded-full aqt-display font-extrabold transition-transform group-hover:scale-110"
-                style={{
-                  width: size,
-                  height: size,
-                  fontSize: size * 0.34,
-                  background: TEAMMATE_COLORS[i % TEAMMATE_COLORS.length],
-                  color: "hsl(220 30% 8%)",
-                  boxShadow: "0 4px 12px hsl(220 55% 4% / 0.45)"
-                }}
-              >
-                {heroInitials(nm)}
-              </div>
-              <div className="leading-tight">
-                <div className="max-w-[88px] truncate text-[12.5px] font-semibold text-[color:var(--aqt-fg)] group-hover:text-[color:var(--aqt-teal)]">
+              {heroInitials(nm)}
+            </span>
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5">
+                <span className="truncate text-[13px] font-semibold text-[color:var(--aqt-fg)] group-hover:text-[color:var(--aqt-teal)]">
                   {nm}
-                </div>
-                <div className="aqt-mono text-[10.5px] text-[color:var(--aqt-fg-dim)]">
-                  ×{tm.tournaments} · {(tm.winrate * 100).toFixed(0)}%
-                </div>
+                </span>
+                {tag ? <span className="aqt-mono text-[10.5px] text-[color:var(--aqt-fg-faint)]">#{tag}</span> : null}
               </div>
-            </Link>
-          );
-        })}
+              <div className="aqt-mono text-[11px] text-[color:var(--aqt-fg-dim)]">
+                {t("users.overview.teammates.playedMaps", { count: tm.tournaments, maps: tm.maps })}
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="h-[5px] w-[84px] overflow-hidden rounded-full bg-[color:var(--aqt-card-2)]">
+                <span className="block h-full rounded-full" style={{ width: `${wrPct}%`, background: color }} />
+              </span>
+              <span className="aqt-tnum w-9 text-right text-[13px] font-bold" style={{ color }}>
+                {wrPct.toFixed(0)}%
+              </span>
+            </div>
+          </Link>
+        );
+      })}
+      <div className="aqt-mono flex justify-between px-[18px] py-2.5 text-[12px] text-[color:var(--aqt-fg-dim)]">
+        <span>{t("users.overview.teammates.wrHint")}</span>
+        <span>{t("users.overview.teammates.footer", { count: totalCount, maps: totalMaps })}</span>
       </div>
-      <div className="aqt-mono flex justify-between border-t border-[color:var(--aqt-border)] px-[18px] py-2.5 text-[12px] text-[color:var(--aqt-fg-dim)]">
-        <span>Edges sized by appearances</span>
-        <span>
-          {totalCount} unique · {totalMaps} maps
-        </span>
-      </div>
-    </>
+    </div>
   );
 };
 
@@ -205,11 +152,12 @@ const AllTeammatesTable = ({
   search: string;
   onSearchChange: (value: string) => void;
 }) => {
+  const t = useTranslations();
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     const rows = [...teammates].sort((a, b) => b.tournaments - a.tournaments);
     if (!q) return rows;
-    return rows.filter((t) => t.user.name.toLowerCase().includes(q));
+    return rows.filter((tm) => tm.user.name.toLowerCase().includes(q));
   }, [teammates, search]);
 
   const perPage = 12;
@@ -233,7 +181,7 @@ const AllTeammatesTable = ({
             <path d="m20 20-3.5-3.5" />
           </svg>
           <input
-            placeholder="Search teammates…"
+            placeholder={t("users.overview.teammates.searchPlaceholder")}
             value={search}
             onChange={(e) => onSearchChange(e.target.value)}
             className="w-full rounded-lg border border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.025)] px-3 py-1.5 pl-8 text-[14px] text-[color:var(--aqt-fg)] outline-none"
@@ -244,9 +192,16 @@ const AllTeammatesTable = ({
         <table className="aqt-tnum w-full border-collapse text-[13.5px]">
           <thead className="sticky top-0 z-[1] bg-[color:var(--aqt-bg)]">
             <tr>
-              {["Player", "×played", "Maps", "WR", "KDA", "MVP"].map((h, i) => (
-                <th key={h} className={cnHeader(i === 0)}>
-                  {h}
+              {[
+                { id: "player", label: t("users.overview.teammates.col.player"), left: true },
+                { id: "played", label: t("users.overview.teammates.col.played"), left: false },
+                { id: "maps", label: t("users.overview.teammates.col.maps"), left: false },
+                { id: "wr", label: t("users.overview.teammates.col.wr"), left: false },
+                { id: "kda", label: t("users.overview.teammates.col.kda"), left: false },
+                { id: "mvp", label: t("users.overview.teammates.col.mvp"), left: false }
+              ].map((h) => (
+                <th key={h.id} className={cnHeader(h.left)}>
+                  {h.label}
                 </th>
               ))}
             </tr>
@@ -266,9 +221,7 @@ const AllTeammatesTable = ({
                   <td className="aqt-mono px-3 py-2 text-right text-[color:var(--aqt-fg-muted)]">{tm.maps}</td>
                   <td
                     className="aqt-mono px-3 py-2 text-right font-semibold"
-                    style={{
-                      color: tm.winrate >= 0.55 ? "var(--aqt-emerald)" : tm.winrate < 0.45 ? "var(--aqt-rose)" : "var(--aqt-amber)"
-                    }}
+                    style={{ color: wrColorOf(tm.winrate) }}
                   >
                     {(tm.winrate * 100).toFixed(0)}%
                   </td>
@@ -284,7 +237,7 @@ const AllTeammatesTable = ({
             {filtered.length === 0 ? (
               <tr>
                 <td colSpan={6} className="px-3 py-6 text-center text-[13px] text-[color:var(--aqt-fg-dim)]">
-                  No teammates match search
+                  {t("users.overview.teammates.noMatch")}
                 </td>
               </tr>
             ) : null}
@@ -294,7 +247,11 @@ const AllTeammatesTable = ({
       {filtered.length > perPage ? (
         <div className="flex items-center justify-between border-t border-[color:var(--aqt-border)] px-5 py-2.5">
           <span className="aqt-mono text-[12px] text-[color:var(--aqt-fg-dim)]">
-            {(safePage - 1) * perPage + 1}–{Math.min(safePage * perPage, filtered.length)} of {filtered.length}
+            {t("users.overview.teammates.pageRange", {
+              start: String((safePage - 1) * perPage + 1),
+              end: String(Math.min(safePage * perPage, filtered.length)),
+              total: String(filtered.length)
+            })}
           </span>
           <div className="flex items-center gap-1">
             <button

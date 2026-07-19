@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/components/ui/number-input";
 import {
   Select,
   SelectContent,
@@ -382,17 +383,13 @@ export function DivisionGridMappingEditor({ versions, canEdit }: Props) {
 
                             {/* Weight — only for multi-target rows */}
                             {multi && (
-                              <Input
-                                type="number"
-                                min="0"
-                                max="1"
-                                step="0.01"
+                              <NumberInput
+                                min={0}
+                                max={1}
                                 className="h-8 w-20 tabular-nums"
                                 value={target.weight}
-                                onChange={(e) =>
-                                  updateTarget(rowIdx, targetIdx, {
-                                    weight: Number.parseFloat(e.target.value) || 0
-                                  })
+                                onValueChange={(next) =>
+                                  updateTarget(rowIdx, targetIdx, { weight: next ?? 0 })
                                 }
                                 disabled={!canEdit}
                               />

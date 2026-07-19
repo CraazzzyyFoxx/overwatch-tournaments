@@ -1,0 +1,59 @@
+"use client";
+
+import { useTranslations } from "next-intl";
+
+import type { DraftBoard } from "@/types/draft.types";
+import type { DivisionGrid } from "@/types/workspace.types";
+
+import { CurrentPick } from "./CurrentPick";
+import { DraftOrder } from "./DraftOrder";
+import { TeamRosters } from "./TeamRosters";
+
+interface SpectatorDraftWorkspaceProps {
+  board: DraftBoard;
+  divisionGrid: DivisionGrid;
+  /** Online captain auth ids, for the TeamRosters captain presence dots. */
+  onlineCaptainIds?: Set<number>;
+}
+
+export function SpectatorDraftWorkspace({
+  board,
+  divisionGrid,
+  onlineCaptainIds,
+}: SpectatorDraftWorkspaceProps) {
+  const t = useTranslations("draftRedesign");
+  const showCurrentPick =
+    board.current_pick != null ||
+    board.session.status === "live" ||
+    board.session.status === "paused";
+  return (
+    <div className="space-y-4">
+      {showCurrentPick ? <CurrentPick board={board} /> : null}
+      <p className="max-w-3xl text-sm text-[color:var(--aqt-fg-muted)]">
+        {board.session.status === "completed" ? t("spectatorCompleted") : t("spectatorReadOnly")}
+      </p>
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <main className="min-w-0">
+          <TeamRosters
+            teams={board.teams}
+            players={board.players}
+            picks={board.picks}
+            teamSize={board.session.team_size}
+            onClockTeamId={board.current_pick?.draft_team_id ?? null}
+            divisionGrid={divisionGrid}
+            onlineCaptainIds={onlineCaptainIds}
+          />
+        </main>
+        <aside className="space-y-6 border-t border-[color:var(--aqt-border)] pt-6 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
+          <DraftOrder
+            picks={board.picks}
+            teams={board.teams}
+            players={board.players}
+            compact
+            divisionGrid={divisionGrid}
+          />
+        </aside>
+      </div>
+    </div>
+  );
+}

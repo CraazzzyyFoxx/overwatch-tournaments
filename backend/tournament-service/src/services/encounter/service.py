@@ -9,6 +9,7 @@ from sqlalchemy.orm.strategy_options import _AbstractLoad
 
 from shared.core import http_status as status
 from shared.core.errors import BaseAPIException as HTTPException
+from shared.services.tournament_visibility import visible_tournament_ids_subquery
 from src import models, schemas
 from src.core import enums, pagination, utils
 from src.core.workspace import workspace_filter
@@ -236,6 +237,10 @@ def _apply_encounter_filters(
 
     if params.tournament_id:
         query = query.where(models.Encounter.tournament_id == params.tournament_id)
+    else:
+        # Cross-tournament browse: never surface hidden tournaments (issue #115).
+        # A specific tournament_id is authorized upstream by assert_tournament_viewable.
+        query = query.where(models.Encounter.tournament_id.in_(visible_tournament_ids_subquery(None)))
     if params.stage_id is not None:
         query = query.where(models.Encounter.stage_id == params.stage_id)
     if params.stage_item_id is not None:
@@ -1065,6 +1070,50 @@ async def get_match_stats_for_users(
     return out
 
 
+async def get_match_kill_feed(
+    session: AsyncSession,
+    match_id: int,
+) -> tuple[list[typing.Any], list[typing.Any]]:
+    """Raw kill-feed + timeline-event rows for one match, ordered chronologically.
+
+    Returns ``(kill_rows, event_rows)`` where each kill row is
+    ``(MatchKillFeed, killer_hero, victim_hero)`` and each event row is
+    ``(MatchEvent, hero | None)``. The hero *at event time* is joined (it can
+    differ from the aggregate roster hero); player names are resolved by the
+    caller/client from the roster to keep the payload lean. Only timeline-worthy
+    events (ultimate casts, resurrects) are returned — per-hit assists are
+    already surfaced as aggregate stats.
+    """
+    killer_hero = aliased(models.Hero)
+    victim_hero = aliased(models.Hero)
+    kf = models.MatchKillFeed
+
+    kills_query = (
+        sa.select(kf, killer_hero, victim_hero)
+        .join(killer_hero, killer_hero.id == kf.killer_hero_id)
+        .join(victim_hero, victim_hero.id == kf.victim_hero_id)
+        .where(kf.match_id == match_id)
+        .order_by(kf.round.asc(), kf.time.asc(), kf.id.asc())
+    )
+
+    ev = models.MatchEvent
+    timeline_events = (
+        enums.MatchEvent.UltimateStart,
+        enums.MatchEvent.UltimateEnd,
+        enums.MatchEvent.MercyRez,
+    )
+    events_query = (
+        sa.select(ev, models.Hero)
+        .outerjoin(models.Hero, models.Hero.id == ev.hero_id)
+        .where(sa.and_(ev.match_id == match_id, ev.name.in_(timeline_events)))
+        .order_by(ev.round.asc(), ev.time.asc(), ev.id.asc())
+    )
+
+    kill_rows = (await session.execute(kills_query)).all()
+    event_rows = (await session.execute(events_query)).all()
+    return list(kill_rows), list(event_rows)
+
+
 async def get_by_stage_id(
     session: AsyncSession,
     tournament_id: int,
@@ -1116,6 +1165,13 @@ async def get_all_matches(
         total_query = total_query.join(models.Encounter, models.Match.encounter_id == models.Encounter.id).where(
             sa.and_(models.Encounter.tournament_id == params.tournament_id)
         )
+    else:
+        # Cross-tournament browse: exclude matches of hidden tournaments (issue #115).
+        _visible_encounter_ids = sa.select(models.Encounter.id).where(
+            models.Encounter.tournament_id.in_(visible_tournament_ids_subquery(None))
+        )
+        query = query.where(models.Match.encounter_id.in_(_visible_encounter_ids))
+        total_query = total_query.where(models.Match.encounter_id.in_(_visible_encounter_ids))
 
     if params.home_team_id:
         if not encounter_joined:

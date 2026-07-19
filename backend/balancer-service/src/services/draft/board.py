@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 import sqlalchemy as sa
+from cashews import cache
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.core.enums import DraftStatus
@@ -20,12 +21,26 @@ from src.schemas.draft import (
 )
 from src.services.draft import loaders
 
+# Registration `notes` stay public: captains read them in the Player Inspector
+# while drafting. Only organizer-side metadata is stripped from the snapshot.
+_PRIVATE_ADDITIONAL_INFO_KEYS = frozenset({"admin_notes", "audit_reason"})
 _ACTIVE = (
     DraftStatus.SETUP.value,
     DraftStatus.READY.value,
     DraftStatus.LIVE.value,
     DraftStatus.PAUSED.value,
 )
+
+# Safety-net TTL for the public board cache: the event-id in the key already
+# invalidates on every persisted draft event, so the TTL only bounds staleness
+# for hypothetical writes that bypass the event log and expires dead keys.
+_BOARD_CACHE_TTL = "5s"
+
+
+def _board_cache_key(session_id: int, last_event_id: int | None) -> str:
+    # The "backend:" prefix routes the key to the backend configured by
+    # cache.setup() (cashews routes strictly by key prefix).
+    return f"backend:balancer:draft_board:{session_id}:{last_event_id or 0}"
 
 
 async def get_active_session(session: AsyncSession, tournament_id: int) -> DraftSession | None:
@@ -46,7 +61,35 @@ async def get_active_session(session: AsyncSession, tournament_id: int) -> Draft
     )
 
 
+def public_additional_info(additional_info: dict | None) -> dict:
+    """Remove organizer-only metadata from the public draft snapshot."""
+
+    return {
+        key: value
+        for key, value in (additional_info or {}).items()
+        if key not in _PRIVATE_ADDITIONAL_INFO_KEYS
+    }
+
+
 async def build_board(session: AsyncSession, draft_session: DraftSession) -> DraftBoardSnapshot:
+    # The cheap max-event-id read runs on every request and doubles as the
+    # cache key: every draft mutation persists a WorkspaceEvent in the same
+    # transaction (services.draft.realtime), so new event -> new key -> fresh
+    # board, and an unchanged id can safely serve the cached snapshot.
+    topic = realtime_topics.draft(draft_session.tournament_id)
+    last_event_id = await session.scalar(
+        sa.select(sa.func.max(WorkspaceEvent.id)).where(WorkspaceEvent.topic == topic)
+    )
+    cache_key = _board_cache_key(draft_session.id, last_event_id)
+    if cache.is_setup():
+        try:
+            cached = await cache.get(cache_key)
+        except Exception:  # noqa: BLE001 — cache is best-effort
+            cached = None
+        if cached is not None:
+            # server_time drives client clock sync; never serve a stale one.
+            return cached.model_copy(update={"server_time": datetime.now(UTC)})
+
     # DraftTeamRead reads captain_user_id, DraftPickRead reads picked_by_user_id,
     # DraftPlayerRead reads user_id/secondary_roles_json/role_ranks/role_top_heroes
     # — eager-load the relationships those compat properties resolve through.
@@ -75,57 +118,30 @@ async def build_board(session: AsyncSession, draft_session: DraftSession) -> Dra
         )
     ).all()
 
-    # Dynamically inject notes if not already snapshot in additional_info (supports existing drafts)
-    if players:
-        user_ids = [p.user_id for p in players if p.user_id is not None]
-        if user_ids:
-            from shared.models.registration.registration import BalancerRegistration
-            from shared.models.tenancy.workspace import WorkspaceMember
-
-            # Registrations are anchored on workspace_member (dbarch02 dropped
-            # user_id); the inner join naturally skips member-less rows — they
-            # have no player identity, same as user_id IS NULL before.
-            regs = (
-                await session.execute(
-                    sa.select(WorkspaceMember.player_id, BalancerRegistration.notes)
-                    # Explicit FROM anchor: the first select column is
-                    # WorkspaceMember, which would otherwise anchor the join
-                    # on the wrong side.
-                    .select_from(BalancerRegistration)
-                    .join(
-                        WorkspaceMember,
-                        WorkspaceMember.id == BalancerRegistration.workspace_member_id,
-                    )
-                    .where(
-                        BalancerRegistration.tournament_id == draft_session.tournament_id,
-                        WorkspaceMember.player_id.in_(user_ids),
-                        BalancerRegistration.deleted_at.is_(None),
-                    )
-                )
-            ).all()
-            user_notes = {r_user_id: r_notes for r_user_id, r_notes in regs if r_notes}
-            for p in players:
-                if p.user_id in user_notes:
-                    info = dict(p.additional_info) if p.additional_info else {}
-                    if "notes" not in info or not info["notes"]:
-                        info["notes"] = user_notes[p.user_id]
-                        p.additional_info = info
-
-    # Already among `picks` (loaded with pick_options) when set; options guard the
-    # cold-cache path so DraftPickRead.picked_by_user_id never lazy-loads.
+    # The current pick always belongs to this session, so it is among `picks`
+    # (loaded with pick_options above) — no extra fetch needed.
     current = (
-        await session.get(DraftPick, draft_session.current_pick_id, options=loaders.pick_options())
+        next((p for p in picks if p.id == draft_session.current_pick_id), None)
         if draft_session.current_pick_id
         else None
     )
-    topic = realtime_topics.draft(draft_session.tournament_id)
-    last_event_id = await session.scalar(sa.select(sa.func.max(WorkspaceEvent.id)).where(WorkspaceEvent.topic == topic))
-    return DraftBoardSnapshot(
+    snapshot = DraftBoardSnapshot(
         session=DraftSessionRead.model_validate(draft_session),
         teams=[DraftTeamRead.model_validate(t) for t in teams],
         picks=[DraftPickRead.model_validate(p) for p in picks],
-        players=[DraftPlayerRead.model_validate(p) for p in players],
+        players=[
+            DraftPlayerRead.model_validate(p).model_copy(
+                update={"additional_info": public_additional_info(p.additional_info)}
+            )
+            for p in players
+        ],
         current_pick=DraftPickRead.model_validate(current) if current else None,
         server_time=datetime.now(UTC),
         last_event_id=last_event_id,
     )
+    if cache.is_setup():
+        try:
+            await cache.set(cache_key, snapshot, expire=_BOARD_CACHE_TTL)
+        except Exception:  # noqa: BLE001 — cache is best-effort
+            pass
+    return snapshot

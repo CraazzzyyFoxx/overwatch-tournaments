@@ -18,7 +18,7 @@ import AnomalyTooltip from "@/app/(site)/tournaments/analytics/components/Anomal
 import ExplanationPopover from "@/app/(site)/tournaments/analytics/components/ExplanationPopover";
 import ForecastChip from "@/app/(site)/tournaments/analytics/components/ForecastChip";
 import MetricTooltip from "@/app/(site)/tournaments/analytics/components/MetricTooltip";
-import { useTranslation } from "@/i18n/LanguageContext";
+import { useTranslations } from "next-intl";
 import { sortTeamPlayers } from "@/utils/player";
 import { cn } from "@/lib/utils";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -156,6 +156,7 @@ const ChangeDivisionModal = ({
 }) => {
   const [division, setDivision] = useState(player.shift ?? 0);
   const queryClient = useQueryClient();
+  const t = useTranslations();
 
   const onSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -168,12 +169,12 @@ const ChangeDivisionModal = ({
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>Edit manual shift</DialogTitle>
+          <DialogTitle>{t("analytics.standings.editManualShift")}</DialogTitle>
         </DialogHeader>
         <form onSubmit={onSubmit} className="grid gap-4">
           <div className="grid grid-cols-4 items-center gap-4">
             <Label htmlFor={`analytics-shift-${player.id}`} className="text-right">
-              Shift
+              {t("analytics.standings.shiftLabel")}
             </Label>
             <Input
               id={`analytics-shift-${player.id}`}
@@ -184,7 +185,7 @@ const ChangeDivisionModal = ({
             />
           </div>
           <DialogFooter>
-            <Button type="submit">Save changes</Button>
+            <Button type="submit">{t("analytics.standings.save")}</Button>
           </DialogFooter>
         </form>
       </DialogContent>
@@ -201,7 +202,7 @@ const TeamDetail = ({
 }) => {
   const [editingPlayer, setEditingPlayer] = useState<PlayerAnalytics | null>(null);
   const { hasPermission } = usePermissions();
-  const { t } = useTranslation();
+  const t = useTranslations();
   const canEdit = hasPermission("analytics.update");
   const tournamentGrid = team.tournament?.division_grid_version;
   const players = useMemo(() => sortTeamPlayers(team.players), [team.players]);
@@ -323,7 +324,12 @@ const TeamDetail = ({
                   </td>
                   <td className={styles.center}>
                     {performance ? (
-                      <span title={`Local percentile ${formatAnalyticsNumber(performance.local_percentile, 0)} / n=${performance.local_reference_n}`}>
+                      <span
+                        title={t("analytics.standings.localPercentileTitle", {
+                          value: formatAnalyticsNumber(performance.local_percentile, 0),
+                          n: performance.local_reference_n
+                        })}
+                      >
                         {performance.local_zscore > 0 ? "+" : ""}
                         {formatAnalyticsNumber(performance.local_zscore, 2)}
                       </span>
@@ -417,7 +423,7 @@ const TeamRow = ({
   performanceByPlayer: Map<number, PerformanceV2>;
   distribution?: StandingsDistribution;
 }) => {
-  const { t } = useTranslation();
+  const t = useTranslations();
   const groupName = team.group?.name ?? "-";
   const conf = confidenceWord(team.avg_confidence);
   const shiftDirection =
@@ -472,7 +478,10 @@ const TeamRow = ({
             <span>{t("common.group")} {groupName}</span>
             {distribution ? (
               <span
-                title={`Monte Carlo: mean ${distribution.mean_position.toFixed(1)}, P(top1) ${(distribution.prob_top1 * 100).toFixed(0)}%`}
+                title={t("analytics.standings.monteCarloTitle", {
+                  mean: distribution.mean_position.toFixed(1),
+                  prob: (distribution.prob_top1 * 100).toFixed(0)
+                })}
               >
                 {t("analytics.standings.predictedRange", {
                   mean: distribution.mean_position.toFixed(1),
@@ -511,7 +520,10 @@ const TeamRow = ({
             direction={shiftDirection}
             magnitude={Math.abs(team.total_shift)}
             focusable={false}
-            rawTooltip={`Balancer ${formatAnalyticsNumber(team.balancer_shift, 1)} · manual ${formatAnalyticsNumber(team.manual_shift, 1)}`}
+            rawTooltip={t("analytics.standings.shiftBreakdownTooltip", {
+              balancer: formatAnalyticsNumber(team.balancer_shift, 1),
+              manual: formatAnalyticsNumber(team.manual_shift, 1)
+            })}
           />
         </div>
         <div className={styles.chips}>
@@ -563,7 +575,7 @@ const AnalyticsStandings = ({
   distributionByTeam,
   headerEnd
 }: AnalyticsStandingsProps) => {
-  const { t } = useTranslation();
+  const t = useTranslations();
   const [mode, setMode] = useState<SortMode>("standings");
   const [expandedId, setExpandedId] = useState<number | null>(teams[0]?.id ?? null);
   const visibleTeams = useMemo(() => sortedTeams(teams, mode), [teams, mode]);

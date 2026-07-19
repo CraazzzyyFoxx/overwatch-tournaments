@@ -200,15 +200,15 @@ export function BalanceImageExportDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="flex h-[min(860px,calc(100vh-2rem))] w-[min(1180px,calc(100vw-2rem))] max-w-none flex-col gap-0 overflow-hidden border-border bg-popover p-0 text-white shadow-2xl shadow-black/60">
-          <DialogHeader className="shrink-0 border-b border-white/8 px-5 py-4 text-left">
+        <DialogContent className="flex h-[min(860px,calc(100vh-2rem))] w-[min(1180px,calc(100vw-2rem))] max-w-none flex-col gap-0 overflow-hidden border-border bg-popover p-0 text-[color:var(--aqt-fg)] shadow-2xl shadow-black/60">
+          <DialogHeader className="shrink-0 border-b border-[color:var(--aqt-border)] px-5 py-4 text-left">
             <div className="flex flex-col gap-3 pr-8 lg:flex-row lg:items-start lg:justify-between">
               <div>
-                <DialogTitle className="flex items-center gap-2 text-base font-semibold text-white">
+                <DialogTitle className="flex items-center gap-2 text-base font-semibold text-[color:var(--aqt-fg)]">
                   <Images className="h-4 w-4 text-cyan-200" />
                   Balance Images
                 </DialogTitle>
-                <DialogDescription className="mt-1 text-xs text-white/45">
+                <DialogDescription className="mt-1 text-xs text-[color:var(--aqt-fg-dim)]">
                   Preview, copy, or download readable team images.
                 </DialogDescription>
               </div>
@@ -218,7 +218,7 @@ export function BalanceImageExportDialog({
                   type="button"
                   variant="outline"
                   size="sm"
-                  className="rounded-xl border-white/10 bg-white/[0.04] text-white/75 hover:bg-white/[0.08] hover:text-white"
+                  className="rounded-xl border-[color:var(--aqt-border-2)] bg-white/[0.04] text-[color:var(--aqt-fg-muted)] hover:bg-white/[0.08] hover:text-[color:var(--aqt-fg)]"
                   onClick={handleDownloadAll}
                   disabled={isGenerating || images.length === 0}
                 >
@@ -229,7 +229,7 @@ export function BalanceImageExportDialog({
                   type="button"
                   variant="outline"
                   size="sm"
-                  className="rounded-xl border-white/10 bg-white/[0.04] text-white/75 hover:bg-white/[0.08] hover:text-white"
+                  className="rounded-xl border-[color:var(--aqt-border-2)] bg-white/[0.04] text-[color:var(--aqt-fg-muted)] hover:bg-white/[0.08] hover:text-[color:var(--aqt-fg)]"
                   onClick={() => {
                     if (fullImageBlob) {
                       void handleCopyImage(fullImageBlob, "Full image copied");
@@ -246,7 +246,7 @@ export function BalanceImageExportDialog({
 
           <div className="min-h-0 flex-1 overflow-y-auto p-4">
             {isGenerating ? (
-              <div className="flex min-h-64 items-center justify-center rounded-2xl border border-white/8 bg-white/[0.03] text-sm text-white/55">
+              <div className="flex min-h-64 items-center justify-center rounded-2xl border border-[color:var(--aqt-border)] bg-white/[0.03] text-sm text-[color:var(--aqt-fg-muted)]">
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 Generating images...
               </div>
@@ -266,15 +266,15 @@ export function BalanceImageExportDialog({
                     key={image.id}
                     className="overflow-hidden rounded-xl border border-border bg-card"
                   >
-                    <div className="flex items-center justify-between gap-3 border-b border-white/8 px-3 py-2.5">
-                      <div className="text-xs font-semibold uppercase tracking-[0.16em] text-white/55">
+                    <div className="flex items-center justify-between gap-3 border-b border-[color:var(--aqt-border)] px-3 py-2.5">
+                      <div className="text-xs font-semibold uppercase tracking-[0.16em] text-[color:var(--aqt-fg-muted)]">
                         {image.label}
                       </div>
                       <Button
                         type="button"
                         variant="outline"
                         size="sm"
-                        className="rounded-xl border-white/10 bg-white/[0.04] text-white/75 hover:bg-white/[0.08] hover:text-white"
+                        className="rounded-xl border-[color:var(--aqt-border-2)] bg-white/[0.04] text-[color:var(--aqt-fg-muted)] hover:bg-white/[0.08] hover:text-[color:var(--aqt-fg)]"
                         onClick={() =>
                           void handleCopyImage(image.blob, `Image ${index + 1} copied`)
                         }
@@ -290,7 +290,7 @@ export function BalanceImageExportDialog({
                         width={EXPORT_WIDTH}
                         height={720}
                         unoptimized
-                        className="h-auto w-full rounded-xl border border-white/8"
+                        className="h-auto w-full rounded-xl border border-[color:var(--aqt-border)]"
                       />
                     </div>
                   </div>
@@ -342,7 +342,7 @@ function BalanceImageCaptureFrame({
   return (
     <div
       ref={refCallback}
-      className="mb-6 bg-[#090a10] p-4 text-white"
+      className="mb-6 bg-[#090a10] p-4 text-[color:var(--aqt-fg)]"
       style={{ width: EXPORT_WIDTH }}
     >
       <div className="grid grid-cols-5 gap-3">
@@ -373,8 +373,8 @@ function BalanceExportTeamCard({
   const teamAccent = TEAM_BADGE_ACCENTS[teamIndex % TEAM_BADGE_ACCENTS.length];
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-white/8 bg-[#101116] shadow-[0_16px_48px_rgba(0,0,0,0.24)]">
-      <div className="flex items-start justify-between gap-3 border-b border-white/6 px-4 py-3">
+    <div className="overflow-hidden rounded-2xl border border-[color:var(--aqt-border)] bg-[#101116] shadow-[0_16px_48px_rgba(0,0,0,0.24)]">
+      <div className="flex items-start justify-between gap-3 border-b border-[color:var(--aqt-border)] px-4 py-3">
         <div className="flex min-w-0 items-center gap-2">
           <div
             className={cn(
@@ -384,18 +384,18 @@ function BalanceExportTeamCard({
           >
             #{team.id}
           </div>
-          <div className="truncate text-sm font-semibold text-white/88" title={team.name}>
+          <div className="truncate text-sm font-semibold text-[color:var(--aqt-fg)]" title={team.name}>
             {team.name}
           </div>
         </div>
 
         <div className="shrink-0 text-right">
-          <div className="flex flex-wrap justify-end gap-x-3 gap-y-1 text-[11px] font-medium text-white/55">
+          <div className="flex flex-wrap justify-end gap-x-3 gap-y-1 text-[11px] font-medium text-[color:var(--aqt-fg-muted)]">
             <span>
-              Total: <span className="tabular-nums text-white/88">{total}</span>
+              Total: <span className="tabular-nums text-[color:var(--aqt-fg)]">{total}</span>
             </span>
             <span>
-              Avg: <span className="tabular-nums text-white/88">{average}</span>
+              Avg: <span className="tabular-nums text-[color:var(--aqt-fg)]">{average}</span>
             </span>
           </div>
         </div>
@@ -403,17 +403,17 @@ function BalanceExportTeamCard({
 
       <table className="w-full min-w-90 caption-bottom text-sm">
         <thead>
-          <tr className="border-b border-white/6">
-            <th className="h-8 w-13 px-4 text-left align-middle text-[10px] font-semibold uppercase tracking-[0.18em] text-white/35">
+          <tr className="border-b border-[color:var(--aqt-border)]">
+            <th className="h-8 w-13 px-4 text-left align-middle text-[10px] font-semibold uppercase tracking-[0.18em] text-[color:var(--aqt-fg-dim)]">
               Role
             </th>
-            <th className="h-8 min-w-45 px-0 text-left align-middle text-[10px] font-semibold uppercase tracking-[0.18em] text-white/35">
+            <th className="h-8 min-w-45 px-0 text-left align-middle text-[10px] font-semibold uppercase tracking-[0.18em] text-[color:var(--aqt-fg-dim)]">
               Player
             </th>
-            <th className="h-8 w-18 px-2 text-center align-middle text-[10px] font-semibold uppercase tracking-[0.18em] text-white/35">
+            <th className="h-8 w-18 px-2 text-center align-middle text-[10px] font-semibold uppercase tracking-[0.18em] text-[color:var(--aqt-fg-dim)]">
               Rank
             </th>
-            <th className="h-8 w-22 px-3 text-center align-middle text-[10px] font-semibold uppercase tracking-[0.18em] text-white/35">
+            <th className="h-8 w-22 px-3 text-center align-middle text-[10px] font-semibold uppercase tracking-[0.18em] text-[color:var(--aqt-fg-dim)]">
               Prefs
             </th>
           </tr>
@@ -421,7 +421,7 @@ function BalanceExportTeamCard({
         {BALANCE_ROSTER_KEYS.map((roleKey) => (
           <tbody key={`${team.id}-${roleKey}`}>
             {team.roster[roleKey].map((player) => (
-              <tr key={player.uuid} className="border-b border-white/5">
+              <tr key={player.uuid} className="border-b border-[color:var(--aqt-border)]">
                 <td className="w-13 px-4 py-2.5">
                   <div className="flex justify-center">
                     <PlayerRoleIcon role={roleKey} size={18} />
@@ -431,14 +431,14 @@ function BalanceExportTeamCard({
                   <div className="flex min-w-0 flex-col gap-0.5">
                     <div className="flex min-w-0 items-center gap-2">
                       <span
-                        className="truncate text-sm font-semibold text-white/88"
+                        className="truncate text-sm font-semibold text-[color:var(--aqt-fg)]"
                         title={player.name}
                       >
                         {player.name}
                       </span>
                     </div>
                     {formatSubRoleLabel(player.sub_role) ? (
-                      <span className="truncate text-[10px] font-medium uppercase tracking-[0.12em] text-white/40">
+                      <span className="truncate text-[10px] font-medium uppercase tracking-[0.12em] text-[color:var(--aqt-fg-dim)]">
                         {formatSubRoleLabel(player.sub_role)}
                       </span>
                     ) : null}
@@ -459,7 +459,7 @@ function BalanceExportTeamCard({
                         </span>
                       ))
                     ) : (
-                      <span className="text-xs text-white/25">-</span>
+                      <span className="text-xs text-[color:var(--aqt-fg-faint)]">-</span>
                     )}
                   </div>
                 </td>
@@ -467,10 +467,10 @@ function BalanceExportTeamCard({
             ))}
 
             {team.roster[roleKey].length === 0 ? (
-              <tr className="border-b border-white/5">
+              <tr className="border-b border-[color:var(--aqt-border)]">
                 <td
                   colSpan={4}
-                  className="px-3 py-2.5 text-center text-[11px] uppercase tracking-[0.14em] text-white/24"
+                  className="px-3 py-2.5 text-center text-[11px] uppercase tracking-[0.14em] text-[color:var(--aqt-fg-faint)]"
                 >
                   Empty {roleKey.toLowerCase()}
                 </td>
@@ -489,7 +489,7 @@ function ExportDivisionIcon({ divisionGrid, rank }: { divisionGrid: DivisionGrid
   const label = getDivisionLabel(divisionGrid, division);
 
   if (!src || division == null) {
-    return <div className="text-center text-xs text-white/25">-</div>;
+    return <div className="text-center text-xs text-[color:var(--aqt-fg-faint)]">-</div>;
   }
 
   return (

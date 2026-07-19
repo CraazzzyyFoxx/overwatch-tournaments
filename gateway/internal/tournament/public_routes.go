@@ -8,7 +8,9 @@
 //     confirm-result, dispute-result, veto), registration me/create/check-in,
 //     and the saved-view writes all require a logged-in user -> AuthRequired.
 //   - The captain map-pool read and the public registration form/list reads are
-//     unauthenticated -> AuthNone.
+//     visibility-gated (hidden tournaments 404 for ineligible viewers) -> AuthOptional,
+//     so an eligible admin/preview viewer's identity reaches the handler; anonymous
+//     viewers are still allowed (and see non-hidden tournaments).
 //
 // The map-pool WebSocket (/{encounter_id}/map-pool/ws) is intentionally NOT here;
 // it is re-architected onto the realtime hub separately.
@@ -23,7 +25,7 @@ var PublicWriteRoutes = []edge.RouteSpec{
 	{Method: "POST", Pattern: "/api/v1/encounters/{encounter_id}/submit-match-report", Queue: "rpc.tournament.captain_submit_match_report", IDParam: "encounter_id", Body: true, Auth: edge.AuthRequired},
 	{Method: "POST", Pattern: "/api/v1/encounters/{encounter_id}/confirm-result", Queue: "rpc.tournament.captain_confirm_result", IDParam: "encounter_id", Auth: edge.AuthRequired},
 	{Method: "POST", Pattern: "/api/v1/encounters/{encounter_id}/dispute-result", Queue: "rpc.tournament.captain_dispute_result", IDParam: "encounter_id", Body: true, Auth: edge.AuthRequired},
-	{Method: "GET", Pattern: "/api/v1/encounters/{encounter_id}/map-pool", Queue: "rpc.tournament.captain_map_pool", IDParam: "encounter_id", Auth: edge.AuthNone},
+	{Method: "GET", Pattern: "/api/v1/encounters/{encounter_id}/map-pool", Queue: "rpc.tournament.captain_map_pool", IDParam: "encounter_id", Auth: edge.AuthOptional},
 	{Method: "GET", Pattern: "/api/v1/encounters/{encounter_id}/map-pool/state", Queue: "rpc.tournament.captain_map_pool_state", IDParam: "encounter_id", Auth: edge.AuthOptional},
 	{Method: "POST", Pattern: "/api/v1/encounters/{encounter_id}/map-pool/veto", Queue: "rpc.tournament.captain_veto", IDParam: "encounter_id", Body: true, Auth: edge.AuthRequired},
 
@@ -32,11 +34,11 @@ var PublicWriteRoutes = []edge.RouteSpec{
 	{Method: "DELETE", Pattern: "/api/v1/encounters/views/{saved_view_id}", Queue: "rpc.tournament.saved_view_delete", Path: []string{"saved_view_id"}, Query: []string{"workspace_id"}, Auth: edge.AuthRequired, Success: 204},
 
 	// registration.py — public user sign-up (prefix /tournaments/{tournament_id}/registration).
-	{Method: "GET", Pattern: "/api/v1/tournaments/{tournament_id}/registration/form", Queue: "rpc.tournament.reg_pub_form", Path: []string{"tournament_id"}, Auth: edge.AuthNone},
+	{Method: "GET", Pattern: "/api/v1/tournaments/{tournament_id}/registration/form", Queue: "rpc.tournament.reg_pub_form", Path: []string{"tournament_id"}, Auth: edge.AuthOptional},
 	{Method: "POST", Pattern: "/api/v1/tournaments/{tournament_id}/registration", Queue: "rpc.tournament.reg_pub_create", Path: []string{"tournament_id"}, Body: true, Auth: edge.AuthRequired, Success: 201},
 	{Method: "GET", Pattern: "/api/v1/tournaments/{tournament_id}/registration/me", Queue: "rpc.tournament.reg_pub_get_me", Path: []string{"tournament_id"}, Auth: edge.AuthRequired},
 	{Method: "PATCH", Pattern: "/api/v1/tournaments/{tournament_id}/registration/me", Queue: "rpc.tournament.reg_pub_update_me", Path: []string{"tournament_id"}, Body: true, Auth: edge.AuthRequired},
 	{Method: "DELETE", Pattern: "/api/v1/tournaments/{tournament_id}/registration/me", Queue: "rpc.tournament.reg_pub_withdraw_me", Path: []string{"tournament_id"}, Auth: edge.AuthRequired},
 	{Method: "POST", Pattern: "/api/v1/tournaments/{tournament_id}/registration/me/check-in", Queue: "rpc.tournament.reg_pub_check_in", Path: []string{"tournament_id"}, Auth: edge.AuthRequired},
-	{Method: "GET", Pattern: "/api/v1/tournaments/{tournament_id}/registration/list", Queue: "rpc.tournament.reg_pub_list", Path: []string{"tournament_id"}, Auth: edge.AuthNone},
+	{Method: "GET", Pattern: "/api/v1/tournaments/{tournament_id}/registration/list", Queue: "rpc.tournament.reg_pub_list", Path: []string{"tournament_id"}, Auth: edge.AuthOptional},
 }

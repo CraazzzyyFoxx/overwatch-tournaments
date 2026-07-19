@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Pencil, FileEdit, Maximize2, Minimize2, Search } from "lucide-react";
+import { Pencil, FileEdit, Check, Maximize2, Minimize2, Search } from "lucide-react";
 import Link from "next/link";
 
+import { useTranslations } from "next-intl";
+
 import { cn } from "@/lib/utils";
-import { useTranslation } from "@/i18n/LanguageContext";
 import type { Encounter } from "@/types/encounter.types";
 import type { StageType } from "@/types/tournament.types";
 import {
@@ -17,13 +18,17 @@ import {
   getRoundSectionMatchCapacity
 } from "@/components/bracket-view.helpers";
 
+type Translate = ReturnType<typeof useTranslations<never>>;
+
 interface BracketViewProps {
   encounters: Encounter[];
   type: StageType;
   onEdit?: (encounter: Encounter) => void;
   onReport?: (encounter: Encounter) => void;
+  onConfirm?: (encounter: Encounter) => void;
   canEdit?: (encounter: Encounter) => boolean;
   canReport?: (encounter: Encounter) => boolean;
+  canConfirm?: (encounter: Encounter) => boolean;
 }
 
 interface MatchNodeData {
@@ -206,7 +211,7 @@ function addSequentialEdges(
   }
 }
 
-function buildLayout(encounters: Encounter[], type: StageType): BracketLayout {
+function buildLayout(encounters: Encounter[], type: StageType, t: Translate): BracketLayout {
   const hasBracketConnections = type === "single_elimination" || type === "double_elimination";
 
   const isDE = type === "double_elimination";
@@ -276,7 +281,7 @@ function buildLayout(encounters: Encounter[], type: StageType): BracketLayout {
       id: `upper-header-${group.round}`,
       x,
       y: upperHeaderY,
-      label: `Round ${group.round}`,
+      label: t("bracket.round", { n: String(group.round) }),
       section: "upper"
     });
 
@@ -311,7 +316,7 @@ function buildLayout(encounters: Encounter[], type: StageType): BracketLayout {
       id: `lower-header-${group.round}`,
       x,
       y: lowerHeaderY,
-      label: `Lower R${Math.abs(group.round)}`,
+      label: t("bracket.lowerRound", { n: String(Math.abs(group.round)) }),
       section: "lower"
     });
 
@@ -441,7 +446,7 @@ function buildLayout(encounters: Encounter[], type: StageType): BracketLayout {
   };
 }
 
-function getMatchMeta(encounter: Encounter) {
+function getMatchMeta(encounter: Encounter, t: Translate) {
   const isCompleted = COMPLETED_STATUSES.has(encounter.status);
   const isLive = !isCompleted && Boolean(encounter.started_at) && !encounter.ended_at;
   const played = (encounter.score?.home ?? 0) + (encounter.score?.away ?? 0);
@@ -449,7 +454,7 @@ function getMatchMeta(encounter: Encounter) {
 
   let timeLabel = "";
   if (isLive) {
-    timeLabel = "Live";
+    timeLabel = t("common.live");
   } else if (!isCompleted) {
     if (encounter.scheduled_at) {
       timeLabel = new Date(encounter.scheduled_at).toLocaleDateString("en-US", {
@@ -457,7 +462,7 @@ function getMatchMeta(encounter: Encounter) {
         day: "numeric"
       });
     } else {
-      timeLabel = "TBD";
+      timeLabel = t("common.tbd");
     }
   }
 
@@ -475,13 +480,14 @@ function MatchCard({
   hoveredTeamId: number | null;
   onHoveredTeamChange: (teamId: number | null) => void;
 }) {
-  const meta = getMatchMeta(encounter);
+  const t = useTranslations();
+  const meta = getMatchMeta(encounter, t);
   const hasVisibleScore = data.isCompleted || data.homeScore !== 0 || data.awayScore !== 0;
   const footerHeight = CARD_HEIGHT - CARD_ROW_HEIGHT * 2;
 
   const getRowClasses = (side: "home" | "away") => {
     if (data.winner === side) {
-      return "bg-[hsl(174_72%_46%/0.10)] text-[var(--aqt-fg)] font-semibold";
+      return "bg-[color:color-mix(in_srgb,var(--aqt-teal)_10%,transparent)] text-[var(--aqt-fg)] font-semibold";
     }
     if (data.winner && data.winner !== side) {
       return "text-[var(--aqt-fg-dim)]";
@@ -506,7 +512,7 @@ function MatchCard({
     const name = side === "home" ? data.homeName : data.awayName;
     if (name === "TBD") {
       const source = side === "home" ? data.homeSource : data.awaySource;
-      return source ?? "TBD";
+      return source ?? t("common.tbd");
     }
     return name;
   };
@@ -523,7 +529,8 @@ function MatchCard({
           "flex items-center justify-between gap-2 px-2.5 transition-colors",
           side === "home" && "border-b border-[var(--aqt-border)]",
           getRowClasses(side),
-          isHighlighted(side) && "bg-[hsl(174_72%_46%/0.16)] text-[var(--aqt-fg)]"
+          isHighlighted(side) &&
+            "bg-[color:color-mix(in_srgb,var(--aqt-teal)_16%,transparent)] text-[var(--aqt-fg)]"
         )}
         data-team-id={getTeamId(side) ?? undefined}
         data-team-highlighted={isHighlighted(side) || undefined}
@@ -556,7 +563,7 @@ function MatchCard({
       className={cn(
         "relative flex h-full flex-col overflow-hidden rounded-[10px] border bg-[var(--aqt-card)] shadow-[0_10px_24px_rgba(0,0,0,0.28)]",
         meta.isLive
-          ? "border-[hsl(340_75%_58%/0.45)]"
+          ? "border-[color:color-mix(in_srgb,var(--aqt-rose)_45%,transparent)]"
           : data.winner
             ? "border-[var(--aqt-border-2)]"
             : "border-[var(--aqt-border)]"
@@ -573,7 +580,7 @@ function MatchCard({
           <Link
             href={`/encounters/${encounter.id}`}
             className="flex items-center justify-center rounded p-0.5 text-[var(--aqt-fg-muted)] hover:bg-white/10 hover:text-[var(--aqt-fg)] transition-colors"
-            title="Посмотреть матч"
+            title={t("bracket.viewMatch")}
             onClick={(e) => {
               // Предотвращаем срабатывание других кликов на карточке, если они будут добавлены
               e.stopPropagation();
@@ -603,12 +610,16 @@ function MatchCard({
   );
 }
 
-function resultStatusBadge(encounter: Encounter) {
+function resultStatusBadge(encounter: Encounter, t: Translate) {
   const status = encounter.result_status;
   if (!status || status === "none") return null;
   if (status === "confirmed") return null;
   const label =
-    status === "pending_confirmation" ? "Ожидает" : status === "disputed" ? "Спор" : status;
+    status === "pending_confirmation"
+      ? t("bracket.pending")
+      : status === "disputed"
+        ? t("bracket.disputed")
+        : status;
   const color =
     status === "pending_confirmation"
       ? "bg-amber-500/80"
@@ -629,10 +640,12 @@ export function BracketView({
   type,
   onEdit,
   onReport,
+  onConfirm,
   canEdit,
-  canReport
+  canReport,
+  canConfirm
 }: BracketViewProps) {
-  const { t } = useTranslation();
+  const t = useTranslations();
   const [hoveredTeamId, setHoveredTeamId] = useState<number | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const panRef = useRef({ active: false, startX: 0, startY: 0, left: 0, top: 0 });
@@ -659,7 +672,7 @@ export function BracketView({
     };
   }, [isFullscreen]);
 
-  const layout = useMemo(() => buildLayout(encounters, type), [encounters, type]);
+  const layout = useMemo(() => buildLayout(encounters, type, t), [encounters, type, t]);
 
   // Drag-to-pan with the mouse; touch keeps native scrolling.
   const handlePanStart = (event: React.PointerEvent<HTMLDivElement>) => {
@@ -693,7 +706,7 @@ export function BracketView({
 
   if (layout.nodes.length === 0) {
     return (
-      <div className="py-8 text-center text-muted-foreground">No bracket matches to display</div>
+      <div className="py-8 text-center text-muted-foreground">{t("common.noBracketMatches")}</div>
     );
   }
 
@@ -709,10 +722,10 @@ export function BracketView({
           <div>
             <h2 className="text-xl font-bold text-white uppercase tracking-wider">
               {type === "double_elimination"
-                ? "Double Elimination"
+                ? t("bracket.doubleElimination")
                 : type === "single_elimination"
-                  ? "Single Elimination"
-                  : "Bracket"}
+                  ? t("bracket.singleElimination")
+                  : t("common.bracket")}
             </h2>
             <p className="text-xs text-[var(--aqt-fg-muted)]">
               {t("common.bracketInstructions")}
@@ -776,7 +789,7 @@ export function BracketView({
                 key={edge.id}
                 d={edge.path}
                 stroke={
-                  edge.isCompleted ? "hsl(174 72% 46% / 0.55)" : "hsl(0 0% 100% / 0.12)"
+                  edge.isCompleted ? "hsl(172 70% 49% / 0.55)" : "hsl(0 0% 100% / 0.12)"
                 }
                 strokeWidth="2"
                 strokeLinecap="round"
@@ -807,6 +820,7 @@ export function BracketView({
           {layout.nodes.map((node) => {
             const editable = onEdit && (canEdit?.(node.encounter) ?? true);
             const reportable = onReport && (canReport?.(node.encounter) ?? false);
+            const confirmable = onConfirm && (canConfirm?.(node.encounter) ?? false);
             return (
               <div
                 key={node.id}
@@ -827,14 +841,14 @@ export function BracketView({
                     {node.data.matchLabel}
                   </span>
                 </div>
-                {resultStatusBadge(node.encounter)}
-                {(editable || reportable) && (
+                {resultStatusBadge(node.encounter, t)}
+                {(editable || reportable || confirmable) && (
                   <div className="absolute right-1 top-1 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
                     {editable && (
                       <button
                         type="button"
                         className="rounded-md border border-[var(--aqt-border-2)] bg-[hsl(0_0%_0%/0.6)] p-1 text-[var(--aqt-fg-muted)] hover:text-[var(--aqt-fg)]"
-                        aria-label="Редактировать матч"
+                        aria-label={t("bracket.editMatch")}
                         onClick={(e) => {
                           e.stopPropagation();
                           onEdit?.(node.encounter);
@@ -846,14 +860,27 @@ export function BracketView({
                     {reportable && (
                       <button
                         type="button"
-                        className="rounded-md border border-[hsl(174_72%_46%/0.3)] bg-[hsl(174_72%_46%/0.16)] p-1 text-[var(--aqt-teal)] hover:bg-[hsl(174_72%_46%/0.24)]"
-                        aria-label="Репорт матча"
+                        className="rounded-md border border-[color:color-mix(in_srgb,var(--aqt-teal)_30%,transparent)] bg-[color:color-mix(in_srgb,var(--aqt-teal)_16%,transparent)] p-1 text-[var(--aqt-teal)] hover:bg-[color:color-mix(in_srgb,var(--aqt-teal)_24%,transparent)]"
+                        aria-label={t("bracket.reportMatch")}
                         onClick={(e) => {
                           e.stopPropagation();
                           onReport?.(node.encounter);
                         }}
                       >
                         <FileEdit className="h-3 w-3" />
+                      </button>
+                    )}
+                    {confirmable && (
+                      <button
+                        type="button"
+                        className="rounded-md border border-emerald-500/40 bg-emerald-500/15 p-1 text-emerald-400 hover:bg-emerald-500/25"
+                        aria-label={t("bracket.confirmMatch")}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onConfirm?.(node.encounter);
+                        }}
+                      >
+                        <Check className="h-3 w-3" />
                       </button>
                     )}
                   </div>

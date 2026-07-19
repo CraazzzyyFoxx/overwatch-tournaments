@@ -2,10 +2,10 @@
 
 import type { DivisionGridVersion } from "@/types/workspace.types";
 import { Checkbox } from "@/components/ui/checkbox";
-import { DateTimePicker } from "@/components/ui/date-picker";
 import { DateRangePicker } from "@/components/ui/date-range-picker";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/components/ui/number-input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -31,10 +31,6 @@ export type TournamentFormFieldsValue = {
   number?: number | null;
   challonge_slug?: string | null;
   is_finished?: boolean;
-  registration_opens_at?: string | null;
-  registration_closes_at?: string | null;
-  check_in_opens_at?: string | null;
-  check_in_closes_at?: string | null;
   win_points?: number;
   draw_points?: number;
   loss_points?: number;
@@ -71,7 +67,6 @@ export function TournamentFormFields<T extends TournamentFormFieldsValue>({
   const showDivisionGrid =
     mode === "workspace-edit" || mode === "manual-create" || mode === "challonge-create";
   const showScoring = mode === "workspace-edit";
-  const showPeriods = mode === "workspace-edit";
   const showTeamFormation =
     mode === "workspace-edit" || mode === "manual-create" || mode === "challonge-create";
 
@@ -115,16 +110,11 @@ export function TournamentFormFields<T extends TournamentFormFieldsValue>({
               <Label htmlFor={`${idPrefix}-number`}>
                 {mode === "challonge-create" ? "Number *" : "Number"}
               </Label>
-              <Input
+              <NumberInput
                 id={`${idPrefix}-number`}
-                type="number"
-                value={value.number ?? ""}
-                onChange={(event) =>
-                  onChange({
-                    ...value,
-                    number: event.target.value ? Number(event.target.value) : null,
-                  })
-                }
+                integer
+                value={value.number}
+                onValueChange={(next) => onChange({ ...value, number: next })}
                 required={mode === "challonge-create"}
                 className="mt-1.5"
               />
@@ -266,89 +256,29 @@ export function TournamentFormFields<T extends TournamentFormFieldsValue>({
           <div className="grid grid-cols-3 gap-3">
             <div>
               <Label htmlFor={`${idPrefix}-win-points`}>Win</Label>
-              <Input
+              <NumberInput
                 id={`${idPrefix}-win-points`}
-                type="number"
-                step="0.5"
                 value={value.win_points ?? 0}
-                onChange={(event) =>
-                  onChange({ ...value, win_points: Number(event.target.value) })
-                }
+                onValueChange={(next) => onChange({ ...value, win_points: next ?? 0 })}
                 className="mt-1.5"
               />
             </div>
             <div>
               <Label htmlFor={`${idPrefix}-draw-points`}>Draw</Label>
-              <Input
+              <NumberInput
                 id={`${idPrefix}-draw-points`}
-                type="number"
-                step="0.5"
                 value={value.draw_points ?? 0}
-                onChange={(event) =>
-                  onChange({ ...value, draw_points: Number(event.target.value) })
-                }
+                onValueChange={(next) => onChange({ ...value, draw_points: next ?? 0 })}
                 className="mt-1.5"
               />
             </div>
             <div>
               <Label htmlFor={`${idPrefix}-loss-points`}>Loss</Label>
-              <Input
+              <NumberInput
                 id={`${idPrefix}-loss-points`}
-                type="number"
-                step="0.5"
                 value={value.loss_points ?? 0}
-                onChange={(event) =>
-                  onChange({ ...value, loss_points: Number(event.target.value) })
-                }
+                onValueChange={(next) => onChange({ ...value, loss_points: next ?? 0 })}
                 className="mt-1.5"
-              />
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {showPeriods ? (
-        <div className="col-span-full grid grid-cols-1 md:grid-cols-2 gap-6 border-t border-border/40 pt-4">
-          <div className="space-y-3">
-            <p className="text-sm font-medium">Registration Period</p>
-            <div className="grid gap-3">
-              <DateTimePicker
-                id={`${idPrefix}-registration-opens`}
-                timeId={`${idPrefix}-registration-opens-time`}
-                dateLabel="Opens at"
-                timeLabel="Time"
-                value={value.registration_opens_at ?? ""}
-                onChange={(nextValue) => onChange({ ...value, registration_opens_at: nextValue })}
-              />
-              <DateTimePicker
-                id={`${idPrefix}-registration-closes`}
-                timeId={`${idPrefix}-registration-closes-time`}
-                dateLabel="Closes at"
-                timeLabel="Time"
-                value={value.registration_closes_at ?? ""}
-                onChange={(nextValue) => onChange({ ...value, registration_closes_at: nextValue })}
-              />
-            </div>
-          </div>
-
-          <div className="space-y-3">
-            <p className="text-sm font-medium">Check-in Period</p>
-            <div className="grid gap-3">
-              <DateTimePicker
-                id={`${idPrefix}-check-in-opens`}
-                timeId={`${idPrefix}-check-in-opens-time`}
-                dateLabel="Opens at"
-                timeLabel="Time"
-                value={value.check_in_opens_at ?? ""}
-                onChange={(nextValue) => onChange({ ...value, check_in_opens_at: nextValue })}
-              />
-              <DateTimePicker
-                id={`${idPrefix}-check-in-closes`}
-                timeId={`${idPrefix}-check-in-closes-time`}
-                dateLabel="Closes at"
-                timeLabel="Time"
-                value={value.check_in_closes_at ?? ""}
-                onChange={(nextValue) => onChange({ ...value, check_in_closes_at: nextValue })}
               />
             </div>
           </div>

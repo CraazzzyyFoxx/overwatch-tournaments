@@ -2,6 +2,7 @@
 
 import { memo, useCallback, useMemo, useRef, useState } from "react";
 import { DivisionGridMappingEditor } from "./MappingEditor";
+import { OwRankRangePicker } from "./OwRankRangePicker";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Check,
@@ -14,7 +15,8 @@ import {
   Store,
   Trash2,
   Upload,
-  Wand2
+  Wand2,
+  X
 } from "lucide-react";
 import Image from "next/image";
 
@@ -34,6 +36,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/components/ui/number-input";
 import {
   Select,
   SelectContent,
@@ -156,7 +159,7 @@ type DivisionGridEditorCardProps = {
   onSaved: () => Promise<void>;
 };
 
-// Navigable column indices: 0=#, 1=name, 2=rank_min, 3=rank_max (OW cols use Select, no nav)
+// Navigable column indices: 0=#, 1=name, 2=rank_min, 3=rank_max (OW range uses a popover, no nav)
 const NAV_COLS = 4;
 const DEFAULT_RANK_STEP = 100;
 
@@ -197,6 +200,7 @@ type TierEditorRowProps = {
   onSelect: (index: number, checked: boolean) => void;
   onSetInputRef: (row: number, col: number, element: HTMLInputElement | null) => void;
   onUpdate: (index: number, field: keyof DivisionTier, value: string | number | null) => void;
+  onUpdateOwRange: (index: number, min: number | null, max: number | null) => void;
   onUpload: (index: number, tier: DivisionTier, file: File) => void;
 };
 
@@ -210,6 +214,7 @@ const TierEditorRow = memo(function TierEditorRow({
   onSelect,
   onSetInputRef,
   onUpdate,
+  onUpdateOwRange,
   onUpload
 }: TierEditorRowProps) {
   const setInputRef = useCallback(
@@ -283,46 +288,13 @@ const TierEditorRow = memo(function TierEditorRow({
           disabled={!canEdit}
         />
       </div>
-      <div className="flex items-center gap-1.5">
-        <Select
-          value={tier.ow_rank_min?.toString() ?? "__none__"}
-          onValueChange={(v) =>
-            onUpdate(rowIndex, "ow_rank_min", v === "__none__" ? null : Number(v))
-          }
+      <div className="flex items-center">
+        <OwRankRangePicker
+          min={tier.ow_rank_min ?? null}
+          max={tier.ow_rank_max ?? null}
           disabled={!canEdit}
-        >
-          <SelectTrigger className="h-8 flex-1 min-w-0">
-            <SelectValue placeholder="—" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__none__">—</SelectItem>
-            {OW2_RANK_OPTIONS.map((opt) => (
-              <SelectItem key={opt.value} value={opt.value.toString()}>
-                {opt.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <span className="shrink-0 text-xs text-muted-foreground">–</span>
-        <Select
-          value={tier.ow_rank_max?.toString() ?? "__none__"}
-          onValueChange={(v) =>
-            onUpdate(rowIndex, "ow_rank_max", v === "__none__" ? null : Number(v))
-          }
-          disabled={!canEdit}
-        >
-          <SelectTrigger className="h-8 flex-1 min-w-0">
-            <SelectValue placeholder="—" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__none__">—</SelectItem>
-            {OW2_RANK_OPTIONS.map((opt) => (
-              <SelectItem key={opt.value} value={opt.value.toString()}>
-                {opt.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          onChange={(min, max) => onUpdateOwRange(rowIndex, min, max)}
+        />
       </div>
       <label className="inline-flex cursor-pointer items-center justify-center">
         <input
@@ -466,6 +438,14 @@ function DivisionGridEditorCard({
     []
   );
 
+  const updateTierOwRange = useCallback((index: number, min: number | null, max: number | null) => {
+    setTiers((current) =>
+      current.map((tier, tierIndex) =>
+        tierIndex === index ? { ...tier, ow_rank_min: min, ow_rank_max: max } : tier
+      )
+    );
+  }, []);
+
   const selectedRowIndexes = useMemo(
     () => getSelectedIndexes(selectedRows, tiers.length),
     [selectedRows, tiers.length]
@@ -544,6 +524,51 @@ function DivisionGridEditorCard({
     });
   }, [bulkTargetIndexes, rangeStart, rangeStep]);
 
+  const autoMapOwRanges = useCallback(() => {
+    const targetSet = new Set(bulkTargetIndexes);
+
+    setTiers((current) => {
+      // Top tier (lowest number) first, matching OW2_RANK_OPTIONS' highest → lowest order.
+      const orderedIndexes = bulkTargetIndexes
+        .slice()
+        .sort((a, b) => current[a].number - current[b].number || a - b);
+      const tierCount = orderedIndexes.length;
+      if (tierCount === 0) return current;
+
+      // Distribute the full OW ladder across the targeted tiers as contiguous,
+      // near-even chunks: 40 tiers -> one OW rank each, 8 tiers -> one division each.
+      const assignments = new Map<number, { min: number; max: number }>();
+      let cursor = 0;
+      for (let order = 0; order < tierCount; order++) {
+        const size =
+          Math.floor(OW2_RANK_OPTIONS.length / tierCount) +
+          (order < OW2_RANK_OPTIONS.length % tierCount ? 1 : 0);
+        if (size === 0) break; // more tiers than OW ranks: the rest stay unmapped
+        const chunk = OW2_RANK_OPTIONS.slice(cursor, cursor + size);
+        cursor += size;
+        assignments.set(orderedIndexes[order], {
+          min: chunk[chunk.length - 1].value,
+          max: chunk[0].value
+        });
+      }
+
+      return current.map((tier, index) => {
+        const assigned = assignments.get(index);
+        if (!targetSet.has(index) || !assigned) return tier;
+        return { ...tier, ow_rank_min: assigned.min, ow_rank_max: assigned.max };
+      });
+    });
+  }, [bulkTargetIndexes]);
+
+  const clearOwRanges = useCallback(() => {
+    const targetSet = new Set(bulkTargetIndexes);
+    setTiers((current) =>
+      current.map((tier, index) =>
+        targetSet.has(index) ? { ...tier, ow_rank_min: null, ow_rank_max: null } : tier
+      )
+    );
+  }, [bulkTargetIndexes]);
+
   const addTiers = useCallback(() => {
     const count = Math.max(1, Math.min(100, Math.abs(toSafeInteger(tiersToAdd, 1))));
     const step = Math.max(1, Math.abs(toSafeInteger(rangeStep, DEFAULT_RANK_STEP)));
@@ -617,15 +642,13 @@ function DivisionGridEditorCard({
               <label className="text-xs font-medium text-muted-foreground" htmlFor="rank-delta">
                 Rank delta
               </label>
-              <Input
+              <NumberInput
                 id="rank-delta"
-                type="number"
-                inputMode="numeric"
+                integer
+                min={0}
                 className="h-9 w-28 tabular-nums"
                 value={rankDelta}
-                onChange={(event) =>
-                  setRankDelta(Math.max(0, parseIntegerInput(event.target.value)))
-                }
+                onValueChange={(next) => setRankDelta(next ?? 0)}
                 disabled={!canEdit}
               />
             </div>
@@ -649,15 +672,13 @@ function DivisionGridEditorCard({
               <label className="text-xs font-medium text-muted-foreground" htmlFor="range-start">
                 Range start
               </label>
-              <Input
+              <NumberInput
                 id="range-start"
-                type="number"
-                inputMode="numeric"
+                integer
+                min={0}
                 className="h-9 w-28 tabular-nums"
                 value={rangeStart}
-                onChange={(event) =>
-                  setRangeStart(Math.max(0, parseIntegerInput(event.target.value)))
-                }
+                onValueChange={(next) => setRangeStart(next ?? 0)}
                 disabled={!canEdit}
               />
             </div>
@@ -665,16 +686,13 @@ function DivisionGridEditorCard({
               <label className="text-xs font-medium text-muted-foreground" htmlFor="range-step">
                 Step
               </label>
-              <Input
+              <NumberInput
                 id="range-step"
-                type="number"
-                inputMode="numeric"
+                integer
                 min={1}
                 className="h-9 w-24 tabular-nums"
                 value={rangeStep}
-                onChange={(event) =>
-                  setRangeStep(Math.max(1, parseIntegerInput(event.target.value, 1)))
-                }
+                onValueChange={(next) => setRangeStep(next ?? 1)}
                 disabled={!canEdit}
               />
             </div>
@@ -686,20 +704,34 @@ function DivisionGridEditorCard({
               <Wand2 className="mr-2 h-4 w-4" />
               Auto ranges
             </Button>
+            <Button
+              variant="outline"
+              onClick={autoMapOwRanges}
+              disabled={!canEdit || bulkTargetIndexes.length === 0}
+              title="Distribute the OW2 ladder across the targeted tiers (top tier gets the highest ranks)"
+            >
+              <Wand2 className="mr-2 h-4 w-4" />
+              Auto OW map
+            </Button>
+            <Button
+              variant="outline"
+              onClick={clearOwRanges}
+              disabled={!canEdit || bulkTargetIndexes.length === 0}
+            >
+              <X className="mr-2 h-4 w-4" />
+              Clear OW
+            </Button>
             <div className="space-y-1">
               <label className="text-xs font-medium text-muted-foreground" htmlFor="tiers-to-add">
                 Tiers
               </label>
-              <Input
+              <NumberInput
                 id="tiers-to-add"
-                type="number"
-                inputMode="numeric"
+                integer
                 min={1}
                 className="h-9 w-20 tabular-nums"
                 value={tiersToAdd}
-                onChange={(event) =>
-                  setTiersToAdd(Math.max(1, parseIntegerInput(event.target.value, 1)))
-                }
+                onValueChange={(next) => setTiersToAdd(next ?? 1)}
                 disabled={!canEdit}
               />
             </div>
@@ -752,6 +784,7 @@ function DivisionGridEditorCard({
               onSelect={toggleRowSelection}
               onSetInputRef={setInputRef}
               onUpdate={updateTier}
+              onUpdateOwRange={updateTierOwRange}
               onUpload={uploadIcon}
             />
           ))}

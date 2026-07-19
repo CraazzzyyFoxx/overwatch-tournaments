@@ -1,6 +1,7 @@
 "use client";
 
 import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import teamService from "@/services/team.service";
 import { TournamentTeamCard, TournamentTeamCardSkeleton } from "@/components/TournamentTeamCard";
 import tournamentService from "@/services/tournament.service";
@@ -21,6 +22,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
 const TeamsPage = () => {
+  const t = useTranslations();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -58,7 +60,8 @@ const TeamsPage = () => {
     isError: isErrorTeams
   } = useQuery({
     queryKey: ["teams", tournamentId, sortBy, sortOrder],
-    queryFn: () => teamService.getAll(tournamentId as number, sortBy, sortOrder),
+    queryFn: () =>
+      teamService.getAll({ tournamentId: tournamentId as number, sort: sortBy, order: sortOrder }),
     enabled: tournamentId != null
   });
 
@@ -134,9 +137,9 @@ const TeamsPage = () => {
           <CardHeader className="p-4 pb-3">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
               <div className="flex flex-col gap-1">
-                <h1 className="text-2xl font-semibold leading-none tracking-tight">Teams</h1>
+                <h1 className="text-2xl font-semibold leading-none tracking-tight">{t("common.teams")}</h1>
                 <p className="text-sm text-muted-foreground hidden sm:block">
-                  Browse balanced teams, jump to a team, and adjust sorting.
+                  {t("teams.subtitle")}
                 </p>
               </div>
 
@@ -144,7 +147,7 @@ const TeamsPage = () => {
                 {loadingTournaments ? (
                   <Skeleton className="h-6 w-56" />
                 ) : isErrorTournaments ? (
-                  <Badge variant="outline">Failed to load tournaments</Badge>
+                  <Badge variant="outline">{t("teams.tournamentsLoadError")}</Badge>
                 ) : null}
               </div>
             </div>
@@ -153,23 +156,23 @@ const TeamsPage = () => {
           <CardContent className="p-4 pt-3">
             <div className="grid gap-3 xs:grid-cols-1 sm:grid-cols-2 lg:flex lg:flex-wrap lg:items-end">
               <div className="grid gap-1">
-                <span className="text-xs text-muted-foreground">Tournament</span>
+                <span className="text-xs text-muted-foreground">{t("common.tournament")}</span>
                 <Select
                   value={tournamentId?.toString()}
                   onValueChange={(value) => pushTournamentId(value)}
                   disabled={loadingTournaments || isErrorTournaments}
                 >
                   <SelectTrigger
-                    aria-label="Tournament"
+                    aria-label={t("common.tournament")}
                     className="h-10 cursor-pointer xs:w-full md:w-62.5"
                   >
                     <SelectValue
                       placeholder={
                         loadingTournaments
-                          ? "Loading tournaments..."
+                          ? t("teams.loadingTournaments")
                           : isErrorTournaments
-                            ? "Failed to load tournaments"
-                            : "Select a tournament"
+                            ? t("teams.tournamentsLoadError")
+                            : t("teams.selectTournament")
                       }
                     />
                   </SelectTrigger>
@@ -186,7 +189,7 @@ const TeamsPage = () => {
               </div>
 
               <div className="grid gap-1">
-                <span className="text-xs text-muted-foreground">Jump to team</span>
+                <span className="text-xs text-muted-foreground">{t("teams.jumpToTeam")}</span>
                 {teamsLoading ? (
                   <Skeleton className="h-10 xs:w-full md:w-62.5" />
                 ) : (
@@ -200,28 +203,28 @@ const TeamsPage = () => {
               </div>
 
               <div className="grid gap-1">
-                <span className="text-xs text-muted-foreground">Sort by</span>
+                <span className="text-xs text-muted-foreground">{t("common.sortBy")}</span>
                 <Select value={sortBy} onValueChange={(value) => setSortBy(value as typeof sortBy)}>
-                  <SelectTrigger aria-label="Sort by" className="h-10 cursor-pointer xs:w-full md:w-62.5">
-                    <SelectValue placeholder="Sort by" />
+                  <SelectTrigger aria-label={t("common.sortBy")} className="h-10 cursor-pointer xs:w-full md:w-62.5">
+                    <SelectValue placeholder={t("common.sortBy")} />
                   </SelectTrigger>
                   <SelectContent className="liquid-glass-panel">
-                    <SelectItem value="avg_sr">Avg. SR</SelectItem>
-                    <SelectItem value="placement">Placement</SelectItem>
-                    <SelectItem value="group">Group</SelectItem>
+                    <SelectItem value="avg_sr">{t("teams.sortAvgSr")}</SelectItem>
+                    <SelectItem value="placement">{t("teams.sortPlacement")}</SelectItem>
+                    <SelectItem value="group">{t("teams.sortGroup")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
               <div className="grid gap-1">
-                <span className="text-xs text-muted-foreground">Order</span>
+                <span className="text-xs text-muted-foreground">{t("common.order")}</span>
                 <Select value={sortOrder} onValueChange={(value) => setSortOrder(value as typeof sortOrder)}>
-                  <SelectTrigger aria-label="Order" className="h-10 cursor-pointer xs:w-full md:w-62.5">
-                    <SelectValue placeholder="Order" />
+                  <SelectTrigger aria-label={t("common.order")} className="h-10 cursor-pointer xs:w-full md:w-62.5">
+                    <SelectValue placeholder={t("common.order")} />
                   </SelectTrigger>
                   <SelectContent className="liquid-glass-panel">
-                    <SelectItem value="asc">Ascending</SelectItem>
-                    <SelectItem value="desc">Descending</SelectItem>
+                    <SelectItem value="asc">{t("common.ascending")}</SelectItem>
+                    <SelectItem value="desc">{t("common.descending")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -233,19 +236,19 @@ const TeamsPage = () => {
       {tournamentId == null && !loadingTournaments ? (
         <Card>
           <CardHeader>
-            <div className="text-sm text-muted-foreground">Select a tournament to view teams.</div>
+            <div className="text-sm text-muted-foreground">{t("teams.selectTournamentToView")}</div>
           </CardHeader>
         </Card>
       ) : isErrorTeams ? (
         <Card>
           <CardHeader>
-            <div className="text-sm text-muted-foreground">Failed to load teams.</div>
+            <div className="text-sm text-muted-foreground">{t("teams.teamsLoadError")}</div>
           </CardHeader>
         </Card>
       ) : isEmptyTeams ? (
         <Card>
           <CardHeader>
-            <div className="text-sm text-muted-foreground">No teams found for this tournament.</div>
+            <div className="text-sm text-muted-foreground">{t("teams.noTeamsFound")}</div>
           </CardHeader>
         </Card>
       ) : (

@@ -71,6 +71,28 @@ func TestMiddlewareGeneratesAndEchoesCorrelationID(t *testing.T) {
 	}
 }
 
+func TestMiddlewareTagsAccessLog(t *testing.T) {
+	base, buf := newBuf(t)
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /x", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	})
+	h := Middleware(mux, base, nil)
+
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/x", nil))
+
+	ls := lines(t, buf)
+	if len(ls) != 1 {
+		t.Fatalf("got %d log lines, want 1", len(ls))
+	}
+	// The access log must carry AccessLogAttr=true so the observability Sentry
+	// bridge keeps it out of Sentry even at error level (status 500 here).
+	if ls[0][AccessLogAttr] != true {
+		t.Errorf("%s = %v, want true", AccessLogAttr, ls[0][AccessLogAttr])
+	}
+}
+
 func TestMiddlewareReusesIncomingRequestID(t *testing.T) {
 	base, buf := newBuf(t)
 	mux := http.NewServeMux()

@@ -4,6 +4,7 @@ import React, { useMemo, useState, useTransition } from "react";
 import { Award, Crown, Flame, Gem, Sparkles } from "lucide-react";
 import Image from "next/image";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
 import { AchievementRarity } from "@/types/achievement.types";
 import type { UserTournamentSummary } from "@/types/user.types";
@@ -17,8 +18,8 @@ import {
 import {
   classifyRarity,
   RARITY_ORDER,
-  RARITY_RANGE,
-  RARITY_TITLES,
+  rarityRanges,
+  rarityTitles,
   type Rarity
 } from "@/app/(site)/users/components/achievements/rarity";
 import { AchievementDetailDialog } from "@/app/(site)/users/components/achievements/AchievementDetailDialog";
@@ -32,6 +33,9 @@ interface Props {
 }
 
 const AchievementsView = ({ achievements, tournaments = [], selectedTournamentValue = "all" }: Props) => {
+  const tr = useTranslations();
+  const titles = rarityTitles(tr);
+  const ranges = rarityRanges(tr);
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -141,7 +145,7 @@ const AchievementsView = ({ achievements, tournaments = [], selectedTournamentVa
           <div key={r} className={cn("aqt-tier", r)}>
             <span className="aqt-l">{r}</span>
             <span className="aqt-n">{unlockedCounts[r]}</span>
-            <span className="aqt-sub">{RARITY_RANGE[r]}</span>
+            <span className="aqt-sub">{ranges[r]}</span>
           </div>
         ))}
       </div>
@@ -157,7 +161,7 @@ const AchievementsView = ({ achievements, tournaments = [], selectedTournamentVa
           role="button"
           tabIndex={0}
         >
-          All <span className="aqt-count">{totalCount}</span>
+          {tr("common.all")} <span className="aqt-count">{totalCount}</span>
         </span>
         {hasLocked ? (
           <>
@@ -167,7 +171,7 @@ const AchievementsView = ({ achievements, tournaments = [], selectedTournamentVa
               role="button"
               tabIndex={0}
             >
-              Unlocked <span className="aqt-count">{unlockedCount}</span>
+              {tr("users.achievements.unlocked")} <span className="aqt-count">{unlockedCount}</span>
             </span>
             <span
               className={cn("aqt-filter-chip", lockFilter === "locked" && "active")}
@@ -175,7 +179,7 @@ const AchievementsView = ({ achievements, tournaments = [], selectedTournamentVa
               role="button"
               tabIndex={0}
             >
-              Locked <span className="aqt-count">{lockedCount}</span>
+              {tr("users.achievements.locked")} <span className="aqt-count">{lockedCount}</span>
             </span>
           </>
         ) : null}
@@ -195,12 +199,12 @@ const AchievementsView = ({ achievements, tournaments = [], selectedTournamentVa
         <span className="aqt-filter-divider" />
         {uniqueTournaments.length > 0 && (
           <Select value={selectedTournamentValue} onValueChange={onTournamentChange}>
-            <SelectTrigger className="h-8 w-48 border-white/[0.07] bg-white/[0.02] text-[14px] text-white/80 shadow-none hover:border-white/[0.13] hover:bg-white/[0.04] focus:ring-1 focus:ring-white/[0.15] focus:ring-offset-0">
-              <SelectValue placeholder="All tournaments" />
+            <SelectTrigger className="h-8 w-48 border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.02)] text-[14px] text-[color:var(--aqt-fg-muted)] shadow-none hover:border-[color:var(--aqt-border-2)] hover:bg-[hsl(0_0%_100%/0.04)] focus:ring-1 focus:ring-[color:var(--aqt-teal)] focus:ring-offset-0">
+              <SelectValue placeholder={tr("users.achievements.filter.allTournaments")} />
             </SelectTrigger>
             <SelectContent className="max-h-[min(var(--radix-select-content-available-height),20rem)]">
-              <SelectItem value="all">All tournaments</SelectItem>
-              <SelectItem value="none">Without tournament</SelectItem>
+              <SelectItem value="all">{tr("users.achievements.filter.allTournaments")}</SelectItem>
+              <SelectItem value="none">{tr("users.achievements.filter.withoutTournament")}</SelectItem>
               {uniqueTournaments.map((t) => (
                 <SelectItem key={t.id} value={`t-${t.id}`}>
                   {t.name}
@@ -211,20 +215,20 @@ const AchievementsView = ({ achievements, tournaments = [], selectedTournamentVa
         )}
         <Select value={sort} onValueChange={(v) => setSort(v as "rarity" | "name" | "count")}>
           <SelectTrigger
-            title="Sort achievements"
-            className="aqt-mono h-8 w-[150px] shadow-none border-white/[0.07] bg-white/[0.02] text-[13px] text-white/80 hover:border-white/[0.13] hover:bg-white/[0.04] focus:ring-1 focus:ring-white/[0.15] focus:ring-offset-0"
+            title={tr("users.achievements.sort.title")}
+            className="aqt-mono h-8 w-[150px] shadow-none border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.02)] text-[13px] text-[color:var(--aqt-fg-muted)] hover:border-[color:var(--aqt-border-2)] hover:bg-[hsl(0_0%_100%/0.04)] focus:ring-1 focus:ring-[color:var(--aqt-teal)] focus:ring-offset-0"
           >
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="rarity">Sort: Rarity</SelectItem>
-            <SelectItem value="name">Sort: Name</SelectItem>
-            <SelectItem value="count">Sort: Earned</SelectItem>
+            <SelectItem value="rarity">{tr("users.achievements.sort.rarity")}</SelectItem>
+            <SelectItem value="name">{tr("users.achievements.sort.name")}</SelectItem>
+            <SelectItem value="count">{tr("users.achievements.sort.earned")}</SelectItem>
           </SelectContent>
         </Select>
         <div className="filter-search relative ml-auto min-w-[200px] max-w-[300px] flex-1">
           <input
-            placeholder="Search achievements…"
+            placeholder={tr("users.achievements.searchPlaceholder")}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full rounded-lg border border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.02)] px-3 py-1.5 pl-8 text-[14px] outline-none"
@@ -248,9 +252,14 @@ const AchievementsView = ({ achievements, tournaments = [], selectedTournamentVa
                 <span className="aqt-card-title-ic">
                   {r === "mythic" ? <Flame size={15} /> : r === "legendary" ? <Crown size={15} /> : r === "epic" ? <Gem size={15} /> : r === "rare" ? <Sparkles size={15} /> : <Award size={15} />}
                 </span>
-                <span>{RARITY_TITLES[r]}</span>
+                <span>{titles[r]}</span>
               </div>
-              <span className="aqt-card-sub">{sectionUnlocked} of {list.length} unlocked</span>
+              <span className="aqt-card-sub">
+                {tr("users.achievements.sectionUnlocked", {
+                  unlocked: String(sectionUnlocked),
+                  total: String(list.length)
+                })}
+              </span>
             </div>
             <div className="aqt-card-body">
               <div className="aqt-ach-grid">
@@ -292,7 +301,7 @@ const AchievementsView = ({ achievements, tournaments = [], selectedTournamentVa
                       </div>
                       <div className="mt-auto flex items-center justify-between border-t border-[color:var(--aqt-border)] pt-2 text-[11.5px] text-[color:var(--aqt-fg-muted)]">
                         {locked ? (
-                          <span className="aqt-rarity">Locked</span>
+                          <span className="aqt-rarity">{tr("users.achievements.locked")}</span>
                         ) : (
                           <span className="aqt-rarity">◆ <span className="capitalize">{r}</span></span>
                         )}
@@ -310,7 +319,7 @@ const AchievementsView = ({ achievements, tournaments = [], selectedTournamentVa
       {achievements.length === 0 ? (
         <div className="aqt-card-surface">
           <div className="aqt-card-body text-center text-[color:var(--aqt-fg-dim)]">
-            У пользователя пока нет достижений.
+            {tr("users.achievements.emptyState")}
           </div>
         </div>
       ) : null}

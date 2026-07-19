@@ -17,7 +17,14 @@ import workspaceService from "@/services/workspace.service";
 import type { DivisionGridVersion } from "@/types/workspace.types";
 import { TournamentWorkspaceHeader } from "./components/TournamentWorkspaceHeader";
 
-type TournamentWorkspaceTab = "overview" | "teams" | "matches" | "logs" | "draft" | "settings";
+type TournamentWorkspaceTab =
+  | "overview"
+  | "teams"
+  | "matches"
+  | "logs"
+  | "draft"
+  | "veto"
+  | "settings";
 const TOURNAMENT_WORKSPACE_REFRESH_INTERVAL_MS = 60_000;
 
 const tabFallback = (
@@ -75,6 +82,14 @@ const TournamentSettingsTab = dynamic(
   { loading: () => tabFallback }
 );
 
+const TournamentMapVetoTab = dynamic(
+  () =>
+    import("./components/TournamentMapVetoTab").then((module) => ({
+      default: module.TournamentMapVetoTab
+    })),
+  { loading: () => tabFallback }
+);
+
 
 function UnauthorizedTournamentWorkspaceState() {
   return (
@@ -123,7 +138,7 @@ export default function AdminTournamentWorkspacePage() {
 
   const teamsQuery = useQuery({
     queryKey: ["admin", "tournament", tournamentId, "teams"],
-    queryFn: () => teamService.getAll(tournamentId),
+    queryFn: () => teamService.getAll({ tournamentId }),
     enabled: isValidTournamentId && shouldLoadTeams
   });
 
@@ -295,6 +310,7 @@ export default function AdminTournamentWorkspacePage() {
           {tournament.team_formation === "draft" ? (
             <TabsTrigger value="draft">Draft</TabsTrigger>
           ) : null}
+          {canUpdateEncounter ? <TabsTrigger value="veto">Map Veto</TabsTrigger> : null}
           {canUpdateTournament ? (
             <TabsTrigger value="settings">Settings</TabsTrigger>
           ) : null}
@@ -376,6 +392,18 @@ export default function AdminTournamentWorkspacePage() {
           <TabsContent value="draft" className="space-y-4">
             {activeTab === "draft" ? (
               <DraftSessionDashboard tournamentId={tournamentId} canManage={canImportTeams} />
+            ) : null}
+          </TabsContent>
+        ) : null}
+
+        {canUpdateEncounter ? (
+          <TabsContent value="veto" className="space-y-4">
+            {activeTab === "veto" ? (
+              <TournamentMapVetoTab
+                tournamentId={tournamentId}
+                stages={stages}
+                canManage={canUpdateEncounter}
+              />
             ) : null}
           </TabsContent>
         ) : null}

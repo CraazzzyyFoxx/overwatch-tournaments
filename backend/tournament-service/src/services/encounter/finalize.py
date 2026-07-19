@@ -8,11 +8,18 @@ from typing import Literal
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from shared.core.enums import EncounterResultStatus, EncounterStatus
+from shared.core import http_status
+from shared.core.enums import EncounterResultStatus, EncounterStatus, StageType
+from shared.core.errors import BaseAPIException as HTTPException
 from shared.services.bracket import advancement
 from src import models
+from src.services.encounter import veto_session as veto_session_service
 
 FinalizeSource = Literal["captain", "admin", "challonge", "log"]
+
+# Stage types where a match MUST produce a winner: a drawn score would leave
+# the advancement edges unfired and the bracket silently stuck.
+_NO_DRAW_STAGE_TYPES = {StageType.SINGLE_ELIMINATION, StageType.DOUBLE_ELIMINATION}
 
 
 @dataclass(frozen=True)
@@ -45,6 +52,17 @@ async def finalize_encounter_score(
     if locked_encounter.id != encounter_id:
         raise ValueError(f"Encounter id mismatch: expected {encounter_id}, got {locked_encounter.id}")
 
+    if home_score == away_score and status == EncounterStatus.COMPLETED:
+        stage_type = await _load_stage_type(session, locked_encounter.stage_id)
+        if stage_type in _NO_DRAW_STAGE_TYPES:
+            raise HTTPException(
+                status_code=http_status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "An elimination-bracket match cannot be completed with a drawn score — "
+                    "a winner is required to advance the bracket"
+                ),
+            )
+
     locked_encounter.home_score = home_score
     locked_encounter.away_score = away_score
     locked_encounter.status = status
@@ -57,6 +75,13 @@ async def finalize_encounter_score(
         locked_encounter.confirmed_at = confirmed_at or datetime.now(UTC)
 
     advanced_encounters = await advancement.advance_winner(session, locked_encounter)
+    # Bracket propagation is THE write path where encounter team slots become
+    # set (or change): keep each affected encounter's veto session in sync —
+    # both teams known -> ensure a session; teams changed under an existing
+    # session -> reset it (unless a map was already played). Runs in the
+    # caller's transaction, like the advancement itself.
+    for advanced in advanced_encounters:
+        await veto_session_service.sync_veto_session_after_team_change(session, advanced)
     return FinalizedEncounterScore(
         encounter=locked_encounter,
         advanced_encounters=advanced_encounters,
@@ -74,3 +99,12 @@ async def _load_encounter_for_update(
     if encounter is None:
         raise ValueError(f"Encounter {encounter_id} not found")
     return encounter
+
+
+async def _load_stage_type(
+    session: AsyncSession,
+    stage_id: int | None,
+) -> StageType | None:
+    if stage_id is None:
+        return None
+    return await session.scalar(select(models.Stage.stage_type).where(models.Stage.id == stage_id))

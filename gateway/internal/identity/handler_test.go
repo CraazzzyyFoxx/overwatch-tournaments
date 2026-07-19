@@ -167,6 +167,202 @@ func TestLogout_ForwardsAccessToken(t *testing.T) {
 	}
 }
 
+// TestOAuthURL_ForwardsGuardHash (Task 10R fix 1): the optional
+// guard_hash query param -- set only by the frontend's custom-domain apex
+// bounce (oauth-login.ts) -- must reach identity-svc's rpc.identity.oauth_url
+// alongside origin/redirect/action/csrf so it gets signed into the state.
+func TestOAuthURL_ForwardsGuardHash(t *testing.T) {
+	caller := &fakeCaller{resp: []byte(`{"ok":true,"data":{"provider":"discord","url":"https://discord.example/authorize","state":"s"}}`)}
+	r := httptest.NewRequest(http.MethodGet,
+		"/api/auth/oauth/discord/url?origin=https://anakq.gg&redirect=/account&action=login&csrf=raw-csrf&guard_hash=abc123",
+		nil)
+	w := httptest.NewRecorder()
+	newHandler(caller).OAuthURL(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", w.Code)
+	}
+	var req map[string]any
+	_ = json.Unmarshal(caller.gotBody, &req)
+	if req["guard_hash"] != "abc123" {
+		t.Fatalf("guard_hash = %v, want \"abc123\"", req["guard_hash"])
+	}
+}
+
+// TestOAuthURL_OmittedGuardHashForwardsEmptyString documents that a
+// platform-host flow (no guard_hash query param at all) forwards an empty
+// string, not a missing key -- identity-svc treats an empty string the same
+// as absent (never signs an empty "lg" into the state).
+func TestOAuthURL_OmittedGuardHashForwardsEmptyString(t *testing.T) {
+	caller := &fakeCaller{resp: []byte(`{"ok":true,"data":{"provider":"discord","url":"https://discord.example/authorize","state":"s"}}`)}
+	r := httptest.NewRequest(http.MethodGet,
+		"/api/auth/oauth/discord/url?origin=https://owt.craazzzyyfoxx.me&redirect=/&action=login&csrf=raw-csrf",
+		nil)
+	w := httptest.NewRecorder()
+	newHandler(caller).OAuthURL(w, r)
+
+	var req map[string]any
+	_ = json.Unmarshal(caller.gotBody, &req)
+	if req["guard_hash"] != "" {
+		t.Fatalf("guard_hash = %v, want \"\"", req["guard_hash"])
+	}
+}
+
+// TestOAuthLink_NoBearer_StillCallsIdentity documents the Task 10R behavior
+// change: unlike every other authenticated identity route, OAuthLink no
+// longer rejects a missing bearer at the gateway -- identity-svc decides
+// (branching on the signed OAuth state's origin) whether one is required.
+func TestOAuthLink_NoBearer_StillCallsIdentity(t *testing.T) {
+	caller := &fakeCaller{resp: []byte(`{"ok":true,"data":{"mode":"link_ticket","ticket":"tic-1","origin":"https://anakq.gg","redirect":"/account"}}`)}
+	r := httptest.NewRequest(http.MethodPost, "/api/auth/oauth/discord/link", strings.NewReader(`{"code":"c","state":"s","csrf":"x"}`))
+	w := httptest.NewRecorder()
+	newHandler(caller).OAuthLink(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", w.Code)
+	}
+	if !caller.called {
+		t.Fatal("RPC must run even without a bearer token -- identity-svc decides (Task 10R)")
+	}
+}
+
+// TestOAuthLink_NoBearer_BodyAccessTokenNeverReachesIdentity is the
+// "hardening" test from the Task 10R brief: a client-supplied access_token
+// in the body must never survive mergeBody's overwrite, whether or not a
+// real bearer is present. With no bearer, the forwarded access_token must be
+// the empty string, never the attacker-supplied value.
+func TestOAuthLink_NoBearer_BodyAccessTokenNeverReachesIdentity(t *testing.T) {
+	caller := &fakeCaller{resp: []byte(`{"ok":true,"data":{"mode":"link_ticket","ticket":"tic-1","origin":"https://anakq.gg","redirect":"/account"}}`)}
+	r := httptest.NewRequest(http.MethodPost, "/api/auth/oauth/discord/link",
+		strings.NewReader(`{"code":"c","state":"s","csrf":"x","access_token":"attacker-supplied"}`))
+	w := httptest.NewRecorder()
+	newHandler(caller).OAuthLink(w, r)
+
+	var req map[string]any
+	_ = json.Unmarshal(caller.gotBody, &req)
+	if req["access_token"] != "" {
+		t.Fatalf("access_token = %v, want \"\" (body-supplied value must never survive)", req["access_token"])
+	}
+}
+
+// TestOAuthLink_WithBearer_OverridesBodyAccessToken proves the same
+// overwrite holds when a real bearer IS present: the server-computed
+// access_token (from the Authorization header) always wins over whatever a
+// client put in the JSON body.
+func TestOAuthLink_WithBearer_OverridesBodyAccessToken(t *testing.T) {
+	caller := &fakeCaller{resp: []byte(`{"ok":true,"data":{"mode":"linked","message":"ok","provider":"discord","username":"u","origin":"https://owt.craazzzyyfoxx.me","redirect":"/account"}}`)}
+	r := httptest.NewRequest(http.MethodPost, "/api/auth/oauth/discord/link",
+		strings.NewReader(`{"code":"c","state":"s","csrf":"x","access_token":"attacker-supplied"}`))
+	r.Header.Set("Authorization", "Bearer real-token")
+	w := httptest.NewRecorder()
+	newHandler(caller).OAuthLink(w, r)
+
+	var req map[string]any
+	_ = json.Unmarshal(caller.gotBody, &req)
+	if req["access_token"] != "real-token" {
+		t.Fatalf("access_token = %v, want \"real-token\"", req["access_token"])
+	}
+}
+
+func TestLinkComplete_NoBearer(t *testing.T) {
+	caller := &fakeCaller{}
+	r := httptest.NewRequest(http.MethodPost, "/api/auth/link/complete", strings.NewReader(`{"ticket":"tic-1"}`))
+	w := httptest.NewRecorder()
+	newHandler(caller).LinkComplete(w, r)
+
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403", w.Code)
+	}
+	if caller.called {
+		t.Fatal("RPC must not run without a bearer token -- this route is NOT public (unlike SsoExchange)")
+	}
+}
+
+func TestLinkComplete_ForwardsAccessTokenAndTicket(t *testing.T) {
+	caller := &fakeCaller{resp: []byte(`{"ok":true,"data":{"message":"Discord account linked successfully","provider":"discord","username":"u"}}`)}
+	r := httptest.NewRequest(http.MethodPost, "/api/auth/link/complete", strings.NewReader(`{"ticket":"tic-1"}`))
+	r.Header.Set("Authorization", "Bearer acc")
+	w := httptest.NewRecorder()
+	newHandler(caller).LinkComplete(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", w.Code)
+	}
+	if caller.gotQueue != queueLinkComplete {
+		t.Fatalf("queue = %q", caller.gotQueue)
+	}
+	var req map[string]any
+	_ = json.Unmarshal(caller.gotBody, &req)
+	if req["access_token"] != "acc" || req["ticket"] != "tic-1" {
+		t.Fatalf("link_complete body = %v", req)
+	}
+}
+
+// TestLinkComplete_BodyAccessTokenNeverOverridesBearer guards the same
+// footgun as OAuthLink above, for the new route.
+func TestLinkComplete_BodyAccessTokenNeverOverridesBearer(t *testing.T) {
+	caller := &fakeCaller{resp: []byte(`{"ok":true,"data":{}}`)}
+	r := httptest.NewRequest(http.MethodPost, "/api/auth/link/complete",
+		strings.NewReader(`{"ticket":"tic-1","access_token":"attacker-supplied"}`))
+	r.Header.Set("Authorization", "Bearer real-token")
+	w := httptest.NewRecorder()
+	newHandler(caller).LinkComplete(w, r)
+
+	var req map[string]any
+	_ = json.Unmarshal(caller.gotBody, &req)
+	if req["access_token"] != "real-token" {
+		t.Fatalf("access_token = %v, want \"real-token\"", req["access_token"])
+	}
+}
+
+// TestLinkComplete_ForwardsGuard (Task 10R fix 1): "guard" -- the raw
+// owt_xdomain_guard cookie value the frontend route read -- must reach
+// identity-svc's rpc.identity.link_complete alongside "ticket"/access_token.
+// mergeBody only overwrites "access_token"; every other client field
+// (including "guard") passes through unfiltered, so no gateway code needs
+// to name "guard" explicitly for it to be forwarded.
+func TestLinkComplete_ForwardsGuard(t *testing.T) {
+	caller := &fakeCaller{resp: []byte(`{"ok":true,"data":{"message":"Discord account linked successfully","provider":"discord","username":"u"}}`)}
+	r := httptest.NewRequest(http.MethodPost, "/api/auth/link/complete",
+		strings.NewReader(`{"ticket":"tic-1","guard":"raw-guard-value"}`))
+	r.Header.Set("Authorization", "Bearer acc")
+	w := httptest.NewRecorder()
+	newHandler(caller).LinkComplete(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", w.Code)
+	}
+	var req map[string]any
+	_ = json.Unmarshal(caller.gotBody, &req)
+	if req["ticket"] != "tic-1" || req["guard"] != "raw-guard-value" || req["access_token"] != "acc" {
+		t.Fatalf("link_complete body = %v", req)
+	}
+}
+
+// TestSsoExchange_ForwardsGuard (Task 10R fix 1): same as LinkComplete
+// above, but for the public /auth/sso/exchange route, which uses
+// decodeRawBody (re-marshals the entire client body verbatim) rather than
+// mergeBody.
+func TestSsoExchange_ForwardsGuard(t *testing.T) {
+	caller := &fakeCaller{resp: []byte(`{"ok":true,"data":{"access_token":"a","refresh_token":"r"}}`)}
+	r := httptest.NewRequest(http.MethodPost, "/api/auth/sso/exchange",
+		strings.NewReader(`{"ticket":"tic-1","guard":"raw-guard-value"}`))
+	w := httptest.NewRecorder()
+	newHandler(caller).SsoExchange(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", w.Code)
+	}
+	if caller.gotQueue != queueSsoExchange {
+		t.Fatalf("queue = %q", caller.gotQueue)
+	}
+	var req map[string]any
+	_ = json.Unmarshal(caller.gotBody, &req)
+	if req["ticket"] != "tic-1" || req["guard"] != "raw-guard-value" {
+		t.Fatalf("sso_exchange body = %v", req)
+	}
+}
+
 func TestRbacListSessions_ForwardsAllQuery(t *testing.T) {
 	caller := &fakeCaller{resp: []byte(`{"ok":true,"data":{"results":[],"total":0,"page":2,"per_page":25}}`)}
 	r := httptest.NewRequest(http.MethodGet,

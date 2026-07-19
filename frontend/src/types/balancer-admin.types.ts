@@ -334,8 +334,6 @@ export interface AdminRegistrationForm {
   workspace_id: number;
   is_open: boolean;
   auto_approve: boolean;
-  opens_at: string | null;
-  closes_at: string | null;
   require_open_profile?: boolean;
   open_profile_scope?: "main" | "all";
   show_ranks?: boolean;
@@ -347,8 +345,6 @@ export interface AdminRegistrationForm {
 export interface AdminRegistrationFormUpsert {
   is_open: boolean;
   auto_approve: boolean;
-  opens_at?: string | null;
-  closes_at?: string | null;
   require_open_profile?: boolean;
   open_profile_scope?: "main" | "all";
   show_ranks?: boolean;
@@ -466,6 +462,8 @@ export interface AdminRegistrationCreateInput {
   admin_notes?: string | null;
   is_flex?: boolean;
   roles?: AdminRegistrationRole[];
+  /** Site account to anchor this registration on (its player). */
+  auth_user_id?: number | null;
 }
 
 export interface AdminRegistrationUpdateInput {
@@ -481,6 +479,12 @@ export interface AdminRegistrationUpdateInput {
   status?: string | null;
   balancer_status?: string | null;
   roles?: AdminRegistrationRole[] | null;
+  /** When set, (re)anchor the registration on this site account's player. */
+  auth_user_id?: number | null;
+  /** When set, mirrors the exclusion endpoint semantics in a single PATCH. */
+  exclude_from_balancer?: boolean | null;
+  /** Applied only together with exclude_from_balancer. */
+  exclude_reason?: string | null;
 }
 
 export interface AdminRegistrationExclusionInput {

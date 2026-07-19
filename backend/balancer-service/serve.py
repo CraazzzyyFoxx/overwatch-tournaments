@@ -3,6 +3,7 @@ import json
 from typing import Any
 
 from faststream import FastStream
+from faststream.rabbit import Channel
 from faststream.rabbit.annotations import RabbitMessage
 from pydantic import ValidationError
 from redis.asyncio import Redis
@@ -34,7 +35,7 @@ logger = setup_logging(
     json_output=config.json_logging,
 )
 
-broker = make_rabbit_broker(config.rabbitmq_url, logger=logger)
+broker = make_rabbit_broker(config.rabbitmq_url, logger=logger, prefetch_count=config.rpc_prefetch_count)
 app = FastStream(broker)
 
 # The cashews singleton is process-global with no default backend; the HTTP app
@@ -52,6 +53,10 @@ rpc_draft.register(broker, logger)
 # Phase 3 — public job API (create + status + result; create publishes to the
 # job queue this same worker consumes). The SSE stream is not migrated.
 rpc_jobs.register(broker, logger)
+
+
+# Balance jobs run for minutes (MOO solver); isolate them from the RPC channel.
+_JOBS_CHANNEL = Channel(prefetch_count=2)
 
 
 def _decode_balancer_message(message: Any) -> Any:
@@ -107,7 +112,7 @@ async def close_rpc_clients() -> None:
     await rpc_draft.close()
 
 
-@broker.subscriber(BALANCER_JOBS_QUEUE, decoder=_decode_balancer_message)
+@broker.subscriber(BALANCER_JOBS_QUEUE, decoder=_decode_balancer_message, channel=_JOBS_CHANNEL)
 async def process_balancer_job(data: dict, msg: RabbitMessage) -> None:
     try:
         event = BalancerJobEvent.model_validate(data)

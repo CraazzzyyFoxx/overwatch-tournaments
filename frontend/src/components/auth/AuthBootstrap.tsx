@@ -1,13 +1,14 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 import { isAuthRequiredPath } from "@/config/auth";
 import { AUTH_UNAUTHORIZED_EVENT } from "@/lib/auth-events";
-import { getTokenFromCookies, refreshAccessToken } from "@/lib/auth-tokens";
+import { getAccessTokenCookie, refreshAccessToken } from "@/lib/auth-tokens";
 import { isExpiredOrNearExpiry } from "@/lib/jwt";
 import { useProactiveTokenRefresh } from "@/lib/use-proactive-token-refresh";
 import { useAuthProfileStore } from "@/stores/auth-profile.store";
+import { realtimeClient } from "@/services/realtime.service";
 
 const AUTH_PROFILE_STALE_MS = 60_000;
 
@@ -33,6 +34,7 @@ export default function AuthBootstrap() {
   const status = useAuthProfileStore((state) => state.status);
   const fetchMe = useAuthProfileStore((state) => state.fetchMe);
   const clear = useAuthProfileStore((state) => state.clear);
+  const userId = useAuthProfileStore((state) => state.user?.id ?? null);
 
   useEffect(() => {
     if (status !== "idle") {
@@ -43,6 +45,29 @@ export default function AuthBootstrap() {
   }, [fetchMe, status]);
 
   useProactiveTokenRefresh(status === "authenticated", clear);
+
+  // Reset the realtime socket when the authenticated identity settles into a
+  // new value (login, logout, or account switch). The gateway freezes the
+  // connection's principal at handshake, so a socket opened while anonymous
+  // stays anonymous after login (workspace topics keep getting rejected) and a
+  // socket opened while authenticated keeps its stream after logout until it
+  // drops. Reconnecting re-handshakes with the current cookie. The first
+  // settled identity is only a baseline — it must not force a reconnect.
+  const realtimeIdentityRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (status !== "authenticated" && status !== "anonymous") {
+      return; // idle / loading / error: identity not settled yet
+    }
+    const identity = status === "authenticated" ? `user:${userId ?? ""}` : "anon";
+    if (realtimeIdentityRef.current === null) {
+      realtimeIdentityRef.current = identity;
+      return;
+    }
+    if (realtimeIdentityRef.current !== identity) {
+      realtimeIdentityRef.current = identity;
+      realtimeClient.reset();
+    }
+  }, [status, userId]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -59,7 +84,7 @@ export default function AuthBootstrap() {
         // /auth/refresh on every focus while logged out.
         const currentStatus = useAuthProfileStore.getState().status;
         if (currentStatus !== "anonymous") {
-          const token = await getTokenFromCookies("aqt_access_token");
+          const token = await getAccessTokenCookie();
           if (isExpiredOrNearExpiry(token)) {
             await refreshAccessToken();
           }

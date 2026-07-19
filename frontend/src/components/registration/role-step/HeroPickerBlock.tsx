@@ -57,8 +57,8 @@ export function HeroPickerBlock({ heroes, selected, max, roleCode, onChange }: H
               isSelected
                 ? accent.selectedCard
                 : disabled
-                  ? "cursor-default border-white/8 opacity-35"
-                  : "border-white/10 opacity-80 hover:border-white/20 hover:opacity-100",
+                  ? "cursor-default border-[color:var(--aqt-border)] opacity-35"
+                  : "border-[color:var(--aqt-border-2)] opacity-80 hover:border-[color:var(--aqt-border-2)] hover:opacity-100",
             )}
           >
             <span className="block size-full overflow-hidden rounded-[7px]">

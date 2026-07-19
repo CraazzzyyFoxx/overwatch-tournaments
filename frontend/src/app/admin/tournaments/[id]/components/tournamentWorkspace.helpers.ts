@@ -2,6 +2,17 @@ import { Layers3, Trophy, type LucideIcon } from "lucide-react";
 import type { Encounter } from "@/types/encounter.types";
 import type { Team } from "@/types/team.types";
 import type { Stage, Standings, Tournament } from "@/types/tournament.types";
+import type { TournamentPhaseScheduleEntryInput } from "@/types/admin.types";
+import { utcToZonedInput, zonedInputToUtc } from "@/lib/timezone";
+
+export const SCHEDULABLE_PHASES = ["registration", "check_in", "draft", "live"] as const;
+
+export type SchedulablePhase = (typeof SCHEDULABLE_PHASES)[number];
+
+export type PhaseScheduleFormState = Record<
+  SchedulablePhase,
+  { starts_at: string; ends_at: string }
+>;
 
 export type TournamentFormState = {
   number: number | null;
@@ -10,15 +21,15 @@ export type TournamentFormState = {
   challonge_slug: string;
   is_league: boolean;
   is_finished: boolean;
+  is_hidden: boolean;
   start_date: string;
   end_date: string;
   win_points: number;
   draw_points: number;
   loss_points: number;
-  registration_opens_at: string;
-  registration_closes_at: string;
-  check_in_opens_at: string;
-  check_in_closes_at: string;
+  auto_transitions_enabled: boolean;
+  allow_late_registration: boolean;
+  phase_schedule: PhaseScheduleFormState;
   division_grid_version_id: number | null;
   team_formation: string;
 };
@@ -26,8 +37,6 @@ export type TournamentFormState = {
 export type TeamFormState = {
   name: string;
   captain_id: number;
-  avg_sr: number;
-  total_sr: number;
 };
 
 export type EncounterFormState = {
@@ -96,7 +105,38 @@ export function toDateTimeInput(value?: Date | string | null) {
   return new Date(value).toISOString().slice(0, 16);
 }
 
-export function getTournamentForm(tournament: Tournament): TournamentFormState {
+export function getPhaseScheduleForm(
+  tournament: Tournament,
+  timezone: string
+): PhaseScheduleFormState {
+  const schedule = Object.fromEntries(
+    SCHEDULABLE_PHASES.map((phase) => [phase, { starts_at: "", ends_at: "" }])
+  ) as PhaseScheduleFormState;
+
+  for (const row of tournament.phase_schedule ?? []) {
+    if ((SCHEDULABLE_PHASES as readonly string[]).includes(row.status)) {
+      schedule[row.status as SchedulablePhase] = {
+        starts_at: utcToZonedInput(row.starts_at, timezone),
+        ends_at: utcToZonedInput(row.ends_at, timezone)
+      };
+    }
+  }
+
+  return schedule;
+}
+
+export function getPhaseSchedulePayload(
+  schedule: PhaseScheduleFormState,
+  timezone: string
+): TournamentPhaseScheduleEntryInput[] {
+  return SCHEDULABLE_PHASES.filter((phase) => schedule[phase].starts_at).map((phase) => ({
+    status: phase,
+    starts_at: zonedInputToUtc(schedule[phase].starts_at, timezone) ?? schedule[phase].starts_at,
+    ends_at: zonedInputToUtc(schedule[phase].ends_at, timezone)
+  }));
+}
+
+export function getTournamentForm(tournament: Tournament, timezone: string): TournamentFormState {
   return {
     number: tournament.number ?? null,
     name: tournament.name,
@@ -104,15 +144,15 @@ export function getTournamentForm(tournament: Tournament): TournamentFormState {
     challonge_slug: tournament.challonge_slug ?? "",
     is_league: tournament.is_league,
     is_finished: tournament.is_finished,
+    is_hidden: tournament.is_hidden ?? false,
     start_date: toDateInput(tournament.start_date),
     end_date: toDateInput(tournament.end_date),
     win_points: tournament.win_points ?? 1,
     draw_points: tournament.draw_points ?? 0.5,
     loss_points: tournament.loss_points ?? 0,
-    registration_opens_at: toDateTimeInput(tournament.registration_opens_at),
-    registration_closes_at: toDateTimeInput(tournament.registration_closes_at),
-    check_in_opens_at: toDateTimeInput(tournament.check_in_opens_at),
-    check_in_closes_at: toDateTimeInput(tournament.check_in_closes_at),
+    auto_transitions_enabled: tournament.auto_transitions_enabled ?? true,
+    allow_late_registration: tournament.allow_late_registration ?? false,
+    phase_schedule: getPhaseScheduleForm(tournament, timezone),
     division_grid_version_id: tournament.division_grid_version_id ?? null,
     team_formation: tournament.team_formation ?? "balancer"
   };
@@ -121,18 +161,14 @@ export function getTournamentForm(tournament: Tournament): TournamentFormState {
 export function getEmptyTeamForm(): TeamFormState {
   return {
     name: "",
-    captain_id: 0,
-    avg_sr: 0,
-    total_sr: 0
+    captain_id: 0
   };
 }
 
 export function getTeamForm(team: Team): TeamFormState {
   return {
     name: team.name,
-    captain_id: team.captain_id,
-    avg_sr: team.avg_sr,
-    total_sr: team.total_sr
+    captain_id: team.captain_id
   };
 }
 

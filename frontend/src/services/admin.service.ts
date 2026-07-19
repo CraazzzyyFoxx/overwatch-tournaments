@@ -6,7 +6,10 @@ import {
   Stage,
   StageItem,
   StageItemInput,
-  StageItemType
+  StageItemType,
+  MapVetoConfig,
+  MapVetoConfigUpsertInput,
+  EncounterMapPoolState
 } from "@/types/tournament.types";
 import { Team, Player } from "@/types/team.types";
 import { Encounter } from "@/types/encounter.types";
@@ -18,7 +21,9 @@ import { MapRead } from "@/types/map.types";
 import {
   TournamentCreateInput,
   TournamentUpdateInput,
+  TournamentPreviewAccessEntry,
   TournamentStatusTransitionInput,
+  TournamentPhaseScheduleEntryInput,
   StageCreateInput,
   StageUpdateInput,
   StageItemCreateInput,
@@ -87,7 +92,8 @@ import {
   CollectTriggerInput,
   CollectTriggerResult,
   RankFetchLogRow,
-  RankFetchLogQuery
+  RankFetchLogQuery,
+  RankCollectionStats
 } from "@/types/admin.types";
 
 class AdminService {
@@ -148,6 +154,17 @@ class AdminService {
     return response.json();
   }
 
+  async setTournamentSchedule(
+    id: number,
+    schedule: TournamentPhaseScheduleEntryInput[]
+  ): Promise<Tournament> {
+    const response = await apiFetch(`/api/v1/admin/tournaments/${id}/schedule`, {
+      method: "PUT",
+      body: { schedule }
+    });
+    return response.json();
+  }
+
   async deleteTournament(id: number): Promise<void> {
     await apiFetch(`/api/v1/admin/tournaments/${id}`, {
       method: "DELETE"
@@ -175,6 +192,30 @@ class AdminService {
       method: "POST"
     });
     return response.json();
+  }
+
+  // ─── Tournament preview allowlist (hidden tournaments) ──────────────────────
+
+  async getTournamentPreviewAccess(tournamentId: number): Promise<TournamentPreviewAccessEntry[]> {
+    const response = await apiFetch(`/api/v1/admin/tournaments/${tournamentId}/preview-access`);
+    return response.json();
+  }
+
+  async addTournamentPreviewUser(
+    tournamentId: number,
+    authUserId: number
+  ): Promise<TournamentPreviewAccessEntry> {
+    const response = await apiFetch(`/api/v1/admin/tournaments/${tournamentId}/preview-access`, {
+      method: "POST",
+      body: { auth_user_id: authUserId }
+    });
+    return response.json();
+  }
+
+  async removeTournamentPreviewUser(tournamentId: number, authUserId: number): Promise<void> {
+    await apiFetch(`/api/v1/admin/tournaments/${tournamentId}/preview-access/${authUserId}`, {
+      method: "DELETE"
+    });
   }
 
   // ─── Team CRUD ─────────────────────────────────────────────────────────────
@@ -1315,6 +1356,53 @@ class AdminService {
     return response.json();
   }
 
+  // ─── Map Veto Configs & Sessions ───────────────────────────────────────────
+
+  async listVetoConfigs(tournamentId: number): Promise<{ configs: MapVetoConfig[] }> {
+    const response = await apiFetch(`/api/v1/admin/tournaments/${tournamentId}/veto-configs`, {
+      method: "GET"
+    });
+    return response.json();
+  }
+
+  async upsertVetoConfig(
+    tournamentId: number,
+    data: MapVetoConfigUpsertInput
+  ): Promise<MapVetoConfig> {
+    const response = await apiFetch(`/api/v1/admin/tournaments/${tournamentId}/veto-configs`, {
+      method: "PUT",
+      body: data
+    });
+    return response.json();
+  }
+
+  async deleteVetoConfig(configId: number): Promise<{ deleted: boolean }> {
+    const response = await apiFetch(`/api/v1/admin/veto-configs/${configId}`, {
+      method: "DELETE"
+    });
+    return response.json();
+  }
+
+  /** Drop the encounter's veto session + pool and re-create them (re-resolves seeds). */
+  async resetVetoSession(encounterId: number): Promise<EncounterMapPoolState> {
+    const response = await apiFetch(`/api/v1/admin/encounters/${encounterId}/veto-session/reset`, {
+      method: "POST"
+    });
+    return response.json();
+  }
+
+  /** Perform a veto step on behalf of a side (admin override). */
+  async adminVetoAct(
+    encounterId: number,
+    data: { side: "home" | "away"; map_id: number; action: "pick" | "ban" }
+  ): Promise<{ id: number; map_id: number; status: string; picked_by: string | null }> {
+    const response = await apiFetch(`/api/v1/admin/encounters/${encounterId}/veto-act`, {
+      method: "POST",
+      body: data
+    });
+    return response.json();
+  }
+
   // ─── Challonge Sync ─────────────────────────────────────────────────────────
 
   async challongeImport(tournamentId: number, dryRun = false): Promise<Record<string, unknown>> {
@@ -1385,6 +1473,11 @@ class AdminService {
     return response.json();
   }
 
+  async getRankCollectionStats(): Promise<RankCollectionStats> {
+    const response = await apiFetch("/api/v1/admin/rank/stats", { skipWorkspace: true });
+    return response.json();
+  }
+
   async getRankFetchLog(params: RankFetchLogQuery = {}): Promise<RankFetchLogRow[]> {
     const response = await apiFetch("/api/v1/admin/rank/fetch-log", {
       query: {
@@ -1393,6 +1486,17 @@ class AdminService {
         before_id: params.before_id,
         limit: params.limit ?? 50
       },
+      skipWorkspace: true
+    });
+    return response.json();
+  }
+
+  async reenableDisabledRankCollection(
+    onlyPreviouslySucceeded = false
+  ): Promise<{ reenabled: number }> {
+    const response = await apiFetch("/api/v1/admin/rank/reenable-disabled", {
+      method: "POST",
+      body: { only_previously_succeeded: onlyPreviouslySucceeded },
       skipWorkspace: true
     });
     return response.json();

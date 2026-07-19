@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
+import { useTranslations } from "next-intl";
 import { Radio, Users } from "lucide-react";
 import {
   Popover,
@@ -27,6 +28,7 @@ interface WorkspaceGroup {
 }
 
 export default function ActiveEvents() {
+  const t = useTranslations();
   const { workspaces } = useWorkspaceStore();
 
   const { data: allTournaments } = useQuery({
@@ -93,7 +95,7 @@ export default function ActiveEvents() {
             <span className="relative inline-flex size-2 rounded-full bg-emerald-500" />
           </span>
           <span className="hidden sm:inline text-emerald-400">
-            {totalActive} Active
+            {t("nav.activeEvents.badge", { count: totalActive })}
           </span>
           <span className="sm:hidden text-emerald-400">{totalActive}</span>
         </button>
@@ -101,10 +103,12 @@ export default function ActiveEvents() {
 
       <PopoverContent align="end" className="w-80 p-0" sideOffset={8}>
         <div className="px-3 py-2.5 border-b border-border">
-          <p className="text-sm font-medium">Active Events</p>
+          <p className="text-sm font-medium">{t("nav.activeEvents.title")}</p>
           <p className="text-xs text-muted-foreground">
-            {totalActive} ongoing across {activeGroups.length} workspace
-            {activeGroups.length !== 1 ? "s" : ""}
+            {t("nav.activeEvents.summary", {
+              count: totalActive,
+              workspaces: activeGroups.length
+            })}
           </p>
         </div>
 

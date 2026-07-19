@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { useTranslations } from "next-intl";
 import { Map as MapIcon } from "lucide-react";
 import { CardSurface } from "@/app/(site)/users/components/shared/atoms";
 
@@ -13,12 +14,14 @@ export interface HeroMapRow {
   loss: number;
 }
 
-const MapsForHero = ({ heroName, heroMaps }: { heroName: string; heroMaps: HeroMapRow[] }) => (
+const MapsForHero = ({ heroName, heroMaps }: { heroName: string; heroMaps: HeroMapRow[] }) => {
+  const t = useTranslations();
+  return (
   <CardSurface
     flush
-    title={`Maps for ${heroName}`}
+    title={t("users.heroes.mapsFor", { hero: heroName })}
     icon={<MapIcon size={15} />}
-    subtitle={heroMaps.length > 0 ? `${heroMaps.length} maps · best → worst` : undefined}
+    subtitle={heroMaps.length > 0 ? t("users.heroes.mapsSubtitle", { count: heroMaps.length }) : undefined}
   >
     {heroMaps.length > 0 ? (
       <div className="max-h-[360px] overflow-y-auto">
@@ -53,10 +56,11 @@ const MapsForHero = ({ heroName, heroMaps }: { heroName: string; heroMaps: HeroM
       </div>
     ) : (
       <div className="py-6 text-center text-[13px] text-[color:var(--aqt-fg-dim)]">
-        No map data for this hero yet.
+        {t("users.heroes.noMapData")}
       </div>
     )}
   </CardSurface>
-);
+  );
+};
 
 export default MapsForHero;

@@ -1,8 +1,9 @@
 "use client";
 
-import React, { Suspense, useEffect, useState } from "react";
+import React, { Suspense, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
+import { useTranslations } from "next-intl";
 import {
   ColumnDef,
   flexRender,
@@ -32,79 +33,8 @@ import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { MapRead } from "@/types/map.types";
 import { Match, Score } from "@/types/encounter.types";
 
-const getStageLabel = (match: Match) =>
-  match.encounter?.stage_item?.name ?? match.encounter?.stage?.name ?? "Unassigned";
-
-const columns: ColumnDef<Match>[] = [
-  {
-    accessorKey: "map",
-    header: "Map",
-    cell: ({ row }) => {
-      const map: MapRead = row.getValue("map");
-      return (
-        <div className="flex items-center gap-3 px-3 py-2.5">
-          <div className="relative h-12 w-40 shrink-0 overflow-hidden rounded-md">
-            <Image
-              src={map.image_path}
-              alt={map.name}
-              fill
-              style={{ objectFit: "cover" }}
-              className="brightness-75"
-            />
-          </div>
-          <span className="text-sm font-medium text-white/90 whitespace-nowrap">{map.name}</span>
-        </div>
-      );
-    }
-  },
-  {
-    accessorKey: "tournament",
-    header: "Tournament",
-    cell: ({ row }) => (
-      <div className="px-3 py-2.5">
-        <span className="text-sm text-white/60">{row.original.encounter?.tournament.name}</span>
-      </div>
-    )
-  },
-  {
-    accessorKey: "stage",
-    header: "Stage",
-    cell: ({ row }) => (
-      <div className="px-3 py-2.5">
-        <span className="inline-flex items-center rounded-full bg-white/[0.06] border border-white/[0.08] px-2 py-0.5 text-[11px] text-white/55">
-          {getStageLabel(row.original)}
-        </span>
-      </div>
-    )
-  },
-  {
-    accessorKey: "name",
-    header: "Match",
-    cell: ({ row }) => (
-      <div className="px-3 py-2.5">
-        <span className="text-sm text-white/85">{row.original.home_team?.name}</span>
-        <span className="text-sm text-white/30 mx-1.5">vs</span>
-        <span className="text-sm text-white/85">{row.original.away_team?.name}</span>
-      </div>
-    )
-  },
-  {
-    accessorKey: "score",
-    header: "Score",
-    cell: ({ row }) => {
-      const score: Score = row.getValue("score");
-      return (
-        <div className="px-3 py-2.5">
-          <span className="text-sm font-semibold tabular-nums text-white/85">
-            {score.home}<span className="text-white/30 mx-0.5">–</span>{score.away}
-          </span>
-        </div>
-      );
-    }
-  }
-];
-
 const MatchesPage = () => {
+  const t = useTranslations();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -114,6 +44,90 @@ const MatchesPage = () => {
     pageIndex: 0,
     pageSize: 10
   });
+
+  const columns = useMemo<ColumnDef<Match>[]>(
+    () => [
+      {
+        accessorKey: "map",
+        header: t("matches.col.map"),
+        cell: ({ row }) => {
+          const map: MapRead = row.getValue("map");
+          return (
+            <div className="flex items-center gap-3 px-3 py-2.5">
+              <div className="relative h-12 w-40 shrink-0 overflow-hidden rounded-md">
+                <Image
+                  src={map.image_path}
+                  alt={map.name}
+                  fill
+                  style={{ objectFit: "cover" }}
+                  className="brightness-75"
+                />
+              </div>
+              <span className="text-sm font-medium text-white/90 whitespace-nowrap">
+                {map.name}
+              </span>
+            </div>
+          );
+        }
+      },
+      {
+        accessorKey: "tournament",
+        header: t("common.tournament"),
+        cell: ({ row }) => (
+          <div className="px-3 py-2.5">
+            <span className="text-sm text-white/60">
+              {row.original.encounter?.tournament.name}
+            </span>
+          </div>
+        )
+      },
+      {
+        accessorKey: "stage",
+        header: t("common.stage"),
+        cell: ({ row }) => {
+          const stageLabel =
+            row.original.encounter?.stage_item?.name ??
+            row.original.encounter?.stage?.name ??
+            t("matches.unassignedStage");
+          return (
+            <div className="px-3 py-2.5">
+              <span className="inline-flex items-center rounded-full bg-white/[0.06] border border-white/[0.08] px-2 py-0.5 text-[11px] text-white/55">
+                {stageLabel}
+              </span>
+            </div>
+          );
+        }
+      },
+      {
+        accessorKey: "name",
+        header: t("matches.col.match"),
+        cell: ({ row }) => (
+          <div className="px-3 py-2.5">
+            <span className="text-sm text-white/85">{row.original.home_team?.name}</span>
+            <span className="text-sm text-white/30 mx-1.5">{t("common.vs")}</span>
+            <span className="text-sm text-white/85">{row.original.away_team?.name}</span>
+          </div>
+        )
+      },
+      {
+        accessorKey: "score",
+        header: t("matches.col.score"),
+        cell: ({ row }) => {
+          const score: Score = row.getValue("score");
+          return (
+            <div className="px-3 py-2.5">
+              <span className="text-sm font-semibold tabular-nums text-white/85">
+                {score.home}
+                <span className="text-white/30 mx-0.5">–</span>
+                {score.away}
+              </span>
+            </div>
+          );
+        }
+      }
+    ],
+    [t]
+  );
 
   const { data: tournamentsData } = useQuery({
     queryKey: ["tournaments"],
@@ -169,10 +183,12 @@ const MatchesPage = () => {
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-white">Matches</h1>
+          <h1 className="text-2xl font-semibold tracking-tight text-white">
+            {t("common.matches")}
+          </h1>
           {matchesData && (
             <p className="mt-1 text-sm text-white/40">
-              {matchesData.total.toLocaleString()} matches total
+              {t("matches.matchesTotal", { count: matchesData.total })}
             </p>
           )}
         </div>
@@ -185,10 +201,10 @@ const MatchesPage = () => {
             onValueChange={(value) => pushTournamentId(value)}
           >
             <SelectTrigger className="h-8 w-full sm:w-64 border-white/[0.07] bg-white/[0.02] text-sm text-white/80 shadow-none hover:border-white/[0.13] hover:bg-white/[0.04] focus:ring-1 focus:ring-white/[0.15] focus:ring-offset-0">
-              <SelectValue placeholder="All tournaments" />
+              <SelectValue placeholder={t("matches.allTournaments")} />
             </SelectTrigger>
             <SelectContent className="max-h-[min(var(--radix-select-content-available-height),20rem)]">
-              <SelectItem value="all">All tournaments</SelectItem>
+              <SelectItem value="all">{t("matches.allTournaments")}</SelectItem>
               <SelectGroup>
                 {tournamentsData?.results.map((item) => (
                   <SelectItem key={item.id} value={item.id.toString()}>
@@ -252,7 +268,7 @@ const MatchesPage = () => {
                       >
                         <div className="flex flex-col items-center justify-center gap-2 text-white/25">
                           <Swords className="h-8 w-8" />
-                          <p className="text-sm">No matches found.</p>
+                          <p className="text-sm">{t("matches.noMatchesFound")}</p>
                         </div>
                       </td>
                     </tr>
@@ -273,10 +289,13 @@ const MatchesPage = () => {
   );
 };
 
-const MatchesPageWrapper = () => (
-  <Suspense fallback={<div>Loading...</div>}>
-    <MatchesPage />
-  </Suspense>
-);
+const MatchesPageWrapper = () => {
+  const t = useTranslations();
+  return (
+    <Suspense fallback={<div>{t("common.loading")}</div>}>
+      <MatchesPage />
+    </Suspense>
+  );
+};
 
 export default MatchesPageWrapper;

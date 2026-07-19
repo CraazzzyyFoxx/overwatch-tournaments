@@ -67,9 +67,9 @@ export default class tournamentService {
       }
     }).then((response) => response.json());
   }
-  static async getActive(): Promise<PaginatedResponse<Tournament>> {
+  static async getActive(opts?: { skipWorkspace?: boolean }): Promise<PaginatedResponse<Tournament>> {
     return apiFetch(`/api/v1/tournaments`, {
-      skipWorkspace: true,
+      skipWorkspace: opts?.skipWorkspace ?? true,
       query: {
         page: 1,
         per_page: -1,
@@ -89,6 +89,21 @@ export default class tournamentService {
       }
     }).then((response) => response.json());
   }
+
+  static async getPublicOverview(id: number): Promise<Tournament> {
+    return apiFetch(`/api/v1/tournaments/${id}`, {
+      skipWorkspace: true,
+      query: {
+        entities: [
+          "stages",
+          "participants_count",
+          "registrations_count",
+          "teams_count",
+        ],
+      },
+    }).then((response) => response.json());
+  }
+
   static async getStandings(
     id: number,
     workspaceIdOrOptions?: number | null | GetStandingsOptions
@@ -118,6 +133,8 @@ export default class tournamentService {
   }
 
   static async getStages(id: number): Promise<Stage[]> {
-    return apiFetch(`/api/v1/tournaments/${id}/stages`).then((response) => response.json());
+    return apiFetch(`/api/v1/tournaments/${id}/stages`, {
+      skipWorkspace: true,
+    }).then((response) => response.json());
   }
 }

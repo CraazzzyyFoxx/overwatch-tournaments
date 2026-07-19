@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { useTranslations } from "next-intl";
 import { LogStatsName } from "@/types/stats.types";
 import { getHumanizedStats } from "@/utils/stats";
 
@@ -11,14 +12,6 @@ export const RADAR_STATS: LogStatsName[] = [
   LogStatsName.Deaths,
   LogStatsName.HealingDealt
 ];
-
-const RADAR_LABELS: Record<string, string> = {
-  [LogStatsName.HeroDamageDealt]: "DMG",
-  [LogStatsName.Eliminations]: "ELIMS",
-  [LogStatsName.CriticalHits]: "CRITS",
-  [LogStatsName.Deaths]: "SURV",
-  [LogStatsName.HealingDealt]: "HEAL"
-};
 
 const radarPolygon = (values: number[], radius = 100): string => {
   const n = values.length;
@@ -47,7 +40,28 @@ export interface RadarPoint {
   global: number;
 }
 
-const HeroRadar = ({ radarData }: { radarData: RadarPoint[] | null }) => (
+const HeroRadar = ({ radarData }: { radarData: RadarPoint[] | null }) => {
+  const t = useTranslations();
+
+  // Terse radar axis label per stat (falls back to the humanized stat name).
+  const axisLabel = (stat: LogStatsName): string => {
+    switch (stat) {
+      case LogStatsName.HeroDamageDealt:
+        return t("users.heroes.radar.dmg");
+      case LogStatsName.Eliminations:
+        return t("users.heroes.radar.elims");
+      case LogStatsName.CriticalHits:
+        return t("users.heroes.radar.crits");
+      case LogStatsName.Deaths:
+        return t("users.heroes.radar.surv");
+      case LogStatsName.HealingDealt:
+        return t("users.heroes.radar.heal");
+      default:
+        return getHumanizedStats(stat);
+    }
+  };
+
+  return (
   <div className="flex flex-col items-center gap-2">
     {radarData ? (
       <svg viewBox="-130 -130 260 260" width="240" height="240" className="block">
@@ -75,7 +89,7 @@ const HeroRadar = ({ radarData }: { radarData: RadarPoint[] | null }) => (
               textAnchor={p.x < -2 ? "end" : p.x > 2 ? "start" : "middle"}
               dominantBaseline="middle"
             >
-              {RADAR_LABELS[d.stat] ?? getHumanizedStats(d.stat)}
+              {axisLabel(d.stat)}
             </text>
           );
         })}
@@ -84,14 +98,15 @@ const HeroRadar = ({ radarData }: { radarData: RadarPoint[] | null }) => (
     <div className="flex gap-3.5 pt-1.5 text-[12px] text-[color:var(--aqt-fg-muted)]">
       <span className="inline-flex items-center gap-1.5">
         <span className="h-2.5 w-2.5 rounded-sm" style={{ background: "var(--aqt-teal)" }} />
-        You
+        {t("users.heroes.you")}
       </span>
       <span className="inline-flex items-center gap-1.5">
         <span className="h-2.5 w-2.5 rounded-sm" style={{ background: "hsl(220 12% 55%)" }} />
-        Global avg
+        {t("users.heroes.globalAvg")}
       </span>
     </div>
   </div>
-);
+  );
+};
 
 export default HeroRadar;

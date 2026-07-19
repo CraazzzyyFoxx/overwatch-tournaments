@@ -1,6 +1,10 @@
+import secrets
 import typing
+from datetime import UTC, datetime
 
+import dns.asyncresolver
 import sqlalchemy as sa
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.core.errors import BaseAPIException as HTTPException
@@ -21,12 +25,18 @@ from shared.repository import (
 )
 from shared.services import division_grid_cache
 from shared.services.division_grid_access import get_default_division_grid_version_id
+from shared.tenancy.hostnames import normalize_custom_domain
 from src import models
 
 _role_repo = RoleRepository()
 _workspace_member_repo = WorkspaceMemberRepository()
 _workspace_repo = WorkspaceRepository()
 _user_repo = UserRepository()
+
+# Prefix for the generated per-workspace DNS verification token (the required
+# TXT value at ``_owt-verify.<custom_domain>``). Namespaced so the string is
+# unambiguous if it ever leaks into logs or support tickets.
+_CUSTOM_DOMAIN_TOKEN_PREFIX = "owt-verify-"
 
 
 async def get_by_id(session: AsyncSession, workspace_id: int) -> models.Workspace | None:
@@ -35,6 +45,128 @@ async def get_by_id(session: AsyncSession, workspace_id: int) -> models.Workspac
 
 async def get_by_slug(session: AsyncSession, slug: str) -> models.Workspace | None:
     return await _workspace_repo.get_by_slug(session, slug)
+
+
+async def get_by_subdomain(session: AsyncSession, subdomain: str) -> models.Workspace | None:
+    return await _workspace_repo.get_by_subdomain(session, subdomain)
+
+
+async def get_by_custom_domain(session: AsyncSession, domain: str) -> models.Workspace | None:
+    """Resolve a verified custom domain to its workspace (Phase 2 of ``by_host``).
+
+    Delegates to the verified-only repo query — an unverified ``custom_domain``
+    never resolves here.
+    """
+    return await _workspace_repo.get_by_verified_custom_domain(session, domain)
+
+
+async def _dns_txt_contains(name: str, expected: str) -> bool:
+    """True iff a TXT record at ``name`` has a string that exactly equals ``expected``.
+
+    Any DNS failure (NXDOMAIN, timeout, no-answer, malformed name, resolver
+    misconfiguration, ...) resolves to ``False`` rather than raising —
+    verification is meant to fail closed (``verify_custom_domain`` reports
+    "not found yet"), never 500.
+    """
+    try:
+        answers = await dns.asyncresolver.resolve(name, "TXT")
+    except Exception:  # noqa: BLE001 -- any DNS failure means "not verified yet"
+        return False
+    for rdata in answers:
+        txt = b"".join(rdata.strings).decode("utf-8", "ignore")
+        if txt.strip() == expected:
+            return True
+    return False
+
+
+_DOMAIN_CONFLICT_MESSAGE = "This custom domain is already claimed by another workspace"
+
+
+async def set_custom_domain(session: AsyncSession, workspace: models.Workspace, domain: str) -> models.Workspace:
+    """Store a normalized custom domain plus a fresh verification token, unverified.
+
+    Re-pointing an already-verified domain (or setting a new one) always resets
+    ``custom_domain_verified_at`` — the resolver (``get_by_custom_domain``) must
+    never serve a domain whose ownership hasn't been (re-)proven via DNS TXT.
+
+    Raises ``ValueError`` (mapped to 400 by the RPC caller) if ``domain`` fails
+    ``normalize_custom_domain`` (empty, not a valid FQDN, or under the platform
+    zone).
+
+    Raises ``HTTPException(409)`` if another workspace already claims this
+    domain (verified or not — the unique index ``ix_workspace_custom_domain``
+    doesn't care either way). This is checked twice: a best-effort read
+    up front (cheap, gives a clean error in the common case) AND the
+    authoritative catch of the index's ``IntegrityError`` on write, since the
+    read has a TOCTOU gap under a concurrent claim of the same domain.
+    """
+    normalized = normalize_custom_domain(domain)
+    existing = await _workspace_repo.get_by_custom_domain_any(session, normalized)
+    if existing is not None and existing.id != workspace.id:
+        raise HTTPException(status_code=409, detail=_DOMAIN_CONFLICT_MESSAGE)
+
+    token = _CUSTOM_DOMAIN_TOKEN_PREFIX + secrets.token_urlsafe(24)
+    try:
+        await _workspace_repo.update_fields(
+            session,
+            workspace,
+            {
+                "custom_domain": normalized,
+                "custom_domain_verification_token": token,
+                "custom_domain_verified_at": None,
+            },
+        )
+    except IntegrityError as exc:
+        await session.rollback()
+        raise HTTPException(status_code=409, detail=_DOMAIN_CONFLICT_MESSAGE) from exc
+    return workspace
+
+
+async def clear_custom_domain(session: AsyncSession, workspace: models.Workspace) -> models.Workspace:
+    """Remove the custom domain (and its token/verification state) entirely."""
+    await _workspace_repo.update_fields(
+        session,
+        workspace,
+        {
+            "custom_domain": None,
+            "custom_domain_verification_token": None,
+            "custom_domain_verified_at": None,
+        },
+    )
+    return workspace
+
+
+async def verify_custom_domain(session: AsyncSession, workspace: models.Workspace) -> models.Workspace:
+    """DNS-verify ``workspace.custom_domain`` and stamp ``custom_domain_verified_at``.
+
+    Ownership proof is a TXT record at ``_owt-verify.<custom_domain>`` whose value
+    equals the stored ``custom_domain_verification_token``. Raises 400 if no
+    domain/token is set, or if the record doesn't (yet) match.
+
+    The DNS TXT lookup is network I/O and must not run while pinning a pooled
+    DB connection. By the time this is called, the caller's earlier read
+    (``get_by_id``) has already opened an ambient transaction on ``session``
+    — with nothing written yet, so committing it here is a plain read-only
+    commit that only releases the connection. The lookup then runs with no
+    session held, and the DB is only touched again (a fresh, short
+    transaction) for the final ``custom_domain_verified_at`` write. This is
+    safe against SQLAlchemy's attribute-expiry-on-commit: ``async_session_maker``
+    is built with ``expire_on_commit=False`` (``backend/shared/core/db.py``),
+    so this early commit never invalidates ``workspace``'s already-loaded
+    attributes.
+    """
+    if not workspace.custom_domain or not workspace.custom_domain_verification_token:
+        raise HTTPException(status_code=400, detail="No custom domain to verify")
+
+    domain = workspace.custom_domain
+    token = workspace.custom_domain_verification_token
+    await session.commit()
+
+    ok = await _dns_txt_contains(f"_owt-verify.{domain}", token)
+    if not ok:
+        raise HTTPException(status_code=400, detail="Verification TXT record not found yet")
+    await _workspace_repo.update_fields(session, workspace, {"custom_domain_verified_at": datetime.now(UTC)})
+    return workspace
 
 
 async def get_all(session: AsyncSession) -> typing.Sequence[models.Workspace]:

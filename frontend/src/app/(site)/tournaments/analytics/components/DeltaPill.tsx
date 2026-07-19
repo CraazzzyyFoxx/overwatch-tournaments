@@ -4,7 +4,7 @@ import React from "react";
 import { ArrowDown, ArrowUp } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { useTranslation } from "@/i18n/LanguageContext";
+import { useTranslations } from "next-intl";
 import styles from "@/app/(site)/tournaments/analytics/components/AnalyticsRedesign.module.css";
 
 interface DeltaPillProps {
@@ -17,7 +17,7 @@ interface DeltaPillProps {
  * forecast, rose "−N" when worse, a neutral "on form" when bang on.
  */
 export default function DeltaPill({ delta }: DeltaPillProps) {
-  const { t } = useTranslation();
+  const t = useTranslations();
   if (delta == null) return null;
 
   if (delta === 0) {

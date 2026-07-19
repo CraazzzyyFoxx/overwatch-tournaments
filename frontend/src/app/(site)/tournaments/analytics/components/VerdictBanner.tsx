@@ -2,7 +2,7 @@
 
 import React from "react";
 
-import { useTranslation } from "@/i18n/LanguageContext";
+import { useTranslations, useLocale } from "next-intl";
 import { CommunityVerdict, formatPlace } from "@/app/(site)/tournaments/analytics/analytics.helpers";
 import { GlossaryTerm } from "@/app/(site)/tournaments/analytics/analytics-glossary";
 import InfoDot from "@/app/(site)/tournaments/analytics/components/InfoDot";
@@ -36,7 +36,8 @@ function highlightTeam(
  * quiet — a single calm sentence — when no team has strayed from its forecast.
  */
 export default function VerdictBanner({ verdict, onExplain }: VerdictBannerProps) {
-  const { t, locale } = useTranslation();
+  const t = useTranslations();
+  const locale = useLocale();
   const { story, letdown } = verdict;
 
   return (

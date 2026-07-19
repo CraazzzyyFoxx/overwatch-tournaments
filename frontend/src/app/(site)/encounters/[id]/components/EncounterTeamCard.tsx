@@ -1,4 +1,5 @@
 import React from "react";
+import { useTranslations } from "next-intl";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { Team } from "@/types/team.types";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
@@ -26,7 +27,8 @@ const EncounterTeamCard = ({
   isHome: boolean;
   tournamentGrid?: DivisionGridVersion | null;
 }) => {
-  const titleColor = isHome ? "text-[#16e5b4]" : "text-[#ff4655]";
+  const t = useTranslations();
+  const titleColor = isHome ? "text-[color:var(--aqt-teal)]" : "text-[color:var(--aqt-rose)]";
   const sortedPlayers = sortTeamPlayers(team.players);
   const backgroundColor = isHome
     ? "bg-[#104e48] hover:bg-[#104e48]"
@@ -39,17 +41,23 @@ const EncounterTeamCard = ({
           {team.name}
         </CardTitle>
         <p className={`leading-7 ${titleColor}`}>
-          Placement: {team.placement ? team.placement : "Unknown"}
+          {t("encounters.team.placement", {
+            value: team.placement ? String(team.placement) : t("common.unknown")
+          })}
         </p>
       </CardHeader>
       <ScrollArea>
         <Table>
           <TableHeader>
             <TableRow className={backgroundColor}>
-              <TableHead className="text-white">Name</TableHead>
-              <TableHead className="text-center text-white">Division</TableHead>
-              <TableHead className="text-center text-white">New</TableHead>
-              <TableHead className="text-center text-white">New Role</TableHead>
+              <TableHead className="text-white">{t("encounters.team.colName")}</TableHead>
+              <TableHead className="text-center text-white">
+                {t("encounters.team.colDivision")}
+              </TableHead>
+              <TableHead className="text-center text-white">{t("encounters.team.colNew")}</TableHead>
+              <TableHead className="text-center text-white">
+                {t("encounters.team.colNewRole")}
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -85,18 +93,18 @@ const EncounterTeamCard = ({
                   <TableCell>
                     <div className="flex justify-center">
                       {player.is_newcomer ? (
-                        <CirclePlus className="text-red-500" />
+                        <CirclePlus className="text-[color:var(--aqt-amber)]" />
                       ) : (
-                        <CircleMinus className="text-green-500" />
+                        <CircleMinus className="text-[color:var(--aqt-fg-faint)]" />
                       )}
                     </div>
                   </TableCell>
                   <TableCell>
                     <div className="flex justify-center">
                       {player.is_newcomer_role ? (
-                        <CirclePlus className="text-red-500" />
+                        <CirclePlus className="text-[color:var(--aqt-amber)]" />
                       ) : (
-                        <CircleMinus className="text-green-500" />
+                        <CircleMinus className="text-[color:var(--aqt-fg-faint)]" />
                       )}
                     </div>
                   </TableCell>

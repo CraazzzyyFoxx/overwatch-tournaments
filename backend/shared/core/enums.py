@@ -129,6 +129,12 @@ class LogStatsName(StrEnum):
     WeaponAccuracy = "weapon_accuracy"
     HeroTimePlayed = "hero_time_played"
 
+    # Derived from kill_feed (parser writes them like any other stat).
+    FirstPicks = "first_picks"
+    FirstDeaths = "first_deaths"
+    UltimateKills = "ultimate_kills"
+    SupportKills = "support_kills"
+
     Performance = "performance"  # self calculated
     PerformancePoints = "performance_points"  # self calculated
     KD = "kd"  # self calculated
@@ -137,6 +143,9 @@ class LogStatsName(StrEnum):
     FBE = "fbe"  # self calculated
     DamageFB = "damage_fb"  # self calculated
     Assists = "assists"  # self calculated
+    ImpactPoints = "impact_points"  # self calculated (impact formula)
+    ImpactRank = "impact_rank"  # self calculated (1 = MVP)
+    OverperformanceScore = "overperformance_score"  # self calculated (role x rank baseline)
 
 
 StatDirection = Literal["asc", "desc"]
@@ -151,6 +160,8 @@ _log_stats_default_direction.update(
         LogStatsName.ShotsMissed: "asc",
         LogStatsName.DamageFB: "asc",
         LogStatsName.Performance: "asc",
+        LogStatsName.FirstDeaths: "asc",
+        LogStatsName.ImpactRank: "asc",
     }
 )
 
@@ -278,6 +289,23 @@ class MapPickSide(StrEnum):
     ADMIN = "admin"
 
 
+class MapVetoSessionStatus(StrEnum):
+    ACTIVE = "active"
+    COMPLETED = "completed"
+    CANCELLED = "cancelled"
+
+
+class VetoSeedSource(StrEnum):
+    BRACKET_SLOT = "bracket_slot"
+    STANDINGS = "standings"
+    FALLBACK_HOME = "fallback_home"
+    ADMIN = "admin"
+
+
+class FirstPickRule(StrEnum):
+    HIGHER_SEED = "higher_seed"
+
+
 class EncounterStatus(StrEnum):
     COMPLETED = "completed"
     PENDING = "pending"
@@ -351,6 +379,9 @@ __all__ = [
     "EncounterResultStatus",
     "MapPoolEntryStatus",
     "MapPickSide",
+    "MapVetoSessionStatus",
+    "VetoSeedSource",
+    "FirstPickRule",
     "EncounterStatus",
     "EncounterLinkRole",
     "EncounterLinkSlot",

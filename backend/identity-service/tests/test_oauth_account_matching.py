@@ -118,6 +118,8 @@ def test_find_existing_auth_user_ignores_email_only_match() -> None:
             # _find_player_by_provider_record: provider_user_id subject match → none.
             # NOTE: there is deliberately NO email query anymore.
             {"scalars": []},
+            # _find_unowned_player_by_handle: no player carries this handle → none.
+            {"scalars": []},
         ]
     )
     oauth_info = schemas.OAuthUserInfo(
@@ -134,6 +136,53 @@ def test_find_existing_auth_user_ignores_email_only_match() -> None:
 
     assert auth_user is None
     assert matched_player is None
+
+
+def test_find_existing_auth_user_links_unowned_player_by_handle() -> None:
+    """Relaxed reconciliation: no verified provider_user_id yet, but an UNOWNED
+    player already carries this provider handle (a shadow tournament identity).
+    It is returned as matched_player so the caller links it instead of spawning a
+    duplicate the admin has to merge by hand."""
+    shadow = SimpleNamespace(id=500, auth_user_id=None)
+    session = _FakeSession(
+        [
+            {"scalars": []},  # _find_player_by_provider_record: subject match → none
+            {"scalars": [shadow]},  # _find_unowned_player_by_handle → the shadow player
+        ]
+    )
+    oauth_info = schemas.OAuthUserInfo(
+        provider=schemas.OAuthProvider.BATTLENET,
+        provider_user_id="bnet-new",
+        email=None,
+        username="Shadow#1234",
+        display_name="Shadow#1234",
+        raw_data={"battletag": "Shadow#1234"},
+    )
+
+    auth_user, matched_player = asyncio.run(OAuthService._find_existing_auth_user(session, oauth_info))
+
+    assert auth_user is None
+    assert matched_player is shadow
+
+
+def test_find_unowned_player_by_handle_skips_already_owned_player() -> None:
+    """Conservative guard: a player carrying the handle but already owned by
+    some auth account is a merge conflict — never auto-claimed by a login with a
+    different (unverified) provider subject."""
+    owned = SimpleNamespace(id=501, auth_user_id=42)
+    session = _FakeSession([{"scalars": [owned]}])
+    oauth_info = schemas.OAuthUserInfo(
+        provider=schemas.OAuthProvider.DISCORD,
+        provider_user_id="discord-x",
+        email=None,
+        username="TakenHandle",
+        display_name="TakenHandle",
+        raw_data={},
+    )
+
+    result = asyncio.run(OAuthService._find_unowned_player_by_handle(session, oauth_info))
+
+    assert result is None
 
 
 def test_find_or_create_oauth_user_reuses_existing_user_by_provider_user_id() -> None:

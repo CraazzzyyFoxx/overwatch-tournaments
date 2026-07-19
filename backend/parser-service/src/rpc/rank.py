@@ -109,6 +109,19 @@ def register(broker: Any, logger: Any) -> None:
 
         return await c.envelope(logger, "rank.fetch_log", op, session_factory=_SF)
 
+    @broker.subscriber("rpc.parser.rank.stats")
+    async def _stats(data: dict, msg: RabbitMessage) -> dict:
+        # GET /admin/rank/stats — require_role("admin").
+        async def op(session: Any) -> Any:
+            user = c.actor(data)
+            c.require_active(user)
+            if not user.has_role("admin"):
+                raise HTTPException(status_code=403, detail="Role required: admin")
+            result = await rank_admin.get_collection_stats(session)
+            return rc_schemas.RankCollectionStats.model_validate(result)
+
+        return await c.envelope(logger, "rank.stats", op, session_factory=_SF)
+
     @broker.subscriber("rpc.parser.rank.user_collection")
     async def _user_collection(data: dict, msg: RabbitMessage) -> dict:
         # GET /admin/rank/users/{user_id}/collection — require_role("admin").
@@ -137,3 +150,19 @@ def register(broker: Any, logger: Any) -> None:
             return rc_schemas.CollectTriggerResponse(enqueued=enqueued)
 
         return await c.envelope(logger, "rank.collect", op, session_factory=_SF)
+
+    @broker.subscriber("rpc.parser.rank.reenable_disabled")
+    async def _reenable_disabled(data: dict, msg: RabbitMessage) -> dict:
+        # POST /admin/rank/reenable-disabled — require_role("admin").
+        async def op(session: Any) -> Any:
+            user = c.actor(data)
+            c.require_active(user)
+            if not user.has_role("admin"):
+                raise HTTPException(status_code=403, detail="Role required: admin")
+            body = rc_schemas.ReenableDisabledRequest.model_validate(c.payload(data))
+            count = await rank_admin.reenable_disabled(
+                session, only_previously_succeeded=body.only_previously_succeeded
+            )
+            return rc_schemas.ReenableDisabledResponse(reenabled=count)
+
+        return await c.envelope(logger, "rank.reenable_disabled", op, session_factory=_SF)

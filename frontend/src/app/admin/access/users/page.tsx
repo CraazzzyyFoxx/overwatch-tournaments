@@ -16,9 +16,21 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { AdminDataTable } from "@/components/admin/AdminDataTable";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { ProviderBadge } from "@/components/admin/OAuthProviderBadge";
 import { StatusIcon } from "@/components/admin/StatusIcon";
 import { UserDenyEditor } from "./UserDenyEditor";
 import { UserSearchCombobox } from "@/components/admin/UserSearchCombobox";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -36,10 +48,12 @@ import {
   SelectTrigger,
   SelectValue
 } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { usePermissions } from "@/hooks/usePermissions";
 import { getSingleLinkedPlayer } from "@/lib/auth-profile-links";
 import { notify } from "@/lib/notify";
 import { rbacService } from "@/services/rbac.service";
+import { useAuthProfileStore } from "@/stores/auth-profile.store";
 import type { AuthAdminUser } from "@/types/rbac.types";
 import type { MinimizedUser } from "@/types/user.types";
 
@@ -47,7 +61,8 @@ const PAGE_SIZE = 15;
 
 export default function AccessAdminUsersPage() {
   const queryClient = useQueryClient();
-  const { hasPermission } = usePermissions();
+  const { hasPermission, isSuperuser } = usePermissions();
+  const currentUserId = useAuthProfileStore((s) => s.user?.id);
   const canAssignRoles = hasPermission("role.assign") && hasPermission("role.read");
   const canManageLinkedPlayers = hasPermission("auth_user.update");
 
@@ -65,6 +80,16 @@ export default function AccessAdminUsersPage() {
   const userDetailQuery = useQuery({
     queryKey: ["access-admin", "users", managingUserId],
     queryFn: () => rbacService.getUser(managingUserId as number),
+    enabled: managingUserId !== null
+  });
+
+  const oauthConnectionsQuery = useQuery({
+    queryKey: ["access-admin", "users", managingUserId, "oauth-connections"],
+    queryFn: () =>
+      rbacService.listOAuthConnections({
+        auth_user_id: managingUserId as number,
+        per_page: -1
+      }),
     enabled: managingUserId !== null
   });
 
@@ -120,6 +145,16 @@ export default function AccessAdminUsersPage() {
         queryClient.invalidateQueries({ queryKey: ["access-admin", "users", managingUserId] })
       ]);
       notify.success("Linked analytics account removed");
+    },
+    onError: (error) => notify.apiError(error)
+  });
+
+  const deleteUserMutation = useMutation({
+    mutationFn: (userId: number) => rbacService.deleteUser(userId),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["access-admin", "users"] });
+      setManagingUserId(null);
+      notify.success("Account deleted");
     },
     onError: (error) => notify.apiError(error)
   });
@@ -234,7 +269,7 @@ export default function AccessAdminUsersPage() {
             per_page: pageSize,
             sort: sortField ?? undefined,
             order: sortDir,
-            search: search || undefined,
+            search: search || undefined
           })
         }
         columns={columns}
@@ -292,83 +327,90 @@ export default function AccessAdminUsersPage() {
                 </div>
               </div>
 
-              <UserDenyEditor userId={userDetailQuery.data.id} canEdit={canAssignRoles} />
+              <Tabs key={userDetailQuery.data.id} defaultValue="roles" className="w-full">
+                <TabsList className="grid w-full grid-cols-4">
+                  <TabsTrigger value="roles">Roles</TabsTrigger>
+                  <TabsTrigger value="player">Player</TabsTrigger>
+                  <TabsTrigger value="oauth">OAuth</TabsTrigger>
+                  <TabsTrigger value="permissions">Permissions</TabsTrigger>
+                </TabsList>
 
-              <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-                <div className="space-y-4 rounded-lg border border-border/60 bg-card/60 p-4">
-                  <div>
-                    <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-                      Assigned Roles
-                    </h3>
-                  </div>
+                <TabsContent value="roles" className="max-h-[60vh] space-y-4 overflow-y-auto pr-1">
+                  <div className="space-y-4 rounded-lg border border-border/60 bg-card/60 p-4">
+                    <div>
+                      <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                        Assigned Roles
+                      </h3>
+                    </div>
 
-                  <div className="space-y-3">
-                    {userDetailQuery.data.roles.length > 0 ? (
-                      userDetailQuery.data.roles.map((role) => (
-                        <div
-                          key={role.id}
-                          className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border/60 p-3"
-                        >
-                          <div>
-                            <p className="font-medium">{role.name}</p>
-                            <p className="text-sm text-muted-foreground">
-                              {role.description || "No description provided."}
-                            </p>
+                    <div className="space-y-3">
+                      {userDetailQuery.data.roles.length > 0 ? (
+                        userDetailQuery.data.roles.map((role) => (
+                          <div
+                            key={role.id}
+                            className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border/60 p-3"
+                          >
+                            <div>
+                              <p className="font-medium">{role.name}</p>
+                              <p className="text-sm text-muted-foreground">
+                                {role.description || "No description provided."}
+                              </p>
+                            </div>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled={!canAssignRoles || removeRoleMutation.isPending}
+                              onClick={() =>
+                                removeRoleMutation.mutate({
+                                  user_id: userDetailQuery.data!.id,
+                                  role_id: role.id
+                                })
+                              }
+                            >
+                              {canAssignRoles ? "Remove" : "Assigned"}
+                            </Button>
                           </div>
+                        ))
+                      ) : (
+                        <p className="text-sm text-muted-foreground">No roles assigned.</p>
+                      )}
+                    </div>
+
+                    {canAssignRoles ? (
+                      <div className="rounded-md border border-dashed border-border p-4">
+                        <div className="space-y-3">
+                          <p className="text-sm font-medium">Assign another role</p>
+                          <Select value={selectedRoleId} onValueChange={setSelectedRoleId}>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select a role" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {assignableRoles.map((role) => (
+                                <SelectItem key={role.id} value={String(role.id)}>
+                                  {role.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                           <Button
-                            variant="outline"
-                            size="sm"
-                            disabled={!canAssignRoles || removeRoleMutation.isPending}
+                            disabled={!selectedRoleId || assignRoleMutation.isPending}
                             onClick={() =>
-                              removeRoleMutation.mutate({
+                              assignRoleMutation.mutate({
                                 user_id: userDetailQuery.data!.id,
-                                role_id: role.id
+                                role_id: Number(selectedRoleId)
                               })
                             }
                           >
-                            {canAssignRoles ? "Remove" : "Assigned"}
+                            <Shield className="mr-2 h-4 w-4" />
+                            Assign Role
                           </Button>
                         </div>
-                      ))
-                    ) : (
-                      <p className="text-sm text-muted-foreground">No roles assigned.</p>
-                    )}
-                  </div>
-
-                  {canAssignRoles ? (
-                    <div className="rounded-md border border-dashed border-border p-4">
-                      <div className="space-y-3">
-                        <p className="text-sm font-medium">Assign another role</p>
-                        <Select value={selectedRoleId} onValueChange={setSelectedRoleId}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select a role" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {assignableRoles.map((role) => (
-                              <SelectItem key={role.id} value={String(role.id)}>
-                                {role.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <Button
-                          disabled={!selectedRoleId || assignRoleMutation.isPending}
-                          onClick={() =>
-                            assignRoleMutation.mutate({
-                              user_id: userDetailQuery.data!.id,
-                              role_id: Number(selectedRoleId)
-                            })
-                          }
-                        >
-                          <Shield className="mr-2 h-4 w-4" />
-                          Assign Role
-                        </Button>
                       </div>
-                    </div>
-                  ) : null}
-                </div>
+                    ) : null}
+                  </div>
+                </TabsContent>
 
-                <div className="space-y-6">
+                <TabsContent value="player" className="max-h-[60vh] space-y-4 overflow-y-auto pr-1">
                   <div className="space-y-4 rounded-lg border border-border/60 bg-card/60 p-4">
                     <div>
                       <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
@@ -445,6 +487,69 @@ export default function AccessAdminUsersPage() {
                       </div>
                     ) : null}
                   </div>
+                </TabsContent>
+
+                <TabsContent value="oauth" className="max-h-[60vh] space-y-4 overflow-y-auto pr-1">
+                  <div className="space-y-4 rounded-lg border border-border/60 bg-card/60 p-4">
+                    <div>
+                      <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                        OAuth Connections
+                      </h3>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        Provider accounts linked to this auth account.
+                      </p>
+                    </div>
+
+                    <div className="space-y-3">
+                      {oauthConnectionsQuery.isLoading ? (
+                        <p className="text-sm text-muted-foreground">Loading connections...</p>
+                      ) : oauthConnectionsQuery.data?.results.length ? (
+                        oauthConnectionsQuery.data.results.map((conn) => {
+                          const expired = conn.token_expires_at
+                            ? new Date(conn.token_expires_at) < new Date()
+                            : false;
+                          return (
+                            <div
+                              key={conn.id}
+                              className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border/60 p-3"
+                            >
+                              <div className="min-w-0 space-y-1">
+                                <ProviderBadge provider={conn.provider} />
+                                <p className="truncate text-sm font-medium">
+                                  {conn.display_name ?? conn.username}
+                                </p>
+                                <p className="truncate text-xs text-muted-foreground">
+                                  {conn.username}
+                                  {conn.email ? ` · ${conn.email}` : ""}
+                                </p>
+                              </div>
+                              {conn.token_expires_at ? (
+                                <Badge
+                                  variant="outline"
+                                  className={
+                                    expired
+                                      ? "border-red-500/30 text-red-400"
+                                      : "border-green-500/30 text-green-400"
+                                  }
+                                >
+                                  {expired ? "Expired" : "Active"}
+                                </Badge>
+                              ) : null}
+                            </div>
+                          );
+                        })
+                      ) : (
+                        <p className="text-sm text-muted-foreground">No OAuth connections.</p>
+                      )}
+                    </div>
+                  </div>
+                </TabsContent>
+
+                <TabsContent
+                  value="permissions"
+                  className="max-h-[60vh] space-y-4 overflow-y-auto pr-1"
+                >
+                  <UserDenyEditor userId={userDetailQuery.data.id} canEdit={canAssignRoles} />
 
                   <div className="space-y-4 rounded-lg border border-border/60 bg-card/60 p-4">
                     <div>
@@ -467,8 +572,8 @@ export default function AccessAdminUsersPage() {
                       ) : null}
                     </div>
                   </div>
-                </div>
-              </div>
+                </TabsContent>
+              </Tabs>
             </div>
           ) : (
             <div className="py-8 text-sm text-muted-foreground">
@@ -476,7 +581,42 @@ export default function AccessAdminUsersPage() {
             </div>
           )}
 
-          <DialogFooter>
+          <DialogFooter className="sm:justify-between">
+            {isSuperuser && userDetailQuery.data && userDetailQuery.data.id !== currentUserId ? (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="destructive" disabled={deleteUserMutation.isPending}>
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Delete Account
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Delete this account?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This permanently deletes the auth account for{" "}
+                      <span className="font-medium text-foreground">
+                        {userDetailQuery.data.email}
+                      </span>
+                      , including its roles, permission denies, OAuth connections, API keys, and
+                      active sessions. The linked player profile and tournament history are
+                      preserved (only unlinked). This cannot be undone.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      onClick={() => deleteUserMutation.mutate(userDetailQuery.data!.id)}
+                    >
+                      Delete Account
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            ) : (
+              <span />
+            )}
             <Button variant="ghost" onClick={() => setManagingUserId(null)}>
               Close
             </Button>

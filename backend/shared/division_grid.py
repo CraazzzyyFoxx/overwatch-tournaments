@@ -45,17 +45,30 @@ class DivisionGrid:
         divisions high→low (e.g. "Ultimate 1 → Ultimate 3"), which stores
         ow_rank_min > ow_rank_max. Comparing against ``min``/``max`` of the pair
         keeps those tiers matching instead of silently dropping the highest
-        ranks. Returns None when no tier has OW rank mapping configured or the
-        rank falls outside all configured ranges.
+        ranks.
+
+        When **no** tier carries an explicit OW range (the common case: the grid
+        was cloned from the default OW2 scale and the admin never filled the OW
+        mapping), the OW ``rank_value`` is assumed to already live on the grid's
+        native scale — the parser's default division→rank_value mapping is
+        SR-aligned exactly like the default grid — and is resolved by plain
+        ``rank_min``/``rank_max`` containment instead of being dropped. As soon
+        as at least one tier is explicitly configured the admin owns the
+        mapping: unconfigured tiers stay unreachable and a rank outside every
+        configured range returns None.
         """
+        configured = False
         for tier in self.tiers:
             if tier.ow_rank_min is None or tier.ow_rank_max is None:
                 continue
+            configured = True
             low = min(tier.ow_rank_min, tier.ow_rank_max)
             high = max(tier.ow_rank_min, tier.ow_rank_max)
             if low <= ow_rank <= high:
                 return tier
-        return None
+        if configured or not self.tiers:
+            return None
+        return self.resolve_division(ow_rank)
 
     @property
     def max_division(self) -> int:

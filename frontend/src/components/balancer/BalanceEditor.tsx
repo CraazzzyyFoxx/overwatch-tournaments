@@ -112,7 +112,7 @@ export const BalanceEditor = forwardRef<HTMLDivElement, BalanceEditorProps>(func
 
   if (!value || teamCards.length === 0) {
     return (
-      <div className="rounded-2xl border border-white/8 bg-white/2 px-4 py-6 text-sm text-white/45">
+      <div className="rounded-2xl border border-[color:var(--aqt-border)] bg-white/2 px-4 py-6 text-sm text-[color:var(--aqt-fg-dim)]">
         Run the balancer to edit teams.
       </div>
     );

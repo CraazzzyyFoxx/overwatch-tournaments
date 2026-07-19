@@ -25,6 +25,7 @@ from pydantic import ValidationError  # noqa: E402
 
 from shared.core.enums import DraftAutopickStrategy, DraftFormat, DraftPoolSource  # noqa: E402
 from src.schemas import draft as ds  # noqa: E402
+from src.services.draft import lifecycle  # noqa: E402
 
 
 def test_create_request_defaults() -> None:
@@ -42,6 +43,22 @@ def test_create_request_defaults() -> None:
 def test_create_request_rejects_bad_rounds(rounds: int) -> None:
     with pytest.raises(ValidationError):
         ds.DraftSessionCreateRequest(rounds=rounds)
+
+
+def test_create_request_rejects_rounds_that_do_not_match_roster_size() -> None:
+    with pytest.raises(ValidationError, match="team_size - 1"):
+        ds.DraftSessionCreateRequest(rounds=3, team_size=5)
+
+
+def test_lifecycle_rejects_inconsistent_roster_shape_even_without_schema() -> None:
+    with pytest.raises(Exception) as exc_info:
+        lifecycle.validate_roster_shape(rounds=3, team_size=5)
+
+    assert exc_info.value.detail[0]["code"] == "invalid_roster_shape"
+
+
+def test_lifecycle_accepts_rounds_equal_to_team_size_minus_captain() -> None:
+    lifecycle.validate_roster_shape(rounds=4, team_size=5)
 
 
 @pytest.mark.parametrize("seconds", [9, 601])

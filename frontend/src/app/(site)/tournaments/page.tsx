@@ -2,6 +2,7 @@
 
 import React, { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useTranslations } from "next-intl";
 
 import tournamentService from "@/services/tournament.service";
 import encounterService from "@/services/encounter.service";
@@ -34,6 +35,7 @@ const TournamentsPageSkeleton = () => (
 );
 
 const TournamentsPage = () => {
+  const t = useTranslations();
   const workspaceId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const workspaces = useWorkspaceStore((s) => s.workspaces);
   const workspaceName = workspaces.find((w) => w.id === workspaceId)?.name;
@@ -170,19 +172,19 @@ const TournamentsPage = () => {
               letterSpacing: ".04em"
             }}
           >
-            All tournaments
+            {t("tournamentsList.heading.all")}
           </h2>
           <span
             className="tn-id"
             style={{
               marginLeft: 6,
               background: "hsl(0 0% 100% / 0.03)",
-              border: "1px solid var(--border)",
+              border: "1px solid hsl(var(--border))",
               padding: "3px 8px",
               borderRadius: 6
             }}
           >
-            {totalTournaments} total
+            {t("tournamentsList.heading.total", { count: totalTournaments })}
           </span>
         </div>
       </section>
@@ -216,10 +218,10 @@ const TournamentsPage = () => {
               margin: "0 0 6px"
             }}
           >
-            No tournaments found
+            {t("tournamentsList.empty.title")}
           </h2>
           <p style={{ color: "var(--fg-dim)", fontSize: 13, margin: 0 }}>
-            Try adjusting your filters or check back soon for upcoming tournaments.
+            {t("tournamentsList.empty.body")}
           </p>
         </div>
       ) : (

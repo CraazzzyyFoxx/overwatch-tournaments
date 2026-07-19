@@ -7,6 +7,7 @@ RPC body (``content_b64``) alongside the ``payload_format`` form field. Ports th
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import json
 from typing import Any
@@ -27,14 +28,15 @@ _SF = db.async_session_maker
 _PAYLOAD_FORMATS = ("auto", "atravkovs", "internal")
 
 
-def _decode(data: dict[str, Any]) -> bytes:
+def _decode_and_parse(data: dict[str, Any]) -> Any:
     raw = data.get("content_b64")
     if not isinstance(raw, str):
         raise HTTPException(status_code=422, detail="content_b64 is required")
     try:
-        return base64.b64decode(raw)
+        decoded = base64.b64decode(raw)
     except (ValueError, TypeError) as exc:
         raise HTTPException(status_code=400, detail="invalid base64 content") from exc
+    return json.loads(decoded.decode("utf-8"))
 
 
 def register(broker: Any, logger: Any) -> None:
@@ -51,7 +53,8 @@ def register(broker: Any, logger: Any) -> None:
             if payload_format not in _PAYLOAD_FORMATS:
                 raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="invalid payload_format")
 
-            payload = json.loads(_decode(data).decode("utf-8"))
+            # Imports can be multi-MB; base64-decode + parse off the event loop.
+            payload = await asyncio.to_thread(_decode_and_parse, data)
 
             use_atravkovs = payload_format == "atravkovs" or (
                 payload_format == "auto"

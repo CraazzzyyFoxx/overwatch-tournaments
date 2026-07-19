@@ -9,12 +9,15 @@ import {
   DialogDescription,
   DialogTitle
 } from "@/components/ui/dialog";
+import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useOAuthProviders } from "@/hooks/use-oauth-providers";
 import { OAUTH_PROVIDER_META } from "@/lib/oauth-providers";
 import { useAuthModalStore } from "@/stores/auth-modal.store";
 import { SITE_ICON, SITE_NAME } from "@/config/site";
+import WorkspaceBrandIcon from "@/components/WorkspaceBrandIcon";
+import type { TenantWorkspaceBranding } from "@/lib/tenant-host";
 
 type ProviderButtonProps = {
   href: string;
@@ -39,7 +42,17 @@ const ProviderButton = ({ href, title, icon }: ProviderButtonProps) => {
   );
 };
 
-const AuthModal = () => {
+type AuthModalProps = {
+  /**
+   * The host workspace's branding on a tenant (white-label) host, resolved
+   * server-side in the root layout. When set, it replaces the platform
+   * icon/name in the modal header. Absent on the apex/platform host.
+   */
+  tenantWorkspace?: TenantWorkspaceBranding;
+};
+
+const AuthModal = ({ tenantWorkspace }: AuthModalProps) => {
+  const t = useTranslations();
   const isOpen = useAuthModalStore((state) => state.isOpen);
   const nextPath = useAuthModalStore((state) => state.nextPath);
   const close = useAuthModalStore((state) => state.close);
@@ -54,20 +67,28 @@ const AuthModal = () => {
         {/* Branding header */}
         <div className="flex flex-col items-center px-8 pt-8 pb-6">
           <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.05] shadow-sm">
-            <Image
-              src={SITE_ICON}
-              alt={SITE_NAME}
-              width={22}
-              height={22}
-              className="rounded-sm"
-            />
+            {tenantWorkspace ? (
+              <WorkspaceBrandIcon
+                name={tenantWorkspace.name}
+                iconUrl={tenantWorkspace.iconUrl}
+                className="size-[22px] rounded-sm text-[10px]"
+              />
+            ) : (
+              <Image
+                src={SITE_ICON}
+                alt={SITE_NAME}
+                width={22}
+                height={22}
+                className="rounded-sm"
+              />
+            )}
           </div>
 
           <DialogTitle className="text-[15px] font-semibold text-white tracking-[-0.01em]">
-            Sign in
+            {t("auth.signIn")}
           </DialogTitle>
           <DialogDescription className="mt-1 text-[12px] text-white/40 font-normal">
-            to continue to {SITE_NAME}
+            {t("auth.continueTo", { siteName: tenantWorkspace?.name ?? SITE_NAME })}
           </DialogDescription>
         </div>
 
@@ -87,7 +108,7 @@ const AuthModal = () => {
                   <ProviderButton
                     key={provider}
                     href={`/auth/${provider}/login?next=${next}`}
-                    title={`Continue with ${meta.title}`}
+                    title={t("auth.continueWith", { provider: meta.title })}
                     icon={
                       <Image
                         src={meta.icon}
@@ -103,7 +124,7 @@ const AuthModal = () => {
 
           {!isLoading && providers.length === 0 && (
             <p className="text-[12px] text-white/30 text-center py-1">
-              OAuth login is currently unavailable.
+              {t("auth.unavailable")}
             </p>
           )}
         </div>
@@ -112,14 +133,18 @@ const AuthModal = () => {
         <div className="h-px bg-white/[0.06]" />
         <div className="px-8 py-4 flex justify-center">
           <p className="text-[11px] text-white/25 text-center leading-relaxed">
-            By continuing, you agree to our{" "}
-            <span className="text-white/40 underline underline-offset-2 decoration-white/20 cursor-pointer hover:text-white/60 transition-colors">
-              Terms of Service
-            </span>{" "}
-            and{" "}
-            <span className="text-white/40 underline underline-offset-2 decoration-white/20 cursor-pointer hover:text-white/60 transition-colors">
-              Privacy Policy
-            </span>
+            {t.rich("auth.agreement", {
+              terms: (chunks) => (
+                <span className="text-white/40 underline underline-offset-2 decoration-white/20 cursor-pointer hover:text-white/60 transition-colors">
+                  {chunks}
+                </span>
+              ),
+              privacy: (chunks) => (
+                <span className="text-white/40 underline underline-offset-2 decoration-white/20 cursor-pointer hover:text-white/60 transition-colors">
+                  {chunks}
+                </span>
+              )
+            })}
           </p>
         </div>
       </DialogContent>

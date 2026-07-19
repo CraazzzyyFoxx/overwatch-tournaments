@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.core.social import SocialProvider
 from shared.schemas.events import FetchRankEvent
+from shared.services import settings_provider
 from src import models
 
 from . import service, tasks
@@ -56,10 +57,19 @@ async def list_fetch_log(
     source: str | None = None,
     before_id: int | None = None,
     limit: int = 50,
-) -> list[models.RankFetchLog]:
-    """Most-recent worker fetch attempts (newest first), filterable + cursor-paged."""
+) -> list[dict[str, Any]]:
+    """Most-recent worker fetch attempts (newest first), filterable + cursor-paged.
+
+    Resolves the owning ``user_id`` (LEFT JOIN — null when the account was
+    deleted) so the admin log is clickable through to the player detail view.
+    """
     log = models.RankFetchLog
-    query = sa.select(log).order_by(log.id.desc())
+    acc = models.SocialAccount
+    query = (
+        sa.select(log, acc.user_id.label("user_id"))
+        .outerjoin(acc, acc.id == log.social_account_id)
+        .order_by(log.id.desc())
+    )
     if status:
         query = query.where(log.status == status)
     if source:
@@ -67,7 +77,49 @@ async def list_fetch_log(
     if before_id is not None:
         query = query.where(log.id < before_id)
     query = query.limit(max(1, min(limit, 200)))
-    return list((await session.scalars(query)).all())
+    rows = (await session.execute(query)).all()
+    return [
+        {
+            "id": row.RankFetchLog.id,
+            "social_account_id": row.RankFetchLog.social_account_id,
+            "user_id": row.user_id,
+            "battle_tag": row.RankFetchLog.battle_tag,
+            "status": row.RankFetchLog.status,
+            "source": row.RankFetchLog.source,
+            "error": row.RankFetchLog.error,
+            "snapshots_written": row.RankFetchLog.snapshots_written,
+            "created_at": row.RankFetchLog.created_at,
+        }
+        for row in rows
+    ]
+
+
+async def get_collection_stats(session: AsyncSession) -> dict[str, Any]:
+    """Assemble the admin health dashboard: DB aggregates + current config echo."""
+    raw = await service.collection_stats(session)
+    cfg = await settings_provider.get_rank_collection_config(session)
+    fetch = raw["fetch_24h"]
+    fetch_total = sum(fetch.values())
+    errors = fetch.get("error", 0) + fetch.get("rate_limited", 0)
+    tiers = raw["by_tier"]
+    return {
+        "total": raw["total"],
+        "never_checked": raw["never_checked"],
+        "by_status": raw["by_status"],
+        "tier0": tiers.get(0, 0),
+        "tier1": tiers.get(1, 0),
+        "tier2": tiers.get(2, 0),
+        "coverage_24h": raw["coverage_24h"],
+        "coverage_7d": raw["coverage_7d"],
+        "last_success_at": raw["last_success_at"],
+        "fetch_24h": fetch,
+        "fetch_24h_total": fetch_total,
+        "error_rate_24h": round(errors / fetch_total, 4) if fetch_total else 0.0,
+        "enabled": cfg.enabled,
+        "scope": cfg.scope,
+        "interval_seconds": cfg.interval_seconds,
+        "rate_limit_per_minute": cfg.rate_limit_per_minute,
+    }
 
 
 async def _resolve_target_tags(
@@ -87,6 +139,26 @@ async def _resolve_target_tags(
     else:
         return []
     return list((await session.scalars(query)).all())
+
+
+async def reenable_disabled(
+    session: AsyncSession,
+    *,
+    only_previously_succeeded: bool = False,
+) -> int:
+    """Requeue auto-disabled tags (admin recovery after a transient OverFast outage).
+
+    Uses the configured collection interval to spread the re-enabled backlog.
+    Returns the number of tags re-enabled; commits.
+    """
+    cfg = await settings_provider.get_rank_collection_config(session)
+    count = await service.reenable_disabled(
+        session,
+        interval_seconds=cfg.interval_seconds,
+        only_previously_succeeded=only_previously_succeeded,
+    )
+    await session.commit()
+    return count
 
 
 async def trigger_collection(

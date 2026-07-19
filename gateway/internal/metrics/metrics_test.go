@@ -32,3 +32,19 @@ func TestHandlerExposesGatewayMetrics(t *testing.T) {
 		}
 	}
 }
+
+func TestRPCShedCounter(t *testing.T) {
+	m := New()
+	m.RPCShed("rpc.app.users.list")
+	m.RPCShed("rpc.app.users.list")
+
+	req := httptest.NewRequest("GET", "/metrics", nil)
+	rec := httptest.NewRecorder()
+	m.Handler().ServeHTTP(rec, req)
+
+	body := rec.Body.String()
+	want := `gateway_rpc_shed_total{queue="rpc.app.users.list"} 2`
+	if !strings.Contains(body, want) {
+		t.Fatalf("metrics output missing %q", want)
+	}
+}

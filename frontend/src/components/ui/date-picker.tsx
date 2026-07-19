@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
+import { TimeInput } from "@/components/ui/time-input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 interface DatePickerProps {
@@ -34,7 +34,7 @@ function formatDisplay(date: Date | undefined): string {
   return date.toLocaleDateString("en-US", {
     day: "2-digit",
     month: "long",
-    year: "numeric",
+    year: "numeric"
   });
 }
 
@@ -43,7 +43,7 @@ function formatDateTimeDisplay(date: Date | undefined): string {
   return date.toLocaleDateString("en-US", {
     day: "2-digit",
     month: "long",
-    year: "numeric",
+    year: "numeric"
   });
 }
 
@@ -150,7 +150,7 @@ export function DateTimePicker({
   placeholder = "Select date",
   timeLabel = "Time",
   timeId,
-  value,
+  value
 }: DateTimePickerProps) {
   const [open, setOpen] = React.useState(false);
   const selected = React.useMemo(() => parseDateTimeValue(value), [value]);
@@ -201,16 +201,14 @@ export function DateTimePicker({
         </Field>
         <Field className="gap-1.5 sm:w-32 sm:shrink-0" data-disabled={disabled}>
           <FieldLabel htmlFor={timeId}>{timeLabel}</FieldLabel>
-          <Input
+          <TimeInput
             id={timeId}
-            type="time"
-            step="1"
             value={timeValue}
             disabled={disabled}
-            className="appearance-none bg-background [&::-webkit-calendar-picker-indicator]:hidden [&::-webkit-calendar-picker-indicator]:appearance-none"
-            onChange={(event) => {
+            className="bg-background"
+            onValueChange={(nextTime) => {
               const baseDate = selected ?? new Date();
-              onChange(toLocalDateTime(withTime(baseDate, event.target.value || "12:00")));
+              onChange(toLocalDateTime(withTime(baseDate, nextTime || "12:00")));
             }}
           />
         </Field>
@@ -228,6 +226,5 @@ export function DateTimePicker({
         </Button>
       ) : null}
     </div>
-
   );
 }

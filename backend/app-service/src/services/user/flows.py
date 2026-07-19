@@ -537,45 +537,50 @@ async def get_compare(
             detail=[errors.ApiExc(code="invalid_filter", msg="target_user_id is required for baseline=target_user.")],
         )
 
-    subject = await get(session, id, [])
-
-    subject_rows = await service.get_compare_population(
-        session,
-        user_ids=[subject.id],
-        role=compare_role,
-        div_min=compare_div_min,
-        div_max=compare_div_max,
-        tournament_id=params.tournament_id,
-        grid=grid,
-    )
-    if not subject_rows:
-        raise errors.ApiHTTPException(
-            status_code=404,
-            detail=[errors.ApiExc(code="not_found", msg="Subject user has no stats for selected cohort filters.")],
-        )
-    subject_row = subject_rows[0]
-
     baseline_target: schemas.UserCompareUser | None = None
     sample_size = 0
     population_rows: list[dict[str, typing.Any]] = []
 
     if mode == "target_user":
-        target_user = await get(session, params.target_user_id, [])
-        target_rows = await service.get_compare_population(
+        requested_ids = [id, typing.cast(int, params.target_user_id)]
+        pair_rows = await service.get_compare_population(
             session,
-            user_ids=[target_user.id],
+            user_ids=requested_ids,
             tournament_id=params.tournament_id,
             grid=grid,
         )
-        if not target_rows:
+        pair_by_id = {int(row["id"]): row for row in pair_rows}
+        subject_row = pair_by_id.get(id)
+        if subject_row is None:
             raise errors.ApiHTTPException(
-                status_code=404,
-                detail=[errors.ApiExc(code="not_found", msg=f"User with id {target_user.id} not found.")],
+                status_code=400,
+                detail=[errors.ApiExc(code="not_found", msg=f"User with id {id} not found.")],
             )
-        baseline_row = target_rows[0]
+        target_id = typing.cast(int, params.target_user_id)
+        baseline_row = pair_by_id.get(target_id)
+        if baseline_row is None:
+            raise errors.ApiHTTPException(
+                status_code=400,
+                detail=[errors.ApiExc(code="not_found", msg=f"User with id {target_id} not found.")],
+            )
         sample_size = 1
-        baseline_target = schemas.UserCompareUser(id=target_user.id, name=target_user.name)
+        baseline_target = schemas.UserCompareUser(id=target_id, name=str(baseline_row["name"]))
     else:
+        subject_rows = await service.get_compare_population(
+            session,
+            user_ids=[id],
+            role=compare_role,
+            div_min=compare_div_min,
+            div_max=compare_div_max,
+            tournament_id=params.tournament_id,
+            grid=grid,
+        )
+        if not subject_rows:
+            raise errors.ApiHTTPException(
+                status_code=400,
+                detail=[errors.ApiExc(code="not_found", msg=f"User with id {id} not found.")],
+            )
+        subject_row = subject_rows[0]
         population_rows = await service.get_compare_population(
             session,
             role=compare_role,
@@ -633,7 +638,7 @@ async def get_compare(
         )
 
     return schemas.UserCompareResponse(
-        subject=schemas.UserCompareUser(id=subject.id, name=subject.name),
+        subject=schemas.UserCompareUser(id=id, name=str(subject_row["name"])),
         baseline=schemas.UserCompareBaselineInfo(
             mode=mode,
             sample_size=sample_size,
@@ -643,6 +648,68 @@ async def get_compare(
             div_max=resolved_div_max if mode == "cohort" else None,
         ),
         metrics=metrics,
+    )
+
+
+@cache(
+    ttl=config.settings.users_cache_ttl,
+    key=(
+        "user_compare:v2:{id}:{baseline}:{target_user_id}:{role}:"
+        "{div_min}:{div_max}:{tournament_id}:{grid_version}"
+    ),
+    prefix="backend:",
+    lock=True,
+)
+async def _get_compare_cached(
+    session: AsyncSession,
+    id: int,
+    baseline: schemas.UserCompareBaselineMode,
+    target_user_id: int | None,
+    role: str | None,
+    div_min: int | None,
+    div_max: int | None,
+    tournament_id: int | None,
+    grid_version: int | None,
+    *,
+    grid: DivisionGrid,
+) -> schemas.UserCompareResponse:
+    # ``session`` and the runtime grid object deliberately stay out of the key.
+    # The immutable grid version is enough to prevent cross-version reuse.
+    del grid_version
+    return await get_compare(
+        session,
+        id,
+        schemas.UserCompareParams(
+            baseline=baseline,
+            target_user_id=target_user_id,
+            role=enums.HeroClass(role) if role is not None else None,
+            div_min=div_min,
+            div_max=div_max,
+            tournament_id=tournament_id,
+        ),
+        grid=grid,
+    )
+
+
+async def get_compare_cached(
+    session: AsyncSession,
+    id: int,
+    params: schemas.UserCompareParams,
+    *,
+    grid: DivisionGrid,
+) -> schemas.UserCompareResponse:
+    is_cohort = params.baseline == "cohort"
+    return await _get_compare_cached(
+        session,
+        id,
+        params.baseline,
+        params.target_user_id if params.baseline == "target_user" else None,
+        params.role.value if is_cohort and params.role is not None else None,
+        params.div_min if is_cohort else None,
+        params.div_max if is_cohort else None,
+        params.tournament_id,
+        grid.version_id,
+        grid=grid,
     )
 
 
@@ -779,9 +846,31 @@ async def get_hero_compare(
             )
         )
 
-    left_hero = await hero_flows.get(session, params.left_hero_id) if params.left_hero_id else None
-    right_hero = await hero_flows.get(session, params.right_hero_id) if params.right_hero_id else None
-    map_value = await map_flows.get(session, params.map_id, []) if params.map_id else None
+    left_hero_model, right_hero_model, map_model = await service.get_compare_catalog_entities(
+        session,
+        left_hero_id=params.left_hero_id,
+        right_hero_id=params.right_hero_id,
+        map_id=params.map_id,
+    )
+    if params.left_hero_id is not None and left_hero_model is None:
+        raise errors.ApiHTTPException(
+            status_code=404,
+            detail=[errors.ApiExc(code="not_found", msg=f"Hero {params.left_hero_id} not found")],
+        )
+    if params.right_hero_id is not None and right_hero_model is None:
+        raise errors.ApiHTTPException(
+            status_code=404,
+            detail=[errors.ApiExc(code="not_found", msg=f"Hero {params.right_hero_id} not found")],
+        )
+    if params.map_id is not None and map_model is None:
+        raise errors.ApiHTTPException(
+            status_code=404,
+            detail=[errors.ApiExc(code="not_found", msg=f"Map with ID {params.map_id} not found")],
+        )
+
+    left_hero = await hero_flows.to_pydantic(session, left_hero_model, []) if left_hero_model else None
+    right_hero = await hero_flows.to_pydantic(session, right_hero_model, []) if right_hero_model else None
+    map_value = await map_flows.to_pydantic(session, map_model, []) if map_model else None
 
     return schemas.UserHeroCompareResponse(
         subject=schemas.UserCompareUser(id=subject.id, name=subject.name),
@@ -800,6 +889,83 @@ async def get_hero_compare(
         left_playtime_seconds=round(left_playtime, 2),
         right_playtime_seconds=round(right_playtime, 2),
         metrics=metrics,
+    )
+
+
+@cache(
+    ttl=config.settings.users_cache_ttl,
+    key=(
+        "user_hero_compare:v2:{id}:{baseline}:{target_user_id}:{left_hero_id}:"
+        "{right_hero_id}:{map_id}:{role}:{div_min}:{div_max}:{tournament_id}:"
+        "{stats_key}:{grid_version}"
+    ),
+    prefix="backend:",
+    lock=True,
+)
+async def _get_hero_compare_cached(
+    session: AsyncSession,
+    id: int,
+    baseline: schemas.UserCompareBaselineMode,
+    target_user_id: int | None,
+    left_hero_id: int | None,
+    right_hero_id: int | None,
+    map_id: int | None,
+    role: str | None,
+    div_min: int | None,
+    div_max: int | None,
+    tournament_id: int | None,
+    stats_key: str,
+    grid_version: int | None,
+    *,
+    grid: DivisionGrid,
+) -> schemas.UserHeroCompareResponse:
+    del grid_version
+    return await get_hero_compare(
+        session,
+        id,
+        schemas.UserHeroCompareParams(
+            baseline=baseline,
+            target_user_id=target_user_id,
+            left_hero_id=left_hero_id,
+            right_hero_id=right_hero_id,
+            map_id=map_id,
+            role=enums.HeroClass(role) if role is not None else None,
+            div_min=div_min,
+            div_max=div_max,
+            tournament_id=tournament_id,
+            stats=[enums.LogStatsName(value) for value in stats_key.split(",") if value],
+        ),
+        grid=grid,
+    )
+
+
+async def get_hero_compare_cached(
+    session: AsyncSession,
+    id: int,
+    params: schemas.UserHeroCompareParams,
+    *,
+    grid: DivisionGrid,
+) -> schemas.UserHeroCompareResponse:
+    requested_stats = {stat for stat in params.stats if stat != enums.LogStatsName.HeroTimePlayed}
+    if not requested_stats:
+        requested_stats = set(service.DEFAULT_HERO_COMPARE_STATS)
+    stats_key = ",".join(sorted(stat.value for stat in requested_stats))
+    is_cohort = params.baseline == "cohort"
+    return await _get_hero_compare_cached(
+        session,
+        id,
+        params.baseline,
+        params.target_user_id if params.baseline == "target_user" else None,
+        params.left_hero_id,
+        params.right_hero_id,
+        params.map_id,
+        params.role.value if is_cohort and params.role is not None else None,
+        params.div_min if is_cohort else None,
+        params.div_max if is_cohort else None,
+        params.tournament_id,
+        stats_key,
+        grid.version_id,
+        grid=grid,
     )
 
 
@@ -883,7 +1049,7 @@ async def get_roles(
 # (grid/normalizer are loaded fresh for the workspace). Workspace-level grid
 # changes are rare; a TournamentChangedEvent invalidates all user_* keys.
 @cache(
-    ttl=config.settings.users_cache_ttl,
+    ttl=config.settings.user_profile_cache_ttl,
     key="user_profile:{id}:{workspace_id}",
     prefix="backend:",
 )
@@ -1022,7 +1188,32 @@ async def get_tournaments(
     matches = await _repositories.get_user_encounter_matches_unpaginated(session, user.id)
     placements = await _repositories.count_teams_by_tournament_bulk(session, tournaments_ids)
 
-    for team, encounter, match, performance, heroes in matches:
+    # Per-roster-player enrichment (avg MVP + signature heroes), scoped to the
+    # tournaments this history covers. Gather every teammate's canonical user id
+    # (workspace_member.player_id) up front and resolve both metrics in two bulk
+    # queries keyed by (tournament_id, user_id) — no N+1 across roster players.
+    roster_user_ids = list(
+        {
+            player.workspace_member.player_id
+            for team, *_ in tournaments
+            for player in team.players
+            if player.workspace_member is not None
+        }
+    )
+    avg_mvp_map = await _repositories.get_roster_avg_mvp_bulk(session, tournaments_ids, roster_user_ids)
+    top_heroes_map = await _repositories.get_roster_top_heroes_bulk(session, tournaments_ids, roster_user_ids)
+
+    for (
+        team,
+        encounter,
+        match,
+        performance,
+        heroes,
+        impact_rank,
+        impact_points,
+        overperformance_score,
+        overperf_pos,
+    ) in matches:
         encounters.setdefault(team.id, [])
         encounters_cache.setdefault(team.id, {})
         matches_cache.setdefault(team.id, {})
@@ -1031,7 +1222,15 @@ async def get_tournaments(
 
         if match:
             matches_cache[team.id][encounter.id].append(
-                _mappers.to_match_with_user_stats(match, performance=performance, heroes=heroes)
+                _mappers.to_match_with_user_stats(
+                    match,
+                    performance=performance,
+                    heroes=heroes,
+                    impact_rank=impact_rank,
+                    impact_points=impact_points,
+                    overperformance_score=overperformance_score,
+                    overperf_pos=overperf_pos,
+                )
             )
 
     for team_id, encounter_dict in encounters_cache.items():
@@ -1080,7 +1279,23 @@ async def get_tournaments(
             else None
         )
 
-        players_read = [_mappers.to_user_tournament_player(player, grid=tournament_grid) for player in team.players]
+        players_read = [
+            _mappers.to_user_tournament_player(
+                player,
+                grid=tournament_grid,
+                avg_mvp=(
+                    avg_mvp_map.get((team.tournament_id, player.workspace_member.player_id))
+                    if player.workspace_member is not None
+                    else None
+                ),
+                heroes=(
+                    top_heroes_map.get((team.tournament_id, player.workspace_member.player_id), [])
+                    if player.workspace_member is not None
+                    else []
+                ),
+            )
+            for player in team.players
+        ]
 
         tournament = schemas.UserTournament(
             id=team.tournament.id,
@@ -1109,6 +1324,15 @@ async def get_tournaments(
     return output
 
 
+# ``grid`` is a pure function of ``tournament_id`` (a tournament pins its own
+# division_grid_version), so it stays out of the key; a grid change fires a
+# TournamentChangedEvent that broadly drops ``user_tournament_stats:*``.
+@cache(
+    ttl=config.settings.users_cache_ttl,
+    key="user_tournament_stats:{id}:{tournament_id}",
+    prefix="backend:",
+    lock=True,
+)
 async def get_tournament_with_stats(
     session: AsyncSession, id: int, tournament_id: int, *, grid: DivisionGrid
 ) -> schemas.UserTournamentWithStats | None:
@@ -1187,10 +1411,80 @@ async def get_tournament_with_stats(
     )
 
 
+async def get_tournament_leaderboard(
+    session: AsyncSession,
+    tournament_id: int,
+    stat: enums.LogStatsName,
+) -> schemas.LobbyLeaderboard:
+    """Per-stat lobby leaderboard: every player in a tournament ranked by one stat.
+
+    Exposes the full ranked population that backs a single user's
+    ``UserTournamentWithStats.stats[stat].{rank,total}`` on the tournament-stats
+    page. It reuses the exact ranking scheme
+    (``statistics_service.get_tournament_stat_leaderboard``, a generalization of
+    ``get_tournament_avg_match_stat_for_user_bulk``) — same AVG + dense_rank
+    window and same inverse-stat direction handling — so an entry's rank/value
+    here matches that user's row.
+
+    ``stat`` must be one of the tournament-stats feature's ranked stats
+    (``tournament_stats``); any other stat raises 400.
+    """
+    if stat not in tournament_stats:
+        raise errors.ApiHTTPException(
+            status_code=400,
+            detail=[
+                errors.ApiExc(
+                    code="invalid_stat",
+                    msg=f"Stat [{stat.value}] is not a ranked tournament stat.",
+                )
+            ],
+        )
+
+    rows = await statistics_service.get_tournament_stat_leaderboard(session, tournament_id, stat)
+    entries = [
+        schemas.LobbyLeaderboardEntry(rank=row.rank, player_id=row.user_id, name=row.name, value=row.value)
+        for row in rows
+    ]
+    return schemas.LobbyLeaderboard(stat=stat, total_players=len(entries), entries=entries)
+
+
 async def get_heroes(
     session: AsyncSession,
     id: int,
     params: pagination.PaginationParams,
+    stats: list[enums.LogStatsName] | None = None,
+    tournament_id: int | None = None,
+    workspace_id: int | None = None,
+) -> pagination.Paginated[schemas.HeroWithUserStats]:
+    """Cache wrapper for a user's hero statistics.
+
+    Normalizes the requested-stats list (sort + dedup) into a stable cache key
+    before delegating to the cached implementation, so ``[Deaths, Elims]`` and
+    ``[Elims, Deaths, Elims]`` share one entry (mirrors the hero-compare cache).
+    """
+    stats_key = ",".join(sorted({stat.value for stat in (stats or [])}))
+    return await _get_heroes_cached(
+        session,
+        id,
+        params,
+        stats_key,
+        stats=stats,
+        tournament_id=tournament_id,
+        workspace_id=workspace_id,
+    )
+
+
+@cache(
+    ttl=config.settings.users_cache_ttl,
+    key="user_heroes:{id}:{workspace_id}:{tournament_id}:{stats_key}:{params.page}:{params.per_page}",
+    prefix="backend:",
+    lock=True,
+)
+async def _get_heroes_cached(
+    session: AsyncSession,
+    id: int,
+    params: pagination.PaginationParams,
+    stats_key: str,
     stats: list[enums.LogStatsName] | None = None,
     tournament_id: int | None = None,
     workspace_id: int | None = None,
@@ -1206,6 +1500,7 @@ async def get_heroes(
     Returns:
         A list of `HeroWithUserStats` schemas representing the user's hero statistics.
     """
+    del stats_key  # participates in the cache key only
     user = await get(session, id, [])
     requested_stats = set(stats or [])
     stats_filter = list(requested_stats) if requested_stats else None
@@ -1287,6 +1582,11 @@ async def get_heroes(
     )
 
 
+@cache(
+    ttl=config.settings.users_cache_ttl,
+    key="user_teammates:{id}:{workspace_id}:{params.page}:{params.per_page}:{params.sort}:{params.order}",
+    prefix="backend:",
+)
 async def get_best_teammates(
     session: AsyncSession,
     id: int,
@@ -1327,13 +1627,22 @@ async def get_best_teammates(
     )
 
 
+@cache(
+    ttl=config.settings.users_cache_ttl,
+    key=(
+        "user_encounters:{user_id}:{workspace_id}:{params.page}:{params.per_page}:"
+        "{params.sort}:{params.order}:{result_filter}:{stage}:{mvp1}:{has_logs}:{opponent}"
+    ),
+    prefix="backend:",
+    lock=True,
+)
 async def get_encounters_by_user(
     session: AsyncSession,
     user_id: int,
     params: pagination.PaginationSortParams,
     workspace_id: int | None = None,
     *,
-    result: str | None = None,
+    result_filter: str | None = None,
     stage: str | None = None,
     mvp1: bool = False,
     has_logs: bool | None = None,
@@ -1352,7 +1661,7 @@ async def get_encounters_by_user(
         user.id,
         params,
         workspace_id=workspace_id,
-        result=result,
+        result=result_filter,
         stage=stage,
         mvp1=mvp1,
         has_logs=has_logs,
@@ -1362,13 +1671,30 @@ async def get_encounters_by_user(
     encounters_cache: dict[int, models.Encounter] = {}
     matches_cache: dict[int, list[schemas.MatchReadWithUserStats]] = {}
 
-    for encounter, match, performance, heroes in encounters:
+    for (
+        encounter,
+        match,
+        performance,
+        heroes,
+        impact_rank,
+        impact_points,
+        overperformance_score,
+        overperf_pos,
+    ) in encounters:
         encounters_cache.setdefault(encounter.id, encounter)
         matches_cache.setdefault(encounter.id, [])
 
         if match:
             matches_cache[encounter.id].append(
-                _mappers.to_match_with_user_stats(match, performance=performance, heroes=heroes)
+                _mappers.to_match_with_user_stats(
+                    match,
+                    performance=performance,
+                    heroes=heroes,
+                    impact_rank=impact_rank,
+                    impact_points=impact_points,
+                    overperformance_score=overperformance_score,
+                    overperf_pos=overperf_pos,
+                )
             )
 
     for encounter_id, encounter in encounters_cache.items():
@@ -1388,6 +1714,11 @@ async def get_encounters_by_user(
     )
 
 
+@cache(
+    ttl=config.settings.users_cache_ttl,
+    key="user_matches_summary:{user_id}:{workspace_id}:{opponents_limit}",
+    prefix="backend:",
+)
 async def get_matches_summary(
     session: AsyncSession,
     user_id: int,

@@ -109,6 +109,9 @@ OPERATIONS: dict[str, Op] = {
     "rpc.app.users.by_name": Op(response=schemas.UserRead),
     "rpc.app.users.tournaments": Op(response=schemas.UserTournament, response_array=True),
     "rpc.app.users.tournament": Op(response=schemas.UserTournamentWithStats),
+    "rpc.app.users.tournament_leaderboard": Op(
+        response=schemas.LobbyLeaderboard, query_params=(QueryParam("stat"),)
+    ),
     "rpc.app.users.maps": Op(response=Paginated[schemas.UserMap], query=schemas.UserMapsSearchQueryParams),
     "rpc.app.users.maps_summary": Op(response=schemas.UserMapsSummary, query=schemas.UserMapsSearchQueryParams),
     "rpc.app.users.encounters": Op(
@@ -165,6 +168,11 @@ OPERATIONS: dict[str, Op] = {
     "rpc.app.workspaces.members_autofill_roles": Op(response=schemas.WorkspaceMemberAutofillResult),
     "rpc.app.workspaces.member_add": Op(request=schemas.WorkspaceMemberCreate, response=schemas.WorkspaceMemberRead),
     "rpc.app.workspaces.member_update": Op(request=schemas.WorkspaceMemberUpdate, response=schemas.WorkspaceMemberRead),
+    "rpc.app.workspaces.set_custom_domain": Op(
+        request=schemas.WorkspaceCustomDomainSet, response=schemas.WorkspaceRead
+    ),
+    "rpc.app.workspaces.verify_custom_domain": Op(response=schemas.WorkspaceRead),
+    "rpc.app.workspaces.clear_custom_domain": Op(response=schemas.WorkspaceRead),
     # ── metadata admin (hero/map/gamemode) ─────────────────────────────────
     "rpc.app.heroes.admin_create": Op(request=HeroCreate, response=schemas.HeroRead),
     "rpc.app.heroes.admin_update": Op(request=HeroUpdate, response=schemas.HeroRead),

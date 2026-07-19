@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -45,7 +44,13 @@ func (b *Binary) AdminLogsUpload(w http.ResponseWriter, r *http.Request) {
 		writeDetail(w, http.StatusUnauthorized, "Not authenticated")
 		return
 	}
-	id, ok := b.identity(r)
+	id, ok, err := b.identity(r)
+	if err != nil {
+		b.log.Error("identity resolution unavailable", "err", err)
+		w.Header().Set("Retry-After", "1")
+		writeDetail(w, http.StatusServiceUnavailable, "service unavailable")
+		return
+	}
 	if !ok {
 		writeDetail(w, http.StatusUnauthorized, "Not authenticated")
 		return
@@ -97,7 +102,13 @@ func (b *Binary) TeamsBalancerUpload(w http.ResponseWriter, r *http.Request) {
 		writeDetail(w, http.StatusUnauthorized, "Not authenticated")
 		return
 	}
-	id, ok := b.identity(r)
+	id, ok, err := b.identity(r)
+	if err != nil {
+		b.log.Error("identity resolution unavailable", "err", err)
+		w.Header().Set("Retry-After", "1")
+		writeDetail(w, http.StatusServiceUnavailable, "service unavailable")
+		return
+	}
 	if !ok {
 		writeDetail(w, http.StatusUnauthorized, "Not authenticated")
 		return
@@ -149,8 +160,9 @@ func (b *Binary) relayJSON(w http.ResponseWriter, r *http.Request, queue string,
 
 	reply, err := b.rpc.Call(ctx, queue, body)
 	if err != nil {
-		if errors.Is(err, rpc.ErrNotConnected) || errors.Is(err, rpc.ErrDisconnected) {
+		if rpc.IsUnavailable(err) {
 			b.log.Error("rpc unavailable", "queue", queue, "err", err)
+			w.Header().Set("Retry-After", "1")
 			writeDetail(w, http.StatusServiceUnavailable, "service unavailable")
 			return
 		}

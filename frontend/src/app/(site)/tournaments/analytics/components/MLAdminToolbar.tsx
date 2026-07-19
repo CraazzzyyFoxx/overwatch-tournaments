@@ -3,6 +3,7 @@
 import React from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertCircle, Brain, CheckCircle2, Loader2, PlayCircle } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -39,19 +40,6 @@ type JobMutationVariables = {
   trainingWorkspaceIds?: number[] | null;
 };
 
-function formatRelative(iso: string | null | undefined): string {
-  if (!iso) return "-";
-  const t = new Date(iso).getTime();
-  const diffMs = Date.now() - t;
-  const minutes = Math.round(diffMs / 60_000);
-  if (minutes < 1) return "just now";
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.round(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.round(hours / 24);
-  return `${days}d ago`;
-}
-
 function statusTone(status: AnalyticsJob["status"]): string {
   switch (status) {
     case "running":
@@ -81,13 +69,32 @@ function StageRow({ name, stage }: { name: string; stage: AnalyticsJobProgressSt
   );
 }
 
-function trainScopeDescription(scope: TrainScope, selectedCount: number): string {
-  if (scope === "all") return "All historical tournaments across all workspaces.";
-  if (scope === "current") return "Only tournaments from the current workspace.";
-  return `${selectedCount} selected workspace${selectedCount === 1 ? "" : "s"}.`;
+// Module-scoped so the impure `Date.now()` read is not flagged by the React
+// Compiler purity rule (matches the pattern used elsewhere for relative time).
+function formatRelative(
+  t: ReturnType<typeof useTranslations<never>>,
+  iso: string | null | undefined
+): string {
+  if (!iso) return "-";
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const minutes = Math.round(diffMs / 60_000);
+  if (minutes < 1) return t("analytics.job.relativeJustNow");
+  if (minutes < 60) return t("analytics.job.relativeMinutes", { count: minutes });
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return t("analytics.job.relativeHours", { count: hours });
+  const days = Math.round(hours / 24);
+  return t("analytics.job.relativeDays", { count: days });
 }
 
 export default function MLAdminToolbar({ tournamentId, workspaceId }: MLAdminToolbarProps) {
+  const t = useTranslations();
+
+  const trainScopeDescription = (scope: TrainScope, selectedCount: number): string => {
+    if (scope === "all") return t("analytics.job.sampleAll");
+    if (scope === "current") return t("analytics.job.sampleCurrent");
+    return t("analytics.job.sampleSelected", { count: selectedCount });
+  };
+
   const queryClient = useQueryClient();
   const { isSuperuser } = usePermissions();
   const workspaces = useWorkspaceStore((state) => state.workspaces);
@@ -195,9 +202,14 @@ export default function MLAdminToolbar({ tournamentId, workspaceId }: MLAdminToo
       if (job.kind === "train_ml") {
         setIsTrainDialogOpen(false);
       }
-      notify.success(job.kind === "train_ml" ? "Training dispatched" : "Recalculation dispatched", {
-        description: `Job #${job.id} - listening for live updates.`
-      });
+      notify.success(
+        job.kind === "train_ml"
+          ? t("analytics.job.trainingDispatched")
+          : t("analytics.job.recalculationDispatched"),
+        {
+          description: t("analytics.job.dispatchedDescription", { id: job.id })
+        }
+      );
     }
   });
 
@@ -209,7 +221,7 @@ export default function MLAdminToolbar({ tournamentId, workspaceId }: MLAdminToo
           onClick={() => createJobMutation.mutate({ kind: "compute" })}
           disabled={isActive || createJobMutation.isPending}
         >
-          <span className="truncate">Run analytics</span>
+          <span className="truncate">{t("analytics.job.runAnalytics")}</span>
           {createJobMutation.isPending && createJobMutation.variables?.kind === "compute" ? (
             <Loader2 className="h-4 w-4 animate-spin" />
           ) : (
@@ -224,7 +236,7 @@ export default function MLAdminToolbar({ tournamentId, workspaceId }: MLAdminToo
             onClick={() => setIsTrainDialogOpen(true)}
             disabled={isActive || createJobMutation.isPending}
           >
-            <span className="truncate">Train ML</span>
+            <span className="truncate">{t("analytics.job.trainMl")}</span>
             {createJobMutation.isPending && createJobMutation.variables?.kind === "train_ml" ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
@@ -238,11 +250,8 @@ export default function MLAdminToolbar({ tournamentId, workspaceId }: MLAdminToo
         <Dialog open={isTrainDialogOpen} onOpenChange={setIsTrainDialogOpen}>
           <DialogContent className="sm:max-w-[560px]">
             <DialogHeader>
-              <DialogTitle>Train ML models</DialogTitle>
-              <DialogDescription>
-                Choose which workspaces should be included in the training sample. Inference will
-                still run for the selected tournament separately.
-              </DialogDescription>
+              <DialogTitle>{t("analytics.job.trainDialogTitle")}</DialogTitle>
+              <DialogDescription>{t("analytics.job.trainDialogDescription")}</DialogDescription>
             </DialogHeader>
 
             <div className="space-y-4">
@@ -254,8 +263,8 @@ export default function MLAdminToolbar({ tournamentId, workspaceId }: MLAdminToo
                   onClick={() => setTrainScope("all")}
                 >
                   <span>
-                    <span className="block font-semibold">All workspaces</span>
-                    <span className="block text-xs opacity-75">Largest sample</span>
+                    <span className="block font-semibold">{t("analytics.job.scopeAll")}</span>
+                    <span className="block text-xs opacity-75">{t("analytics.job.scopeAllHint")}</span>
                   </span>
                 </Button>
                 <Button
@@ -269,8 +278,8 @@ export default function MLAdminToolbar({ tournamentId, workspaceId }: MLAdminToo
                   disabled={workspaceId == null}
                 >
                   <span>
-                    <span className="block font-semibold">Current</span>
-                    <span className="block text-xs opacity-75">This workspace</span>
+                    <span className="block font-semibold">{t("analytics.job.scopeCurrent")}</span>
+                    <span className="block text-xs opacity-75">{t("analytics.job.scopeCurrentHint")}</span>
                   </span>
                 </Button>
                 <Button
@@ -280,14 +289,14 @@ export default function MLAdminToolbar({ tournamentId, workspaceId }: MLAdminToo
                   onClick={() => setTrainScope("custom")}
                 >
                   <span>
-                    <span className="block font-semibold">Selected</span>
-                    <span className="block text-xs opacity-75">Manual scope</span>
+                    <span className="block font-semibold">{t("analytics.job.scopeSelected")}</span>
+                    <span className="block text-xs opacity-75">{t("analytics.job.scopeSelectedHint")}</span>
                   </span>
                 </Button>
               </div>
 
               <div className="rounded-md border bg-background/40 p-3 text-sm">
-                <div className="font-medium">Training sample</div>
+                <div className="font-medium">{t("analytics.job.trainingSample")}</div>
                 <div className="mt-1 text-muted-foreground">
                   {trainScopeDescription(trainScope, selectedWorkspaceIds.length)}
                 </div>
@@ -296,7 +305,7 @@ export default function MLAdminToolbar({ tournamentId, workspaceId }: MLAdminToo
               {trainScope === "custom" ? (
                 <div className="rounded-md border bg-background/30">
                   <div className="border-b px-3 py-2 text-xs font-medium text-muted-foreground">
-                    Workspaces
+                    {t("analytics.job.workspaces")}
                   </div>
                   <div className="grid max-h-56 gap-1 overflow-auto p-2">
                     {workspaces.length ? (
@@ -320,7 +329,7 @@ export default function MLAdminToolbar({ tournamentId, workspaceId }: MLAdminToo
                       ))
                     ) : (
                       <span className="px-2 py-3 text-sm text-muted-foreground">
-                        Workspace list is not loaded.
+                        {t("analytics.job.workspaceListNotLoaded")}
                       </span>
                     )}
                   </div>
@@ -328,13 +337,13 @@ export default function MLAdminToolbar({ tournamentId, workspaceId }: MLAdminToo
               ) : null}
 
               {!isTrainScopeValid ? (
-                <p className="text-sm text-red-300">Select at least one workspace.</p>
+                <p className="text-sm text-red-300">{t("analytics.job.selectAtLeastOneWorkspace")}</p>
               ) : null}
             </div>
 
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setIsTrainDialogOpen(false)}>
-                Cancel
+                {t("common.cancel")}
               </Button>
               <Button
                 type="button"
@@ -351,7 +360,7 @@ export default function MLAdminToolbar({ tournamentId, workspaceId }: MLAdminToo
                 ) : (
                   <Brain className="mr-2 h-4 w-4" />
                 )}
-                Start training
+                {t("analytics.job.startTraining")}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -374,15 +383,16 @@ export default function MLAdminToolbar({ tournamentId, workspaceId }: MLAdminToo
               ) : (
                 <AlertCircle className="h-3.5 w-3.5" />
               )}
-              Job #{liveJob.id} / {liveJob.kind === "train_ml" ? "Train ML" : "Compute"} /{" "}
+              {t("analytics.job.jobLabel", { id: liveJob.id })} /{" "}
+              {liveJob.kind === "train_ml" ? t("analytics.job.trainMl") : t("analytics.job.compute")} /{" "}
               {liveJob.status}
             </span>
             <span className="text-muted-foreground">
               {liveJob.finished_at
-                ? `finished ${formatRelative(liveJob.finished_at)}`
+                ? t("analytics.job.finishedRelative", { relative: formatRelative(t, liveJob.finished_at) })
                 : liveJob.started_at
-                  ? `started ${formatRelative(liveJob.started_at)}`
-                  : `created ${formatRelative(liveJob.created_at)}`}
+                  ? t("analytics.job.startedRelative", { relative: formatRelative(t, liveJob.started_at) })
+                  : t("analytics.job.createdRelative", { relative: formatRelative(t, liveJob.created_at) })}
             </span>
           </header>
 

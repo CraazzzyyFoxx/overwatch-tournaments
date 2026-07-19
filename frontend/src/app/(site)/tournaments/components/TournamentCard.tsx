@@ -4,6 +4,7 @@ import React from "react";
 import { Tournament } from "@/types/tournament.types";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Calendar, Users, ExternalLink } from "lucide-react";
 import { cn, formatDateRange } from "@/lib/utils";
 import { getTournamentStatusMeta } from "@/lib/tournament-status";
@@ -15,6 +16,7 @@ export const TournamentChallongeLink = ({
   tournament: Tournament;
   stages?: Tournament["stages"];
 }) => {
+  const t = useTranslations();
   const tournamentStages = stages ?? tournament.stages ?? [];
   const slug =
     tournament.challonge_slug ??
@@ -35,7 +37,7 @@ export const TournamentChallongeLink = ({
       rel="noopener noreferrer"
     >
       <ExternalLink className="w-3 h-3" />
-      <span>Bracket</span>
+      <span>{t("common.bracket")}</span>
     </Link>
   );
 };
@@ -47,6 +49,7 @@ export const TournamentChallongeLinkInline = ({
   tournament: Tournament;
   stages?: Tournament["stages"];
 }) => {
+  const t = useTranslations();
   const tournamentStages = stages ?? tournament.stages ?? [];
   const slug =
     tournament.challonge_slug ??
@@ -66,12 +69,13 @@ export const TournamentChallongeLinkInline = ({
       target="_blank"
       rel="noopener noreferrer"
     >
-      View Bracket
+      {t("tournamentsList.card.viewBracket")}
     </Link>
   );
 };
 
 const TournamentCard = ({ tournament }: { tournament: Tournament }) => {
+  const t = useTranslations();
   const router = useRouter();
   const statusMeta = getTournamentStatusMeta(tournament.status);
 
@@ -94,7 +98,7 @@ const TournamentCard = ({ tournament }: { tournament: Tournament }) => {
         <div className="flex items-center gap-2">
           {tournament.is_league && (
             <span className="inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-400 border border-purple-500/20 tracking-wide uppercase">
-              League
+              {t("common.league")}
             </span>
           )}
           <span
@@ -112,7 +116,7 @@ const TournamentCard = ({ tournament }: { tournament: Tournament }) => {
                 )}
               />
             ) : null}
-            {statusMeta.badgeLabel}
+            {t(`common.statusBadge.${tournament.status}`)}
           </span>
         </div>
         {!tournament.is_league && (
@@ -133,7 +137,11 @@ const TournamentCard = ({ tournament }: { tournament: Tournament }) => {
         </div>
         <div className="flex items-center gap-2 text-xs text-white/60">
           <Users className="w-3.5 h-3.5 shrink-0 text-white/40" />
-          <span>{tournament.participants_count} participants</span>
+          <span>
+            {t("tournamentsList.card.participantsCount", {
+              count: tournament.participants_count ?? 0
+            })}
+          </span>
         </div>
       </div>
 

@@ -8,9 +8,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from shared.division_grid import DivisionGrid
+from shared.models.identity.auth_user import AuthUser
 from shared.services.challonge_refs import ChallongeRef, resolve_stage_challonge, resolve_tournament_challonge
 from shared.services.division_grid_normalization import DivisionGridNormalizationError, DivisionGridNormalizer
 from shared.services.division_grid_resolution import resolve_tournament_division
+from shared.services.tournament_visibility import visible_tournaments_predicate
 from src import models, schemas
 from src.core import config, enums, errors, pagination
 from src.services.registration import service as registration_service
@@ -50,6 +52,7 @@ async def to_pydantic(
     *,
     participants_counts: typing.Mapping[int, int] | None = None,
     registrations_counts: typing.Mapping[int, int] | None = None,
+    teams_counts: typing.Mapping[int, int] | None = None,
     challonge_ref: ChallongeRef | None = None,
     stage_challonge_refs: typing.Mapping[int, ChallongeRef] | None = None,
 ) -> schemas.TournamentRead:
@@ -74,6 +77,7 @@ async def to_pydantic(
     stages: list[schemas.StageSummaryRead] = []
     participants_count: int | None = None
     registrations_count: int | None = None
+    teams_count: int | None = None
     if "stages" in entities:
         stage_models = _loaded_relationship(tournament, "stages") or []
         stages = [
@@ -96,6 +100,11 @@ async def to_pydantic(
             registrations_count = await registration_service.get_registration_count_by_tournament(
                 session, tournament.id
             )
+    if "teams_count" in entities:
+        if teams_counts is not None:
+            teams_count = teams_counts.get(tournament.id, 0)
+        else:
+            teams_count = await team_service.get_team_count_by_tournament(session, tournament.id)
     division_grid_version = None
     if _entity_requested(entities, "division_grid_version"):
         division_grid_version_model = _loaded_relationship(tournament, "division_grid_version")
@@ -113,16 +122,19 @@ async def to_pydantic(
         number=tournament.number,
         is_league=tournament.is_league,
         is_finished=tournament.is_finished,
+        is_hidden=tournament.is_hidden,
         team_formation=tournament.team_formation,
         status=tournament.status,
         name=tournament.name,
         description=tournament.description,
         challonge_id=tournament_challonge_id,
         challonge_slug=tournament_challonge_slug,
-        registration_opens_at=tournament.registration_opens_at,
-        registration_closes_at=tournament.registration_closes_at,
-        check_in_opens_at=tournament.check_in_opens_at,
-        check_in_closes_at=tournament.check_in_closes_at,
+        auto_transitions_enabled=tournament.auto_transitions_enabled,
+        allow_late_registration=tournament.allow_late_registration,
+        phase_schedule=[
+            schemas.TournamentPhaseScheduleRead.model_validate(row, from_attributes=True)
+            for row in _loaded_relationship(tournament, "phase_schedule") or []
+        ],
         win_points=tournament.win_points,
         draw_points=tournament.draw_points,
         loss_points=tournament.loss_points,
@@ -131,6 +143,7 @@ async def to_pydantic(
         stages=stages,
         participants_count=participants_count,
         registrations_count=registrations_count,
+        teams_count=teams_count,
     )
 
 
@@ -237,7 +250,13 @@ async def lookup(
     limit: int = 500,
 ) -> list[schemas.LookupItem]:
     """Lightweight id/name lookup for pickers (rpc.tournament.lookup_tournaments)."""
-    query = sa.select(models.Tournament.id, models.Tournament.name).order_by(models.Tournament.id.desc()).limit(limit)
+    query = (
+        sa.select(models.Tournament.id, models.Tournament.name)
+        # Hidden tournaments never appear in public pickers/lookups (issue #115).
+        .where(models.Tournament.is_hidden.is_(False))
+        .order_by(models.Tournament.id.desc())
+        .limit(limit)
+    )
     if workspace_id is not None:
         query = query.where(models.Tournament.workspace_id == workspace_id)
     if is_league is not None:
@@ -297,7 +316,10 @@ async def get_by_number_and_league(
 
 
 async def get_all(
-    session: AsyncSession, params: schemas.TournamentPaginationSortSearchParams
+    session: AsyncSession,
+    params: schemas.TournamentPaginationSortSearchParams,
+    *,
+    viewer: AuthUser | None = None,
 ) -> pagination.Paginated[schemas.TournamentRead]:
     """
     Retrieves a paginated list of `Tournament` model instances and converts them to `TournamentRead` schemas.
@@ -309,7 +331,9 @@ async def get_all(
     Returns:
         A `Paginated` instance containing `TournamentRead` schemas.
     """
-    results, total = await service.get_all(session, params)
+    results, total = await service.get_all(
+        session, params, visibility=visible_tournaments_predicate(viewer)
+    )
     tournament_ids = [result.id for result in results]
     participants_counts = (
         await team_service.get_player_count_by_tournament_bulk(session, tournament_ids)
@@ -319,6 +343,11 @@ async def get_all(
     registrations_counts = (
         await registration_service.get_registration_count_by_tournament_bulk(session, tournament_ids)
         if "registrations_count" in params.entities
+        else None
+    )
+    teams_counts = (
+        await team_service.get_team_count_by_tournament_bulk(session, tournament_ids)
+        if "teams_count" in params.entities
         else None
     )
     # Batched Challonge-ref derivation (no N+1): one query for every tournament id
@@ -336,6 +365,7 @@ async def get_all(
                 params.entities,
                 participants_counts=participants_counts,
                 registrations_counts=registrations_counts,
+                teams_counts=teams_counts,
                 challonge_ref=challonge_refs.get(result.id),
                 stage_challonge_refs=stage_challonge_refs,
             )

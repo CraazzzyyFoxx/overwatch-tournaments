@@ -396,7 +396,7 @@ export default function PlayersPage() {
 
   const { data: teamsData } = useQuery({
     queryKey: ["teams", selectedTournamentId],
-    queryFn: () => teamService.getAll(selectedTournamentId)
+    queryFn: () => teamService.getAll({ tournamentId: selectedTournamentId })
   });
 
   const selectedTournament = tournamentsData?.results.find(
@@ -705,7 +705,7 @@ export default function PlayersPage() {
           sortDir
         ]}
         queryFn={async (page, search, pageSize, sortField, sortDir) => {
-          const data = await teamService.getAll(selectedTournamentId);
+          const data = await teamService.getAll({ tournamentId: selectedTournamentId });
           const players = buildPlayerRows(data.results);
           const normalizedSearch = search.trim().toLowerCase();
           const filtered = normalizedSearch

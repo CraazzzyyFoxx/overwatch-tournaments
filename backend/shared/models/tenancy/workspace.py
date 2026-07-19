@@ -1,6 +1,7 @@
+from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, ForeignKey, String, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, ForeignKey, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from shared.core import db
@@ -23,6 +24,37 @@ class Workspace(db.TimeStampIntegerMixin):
     description: Mapped[str | None] = mapped_column(String(), nullable=True)
     icon_url: Mapped[str | None] = mapped_column(String(), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean(), server_default="true")
+    # IANA timezone all workspace tournaments run in (admin schedule forms
+    # display/parse wall-clock times in this zone; storage stays UTC).
+    timezone: Mapped[str] = mapped_column(String(64), nullable=False, server_default="Europe/Moscow")
+    # Per-workspace site branding (main public site only). Typed hex colours
+    # (#RRGGBB); the rest of the palette (text/borders/hover) is derived on the
+    # frontend with contrast guards. ``branding_enabled`` is the master toggle so
+    # a workspace can turn branding off without losing its saved colours.
+    branding_enabled: Mapped[bool] = mapped_column(Boolean(), server_default="false")
+    brand_primary: Mapped[str | None] = mapped_column(String(), nullable=True)
+    brand_secondary: Mapped[str | None] = mapped_column(String(), nullable=True)
+    brand_background: Mapped[str | None] = mapped_column(String(), nullable=True)
+    brand_surface: Mapped[str | None] = mapped_column(String(), nullable=True)
+    # Curated core-palette overrides (optional). When null, the frontend derives
+    # these from the four seed colours above; when set, they win. Same typed hex
+    # (#RRGGBB) columns as the seeds — no JSON bag.
+    brand_accent: Mapped[str | None] = mapped_column(String(), nullable=True)
+    brand_foreground: Mapped[str | None] = mapped_column(String(), nullable=True)
+    brand_muted: Mapped[str | None] = mapped_column(String(), nullable=True)
+    brand_border: Mapped[str | None] = mapped_column(String(), nullable=True)
+    brand_ring: Mapped[str | None] = mapped_column(String(), nullable=True)
+    brand_destructive: Mapped[str | None] = mapped_column(String(), nullable=True)
+    # White-label multi-domain (Phase 1: subdomains). See
+    # docs/superpowers/specs/2026-07-06-workspace-multidomain-design.md.
+    subdomain: Mapped[str | None] = mapped_column(String(63), unique=True, index=True, nullable=True)
+    seo_title: Mapped[str | None] = mapped_column(String(), nullable=True)
+    seo_description: Mapped[str | None] = mapped_column(String(), nullable=True)
+    # White-label custom domains (Phase 2). Resolver serves the domain only
+    # once verified (DNS TXT owner-proof); token is the required TXT value.
+    custom_domain: Mapped[str | None] = mapped_column(String(255), unique=True, index=True, nullable=True)
+    custom_domain_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    custom_domain_verification_token: Mapped[str | None] = mapped_column(String(64), nullable=True)
     default_division_grid_version_id: Mapped[int | None] = mapped_column(
         ForeignKey("division_grid_version.id", ondelete="SET NULL"),
         nullable=True,

@@ -23,7 +23,7 @@ import { SpecializationBlock } from "./role-step/SpecializationBlock";
 import { SecondaryRolesEmptyState } from "./role-step/SecondaryRolesEmptyState";
 import { HeroPickerBlock } from "./role-step/HeroPickerBlock";
 
-import { useTranslation } from "@/i18n/LanguageContext";
+import { useTranslations } from "next-intl";
 
 interface RoleStepProps {
   isFlex: boolean;
@@ -71,7 +71,7 @@ export default function RoleStep({
   flexHeroes,
   onSetFlexHeroes,
 }: RoleStepProps) {
-  const { t } = useTranslation();
+  const t = useTranslations();
   const isAdditionalRolesRequired =
     form.built_in_fields?.additional_roles?.enabled !== false
     && form.built_in_fields?.additional_roles?.required === true;
@@ -179,8 +179,8 @@ export default function RoleStep({
     <div className="grid gap-5">
       {!hideHelperText ? (
         <div className="space-y-1">
-          <h3 className="text-xs font-medium text-white/85">{t("registration.roles.title")}</h3>
-          <p className="max-w-[40rem] text-xs leading-5 text-white/42">
+          <h3 className="text-xs font-medium text-[color:var(--aqt-fg)]">{t("registration.roles.title")}</h3>
+          <p className="max-w-[40rem] text-xs leading-5 text-[color:var(--aqt-fg-dim)]">
             {t("registration.roles.desc")}
           </p>
         </div>
@@ -188,11 +188,11 @@ export default function RoleStep({
 
       <section className="space-y-2.5">
         <div className="space-y-0.5">
-          <h4 className="text-xs font-medium uppercase tracking-[0.14em] text-white/55">
+          <h4 className="text-xs font-medium uppercase tracking-[0.14em] text-[color:var(--aqt-fg-muted)]">
             {t("registration.roles.primary.title")}
           </h4>
           {!hideHelperText ? (
-            <p className="text-xs leading-5 text-white/42">
+            <p className="text-xs leading-5 text-[color:var(--aqt-fg-dim)]">
               {t("registration.roles.primary.desc")}
             </p>
           ) : null}
@@ -267,7 +267,7 @@ export default function RoleStep({
         <div className="flex items-start justify-between gap-4">
           <div className="space-y-0.5">
             <div className="flex items-center gap-2">
-              <h4 className="text-xs font-medium uppercase tracking-[0.14em] text-white/55">
+              <h4 className="text-xs font-medium uppercase tracking-[0.14em] text-[color:var(--aqt-fg-muted)]">
                 {t("registration.roles.secondary.title")}
               </h4>
               <span
@@ -275,7 +275,7 @@ export default function RoleStep({
                   "rounded-full border px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide",
                   isAdditionalRolesRequired
                     ? "border-amber-400/20 bg-amber-500/[0.08] text-amber-200/90"
-                    : "border-white/10 text-white/40",
+                    : "border-[color:var(--aqt-border-2)] text-[color:var(--aqt-fg-dim)]",
                 )}
               >
                 {isAdditionalRolesRequired
@@ -284,7 +284,7 @@ export default function RoleStep({
               </span>
             </div>
             {!hideHelperText ? (
-              <p className="max-w-[40rem] text-xs leading-5 text-white/42">
+              <p className="max-w-[40rem] text-xs leading-5 text-[color:var(--aqt-fg-dim)]">
                 {secondaryRolesDescription}
               </p>
             ) : null}
@@ -296,11 +296,11 @@ export default function RoleStep({
             onClick={handleSelectAllAdditionalRoles}
             className={cn(
               "shrink-0 rounded-lg border px-2.5 py-1 text-[11px] font-medium transition-colors",
-              !canEditSecondaryRoles && "cursor-default border-white/10 bg-white/[0.02] text-white/30",
+              !canEditSecondaryRoles && "cursor-default border-[color:var(--aqt-border-2)] bg-white/[0.02] text-[color:var(--aqt-fg-dim)]",
               canEditSecondaryRoles
                 && (areAllAdditionalSelected
                   ? "border-violet-400/50 bg-violet-500/12 text-violet-200"
-                  : "border-white/10 bg-white/[0.03] text-white/55 hover:bg-white/[0.06] hover:text-white/75"),
+                  : "border-[color:var(--aqt-border-2)] bg-white/[0.03] text-[color:var(--aqt-fg-muted)] hover:bg-white/[0.06] hover:text-[color:var(--aqt-fg-muted)]"),
             )}
           >
             {areAllAdditionalSelected
@@ -361,11 +361,11 @@ export default function RoleStep({
       {showTopHeroes && (
         <section className="space-y-2.5">
           <div className="space-y-0.5">
-            <h4 className="text-xs font-medium uppercase tracking-[0.14em] text-white/55">
+            <h4 className="text-xs font-medium uppercase tracking-[0.14em] text-[color:var(--aqt-fg-muted)]">
               {t("registration.roles.topHeroes.title")}
             </h4>
             {!hideHelperText ? (
-              <p className="max-w-[40rem] text-xs leading-5 text-white/42">
+              <p className="max-w-[40rem] text-xs leading-5 text-[color:var(--aqt-fg-dim)]">
                 {t("registration.roles.topHeroes.desc", { max: maxHeroes })}
               </p>
             ) : null}
@@ -449,7 +449,7 @@ function HeroPickerGroup({
   onChange: (slugs: string[]) => void;
 }) {
   return (
-    <div className="space-y-2 rounded-xl border border-white/10 bg-white/[0.02] p-2.5">
+    <div className="space-y-2 rounded-xl border border-[color:var(--aqt-border-2)] bg-white/[0.02] p-2.5">
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <span
@@ -460,9 +460,9 @@ function HeroPickerGroup({
           >
             {icon}
           </span>
-          <span className="text-[12px] font-semibold text-white">{label}</span>
+          <span className="text-[12px] font-semibold text-[color:var(--aqt-fg)]">{label}</span>
         </div>
-        <span className="rounded-full border border-white/10 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-white/45">
+        <span className="rounded-full border border-[color:var(--aqt-border-2)] px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-[color:var(--aqt-fg-dim)]">
           {countLabel}
         </span>
       </div>

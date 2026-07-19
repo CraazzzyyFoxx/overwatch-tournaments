@@ -693,3 +693,60 @@ async def get_match_with_stats(
         home_team=home_team,
         away_team=away_team,
     )
+
+
+@cache(
+    ttl=config.settings.match_cache_ttl,
+    key="match_kill_feed:{match_id}:{workspace_id}",
+    prefix="fastapi:",
+)
+async def get_match_kill_feed(
+    session: AsyncSession,
+    match_id: int,
+    workspace_id: int | None = None,
+) -> schemas.MatchKillFeedRead:
+    """Kill feed + timeline events for a match as a chronological read schema.
+
+    Validates the match exists within the (optional) workspace scope — mirrors
+    ``get_match_with_stats`` so kill data can't cross workspace boundaries — then
+    maps the raw joined rows to the typed read. Immutable once parsed, so it
+    reuses the short match cache TTL.
+    """
+    await get_match(session, match_id, [], workspace_id=workspace_id)  # 404s if missing / out of workspace scope
+
+    kill_rows, event_rows = await service.get_match_kill_feed(session, match_id)
+
+    kills = [
+        schemas.KillFeedEntry(
+            time=kf.time,
+            round=kf.round,
+            fight=kf.fight,
+            ability=kf.ability.value if kf.ability is not None else None,
+            damage=kf.damage,
+            is_critical_hit=kf.is_critical_hit,
+            is_environmental=kf.is_environmental,
+            killer_user_id=kf.killer_id,
+            killer_team_id=kf.killer_team_id,
+            killer_hero=schemas.HeroRead.model_validate(killer_hero, from_attributes=True),
+            victim_user_id=kf.victim_id,
+            victim_team_id=kf.victim_team_id,
+            victim_hero=schemas.HeroRead.model_validate(victim_hero, from_attributes=True),
+        )
+        for kf, killer_hero, victim_hero in kill_rows
+    ]
+
+    events = [
+        schemas.MatchTimelineEvent(
+            time=ev.time,
+            round=ev.round,
+            name=ev.name.value,
+            user_id=ev.user_id,
+            team_id=ev.team_id,
+            hero=schemas.HeroRead.model_validate(hero, from_attributes=True) if hero is not None else None,
+            related_user_id=ev.related_user_id,
+            related_team_id=ev.related_team_id,
+        )
+        for ev, hero in event_rows
+    ]
+
+    return schemas.MatchKillFeedRead(match_id=match_id, kills=kills, events=events)

@@ -2,6 +2,7 @@ import base64
 
 import sqlalchemy as sa
 from faststream import FastStream
+from faststream.rabbit import Channel
 from faststream.rabbit.annotations import RabbitMessage
 
 from shared.core.social import SocialProvider, normalize_social_handle
@@ -48,6 +49,9 @@ from src.rpc import (
     bootstrap as rpc_bootstrap,
 )
 from src.rpc import (
+    impact as rpc_impact,
+)
+from src.rpc import (
     logs as rpc_logs,
 )
 from src.rpc import (
@@ -72,8 +76,15 @@ logger = setup_logging(
     json_output=config.settings.json_logging,
 )
 
-broker = make_rabbit_broker(config.settings.rabbitmq_url, logger=logger)
+broker = make_rabbit_broker(
+    config.settings.rabbitmq_url, logger=logger, prefetch_count=config.settings.rpc_prefetch_count
+)
 app = FastStream(broker)
+
+# Match-log processing is minutes-long; keep it off the RPC channel QoS.
+_JOBS_CHANNEL = Channel(prefetch_count=2)
+# OverFast-protective prefetch (existing setting, previously unwired).
+_RANK_FETCH_CHANNEL = Channel(prefetch_count=config.settings.rank_fetch_worker_prefetch)
 
 # Expose the worker broker to publishers that don't thread one through (the
 # APScheduler rank tick, the admin "collect now" RPC, the Challonge-import
@@ -94,6 +105,7 @@ rpc_rank.register(broker, logger)
 rpc_achievements.register(broker, logger)
 rpc_misc.register(broker, logger)
 rpc_bootstrap.register(broker, logger)
+rpc_impact.register(broker, logger)
 
 
 @app.on_startup
@@ -137,7 +149,7 @@ async def stop_worker() -> None:
     await _clients.realtime_redis.aclose()
 
 
-@broker.subscriber(UPLOAD_MATCH_LOG_QUEUE)
+@broker.subscriber(UPLOAD_MATCH_LOG_QUEUE, channel=_JOBS_CHANNEL)
 async def process_upload_match_log(data: dict, msg: RabbitMessage) -> None:
     """Ingest a bot-uploaded match log carried over RabbitMQ (base64), then queue it.
 
@@ -190,7 +202,7 @@ async def process_upload_match_log(data: dict, msg: RabbitMessage) -> None:
         log.info("Uploaded match log ingested and queued for processing")
 
 
-@broker.subscriber(PROCESS_MATCH_LOG_QUEUE)
+@broker.subscriber(PROCESS_MATCH_LOG_QUEUE, channel=_JOBS_CHANNEL)
 async def process_match_log_async(data: dict, msg: RabbitMessage) -> None:
     async with observe_message_processing(
         queue=PROCESS_MATCH_LOG_QUEUE,
@@ -249,7 +261,7 @@ async def process_match_log_async(data: dict, msg: RabbitMessage) -> None:
             )
 
 
-@broker.subscriber(PROCESS_TOURNAMENT_LOGS_QUEUE)
+@broker.subscriber(PROCESS_TOURNAMENT_LOGS_QUEUE, channel=_JOBS_CHANNEL)
 async def process_tournament_log(data: dict, msg: RabbitMessage) -> None:
     async with observe_message_processing(
         queue=PROCESS_TOURNAMENT_LOGS_QUEUE,
@@ -274,7 +286,7 @@ async def process_tournament_log(data: dict, msg: RabbitMessage) -> None:
             raise
 
 
-@broker.subscriber(ACHIEVEMENT_EVALUATE_QUEUE)
+@broker.subscriber(ACHIEVEMENT_EVALUATE_QUEUE, channel=_JOBS_CHANNEL)
 async def process_achievement_evaluate(data: dict, msg: RabbitMessage) -> None:
     async with observe_message_processing(
         queue=ACHIEVEMENT_EVALUATE_QUEUE,
@@ -318,7 +330,7 @@ async def process_tournament_encounter_completed(data: dict, msg: RabbitMessage)
         )
 
 
-@broker.subscriber(RANK_FETCH_QUEUE)
+@broker.subscriber(RANK_FETCH_QUEUE, channel=_RANK_FETCH_CHANNEL)
 async def process_rank_fetch(data: dict, msg: RabbitMessage) -> None:
     async with observe_message_processing(
         queue=RANK_FETCH_QUEUE,
@@ -329,7 +341,7 @@ async def process_rank_fetch(data: dict, msg: RabbitMessage) -> None:
         await rank_tasks.process_fetch_rank(data)
 
 
-@broker.subscriber(RANK_FETCH_PRIORITY_QUEUE)
+@broker.subscriber(RANK_FETCH_PRIORITY_QUEUE, channel=_RANK_FETCH_CHANNEL)
 async def process_rank_fetch_priority(data: dict, msg: RabbitMessage) -> None:
     async with observe_message_processing(
         queue=RANK_FETCH_PRIORITY_QUEUE,

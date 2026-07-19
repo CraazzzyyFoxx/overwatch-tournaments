@@ -28,6 +28,7 @@ import (
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/app"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/auth"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/balancer"
+	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/cachecontrol"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/config"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/db"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/edge"
@@ -42,6 +43,7 @@ import (
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/proxy"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/ratelimit"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/replay"
+	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/respcache"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/rpc"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/safego"
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/tournament"
@@ -92,7 +94,7 @@ func run() error {
 	}()
 
 	// Postgres pool for read-only queries (event replay + ACL membership).
-	pool, err := db.Connect(rootCtx, cfg.DatabaseURL, cfg.DBPgBouncer)
+	pool, err := db.Connect(rootCtx, cfg.DatabaseURL, cfg.DBPgBouncer, cfg.DBMaxConns, cfg.DBStatementTimeout)
 	if err != nil {
 		return err
 	}
@@ -106,9 +108,20 @@ func run() error {
 	rdb := redis.NewClient(redisOpts)
 	defer func() { _ = rdb.Close() }()
 
+	// Usage metrics (Prometheus): per-route request stats + active users. The
+	// recorder buffers active-user IDs and flushes them to Redis (HyperLogLog).
+	// Created before the RPC client so the bulkhead can report shed requests.
+	mtr := metrics.New()
+	activeUsers := metrics.NewRecorder(rdb, logger)
+
 	// RPC client for calling identity-svc (and future headless domain services)
 	// over RabbitMQ request-reply. Non-blocking: reconnects in the background.
-	rpcClient := rpc.New(cfg.RabbitMQURL, logger)
+	// Per-queue in-flight cap sheds overload with an immediate 503 (see
+	// GATEWAY_RPC_MAX_INFLIGHT); every publish carries a TTL + x-deadline-ms.
+	rpcClient := rpc.New(cfg.RabbitMQURL, logger,
+		rpc.WithMaxInFlight(cfg.RPCMaxInFlight),
+		rpc.WithShedHook(mtr.RPCShed),
+	)
 	defer func() { _ = rpcClient.Close() }()
 	identityHandler := identity.NewHandler(rpcClient, logger)
 	// Tournament-service routes served via typed RPC through the shared edge
@@ -117,19 +130,24 @@ func run() error {
 	resolver := principal.New(rpcClient)
 	tournamentEdge := edge.New(rpcClient, logger, resolver.Resolve)
 
-	// Usage metrics (Prometheus): per-route request stats + active users. The
-	// recorder buffers active-user IDs and flushes them to Redis (HyperLogLog).
-	mtr := metrics.New()
-	activeUsers := metrics.NewRecorder(rdb, logger)
 	authn := auth.New(cfg.JWTSecret)
 	// Anti-brute-force throttle for the auth endpoints (per client IP + path).
 	// Disabled (pass-through) when GATEWAY_AUTH_RATE_LIMIT <= 0.
 	authLimiter := ratelimit.New(cfg.AuthRateLimit, cfg.AuthRateWindow)
+	// Separate limiter bounding ws.Handler's pre-handshake custom-domain
+	// lookup per client IP: /ws itself carries no auth and no rate limit, so
+	// without this an unauthenticated flood of distinct fake Origin headers
+	// could drive unbounded DB/cache-write load (see acceptOptionsFor).
+	// Disabled (pass-through) when GATEWAY_WS_CUSTOM_DOMAIN_RATE_LIMIT <= 0.
+	wsCustomDomainLimiter := ratelimit.New(cfg.WSCustomDomainRateLimit, cfg.WSCustomDomainRateWindow)
 
-	// Wiring: workspace store satisfies both ACL interfaces (resolver + members).
+	// Wiring: workspace store satisfies both ACL interfaces (resolver + members)
+	// plus ws.CustomDomainResolver, so verified white-label custom-domain
+	// origins (Phase 2) are allowed dynamically without widening the static
+	// WS origin allowlist.
 	hub := ws.NewHub()
 	wsStore := workspace.New(pool)
-	authz := acl.New(wsStore, wsStore)
+	authz := acl.New(wsStore, wsStore, wsStore)
 	wsHandler := ws.NewHandler(
 		hub,
 		authn,
@@ -138,7 +156,14 @@ func run() error {
 		cfg.WSIdleTimeout,
 		logger,
 		cfg.WSAllowedOrigins,
+		wsStore,
+		wsCustomDomainLimiter,
 		activeUsers.Record,
+		ws.Limits{
+			MaxAnonConnsPerIP: cfg.WSMaxAnonConnsPerIP,
+			MaxTopicsAnon:     cfg.WSMaxTopicsAnon,
+			MaxTopicsAuth:     cfg.WSMaxTopicsAuth,
+		},
 	)
 
 	rev, err := proxy.New(cfg.Upstreams)
@@ -174,10 +199,18 @@ func run() error {
 	mux.HandleFunc("GET /api/auth/oauth/providers", identityHandler.OAuthProviders)
 	mux.HandleFunc("GET /api/auth/oauth/connections", identityHandler.OAuthConnections)
 	mux.HandleFunc("GET /api/auth/oauth/{provider}/url", identityHandler.OAuthURL)
-	mux.HandleFunc("GET /api/auth/oauth/{provider}/callback", authLimiter.Wrap(identityHandler.OAuthCallbackGet))
 	mux.HandleFunc("POST /api/auth/oauth/{provider}/callback", authLimiter.Wrap(identityHandler.OAuthCallbackPost))
 	mux.HandleFunc("POST /api/auth/oauth/{provider}/link", identityHandler.OAuthLink)
 	mux.HandleFunc("DELETE /api/auth/oauth/{provider}/unlink", identityHandler.OAuthUnlink)
+	// Custom-domain SSO ticket handoff (Task 8): redeems a one-time ticket
+	// minted by the apex OAuth callback for the session tokens. Same
+	// anti-brute-force posture as the other auth token-exchange endpoints.
+	mux.HandleFunc("POST /api/auth/sso/exchange", authLimiter.Wrap(identityHandler.SsoExchange))
+	// Custom-domain account-linking end-ticket (Task 10R): redeems a
+	// pending-link ticket minted by a custom-domain OAuth link callback and
+	// attaches its provider identity to the bearer-authenticated caller.
+	// Unlike sso/exchange above, this route IS authenticated.
+	mux.HandleFunc("POST /api/auth/link/complete", identityHandler.LinkComplete)
 	mux.HandleFunc("GET /api/auth/api-keys", identityHandler.ListApiKeys)
 	mux.HandleFunc("POST /api/auth/api-keys", identityHandler.CreateApiKey)
 	mux.HandleFunc("PATCH /api/auth/api-keys/{id}", identityHandler.UpdateApiKey)
@@ -196,6 +229,7 @@ func run() error {
 	mux.HandleFunc("POST /api/auth/rbac/users/assign-role", identityHandler.RbacAssignRole)
 	mux.HandleFunc("POST /api/auth/rbac/users/remove-role", identityHandler.RbacRemoveRole)
 	mux.HandleFunc("GET /api/auth/rbac/users/{user_id}", identityHandler.RbacGetAuthUser)
+	mux.HandleFunc("DELETE /api/auth/rbac/users/{user_id}", identityHandler.RbacDeleteAuthUser)
 	mux.HandleFunc("GET /api/auth/rbac/users/{user_id}/roles", identityHandler.RbacGetUserRoles)
 	mux.HandleFunc("GET /api/auth/rbac/users/{user_id}/denies", identityHandler.RbacListUserDenies)
 	mux.HandleFunc("POST /api/auth/rbac/users/{user_id}/denies", identityHandler.RbacAddUserDeny)
@@ -227,12 +261,20 @@ func run() error {
 	})
 	// tournament-service: typed RPC reads + generic admin CRUD (the rest of
 	// /api/v1 still proxies). Specific patterns win over the proxy.
-	tournamentEdge.Register(mux, tournament.PublicReadRoutes)
+	// Public reads go through the anonymous response cache (respcache): one
+	// upstream RPC per unique URL per TTL/invalidation window instead of one
+	// per page view. Invalidated below by the worker's realtime
+	// tournament-changed signal; nil (disabled) when GATEWAY_RESPONSE_CACHE_TTL=0.
+	respCache := respcache.New(cfg.ResponseCacheTTL, logger)
+	respcache.RegisterCached(mux, tournamentEdge, tournament.PublicReadRoutes, tournament.PublicCacheableReads, respCache)
 	tournamentEdge.Register(mux, tournament.AdminCrudRoutes)
 	tournamentEdge.Register(mux, tournament.AdminMiscRoutes)
 	tournamentEdge.Register(mux, tournament.RegistrationAdminRoutes)
 	tournamentEdge.Register(mux, tournament.IntegrationsRoutes)
-	tournamentEdge.Register(mux, tournament.PublicWriteRoutes)
+	// PublicWriteRoutes are mostly writes (never cached), but the public
+	// participants list rides here too — the heaviest anonymous read of a
+	// registration-phase tournament, with no backend cache at all.
+	respcache.RegisterCached(mux, tournamentEdge, tournament.PublicWriteRoutes, tournament.PublicWriteCacheableReads, respCache)
 	// division-grids + admin/stages: ambiguous patterns under ServeMux -> subtree matcher.
 	mux.Handle("/api/v1/division-grids/", tournamentEdge.Subtree(tournament.DivisionGridRoutes))
 	mux.Handle("/api/v1/admin/stages/", tournamentEdge.Subtree(tournament.StageSubtreeRoutes))
@@ -259,9 +301,12 @@ func run() error {
 	mux.Handle("/api/v1/admin/ws/", parserEdge.Subtree(parser.AchievementAdminRoutes))
 	// app-service: typed RPC public reads (the rest of /api/v1 still proxies).
 	// hero/map/gamemode/achievement get+list use the shared CRUD read engine.
-	// Specific patterns win over the /api/v1 proxy below.
+	// Specific patterns win over the /api/v1 proxy below. Home-page aggregates
+	// and /users/[slug] profile reads go through the same anonymous response
+	// cache as the tournament page (mostly TTL-only — no per-user realtime
+	// signal exists; see app.PublicCacheableReads).
 	appEdge := edge.New(rpcClient, logger, resolver.Resolve)
-	appEdge.Register(mux, app.ReadRoutes)
+	respcache.RegisterCached(mux, appEdge, app.ReadRoutes, app.PublicCacheableReads, respCache)
 	appEdge.Register(mux, app.WorkspaceWriteRoutes)
 	appEdge.Register(mux, app.MetadataAdminRoutes)
 	appEdge.Register(mux, app.UsersAdminRoutes)
@@ -338,10 +383,18 @@ func run() error {
 
 	mux.Handle("/", rev)
 
-	// Relay the realtime Redis bus to WebSocket subscribers. safego recovers a
-	// panic here (unexpected Redis message format, etc.) instead of crashing the
-	// whole process.
-	subscriber := events.New(rdb, hub, logger)
+	// Relay the realtime Redis bus to WebSocket subscribers, and tee it into
+	// the response cache's invalidator: the worker's tournament_changed
+	// consumer publishes realtime:tournament:{id}:bracket after every
+	// committed tournament write (via the transactional outbox), so cached
+	// public reads drop the moment the backend's own cache does. safego
+	// recovers a panic here (unexpected Redis message format, etc.) instead
+	// of crashing the whole process.
+	bus := events.Broadcaster(hub)
+	if respCache != nil {
+		bus = events.Fanout(hub, respCache)
+	}
+	subscriber := events.New(rdb, bus, logger)
 	safego.Go(func() {
 		if err := subscriber.Run(rootCtx); err != nil && !errors.Is(err, context.Canceled) {
 			logger.Error("realtime subscriber stopped", "err", err)
@@ -380,7 +433,17 @@ func run() error {
 	// request logger picks up the OTel trace_id and rpc.Call/proxy see the span
 	// context. Sentry stays outermost for per-request hub + panic recovery
 	// (Repanic lets net/http's own recovery run after capture).
-	instrumented := httplog.Middleware(mtr.Middleware(mux, authn, activeUsers), logger, authn)
+	// Anonymous (no-bearer) per-IP throttle across the whole API mux, layered
+	// under the coarse nginx limit_req. Innermost (wrapping mux) so a throttled
+	// 429 is still metered + access-logged. Disabled (pass-through) when
+	// GATEWAY_ANON_RATE_LIMIT <= 0.
+	// cachecontrol sits just outside the limiter so every /api/* response —
+	// including the limiter's own 429s — leaves with an explicit Cache-Control
+	// when no upstream set one (an absent header invites heuristic caching of
+	// viewer-dependent payloads by intermediaries).
+	anonLimiter := ratelimit.New(cfg.AnonRateLimit, cfg.AnonRateWindow)
+	apiSurface := cachecontrol.Middleware(anonLimiter.WrapAnon(mux))
+	instrumented := httplog.Middleware(mtr.Middleware(apiSurface, authn, activeUsers), logger, authn)
 	traced := tracing.Middleware(instrumented)
 	tracedMux := sentryhttp.New(sentryhttp.Options{Repanic: true}).Handle(traced)
 

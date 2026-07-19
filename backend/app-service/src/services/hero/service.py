@@ -11,6 +11,7 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.division_grid import DivisionGrid, division_case_expr
+from shared.services.tournament_visibility import visible_tournament_ids_subquery
 from src import models, schemas
 from src.core import enums, pagination
 
@@ -335,6 +336,17 @@ async def get_hero_leaderboard(
             )
         ),
     ]
+
+    if tournament_id is None:
+        # Cross-tournament leaderboard: exclude hidden tournaments' stats (issue
+        # #115). A specific tournament_id is authorized upstream by the handler gate.
+        base_conditions.append(
+            models.MatchStatistics.match_id.in_(
+                sa.select(models.Match.id)
+                .join(models.Encounter, models.Encounter.id == models.Match.encounter_id)
+                .where(models.Encounter.tournament_id.in_(visible_tournament_ids_subquery(None)))
+            )
+        )
 
     base_select = sa.select(
         models.MatchStatistics.match_id,

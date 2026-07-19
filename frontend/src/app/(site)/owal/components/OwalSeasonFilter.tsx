@@ -2,6 +2,7 @@
 
 import React, { useTransition } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useTranslations } from "next-intl";
 import {
   Select,
   SelectContent,
@@ -16,6 +17,7 @@ type OwalSeasonFilterProps = {
 };
 
 const OwalSeasonFilter = ({ seasons, selectedSeason }: OwalSeasonFilterProps) => {
+  const t = useTranslations();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -32,10 +34,10 @@ const OwalSeasonFilter = ({ seasons, selectedSeason }: OwalSeasonFilterProps) =>
 
   return (
     <div className="flex items-center gap-3">
-      <span className="text-sm text-muted-foreground">Season:</span>
+      <span className="text-sm text-muted-foreground">{t("owal.season")}</span>
       <Select value={selectedSeason} onValueChange={onValueChange}>
         <SelectTrigger className="w-full sm:w-[260px]">
-          <SelectValue placeholder="Select season" />
+          <SelectValue placeholder={t("owal.selectSeason")} />
         </SelectTrigger>
         <SelectContent>
           {seasons.map((season) => (

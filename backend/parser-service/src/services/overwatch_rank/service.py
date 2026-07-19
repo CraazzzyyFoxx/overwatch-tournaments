@@ -362,6 +362,70 @@ async def count_in_scope(session: AsyncSession, *, scope: str) -> int:
     return int(await session.scalar(query) or 0)
 
 
+async def collection_stats(session: AsyncSession) -> dict:
+    """Aggregate collection health (DB layer only; caller adds config).
+
+    Mirrors the manual incident-diagnostic queries: state status/tier mix, whole
+    population size, distinct-account snapshot coverage over 24h/7d, the global
+    last successful capture, and the last-24h ``fetch_log`` outcome mix.
+    """
+    state = models.BattleTagRankState
+    snap = models.UserRankSnapshot
+    log = models.RankFetchLog
+    now = _now()
+
+    by_status = {
+        str(status): int(count)
+        for status, count in (
+            await session.execute(sa.select(state.status, sa.func.count()).group_by(state.status))
+        ).all()
+    }
+    by_tier = {
+        int(tier): int(count)
+        for tier, count in (
+            await session.execute(sa.select(state.priority_tier, sa.func.count()).group_by(state.priority_tier))
+        ).all()
+    }
+    total = int(await session.scalar(sa.select(sa.func.count()).select_from(state)) or 0)
+    never_checked = int(
+        await session.scalar(
+            sa.select(sa.func.count()).select_from(state).where(state.last_checked_at.is_(None))
+        )
+        or 0
+    )
+    last_success_at = await session.scalar(sa.select(sa.func.max(state.last_success_at)))
+
+    async def _coverage(delta: timedelta) -> int:
+        return int(
+            await session.scalar(
+                sa.select(sa.func.count(sa.distinct(snap.social_account_id))).where(snap.captured_at > now - delta)
+            )
+            or 0
+        )
+
+    fetch_24h = {
+        str(status): int(count)
+        for status, count in (
+            await session.execute(
+                sa.select(log.status, sa.func.count())
+                .where(log.created_at > now - timedelta(hours=24))
+                .group_by(log.status)
+            )
+        ).all()
+    }
+
+    return {
+        "total": total,
+        "never_checked": never_checked,
+        "by_status": by_status,
+        "by_tier": by_tier,
+        "last_success_at": last_success_at,
+        "coverage_24h": await _coverage(timedelta(hours=24)),
+        "coverage_7d": await _coverage(timedelta(days=7)),
+        "fetch_24h": fetch_24h,
+    }
+
+
 async def select_and_claim_due(
     session: AsyncSession,
     *,
@@ -504,27 +568,73 @@ async def record_failure(
     status: enums.RankCollectionStatus,
     error: str | None,
     config: RankCollectionConfig,
+    transient: bool = False,
     now: datetime | None = None,
 ) -> int:
-    """Apply exponential backoff for a transient failure; auto-disable dead tags."""
+    """Apply exponential backoff for a failure; auto-disable only *permanent* ones.
+
+    ``transient=True`` (OverFast 5xx / timeout / 429 — the upstream is at fault,
+    not the tag) NEVER auto-disables: it only backs off (capped at
+    ``MAX_BACKOFF_SECONDS``) so the tag keeps retrying and recovers on its own
+    once OverFast is healthy again. Without this, an upstream outage that trips
+    ``max_consecutive_failures`` in a row would permanently disable healthy
+    accounts with no recovery path (``select_and_claim_due`` skips ``disabled``
+    and nothing re-enables them). Only permanent failures (an invalid battle tag
+    that will never resolve) count toward auto-disable.
+    """
     now = now or _now()
     state = await ensure_state(session, social_account_id, battle_tag)
     state.last_checked_at = now
     state.last_error = (error or "")[:2000] or None
     state.consecutive_failures = (state.consecutive_failures or 0) + 1
 
-    if state.consecutive_failures >= config.max_consecutive_failures:
+    if not transient and state.consecutive_failures >= config.max_consecutive_failures:
         state.status = enums.RankCollectionStatus.disabled.value
         state.next_eligible_at = None
     else:
+        # Cap the exponent: a transient outage can drive consecutive_failures
+        # arbitrarily high (it no longer disables), and 2**big is wasteful — the
+        # backoff is clamped to MAX_BACKOFF_SECONDS long before then anyway.
         backoff = min(
-            config.backoff_base_seconds * (2 ** (state.consecutive_failures - 1)),
+            config.backoff_base_seconds * (2 ** min(state.consecutive_failures - 1, 16)),
             MAX_BACKOFF_SECONDS,
         )
         state.status = status.value
         state.next_eligible_at = now + timedelta(seconds=backoff)
     await session.flush()
     return 0
+
+
+async def reenable_disabled(
+    session: AsyncSession,
+    *,
+    interval_seconds: int,
+    only_previously_succeeded: bool = False,
+    now: datetime | None = None,
+) -> int:
+    """Requeue auto-disabled tags: ``disabled`` -> ``pending``, reset failures.
+
+    Recovery path for accounts wrongly disabled by a transient upstream outage
+    (see ``record_failure``). ``next_eligible_at`` is spread across
+    ``[now, now+interval_seconds]`` (like the seeders) so re-enabling the whole
+    backlog doesn't stampede OverFast. ``only_previously_succeeded`` limits it to
+    tags that ever produced a snapshot (skip genuinely-dead handles). Returns the
+    number of rows re-enabled; caller commits.
+    """
+    now = now or _now()
+    state = models.BattleTagRankState
+    query = sa.update(state).where(state.status == enums.RankCollectionStatus.disabled.value)
+    if only_previously_succeeded:
+        query = query.where(state.last_success_at.isnot(None))
+    result = await session.execute(
+        query.values(
+            status=enums.RankCollectionStatus.pending.value,
+            consecutive_failures=0,
+            last_error=None,
+            next_eligible_at=_seed_next_eligible(interval_seconds),
+        )
+    )
+    return result.rowcount or 0
 
 
 async def defer_tag(

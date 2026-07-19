@@ -1,6 +1,9 @@
 "use client";
 
 import React from "react";
+import { useTranslations } from "next-intl";
+
+import { PageHero, HeroCoord, HeroStat } from "@/components/site/PageHero";
 
 interface TournamentsHeroProps {
   workspaceName?: string | null;
@@ -21,52 +24,57 @@ const TournamentsHero = ({
   totalPlayers,
   totalTeams,
 }: TournamentsHeroProps) => {
+  const t = useTranslations();
+
   return (
-    <section className="hero">
-      <div className="hex" />
-      <div className="glow-1" />
-      <div className="glow-2" />
-      <div className="hero-grid">
-        <div>
-          <p className="crumb">
-            {workspaceName ? `Workspace · ${workspaceName}` : "Workspace"}
-          </p>
-          <h1 className="h1">
-            All <em>tournaments</em> in one place
-          </h1>
-          <p className="lede">
-            From draft to crown: track every event your community has run. Live
-            brackets, locked rosters, and crowned champions — all in one ledger.
-          </p>
+    <PageHero
+      eyebrow={
+        <>
+          <HeroCoord>{t("tournamentsList.hero.coord")}</HeroCoord>
+          {workspaceName ? (
+            <HeroCoord>{t("tournamentsList.hero.sector", { name: workspaceName })}</HeroCoord>
+          ) : null}
+        </>
+      }
+      title={t.rich("tournamentsList.hero.title", { em: (chunks) => <em>{chunks}</em> })}
+      lede={t("tournamentsList.hero.lede")}
+      aside={
+        <div className="grid grid-cols-3 gap-6">
+          <HeroStat
+            label={
+              <span className="inline-flex items-center gap-1.5">
+                {liveEvents > 0 ? (
+                  <span className="h-1.5 w-1.5 rounded-full bg-[color:var(--aqt-rose)] [animation:aqtPulse_2s_ease-in-out_infinite]" />
+                ) : null}
+                {t("tournamentsList.hero.liveNow")}
+              </span>
+            }
+            value={
+              liveEvents > 0 ? (
+                <span className="text-[color:var(--aqt-teal)]">{liveEvents}</span>
+              ) : (
+                liveEvents
+              )
+            }
+            sub={
+              liveMatches > 0
+                ? t("tournamentsList.hero.matchesInFlight", { count: liveMatches })
+                : t("tournamentsList.hero.noMatchesInFlight")
+            }
+          />
+          <HeroStat
+            label={t("tournamentsList.hero.totalTournaments")}
+            value={totalTournaments}
+            sub={t("tournamentsList.hero.activeCount", { count: activeTournaments })}
+          />
+          <HeroStat
+            label={t("common.playersLabel")}
+            value={totalPlayers}
+            sub={t("tournamentsList.hero.teamsBalanced", { count: totalTeams })}
+          />
         </div>
-        <div className="hero-stats">
-          <div className="hero-stat">
-            <span className="label">
-              {liveEvents > 0 && <span className="live-dot" />}
-              Live now
-            </span>
-            <span className="v">
-              {liveEvents > 0 ? <em>{liveEvents}</em> : liveEvents}
-            </span>
-            <span className="sub">
-              {liveMatches > 0
-                ? `${liveMatches} match${liveMatches === 1 ? "" : "es"} in flight`
-                : "No matches in flight"}
-            </span>
-          </div>
-          <div className="hero-stat">
-            <span className="label">Total tournaments</span>
-            <span className="v">{totalTournaments}</span>
-            <span className="sub">{activeTournaments} active</span>
-          </div>
-          <div className="hero-stat">
-            <span className="label">Players</span>
-            <span className="v">{totalPlayers}</span>
-            <span className="sub">{totalTeams} teams balanced</span>
-          </div>
-        </div>
-      </div>
-    </section>
+      }
+    />
   );
 };
 

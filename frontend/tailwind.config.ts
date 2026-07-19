@@ -31,18 +31,23 @@ const config = {
       fontFamily: {
         sans: ["var(--font-inter)", "system-ui", "sans-serif"],
         mono: ["var(--font-jetbrains-mono)", "ui-monospace", "monospace"],
-        display: ["var(--font-barlow-condensed)", "system-ui", "sans-serif"],
+        display: ["var(--font-onest)", "var(--font-inter)", "system-ui", "sans-serif"],
+        // Editorial Tactical display face (page-hero titles); see design-book.
+        onest: ["var(--font-onest)", "var(--font-inter)", "system-ui", "sans-serif"],
       },
       colors: {
         // Redesign (OWT) accent palette — references global --aqt-* tokens.
         aqt: {
           teal: "var(--aqt-teal)",
+          "teal-deep": "var(--aqt-teal-deep)",
           emerald: "var(--aqt-emerald)",
           amber: "var(--aqt-amber)",
           rose: "var(--aqt-rose)",
           violet: "var(--aqt-violet)",
           blue: "var(--aqt-blue)",
           gold: "var(--aqt-gold)",
+          silver: "var(--aqt-silver)",
+          bronze: "var(--aqt-bronze)",
           tank: "var(--aqt-tank)",
           damage: "var(--aqt-damage)",
           support: "var(--aqt-support)",
@@ -56,10 +61,12 @@ const config = {
         "group-b": "#fef08a", // yellow-200 in HEX
         "group-c": "#93c5fd", // blue-300 in HEX
         "group-d": "#c084fc", // purple-400 in HEX
-        firstPlaceBg: "#cbb765",
+        // Medal/placement colors now reference the design-book tokens
+        // (gold/silver/bronze) instead of ad-hoc hex.
+        firstPlaceBg: "var(--aqt-gold)",
         TopPlaceText: "#121009",
-        secondPlaceBg: "#99b0cc",
-        thirdPlaceBg: "#a86243",
+        secondPlaceBg: "var(--aqt-silver)",
+        thirdPlaceBg: "var(--aqt-bronze)",
         placeBg: "#2c3f52",
         placeText: "#ffffff",
         primary: {

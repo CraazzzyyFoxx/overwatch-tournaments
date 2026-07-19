@@ -71,10 +71,12 @@ async def to_pydantic(
         description=tournament.description,
         challonge_id=tournament_challonge_id,
         challonge_slug=tournament_challonge_slug,
-        registration_opens_at=tournament.registration_opens_at,
-        registration_closes_at=tournament.registration_closes_at,
-        check_in_opens_at=tournament.check_in_opens_at,
-        check_in_closes_at=tournament.check_in_closes_at,
+        auto_transitions_enabled=tournament.auto_transitions_enabled,
+        allow_late_registration=tournament.allow_late_registration,
+        phase_schedule=[
+            schemas.TournamentPhaseScheduleRead.model_validate(entry, from_attributes=True)
+            for entry in tournament.phase_schedule
+        ],
         win_points=tournament.win_points,
         draw_points=tournament.draw_points,
         loss_points=tournament.loss_points,
