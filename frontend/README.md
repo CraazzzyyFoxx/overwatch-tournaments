@@ -1,7 +1,8 @@
 # Frontend
 
 The OWT frontend is a [Next.js](https://nextjs.org/) application that presents tournament history,
-player statistics, registration, and admin tooling on top of the OWT backend API.
+player statistics, registration, and admin tooling on top of the OWT backend API. See
+[../docs/architecture.md](../docs/architecture.md) for the overall system architecture.
 
 ## Tech stack
 
@@ -10,18 +11,42 @@ player statistics, registration, and admin tooling on top of the OWT backend API
 - [TanStack Query](https://tanstack.com/query) and [TanStack Table](https://tanstack.com/table) for data
 - [Zustand](https://github.com/pmndrs/zustand) for client state
 - [Recharts](https://recharts.org/) and [XYFlow](https://reactflow.dev/) for visualizations
-- [Playwright](https://playwright.dev) for End-to-End tests, [Sentry](https://sentry.io/) for monitoring
+- [Vitest](https://vitest.dev) (happy-dom) for unit / smoke tests, [Sentry](https://sentry.io/) for monitoring
 
 ## Getting started
 
 Install dependencies and start the development server:
 
 ```bash
-npm install
-npm run dev
+bun install
+bun run dev
 ```
 
+The repository uses [Bun](https://bun.sh/) (`bun.lock`); `npm install` / `npm run dev` also work.
+
 Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+## Internationalization
+
+The app is localized with [next-intl](https://next-intl.dev/) (English and Russian). Translation
+messages and the terminology glossary live under `frontend/src/i18n` (see
+`frontend/src/i18n/GLOSSARY.md` for the shared glossary; runtime config is in
+`frontend/src/i18n/request.ts`).
+
+## Backend integration
+
+The app talks to a **single gateway origin** via path-namespaced routes:
+
+- `/api/v1` — app, tournament, and parser reads/writes
+- `/api/balancer` — team balancing and draft
+- `/api/analytics` — post-tournament analytics
+- `/api/auth` — identity (auth, RBAC, workspace membership)
+- `/api/realtime/ws` — realtime WebSocket stream
+
+The browser uses **relative same-origin paths**; SSR and middleware use `NEXT_INTERNAL_API_URL`
+(the gateway, e.g. `http://gateway:8080`). Route definitions are the source of truth in
+`frontend/src/lib/api-routes.ts`. Multidomain / white-label tenancy is resolved in
+`frontend/src/middleware.ts`, which maps the request `Host` to a workspace.
 
 ## Branding via .env
 
@@ -33,7 +58,7 @@ The site name and main icon/logo are configurable via environment variables.
 - (Optional) Set `NEXT_PUBLIC_SITE_FAVICON` (e.g. "/favicon.ico")
 - For a host-run dev server, set `NEXT_INTERNAL_API_URL` to the gateway
   (e.g. `http://localhost:8080`); the browser uses relative same-origin paths
-- Restart `npm run dev`
+- Restart `bun run dev`
 
 > **Note:** When self-hosting a **modified** version of OWT, the license requires a visible link back to
 > the original project and author on the running site (see the repository [LICENSE](../LICENSE), AGPL §7
@@ -46,9 +71,9 @@ bind-mounting your own file into the container:
 
 `./conf/favicon.ico:/app/public/favicon.ico:ro`
 
-## Docker workflow (breaking change)
+## Docker workflow
 
-- `docker-compose.override.yml` is removed; dev behavior is defined in the root `docker-compose.yml`.
+- Dev behavior is defined in the root `docker-compose.yml`.
 - Start the core frontend/backend stack with:
 
 ```bash
@@ -61,7 +86,7 @@ docker compose up -d --wait
 docker compose --profile workers up -d --wait
 ```
 
-Production image builds use explicit Docker build args/env values and no longer copy `.env` into image layers.
+Production image builds use explicit Docker build args/env values; no `.env` is copied into image layers.
 
 ## UI/UX
 

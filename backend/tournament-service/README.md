@@ -1,51 +1,55 @@
 # Tournament Service
 
-The tournament domain API and its background workers — the heart of OWT's tournament lifecycle, from
-registration through bracket generation, results, and realtime updates.
+The heart of OWT's tournament lifecycle — from registration through bracket generation, results,
+and realtime updates.
 
-- **Port:** 8004
-- **Entry points:** `main.py` (FastAPI HTTP server), `serve.py` (FastStream workers, outbox sweeper, scheduler)
+- **Type:** headless FastStream (RabbitMQ) RPC worker + APScheduler + durable job consumers — no HTTP
+  server of its own
+- **Entry point:** `serve.py`
+- **Run:** `faststream run serve:app`
+- **Reached via:** the Go gateway (the sole HTTP entry point) under `/api/v1`
+
+See [`../../docs/architecture.md`](../../docs/architecture.md) for the system overview.
 
 ## Responsibilities
 
-- **Health**: `/health/live`, `/health/ready`
-- **Public read**: routes under `/tournaments`, `/encounters`, and `/teams`
-- **Registration**: public registration routes under
-  `/workspaces/{workspace_id}/tournaments/{tournament_id}/registration`
-- **Captain results**: result routes under `/encounters/{id}/...`
-- **Admin**: tournament / stage / team / player / encounter / standing routes under `/admin`
-- **Challonge integration**: read / import / export / push / log routes under `/admin/challonge`
-- **Balancer & sheets**: admin registration, status catalog, Google Sheets sync / preview / suggest, and
-  active-registration export under `/admin/balancer` and `/admin/ws`
-- **Map veto**: routes and a websocket under `/encounters/{id}/map-pool`
+The RPC surface is grouped as representative `rpc.tournament.*` methods served behind the gateway:
+
+- **Reads** — typed read RPC for tournaments, encounters, teams, and standings.
+- **Admin CRUD** — generic admin CRUD via the shared engine (`rpc.tournament.admin.*`).
+- **Admin misc** — bespoke admin operations plus division-grid.
+- **Registration admin** — registration management and status catalog.
+- **Integrations** — Challonge (read / import / export / push / log) and Google Sheets sync /
+  preview / suggest.
+- **Stage admin** — stage / stage-item lifecycle.
+- **Map veto / draft** — encounter map-pool veto administration.
+- **Public** — public captain results and public registration.
 
 ## Realtime & messaging
 
-- Tournament realtime events are published to `realtime.workspace_event` for gateway WebSocket fan-out.
+- Tournament realtime events are published as `realtime.workspace_event` rows for gateway WebSocket
+  fan-out (multi-replica broadcast through the gateway).
 - A RabbitMQ `tournament_changed` consumer handles cache invalidation.
-- Redis realtime publish enables multi-replica WebSocket broadcast through the gateway.
 - A transactional outbox publishes captain/admin tournament changes, recalculations, encounter
-  completion, registration approvals/rejections, and tournament state changes; the outbox sweeper runs in
-  `serve.py`.
+  completion, registration approvals/rejections, and tournament state changes; the outbox sweeper
+  runs in `serve.py` (~1s).
 
 ## Background jobs
 
-All background processing runs in a single worker (`serve.py`, started with `faststream run serve:app`):
+All background processing runs in the single worker process:
 
-- Durable computation jobs with a history/status API under `/admin/tournament-jobs`.
-- Bracket job consumer (`tournament_bracket_jobs`) and standings job consumer (`tournament_standings_jobs`) — both subscribed in the same process.
-- Outbox sweeper publishing pending domain events.
-- Scheduler for registration Google Sheets sync.
+- Bracket job consumer (`tournament_bracket_jobs`) and standings job consumer
+  (`tournament_standings_jobs`), both on an isolated compute channel.
+- Recalculation-event consumers (`tournament.changed` / `standings.invalidated`).
+- APScheduler jobs: registration Google Sheets sync, Challonge active-tournament auto-sync, and
+  tournament auto-transitions — a state machine running every ~30s via
+  [`shared/core/tournament_state`](../shared/README.md).
 
-## Running
+## Dependencies
 
-```bash
-# Development (HTTP server)
-uvicorn main:app --reload --port 8004
-
-# Worker (outbox sweeper, bracket + standings consumers, scheduler)
-faststream run serve:app
-```
+- **Postgres** — shared ORM (tournament and related schemas).
+- **Redis** — realtime publish + cache invalidation.
+- **RabbitMQ** — RPC transport, durable job queues, and the outbox/event exchanges.
 
 ## Configuration & environment
 

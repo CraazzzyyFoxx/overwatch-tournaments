@@ -17,7 +17,7 @@ challonge), `registration/`, `balancer/` (balance, draft), `matches/`,
 
 > **Актуальность.** Документ отражает финальное состояние после
 > identity/workspace-рефактора и нормализаций Challonge / map-veto / draft /
-> predictions. Alembic head — **`dbarch06`**. Сводка изменений — в конце
+> predictions. Alembic head — **`captrep0001`**. Сводка изменений — в конце
 > файла («История изменений схемы»).
 
 > Соглашение об именах на диаграммах: имя сущности = `SCHEMA_TABLE`, потому что
@@ -34,7 +34,7 @@ challonge), `registration/`, `balancer/` (balance, draft), `matches/`,
 
 | Схема | Домен | Ключевые таблицы | Владелец (сервис) |
 |-------|-------|------------------|-------------------|
-| `auth` | Аутентификация и RBAC | `user`, `refresh_token`, `oauth_connections`, `api_key`, `roles`, `permissions`, `user_roles`, `role_permissions`, `user_permission_deny` | auth-service |
+| `auth` | Аутентификация и RBAC | `user`, `refresh_token`, `oauth_connections`, `api_key`, `roles`, `permissions`, `user_roles`, `role_permissions`, `user_permission_deny` | identity-service |
 | `players` | Идентичность игрока | `user`, `social_account`, `social_account_visibility`, `user_merge_audit` | app-service |
 | `public` | Воркспейсы, сетки дивизионов, инфра | `workspace`, `workspace_member`, `division_grid*`, `settings`, `event_outbox` | app-service |
 | `tournament` | Структура турнира и сетка | `tournament`, `stage`, `stage_item`, `team`, `player`, `standing`, `encounter`, `encounter_link`, `challonge_*`, `computation_job` | tournament-service |
@@ -238,6 +238,13 @@ erDiagram
 `social_account` с overlay-видимостью по воркспейсам. `workspace_member`
 привязывает игрока к арендатору и служит якорем для ростеров и достижений.
 
+`public.workspace` (арендатор) несёт мультитенантные и white-label поля:
+`timezone` (IANA, default `Europe/Moscow`), `branding_enabled` + палитра
+`brand_*` (primary/secondary/background/surface/accent/foreground/muted/
+border/ring/destructive), `subdomain` (UNIQUE), `seo_title`/`seo_description`,
+а также `custom_domain` (UNIQUE) / `custom_domain_verified_at` /
+`custom_domain_verification_token`.
+
 ```mermaid
 erDiagram
     AUTH_USER {
@@ -279,6 +286,15 @@ erDiagram
         string slug UK
         string name
         bool is_active
+        string timezone "default Europe/Moscow"
+        bool branding_enabled
+        string brand_primary "nullable; + brand_* палитра (#RRGGBB)"
+        string subdomain UK "nullable"
+        string seo_title "nullable"
+        string seo_description "nullable"
+        string custom_domain UK "nullable"
+        timestamp custom_domain_verified_at "nullable"
+        string custom_domain_verification_token "nullable"
         int default_division_grid_version_id FK "nullable"
     }
     WORKSPACE_MEMBER {
@@ -1413,7 +1429,7 @@ erDiagram
 
 ## История изменений схемы
 
-Документ актуализирован под финальное состояние (Alembic head — **`dbarch06`**).
+Документ актуализирован под финальное состояние (Alembic head — **`captrep0001`**).
 Ключевые изменения относительно прежнего mid-refactor состояния:
 
 - **Identity/workspace-рефактор.** `players.user.auth_user_id` (unique nullable;
@@ -1443,3 +1459,7 @@ erDiagram
   players.user`, `auth.user_permission_deny.created_by → auth.user`; перенос
   типа `encounterstatus` `public` → `tournament`; частичный unique-индекс на
   `players.social_account` для NULL-хендлов.
+- **Добавления после `dbarch06`** (цепочка `captrep0001` — ~100+ ревизий):
+  map-veto, timezone воркспейса (wstz), phase-schedule, снятие team-SR (teamsr),
+  MVP-impact scoring (mvpimp), брендинг-палитра (wsbrand), скрытые/preview
+  турниры (hidden), captain reports (captrep, `encounter_report`), draft-audit.

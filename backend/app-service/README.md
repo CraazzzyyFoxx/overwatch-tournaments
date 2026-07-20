@@ -1,33 +1,36 @@
 # App Service
 
-The core public REST API for OWT — the primary application server that serves tournament, player, team,
-hero, map, match, and statistics data to the frontend and external API consumers.
+The core public read/data API for OWT — serves tournament, player, team, hero, map, gamemode,
+match, achievement, and statistics data, plus workspace, user/metadata admin, and binary assets.
 
-- **Port:** 8000
-- **Entry point:** `main.py` (FastAPI HTTP server)
+- **Type:** headless FastStream (RabbitMQ) RPC worker — no HTTP server of its own
+- **Entry point:** `serve.py`
+- **Run:** `faststream run serve:app`
+- **Reached via:** the Go gateway under `/api/v1` (the gateway is the sole HTTP entry point and
+  serves the API docs via Scalar)
+
+See [`../../docs/architecture.md`](../../docs/architecture.md) for the system overview.
 
 ## Responsibilities
 
-- Public, read-optimized API endpoints for the data shown on the site (tournaments, players, teams,
-  heroes, maps, matches, achievements, statistics).
-- Redis-based caching to keep responses fast and minimize database load (see the caching section in the
-  repository [root README](../../README.md)).
-- Serves the OpenAPI documentation (Redoc / Swagger).
+The RPC surface is grouped as representative `rpc.app.*` methods served behind the gateway:
 
-## API documentation
+- **Core reads** — read-optimized data for tournaments, players, teams, heroes, maps, gamemodes,
+  matches, achievements, and statistics (bespoke aggregations/lookups plus a shared CRUD read engine
+  for hero/map/gamemode/achievement get+list).
+- **Workspaces** — workspace reads/writes and workspace-member management.
+- **Admin CRUD** — user + game-metadata (hero/map/gamemode) admin CRUD, profile merge, avatar, and
+  CSV import (relocated here from parser-service).
+- **Binary assets** — icons, assets, and match-log served as binary/base64 payloads.
+- **Caching** — Redis-backed response caching (cashews) to keep reads fast and reduce DB load; a
+  `tournament_changed` RabbitMQ consumer performs cache invalidation.
 
-- Redoc: `http://localhost:8000/api/v1/redoc`
-- Swagger UI: `http://localhost:8000/api/v1/docs`
+## Dependencies
 
-## Running
-
-```bash
-# Development
-uvicorn main:app --reload --port 8000
-
-# Production
-uvicorn main:app --host 0.0.0.0 --port 8000
-```
+- **Postgres** — shared ORM (players / public / overwatch and related schemas).
+- **Redis** — response cache (cashews) + cache-invalidation pub/sub.
+- **RabbitMQ** — RPC transport and the `tournament_changed` invalidation consumer.
+- **S3** — binary asset storage.
 
 ## Configuration & environment
 
