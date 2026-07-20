@@ -97,7 +97,9 @@ import balancerAdminService from "@/services/balancer-admin.service";
 import registrationService from "@/services/registration.service";
 import type {
   AdminRegistration,
+  AdminRegistrationCreateInput,
   AdminRegistrationRole,
+  AdminRegistrationUpdateInput,
   BalancerRoleCode,
   BalancerRoleSubtype
 } from "@/types/balancer-admin.types";
@@ -348,76 +350,102 @@ export default function BalancerRegistrationsPage() {
     [customStatusesQuery.data]
   );
 
-  const invalidateRegistrations = async () => {
-    await queryClient.invalidateQueries({
+  // Patch a single row across every cached filter variant. The PATCH endpoints
+  // already return the fully-serialized registration, so we never need to
+  // re-fetch the whole pool just to reflect one edit.
+  const patchRegistrationInCache = (row: AdminRegistration) => {
+    queryClient.setQueriesData<AdminRegistration[]>(
+      { queryKey: ["balancer-admin", "registrations", tournamentId] },
+      (old) => (old ? old.map((r) => (r.id === row.id ? row : r)) : old)
+    );
+  };
+
+  const removeRegistrationFromCache = (registrationId: number) => {
+    queryClient.setQueriesData<AdminRegistration[]>(
+      { queryKey: ["balancer-admin", "registrations", tournamentId] },
+      (old) => (old ? old.filter((r) => r.id !== registrationId) : old)
+    );
+  };
+
+  // Fire-and-forget reconcile: keeps filter membership correct (e.g. an approved
+  // row leaving the "pending" view) without blocking the mutation. NOT awaited,
+  // so the spinner/modal closes immediately after the mutation itself resolves.
+  const revalidateRegistrations = () => {
+    void queryClient.invalidateQueries({
       queryKey: ["balancer-admin", "registrations", tournamentId]
     });
   };
 
   const createMutation = useMutation({
-    mutationFn: (payload: any) =>
+    mutationFn: (payload: AdminRegistrationCreateInput) =>
       balancerAdminService.createManualRegistration(tournamentId as number, payload),
-    onSuccess: async () => {
-      await invalidateRegistrations();
+    onSuccess: () => {
       setCreateOpen(false);
       notify.success("Manual registration created");
+      revalidateRegistrations();
     }
   });
 
   const updateMutation = useMutation({
-    mutationFn: (payload: any) => {
+    mutationFn: (payload: AdminRegistrationUpdateInput) => {
       if (!editingRegistration) {
         throw new Error("No registration selected");
       }
       return balancerAdminService.updateRegistration(editingRegistration.id, payload);
     },
-    onSuccess: async () => {
-      await invalidateRegistrations();
+    onSuccess: (updated) => {
+      patchRegistrationInCache(updated);
       setEditingRegistration(null);
       notify.success("Registration updated");
+      revalidateRegistrations();
     }
   });
 
   const approveMutation = useMutation({
     mutationFn: (registrationId: number) =>
       balancerAdminService.approveRegistration(registrationId),
-    onSuccess: async () => {
-      await invalidateRegistrations();
+    onSuccess: (updated) => {
+      patchRegistrationInCache(updated);
       notify.success("Registration approved");
+      revalidateRegistrations();
     }
   });
 
   const rejectMutation = useMutation({
     mutationFn: (registrationId: number) => balancerAdminService.rejectRegistration(registrationId),
-    onSuccess: async () => {
-      await invalidateRegistrations();
+    onSuccess: (updated) => {
+      patchRegistrationInCache(updated);
       notify.success("Registration rejected");
+      revalidateRegistrations();
     }
   });
 
   const withdrawMutation = useMutation({
     mutationFn: (registrationId: number) =>
       balancerAdminService.withdrawRegistration(registrationId),
-    onSuccess: async () => {
-      await invalidateRegistrations();
+    onSuccess: (updated) => {
+      patchRegistrationInCache(updated);
       notify.success("Registration withdrawn");
+      revalidateRegistrations();
     }
   });
 
   const restoreMutation = useMutation({
     mutationFn: (registrationId: number) =>
       balancerAdminService.restoreRegistration(registrationId),
-    onSuccess: async () => {
-      await invalidateRegistrations();
+    onSuccess: (updated) => {
+      patchRegistrationInCache(updated);
       notify.success("Registration restored");
+      revalidateRegistrations();
     }
   });
 
   const deleteMutation = useMutation({
     mutationFn: (registrationId: number) => balancerAdminService.deleteRegistration(registrationId),
-    onSuccess: async () => {
-      await invalidateRegistrations();
+    onSuccess: (_, registrationId) => {
+      removeRegistrationFromCache(registrationId);
       notify.success("Registration deleted");
+      revalidateRegistrations();
     }
   });
 
@@ -427,10 +455,10 @@ export default function BalancerRegistrationsPage() {
         tournamentId as number,
         Array.from(selectedIds)
       ),
-    onSuccess: async (result) => {
-      await invalidateRegistrations();
+    onSuccess: (result) => {
       setSelectedIds(new Set());
       notify.success(`${result.approved} approved, ${result.skipped} skipped`);
+      revalidateRegistrations();
     }
   });
 
@@ -442,28 +470,30 @@ export default function BalancerRegistrationsPage() {
       registrationId: number;
       balancerStatus: string;
     }) => balancerAdminService.setBalancerStatus(registrationId, balancerStatus),
-    onSuccess: async () => {
-      await invalidateRegistrations();
+    onSuccess: (updated) => {
+      patchRegistrationInCache(updated);
       notify.success("Balancer status updated");
+      revalidateRegistrations();
     }
   });
 
   const checkInMutation = useMutation({
     mutationFn: ({ registrationId, checkedIn }: { registrationId: number; checkedIn: boolean }) =>
       balancerAdminService.checkInRegistration(registrationId, checkedIn),
-    onSuccess: async (_, variables) => {
-      await invalidateRegistrations();
+    onSuccess: (updated, variables) => {
+      patchRegistrationInCache(updated);
       notify.success(variables.checkedIn ? "Checked in" : "Check-in removed");
+      revalidateRegistrations();
     }
   });
 
   const bulkAddToBalancerMutation = useMutation({
     mutationFn: () =>
       balancerAdminService.bulkAddToBalancer(tournamentId as number, Array.from(selectedIds)),
-    onSuccess: async (result) => {
-      await invalidateRegistrations();
+    onSuccess: (result) => {
       setSelectedIds(new Set());
       notify.success(`${result.updated} added to balancer, ${result.skipped} skipped`);
+      revalidateRegistrations();
     }
   });
 
