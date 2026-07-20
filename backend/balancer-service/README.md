@@ -7,6 +7,13 @@ WebSocket topic `tournament:{id}:balancer` (served by the Go gateway).
 - **Transport:** headless FastStream worker behind the Go gateway (no HTTP server). External clients
   call `/api/balancer/*`; the gateway translates each route to its `rpc.balancer.*` queue.
 - **Entry point:** `serve.py` (typed `rpc.balancer.*` RPC + async job queue + draft clock)
+- **Balancing engine:** the heavy solve runs in a native Rust/PyO3 crate `moo_core`, an NSGA-style
+  multi-objective genetic algorithm over two objectives — `balance` vs `comfort` — with a
+  `rank_comfort_tilt` knob that ranks result variants between the two. It is offloaded from the event
+  loop via `asyncio.to_thread`. Balancing is **Linux-only**: `moo_core` is built with maturin (see
+  `native/moo_core`).
+
+See [`../../docs/architecture.md`](../../docs/architecture.md) for the platform overview.
 
 ## Features
 
@@ -52,9 +59,10 @@ Get job status (`queued`, `running`, `succeeded`, `failed`) with the current sta
 
 Get the final balancing result when the job is complete.
 
-### GET `/api/balancer/jobs/{job_id}/stream`
+### GET `/api/balancer/jobs/{job_id}/stream` — not available
 
-SSE stream with live status updates and worker logs.
+Live status updates and worker logs are delivered over the realtime WebSocket topic
+`tournament:{id}:balancer`, relayed by the Go gateway.
 
 ### GET `/api/balancer/config`
 
@@ -113,9 +121,9 @@ The authoritative list of runtime defaults, allowed limits, and presets is retur
 
 ## Running
 
-The HTTP service is decommissioned: balancer runs as a single headless FastStream
-worker behind the Go gateway. It serves the typed `rpc.balancer.*` API (config /
-admin / draft / jobs), consumes the balancer job queue, and runs the draft clock.
+Balancer runs as a single headless FastStream worker behind the Go gateway. It serves the
+typed `rpc.balancer.*` API (config / admin / draft / jobs), consumes the balancer job queue,
+and runs the draft clock.
 
 ```bash
 # Worker (typed RPC + async jobs + draft clock)

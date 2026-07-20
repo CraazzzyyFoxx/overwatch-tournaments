@@ -4,21 +4,22 @@
 [![Test Backend](https://github.com/CraazzzyyFoxx/overwatch-tournaments/actions/workflows/test-backend.yml/badge.svg)](https://github.com/CraazzzyyFoxx/overwatch-tournaments/actions/workflows/test-backend.yml)
 [![Coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/CraazzzyyFoxx/e00b7692443a542b0e505c090cf83d35/raw/owt-coverage.json)](https://github.com/CraazzzyyFoxx/overwatch-tournaments/actions/workflows/test-backend.yml)
 [![Issues](https://img.shields.io/github/issues/CraazzzyyFoxx/overwatch-tournaments)](https://github.com/CraazzzyyFoxx/overwatch-tournaments/issues)
-[![Documentation](https://img.shields.io/badge/documentation-yes-brightgreen.svg)](https://owt.craazzzyyfoxx.me/api/redoc)
+[![Documentation](https://img.shields.io/badge/documentation-yes-brightgreen.svg)](https://owt.craazzzyyfoxx.me/api/docs)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://github.com/CraazzzyyFoxx/overwatch-tournaments/blob/master/LICENSE)
 
 > **OWT** provides comprehensive statistics about Overwatch Tournaments —
 > the history of past tournaments and player statistics such as tournaments participated in, divisions, teams,
 > heroes, and performance metrics.
-> The backend is a Python microservices platform (FastAPI, SQLAlchemy, PostgreSQL, Redis, RabbitMQ) and the
-> frontend is a Next.js application. The project is optimized for fast and accurate data delivery while
-> minimizing server load.
+> The backend is a Python microservices platform of headless [FastStream](https://faststream.airt.ai/)
+> workers (SQLAlchemy, PostgreSQL, Redis, RabbitMQ) fronted by a Go gateway, and the frontend is a
+> Next.js application. The project is optimized for fast and accurate data delivery while minimizing
+> server load. For the full picture, see [docs/architecture.md](./docs/architecture.md).
 
 ## Table of contents
 
 * [✨ Live instance](#-live-instance)
 * [🏛️ Architecture](#-architecture)
-* [🐋 Docker development](#docker-development-breaking-change)
+* [🐋 Docker development](#-docker-development)
 * [📈 Monitoring](#-monitoring)
 * [👨‍💻 Technical details](#-technical-details)
 * [🙏 Credits](#-credits)
@@ -27,11 +28,10 @@
 ## ✨ [Live instance](https://owt.craazzzyyfoxx.me/)
 
 **Backend**
-> The backend is built with FastAPI and provides the core API functionality, including data retrieval, caching, and processing.
-> You can explore the backend API documentation using the following links:
+> The backend is a set of headless RPC workers behind a Go gateway, which is the single HTTP/WebSocket
+> entry point and serves interactive API documentation (Scalar):
 >
-> Redoc Documentation: https://owt.craazzzyyfoxx.me/api/v1/redoc
-> Swagger UI: https://owt.craazzzyyfoxx.me/api/v1/docs
+> API docs: https://owt.craazzzyyfoxx.me/api/docs
 
 **Frontend**
 > The frontend is built with Next.js and provides a user-friendly interface for interacting with the OWT API.
@@ -51,43 +51,49 @@ The configuration can be found in the `.pre-commit-config.yaml` file. It consist
 
 ## 🏛️ Architecture
 
-OWT is a microservices monorepo: a set of independent Python services under `backend/` (sharing one ORM layer
-via `backend/shared/`) plus a Next.js frontend. In production the services sit behind nginx and a Go gateway
-(`gateway/`) and communicate over PostgreSQL, Redis, and RabbitMQ.
+**See [docs/architecture.md](./docs/architecture.md) for the full architecture** — request flow,
+inter-service messaging, data model, multitenancy, and deployment topology.
+
+OWT is a microservices monorepo. A **Go gateway** (`gateway/`) is the sole HTTP/WebSocket entry point:
+it terminates HTTP behind nginx (TLS by Traefik upstream), validates JWTs, and dispatches typed
+**request/reply RPC over RabbitMQ** to backend workers. The backend is a set of **headless Python
+FastStream workers** (no HTTP servers) sharing one ORM layer via `backend/shared/`; they communicate
+over PostgreSQL, Redis, and RabbitMQ. The frontend is a Next.js app served through the same gateway.
 
 ### Backend services (`backend/`)
 
-| Service | Port | Purpose | Docs |
-| --- | --- | --- | --- |
-| `app-service` | 8000 | Core public REST API — data retrieval, Redis caching, statistics endpoints | [README](./backend/app-service/README.md) |
-| `auth-service` | 8001 | Authentication & authorization — JWT, Discord OAuth, player linking | [README](./backend/auth-service/README.md) |
-| `parser-service` | 8002 | Match-log parsing & scheduled processing (OR-Tools, APScheduler, FastStream) | [README](./backend/parser-service/README.md) |
-| `balancer-service` | 8003 | Genetic-algorithm team balancing (async jobs + SSE) | [README](./backend/balancer-service/README.md) |
-| `tournament-service` | 8004 | Tournament domain — CRUD, registration, Challonge/Sheets sync, map veto, realtime | [README](./backend/tournament-service/README.md) |
-| `realtime-service` | 8005 | Unified WebSocket gateway with Redis pub/sub fan-out | [README](./backend/realtime-service/README.md) |
-| `analytics-service` | 8006 | Post-tournament analytics — OpenSkill (v1), ML pipeline (v2) | [README](./backend/analytics-service/README.md) |
-| `discord-service` | — | Discord bot integration and notifications | [README](./backend/discord-service/README.md) |
-| `twitch-service` | — | Twitch integration (inactive placeholder) | [README](./backend/twitch-service/README.md) |
-| `shared` | — | Shared ORM models, schemas, clients, and utilities used by every service | [README](./backend/shared/README.md) |
+| Service | Compose | Kind | Purpose | Docs |
+| --- | --- | --- | --- | --- |
+| `app-service` | `app-svc` | RPC worker | Core read/data API (tournaments, players, teams, heroes, maps, matches, stats) + workspace/user/metadata admin + assets + caching | [README](./backend/app-service/README.md) |
+| `identity-service` | `identity-svc` | RPC worker | AuthN/AuthZ — JWT, Discord OAuth, RBAC, workspace membership, custom domains, API keys, player linking (exposed under `/api/auth`) | [README](./backend/identity-service/README.md) |
+| `tournament-service` | `tournament-svc` | RPC worker + scheduler | Tournament lifecycle — CRUD, registration, brackets/standings, Challonge/Sheets sync, map veto, state machine, outbox sweeper | [README](./backend/tournament-service/README.md) |
+| `parser-service` | `parser-svc` | RPC worker + scheduler | Match-log ingestion/parsing, OverFast rank fetch, achievement evaluation, MVP-impact backfill | [README](./backend/parser-service/README.md) |
+| `balancer-service` | `balancer-svc` | RPC worker | Genetic team balancing (native Rust `moo_core`) + live draft | [README](./backend/balancer-service/README.md) |
+| `analytics-service` | `analytics-svc` + `analytics-worker` | RPC worker + ML worker | Post-tournament analytics — OpenSkill shifts (v1), ML pipeline (v2) | [README](./backend/analytics-service/README.md) |
+| `discord-service` | `discord-worker` | bot | Discord bot — match-log upload, notifications, commands | [README](./backend/discord-service/README.md) |
+| `shared` | — | library | Shared ORM models, schemas, RPC/messaging, tenancy, RBAC, and utilities used by every service | [README](./backend/shared/README.md) |
+
+The **Go gateway** (`gateway/`) is the HTTP/WebSocket edge — [README](./gateway/README.md).
 
 ### Frontend (`frontend/`)
 
-Next.js 16 + React 19 + TypeScript, styled with Tailwind CSS 4 and Shadcn/UI. See [frontend/README.md](./frontend/README.md).
+Next.js 16 + React 19 + TypeScript, styled with Tailwind CSS 4 and Shadcn/UI, i18n via next-intl.
+See [frontend/README.md](./frontend/README.md).
 
 ## 👨‍💻 Technical details
 
 ### Technology Stack and Features
 
-- ⚡ [**FastAPI**](https://fastapi.tiangolo.com) for the Python backend services.
+- ⚡ [**FastStream**](https://faststream.airt.ai/) for the Python backend workers — headless RPC over RabbitMQ, behind a **Go** gateway (`gateway/`).
     - 🧰 [SqlAlchemy](https://www.sqlalchemy.org/) for the Python SQL database interactions (ORM).
-    - 🔍 [Pydantic](https://docs.pydantic.dev), used by FastAPI, for the data validation and settings management.
+    - 🔍 [Pydantic](https://docs.pydantic.dev) for data validation and settings management.
     - 💾 [PostgreSQL](https://www.postgresql.org) as the SQL database.
     - 🐇 [RabbitMQ](https://www.rabbitmq.com/) with [FastStream](https://faststream.airt.ai/) for inter-service messaging and workers.
     - 🧊 [Redis](https://redis.io/) for caching and realtime pub/sub.
 - 🚀 [**Next.js**](https://nextjs.org/) for the frontend.
     - 💃 Using TypeScript, hooks, and other parts of a modern frontend stack.
     - 🎨 [Shadcn/UI](https://ui.shadcn.com/) for the frontend components.
-    - 🧪 [Playwright](https://playwright.dev) for End-to-End testing.
+- 🧪 [Vitest](https://vitest.dev) for frontend unit/smoke tests.
 - 🐋 [Docker Compose](https://www.docker.com) for development and production.
 - 🔭 OpenTelemetry, Prometheus, Loki, Tempo, and Grafana for observability.
 - ✅ Tests with [Pytest](https://pytest.org).
@@ -118,16 +124,15 @@ Function Cache: This cache stores the results of specific functions, such as the
 * Matches: 1 day
 * Achievements: 1 day
 
-## Docker Development (Breaking Change)
+## 🐋 Docker Development
 
-The local Docker workflow has changed and is now profile-driven.
+The local Docker workflow is profile-driven.
 
-- `docker-compose.override.yml` has been removed.
-- Default dev startup (`docker compose up -d --wait`) now starts core services only.
+- Default dev startup (`docker compose up -d --wait`) starts core services only.
 - The Go gateway + nginx edge are part of the default stack (nginx on `APP_PORT` -> gateway:8080).
 - Optional profiles:
   - `workers` for background services (`docker compose --profile workers up -d --wait`)
-- Local PostgreSQL is now part of the dev stack by default.
+- Local PostgreSQL is part of the dev stack by default.
 
 ### First-time setup
 
@@ -139,10 +144,10 @@ The local Docker workflow has changed and is now profile-driven.
 docker compose up -d --wait
 ```
 
-4. Start full stack (gateway + workers), if needed:
+4. Start full stack (with background workers), if needed:
 
 ```bash
-docker compose --profile gateway --profile workers up -d --wait
+docker compose --profile workers up -d --wait
 ```
 
 You can also use `make dev-up` and `make dev-up-full`.

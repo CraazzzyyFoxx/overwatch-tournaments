@@ -1,300 +1,99 @@
-# Authentication Service
+# Identity Service (identity-svc)
 
-Microservice for user authentication and authorization.
+Authentication and authorization for OWT. A **headless FastStream (RabbitMQ) RPC worker** —
+there is no HTTP server and no listening API port.
+All requests arrive as typed request/reply RPC (`rpc.identity.*`) published by the
+[Go gateway](../../docs/architecture.md), which terminates HTTP and exposes this worker's
+surface under `/api/auth`.
 
-## Features
+- **Compose service:** `identity-svc`
+- **Entry point:** `serve.py` (headless FastStream RPC worker)
+- **Run command:** `faststream run serve:app`
+- **Transport:** RabbitMQ request/reply (`rpc.identity.<method>`); no HTTP, no uvicorn
+- **Metrics:** Prometheus on `WORKER_METRICS_PORT` (`9107`) — a scrape endpoint, not an API
 
-- 🔐 User registration with validation
-- 🔑 Authentication by email and password
-- 🎫 JWT tokens (access + refresh)
-- 🔄 Token refresh
-- 👤 Read and update the user profile
-- 🚪 Logout from one or all sessions
-- ✅ Token validation for other microservices
-- 🎮 **Discord OAuth** — sign in via Discord
-- 🔗 **Discord linking** — attach a Discord account to an existing user
-- 👥 **Player linking** — attach in-game player profiles to an auth user
+See [`../../docs/architecture.md`](../../docs/architecture.md) for the system overview and
+request flow, and [`../shared/README.md`](../shared/README.md) for the ORM/kernel this
+service builds on.
 
-## Technologies
+## Responsibilities
 
-- **FastAPI** — web framework
-- **SQLAlchemy 2.0+** — ORM with async support
-- **PostgreSQL** — database (shared with the main application)
-- **JWT** (python-jose) — authentication tokens
-- **Bcrypt** (passlib) — password hashing
-- **Pydantic** — data validation
-- **Loguru** — logging
-- **HTTPX** — HTTP client for the Discord API
+- **JWT auth** — issues and validates access + refresh tokens (python-jose, HS256, shared
+  secret). `validate_token` is the gateway's authority for RBAC-gated routes and rehydrates
+  the `AuthUser` / permission set from the request.
+- **Sessions** — list, revoke a single session, logout, and logout-all (revoke every
+  session for the user). Refresh tokens are persisted in Postgres and revocable.
+- **Discord OAuth** — authorization URL, callback exchange, account link/unlink, and listing
+  connected providers. State is signed and OAuth handoff to custom domains is completed via
+  single-use, short-lived Redis SSO / pending-link tickets.
+- **SSO exchange** — redeems a one-time SSO ticket so a custom-domain OAuth callback can hand
+  the session back to the tenant origin without exposing tokens in the redirect.
+- **RBAC** — permissions, roles, role↔permission grants, user↔role assignments, and a
+  workspace-scoped `user_permission_deny` overlay (grant-only catalog + deny overrides),
+  administered through the `rpc.identity.rbac.*` method group. RBAC results are cached in Redis
+  and invalidated on mutation.
+- **Workspace membership authz** — resolves and authorizes a user's membership within a
+  workspace (tenant), feeding the gateway's ACL decisions.
+- **Multitenancy** — custom-domain / subdomain tenancy: signed OAuth `state`, single-use Redis
+  SSO and link tickets, and tenant-aware callbacks so white-label hosts share one identity
+  backend.
+- **API keys** — create, list, update, and revoke per-user API keys; `validate_token` accepts
+  an API key in place of a bearer access token.
+- **Player linking** — attach in-game player profiles to an auth user, unlink, list linked
+  players, and set the primary player (`rpc.identity.player.*`).
+- **Avatar** — set/delete the current user's avatar, stored in S3.
+- **Service tokens** — client-credentials tokens (`service_token` / `validate_service_token`)
+  used by other services (e.g. the Discord bot) to call the platform machine-to-machine.
 
-## Project structure
+## RPC surface
 
-```
-auth-service/
-├── main.py              # Entry point
-├── pyproject.toml       # Dependencies
-├── Dockerfile           # Docker image
-├── docker-compose.yml   # Docker composition
-├── .env.example         # Example environment variables
-└── src/
-    ├── core/            # Core configuration
-    │   ├── config.py    # Application settings
-    │   ├── db.py        # Database
-    │   └── logging.py   # Logging
-    ├── models.py        # Re-exports models from shared
-    ├── schemas/         # Pydantic schemas
-    │   └── auth.py
-    ├── services/        # Business logic
-    │   └── auth_service.py
-    └── routes/          # API endpoints
-        ├── auth.py      # Authentication
-        └── health.py    # Health checks
-```
+The gateway publishes to `rpc.identity.<method>`; the worker replies with an
+`{ ok, data, error }` envelope. Authenticated methods carry the caller's bearer
+`access_token` (injected by the gateway) and resolve the active user before executing.
+Representative method groups:
 
-## Setup and run
+| Group | Representative methods |
+|---|---|
+| Token / auth | `validate_token`, `register`, `login`, `refresh`, `logout`, `logout_all` |
+| Current user | `get_me`, `update_me`, `set_password`, `me.avatar_set`, `me.avatar_delete` |
+| Sessions | `list_sessions`, `revoke_session`, `invalidate_session` |
+| OAuth (Discord) | `oauth_providers`, `oauth_url`, `oauth_callback`, `oauth_link`, `oauth_unlink`, `oauth_connections`, `sso_exchange`, `link_complete` |
+| RBAC admin | `rbac.list_permissions`, `rbac.create_permission`, `rbac.list_roles`, `rbac.create_role`, `rbac.update_role`, `rbac.assign_role`, `rbac.remove_role`, `rbac.get_user_roles`, `rbac.list_user_denies`, `rbac.add_user_deny`, `rbac.remove_user_deny`, `rbac.list_auth_users`, `rbac.assign_linked_player`, … |
+| Player linking | `player.link`, `player.unlink`, `player.linked`, `player.set_primary` |
+| API keys | `api_key` group: `list_api_keys`, `create_api_key`, `update_api_key`, `revoke_api_key` |
+| Service tokens | `service_token`, `validate_service_token` |
 
-### Local run
+## Dependencies
 
-1. Sync dependencies from the backend workspace and activate the virtualenv:
+- **PostgreSQL** — owns the `auth` schema (user, refresh_token, oauth_connections, api_key,
+  roles, permissions, user_roles, role_permissions, user_permission_deny) and reads the
+  `players` schema for player linking. Shared with the rest of the backend via the
+  single SQLAlchemy metadata in [`../shared/README.md`](../shared/README.md).
+- **Redis** — session/ticket storage (single-use SSO and pending-link tickets) and the RBAC
+  permission cache.
+- **S3** — avatar object storage.
+- **RabbitMQ** — the RPC transport (`rpc.identity.*`) and the shared broker topology.
 
-```bash
-cd backend
-uv sync
-source .venv/bin/activate   # Linux/macOS
-.venv\Scripts\activate      # Windows
-```
+Database tables live in the shared ORM models and are created by the **central Alembic
+migrations** — this service ships no migrations of its own.
 
-2. Copy `.env.example` to `.env` and configure the variables:
+## Configuration & running
 
-```bash
-cp .env.example .env
-```
-
-3. Run the service:
-
-```bash
-python main.py
-```
-
-The service will be available at `http://localhost:8001`.
-
-### Docker run
-
-1. Create an `.env` file with the required variables.
-
-2. Start the service (typically as part of the root `docker compose` stack):
-
-```bash
-docker compose up -d auth-service
-```
-
-3. Check the health endpoint:
+Configuration is environment-driven (shared `JWT_SECRET_KEY`, `POSTGRES_*`, `REDIS_URL`,
+`RABBITMQ_URL`, S3 credentials, Discord OAuth client, plus `WORKER_METRICS_PORT`); see the
+env files under `backend/env/`.
 
 ```bash
-curl http://localhost:8001/health
+# From backend/, with the workspace virtualenv active
+cd backend/identity-service
+faststream run serve:app
 ```
 
-## API endpoints
-
-### Core endpoints
-
-- `GET /` — service info
-- `GET /health` — health check
-- `GET /docs` — Swagger documentation
-- `GET /redoc` — ReDoc documentation
-
-### Authentication
-
-- `POST /register` — register a new user
-- `POST /login` — log in (obtain tokens)
-- `POST /refresh` — refresh the access token
-- `POST /logout` — log out (revoke the token)
-- `POST /logout-all` — log out from all devices
-- `POST /set-password` 🔒 — set/change password
-- `GET /me` — get the current user
-- `PATCH /me` — update the profile
-- `POST /validate` — validate a token (for other services)
-
-### OAuth (Discord)
-
-- `GET /oauth/discord/url` — get the Discord authorization URL
-- `GET /oauth/discord/callback` — handle the Discord callback (GET version)
-- `POST /oauth/discord/callback` — handle the Discord callback (POST version)
-- `POST /oauth/discord/link` 🔒 — link Discord to the account
-- `DELETE /oauth/discord/unlink` 🔒 — unlink Discord
-- `GET /oauth/connections` 🔒 — all OAuth connections for the account
-
-### Player linking
-
-- `POST /player/link` 🔒 — link an in-game player
-- `DELETE /player/unlink/{player_id}` 🔒 — unlink a player
-- `GET /player/linked` 🔒 — list linked players
-- `PATCH /player/linked/{player_id}/primary` 🔒 — set the primary player
-
-🔒 — requires authorization.
-
-## Usage examples
-
-### Register
-
-```bash
-curl -X POST "http://localhost:8001/register" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "email": "user@example.com",
-    "username": "testuser",
-    "password": "Password123",
-    "first_name": "John",
-    "last_name": "Doe"
-  }'
-```
-
-### Log in
-
-```bash
-curl -X POST "http://localhost:8001/login" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "email": "user@example.com",
-    "password": "Password123"
-  }'
-```
-
-Response:
-
-```json
-{
-  "access_token": "eyJ...",
-  "refresh_token": "a1b2c3...",
-  "token_type": "bearer"
-}
-```
-
-### Use a token
-
-```bash
-curl -X GET "http://localhost:8001/me" \
-  -H "Authorization: Bearer eyJ..."
-```
-
-### Refresh a token
-
-```bash
-curl -X POST "http://localhost:8001/refresh" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "refresh_token": "a1b2c3..."
-  }'
-```
-
-## Integration with other services
-
-Other microservices can validate tokens through the `/validate` endpoint:
-
-```python
-import httpx
-
-async def validate_token(token: str):
-    async with httpx.AsyncClient() as client:
-        response = await client.post(
-            "http://auth-service:8001/validate",
-            headers={"Authorization": f"Bearer {token}"}
-        )
-        if response.status_code == 200:
-            return response.json()  # TokenPayload
-        return None
-```
-
-## Configuration
-
-Key environment variables (see `.env.example`):
-
-```bash
-# Application
-ENVIRONMENT=development
-DEBUG=True
-HOST=0.0.0.0
-PORT=8001
-
-# Database (shared with the main app)
-POSTGRES_HOST=localhost
-POSTGRES_PORT=5432
-POSTGRES_USER=postgres
-POSTGRES_PASSWORD=postgres
-POSTGRES_DB=tournaments
-
-# JWT
-JWT_SECRET_KEY=your-secret-key-here
-JWT_ALGORITHM=HS256
-ACCESS_TOKEN_EXPIRE_MINUTES=30
-REFRESH_TOKEN_EXPIRE_DAYS=30
-
-# CORS
-ALLOWED_ORIGINS=http://localhost:3000,http://localhost:8000
-```
-
-## Database
-
-The service uses the **shared database** together with the main application:
-
-- Tables are created via Alembic migrations in the main application.
-- The auth service connects to the existing `auth_users` and `refresh_tokens` tables.
-- No separate migrations are required for the auth service.
-
-## Development
-
-### Logging
-
-Logs are emitted through Loguru with colored formatting:
-
-```
-2024-01-15 12:00:00.000 | INFO     | Starting Authentication Service...
-2024-01-15 12:00:01.000 | SUCCESS  | Database connection established
-2024-01-15 12:00:02.000 | INFO     | Registering new user: user@example.com
-```
-
-### Security
-
-- ✅ Passwords are hashed with bcrypt
-- ✅ JWT tokens are signed with a secret key
-- ✅ Refresh tokens are stored in the database
-- ✅ Token revocation is supported
-- ✅ Password-strength validation
-- ✅ CORS middleware
-
-## Architecture
-
-```
-┌─────────────┐     ┌──────────────┐     ┌──────────────┐
-│   Client    │────▶│ Auth Service │────▶│  PostgreSQL  │
-│ (Frontend)  │     │  (Port 8001) │     │  (Shared DB) │
-└─────────────┘     └──────────────┘     └──────────────┘
-                            │                     ▲
-                            │                     │
-                            ▼                     │
-                    ┌──────────────┐              │
-                    │  Main App    │──────────────┘
-                    │ (Port 8000)  │
-                    └──────────────┘
-```
-
-## Monitoring
-
-A health-check endpoint is available for monitoring:
-
-```bash
-curl http://localhost:8001/health
-```
-
-Response:
-
-```json
-{
-  "status": "healthy",
-  "service": "auth-service"
-}
-```
+In Docker the service runs headless as the `identity-svc` compose service. It has no HTTP
+server, so compose overrides the image's `/health` HTTPCHECK with a python exit-0 healthcheck.
+To reach external APIs (Discord, S3) it `depends_on` the outbound `proxy` service.
 
 ## License
 
-This service is part of the OWT project, licensed under the GNU AGPL v3.0 with additional attribution
-terms. See the repository-root [LICENSE](../../LICENSE).
+This service is part of the OWT project, licensed under the GNU AGPL v3.0 with additional
+attribution terms. See the repository-root [LICENSE](../../LICENSE).

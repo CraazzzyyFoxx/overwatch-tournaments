@@ -7,6 +7,10 @@ import workspaceService from "@/services/workspace.service";
 import { deriveWorkspacePalette } from "@/lib/workspace-theme";
 import { WorkspaceThemeSync } from "@/components/WorkspaceThemeSync";
 import { WorkspaceHostLock } from "@/components/WorkspaceHostLock";
+import {
+  getTournamentOwnerWorkspace,
+  tournamentIdFromPathname,
+} from "./tournaments/[id]/_data";
 import type { Workspace } from "@/types/workspace.types";
 
 // Resolve the current workspace server-side. On a tenant (white-label) host
@@ -35,12 +39,26 @@ export default async function SiteLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const tenantMode = (await headers()).get("x-owt-host-mode") === "tenant";
+  const requestHeaders = await headers();
+  const tenantMode = requestHeaders.get("x-owt-host-mode") === "tenant";
   const workspace = await resolveCurrentWorkspace();
+
+  // A tournament may belong to a workspace other than the one the viewer has
+  // selected; its pages must paint the owner's brand. Resolve the owner here so
+  // the SSR seed is already correct (flash-free) — the client keeps it in sync
+  // via TournamentThemeScope for soft navigations. Never re-theme a locked
+  // tenant (white-label) host: its brand is fixed by the request host.
+  let seedWorkspace: Workspace | null = workspace;
+  if (!tenantMode) {
+    const tournamentId = tournamentIdFromPathname(requestHeaders.get("x-owt-pathname") ?? "");
+    if (tournamentId !== null) {
+      seedWorkspace = (await getTournamentOwnerWorkspace(tournamentId)) ?? workspace;
+    }
+  }
 
   // Branding seed for a flash-free first paint (no-op when the workspace has no
   // custom palette).
-  const seed = workspace ? deriveWorkspacePalette(workspace) : null;
+  const seed = seedWorkspace ? deriveWorkspacePalette(seedWorkspace) : null;
   const style: React.CSSProperties | undefined = seed
     ? ({ ...seed, backgroundColor: "var(--aqt-bg)" } as React.CSSProperties)
     : undefined;

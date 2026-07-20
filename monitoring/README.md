@@ -1,6 +1,6 @@
 # Monitoring Deployment
 
-This document explains how the system monitoring stack is deployed for Anak Tournaments.
+This document explains how the system monitoring stack is deployed for OWT.
 
 Monitoring runs as its **own** Docker Compose project (`owt-monitoring`) defined in
 the repository-root file `docker-compose.monitoring.yml`, using configs stored in `monitoring/`.
@@ -26,7 +26,7 @@ Services:
 
 ## Dashboards
 
-Provisioned into the `Anak Tournaments` folder (deleting a JSON file under
+Provisioned into the `OWT` folder (deleting a JSON file under
 `monitoring/grafana/dashboards/` removes the dashboard — `disableDeletion: false`):
 
 | Dashboard | uid | What it shows |
@@ -150,7 +150,7 @@ Provisioned datasources:
 - Loki -> `http://loki:3100`
 - Tempo -> `${TEMPO_URL}` (default `http://tempo:3200`)
 
-Dashboards are provisioned into the `Anak Tournaments` folder; the default home dashboard
+Dashboards are provisioned into the `OWT` folder; the default home dashboard
 is `Application Logs`.
 
 ### Prometheus targets
