@@ -132,17 +132,34 @@ class SessionService:
         search: str | None = None,
         status: SessionStatus | None = None,
     ) -> list[dict]:
+        # Collapse refresh-token rotation into one row per logical session
+        # directly in SQL (the latest token per ``session_id``) instead of
+        # streaming the ENTIRE auth.refresh_token table into Python and
+        # aggregating there. Rotation writes a new token row on every refresh,
+        # so token count dwarfs session count; the old full-table load was the
+        # bottleneck behind the slow admin session inventory.
+        #
+        # ``user_id`` is constant within a session, so scoping it before the
+        # DISTINCT ON is safe and keeps the (session_id) index selective.
+        latest_ids = (
+            select(models.RefreshToken.id)
+            .distinct(models.RefreshToken.session_id)
+            .order_by(models.RefreshToken.session_id, models.RefreshToken.created_at.desc())
+        )
+        if user_id is not None:
+            latest_ids = latest_ids.where(models.RefreshToken.user_id == user_id)
+
         query = (
             select(models.RefreshToken)
             .options(selectinload(models.RefreshToken.user))
-            .order_by(models.RefreshToken.session_started_at.desc(), models.RefreshToken.created_at.desc())
+            .where(models.RefreshToken.id.in_(latest_ids.scalar_subquery()))
         )
-
-        if user_id is not None:
-            query = query.where(models.RefreshToken.user_id == user_id)
 
         if search:
             term = f"%{search}%"
+            # Match against the session's latest token + its owner (email and
+            # username are user-level and constant across a session; user_agent
+            # and ip_address reflect the session's current client).
             query = query.join(models.AuthUser, models.AuthUser.id == models.RefreshToken.user_id).where(
                 or_(
                     models.AuthUser.email.ilike(term),

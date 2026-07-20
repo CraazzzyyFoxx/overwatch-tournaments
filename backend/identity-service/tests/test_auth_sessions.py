@@ -1,7 +1,7 @@
 import asyncio
 import os
 import sys
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
@@ -428,3 +428,42 @@ def test_revoke_current_user_session_blocks_current_session() -> None:
 
     assert exc_info.value.status_code == 400
     assert exc_info.value.detail == "Current session cannot be revoked from the sessions list"
+
+
+def test_list_all_sessions_aggregates_in_sql_and_filters_status() -> None:
+    # Optimization contract: the latest-token-per-session collapse is pushed
+    # into a single DISTINCT ON query rather than streaming every refresh
+    # token into Python. The fake session captures the issued statement so we
+    # can assert the aggregation stays in SQL.
+    now = datetime.now(UTC)
+    active_user = SimpleNamespace(id=1, email="ada@x.io", username="ada")
+    revoked_user = SimpleNamespace(id=2, email="bob@x.io", username="bob")
+    active = SimpleNamespace(
+        session_id=uuid4(), user_id=1, user=active_user,
+        created_at=now, session_started_at=now, expires_at=now + timedelta(hours=1),
+        is_revoked=False, revoked_at=None, user_agent="Chrome", ip_address="10.0.0.1",
+    )
+    revoked = SimpleNamespace(
+        session_id=uuid4(), user_id=2, user=revoked_user,
+        created_at=now, session_started_at=now, expires_at=now + timedelta(hours=1),
+        is_revoked=True, revoked_at=now, user_agent="Firefox", ip_address="10.0.0.2",
+    )
+
+    session = _FakeSession([{"scalars": [active, revoked]}])
+    summaries = asyncio.run(SessionService.list_all_sessions(session))
+
+    from sqlalchemy.dialects import postgresql
+
+    compiled = str(session.executed[0].compile(dialect=postgresql.dialect()))
+    assert "DISTINCT ON" in compiled
+
+    by_id = {summary["session_id"]: summary for summary in summaries}
+    assert by_id[str(active.session_id)]["status"] == "active"
+    assert by_id[str(active.session_id)]["email"] == "ada@x.io"
+    assert by_id[str(active.session_id)]["user_id"] == 1
+    assert by_id[str(revoked.session_id)]["status"] == "revoked"
+
+    # Status filtering is applied after aggregation.
+    session_filtered = _FakeSession([{"scalars": [active, revoked]}])
+    only_active = asyncio.run(SessionService.list_all_sessions(session_filtered, status="active"))
+    assert [summary["session_id"] for summary in only_active] == [str(active.session_id)]
