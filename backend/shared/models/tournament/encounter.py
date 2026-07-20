@@ -12,6 +12,7 @@ from shared.models.tournament.tournament import Tournament, TournamentGroup
 
 if typing.TYPE_CHECKING:
     from shared.models.matches.match import Match
+    from shared.models.tournament.encounter_report import EncounterCaptainReport
 
 __all__ = ("Encounter",)
 
@@ -113,3 +114,8 @@ class Encounter(db.TimeStampIntegerMixin):
     submitted_by: Mapped["User | None"] = relationship(foreign_keys=[submitted_by_id])
     confirmed_by: Mapped["User | None"] = relationship(foreign_keys=[confirmed_by_id])
     matches: Mapped[list["Match"]] = relationship()
+    captain_reports: Mapped[list["EncounterCaptainReport"]] = relationship(
+        back_populates="encounter",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )

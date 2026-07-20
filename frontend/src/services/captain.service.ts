@@ -3,64 +3,47 @@ import type {
   EncounterMapPoolEntry,
   EncounterMapPoolState,
 } from "@/types/tournament.types";
-import type {
-  ResultSubmissionInput,
-  DisputeInput,
-  VetoActionInput,
-} from "@/types/admin.types";
+import type { CaptainReport } from "@/types/encounter.types";
+import type { VetoActionInput } from "@/types/admin.types";
 
-export interface CaptainMatchReportInput {
+export interface CaptainMapCodeInput {
+  map_index: number;
+  code: string;
+}
+
+export interface CaptainReportInput {
   home_score: number;
   away_score: number;
-  closeness: number; // 1..10 score
+  closeness: number; // 1..10
+  map_codes: CaptainMapCodeInput[];
+}
+
+export interface CaptainReportSubmitResult {
+  id: number;
+  result_status: string;
+  status: string;
+  home_score: number;
+  away_score: number;
+  closeness: number | null;
+  reports: CaptainReport[];
 }
 
 class CaptainService {
-  async submitResult(
+  async submitReport(
     encounterId: number,
-    data: ResultSubmissionInput
-  ): Promise<{ id: number; result_status: string; home_score: number; away_score: number }> {
-    const response = await apiFetch(`/api/v1/encounters/${encounterId}/submit-result`, {
+    data: CaptainReportInput
+  ): Promise<CaptainReportSubmitResult> {
+    const response = await apiFetch(`/api/v1/encounters/${encounterId}/report`, {
       method: "POST",
       body: data,
     });
     return response.json();
   }
 
-  async submitMatchReport(
-    encounterId: number,
-    data: CaptainMatchReportInput
-  ): Promise<{
-    id: number;
-    result_status: string;
-    home_score: number;
-    away_score: number;
-    closeness: number | null;
-  }> {
-    const response = await apiFetch(`/api/v1/encounters/${encounterId}/submit-match-report`,
-      { method: "POST", body: data }
-    );
-    return response.json();
-  }
-
-  async confirmResult(
-    encounterId: number
-  ): Promise<{ id: number; result_status: string; status: string }> {
-    const response = await apiFetch(`/api/v1/encounters/${encounterId}/confirm-result`, {
-      method: "POST",
-    });
-    return response.json();
-  }
-
-  async disputeResult(
-    encounterId: number,
-    data?: DisputeInput
-  ): Promise<{ id: number; result_status: string }> {
-    const response = await apiFetch(`/api/v1/encounters/${encounterId}/dispute-result`, {
-      method: "POST",
-      body: data ?? {},
-    });
-    return response.json();
+  async getReports(encounterId: number): Promise<CaptainReport[]> {
+    const response = await apiFetch(`/api/v1/encounters/${encounterId}/reports`);
+    const data: { reports: CaptainReport[] } = await response.json();
+    return data.reports;
   }
 
   async getMyRole(

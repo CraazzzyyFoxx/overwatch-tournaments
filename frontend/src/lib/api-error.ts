@@ -46,35 +46,6 @@ export function isResultLockedError(error: unknown): boolean {
   );
 }
 
-/**
- * True when a captain match report was rejected because the encounter is no
- * longer in a reportable state — either already confirmed or already submitted
- * and pending the other captain's confirmation. The backend answers with 400
- * and a detail like `Cannot submit: result status is '<status>'`. Callers use
- * this to show a friendly, state-specific message and refresh stale UI.
- */
-export function isResultNotReportableError(error: unknown): boolean {
-  return (
-    error instanceof ApiError &&
-    error.status === 400 &&
-    error.details.some((d) => /Cannot submit: result status is/i.test(d.msg))
-  );
-}
-
-/**
- * True when a captain tried to confirm a result they submitted themselves. The
- * backend rejects this with 400 and a detail like
- * `Cannot confirm your own submission - the other captain must confirm`.
- * Callers swap the raw string for a friendly localized message.
- */
-export function isConfirmOwnSubmissionError(error: unknown): boolean {
-  return (
-    error instanceof ApiError &&
-    error.status === 400 &&
-    error.details.some((d) => /confirm your own submission/i.test(d.msg))
-  );
-}
-
 // ─── Parsing ──────────────────────────────────────────────────────────────────
 
 const PYDANTIC_LOC_PREFIXES = ["body", "query", "path", "header", "cookie"];

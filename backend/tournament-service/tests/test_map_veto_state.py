@@ -41,6 +41,7 @@ def make_pool_entry(
     order: int = 0,
     action_index: int | None = None,
     picked_by: MapPickSide | None = None,
+    team_id: int | None = None,
 ) -> SimpleNamespace:
     return SimpleNamespace(
         id=map_id,
@@ -49,6 +50,7 @@ def make_pool_entry(
         action_index=action_index,
         status=status,
         picked_by=picked_by,
+        team_id=team_id,
     )
 
 
@@ -173,7 +175,7 @@ class SerializationTests(TestCase):
 
         self.assertEqual(
             {"id": 7, "map_id": 7, "order": 0, "action_index": 3, "picked_by": MapPickSide.AWAY,
-             "status": MapPoolEntryStatus.BANNED},
+             "team_id": None, "status": MapPoolEntryStatus.BANNED},
             data,
         )
 

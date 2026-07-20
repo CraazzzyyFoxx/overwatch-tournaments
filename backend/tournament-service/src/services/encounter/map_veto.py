@@ -82,6 +82,7 @@ def serialize_map_pool_entry(entry: models.EncounterMapPool) -> dict[str, Any]:
         "order": entry.order,
         "action_index": entry.action_index,
         "picked_by": entry.picked_by,
+        "team_id": entry.team_id,
         "status": entry.status,
     }
 
@@ -377,6 +378,11 @@ async def perform_veto_action(
         )
 
     entry = apply_veto_action(veto, pool, captain_side, map_id, action, now=datetime.now(UTC))
+    # Denormalize the picking team (mirrors picked_by) for report/UI consumers.
+    if entry.picked_by == MapPickSide.HOME:
+        entry.team_id = encounter.home_team_id
+    elif entry.picked_by == MapPickSide.AWAY:
+        entry.team_id = encounter.away_team_id
 
     register_map_veto_realtime_update(session, encounter_id)
     await session.commit()

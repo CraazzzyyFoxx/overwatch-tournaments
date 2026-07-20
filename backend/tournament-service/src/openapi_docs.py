@@ -516,21 +516,13 @@ DOCS: dict[str, dict] = {
         "summary": "Get my captain side",
         "description": "Returns the calling user's captain side (home/away) for an encounter, or null if they are not a captain; requires authentication.",
     },
-    "rpc.tournament.captain_submit_result": {
-        "summary": "Submit encounter result",
-        "description": "Lets an encounter captain submit a home/away score and returns the updated result status; requires authentication.",
+    "rpc.tournament.captain_submit_report": {
+        "summary": "Submit captain report",
+        "description": "Lets an encounter captain submit their own report (series score + closeness 1..10 + optional per-map codes). Reports are per-captain; when both captains' scores match the encounter auto-confirms and closeness becomes their average, otherwise it is disputed. Upsert allowed until confirmed; requires authentication.",
     },
-    "rpc.tournament.captain_submit_match_report": {
-        "summary": "Submit match report",
-        "description": "Lets an encounter captain submit per-match scores and a closeness rating; requires authentication.",
-    },
-    "rpc.tournament.captain_confirm_result": {
-        "summary": "Confirm encounter result",
-        "description": "Lets the opposing captain confirm a submitted encounter result; requires authentication.",
-    },
-    "rpc.tournament.captain_dispute_result": {
-        "summary": "Dispute encounter result",
-        "description": "Lets an encounter captain dispute a submitted result with a reason; requires authentication.",
+    "rpc.tournament.captain_reports": {
+        "summary": "Get captain reports",
+        "description": "Returns both captains' reports for an encounter (score, closeness, per-map codes); visible to anyone who can view the encounter.",
     },
     "rpc.tournament.captain_map_pool": {
         "summary": "Get encounter map pool",

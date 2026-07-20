@@ -16,7 +16,7 @@ Serialization parity:
   ``model_dump(mode="json", exclude_none=True)``; the delete returns 204 -> None.
 
 Commit semantics: every write service called here commits internally
-(captain.submit_result/submit_match_report/confirm_result/dispute_result,
+(captain.submit_captain_report,
 map_veto.perform_veto_action, reg_service.create/update/withdraw/check_in,
 encounter service.upsert_saved_view/delete_saved_view), so the handlers add no
 extra commit. The map-pool state read also commits when it lazily creates the
@@ -51,9 +51,7 @@ from src.rpc._helpers import (
     _run,
 )
 from src.schemas.captain import (
-    CaptainMatchReport,
-    DisputeRequest,
-    ResultSubmission,
+    CaptainReportSubmission,
     VetoAction,
     resolve_optional_viewer_side,
 )
@@ -108,86 +106,43 @@ def register(broker: Any, logger: Any) -> None:
 
         return await _run(logger, op)
 
-    @broker.subscriber("rpc.tournament.captain_submit_result")
-    async def _captain_submit_result(data: dict, msg: RabbitMessage) -> dict:
+    @broker.subscriber("rpc.tournament.captain_submit_report")
+    async def _captain_submit_report(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
             user = _identity(data)
             encounter_id = _require_id(data)
-            body = ResultSubmission.model_validate(_payload(data))
-            # submit_result commits internally; route returns a custom dict.
-            encounter = await captain_service.submit_result(
-                session,
-                user,
-                encounter_id,
-                body.home_score,
-                body.away_score,
-            )
-            return {
-                "id": encounter.id,
-                "result_status": encounter.result_status,
-                "home_score": encounter.home_score,
-                "away_score": encounter.away_score,
-            }
-
-        return await _run(logger, op)
-
-    @broker.subscriber("rpc.tournament.captain_submit_match_report")
-    async def _captain_submit_match_report(data: dict, msg: RabbitMessage) -> dict:
-        async def op(session: Any) -> Any:
-            user = _identity(data)
-            encounter_id = _require_id(data)
-            body = CaptainMatchReport.model_validate(_payload(data))
-            # submit_match_report commits internally; route returns a custom dict.
-            encounter = await captain_service.submit_match_report(
+            body = CaptainReportSubmission.model_validate(_payload(data))
+            # submit_captain_report commits internally; route returns a custom dict.
+            encounter = await captain_service.submit_captain_report(
                 session,
                 user,
                 encounter_id,
                 home_score=body.home_score,
                 away_score=body.away_score,
-                closeness_score=body.closeness,
+                closeness=body.closeness,
+                map_codes=[(mc.map_index, mc.code) for mc in body.map_codes],
             )
-            return {
-                "id": encounter.id,
-                "result_status": encounter.result_status,
-                "home_score": encounter.home_score,
-                "away_score": encounter.away_score,
-                "closeness": encounter.closeness,
-            }
-
-        return await _run(logger, op)
-
-    @broker.subscriber("rpc.tournament.captain_confirm_result")
-    async def _captain_confirm_result(data: dict, msg: RabbitMessage) -> dict:
-        async def op(session: Any) -> Any:
-            user = _identity(data)
-            encounter_id = _require_id(data)
-            # confirm_result commits internally; route returns a custom dict.
-            encounter = await captain_service.confirm_result(session, user, encounter_id)
+            reports = await captain_service.get_encounter_reports(session, encounter_id)
             return {
                 "id": encounter.id,
                 "result_status": encounter.result_status,
                 "status": encounter.status,
+                "home_score": encounter.home_score,
+                "away_score": encounter.away_score,
+                "closeness": encounter.closeness,
+                "reports": reports,
             }
 
         return await _run(logger, op)
 
-    @broker.subscriber("rpc.tournament.captain_dispute_result")
-    async def _captain_dispute_result(data: dict, msg: RabbitMessage) -> dict:
+    @broker.subscriber("rpc.tournament.captain_reports")
+    async def _captain_reports(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
-            user = _identity(data)
+            # Public read: reports are visible to anyone who can view the encounter.
             encounter_id = _require_id(data)
-            body = DisputeRequest.model_validate(_payload(data))
-            # dispute_result commits internally; route returns a custom dict.
-            encounter = await captain_service.dispute_result(
-                session,
-                user,
-                encounter_id,
-                body.reason,
-            )
-            return {
-                "id": encounter.id,
-                "result_status": encounter.result_status,
-            }
+            tournament_id = await visibility_resolvers.tournament_id_for_encounter(session, encounter_id)
+            await assert_tournament_viewable(session, _optional_identity(data), tournament_id)
+            return {"reports": await captain_service.get_encounter_reports(session, encounter_id)}
 
         return await _run(logger, op)
 

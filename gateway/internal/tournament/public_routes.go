@@ -4,8 +4,7 @@
 // (typed RPC). Mirrors src/routes/{captain,registration,encounter}.py.
 //
 // Auth:
-//   - Captain actions (my-role, submit-result, submit-match-report,
-//     confirm-result, dispute-result, veto), registration me/create/check-in,
+//   - Captain actions (my-role, report, veto), registration me/create/check-in,
 //     and the saved-view writes all require a logged-in user -> AuthRequired.
 //   - The captain map-pool read and the public registration form/list reads are
 //     visibility-gated (hidden tournaments 404 for ineligible viewers) -> AuthOptional,
@@ -21,10 +20,8 @@ import "github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/edge"
 var PublicWriteRoutes = []edge.RouteSpec{
 	// captain.py — encounter result submission + map veto.
 	{Method: "GET", Pattern: "/api/v1/encounters/{encounter_id}/my-role", Queue: "rpc.tournament.captain_my_role", IDParam: "encounter_id", Auth: edge.AuthRequired},
-	{Method: "POST", Pattern: "/api/v1/encounters/{encounter_id}/submit-result", Queue: "rpc.tournament.captain_submit_result", IDParam: "encounter_id", Body: true, Auth: edge.AuthRequired},
-	{Method: "POST", Pattern: "/api/v1/encounters/{encounter_id}/submit-match-report", Queue: "rpc.tournament.captain_submit_match_report", IDParam: "encounter_id", Body: true, Auth: edge.AuthRequired},
-	{Method: "POST", Pattern: "/api/v1/encounters/{encounter_id}/confirm-result", Queue: "rpc.tournament.captain_confirm_result", IDParam: "encounter_id", Auth: edge.AuthRequired},
-	{Method: "POST", Pattern: "/api/v1/encounters/{encounter_id}/dispute-result", Queue: "rpc.tournament.captain_dispute_result", IDParam: "encounter_id", Body: true, Auth: edge.AuthRequired},
+	{Method: "POST", Pattern: "/api/v1/encounters/{encounter_id}/report", Queue: "rpc.tournament.captain_submit_report", IDParam: "encounter_id", Body: true, Auth: edge.AuthRequired},
+	{Method: "GET", Pattern: "/api/v1/encounters/{encounter_id}/reports", Queue: "rpc.tournament.captain_reports", IDParam: "encounter_id", Auth: edge.AuthOptional},
 	{Method: "GET", Pattern: "/api/v1/encounters/{encounter_id}/map-pool", Queue: "rpc.tournament.captain_map_pool", IDParam: "encounter_id", Auth: edge.AuthOptional},
 	{Method: "GET", Pattern: "/api/v1/encounters/{encounter_id}/map-pool/state", Queue: "rpc.tournament.captain_map_pool_state", IDParam: "encounter_id", Auth: edge.AuthOptional},
 	{Method: "POST", Pattern: "/api/v1/encounters/{encounter_id}/map-pool/veto", Queue: "rpc.tournament.captain_veto", IDParam: "encounter_id", Body: true, Auth: edge.AuthRequired},

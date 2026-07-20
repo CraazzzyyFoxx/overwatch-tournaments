@@ -7,6 +7,7 @@ from shared.core import db, enums
 from shared.models.catalog.map import Map
 from shared.models.tournament.encounter import Encounter
 from shared.models.tournament.stage import Stage
+from shared.models.tournament.team import Team
 from shared.models.tournament.tournament import Tournament
 
 __all__ = (
@@ -77,9 +78,18 @@ class EncounterMapPool(db.TimeStampIntegerMixin):
         default=enums.MapPoolEntryStatus.AVAILABLE,
         server_default=enums.MapPoolEntryStatus.AVAILABLE.value,
     )
+    # Denormalized picking team (mirrors ``picked_by``): PICKED+home ->
+    # encounter.home_team_id, PICKED+away -> encounter.away_team_id; NULL for the
+    # ``decider`` map, banned and still-available entries. ``picked_by`` stays
+    # authoritative for the veto sequence; this is a convenience for report/UI
+    # consumers that key off team_id.
+    team_id: Mapped[int | None] = mapped_column(
+        ForeignKey(Team.id, ondelete="SET NULL"), nullable=True, index=True
+    )
 
     encounter: Mapped[Encounter] = relationship()
     map: Mapped[Map] = relationship()
+    team: Mapped["Team | None"] = relationship()
 
 
 class MapVetoConfig(db.TimeStampIntegerMixin):

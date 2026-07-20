@@ -5235,14 +5235,6 @@
       },
       "summary": "Update tournament"
     },
-    "rpc.tournament.captain_confirm_result": {
-      "description": "Lets the opposing captain confirm a submitted encounter result; requires authentication.",
-      "summary": "Confirm encounter result"
-    },
-    "rpc.tournament.captain_dispute_result": {
-      "description": "Lets an encounter captain dispute a submitted result with a reason; requires authentication.",
-      "summary": "Dispute encounter result"
-    },
     "rpc.tournament.captain_map_pool": {
       "description": "Returns the public map pool for an encounter; no authentication required.",
       "summary": "Get encounter map pool"
@@ -5255,13 +5247,13 @@
       "description": "Returns the calling user's captain side (home/away) for an encounter, or null if they are not a captain; requires authentication.",
       "summary": "Get my captain side"
     },
-    "rpc.tournament.captain_submit_match_report": {
-      "description": "Lets an encounter captain submit per-match scores and a closeness rating; requires authentication.",
-      "summary": "Submit match report"
+    "rpc.tournament.captain_reports": {
+      "description": "Returns both captains' reports for an encounter (score, closeness, per-map codes); visible to anyone who can view the encounter.",
+      "summary": "Get captain reports"
     },
-    "rpc.tournament.captain_submit_result": {
-      "description": "Lets an encounter captain submit a home/away score and returns the updated result status; requires authentication.",
-      "summary": "Submit encounter result"
+    "rpc.tournament.captain_submit_report": {
+      "description": "Lets an encounter captain submit their own report (series score + closeness 1..10 + optional per-map codes); reports are per-captain and the result auto-confirms when both captains' scores match, otherwise disputed; requires authentication.",
+      "summary": "Submit captain report"
     },
     "rpc.tournament.captain_veto": {
       "description": "Lets a captain ban or pick a map in the encounter's veto and returns the updated pool entry; requires authentication.",

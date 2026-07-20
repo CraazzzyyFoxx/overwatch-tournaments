@@ -11,7 +11,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { EncounterEditDialog } from "@/components/tournaments/EncounterEditDialog";
 import { MatchReportDialog } from "@/components/tournaments/MatchReportDialog";
 import { notify } from "@/lib/notify";
-import { getApiErrorMessage, isConfirmOwnSubmissionError } from "@/lib/api-error";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
 import { usePermissions } from "@/hooks/usePermissions";
 import captainService from "@/services/captain.service";
@@ -44,10 +43,8 @@ function GroupStagePanel({
   stages,
   onEdit,
   onReport,
-  onConfirm,
   canEdit,
   canReport,
-  canConfirm,
   bracketTabs
 }: {
   stage: Stage;
@@ -57,10 +54,8 @@ function GroupStagePanel({
   stages: Stage[];
   onEdit?: (encounter: Encounter) => void;
   onReport?: (encounter: Encounter) => void;
-  onConfirm?: (encounter: Encounter) => void;
   canEdit?: (encounter: Encounter) => boolean;
   canReport?: (encounter: Encounter) => boolean;
-  canConfirm?: (encounter: Encounter) => boolean;
   bracketTabs?: Array<{
     key: string;
     href: string;
@@ -142,10 +137,8 @@ function GroupStagePanel({
           type={stage.stage_type}
           onEdit={onEdit}
           onReport={onReport}
-          onConfirm={onConfirm}
           canEdit={canEdit}
           canReport={canReport}
-          canConfirm={canConfirm}
         />
       </TabsContent>
     </Tabs>
@@ -186,8 +179,7 @@ export default function TournamentBracketPage({ tournament }: TournamentBracketP
   const canEdit = isAdmin ? () => true : undefined;
   const canReport =
     isAuthenticated && !isAdmin
-      ? (enc: Encounter) =>
-          enc.result_status === "none" || enc.result_status === "disputed"
+      ? (enc: Encounter) => enc.result_status !== "confirmed"
       : undefined;
   const handleEdit = isAdmin ? (enc: Encounter) => setEditEncounter(enc) : undefined;
   const handleReport =
@@ -198,21 +190,13 @@ export default function TournamentBracketPage({ tournament }: TournamentBracketP
               encounterService.getEncounter(enc.id),
               captainService.getMyRole(enc.id)
             ]);
-            if (fresh.result_status !== "none" && fresh.result_status !== "disputed") {
-              // The result was submitted/confirmed after this bracket data was
-              // cached; report is no longer valid. Tell the captain why, then
+            if (fresh.result_status === "confirmed") {
+              // The result was confirmed after this bracket data was cached; the
+              // report action is no longer valid. Tell the captain why, then
               // refresh so the stale report action disappears.
-              const confirmed = fresh.result_status === "confirmed";
-              notify.error(
-                confirmed
-                  ? t("matchReport.alreadyConfirmedTitle")
-                  : t("matchReport.pendingSubmissionTitle"),
-                {
-                  description: confirmed
-                    ? t("matchReport.alreadyConfirmedBody")
-                    : t("matchReport.pendingSubmissionBody")
-                }
-              );
+              notify.error(t("matchReport.confirmedLockedTitle"), {
+                description: t("matchReport.confirmedLockedBody")
+              });
               void encountersQuery.refetch();
               return;
             }
@@ -223,52 +207,6 @@ export default function TournamentBracketPage({ tournament }: TournamentBracketP
             setReportEncounter(fresh);
           } catch {
             notify.error(t("common.error"), { description: t("common.roleVerificationFailed") });
-          }
-        }
-      : undefined;
-
-  const canConfirm =
-    isAuthenticated && !isAdmin
-      ? (enc: Encounter) => enc.result_status === "pending_confirmation"
-      : undefined;
-  const handleConfirm =
-    isAuthenticated && !isAdmin
-      ? async (enc: Encounter) => {
-          try {
-            const [fresh, role] = await Promise.all([
-              encounterService.getEncounter(enc.id),
-              captainService.getMyRole(enc.id)
-            ]);
-            if (fresh.result_status !== "pending_confirmation") {
-              // Bracket data was stale — nothing pending to confirm anymore.
-              notify.error(t("matchReport.nothingToConfirmTitle"), {
-                description: t("matchReport.nothingToConfirmBody")
-              });
-              void encountersQuery.refetch();
-              return;
-            }
-            if (role.side === null) {
-              notify.error(t("common.noAccess"), { description: t("common.notCaptain") });
-              return;
-            }
-            await captainService.confirmResult(enc.id);
-            notify.success(t("matchReport.confirmedSuccess"));
-            // The encounter status flips synchronously, so refetch it now for
-            // instant feedback. Standings are rebuilt by an async recalc job —
-            // they refresh via the realtime `results_changed` event once the job
-            // finishes; refetching here would only re-fetch pre-recalc rows.
-            await encountersQuery.refetch();
-          } catch (error) {
-            if (isConfirmOwnSubmissionError(error)) {
-              notify.error(t("matchReport.cannotConfirmOwnTitle"), {
-                description: t("matchReport.cannotConfirmOwnBody")
-              });
-              return;
-            }
-            notify.apiError(error, {
-              title: t("matchReport.confirmErrorMessage"),
-              description: getApiErrorMessage(error)
-            });
           }
         }
       : undefined;
@@ -481,10 +419,8 @@ export default function TournamentBracketPage({ tournament }: TournamentBracketP
                   stages={stages}
                   onEdit={handleEdit}
                   onReport={handleReport}
-                  onConfirm={handleConfirm}
                   canEdit={canEdit}
                   canReport={canReport}
-                  canConfirm={canConfirm}
                   bracketTabs={index === 0 ? bracketTabs : undefined}
                 />
               ))
@@ -583,10 +519,8 @@ export default function TournamentBracketPage({ tournament }: TournamentBracketP
                           type={stage.stage_type}
                           onEdit={handleEdit}
                           onReport={handleReport}
-                          onConfirm={handleConfirm}
                           canEdit={canEdit}
                           canReport={canReport}
-                          canConfirm={canConfirm}
                         />
                       )}
                     </TabsContent>

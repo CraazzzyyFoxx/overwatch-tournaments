@@ -51,6 +51,27 @@ export interface Encounter {
   tournament_group?: TournamentGroup | null;
 }
 
+export interface CaptainMapCode {
+  id: number;
+  map_index: number;
+  map_id: number | null;
+  code: string;
+}
+
+export interface CaptainReport {
+  id: number;
+  encounter_id: number;
+  team_id: number;
+  side: "home" | "away" | null;
+  reporter_user_id: number | null;
+  home_score: number;
+  away_score: number;
+  closeness: number; // 1..10
+  map_codes: CaptainMapCode[];
+  created_at: string | null;
+  updated_at: string | null;
+}
+
 export interface Match {
   id: number;
   created_at: Date;

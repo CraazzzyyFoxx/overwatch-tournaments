@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Pencil, FileEdit, Check, Maximize2, Minimize2, Search } from "lucide-react";
+import { Pencil, FileEdit, Maximize2, Minimize2, Search } from "lucide-react";
 import Link from "next/link";
 
 import { useTranslations } from "next-intl";
@@ -25,10 +25,8 @@ interface BracketViewProps {
   type: StageType;
   onEdit?: (encounter: Encounter) => void;
   onReport?: (encounter: Encounter) => void;
-  onConfirm?: (encounter: Encounter) => void;
   canEdit?: (encounter: Encounter) => boolean;
   canReport?: (encounter: Encounter) => boolean;
-  canConfirm?: (encounter: Encounter) => boolean;
 }
 
 interface MatchNodeData {
@@ -640,10 +638,8 @@ export function BracketView({
   type,
   onEdit,
   onReport,
-  onConfirm,
   canEdit,
   canReport,
-  canConfirm
 }: BracketViewProps) {
   const t = useTranslations();
   const [hoveredTeamId, setHoveredTeamId] = useState<number | null>(null);
@@ -820,7 +816,6 @@ export function BracketView({
           {layout.nodes.map((node) => {
             const editable = onEdit && (canEdit?.(node.encounter) ?? true);
             const reportable = onReport && (canReport?.(node.encounter) ?? false);
-            const confirmable = onConfirm && (canConfirm?.(node.encounter) ?? false);
             return (
               <div
                 key={node.id}
@@ -842,7 +837,7 @@ export function BracketView({
                   </span>
                 </div>
                 {resultStatusBadge(node.encounter, t)}
-                {(editable || reportable || confirmable) && (
+                {(editable || reportable) && (
                   <div className="absolute right-1 top-1 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
                     {editable && (
                       <button
@@ -868,19 +863,6 @@ export function BracketView({
                         }}
                       >
                         <FileEdit className="h-3 w-3" />
-                      </button>
-                    )}
-                    {confirmable && (
-                      <button
-                        type="button"
-                        className="rounded-md border border-emerald-500/40 bg-emerald-500/15 p-1 text-emerald-400 hover:bg-emerald-500/25"
-                        aria-label={t("bracket.confirmMatch")}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onConfirm?.(node.encounter);
-                        }}
-                      >
-                        <Check className="h-3 w-3" />
                       </button>
                     )}
                   </div>

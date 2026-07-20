@@ -144,6 +144,8 @@ export interface EncounterMapPoolEntry {
   /** Global veto-action order (bans AND picks); null while still available. */
   action_index: number | null;
   picked_by: MapPickSide | null;
+  /** Denormalized team that picked this map (null unless PICKED). */
+  team_id: number | null;
   status: MapPoolEntryStatus;
 }
 

@@ -16,24 +16,26 @@ from src.services.encounter import captain as captain_service
 # ── Schemas ──────────────────────────────────────────────────────────────
 
 
-class ResultSubmission(BaseModel):
-    home_score: int
-    away_score: int
-
-
-class DisputeRequest(BaseModel):
-    reason: str | None = None
-
-
 class VetoAction(BaseModel):
     map_id: int
     action: str  # "ban" or "pick"
 
 
-class CaptainMatchReport(BaseModel):
+class CaptainMapCodeInput(BaseModel):
+    map_index: int = Field(ge=1)
+    code: str = Field(min_length=1, max_length=32)
+
+
+class CaptainReportSubmission(BaseModel):
+    """One captain's independent encounter report.
+
+    ``home_score``/``away_score`` are in the encounter's home/away orientation.
+    """
+
     home_score: int = Field(ge=0)
     away_score: int = Field(ge=0)
     closeness: int = Field(ge=1, le=10)
+    map_codes: list[CaptainMapCodeInput] = Field(default_factory=list)
 
 
 # HTTP 403 Forbidden — matched without importing fastapi so this module stays
