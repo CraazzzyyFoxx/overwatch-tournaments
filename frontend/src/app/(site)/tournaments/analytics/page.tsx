@@ -31,6 +31,7 @@ import { useTranslations } from "next-intl";
 import tournamentService from "@/services/tournament.service";
 import analyticsService from "@/services/analytics.service";
 import { useWorkspaceStore } from "@/stores/workspace.store";
+import { useSyncActiveWorkspace } from "@/hooks/useSyncActiveWorkspace";
 
 const AnalyticsPage = () => {
   const router = useRouter();
@@ -49,6 +50,17 @@ const AnalyticsPage = () => {
 
   const tournamentId = useMemo(() => parseId(searchParams.get("tournamentId")), [parseId, searchParams]);
   const algorithmId = useMemo(() => parseId(searchParams.get("algorithm")), [parseId, searchParams]);
+
+  // Resolve the selected tournament's owning workspace independently of the
+  // current scope (skipWorkspace), then follow it — so a shared analytics link
+  // to a tournament in another workspace switches the active workspace to match.
+  const { data: selectedTournamentOverview } = useQuery({
+    queryKey: ["tournament-overview", tournamentId],
+    queryFn: () => tournamentService.getPublicOverview(tournamentId!),
+    enabled: tournamentId != null,
+    staleTime: 5 * 60_000
+  });
+  useSyncActiveWorkspace(selectedTournamentOverview?.workspace_id);
 
   const {
     data: tournamentsData,
