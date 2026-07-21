@@ -58,10 +58,6 @@ export async function middleware(request: NextRequest) {
     const headers = new Headers(request.headers);
     headers.delete("x-owt-workspace-id");
     headers.delete("x-owt-host-mode");
-    // Forward the request path so the (site) layout can theme resource routes
-    // (e.g. a tournament) by their owning workspace. Strip any spoofed value.
-    headers.delete("x-owt-pathname");
-    headers.set("x-owt-pathname", request.nextUrl.pathname);
     return NextResponse.next({ request: { headers } });
   }
 
@@ -75,8 +71,6 @@ export async function middleware(request: NextRequest) {
     headers.delete("x-owt-host-mode");
     headers.set("x-owt-workspace-id", String(lookup.id));
     headers.set("x-owt-host-mode", "tenant");
-    headers.delete("x-owt-pathname");
-    headers.set("x-owt-pathname", request.nextUrl.pathname);
     return NextResponse.next({ request: { headers } });
   }
 

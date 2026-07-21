@@ -3,50 +3,41 @@
 import { useEffect } from "react";
 
 import { useWorkspaceStore } from "@/stores/workspace.store";
-import { useThemeScopeStore } from "@/stores/theme-scope.store";
 import { applyWorkspacePalette, deriveWorkspacePalette } from "@/lib/workspace-theme";
 
 /**
- * Keeps the main-site palette in sync with the active workspace on the client.
+ * Applies the site palette on the client.
  *
- * The `(site)` layout SSR-seeds the palette onto the `.site-theme` wrapper for a
- * flash-free first paint. Switching workspaces only updates the store + cookie
- * (no `router.refresh()`), so this component re-derives and imperatively applies
- * the palette whenever the active workspace changes.
+ * Custom workspace branding is tenant-only: only a locked tenant (subdomain /
+ * custom-domain) host paints its workspace's palette. The shared platform (apex)
+ * host never customizes, so this clears any inherited palette back to the default
+ * tokens there.
  *
- * A route-scoped workspace (see {@link useThemeScopeStore}) wins over the
- * viewer's selection — e.g. viewing a tournament owned by another workspace
- * paints that owner's brand. A locked tenant (white-label) host always keeps its
- * host-fixed brand, so the scope is ignored there.
- *
- * It intentionally does nothing until the store has loaded its workspaces, so the
- * SSR seed is never cleared in the gap before hydration completes.
+ * On a tenant host the `(site)` layout SSR-seeds the palette for a flash-free
+ * first paint; this keeps it in sync once the store has loaded (the host-locked
+ * workspace only becomes resolvable after `fetchWorkspaces`). It never clears the
+ * SSR seed in the hydration gap before the locked workspace is known.
  */
 export function WorkspaceThemeSync() {
-  const currentWorkspaceId = useWorkspaceStore((s) => s.currentWorkspaceId);
   const workspaces = useWorkspaceStore((s) => s.workspaces);
   const hostLockedWorkspaceId = useWorkspaceStore((s) => s.hostLockedWorkspaceId);
-  // Subscribe for reactivity; the effect reads the *fresh* value via getState so
-  // it never applies a stale scope on the mount commit (a deeper route's scope
-  // effect runs before this parent effect and sets the store synchronously).
-  const scopedWorkspaceReactive = useThemeScopeStore((s) => s.scopedWorkspace);
 
   useEffect(() => {
     const el = document.querySelector<HTMLElement>(".site-theme");
     if (!el) return;
 
-    const scoped = useThemeScopeStore.getState().scopedWorkspace;
-    if (scoped && hostLockedWorkspaceId == null) {
-      applyWorkspacePalette(el, deriveWorkspacePalette(scoped));
+    // Shared platform host: no customization — ensure the default tokens apply.
+    if (hostLockedWorkspaceId == null) {
+      applyWorkspacePalette(el, null);
       return;
     }
 
-    // Store not hydrated yet — leave the SSR seed untouched.
-    if (workspaces.length === 0) return;
-
-    const current = workspaces.find((w) => w.id === currentWorkspaceId) ?? null;
-    applyWorkspacePalette(el, deriveWorkspacePalette(current));
-  }, [scopedWorkspaceReactive, hostLockedWorkspaceId, currentWorkspaceId, workspaces]);
+    // Tenant host: theme from the host-locked workspace once it's loaded. Until
+    // then keep the SSR seed rather than clearing it in the hydration gap.
+    const locked = workspaces.find((w) => w.id === hostLockedWorkspaceId);
+    if (!locked) return;
+    applyWorkspacePalette(el, deriveWorkspacePalette(locked));
+  }, [hostLockedWorkspaceId, workspaces]);
 
   return null;
 }
