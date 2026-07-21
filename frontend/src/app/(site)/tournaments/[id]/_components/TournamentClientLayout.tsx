@@ -10,6 +10,7 @@ import { cn, formatDateRange } from "@/lib/utils";
 import { useTournamentRealtime } from "@/hooks/useTournamentRealtime";
 import { createTrailingCoalescer } from "@/hooks/tournamentRealtime.helpers";
 import { useTournamentQuery } from "../_hooks/useTournamentClientData";
+import { useWorkspaceStore } from "@/stores/workspace.store";
 import type { StageSummary } from "@/types/tournament.types";
 
 import { useTranslations, useLocale } from "next-intl";
@@ -56,6 +57,18 @@ export default function TournamentClientLayout({
     workspaceId: tournament?.workspace_id,
     onStructureChanged: routeRefresh.schedule,
   });
+
+  // Auto-switch the active workspace to the tournament's owner so the rest of
+  // the app (nav, scoping, switcher) follows the tournament the viewer opened.
+  // Keyed on the owner alone, so a manual switch while on the page is not
+  // fought; a no-op on a locked tenant host (setCurrentWorkspace guards it).
+  const tournamentWorkspaceId = tournament?.workspace_id;
+  React.useEffect(() => {
+    if (tournamentWorkspaceId == null) return;
+    const { currentWorkspaceId, setCurrentWorkspace } = useWorkspaceStore.getState();
+    if (currentWorkspaceId === tournamentWorkspaceId) return;
+    setCurrentWorkspace(tournamentWorkspaceId);
+  }, [tournamentWorkspaceId]);
 
   if (tournamentQuery.isPending) {
     return <TournamentShellSkeleton />;

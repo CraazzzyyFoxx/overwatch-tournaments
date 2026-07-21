@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { Check, ChevronsUpDown } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -53,7 +52,6 @@ export default function WorkspaceSwitcher() {
   const t = useTranslations();
   const [open, setOpen] = useState(false);
   const hoverTimeout = useRef<ReturnType<typeof setTimeout>>(null);
-  const router = useRouter();
   const { workspaces, currentWorkspaceId, fetchWorkspaces, setCurrentWorkspace } =
     useWorkspaceStore();
 
@@ -131,7 +129,6 @@ export default function WorkspaceSwitcher() {
                 onClick={() => {
                   setCurrentWorkspace(workspace.id);
                   setOpen(false);
-                  router.push(`/workspace/${workspace.slug}`);
                 }}
                 className={cn(
                   "flex items-center gap-2.5 rounded-md px-2 py-1.5 text-sm w-full text-left",
