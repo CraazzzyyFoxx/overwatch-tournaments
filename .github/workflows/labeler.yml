@@ -16,7 +16,7 @@ jobs:
       pull-requests: write
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/labeler@v5
+    - uses: actions/labeler@v7
       if: ${{ github.event.action != 'labeled' && github.event.action != 'unlabeled' }}
     - run: echo "Done adding labels"
   # Advisory only: nudges to add a semantic label (feature/bug/…). Those can't be
