@@ -64,7 +64,7 @@ jobs:
       # and un-configured repos stay green.
       - name: Publish coverage badge to gist
         if: ${{ github.event_name == 'push' && env.GIST_TOKEN != '' }}
-        uses: schneegans/dynamic-badges-action@v1.7.0
+        uses: schneegans/dynamic-badges-action@v1.9.0
         with:
           auth: ${{ secrets.GIST_TOKEN }}
           gistID: e00b7692443a542b0e505c090cf83d35
