@@ -918,7 +918,7 @@ export function BalancerMainPageClient() {
       <BalancerOperationDialog
         open={isJsonImportOpen}
         onOpenChange={setIsJsonImportOpen}
-        title="Import JSON"
+        title="Load balance JSON"
         description="Load a previously downloaded balance JSON as a preview variant. Nothing is written to the tournament until you save or export it."
         steps={jsonImportSteps}
         isRunning={importBalanceMutation.isPending}

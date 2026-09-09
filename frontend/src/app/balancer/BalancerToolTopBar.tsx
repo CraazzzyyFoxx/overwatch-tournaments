@@ -54,13 +54,6 @@ export function BalancerToolTopBar({ summary }: Readonly<BalancerToolTopBarProps
         variant="outline"
         className="h-8 shrink-0 rounded-lg border-[color:var(--aqt-border-2)] bg-black/15 px-3 text-sm text-[color:var(--aqt-fg-muted)] hover:bg-white/[0.05] hover:text-[color:var(--aqt-fg)]"
       >
-        <Link href="/balancer/pickup">Mixes</Link>
-      </Button>
-      <Button
-        asChild
-        variant="outline"
-        className="h-8 shrink-0 rounded-lg border-[color:var(--aqt-border-2)] bg-black/15 px-3 text-sm text-[color:var(--aqt-fg-muted)] hover:bg-white/[0.05] hover:text-[color:var(--aqt-fg)]"
-      >
         <Link href={`/admin/tournaments/${summary.id}/registration/rank-autofill`}>
           <Sparkles className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
           Rank autofill

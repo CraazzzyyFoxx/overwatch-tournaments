@@ -61,6 +61,22 @@ describe("parseImportedBalancePayload", () => {
     expect(team.roster.Support).toEqual([]);
   });
 
+  // The save endpoint validates statistics against the solver's `Statistics`
+  // schema: these four are required, so a file that omits the block must still
+  // produce them or the import previews fine and 422s on save.
+  it("derives the statistics the save endpoint requires when the file omits them", () => {
+    const payload = parseImportedBalancePayload(
+      payloadWith({ name: "Team A", roster: { Tank: [player] } })
+    );
+
+    expect(payload.statistics).toMatchObject({
+      average_mmr: 2600,
+      mmr_std_dev: 0,
+      total_teams: 1,
+      players_per_team: 1
+    });
+  });
+
   it("defaults optional player fields so the payload stays saveable", () => {
     const payload = parseImportedBalancePayload(
       payloadWith({

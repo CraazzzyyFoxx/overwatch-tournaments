@@ -162,7 +162,7 @@ export function PresetRunPanel({
         variant="outline"
         onClick={() => importFileRef.current?.click()}
         disabled={isImportPending}
-        title="Load a balance JSON as a preview variant — nothing is written to the tournament"
+        title="Load a balance JSON downloaded from this tool as a preview variant — nothing is written to the tournament"
         className="h-8 rounded-lg border-[color:var(--aqt-border-2)] bg-black/15 px-3 text-sm text-[color:var(--aqt-fg-muted)] hover:bg-white/[0.05] hover:text-[color:var(--aqt-fg)]"
       >
         {isImportPending ? (
@@ -170,7 +170,7 @@ export function PresetRunPanel({
         ) : (
           <FolderInput className="mr-1.5 h-3.5 w-3.5" />
         )}
-        Import JSON
+        Load balance JSON
       </Button>
       <Button
         type="button"

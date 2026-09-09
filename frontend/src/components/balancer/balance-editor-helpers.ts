@@ -365,7 +365,7 @@ function recalculateBalancePayloadStats(
  * (balance/comfort/composite) cannot be recomputed client-side and are
  * preserved from the previous statistics (they reflect the original solve).
  */
-function recalculateBalanceStatistics(
+export function recalculateBalanceStatistics(
   payload: InternalBalancePayload,
 ): InternalBalancePayload["statistics"] {
   const previous = payload.statistics ?? {};
@@ -388,6 +388,11 @@ function recalculateBalanceStatistics(
 
   return {
     ...previous,
+    // `total_teams`/`players_per_team` mirror `result_serializer.teams_to_json`
+    // (roster slot count = the largest roster) and are required by the save
+    // endpoint's `Statistics` schema, so they are always written, not inherited.
+    total_teams: teams.length,
+    players_per_team: Math.max(...teams.map((team) => countTeamPlayers(team))),
     average_mmr: mean(teamAverages),
     mmr_std_dev: sampleStdDev(teamAverages),
     average_total_rating: mean(teamTotals),
