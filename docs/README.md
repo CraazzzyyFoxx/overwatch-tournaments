@@ -59,6 +59,7 @@ Procedures for an operator. Commands are meant to be run verbatim.
 | Runbook | When |
 | --- | --- |
 | [`backup-rustfs.md`](./backup-rustfs.md) | PostgreSQL dumps, two-site S3 replication, verification, restore |
+| [`dev-site.md`](./dev-site.md) | The dev deployment at `dev.owt.craazzzyyfoxx.me` — what differs from production, deploy, data refresh |
 | [`challonge_normalization_phase2_runbook.md`](./challonge_normalization_phase2_runbook.md) | Running the gated destructive migration — and the pattern for any future one |
 | [`superpowers/plans/2026-07-06-subdomains-ops-runbook.md`](./superpowers/plans/2026-07-06-subdomains-ops-runbook.md) | Workspace subdomains and custom domains: DNS, certificates, verification |
 | [`../backend/analytics-service/docs/runbook-shift-recompute.md`](../backend/analytics-service/docs/runbook-shift-recompute.md) | Recomputing OpenSkill rating shifts |
