@@ -15105,6 +15105,7 @@
     },
     "app.TournamentStatus": {
       "enum": [
+        "announcement",
         "registration",
         "draft",
         "check_in",
@@ -42165,7 +42166,7 @@
         },
         "status": {
           "$ref": "#/components/schemas/tournament.TournamentStatus",
-          "default": "registration"
+          "default": "announcement"
         },
         "team_formation": {
           "default": "balancer",
@@ -42967,6 +42968,7 @@
     },
     "tournament.TournamentStatus": {
       "enum": [
+        "announcement",
         "registration",
         "draft",
         "check_in",
