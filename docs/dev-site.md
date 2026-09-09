@@ -4,7 +4,7 @@ A second, self-contained deployment of the same stack on the home server
 (`home.craazzzyyfoxx.me`, `91.135.214.75`), for trying a change against real data before it
 is tagged for production. It shares nothing with production except MinIO objects and the
 OAuth applications; separate database, separate Redis/RabbitMQ, separate JWT secret,
-separate cookie domain.
+separate cookie namespace.
 
 | | Production | Dev site |
 | --- | --- | --- |
@@ -15,6 +15,7 @@ separate cookie domain.
 | Platform zone | `owt.craazzzyyfoxx.me` | `dev.owt.craazzzyyfoxx.me` |
 | Postgres | its own | host `db_postgres` via `db_pgbouncer`, database `anak_dev` |
 | Tracing | otel-collector → Tempo/Sentry | off (`TRACING_ENABLED=false`) |
+| Cookie names | `owt_*` | `owtdev_*` (`COOKIE_PREFIX`/`SESSION_COOKIE_PREFIX`) |
 | discord-worker | 1 replica | **0 replicas** |
 
 ## Why `PLATFORM_ZONE` exists
@@ -31,6 +32,38 @@ production's. Both sides of the stack therefore take the zone from the environme
 - compose — `PLATFORM_ZONE` in the root `.env` feeds that build arg.
 
 Both default to `owt.craazzzyyfoxx.me`, so production needs no configuration to keep working.
+
+## Why the cookie prefix exists
+
+The zone split is not enough on its own. Production writes `owt_access_token`,
+`owt_refresh_token` and `owt_oauth_csrf` with `Domain=.owt.craazzzyyfoxx.me` for
+cross-subdomain SSO, so the browser sends them to the dev site as well — and the `Cookie`
+header carries no `Domain`, so the dev deployment cannot tell them from its own. RFC 6265
+orders same-name cookies by path length then creation time, so the older **production**
+token won every dev request, failed signature verification against the dev JWT secret, and
+could not be cleared from the dev side at all (a delete cannot match production's `Domain`).
+That is a permanently broken dev session for anyone who is logged into production.
+
+So each deployment owns a cookie namespace:
+
+- frontend — `NEXT_PUBLIC_COOKIE_PREFIX`, build arg **and** runtime variable
+  (`frontend/src/lib/cookie-names.ts` is the single source of the names);
+- gateway — `SESSION_COOKIE_PREFIX` in `backend/env/gateway.env`
+  (`gateway/internal/auth`), which MUST match;
+- compose — `COOKIE_PREFIX` in the root `.env` feeds the frontend build arg.
+
+Default `owt`, so production is untouched. The `aqt_*` fallback names stay unprefixed: they
+are read-only leftovers of the old rename and were always host-only, so they cannot leak
+across deployments.
+
+Quick check that the namespace is live (a production-named cookie must be invisible):
+
+```bash
+curl -sX POST -H 'Cookie: owt_refresh_token=x' https://dev.owt.craazzzyyfoxx.me/auth/refresh
+# {"message":"Missing refresh token"}      <- ignored, correct
+curl -sX POST -H 'Cookie: owtdev_refresh_token=x' https://dev.owt.craazzzyyfoxx.me/auth/refresh
+# {"message":"Failed to refresh"}          <- read, then rejected upstream
+```
 
 ## Prerequisites that live outside the repo
 
@@ -67,11 +100,13 @@ Both default to `owt.craazzzyyfoxx.me`, so production needs no configuration to 
 `.gitignore` keeps these out of the repo, so a fresh clone cannot start without them:
 
 - `.env` — the compose overlay (`COMPOSE_PROJECT_NAME`, `IMAGE_TAG=dev`, `APP_PORT=8081`,
-  `APP_BIND=127.0.0.1`, `SITE_URL`, `SITE_NAME`, `PLATFORM_ZONE`, `TRACING_ENABLED=false`,
+  `APP_BIND=127.0.0.1`, `SITE_URL`, `SITE_NAME`, `PLATFORM_ZONE`, `COOKIE_PREFIX=owtdev`,
+  `TRACING_ENABLED=false`,
   `SENTRY_ENVIRONMENT=development`, empty `NEXT_PUBLIC_GA_ID`/`NEXT_PUBLIC_YM_ID`,
   `ANALYTICS_WORKER_CPUS=3`, `ANALYTICS_WORKER_MEMORY=3G`).
 - `backend/env/*.env` — from the `.example` files, with `PLATFORM_ZONE`, `PROJECT_URL`,
-  `CORS_ORIGINS`, `GATEWAY_WS_ALLOWED_ORIGINS` and `OAUTH_REDIRECT` on the dev host, a
+  `CORS_ORIGINS`, `GATEWAY_WS_ALLOWED_ORIGINS` and `OAUTH_REDIRECT` on the dev host,
+  `SESSION_COOKIE_PREFIX=owtdev` in `gateway.env`, a
   **dev-only** `JWT_SECRET_KEY`/`ACCESS_TOKEN_SERVICE`, `POSTGRES_*` pointing at
   `host.docker.internal:6432` + `DB_PGBOUNCER=true`, and `PROXY_TYPE=socks5`,
   `PROXY_IP=proxy`, `PROXY_PORT=1080`.
