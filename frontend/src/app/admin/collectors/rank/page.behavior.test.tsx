@@ -124,7 +124,10 @@ const STATS = {
   tier2: 3,
   coverage_24h: 90,
   coverage_7d: 118,
-  last_success_at: "2026-09-03T09:00:00Z",
+  // Fresh on purpose: the health screen now calls a collector with no recent
+  // success "down", so a hardcoded past date would put every other case in this
+  // file behind an outage banner.
+  last_success_at: new Date(Date.now() - 60_000).toISOString(),
   fetch_24h: {
     ok: 200,
     pending: 0,
@@ -139,7 +142,10 @@ const STATS = {
   enabled: true,
   scope: "workspace",
   interval_seconds: 3600,
-  rate_limit_per_minute: 30
+  rate_limit_per_minute: 30,
+  overfast_base_url: "https://overfast.craazzzyyfoxx.me",
+  overfast_circuit_state: "closed",
+  invalid_battle_tags_24h: 0
 };
 
 const mounted: { root: Root; container: HTMLElement }[] = [];
@@ -260,6 +266,45 @@ describe("RankCollectorPage", () => {
     // Status is the only slot a non-superuser has, so there is no tab bar to
     // pick it from — a one-tab bar would be a heading with a hover state.
     expect(container.querySelectorAll("a[data-admin-tab]")).toHaveLength(0);
+  });
+
+  // The September 2026 OverFast outage: the upstream host stopped resolving, the
+  // circuit opened, and this screen kept reading healthy for a day — the error
+  // ratio FALLS when fetches stop happening, so every tile agreed nothing was
+  // wrong. A stopped collector has to say so on the screen, not only in a metric.
+  it("says battle-tag parsing is down when the upstream circuit is open", async () => {
+    getRankCollectionStats.mockResolvedValue({
+      ...STATS,
+      overfast_circuit_state: "open",
+      // Unchanged from the healthy fixture on purpose: a clean error ratio must
+      // not be able to hide a dead upstream.
+      error_rate_24h: 0.02
+    });
+
+    const container = await mount();
+
+    const alert = container.querySelector("[role=alert]");
+    expect(alert?.textContent).toContain("Battle-tag rank parsing is down");
+    expect(alert?.textContent).toContain("overfast.craazzzyyfoxx.me");
+  });
+
+  it("says the same when nothing has been collected for half an hour", async () => {
+    getRankCollectionStats.mockResolvedValue({
+      ...STATS,
+      last_success_at: new Date(Date.now() - 45 * 60_000).toISOString()
+    });
+
+    const container = await mount();
+
+    expect(container.querySelector("[role=alert]")?.textContent).toContain(
+      "Battle-tag rank parsing is down"
+    );
+  });
+
+  it("stays quiet while collection is healthy", async () => {
+    const container = await mount();
+
+    expect(container.querySelector("[role=alert]")).toBeNull();
   });
 
   it("defaults to Status and writes the slot to the URL when a tab is clicked", async () => {

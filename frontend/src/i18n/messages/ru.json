@@ -176,6 +176,7 @@
     "tournaments": "Турниры",
     "league": "Лига",
     "statusBadge": {
+      "announcement": "Анонс",
       "draft": "Драфт",
       "registration": "Регистрация",
       "check_in": "Чек-ин",

@@ -7,6 +7,7 @@ import { StatTile, StatTileGrid } from "@/components/admin/StatTile";
 import { StatTileGridSkeleton } from "@/components/admin/StatTileGridSkeleton";
 import { TintedBadge } from "@/components/admin/TintedBadge";
 import { EYEBROW_CLASS } from "@/components/admin/tone";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
 import { notify } from "@/lib/notify";
@@ -16,7 +17,13 @@ import { useWorkspaceStore } from "@/stores/workspace.store";
 import type { RankCollectionStats } from "@/types/admin.types";
 
 import { RUN_STATE_TONES } from "./collector-state";
-import { STATUS_BAR, STATUS_ORDER, formatInterval, formatRelative } from "./rank-shared";
+import {
+  STATUS_BAR,
+  STATUS_ORDER,
+  formatInterval,
+  formatRelative,
+  rankParsingOutage
+} from "./rank-shared";
 
 const RANK_SETTING_KEY = "parser.rank_collection";
 
@@ -105,6 +112,8 @@ export function RankHealthDashboard() {
   const okCount = stats.fetch_24h?.ok ?? 0;
   const notFoundCount = stats.fetch_24h?.not_found ?? 0;
   const errCount = (stats.fetch_24h?.error ?? 0) + (stats.fetch_24h?.rate_limited ?? 0);
+  const invalidTags = stats.invalid_battle_tags_24h ?? 0;
+  const outage = rankParsingOutage(stats);
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -142,6 +151,23 @@ export function RankHealthDashboard() {
         )}
       </div>
 
+      {/* The failure this page used to hide: with the circuit open or the
+          collector stalled, every tile below reads healthy-but-stale, because
+          the numbers describe fetches that stopped happening. */}
+      {outage && (
+        <Alert variant="destructive">
+          <AlertTriangle aria-hidden className="h-4 w-4" />
+          <AlertTitle>Battle-tag rank parsing is down</AlertTitle>
+          <AlertDescription>
+            {outage.reason === "circuit_open"
+              ? `The circuit breaker to ${stats.overfast_base_url || "OverFast"} is open — every fetch is refused inside the worker, so the counters below stopped moving instead of reporting errors.`
+              : `No battle tag has been collected successfully since ${formatRelative(stats.last_success_at)}, although collection is switched on.`}{" "}
+            Check that {stats.overfast_base_url || "the OverFast instance"} resolves and answers, then watch this
+            banner clear on the next tick.
+          </AlertDescription>
+        </Alert>
+      )}
+
       <StatTileGrid>
         {/* Not a StatTile: the tile owns a stacked distribution bar below the value. */}
         <div className="space-y-3 rounded-xl border border-border/60 bg-card/70 p-4">
@@ -164,6 +190,14 @@ export function RankHealthDashboard() {
           detail={`${errRate}% errors · ok ${okCount} · not found ${notFoundCount} · errors ${errCount} · last success ${formatRelative(stats.last_success_at)}`}
           tone={errRate >= 20 ? "danger" : "neutral"}
           icon={errRate >= 20 ? AlertTriangle : undefined}
+        />
+
+        <StatTile
+          label="Upstream (OverFast)"
+          value={outage?.reason === "circuit_open" ? "unreachable" : (stats.overfast_circuit_state ?? "closed")}
+          detail={`${stats.overfast_base_url || "not configured"} · ${invalidTags} malformed battle tag(s) rejected in 24h`}
+          tone={outage || invalidTags > 0 ? "danger" : "neutral"}
+          icon={outage || invalidTags > 0 ? AlertTriangle : undefined}
         />
 
         {/* Not a StatTile: the tile owns the bulk re-enable action. */}

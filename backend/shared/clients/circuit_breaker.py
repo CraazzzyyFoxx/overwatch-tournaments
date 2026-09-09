@@ -18,6 +18,7 @@ from enum import Enum
 from typing import TypeVar
 
 from loguru import logger
+from prometheus_client import Gauge
 
 T = TypeVar("T")
 
@@ -28,6 +29,15 @@ class CircuitState(str, Enum):
     CLOSED = "closed"  # Normal operation
     OPEN = "open"  # Blocking requests
     HALF_OPEN = "half_open"  # Testing recovery
+
+
+CIRCUIT_BREAKER_STATE = Gauge(
+    "circuit_breaker_state",
+    "Circuit breaker state per guarded dependency (0=closed, 1=half_open, 2=open).",
+    ("name",),
+)
+
+_STATE_VALUE = {CircuitState.CLOSED: 0, CircuitState.HALF_OPEN: 1, CircuitState.OPEN: 2}
 
 
 class CircuitBreakerOpen(Exception):
@@ -54,6 +64,11 @@ class CircuitBreaker:
         ```
     """
 
+    name: str = "unnamed"
+    """Dependency this breaker guards. Labels the ``circuit_breaker_state`` gauge
+    and names the dependency in log lines and ``CircuitBreakerOpen`` messages —
+    an unnamed breaker turns an outage into an anonymous stack trace."""
+
     failure_threshold: int = 5
     """Number of consecutive failures before opening the circuit."""
 
@@ -68,6 +83,14 @@ class CircuitBreaker:
     _last_failure_time: float | None = field(default=None, init=False)
     _half_open_calls: int = field(default=0, init=False)
     _lock: asyncio.Lock = field(default_factory=asyncio.Lock, init=False)
+
+    def __post_init__(self) -> None:
+        # Export the closed state up front: a gauge that only appears once the
+        # first failure happens is a gauge no alert can rely on.
+        self._publish_state()
+
+    def _publish_state(self) -> None:
+        CIRCUIT_BREAKER_STATE.labels(name=self.name).set(_STATE_VALUE[self._state])
 
     @property
     def state(self) -> CircuitState:
@@ -96,18 +119,22 @@ class CircuitBreaker:
                 if self._should_attempt_recovery():
                     self._state = CircuitState.HALF_OPEN
                     self._half_open_calls = 0
+                    self._publish_state()
                     logger.info(
-                        "Circuit breaker entering half-open state, probing recovery",
+                        "Circuit breaker for {} entering half-open state, probing recovery",
+                        self.name,
                         state="half_open",
                         previous_state="open",
                     )
                 else:
-                    raise CircuitBreakerOpen()
+                    raise CircuitBreakerOpen(f"Circuit breaker for {self.name} is open")
 
             # Limit concurrent calls in HALF_OPEN state
             if self._state == CircuitState.HALF_OPEN:
                 if self._half_open_calls >= self.half_open_max_calls:
-                    raise CircuitBreakerOpen("Circuit breaker is in half-open state, max probes reached")
+                    raise CircuitBreakerOpen(
+                        f"Circuit breaker for {self.name} is in half-open state, max probes reached"
+                    )
                 self._half_open_calls += 1
 
         # Build and execute the operation outside the lock. The factory is only
@@ -135,8 +162,10 @@ class CircuitBreaker:
                 self._state = CircuitState.CLOSED
                 self._failure_count = 0
                 self._half_open_calls = 0
+                self._publish_state()
                 logger.info(
-                    "Circuit breaker closed after successful probe",
+                    "Circuit breaker for {} closed after successful probe",
+                    self.name,
                     state="closed",
                     previous_state="half_open",
                 )
@@ -154,8 +183,10 @@ class CircuitBreaker:
                 # Recovery failed, reopen the circuit
                 self._state = CircuitState.OPEN
                 self._half_open_calls = 0
+                self._publish_state()
                 logger.warning(
-                    "Circuit breaker reopened after failed probe",
+                    "Circuit breaker for {} reopened after failed probe",
+                    self.name,
                     state="open",
                     previous_state="half_open",
                 )
@@ -163,8 +194,11 @@ class CircuitBreaker:
                 # Check if we should open the circuit
                 if self._failure_count >= self.failure_threshold:
                     self._state = CircuitState.OPEN
+                    self._publish_state()
                     logger.error(
-                        "Circuit breaker opened after consecutive failures",
+                        "Circuit breaker for {} opened after {} consecutive failures",
+                        self.name,
+                        self._failure_count,
                         state="open",
                         previous_state="closed",
                         failure_count=self._failure_count,
@@ -178,3 +212,4 @@ class CircuitBreaker:
             self._failure_count = 0
             self._last_failure_time = None
             self._half_open_calls = 0
+            self._publish_state()

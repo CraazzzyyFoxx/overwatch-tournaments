@@ -194,6 +194,7 @@ class CollectionStatsAssemblyTests(IsolatedAsyncioTestCase):
             "coverage_24h": 40,
             "coverage_7d": 70,
             "fetch_24h": {"ok": 70, "error": 20, "rate_limited": 10},
+            "invalid_battle_tags_24h": 3,
         }
         cfg = RankCollectionConfig(enabled=True, scope="all")
         with (
@@ -210,3 +211,7 @@ class CollectionStatsAssemblyTests(IsolatedAsyncioTestCase):
         model = schemas.RankCollectionStats.model_validate(result)
         self.assertEqual(model.by_status.disabled, 10)
         self.assertEqual(model.fetch_24h.error, 20)
+        # The upstream's own state, which no DB aggregate can report: without it a
+        # dead OverFast reads as a falling error rate.
+        self.assertEqual(model.overfast_circuit_state, "closed")
+        self.assertEqual(model.invalid_battle_tags_24h, 3)

@@ -141,6 +141,14 @@ class RankAdminService:
             "scope": cfg.scope,
             "interval_seconds": cfg.interval_seconds,
             "rate_limit_per_minute": cfg.rate_limit_per_minute,
+            # Live upstream state, read from the worker's own OverFast client: an
+            # open circuit means every tag fetch is refused before it leaves the
+            # process, which no DB aggregate can show (the fetch_log simply stops
+            # growing). ``invalid_battle_tags_24h`` counts handles the client
+            # rejects outright — those never recover without an operator.
+            "overfast_base_url": tasks.rank_client.base_url,
+            "overfast_circuit_state": tasks.rank_client.circuit_state,
+            "invalid_battle_tags_24h": raw["invalid_battle_tags_24h"],
         }
 
     async def _resolve_target_tags(

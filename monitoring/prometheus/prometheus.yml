@@ -20,6 +20,8 @@ rule_files:
   # Бэкапы: метрики приходят из textfile collector node-exporter'а, куда их
   # пишет ops/backup/backup.sh (см. docs/backup-rustfs.md).
   - /etc/prometheus/rules/backup.yml
+  # Сбор рангов OverFast: свежесть данных и состояние circuit breaker.
+  - /etc/prometheus/rules/overwatch_rank.yml
 
 scrape_configs:
   # --------------------------------------------------------------------------

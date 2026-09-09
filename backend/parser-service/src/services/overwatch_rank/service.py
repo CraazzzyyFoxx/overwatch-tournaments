@@ -30,6 +30,7 @@ from src import models
 from src.domain.overwatch_rank import RankFetchResult, battle_tag_to_slug
 
 from . import mapping
+from .client import INVALID_BATTLE_TAG_ERROR
 
 # Multipliers applied to the base interval for non-error terminal states so we
 # poll quiet accounts less often.
@@ -309,6 +310,16 @@ class RankStateService:
             query = query.where(state.priority_tier > 0)
         return int(await session.scalar(query) or 0)
 
+    async def last_success_at(self, session: AsyncSession) -> datetime | None:
+        """Newest successful capture across every tag, or ``None`` if there is none.
+
+        One aggregate, deliberately separate from :meth:`collection_stats`: the
+        scheduler exports it as a gauge on every tick and must not pay for the
+        whole dashboard to do it.
+        """
+        state = models.BattleTagRankState
+        return await session.scalar(sa.select(sa.func.max(state.last_success_at)))
+
     async def collection_stats(self, session: AsyncSession, *, workspace_id: int | None = None) -> dict:
         """Aggregate collection health (DB layer only; caller adds config).
 
@@ -383,6 +394,19 @@ class RankStateService:
             ).all()
         }
 
+        # Tags the client refuses before any HTTP call (``Name#1234`` shape broken —
+        # e.g. a mangled handle stored at registration). They never reach OverFast,
+        # so they never recover on their own and need an operator, not a retry.
+        invalid_battle_tags_24h = int(
+            await session.scalar(
+                _scoped(sa.select(sa.func.count()).select_from(log), log.social_account_id).where(
+                    log.created_at > now - timedelta(hours=24),
+                    log.error == INVALID_BATTLE_TAG_ERROR,
+                )
+            )
+            or 0
+        )
+
         return {
             "total": total,
             "never_checked": never_checked,
@@ -392,6 +416,7 @@ class RankStateService:
             "coverage_24h": await _coverage(timedelta(hours=24)),
             "coverage_7d": await _coverage(timedelta(days=7)),
             "fetch_24h": fetch_24h,
+            "invalid_battle_tags_24h": invalid_battle_tags_24h,
         }
 
     async def select_and_claim_due(
@@ -615,6 +640,7 @@ resolve_registration_targets = rank_state_service.resolve_registration_targets
 seed_states_for_all_battle_tags = rank_state_service.seed_states_for_all_battle_tags
 seed_states_from_registrations = rank_state_service.seed_states_from_registrations
 count_in_scope = rank_state_service.count_in_scope
+last_success_at = rank_state_service.last_success_at
 collection_stats = rank_state_service.collection_stats
 select_and_claim_due = rank_state_service.select_and_claim_due
 record_result = rank_state_service.record_result

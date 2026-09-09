@@ -14,6 +14,7 @@ import {
   getTournamentStatusMeta,
   isTournamentStatusEnded,
 } from "@/lib/tournament-status";
+import { reachedAtLeast } from "@/lib/tournament-lifecycle";
 import { cn, formatDateRange } from "@/lib/utils";
 import { useTournamentRealtime } from "@/hooks/useTournamentRealtime";
 import { createTrailingCoalescer } from "@/hooks/tournamentRealtime.helpers";
@@ -155,9 +156,10 @@ export default function TournamentClientLayout({
   const isLive = statusVariant === "live";
   const overviewHref = `/tournaments/${tournament.slug}`;
   // The draft room is an external route, so it cannot be a rail tab. It appears
-  // once registration is over — before that there is no room to open.
+  // once registration is over — before that there is no room to open, and
+  // "before" now includes the announcement phase that precedes registration.
   const showDraftLink =
-    tournament.team_formation === "draft" && tournament.status !== "registration";
+    tournament.team_formation === "draft" && reachedAtLeast(tournament.status, "check_in");
 
   // The draft room is an external route, so it cannot be a rail tab; it stands
   // in the action row as its own button (wireframes §2 ④). Team formation used

@@ -56,10 +56,13 @@ class Tournament(db.TimeStampIntegerMixin):
     # How teams are formed for this tournament: "balancer" (auto-balance) or
     # "draft" (live draft). Stored as text (not a PG enum) to stay flexible.
     team_formation: Mapped[str] = mapped_column(String(), default="balancer", server_default="balancer", nullable=False)
+    # No ``server_default``: the only writer is SQLAlchemy, which always sends
+    # this column, and a DB-side default could only ever answer a raw INSERT
+    # that has no business existing — with a status claiming registration is
+    # open. See migration ``annstat01``.
     status: Mapped[enums.TournamentStatus] = mapped_column(
         TOURNAMENT_STATUS_ENUM,
-        default=enums.TournamentStatus.REGISTRATION,
-        server_default=enums.TournamentStatus.REGISTRATION.value,
+        default=enums.TournamentStatus.ANNOUNCEMENT,
         nullable=False,
     )
     # Purely informational dates ("when the tournament takes place") — they do

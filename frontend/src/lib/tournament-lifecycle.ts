@@ -17,6 +17,7 @@ import type { TournamentStatus } from "@/types/tournament.types";
 
 /** Canonical machine order (`PHASE_ORDER`). Automation only moves forward along it. */
 export const TOURNAMENT_PHASES = [
+  "announcement",
   "registration",
   "check_in",
   "draft",
@@ -41,7 +42,8 @@ export type SchedulablePhase = (typeof SCHEDULABLE_PHASES)[number];
  * superuser only.
  */
 export const VALID_TRANSITIONS: Record<TournamentStatus, readonly TournamentStatus[]> = {
-  registration: ["check_in", "draft", "live"],
+  announcement: ["registration", "check_in", "draft", "live"],
+  registration: ["check_in", "draft", "live", "announcement"],
   check_in: ["draft", "live", "registration"],
   draft: ["live", "check_in", "registration"],
   live: ["playoffs", "completed", "draft", "check_in"],
@@ -55,6 +57,7 @@ export const VALID_TRANSITIONS: Record<TournamentStatus, readonly TournamentStat
  * (`common.statusBadge.<status>`); the hub is English-only.
  */
 export const TOURNAMENT_STATUS_LABELS: Record<TournamentStatus, string> = {
+  announcement: "Announcement",
   registration: "Registration",
   check_in: "Check-in",
   draft: "Draft",

@@ -15,6 +15,7 @@ from typing import Any
 from loguru import logger
 from redis import asyncio as redis_async
 
+from shared.clients.circuit_breaker import CircuitBreakerOpen
 from shared.core import enums
 from shared.messaging.config import RANK_FETCH_PRIORITY_QUEUE, RANK_FETCH_QUEUE
 from shared.observability import publish_message
@@ -278,13 +279,16 @@ async def process_fetch_rank(
                 snapshots_written=written,
             )
             await session.commit()
-    except OverFastError as exc:
-        # Transient upstream failure (OverFast 5xx / timeout). It is fully handled
-        # here: recorded with exponential backoff (transient=True never disables the
+    except (OverFastError, CircuitBreakerOpen) as exc:
+        # Transient upstream failure (OverFast 5xx / timeout, or the breaker
+        # holding the door shut while it is down). It is fully handled here:
+        # recorded with exponential backoff (transient=True never disables the
         # tag) and logged. Retries are scheduler-driven via ``next_eligible_at`` — the
         # message needs no RabbitMQ redelivery, so we swallow it instead of re-raising.
-        # Re-raising only escalated an expected outage to a FastStream/Sentry error.
-        logger.warning("OverFast error for {}: {}", event.battle_tag, exc)
+        # Re-raising only escalated an expected outage to a FastStream/Sentry error —
+        # and, for CircuitBreakerOpen, buried 20k+ dead messages in rank_fetch.dlq
+        # during the September OverFast DNS outage.
+        logger.warning("OverFast fetch failed for {} via {}: {}", event.battle_tag, rank_client.base_url, exc)
         async with session_factory() as session:
             cfg = await settings_provider.get_rank_collection_config(session)
             await service.record_failure(

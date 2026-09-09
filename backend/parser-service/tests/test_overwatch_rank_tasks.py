@@ -14,6 +14,7 @@ sys.path.insert(0, str(backend_root / "parser-service"))
 
 
 tasks = importlib.import_module("src.services.overwatch_rank.tasks")
+from shared.clients.circuit_breaker import CircuitBreakerOpen  # noqa: E402
 from shared.core import enums  # noqa: E402
 from shared.schemas.settings import RankCollectionConfig  # noqa: E402
 from src.domain.overwatch_rank import RankFetchResult  # noqa: E402
@@ -182,6 +183,44 @@ class ProcessFetchTests(IsolatedAsyncioTestCase):
             )
         self.assertEqual(redis.store.get(tasks.COOLDOWN_KEY), "1")
         fail.assert_awaited_once()
+
+    async def test_open_circuit_is_handled_like_any_outage_instead_of_nacking(self) -> None:
+        """An open breaker must not escape the handler.
+
+        September 2026: OverFast's DNS record disappeared, the breaker opened, and
+        ``CircuitBreakerOpen`` — unlike ``OverFastError`` — propagated out of the
+        subscriber. FastStream nacked every message, so 21k dead fetches piled up
+        in ``rank_fetch.dlq`` while the tags themselves were never marked failed.
+        """
+        redis = FakeRedis()
+        session = SimpleNamespace(commit=AsyncMock())
+        client = SimpleNamespace(
+            fetch_summary=AsyncMock(side_effect=CircuitBreakerOpen("Circuit breaker for overfast is open"))
+        )
+        with (
+            patch.object(
+                tasks.settings_provider,
+                "get_rank_collection_config",
+                AsyncMock(return_value=RankCollectionConfig()),
+            ),
+            patch.object(tasks.mapping, "get_rank_mapping", AsyncMock(return_value=({}, "v1"))),
+            patch.object(tasks.service, "record_failure", AsyncMock()) as fail,
+            patch.object(tasks.service, "log_fetch", AsyncMock()) as log_fetch,
+        ):
+            await tasks.process_fetch_rank(
+                {"event_type": "fetch_rank", "social_account_id": 9, "battle_tag": "N#9"},
+                redis=redis,
+                client=client,
+                session_factory=_session_factory(session),
+            )
+
+        # Recorded as a transient failure (backoff, never auto-disable) and written
+        # to the fetch log, exactly like an OverFast 5xx.
+        self.assertTrue(fail.await_args.kwargs["transient"])
+        self.assertEqual(fail.await_args.kwargs["status"], enums.RankCollectionStatus.error)
+        log_fetch.assert_awaited_once()
+        # Dedup keys released, so the scheduler can retry the tag once OverFast is back.
+        self.assertNotIn(tasks._inflight_key(9), redis.store)
 
 
 class RegistrationHookTests(IsolatedAsyncioTestCase):

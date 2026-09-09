@@ -59,6 +59,7 @@ export function formatDate(value?: Date | string | null) {
  * silently rendering grey.
  */
 export const TOURNAMENT_STATUS_TONE: Record<TournamentStatus, Tone> = {
+  announcement: "info",
   registration: "info",
   check_in: "info",
   draft: "info",

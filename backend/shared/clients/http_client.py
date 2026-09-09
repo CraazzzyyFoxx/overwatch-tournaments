@@ -1,6 +1,7 @@
 """Resilient HTTP client with connection pooling, retries, and circuit breaker."""
 
 import httpx
+from loguru import logger
 from tenacity import (
     retry,
     retry_if_exception_type,
@@ -8,7 +9,7 @@ from tenacity import (
     wait_exponential,
 )
 
-from .circuit_breaker import CircuitBreaker
+from .circuit_breaker import CircuitBreaker, CircuitBreakerOpen
 
 # Import correlation ID function (optional dependency)
 try:
@@ -63,7 +64,9 @@ class ResilientHttpClient:
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
         self.max_retries = max_retries
-        self.circuit_breaker = circuit_breaker or CircuitBreaker()
+        # A default breaker inherits the upstream's name, so the state gauge and
+        # every "circuit open" line say WHICH dependency is down.
+        self.circuit_breaker = circuit_breaker or CircuitBreaker(name=self.base_url)
         self.default_headers = headers or {}
         self._client: httpx.AsyncClient | None = None
 
@@ -136,18 +139,38 @@ class ResilientHttpClient:
                 if isinstance(kwargs["headers"], dict):
                     kwargs["headers"]["X-Request-ID"] = correlation_id
 
-        # Create a retry decorator for this specific request
+        # Create a retry decorator for this specific request.
+        # ``reraise=True``: without it tenacity swallows the transport error and
+        # raises ``RetryError[<Future ... raised ConnectError>]`` instead — which
+        # no caller catches (they all handle ``httpx.HTTPError``), so an
+        # unreachable upstream escaped as an unhandled error, nacked the message
+        # and reached the logs as an opaque repr. Keep the original exception.
         @retry(
             stop=stop_after_attempt(self.max_retries),
             wait=wait_exponential(multiplier=0.5, max=10),
             retry=retry_if_exception_type((httpx.TimeoutException, httpx.ConnectError)),
+            reraise=True,
         )
         async def _make_request() -> httpx.Response:
             return await self._client.request(method, path, **kwargs)
 
         # Wrap the request in the circuit breaker. Pass the factory (not a ready
         # coroutine) so nothing is created when the circuit is open.
-        return await self.circuit_breaker.call(_make_request)
+        try:
+            return await self.circuit_breaker.call(_make_request)
+        except (httpx.HTTPError, CircuitBreakerOpen) as exc:
+            # ``str(ConnectError)`` is frequently empty and tenacity/faststream
+            # only re-raise a repr, which is how an unreachable upstream reaches
+            # the logs as an anonymous traceback. Name the target and the cause.
+            logger.error(
+                "{} {}{} failed: {}: {}",
+                method,
+                self.base_url,
+                path,
+                type(exc).__name__,
+                str(exc) or "no detail",
+            )
+            raise
 
     async def get(self, path: str, **kwargs) -> httpx.Response:
         """Make a GET request."""

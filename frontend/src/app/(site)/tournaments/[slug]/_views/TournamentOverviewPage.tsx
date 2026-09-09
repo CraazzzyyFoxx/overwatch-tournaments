@@ -62,6 +62,7 @@ export type OverviewVariant = "registration" | "live" | "completed";
  * then fails the build here instead of silently landing on a fallback branch.
  */
 const VARIANT_BY_STATUS: Record<TournamentStatus, OverviewVariant> = {
+  announcement: "registration",
   draft: "registration",
   registration: "registration",
   check_in: "registration",

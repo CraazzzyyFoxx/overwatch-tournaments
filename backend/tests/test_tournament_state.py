@@ -120,7 +120,8 @@ def test_window_with_null_ends_at_spans_rest_of_phase() -> None:
 # ─── can_transition ──────────────────────────────────────────────────────────
 
 
-def test_check_in_precedes_team_draft() -> None:
+def test_announcement_opens_the_lifecycle_and_check_in_precedes_team_draft() -> None:
+    assert PHASE_ORDER[TournamentStatus.ANNOUNCEMENT] < PHASE_ORDER[TournamentStatus.REGISTRATION]
     assert PHASE_ORDER[TournamentStatus.REGISTRATION] < PHASE_ORDER[TournamentStatus.CHECK_IN]
     assert PHASE_ORDER[TournamentStatus.CHECK_IN] < PHASE_ORDER[TournamentStatus.DRAFT]
     assert PHASE_ORDER[TournamentStatus.DRAFT] < PHASE_ORDER[TournamentStatus.LIVE]
@@ -153,3 +154,28 @@ def test_illegal_transitions_rejected() -> None:
     assert not can_transition(TournamentStatus.REGISTRATION, TournamentStatus.COMPLETED)
     assert not can_transition(TournamentStatus.PLAYOFFS, TournamentStatus.REGISTRATION)
     assert not can_transition(TournamentStatus.COMPLETED, TournamentStatus.LIVE)
+
+
+def test_the_registration_row_is_what_ends_the_announcement() -> None:
+    # ANNOUNCEMENT has no schedule row of its own; the REGISTRATION row is both
+    # "registration opens" and "the announcement is over".
+    schedule = [_row(TournamentStatus.REGISTRATION, timedelta(minutes=-1))]
+    assert next_due_status(TournamentStatus.ANNOUNCEMENT, schedule, NOW) == TournamentStatus.REGISTRATION
+
+
+def test_an_announcement_with_nothing_scheduled_stays_put() -> None:
+    assert next_due_status(TournamentStatus.ANNOUNCEMENT, [], NOW) is None
+    future = [_row(TournamentStatus.REGISTRATION, timedelta(hours=1))]
+    assert next_due_status(TournamentStatus.ANNOUNCEMENT, future, NOW) is None
+
+
+def test_announcement_transitions() -> None:
+    # Skips are legal from the announcement too — an organizer may open straight
+    # into check-in or live.
+    assert can_transition(TournamentStatus.ANNOUNCEMENT, TournamentStatus.REGISTRATION)
+    assert can_transition(TournamentStatus.ANNOUNCEMENT, TournamentStatus.LIVE)
+    # Un-announcing is a rollback to the prior effective phase, so no force.
+    assert can_transition(TournamentStatus.REGISTRATION, TournamentStatus.ANNOUNCEMENT)
+    # From anywhere play has started, though, it is a force-only correction.
+    assert not can_transition(TournamentStatus.LIVE, TournamentStatus.ANNOUNCEMENT)
+    assert not can_transition(TournamentStatus.ANNOUNCEMENT, TournamentStatus.COMPLETED)

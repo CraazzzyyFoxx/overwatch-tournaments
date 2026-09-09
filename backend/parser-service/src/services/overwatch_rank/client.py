@@ -30,6 +30,10 @@ logger = logging.getLogger(__name__)
 # URL interpolation).
 _BATTLE_TAG_RE = re.compile(settings.battle_tag_regex)
 
+INVALID_BATTLE_TAG_ERROR = "invalid battle tag"
+"""``fetch_log.error`` written when the stored handle is not a battletag. Shared
+with the admin aggregate so the dashboard counts exactly what the client rejects."""
+
 
 def _is_valid_battle_tag(battle_tag: str) -> bool:
     return bool(battle_tag) and _BATTLE_TAG_RE.fullmatch(battle_tag) is not None
@@ -112,6 +116,16 @@ class OverFastRankClient:
     def __init__(self, base_url: str, *, timeout: float = 15.0, max_retries: int = 3) -> None:
         self._http = ResilientHttpClient(base_url=base_url, timeout=timeout, max_retries=max_retries)
 
+    @property
+    def base_url(self) -> str:
+        """The OverFast instance this client talks to (shown on the admin dashboard)."""
+        return self._http.base_url
+
+    @property
+    def circuit_state(self) -> str:
+        """``closed`` / ``half_open`` / ``open`` — an open circuit means no tag is being fetched."""
+        return self._http.circuit_breaker.state.value
+
     async def start(self) -> None:
         await self._http.start()
 
@@ -124,7 +138,7 @@ class OverFastRankClient:
             logger.warning("Rejecting rank fetch for malformed battle tag %r", battle_tag)
             return RankFetchResult(
                 status=enums.RankCollectionStatus.error,
-                error="invalid battle tag",
+                error=INVALID_BATTLE_TAG_ERROR,
             )
         # Validated to the battletag shape above; ``quote`` is belt-and-suspenders
         # so a stray character can never alter the request path.
@@ -132,7 +146,12 @@ class OverFastRankClient:
         try:
             response = await self._http.get(f"/players/{player_id}/summary")
         except httpx.HTTPError as exc:  # timeouts/connect after retries, etc.
-            raise OverFastError(str(exc)) from exc
+            # ``str(ConnectError)`` is usually empty — without the class name and
+            # the target URL the failure reaches the operator as a bare blank.
+            raise OverFastError(
+                f"GET {self._http.base_url}/players/{player_id}/summary: "
+                f"{type(exc).__name__}: {str(exc) or 'no detail'}"
+            ) from exc
 
         if response.status_code == 404:
             return RankFetchResult(status=enums.RankCollectionStatus.not_found)

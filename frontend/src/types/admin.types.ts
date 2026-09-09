@@ -117,6 +117,12 @@ export interface RankCollectionStats {
   scope: string;
   interval_seconds: number;
   rate_limit_per_minute: number;
+  /** OverFast instance the worker fetches from. */
+  overfast_base_url: string;
+  /** `closed` | `half_open` | `open` — open means no battle tag is being fetched at all. */
+  overfast_circuit_state: string;
+  /** Fetches rejected in 24h because the stored handle is not a battletag. */
+  invalid_battle_tags_24h: number;
 }
 
 // ─── Subscription collection (parser admin) ────────────────────────────────────

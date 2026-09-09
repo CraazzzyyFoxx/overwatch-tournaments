@@ -20,6 +20,17 @@ type TournamentStatusMeta = {
 // upcoming=amber, live=rose, finished=dim) so a card and the tournament
 // page never disagree about what a status looks like.
 const TOURNAMENT_STATUS_META: Record<TournamentStatus, TournamentStatusMeta> = {
+  // Announced but not yet open. It shares the amber "upcoming" bucket with
+  // registration deliberately: to a visitor both mean "this has not started",
+  // and the badge text is what tells them whether they can sign up yet.
+  announcement: {
+    variant: "upcoming",
+    textClassName: "text-[color:var(--aqt-amber)]",
+    badgeClassName: "text-[color:var(--aqt-amber)]",
+    dotClassName: "bg-[color:var(--aqt-amber)]",
+    isActive: true,
+    isEnded: false
+  },
   draft: {
     variant: "draft",
     textClassName: "text-[color:var(--aqt-blue)]",
@@ -95,6 +106,7 @@ export const TOURNAMENT_STATUS_ORDER: TournamentStatus[] = [
   "playoffs",
   "registration",
   "check_in",
+  "announcement",
   "completed",
   "archived",
   "draft"

@@ -1,0 +1,52 @@
+groups:
+  # Сбор рангов OverFast. Инцидент 08.09.2026: у self-hosted OverFast пропала
+  # DNS-запись, circuit breaker встал в open, парсинг встал на сутки. Инфра была
+  # зелёной (postgres/redis/rabbit живы), а WorkerFailureRateHigh указывал на
+  # абстрактную очередь rank_fetch, не на упавшую зависимость. Эти правила
+  # называют проблему: данные протухли / зависимость недоступна.
+  - name: overwatch-rank-alerts
+    interval: 30s
+    rules:
+      - alert: RankCollectionStale
+        # max() — тик крутится только на лидере, у остальных реплик гейдж нулевой.
+        # Гейт по rank_collection_enabled: осознанная пауза не должна будить людей.
+        expr: |
+          max(rank_collection_enabled) == 1
+          and
+          time() - max(rank_collection_last_success_timestamp_seconds) > 1800
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "OverFast rank collection has not succeeded in 30+ minutes"
+          description: >-
+            Последний успешный снимок ранга старше 30 минут, хотя сбор включён.
+            Обычная причина — недоступный OverFast (см. CircuitBreakerOpen) или
+            вставший воркер parser-svc. Проверить: /admin/collectors/rank.
+
+      - alert: RankCollectionNeverSucceeded
+        # Отдельно от staleness: гейдж 0 означает «успеха не было никогда»,
+        # и time() - 0 дал бы бессмысленные 56 лет в тексте алерта.
+        expr: |
+          max(rank_collection_enabled) == 1
+          and
+          max(rank_collection_last_success_timestamp_seconds) == 0
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "OverFast rank collection has never produced a snapshot"
+          description: "Сбор включён, но ни одного успешного снимка ранга нет в базе."
+
+      - alert: CircuitBreakerOpen
+        # Метрика общая для всех ResilientHttpClient, поэтому алерт ловит любую
+        # отрезанную зависимость, не только OverFast.
+        expr: max by (name) (circuit_breaker_state) == 2
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Circuit breaker open for {{ $labels.name }}"
+          description: >-
+            {{ $labels.job }} перестал ходить в {{ $labels.name }} — все вызовы
+            отклоняются до отправки. Обычно это DNS, TLS или упавший апстрим.

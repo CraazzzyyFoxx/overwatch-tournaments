@@ -27,7 +27,7 @@ class TournamentCreate(BaseModel):
     is_league: bool = False
     is_hidden: bool = False
     team_formation: str = "balancer"
-    status: TournamentStatus = TournamentStatus.REGISTRATION
+    status: TournamentStatus = TournamentStatus.ANNOUNCEMENT
     start_date: date
     end_date: date
     auto_transitions_enabled: bool = True

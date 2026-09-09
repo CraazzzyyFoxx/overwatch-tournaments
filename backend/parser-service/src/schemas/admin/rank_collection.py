@@ -80,6 +80,14 @@ class RankCollectionStats(BaseModel):
     scope: str
     interval_seconds: int
     rate_limit_per_minute: int
+    overfast_base_url: str = ""
+    """OverFast instance the worker fetches from — named on the dashboard so an
+    outage points at a host instead of at "the collector"."""
+    overfast_circuit_state: str = "closed"
+    """``closed`` / ``half_open`` / ``open``. Open = every tag fetch is being
+    refused upstream-side; the collector looks idle but is broken."""
+    invalid_battle_tags_24h: int = 0
+    """Fetches rejected because the stored handle is not a battletag."""
 
 
 class FetchLogRead(BaseModel):

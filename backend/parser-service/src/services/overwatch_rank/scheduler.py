@@ -24,7 +24,7 @@ from shared.services.distributed_lock import (
     release_distributed_lock,
 )
 from shared.services.scheduler import IntervalScheduler
-from src.core import db
+from src.core import db, metrics
 from src.domain.overwatch_rank import compute_per_tick
 
 from . import service, tasks
@@ -62,6 +62,13 @@ async def run_collection_tick(
             limit = 0
             async with session_factory() as session:
                 cfg = await settings_provider.get_rank_collection_config(session)
+                # Export freshness before the enabled-check returns: an alert needs
+                # to tell "paused on purpose" from "quietly stopped collecting",
+                # and the September outage was invisible precisely because nothing
+                # published how old the newest capture was.
+                metrics.RANK_COLLECTION_ENABLED.set(1 if cfg.enabled else 0)
+                newest = await service.last_success_at(session)
+                metrics.RANK_COLLECTION_LAST_SUCCESS_TIMESTAMP.set(newest.timestamp() if newest else 0)
                 if not cfg.enabled:
                     logger.debug("OverFast rank collection disabled; skipping tick")
                     return 0

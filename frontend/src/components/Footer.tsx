@@ -4,7 +4,7 @@ import Image from "next/image";
 import { useTranslations } from "next-intl";
 import Github from "@/components/icons/Github";
 import CookieSettingsButton from "@/components/CookieSettingsButton";
-import { SITE_NAME, SITE_ICON } from "@/config/site";
+import { SITE_NAME, SITE_ICON, APP_VERSION } from "@/config/site";
 
 const FOOTER_LINK_CLASS =
   "text-sm text-[color:var(--aqt-fg-muted)] transition-colors hover:text-[color:var(--aqt-fg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background";
@@ -111,7 +111,17 @@ export function Footer() {
       </div>
 
       <div className="mt-8 flex flex-col gap-3 text-xs text-[color:var(--aqt-fg-faint)] sm:flex-row sm:items-center sm:justify-between">
-        <span>{t("common.footer.copyright", { year, siteName: SITE_NAME })}</span>
+        <span className="flex flex-wrap items-center gap-2">
+          {t("common.footer.copyright", { year, siteName: SITE_NAME })}
+          {APP_VERSION ? (
+            <FooterLink
+              href={`https://github.com/CraazzzyyFoxx/anak-tournaments/releases/tag/${APP_VERSION}`}
+              className={FOOTER_META_CLASS}
+            >
+              {APP_VERSION}
+            </FooterLink>
+          ) : null}
+        </span>
         <div className="flex flex-wrap items-center gap-4">
           <FooterLink href="/terms" className={FOOTER_META_CLASS}>
             {t("legal.terms.title")}

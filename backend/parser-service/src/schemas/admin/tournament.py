@@ -18,7 +18,7 @@ class TournamentCreate(BaseModel):
     name: str
     description: str | None = None
     is_league: bool = False
-    status: TournamentStatus = TournamentStatus.REGISTRATION
+    status: TournamentStatus = TournamentStatus.ANNOUNCEMENT
     start_date: date
     end_date: date
     win_points: float = 1.0
