@@ -35,7 +35,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
       # bun is the app's own runtime (both Dockerfiles are oven/bun) AND one of
       # its two test runners, so the same toolchain installs deps and runs tests.
       - name: Install bun
