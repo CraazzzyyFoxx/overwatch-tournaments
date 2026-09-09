@@ -120,7 +120,9 @@ curl -sX POST -H 'Cookie: owtdev_refresh_token=x' https://dev.owt.craazzzyyfoxx.
 ```bash
 ssh home
 cd ~/owt-dev
-git fetch && git checkout <branch-or-tag>            # or `git am` a patch for unpushed work
+# The clone is single-branch (refspec covers `develop` only), so a plain
+# `git fetch && git checkout <branch>` reports "pathspec did not match":
+git fetch origin <branch>:<branch> && git checkout <branch>   # or `git am` a patch
 docker compose -f docker-compose.production.yml build
 docker compose -f docker-compose.production.yml run --rm --no-deps -T app-svc \
     alembic upgrade head </dev/null
