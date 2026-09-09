@@ -1,0 +1,75 @@
+{
+  "$comment": [
+    "Single source of truth for the realtime invalidation vocabulary.",
+    "A resource names WHAT went stale, never WHY. Four tables mirror this file:",
+    "  - backend/shared/services/realtime/resources.py            (Resource enum)",
+    "  - gateway/internal/respcache/resources.go                  (URL substrings)",
+    "  - frontend/src/lib/realtime-resources.ts                   (query keys)",
+    "  - per-service RESOURCE_CACHE_PATTERNS (cashews globs)",
+    "Each of those has a parity test against this file, so a resource cannot be",
+    "published without every consumer knowing what to drop, and a consumer",
+    "cannot keep a rule for a resource nobody publishes.",
+    "Adding a resource: add it here first, then run the four parity tests and",
+    "fix what they report. Bump `version` on any breaking payload change."
+  ],
+  "version": 1,
+  "resources": {
+    "tournament.detail": {
+      "scope": "tournament",
+      "doc": "The tournament read model: layout, metadata, live participants_count/registrations_count."
+    },
+    "tournament.stages": {
+      "scope": "tournament",
+      "doc": "Stage list and stage items."
+    },
+    "tournament.encounters": {
+      "scope": "tournament",
+      "doc": "Encounter list and any single encounter's score/state."
+    },
+    "tournament.standings": {
+      "scope": "tournament",
+      "doc": "Standings, including the matches_history they embed."
+    },
+    "tournament.teams": {
+      "scope": "tournament",
+      "doc": "Materialized tournament.team / player rows (balancer or draft export)."
+    },
+    "tournament.structure": {
+      "scope": "tournament",
+      "route_refresh": true,
+      "doc": "The set of sections a tournament page has (stages created/removed, teams first materialized). The only resource that also forces a route-level refresh on the client."
+    },
+    "tournament.registrations": {
+      "scope": "tournament",
+      "doc": "Public participants list and per-registration admin rows."
+    },
+    "tournament.registration_form": {
+      "scope": "tournament",
+      "doc": "Registration form configuration (admin-owned). Cached nowhere server-side; clients hold it in a query."
+    },
+    "tournament.streams": {
+      "scope": "tournament",
+      "doc": "Which channels are live for the tournament."
+    },
+    "workspace.logs": {
+      "scope": "workspace",
+      "doc": "Match-log processing state."
+    },
+    "workspace.pickup_mix": {
+      "scope": "workspace",
+      "doc": "Pickup-mix rosters, ranks, config, host and status."
+    },
+    "workspace.subscriptions": {
+      "scope": "workspace",
+      "doc": "Subscription entitlements for the workspace's members."
+    },
+    "workspace.analytics_jobs": {
+      "scope": "workspace",
+      "doc": "Analytics job list and their statuses."
+    },
+    "user.notifications": {
+      "scope": "user",
+      "doc": "The recipient's notification inbox."
+    }
+  }
+}

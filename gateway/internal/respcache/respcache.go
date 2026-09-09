@@ -424,72 +424,59 @@ func isBareTournamentDetailKey(key string) bool {
 	return found && segment != "" && !strings.Contains(segment, "/")
 }
 
-// reasonPatterns returns the cached-entry URL substrings a reason can have
-// staled, or nil (invalidate everything) for a reason outside this table —
-// including results_changed/structure_changed (which can touch nearly
-// everything) and anything unparseable or missing entirely.
-//
-// over-invalidation is a cache miss; under-invalidation is a stale page, so
-// unknown reasons default to invalidating everything for the tournament.
-func reasonPatterns(reason string) []string {
-	switch reason {
-	case "bracket_changed":
-		return []string{"/api/v1/encounters"}
-	case "registration_changed":
-		// The tournament-detail response embeds live participants_count/
-		// registrations_count (tournament/flows.py::get_read), which DO
-		// change on every registration write — teams/standings/encounters do
-		// not, so only these two entries need dropping.
-		return []string{
-			"/registration/list",
-			bareTournamentDetailPattern,
-		}
-	case "registration_form_changed":
-		// Empty, NOT nil: the form route is not cached here at all (its only
-		// backend reader is deliberately uncached too — see
-		// registration/admission.py), so an admin form edit stales nothing.
-		// nil would mean "drop everything for this tournament", which is what
-		// this reason used to do by falling through to the default below.
-		return []string{}
-	case "draft_progress":
-		// Also empty, NOT nil. A draft pick writes only draft tables: the
-		// public tournament.team/player/standing rows are materialized by
-		// TeamMaterializationService, i.e. on export only, and the export
-		// paths publish their own structure_changed through the
-		// tournament.changed outbox. Until draft events carried this reason
-		// they fell through to the default below, so a draft day cost 250+
-		// full-tournament evictions (two events per pick) at peak spectating.
-		return []string{}
-	default:
-		return nil
-	}
-}
-
-// eventFrameReason best-effort extracts the tournament realtime reason from a
-// worker event frame: {"op":"event","topic":...,"event":{"data":{"reason":...}}}
-// (see shared/schemas/realtime.py EventFrame/WorkspaceEventEnvelope). Returns
-// "" on any parse failure or a missing reason field — callers treat "" as
-// "scope unknown, invalidate everything".
-func eventFrameReason(payload []byte) string {
+// eventResources extracts the stale resources from an invalidation frame:
+// {"op":"event","topic":...,"event":{"data":{"resources":[...]}}} — see
+// shared/services/realtime/emit.py. A frame that does not parse, or names no
+// resource, yields nil, and callers treat nil as "scope unknown, drop
+// everything for it": over-invalidation costs a cache miss, under-invalidation
+// serves a stale page.
+func eventResources(payload []byte) []string {
 	var frame struct {
 		Event struct {
 			Data struct {
-				Reason string `json:"reason"`
+				Resources []string `json:"resources"`
 			} `json:"data"`
 		} `json:"event"`
 	}
 	if err := json.Unmarshal(payload, &frame); err != nil {
-		return ""
+		return nil
 	}
-	return frame.Event.Data.Reason
+	return frame.Event.Data.Resources
 }
 
-// Broadcast implements the events.Broadcaster shape so the cache can ride the
-// existing realtime subscription (events.Fanout(hub, cache)). Any message on a
-// tournament's bracket or draft topic — the worker publishes
-// "tournament.updated" there from its tournament_changed consumer, and live
-// score/draft events ride the same topics — invalidates that tournament,
-// scoped down by reasonPatterns when the payload names a recognized reason.
+// patternsFor unions the URL substrings of every named resource.
+//
+// nil (drop everything for the scope) for: no resources at all (unparseable
+// or pre-migration frame), or any resource this table does not know yet. A
+// resource whose entry is an EMPTY slice contributes nothing, which is how
+// "this cache holds nothing of that" is expressed — see resources.go.
+func patternsFor(resources []string) []string {
+	if len(resources) == 0 {
+		return nil
+	}
+	patterns := make([]string, 0, len(resources))
+	for _, resource := range resources {
+		known, ok := resourcePatterns[resource]
+		if !ok {
+			return nil
+		}
+		patterns = append(patterns, known...)
+	}
+	return patterns
+}
+
+// Broadcast implements the events.Broadcaster shape so the cache rides the
+// existing realtime subscription (events.Fanout(hub, cache)).
+//
+// ONLY `<scope>:invalidation` topics are consumed. Domain topics (:bracket,
+// :draft, :balancer, :streams, :map-veto, ...) carry data for the UI and are
+// ignored here by design: mixing the two is what produced both halves of the
+// bug this rail replaced — a draft pick dropped the whole tournament while a
+// balancer export, which really did rewrite team rows, dropped nothing.
+//
+// Only the tournament scope has anything cached here (this cache stores
+// anonymous public reads); workspace/user invalidations parse fine and match
+// no entry.
 func (c *Cache) Broadcast(topic string, payload []byte) {
 	if c == nil {
 		return
@@ -499,14 +486,14 @@ func (c *Cache) Broadcast(topic string, payload []byte) {
 		return
 	}
 	rawID, sub, ok := strings.Cut(rest, ":")
-	if !ok || (sub != "bracket" && sub != "draft") {
+	if !ok || sub != "invalidation" {
 		return
 	}
 	id, ok := parseID(rawID)
 	if !ok {
 		return
 	}
-	patterns := reasonPatterns(eventFrameReason(payload))
+	patterns := patternsFor(eventResources(payload))
 	if n := c.Invalidate(id, patterns); n > 0 {
 		c.log.Debug("response cache invalidated", "tournament_id", id, "entries", n, "topic", topic)
 	}

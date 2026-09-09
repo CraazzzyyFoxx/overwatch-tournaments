@@ -149,6 +149,30 @@ class TournamentChangedEvent(BaseEvent):
     )
 
 
+class CacheInvalidatedEvent(BaseEvent):
+    """Cross-service half of a realtime invalidation.
+
+    Published by: whichever service owns the write, through
+    ``shared.services.realtime.enqueue_invalidation_outbox`` (transactional
+    outbox — Redis pub/sub is at-most-once, and another service's cashews
+    entries have no TTL-plus-replay safety net the way clients do).
+    Consumed by: every service that caches reads the resources describe.
+
+    ``resources`` are manifest entries (shared/realtime/resources.json), i.e.
+    WHAT went stale. There is deliberately no "reason" field: the consumer maps
+    resources onto its own cache keys and does not re-derive intent.
+    """
+
+    event_type: str = Field(default="cache_invalidated", frozen=True)
+    scope_kind: str = Field(..., description="tournament | workspace | user")
+    scope_id: int = Field(..., description="Id of the scoped subject")
+    resources: list[str] = Field(..., description="Manifest resource names that went stale")
+    entity_ids: dict[str, list[int]] = Field(
+        default_factory=dict,
+        description="Optional narrowing (e.g. {'registration_ids': [77]}); consumers may ignore it",
+    )
+
+
 class EncounterCompletedEvent(BaseEvent):
     """Domain event emitted after an encounter result is finalized."""
 

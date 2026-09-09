@@ -227,7 +227,11 @@ export default defineConfig({
       "src/app/(site)/tournaments/[slug]/bracket/bracketLiveStreams.test.ts",
       "src/hooks/useRealtimeCoalescedRefetch.test.ts",
       "src/hooks/useTournamentRealtime.test.ts",
-      "src/hooks/useRealtimePatchedQuery.test.ts"
+      "src/hooks/useRealtimePatchedQuery.test.ts",
+      "src/hooks/useInvalidation.test.ts",
+      // The manifest parity gate: this one is the reason a resource cannot be
+      // published without the client knowing which queries it stales.
+      "src/lib/realtime-resources.test.ts"
     ]
   }
 });
