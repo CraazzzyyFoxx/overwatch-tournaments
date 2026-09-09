@@ -8,10 +8,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { AdminTabs, type AdminTabItem } from "@/components/admin/kit/AdminTabs";
 import { EntityHubHeader } from "@/components/admin/kit/EntityHubHeader";
 import { usePermissions } from "@/hooks/usePermissions";
-import { useRealtimeCoalescedRefetch } from "@/hooks/useRealtimeCoalescedRefetch";
-import { useRealtimeTopic } from "@/hooks/useRealtimeTopic";
+import { useInvalidation } from "@/hooks/useInvalidation";
 import { useSyncActiveWorkspace } from "@/hooks/useSyncActiveWorkspace";
-import { useTournamentRealtime } from "@/hooks/useTournamentRealtime";
 import { tournamentQueryKeys } from "@/lib/tournament-query-keys";
 import { TOURNAMENT_STATUS_LABELS } from "@/lib/tournament-lifecycle";
 import encounterService from "@/services/encounter.service";
@@ -44,14 +42,14 @@ const TAB_LABELS: Record<TabKey, string> = {
 };
 
 // Trailing debounce for readiness invalidations (§3): bulk registration edits
-// emit one balancer event per row — a burst must cost one readiness refetch,
-// not N (same pattern as useBalancerRealtime's data-event debounce).
+// flush the tournament and the workspace scope back to back — a burst must cost
+// one readiness refetch, not N.
 const READINESS_INVALIDATE_DEBOUNCE_MS = 400;
 
 /**
  * Client shell of the tournament hub (§1.1): owns the permission gate, the
- * workspace header, the tab bar with route guards, the single
- * `useTournamentRealtime` mount and the shared queries. Query keys MUST stay
+ * workspace header, the tab bar with route guards, the hub's two
+ * `useInvalidation` mounts and the shared queries. Query keys MUST stay
  * identical to the tab pages — realtime patch-in-cache and workspace
  * invalidation depend on them (see components/tournamentWorkspace.queryKeys.ts).
  */
@@ -110,8 +108,11 @@ export function TournamentHubShell({
   // purely to feed three header props that were never read. The Settings tab
   // owns that query, where the grid picker actually uses it.
 
-  // Living-checklist freshness (§3, G-O6): balancer + bracket events schedule
-  // one debounced invalidation of the readiness aggregate. No polling (CG-O4).
+  // Living-checklist freshness (§3, G-O6): the readiness aggregate is derived
+  // from registrations, teams and stages, but it is not a resource of its own —
+  // no publisher names it. So it rides on every invalidation flush of this
+  // tournament, debounced once here (a bulk registration edit is one flush per
+  // coalescing window, but the workspace scope can flush independently).
   const queryClient = useQueryClient();
   const readinessTimerRef = useRef<number | undefined>(undefined);
   const scheduleReadinessInvalidate = useCallback(() => {
@@ -125,43 +126,32 @@ export function TournamentHubShell({
   useEffect(() => () => window.clearTimeout(readinessTimerRef.current), []);
 
   // The one and only realtime mount of the hub — tab pages must not mount it.
-  useTournamentRealtime({
-    tournamentId: isValidTournamentId ? tournamentId : null,
+  useInvalidation({
+    scopeKind: "tournament",
+    scopeId: isValidTournamentId ? tournamentId : null,
     workspaceId: tournamentWorkspaceId,
-    onUpdate: scheduleReadinessInvalidate
+    onFlush: scheduleReadinessInvalidate
   });
-
-  // Existing tournament-scoped balancer topic (assumption A4): registration /
-  // pool / balance writes land here, not on the bracket topic.
-  useRealtimeTopic(
-    isValidTournamentId ? `tournament:${tournamentId}:balancer` : null,
-    (event) => {
-      if (event.event_type === "balancer.presence") return;
-      scheduleReadinessInvalidate();
-    }
-  );
 
   // Subscription verdicts ride on every registration read (`subscription_outcome`
   // drives the admission grouping), so a background sweep or another admin's
   // re-check changes this page with no local mutation to hang an invalidation on.
   // Workspace-scoped, not tournament-scoped: an entitlement is
-  // (workspace, user, provider) and one change is visible in every tournament.
-  useRealtimeCoalescedRefetch(
-    isValidTournamentId && tournamentWorkspaceId != null
-      ? `workspace:${tournamentWorkspaceId}:subscriptions`
-      : null,
-    {
-      minDelayMs: 0,
-      onEvent: (_event, schedule) => schedule(),
-      onFlush: () => {
-        if (tournamentWorkspaceId == null) return;
-        void queryClient.invalidateQueries({
-          queryKey: tournamentQueryKeys.registrationsList(tournamentWorkspaceId, tournamentId)
-        });
-        scheduleReadinessInvalidate();
-      }
+  // (workspace, user, provider) and one change is visible in every tournament —
+  // which is also why `workspace.subscriptions` cannot name this tournament's
+  // registration list, and the hub re-reads it here instead.
+  useInvalidation({
+    scopeKind: "workspace",
+    scopeId: tournamentWorkspaceId,
+    tournamentId: isValidTournamentId ? tournamentId : null,
+    onFlush: (resources) => {
+      if (tournamentWorkspaceId == null || !resources.includes("workspace.subscriptions")) return;
+      void queryClient.invalidateQueries({
+        queryKey: tournamentQueryKeys.registrationsList(tournamentWorkspaceId, tournamentId)
+      });
+      scheduleReadinessInvalidate();
     }
-  );
+  });
 
   const tournament = tournamentQuery.data;
   const canUpdateTournament = canAccessPermission("tournament.update", tournamentWorkspaceId);

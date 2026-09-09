@@ -170,16 +170,20 @@ def _workspace_ctx(data: dict[str, Any], action: str, resource: str = "team") ->
 async def _registration_response(session: Any, ctx: _Ctx, registration: Any) -> Any:
     """The response every per-registration admin mutation returns.
 
-    Status metas are read before the broadcast, in that order, because the
-    serializer needs them and ``emit_*`` runs in its own session -- a failure
-    there must not leave the caller without a body.
+    The signal is STAGED here, not published: the caller's own commit is what
+    releases it, so a response body can never describe a broadcast that outlived
+    a failed transaction.
     """
     status_meta_map = await get_status_metas_map(session, workspace_id=ctx.ws_id)
     await emit_balancer_registrations_changed(
+        session,
         registration.tournament_id,
-        workspace_id=ctx.ws_id,
         actor_user_id=ctx.user.id,
     )
+    # The lifecycle services commit their own writes, so this session is clean
+    # by now: the commit here is what releases the staged event (the rail stages
+    # on before_commit precisely so a clean session still publishes).
+    await session.commit()
     rosters = await roster_engine.resolve(session, [registration], workspace_id=ctx.ws_id)
     return _dump(
         serialize_registration(
@@ -736,7 +740,8 @@ def register(broker: Any, logger: Any) -> None:
                 ctx.id,
                 deleted_by=ctx.user.id,
             )
-            await emit_balancer_registrations_changed(tournament_id, actor_user_id=ctx.user.id)
+            await emit_balancer_registrations_changed(session, tournament_id, actor_user_id=ctx.user.id)
+            await session.commit()
             return None
 
         return await _run(logger, op)
@@ -762,7 +767,8 @@ def register(broker: Any, logger: Any) -> None:
                 reviewed_by=ctx.user.id,
             )
             if approved:
-                await emit_balancer_registrations_changed(ctx.id, actor_user_id=ctx.user.id)
+                await emit_balancer_registrations_changed(session, ctx.id, actor_user_id=ctx.user.id)
+                await session.commit()
             return _dump(schemas.BulkApproveResponse(approved=approved, skipped=skipped))
 
         return await _run(logger, op)
@@ -814,7 +820,8 @@ def register(broker: Any, logger: Any) -> None:
                 registration_ids,
             )
             if updated:
-                await emit_balancer_registrations_changed(ctx.id, actor_user_id=ctx.user.id)
+                await emit_balancer_registrations_changed(session, ctx.id, actor_user_id=ctx.user.id)
+                await session.commit()
             return _dump(schemas.BulkBalancerStatusResponse(updated=updated, skipped=skipped))
 
         return await _run(logger, op)
@@ -845,7 +852,8 @@ def register(broker: Any, logger: Any) -> None:
                 exclude_reason=body.exclude_reason,
             )
             if updated:
-                await emit_balancer_registrations_changed(ctx.id, actor_user_id=ctx.user.id)
+                await emit_balancer_registrations_changed(session, ctx.id, actor_user_id=ctx.user.id)
+                await session.commit()
             return _dump(schemas.BulkBalancerStatusResponse(updated=updated, skipped=skipped))
 
         return await _run(logger, op)
@@ -907,7 +915,8 @@ def register(broker: Any, logger: Any) -> None:
                 stages=body.stages,
                 apply=True,
             )
-            await emit_balancer_registrations_changed(ctx.id, actor_user_id=ctx.user.id)
+            await emit_balancer_registrations_changed(session, ctx.id, actor_user_id=ctx.user.id)
+            await session.commit()
             return _dump(schemas.BalancerRegistrationRankAutofillResponse(**result))
 
         return await _run(logger, op)

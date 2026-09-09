@@ -163,7 +163,11 @@ async def emit(
 def _staged(session: Any) -> _Staged | None:
     sync_session = getattr(session, "sync_session", None)
     info = getattr(sync_session or session, "info", None)
-    if info is None:
+    # A real Session.info is always a dict. Anything else means this is not a
+    # session at all (a Mock or a plain object in a unit test), and there is
+    # nothing to hang the transaction hooks on — staging into it would produce
+    # an event nobody ever publishes.
+    if not isinstance(info, dict):
         return None
     staged = info.get(_STAGED_KEY)
     if staged is None:
@@ -201,8 +205,20 @@ def _domain_row(scope: Scope, data: DomainEvent, actor_user_id: int | None) -> W
     )
 
 
-@event.listens_for(Session, "before_flush")
-def _persist_staged(session: Session, _flush_context: Any, _instances: Any) -> None:
+# before_commit, NOT before_flush: Session._flush early-returns on a clean
+# session, so a commit whose write already landed elsewhere (or that has no ORM
+# write at all — the balancer job worker keeps its jobs in Redis) would never
+# fire before_flush and would drop the staged rows silently. The predecessor
+# factory had exactly this hole, which is why tournament-service carried a
+# second after_commit listener of its own "regardless of whether the shared
+# factory's own before_flush actually ran this transaction".
+#
+# _prepare_impl dispatches before_commit and only THEN runs its
+# `while not _is_clean(): flush()` loop, so rows added here are still flushed
+# inside the caller's transaction and still get their ids before after_commit
+# reads them.
+@event.listens_for(Session, "before_commit")
+def _persist_staged(session: Session) -> None:
     staged: _Staged | None = session.info.get(_STAGED_KEY)
     if staged is None:
         return
@@ -242,8 +258,14 @@ def _publish_staged(session: Session) -> None:
     task.add_done_callback(_background_tasks.discard)
 
 
+# BOTH rollback hooks: after_rollback fires only when a DBAPI transaction was
+# actually begun, so a session that staged an event and rolled back before
+# touching the database (a validation failure between emit and the write) would
+# otherwise keep the event staged and publish it on its NEXT commit — an event
+# describing a write that never happened.
 @event.listens_for(Session, "after_rollback")
-def _drop_staged(session: Session) -> None:
+@event.listens_for(Session, "after_soft_rollback")
+def _drop_staged(session: Session, _previous_transaction: Any = None) -> None:
     session.info.pop(_STAGED_KEY, None)
     session.info.pop(_PENDING_KEY, None)
 

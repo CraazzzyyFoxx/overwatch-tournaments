@@ -65,7 +65,7 @@ class AnalyticsJobRunnerFailureTests(IsolatedAsyncioTestCase):
             patch.object(job_runner.runner_service, "_run_compute", AsyncMock(side_effect=RuntimeError("boom"))),
             patch.object(job_runner.runner_service.runtime, "mark_failed", AsyncMock()) as mark_failed,
         ):
-            await job_runner.runner_service.run_job(session, None, job.id)
+            await job_runner.runner_service.run_job(session, job.id)
 
         session.rollback.assert_awaited()
         mark_failed.assert_awaited_once()
@@ -86,7 +86,7 @@ class AnalyticsJobRunnerFailureTests(IsolatedAsyncioTestCase):
             patch.object(job_runner.runner_service, "_run_train_ml", AsyncMock(side_effect=fail_train)),
             patch.object(job_runner.runner_service.runtime, "mark_failed", AsyncMock()) as mark_failed,
         ):
-            await job_runner.runner_service.run_job(session, None, 10)
+            await job_runner.runner_service.run_job(session, 10)
 
         mark_failed.assert_awaited_once()
         self.assertEqual(10, mark_failed.await_args.args[1])
@@ -107,7 +107,7 @@ class AnalyticsJobRunnerFailureTests(IsolatedAsyncioTestCase):
             ),
         ):
             with self.assertRaises(RuntimeError):
-                await job_runner.runner_service._run_compute(session, None, job)
+                await job_runner.runner_service._run_compute(session, job)
 
         session.rollback.assert_awaited()
         failed_updates = [call for call in update_progress.await_args_list if call.kwargs.get("state") == "failed"]
@@ -126,7 +126,7 @@ class AnalyticsJobRunnerFailureTests(IsolatedAsyncioTestCase):
             patch.object(job_runner.runner_service, "_emit", AsyncMock()),
             patch.object(job_runner, "train_all_models", AsyncMock(return_value={})) as train_all,
         ):
-            await job_runner.runner_service._run_train_ml(session, None, job)
+            await job_runner.runner_service._run_train_ml(session, job)
 
         train_all.assert_awaited_once_with(
             session,

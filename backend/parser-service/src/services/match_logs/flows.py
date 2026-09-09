@@ -12,21 +12,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from shared.clients.s3 import S3Client
 from shared.core import impact as impact_consts
 from shared.core.social import SocialProvider
-from shared.messaging.config import (
-    TOURNAMENT_CHANGED_EXCHANGE,
-    TOURNAMENT_EVENTS_EXCHANGE,
-)
+from shared.messaging.config import TOURNAMENT_EVENTS_EXCHANGE
 from shared.messaging.outbox import enqueue_outbox_event
 from shared.repository.identity import UserRepository
 from shared.repository.match_logs import MatchEventRepository, MatchKillFeedRepository, MatchStatisticsRepository
 from shared.repository.tournament import MatchRepository
 from shared.schemas.events import (
     EncounterCompletedEvent,
-    TournamentChangedEvent,
     TournamentStandingsInvalidatedEvent,
 )
 from shared.services import social_identity
 from shared.services.newcomer_status import load_prior_participation
+from shared.services.realtime import Resource, Scope, emit, enqueue_invalidation_outbox
 from src import models
 from src.core import enums, errors, pagination
 from src.core.config import settings
@@ -40,6 +37,7 @@ from src.services.map import flows as map_flows
 from src.services.match_logs.binary import binary_match_logs
 from src.services.match_logs.event_models import KillEvent, MatchEventRow, PlayerStatRow
 from src.services.match_logs.limits import match_log_oversize_message
+from src.services.match_logs.realtime import emit_logs_updated
 from src.services.team import service as team_service
 from src.services.tournament import flows as tournament_flows
 
@@ -126,16 +124,15 @@ async def _enqueue_match_log_tournament_events(
     session: AsyncSession,
     encounter: models.Encounter,
 ) -> None:
-    await enqueue_outbox_event(
-        session,
-        TournamentChangedEvent(
-            tournament_id=encounter.tournament_id,
-            reason="bracket_changed",
-            source_service="parser-service",
-        ),
-        exchange=TOURNAMENT_CHANGED_EXCHANGE,
-        routing_key=f"tournament.changed.{encounter.tournament_id}",
-    )
+    # A parsed match log moves the encounter's score and the standings built on
+    # top of it. Both halves of the invalidation: emit() for the clients and
+    # this service's own caches, the outbox row for tournament-service and
+    # app-service, which cache the same reads and cannot rely on Redis
+    # pub/sub's at-most-once delivery.
+    invalidated = (Resource.TOURNAMENT_ENCOUNTERS, Resource.TOURNAMENT_STANDINGS)
+    scope = Scope.tournament(encounter.tournament_id)
+    await emit(session, scope=scope, invalidates=list(invalidated), entity_ids={"encounter_ids": [encounter.id]})
+    await enqueue_invalidation_outbox(session, scope=scope, resources=invalidated)
 
     await enqueue_outbox_event(
         session,
@@ -1436,13 +1433,17 @@ async def process_match_log(
         s3,
         record.id if record is not None else None,
     )
+    # The signal is staged, not published: ``set_done``/``set_failed`` own the
+    # commit that carries it, so a state write that fails announces nothing.
     try:
         await processor.start(session, is_raise=is_raise)
         if record is not None:
+            await emit_logs_updated(session, tournament.workspace_id, change="done")
             await record_service.set_done(session, record)
     except Exception as e:
         logger.exception(e)
         if record is not None:
+            await emit_logs_updated(session, tournament.workspace_id, change="failed")
             await record_service.set_failed(session, record, str(e))
         if is_raise:
             raise e

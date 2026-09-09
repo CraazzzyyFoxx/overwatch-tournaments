@@ -19,7 +19,7 @@ from shared.repository.draft import (
     DraftSessionRepository,
     DraftTeamRepository,
 )
-from shared.services import realtime_topics
+from shared.services.realtime import Scope
 from src import schemas
 from src.services.draft import loaders
 from src.services.draft.feasibility import DraftFeasibilityService, feasibility_service
@@ -141,14 +141,12 @@ class DraftBoardService:
         # board, and an unchanged id can safely serve the cached snapshot.
         # Two topics, because roles and ranks are no longer copied into the draft:
         # a rank typed in the balancer changes what this board shows, and a
-        # registration edit publishes on the BRACKET topic
-        # (tournament-service ``realtime_commit`` -> ``registration_changed``).
-        # Keying on the draft topic alone would serve the pre-edit ranks until
-        # the TTL expired.
-        topics = (
-            realtime_topics.draft(draft_session.tournament_id),
-            realtime_topics.bracket(draft_session.tournament_id),
-        )
+        # registration edit lands on the tournament's INVALIDATION topic
+        # (tournament-service, resource ``tournament.registrations``). Keying on
+        # the draft topic alone would serve the pre-edit ranks until the TTL
+        # expired.
+        scope = Scope.tournament(draft_session.tournament_id)
+        topics = (scope.domain_topic("draft"), scope.invalidation_topic)
         last_event_id = await session.scalar(
             sa.select(sa.func.max(WorkspaceEvent.id)).where(WorkspaceEvent.topic.in_(topics))
         )

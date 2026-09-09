@@ -117,7 +117,7 @@ class TestChangeIsSignalled(IsolatedAsyncioTestCase):
             source=SubscriptionCollectionSource.registration,
         )
 
-        assert events.calls == [{"workspace_id": WS, "reason": SubscriptionCollectionSource.registration}]
+        assert events.calls == [{"workspace_id": WS, "trigger": SubscriptionCollectionSource.registration}]
 
     async def test_a_revoked_subscription_is_signalled(self):
         store = _Store(

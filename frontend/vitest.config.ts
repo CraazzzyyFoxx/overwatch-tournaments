@@ -222,11 +222,10 @@ export default defineConfig({
       "src/app/(site)/tournaments/[slug]/_components/TournamentLinkChips.behavior.test.tsx",
       // Same file-level rule as `src/components`: the bracket folder also holds a
       // `bun:test` file (`TournamentBracketPage.test.ts`).
-      // File-level, not a directory glob: `src/hooks` also holds
-      // `tournamentRealtime.helpers.test.ts`, which imports `bun:test`.
+      // File-level, not a directory glob: `src/hooks` also holds `bun:test`
+      // files.
       "src/app/(site)/tournaments/[slug]/bracket/bracketLiveStreams.test.ts",
       "src/hooks/useRealtimeCoalescedRefetch.test.ts",
-      "src/hooks/useTournamentRealtime.test.ts",
       "src/hooks/useRealtimePatchedQuery.test.ts",
       "src/hooks/useInvalidation.test.ts",
       // The manifest parity gate: this one is the reason a resource cannot be

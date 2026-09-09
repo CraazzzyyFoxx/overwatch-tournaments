@@ -40,16 +40,13 @@ from __future__ import annotations
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from datetime import UTC, datetime
 from typing import Any
 
 from loguru import logger
 from redis.asyncio import Redis
 
-from shared.schemas.realtime import WorkspaceEventEnvelope
 from shared.schemas.settings import StreamCollectionConfig
-from shared.services import realtime_topics
-from shared.services.realtime_publisher import publish_envelope_to_redis
+from shared.services.realtime import DomainEvent, Resource, Scope, emit
 from src.core import metrics
 from src.core.config import settings
 from src.services.helix import (
@@ -231,6 +228,11 @@ class StreamPollTick:
             await self._apply(plan, live_by_login)
             processed += 1
 
+        # One commit for the whole tick: emit() publishes from after_commit, and
+        # a tick that touched twenty tournaments should pay one round trip, not
+        # twenty. The session holds nothing else — live status lives in Redis.
+        await self._session.commit()
+
         self._report.status = POLL_STATUS_TRUNCATED if result.truncated else POLL_STATUS_OK
         self._report.tournaments_updated = processed
         metrics.STREAM_POLL_TICKS_TOTAL.labels(status=self._report.status).inc()
@@ -385,31 +387,32 @@ class StreamPollTick:
         if plan.tournament.is_hidden:
             logger.debug("Tournament {} is hidden; live set stored but not published", tournament_id)
             return
-        await self._publish(tournament_id, len(snapshots))
+        await self._emit(tournament_id, len(snapshots))
 
-    async def _publish(self, tournament_id: int, live_count: int) -> None:
-        """Thin ``stream.updated`` on the public spectator topic.
+    async def _emit(self, tournament_id: int, live_count: int) -> None:
+        """Thin ``stream.updated`` plus the ``tournament.streams`` invalidation.
 
-        Non-durable (``event_id=0``, no ``realtime.workspace_event`` row) for the
-        same reason as ``logs.updated``/``subscription.updated``: a reconnecting
-        client refetches anyway, so persisting a row per channel going live buys
-        nothing. Carries no channel data — the authoritative read is the RPC,
+        The data event is non-durable (``event_id=0``, no
+        ``realtime.workspace_event`` row) for the same reason as
+        ``logs.updated``/``subscription.updated``: a reconnecting client
+        refetches anyway, so persisting a row per channel going live buys
+        nothing. It carries no channel data — the authoritative read is the RPC,
         which applies the visibility rules this signal has no way to.
+
+        The tick's session is otherwise read-only; the commit in ``_run`` is what
+        persists the invalidation row and publishes both.
         """
-        envelope = WorkspaceEventEnvelope(
-            event_id=0,
-            event_type=STREAM_UPDATED,
-            schema_version=1,
-            occurred_at=datetime.now(UTC),
-            actor_user_id=None,
-            data={"tournament_id": int(tournament_id), "live_count": int(live_count)},
+        await emit(
+            self._session,
+            scope=Scope.tournament(tournament_id),
+            invalidates=[Resource.TOURNAMENT_STREAMS],
+            data=DomainEvent(
+                domain="streams",
+                event_type=STREAM_UPDATED,
+                payload={"tournament_id": int(tournament_id), "live_count": int(live_count)},
+                durable=False,
+            ),
         )
-        try:
-            await publish_envelope_to_redis(
-                self._redis, topic=realtime_topics.streams(tournament_id), envelope=envelope
-            )
-        except Exception:  # pragma: no cover - best-effort signal, Redis write already landed
-            logger.exception(f"Failed to publish stream.updated for tournament {tournament_id}")
 
 
 async def run_poll_tick(

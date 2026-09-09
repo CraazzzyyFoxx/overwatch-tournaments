@@ -7,7 +7,7 @@ aggregation that used to run inside the web request (and blew past
 
 Trigger model — debounced, event-driven:
   * app-worker startup fires a best-effort initial populate;
-  * every ``TOURNAMENT_CHANGED`` event requests a refresh, throttled to at most
+  * every ``tournament.standings`` invalidation requests a refresh, throttled to at most
     one per cooldown window so a burst of events coalesces into a single refresh.
 
 The refresh is scheduled as a background task (never blocks the event consumer),

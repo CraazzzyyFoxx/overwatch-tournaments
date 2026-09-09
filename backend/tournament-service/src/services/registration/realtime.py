@@ -1,84 +1,45 @@
 """Realtime fan-out for admin registration edits.
 
-Every admin mutation of a tournament's registrations publishes a lightweight
-``balancer.registrations_changed`` signal to ``tournament:{id}:balancer`` so
-that everyone with the balancer page open refetches the live list.
+Every admin mutation of a tournament's registrations announces itself on
+``tournament:{id}:balancer`` so that everyone with the balancer page open
+refetches the live list. That signal is DATA for the admin tool; the staleness
+of the public participants list travels separately, as the
+``tournament.registrations`` resource on the invalidation topic — the two used
+to be conflated, which is how a balancer export came to invalidate nothing
+public at all.
 
-Mirrors ``services.tournament.realtime_pubsub``: the event is persisted and
-broadcast from a short-lived session, decoupled from the admin mutation that
-already committed. The publish is scheduled as a fire-and-forget task so the
-mutation response never waits on the extra DB session + Redis round-trip, and the
-Redis client is the service's single pooled realtime client (``core.redis``)
-instead of a fresh TCP connection per mutation. Failures are
-swallowed — clients self-heal via the reconnect safety-refetch on the frontend.
+The former shape — a fire-and-forget task publishing from its own short-lived
+session after the caller had already committed — is gone with the rest of the
+per-call-site transports: it could publish an event for a transaction that
+later failed, and its own docstring had to explain the ordering caveat that
+riding the caller's transaction now removes.
 """
 
 from __future__ import annotations
 
-import asyncio
 from typing import Any
 
-from loguru import logger
-
-from shared.services.balancer_realtime import (
-    BALANCER_REGISTRATIONS_CHANGED,
-    publish_balancer_event,
-)
-from src.core import db
-from src.core.redis import get_realtime_redis
+from shared.services.balancer_realtime import BALANCER_REGISTRATIONS_CHANGED
+from shared.services.realtime import DomainEvent, Scope, emit
 
 __all__ = ("emit_balancer_registrations_changed",)
 
-# Strong references so fire-and-forget publish tasks are not garbage-collected
-# mid-flight (asyncio only keeps weak refs to running tasks).
-_pending_publishes: set[asyncio.Task[None]] = set()
-
-
-async def _publish(
-    tournament_id: int,
-    *,
-    workspace_id: int | None,
-    actor_user_id: int | None,
-    payload: dict[str, Any] | None,
-) -> None:
-    try:
-        async with db.async_session_maker() as session:
-            async with session.begin():
-                await publish_balancer_event(
-                    session,
-                    get_realtime_redis(),
-                    tournament_id=tournament_id,
-                    workspace_id=workspace_id,
-                    event_type=BALANCER_REGISTRATIONS_CHANGED,
-                    payload=payload,
-                    actor_user_id=actor_user_id,
-                )
-    except Exception:
-        logger.exception(
-            "Failed to publish balancer registrations event",
-            tournament_id=tournament_id,
-        )
-
 
 async def emit_balancer_registrations_changed(
+    session: Any,
     tournament_id: int,
     *,
-    workspace_id: int | None = None,
     actor_user_id: int | None = None,
     payload: dict[str, Any] | None = None,
 ) -> None:
-    """Schedule the ``registrations_changed`` broadcast off the request path.
-
-    The caller's mutation has already committed, so ordering is preserved:
-    the event (persisted in its own session) always describes committed state.
-    """
-    task = asyncio.create_task(
-        _publish(
-            tournament_id,
-            workspace_id=workspace_id,
-            actor_user_id=actor_user_id,
-            payload=payload,
-        )
+    """Stage the admin-tool signal. Call before the commit that owns the write."""
+    await emit(
+        session,
+        scope=Scope.tournament(tournament_id),
+        data=DomainEvent(
+            domain="balancer",
+            event_type=BALANCER_REGISTRATIONS_CHANGED,
+            payload=payload or {},
+        ),
+        actor_user_id=actor_user_id,
     )
-    _pending_publishes.add(task)
-    task.add_done_callback(_pending_publishes.discard)

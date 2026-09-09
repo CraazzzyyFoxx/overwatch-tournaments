@@ -7,7 +7,6 @@ import {
   applyDraftEvent,
   canConfirmPick,
   computeGating,
-  draftInvalidationTargets,
   isUrgent,
   presenceFromEvent,
   remainingMs
@@ -315,15 +314,5 @@ describe("draft safety state", () => {
     expect(canConfirmPick("connected", 4, options, { playerId: 50, role: "support" })).toBe(true);
     expect(canConfirmPick("reconnecting", 4, options, { playerId: 50, role: "support" })).toBe(false);
     expect(canConfirmPick("connected", 5, options, { playerId: 50, role: "support" })).toBe(false);
-  });
-
-  it("returns narrow invalidation targets for realtime changes", () => {
-    expect(draftInvalidationTargets("draft.pick_made")).toEqual(["feasibility", "options"]);
-    expect(draftInvalidationTargets("draft.player_updated")).toEqual([
-      "board",
-      "feasibility",
-      "options"
-    ]);
-    expect(draftInvalidationTargets("draft.presence")).toEqual([]);
   });
 });

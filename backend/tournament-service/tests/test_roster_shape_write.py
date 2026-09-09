@@ -222,7 +222,7 @@ def _run_update(
     async def _noop(*args, **kwargs):
         return tournament
 
-    monkeypatch.setattr(admin_tournament, "enqueue_tournament_changed", _noop)
+    monkeypatch.setattr(admin_tournament, "publish_tournament_invalidation", _noop)
     monkeypatch.setattr(admin_tournament.tournament_service, "get_tournament", _noop)
     monkeypatch.setattr(admin_tournament, "invalidate_roster_shape_cache", spy)
 

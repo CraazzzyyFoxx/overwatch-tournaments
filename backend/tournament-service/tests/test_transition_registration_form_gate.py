@@ -62,7 +62,7 @@ def _transition(*, has_form: bool, force: bool = False):
             AsyncMock(return_value=SimpleNamespace(id=1) if has_form else None),
         ),
         patch("src.services.admin.tournament.enqueue_tournament_state_changed", AsyncMock()),
-        patch("src.services.admin.tournament.enqueue_tournament_changed", AsyncMock()),
+        patch("src.services.admin.tournament.publish_tournament_invalidation", AsyncMock()),
         patch.object(tournament_service, "_maybe_auto_start_group_stage", AsyncMock()),
         patch.object(tournament_service, "get_tournament", AsyncMock(return_value=tournament)),
     ):

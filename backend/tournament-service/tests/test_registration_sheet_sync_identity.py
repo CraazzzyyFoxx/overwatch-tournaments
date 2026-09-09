@@ -106,7 +106,7 @@ class SheetSyncIdentityWiringTests(IsolatedAsyncioTestCase):
                 build_registration_role_payloads=Mock(return_value=[]),
                 replace_registration_roles=Mock(),
                 serialize_parsed_fields=Mock(return_value={}),
-                register_tournament_realtime_update=Mock(),
+                emit=AsyncMock(),
             ),
             # ``registration_service`` is the singleton sheet_sync imported, so
             # patching the method here is what the sync actually calls.

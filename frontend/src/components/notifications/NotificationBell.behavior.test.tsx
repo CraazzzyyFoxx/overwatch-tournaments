@@ -31,16 +31,21 @@ const remove = vi.fn();
 let authUser: unknown = { id: 1, username: "alice" };
 const mounted: { root: Root; client: QueryClient }[] = [];
 
-// Topic -> handler, so a test can fire the push the server would send. The
-// factory is hoisted above these declarations, so it must reference them lazily.
-const realtimeHandlers = new Map<string, (event: unknown) => void>();
+// Topic -> the invalidation consumer's callbacks, so a test can fire the push
+// the server would send. Mocked one level below `useInvalidation` (its own test
+// covers the coalescing timings), leaving the resource vocabulary real.
+type InvalidationConsumer = {
+  onEvent: (event: { data?: { resources?: string[] } }, schedule: () => void) => void;
+  onFlush: () => void;
+};
+const realtimeHandlers = new Map<string, InvalidationConsumer>();
 
 vi.mock("@/hooks/useAuthProfile", () => ({
   useAuthProfile: () => ({ status: authUser ? "authenticated" : "anonymous", user: authUser })
 }));
-vi.mock("@/hooks/useRealtimeTopic", () => ({
-  useRealtimeTopic: (topic: string | null | undefined, onEvent: (event: unknown) => void) => {
-    if (topic) realtimeHandlers.set(topic, onEvent);
+vi.mock("@/hooks/useRealtimeCoalescedRefetch", () => ({
+  useRealtimeCoalescedRefetch: (topic: string | null | undefined, options: InvalidationConsumer) => {
+    if (topic) realtimeHandlers.set(topic, options);
   }
 }));
 vi.mock("@/services/notification.service", () => ({
@@ -118,6 +123,14 @@ async function flush(): Promise<void> {
     setTimeout(resolve, 0);
     await promise;
   });
+}
+
+/** The push the server would send on the signed-in user's invalidation topic. */
+function fireInvalidation(resources: string[] = ["user.notifications"]): void {
+  const consumer = realtimeHandlers.get("user:1:invalidation");
+  if (!consumer) throw new Error("the bell did not subscribe to the caller's own topic");
+  consumer.onEvent({ data: { resources } }, () => {});
+  consumer.onFlush();
 }
 
 async function mount(locale: "en" | "ru" = "en"): Promise<HTMLElement> {
@@ -230,13 +243,7 @@ describe("notification bell", () => {
     await mount();
     await openPanel();
     list.mockRejectedValue(new Error("offline"));
-    await act(async () =>
-      realtimeHandlers.get("user:1:notifications")?.({
-        event_id: 0,
-        event_type: "notification.created",
-        data: {}
-      })
-    );
+    await act(async () => fireInvalidation());
     await flush();
     expect(document.body.textContent).toContain("Alpha");
     expect(document.body.textContent).toContain(en.notifications.refreshError);
@@ -249,19 +256,18 @@ describe("notification bell", () => {
     expect(document.body.textContent).not.toContain(en.notifications.refreshError);
   });
 
-  it("refetches when the realtime signal arrives, because the event carries no payload", async () => {
+  it("refetches when its own inbox is named stale, and ignores an event that names something else", async () => {
     await mount();
 
     expect(list).toHaveBeenCalledTimes(1);
-    const handler = realtimeHandlers.get("user:1:notifications");
-    expect(handler, "the bell did not subscribe to the caller's own topic").toBeTypeOf("function");
-
     list.mockResolvedValue(inbox([INVITE, DISPUTED_WITH_MAP, DISPUTED_NO_MAP]));
-    await act(async () => {
-      handler?.({ event_id: 0, event_type: "notification.created", data: {} });
-    });
-    await flush();
 
+    await act(async () => fireInvalidation(["workspace.logs"]));
+    await flush();
+    expect(list).toHaveBeenCalledTimes(1);
+
+    await act(async () => fireInvalidation());
+    await flush();
     expect(list).toHaveBeenCalledTimes(2);
   });
 
@@ -511,13 +517,7 @@ describe("notification bell", () => {
     expect(buttonNamed(en.notifications.clearRead).getAttribute("aria-disabled")).toBe("true");
 
     list.mockResolvedValue(inbox([{ ...INVITE, is_read: true }, DISPUTED_WITH_MAP], 1));
-    await act(async () =>
-      realtimeHandlers.get("user:1:notifications")?.({
-        event_id: 0,
-        event_type: "notification.created",
-        data: {}
-      })
-    );
+    await act(async () => fireInvalidation());
     await flush();
 
     const clear = buttonNamed(en.notifications.clearRead);

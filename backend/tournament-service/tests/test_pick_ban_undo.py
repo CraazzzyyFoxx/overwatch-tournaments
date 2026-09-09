@@ -31,6 +31,18 @@ from src.services.encounter import pick_ban_undo  # noqa: E402
 from src.services.encounter.pick_ban_action import apply_pick_ban_action  # noqa: E402
 
 
+def staged_topics(session: object) -> list[str]:
+    """The realtime topics ``emit`` staged on this session, in call order.
+
+    The topic is the whole contract for a pick-ban signal: it names the room
+    that must refetch, and the payload adds nothing a subscriber branches on.
+    """
+    staged = getattr(session, "info", {}).get("realtime_staged")
+    if staged is None:
+        return []
+    return [scope.domain_topic(data.domain) for scope, data, _actor in staged.domain]
+
+
 def entry(
     item_id: int,
     *,
@@ -220,7 +232,7 @@ class PerformUndoTests(IsolatedAsyncioTestCase):
         # Nothing reverted yet -- one side is not an agreement.
         self.assertEqual(MapPoolEntryStatus.BANNED.value, pool[0].status)
         self.assertEqual(1, session.commits)
-        self.assertEqual({(500, "hero")}, session.info["encounter_map_veto_realtime_updates"])
+        self.assertEqual(["encounter:500:pick-ban:hero"], staged_topics(session))
 
     async def test_the_same_side_asking_twice_changes_nothing(self) -> None:
         pool = self._banned_pool()

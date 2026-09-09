@@ -30,7 +30,7 @@ flows = importlib.import_module("src.services.user.service")
 enums = importlib.import_module("src.core.enums")
 pagination = importlib.import_module("shared.core.pagination")
 user_cache = importlib.import_module("src.services.user_cache")
-events = importlib.import_module("src.services.tournament_events")
+cache_resources = importlib.import_module("src.services.cache_resources")
 
 _ALL_PREFIXES = (*user_cache.USER_CACHE_KEY_PREFIXES, *user_cache.USER_COMPARE_KEY_PREFIXES)
 
@@ -82,8 +82,8 @@ class UserCacheInvalidationTests(_CacheTestBase):
         self.assertIsNone(await cache.get("backend:user_matches_summary:9:x"))
         self.assertIsNone(await cache.get("backend:user_compare:v2:9:x"))
 
-    def test_tournament_event_patterns_include_new_read_caches(self) -> None:
-        patterns = set(events.tournament_standings_cache_patterns(42))
+    def test_tournament_invalidation_patterns_include_new_read_caches(self) -> None:
+        patterns = set(cache_resources.RESOURCE_CACHE_PATTERNS["tournament.standings"](42))
         for prefix in user_cache.USER_CACHE_KEY_PREFIXES:
             self.assertIn(
                 f"backend:{prefix}:*",

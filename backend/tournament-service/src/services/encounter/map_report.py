@@ -38,11 +38,11 @@ from shared.models.tournament.tournament import Tournament
 from shared.repository import EncounterMapReportRepository, PickBanEntryRepository
 from shared.services import pick_ban_engine as engine
 from shared.services.bracket.usability import is_encounter_live
-from shared.services.notifications import notify, publish_notification_created
+from shared.services.notifications import notify
+from shared.services.realtime import Resource, Scope, emit
 from shared.services.scrim_scope import is_scrim_container
-from src.core.redis import get_realtime_redis
 from src.services.encounter.pick_ban_session import pick_ban_session_service
-from src.services.encounter.realtime_commit import register_map_veto_realtime_update
+from src.services.encounter.realtime_commit import emit_pick_ban_update
 
 
 class MapReportService:
@@ -65,7 +65,7 @@ class MapReportService:
         map_id: int,
         map_index: int,
         reporter_auth_user_id: int | None,
-    ) -> list[int]:
+    ) -> None:
         """Both captains, not just the opponent.
 
         A contradiction needs one of the two to correct their claim, and from
@@ -107,7 +107,6 @@ class MapReportService:
                     "map_index": map_index,
                 },
             )
-        return recipients
 
     async def _pending_play(
         self, session: AsyncSession, map_pick_ban: PickBanSession | None, map_id: int
@@ -172,14 +171,13 @@ class MapReportService:
         row.reporter_user_id = reporter_user_id
         row.home_score = home_score
         row.away_score = away_score
-        # Staged BEFORE this flush, not before the commit: `realtime_commit` collects
-        # registrations in `before_flush`, and a session whose only change is already
-        # flushed can commit without flushing again -- which silently dropped the
-        # signal for the FIRST captain's report, leaving the opponent's room to
-        # discover the claim on a manual reload. Both topics, because the room
-        # refetches map and hero state together: they are two phases of one loop.
-        register_map_veto_realtime_update(session, encounter.id)
-        register_map_veto_realtime_update(session, encounter.id, kind=PickBanKind.HERO.value)
+        # Unconditional, on both branches below: the opponent's tile only flips
+        # from "not reported" to "sealed" on this signal, and the FIRST
+        # captain's report -- the one that resolves nothing -- is exactly the
+        # case that used to commit silently. Both topics, because the room
+        # refetches map and hero state together: two phases of one loop.
+        await emit_pick_ban_update(session, encounter.id)
+        await emit_pick_ban_update(session, encounter.id, kind=PickBanKind.HERO.value)
         await session.flush()
 
         pair = engine.MapReportPair(
@@ -193,9 +191,8 @@ class MapReportService:
         reconciliation = engine.reconcile_map_reports(pair)
 
         if reconciliation.resolved is None:
-            recipients: list[int] = []
             if reconciliation.disputed:
-                recipients = await self._notify_dispute(
+                await self._notify_dispute(
                     session,
                     encounter,
                     map_id=map_id,
@@ -203,8 +200,6 @@ class MapReportService:
                     reporter_auth_user_id=reporter_user_id,
                 )
             await session.commit()
-            for recipient in recipients:
-                await publish_notification_created(get_realtime_redis(), recipient_auth_user_id=recipient)
             return {"disputed": reconciliation.disputed, "resolved": False, "match_id": None}
 
         resolved_home, resolved_away = reconciliation.resolved
@@ -274,6 +269,17 @@ class MapReportService:
                     map_pick_ban.awaiting_choice = True
                     map_pick_ban.pending_loser_side = "away" if winner == "home" else "home"
                     await session.flush()
+
+        # Unlike a veto/ban, an AGREED report moves the encounter's own score and
+        # writes the match row behind it -- the public encounter read is stale the
+        # moment this commits. The scrim branch above writes no match, but the
+        # encounter score still moved, so this is unconditional.
+        await emit(
+            session,
+            scope=Scope.tournament(encounter.tournament_id),
+            invalidates=[Resource.TOURNAMENT_ENCOUNTERS],
+            entity_ids={"encounter_ids": [encounter.id]},
+        )
 
         await session.commit()
         # ``match_id`` is null for a scrim: there is no row to point at. The client

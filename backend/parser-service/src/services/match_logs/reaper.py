@@ -130,6 +130,11 @@ async def _claim_stalled(
             )
         )
 
+    # Staged inside the claim transaction rather than after it: the monitor must
+    # only learn about a requeue that actually persisted.
+    for workspace_id in {item.workspace_id for item in requeue if item.workspace_id}:
+        await logs_realtime.emit_logs_updated(session, workspace_id, change="requeued")
+
     await session.commit()
     return requeue, exhausted
 
@@ -192,9 +197,6 @@ async def reclaim_stalled_logs(
                     )
                     continue
                 published += 1
-
-            for workspace_id in {item.workspace_id for item in requeue if item.workspace_id}:
-                await logs_realtime.publish_logs_updated(redis, workspace_id, reason="requeued")
 
             metrics.count("parser.match_log.reclaimed", published, attributes={"outcome": "requeued"})
             metrics.count("parser.match_log.reclaimed", len(exhausted), attributes={"outcome": "exhausted"})

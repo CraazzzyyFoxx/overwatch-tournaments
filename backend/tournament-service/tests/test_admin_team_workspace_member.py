@@ -88,7 +88,7 @@ class AdminTeamWorkspaceMemberTests(IsolatedAsyncioTestCase):
                 "_resolve_workspace_member_id",
                 AsyncMock(return_value=4242),
             ) as resolve_member,
-            patch.object(admin_team_service.team_service, "_enqueue_team_changed", AsyncMock()),
+            patch.object(admin_team_service.team_service, "_publish_structure_changed", AsyncMock()),
             patch.object(admin_team_service.team_service, "get_player", AsyncMock(return_value="created")),
         ):
             result = await admin_team_service.team_service.add_player_to_team(session, 3, data)
@@ -121,7 +121,7 @@ class AdminTeamWorkspaceMemberTests(IsolatedAsyncioTestCase):
                 "_resolve_workspace_member_id",
                 AsyncMock(return_value=9001),
             ) as resolve_member,
-            patch.object(admin_team_service.team_service, "_enqueue_team_changed", AsyncMock()),
+            patch.object(admin_team_service.team_service, "_publish_structure_changed", AsyncMock()),
             patch.object(admin_team_service.team_service, "get_player", AsyncMock(return_value="created")),
         ):
             result = await admin_team_service.team_service.create_player(session, data)

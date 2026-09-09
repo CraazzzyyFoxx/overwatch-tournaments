@@ -1,12 +1,12 @@
-"""Tests for the bracket-only realtime-event retention job
-(`serve.purge_stale_bracket_events`).
+"""Tests for the realtime-event retention job (`serve.purge_stale_realtime_events`).
 
 Real-DB integration test (mirroring the skip pattern of
 `test_auto_transitions.py`): the DB is probed once and any connection failure
 skips cleanly; the test refuses to run against a production database. Proves
 the scope boundary (design: docs/plans/2026-08-24-realtime-shared-library.md
-§4.2/D2/D10) — only stale BRACKET-topic rows are deleted, never pregame/draft
-rows (no upper bound on session duration) or recent bracket rows.
+§4.2/D2/D10) — only stale BRACKET- and INVALIDATION-topic rows are deleted,
+never pregame/draft rows (no upper bound on session duration) or recent rows of
+either family.
 """
 
 from __future__ import annotations
@@ -98,6 +98,22 @@ async def _seed(session_maker, *, tournament_id: int, encounter_id: int) -> dict
             payload={"tournament_id": tournament_id, "reason": "bracket_changed"},
             occurred_at=recent,
         ),
+        "old_invalidation": WorkspaceEvent(
+            topic=f"tournament:{tournament_id}:invalidation",
+            event_type="cache.invalidated",
+            tournament_id=tournament_id,
+            schema_version=1,
+            payload={"resources": ["tournament.encounters"]},
+            occurred_at=old,
+        ),
+        "recent_invalidation": WorkspaceEvent(
+            topic=f"tournament:{tournament_id}:invalidation",
+            event_type="cache.invalidated",
+            tournament_id=tournament_id,
+            schema_version=1,
+            payload={"resources": ["tournament.encounters"]},
+            occurred_at=recent,
+        ),
         "old_draft": WorkspaceEvent(
             topic=f"tournament:{tournament_id}:draft",
             event_type="draft.updated",
@@ -110,7 +126,7 @@ async def _seed(session_maker, *, tournament_id: int, encounter_id: int) -> dict
             topic=f"encounter:{encounter_id}:map-veto",
             event_type="map_veto.updated",
             schema_version=1,
-            payload={"encounter_id": encounter_id, "reason": "veto_changed"},
+            payload={"encounter_id": encounter_id},
             occurred_at=old,
         ),
     }
@@ -135,7 +151,7 @@ async def _cleanup(session_maker, ids: dict[str, int]) -> None:
         await session.commit()
 
 
-def test_purge_deletes_only_stale_bracket_rows() -> None:
+def test_purge_deletes_only_stale_bracket_and_invalidation_rows() -> None:
     async def _run():
         worker = importlib.import_module("serve")
 
@@ -144,7 +160,7 @@ def test_purge_deletes_only_stale_bracket_rows() -> None:
             ids = await _seed(session_maker, tournament_id=900_000 + suffix, encounter_id=900_000 + suffix)
 
             try:
-                await worker.purge_stale_bracket_events(session_maker)
+                await worker.purge_stale_realtime_events(session_maker)
                 return await _surviving_ids(session_maker, ids), ids
             finally:
                 await _cleanup(session_maker, ids)
@@ -153,5 +169,7 @@ def test_purge_deletes_only_stale_bracket_rows() -> None:
 
     assert ids["old_bracket"] not in surviving
     assert ids["recent_bracket"] in surviving
+    assert ids["old_invalidation"] not in surviving
+    assert ids["recent_invalidation"] in surviving
     assert ids["old_draft"] in surviving
     assert ids["old_map_veto"] in surviving

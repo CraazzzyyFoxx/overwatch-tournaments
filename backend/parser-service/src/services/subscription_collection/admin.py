@@ -320,7 +320,6 @@ class SubscriptionAdminService:
         twitch_client_id: str | None = None,
         broker: Any | None = None,
         proxy: str | None = None,
-        redis: Any | None = None,
     ) -> int:
         """Force a live re-check for one player, or sweep every active tournament.
 
@@ -348,7 +347,6 @@ class SubscriptionAdminService:
                 proxy=proxy,
                 batch_size=cfg.batch_size,
                 source=SubscriptionCollectionSource.manual,
-                redis=redis,
             )
 
         auth_user_id = await _auth_user_id_for_player(session, user_id)
@@ -370,7 +368,6 @@ class SubscriptionAdminService:
             twitch_client_id=twitch_client_id,
             broker=active_broker,
             proxy=proxy,
-            redis=redis,
         )
         checked = 0
         for scope_workspace_id, scope_providers in scopes:

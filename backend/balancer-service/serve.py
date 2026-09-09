@@ -18,6 +18,7 @@ from shared.observability import (
     start_worker_metrics_server,
 )
 from shared.schemas.events import BalancerJobEvent
+from shared.services.realtime import configure_realtime
 from src.core import db
 from src.core.caching import configure_cache
 from src.core.config import config
@@ -47,6 +48,11 @@ app = FastStream(broker)
 # (main.py) configures it at import, the worker must do so before any RPC read
 # path hits the cache (see lesson: cashews-worker-not-configured).
 configure_cache()
+# Same reason, same place: the realtime rail is a process-global too, and every
+# `emit` in this worker is a no-op until it knows where to publish. No
+# `cache_invalidator` — balancer-service keeps no cashews table of its own, so
+# there is nothing local to drop before the publish.
+configure_realtime(redis_url=config.redis_url)
 
 # Typed-RPC subscribers replacing the HTTP balancer-service behind the Go gateway.
 # Phase 1 — public config read + admin balance/config writes + teams import.

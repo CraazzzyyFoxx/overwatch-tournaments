@@ -6,7 +6,7 @@ shared part is the vocabulary (``shared/realtime/resources.json``), and
 tournament-scoped resource — an explicitly empty tuple is how "this service
 caches nothing of that" is said out loud.
 
-Replaces ``tournament_cache_patterns(reason)``: the publisher used to say WHY
+Replaces the old reason-keyed pattern table: the publisher used to say WHY
 and every consumer re-derived WHAT from it, three times, differently.
 """
 

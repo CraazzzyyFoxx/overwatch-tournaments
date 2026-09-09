@@ -16,7 +16,7 @@ from shared.core import http_status as status
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.repository import TournamentPhaseScheduleRepository, TournamentRepository
 from src import models, schemas
-from src.services.tournament.events import enqueue_tournament_changed
+from src.services.tournament.events import STRUCTURE_RESOURCES, publish_tournament_invalidation
 
 _TOURNAMENT_LOAD = (
     selectinload(models.Tournament.stages).selectinload(models.Stage.items).selectinload(models.StageItem.inputs),
@@ -59,7 +59,7 @@ class TournamentScheduleService:
             ],
         )
 
-        await enqueue_tournament_changed(session, tournament_id, "structure_changed")
+        await publish_tournament_invalidation(session, tournament_id, STRUCTURE_RESOURCES)
         await session.commit()
 
         # Fresh read (pattern of admin transition_status); populate_existing forces

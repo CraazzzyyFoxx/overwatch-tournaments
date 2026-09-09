@@ -13,13 +13,15 @@ consumer expressed the same thing as ``if reason == "bracket_changed": return``
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 
-from shared.services.realtime import Resource
+from shared.schemas.events import CacheInvalidatedEvent
+from shared.services.realtime import Resource, Scope
+from shared.services.realtime.consumer import invalidate_from_event
 from src.core.caching import CACHE_PREFIXES
 from src.services import user_cache
 
-__all__ = ("RESOURCE_CACHE_PATTERNS",)
+__all__ = ("RESOURCE_CACHE_PATTERNS", "invalidate_local")
 
 
 def _with_prefixes(*suffixes: str) -> tuple[str, ...]:
@@ -62,3 +64,24 @@ RESOURCE_CACHE_PATTERNS: dict[str, Callable[[int], Sequence[str]]] = {
     Resource.TOURNAMENT_REGISTRATION_FORM: lambda _tid: (),
     Resource.TOURNAMENT_STREAMS: lambda _tid: (),
 }
+
+
+async def invalidate_local(
+    scope: Scope,
+    resources: frozenset[Resource],
+    entity_ids: Mapping[str, Sequence[int]],
+) -> None:
+    """``configure_realtime``'s hook for what THIS process emitted.
+
+    Same table as the queue consumer, because a resource does not mean
+    something different depending on which side of the broker it arrived from.
+    """
+    await invalidate_from_event(
+        CacheInvalidatedEvent(
+            scope_kind=str(scope.kind),
+            scope_id=scope.id,
+            resources=[str(r) for r in resources],
+            entity_ids={key: [int(v) for v in values] for key, values in entity_ids.items()},
+        ),
+        RESOURCE_CACHE_PATTERNS,
+    )

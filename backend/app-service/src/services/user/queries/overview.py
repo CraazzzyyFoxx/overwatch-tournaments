@@ -424,7 +424,7 @@ class UserOverviewQueries:
     # this path serves — the correlated aggregates with *no* role/division/search
     # filter — the ordering depends only on (workspace, sort, direction); `grid` only
     # feeds the division predicates, which are absent here. Short TTL + invalidation
-    # on TournamentChangedEvent (services.tournament_events) bound staleness.
+    # on a tournament.standings invalidation (services.cache_resources) bound staleness.
     @cache(
         ttl=config.settings.users_cache_ttl,
         key="backend:user_overview_order:{workspace_id}:{sort_key}:{descending}",

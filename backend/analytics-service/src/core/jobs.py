@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from shared.jobs import JobConflict, JobService, JobSpec, OneActive, OrmJobStore, Status
 from shared.repository import AnalyticsJobRepository
 from src import models
+from src.worker.job_realtime import emit_job_event
 
 __all__ = (
     "JOB_KIND_COMPUTE",
@@ -129,5 +130,17 @@ async def update_progress(
     progress = dict(job.progress or {})
     progress[stage] = {"state": state, "detail": detail or {}}
     await _repo.update_fields(session, job, {"progress": progress})
+    # Staged before the commit that carries it: this IS the write the tick
+    # reports, so the runner no longer re-reads the row to announce it.
+    await emit_job_event(
+        session,
+        job_id=job_id,
+        workspace_id=job.workspace_id,
+        tournament_id=int(job.tournament_id),
+        kind=job.kind,
+        status=job.status,
+        progress=progress,
+        actor_user_id=job.requested_by_user_id,
+    )
     await session.commit()
     return job

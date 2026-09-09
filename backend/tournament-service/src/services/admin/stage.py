@@ -21,7 +21,6 @@ from shared.repository import (
     TeamRepository,
     TournamentRepository,
 )
-from shared.schemas.events import TournamentChangedReason
 from shared.services.bracket import round_robin
 from shared.services.bracket.engine import generate_bracket, placeholder_bracket, placeholder_seeds
 from shared.services.bracket.persist import persist_skeleton
@@ -71,8 +70,9 @@ from src.services.admin.stage_common import (
     _pick_ban_config_signature,
 )
 from src.services.tournament.events import (
-    enqueue_tournament_changed,
+    STRUCTURE_RESOURCES,
     enqueue_tournament_recalculation,
+    publish_tournament_invalidation,
 )
 
 
@@ -98,10 +98,15 @@ class AdminStageService:
         self.tournament_repo = tournament_repo
         self.pick_ban_config_repo = pick_ban_config_repo
 
-    async def _publish_tournament_changed(
-        self, session: AsyncSession, tournament_id: int, reason: TournamentChangedReason
-    ) -> None:
-        await enqueue_tournament_changed(session, tournament_id, reason)
+    async def _publish_structure_changed(self, session: AsyncSession, tournament_id: int) -> None:
+        """Announce that this tournament's set of page sections moved.
+
+        Every stage write reaches here, and every one of them creates, removes or
+        re-shapes a stage — which is exactly ``tournament.structure``, the one
+        resource a client cannot repair by refetching a query (it has to re-run
+        the route).
+        """
+        await publish_tournament_invalidation(session, tournament_id, STRUCTURE_RESOURCES)
 
     async def get_stage(self, session: AsyncSession, stage_id: int) -> models.Stage:
         stage = await self.stage_repo.get(
@@ -383,7 +388,7 @@ class AdminStageService:
                     source_type="stage",
                 )
             )
-        await self._publish_tournament_changed(session, tournament_id, "structure_changed")
+        await self._publish_structure_changed(session, tournament_id)
         await session.commit()
         return await self.get_stage(session, stage.id)
 
@@ -393,7 +398,7 @@ class AdminStageService:
         update_data = data.model_dump(exclude_unset=True)
         for field, value in update_data.items():
             setattr(stage, field, value)
-        await self._publish_tournament_changed(session, tournament_id, "structure_changed")
+        await self._publish_structure_changed(session, tournament_id)
         await session.commit()
         return await self.get_stage(session, stage.id)
 
@@ -414,7 +419,7 @@ class AdminStageService:
         # silently breaks "preceding stage" lookups like auto-wire's, which
         # compare `order` strictly).
         await self._reindex_tournament_stages(session, tournament_id=tournament_id, removed_stage_ids={stage_id})
-        await self._publish_tournament_changed(session, tournament_id, "structure_changed")
+        await self._publish_structure_changed(session, tournament_id)
         await session.commit()
 
     async def delete_stage_item(self, session: AsyncSession, stage_item_id: int) -> None:
@@ -431,7 +436,7 @@ class AdminStageService:
         await self.standing_repo.delete_for_stage_item(session, stage_item_id)
         await self.stage_item_repo.delete(session, item)
         await enqueue_tournament_recalculation(session, tournament_id)
-        await self._publish_tournament_changed(session, tournament_id, "structure_changed")
+        await self._publish_structure_changed(session, tournament_id)
         await session.commit()
 
     async def _merge_pick_ban_configs(
@@ -674,7 +679,7 @@ class AdminStageService:
             removed_stage_ids=set(unique_source_stage_ids),
         )
         await enqueue_tournament_recalculation(session, target_stage.tournament_id)
-        await self._publish_tournament_changed(session, target_stage.tournament_id, "structure_changed")
+        await self._publish_structure_changed(session, target_stage.tournament_id)
         await session.commit()
 
         logger.info(
@@ -693,7 +698,7 @@ class AdminStageService:
         item = models.StageItem(stage_id=stage_id, **data.model_dump())
         await self.stage_item_repo.create(session, item)
         await enqueue_tournament_recalculation(session, tournament_id)
-        await self._publish_tournament_changed(session, tournament_id, "structure_changed")
+        await self._publish_structure_changed(session, tournament_id)
         await session.commit()
         item_id = item.id
         return await self.get_stage_item(session, item_id)
@@ -709,7 +714,7 @@ class AdminStageService:
         update_data = data.model_dump(exclude_unset=True)
         for field, value in update_data.items():
             setattr(item, field, value)
-        await self._publish_tournament_changed(session, tournament_id, "structure_changed")
+        await self._publish_structure_changed(session, tournament_id)
         await session.commit()
         return await self.get_stage_item(session, stage_item_id)
 
@@ -728,7 +733,7 @@ class AdminStageService:
         inp = models.StageItemInput(stage_item_id=stage_item_id, **data.model_dump())
         await self.stage_item_input_repo.create(session, inp)
         await enqueue_tournament_recalculation(session, tournament_id)
-        await self._publish_tournament_changed(session, tournament_id, "structure_changed")
+        await self._publish_structure_changed(session, tournament_id)
         await session.commit()
         await session.refresh(inp)
         return inp
@@ -827,7 +832,7 @@ class AdminStageService:
         inp.source_position = next_source_position
 
         await enqueue_tournament_recalculation(session, tournament_id)
-        await self._publish_tournament_changed(session, tournament_id, "structure_changed")
+        await self._publish_structure_changed(session, tournament_id)
         await session.commit()
         await session.refresh(inp)
         return inp
@@ -943,7 +948,7 @@ class AdminStageService:
         if schedule_standings:
             await enqueue_tournament_recalculation(session, stage.tournament_id)
         if notify:
-            await self._publish_tournament_changed(session, stage.tournament_id, "structure_changed")
+            await self._publish_structure_changed(session, stage.tournament_id)
         if commit:
             await session.commit()
         else:
@@ -1293,7 +1298,7 @@ class AdminStageService:
 
         await enqueue_tournament_recalculation(session, stage.tournament_id)
         if notify:
-            await self._publish_tournament_changed(session, stage.tournament_id, "structure_changed")
+            await self._publish_structure_changed(session, stage.tournament_id)
         await session.commit()
 
         logger.info(
@@ -1412,7 +1417,7 @@ class AdminStageService:
             _apply_seeding(session, _build_seeding(lb_slices, mode), lb_item)
 
         if notify:
-            await self._publish_tournament_changed(session, target_stage.tournament_id, "structure_changed")
+            await self._publish_structure_changed(session, target_stage.tournament_id)
         if commit:
             await session.commit()
         else:
@@ -1545,7 +1550,7 @@ class AdminStageService:
         stage = await self.get_stage(session, stage_id)
         await self._auto_wire_from_groups(session, stage, strict=True)
         if notify:
-            await self._publish_tournament_changed(session, stage.tournament_id, "structure_changed")
+            await self._publish_structure_changed(session, stage.tournament_id)
         if commit:
             await session.commit()
         else:
@@ -1776,7 +1781,7 @@ class AdminStageService:
                 changed += 1
 
         if changed:
-            await self._publish_tournament_changed(session, stage.tournament_id, "structure_changed")
+            await self._publish_structure_changed(session, stage.tournament_id)
         await session.commit()
         return changed
 

@@ -6,10 +6,10 @@ Two invariants follow from ``notify()`` never committing:
    runs *inside* the caller's transaction, before its ``session.commit()``, the
    same contract ``shared/services/audit.py:record_audit`` has. Notifying about
    a rolled-back invite is worse than not notifying at all.
-2. The realtime signal is not part of that transaction.
-   ``publish_notification_created`` is called *after* the commit and is
-   best-effort: the row is already durable, the signal only tells a connected
-   client to refetch sooner than its next poll would.
+2. The realtime signal rides that same transaction. ``notify()`` stages it
+   through ``shared.services.realtime.emit``, which publishes from the
+   session's ``after_commit`` -- so a rolled-back invite signals nothing, and
+   no caller has to remember to fire anything afterwards.
 
 No text is stored for system kinds. A row carries ``kind`` plus a
 ``payload_json`` snapshot of the named domain fields the frontend interpolates
@@ -27,18 +27,14 @@ also block the legitimate repeat ("you were invited to that team again").
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Any, Literal, get_args
 
-from loguru import logger
 from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator, model_validator
-from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.models.platform.notification import Notification
-from shared.schemas.realtime import WorkspaceEventEnvelope
-from shared.services import realtime_topics
-from shared.services.realtime_publisher import publish_envelope_to_redis
+from shared.services.realtime import DomainEvent, Resource, Scope, emit
 
 __all__ = (
     "NOTIFICATION_CREATED_EVENT",
@@ -53,7 +49,6 @@ __all__ = (
     "TeamInviteAnsweredPayload",
     "TeamInviteReceivedPayload",
     "notify",
-    "publish_notification_created",
     "validate_notification_payload",
 )
 
@@ -273,27 +268,23 @@ async def notify(
         # Left unset otherwise, so the column's server default stamps it.
         row.published_at = published_at
     session.add(row)
-    return row
 
-
-async def publish_notification_created(redis: Redis, *, recipient_auth_user_id: int) -> None:
-    """Thin, non-durable "go refetch" signal. Best-effort; the row is already durable.
-
-    ``event_id=0`` marks it as having no replay cursor: it is not in the durable
-    event log, so a client reconnecting with a cursor must not expect to find it
-    there. The payload is deliberately empty -- the inbox read is authorized,
-    this channel is not the place to leak a notification's contents.
-    """
-    try:
-        await publish_envelope_to_redis(
-            redis,
-            topic=realtime_topics.user_notifications(recipient_auth_user_id),
-            envelope=WorkspaceEventEnvelope(
-                event_id=0,
+    if recipient_auth_user_id is not None:
+        # Only a personal row has an inbox to signal. A workspace or global
+        # announcement is read from the banner query, which has no user-scoped
+        # topic and no per-recipient staleness to announce.
+        await emit(
+            session,
+            scope=Scope.user(recipient_auth_user_id),
+            invalidates=[Resource.USER_NOTIFICATIONS],
+            # Non-durable and payload-free: the inbox read is the authorized
+            # channel, and a reconnecting client refetches it anyway, so a
+            # replay cursor for "go refetch" would buy nothing.
+            data=DomainEvent(
+                domain="notifications",
                 event_type=NOTIFICATION_CREATED_EVENT,
-                occurred_at=datetime.now(UTC),
-                data={},
+                durable=False,
             ),
+            actor_user_id=actor_auth_user_id,
         )
-    except Exception:
-        logger.exception("Failed to publish notification.created signal")
+    return row

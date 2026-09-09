@@ -2,7 +2,6 @@ import time
 
 from faststream import FastStream
 from faststream.rabbit.annotations import RabbitMessage
-from redis.asyncio import Redis
 
 from shared.messaging.config import (
     ANALYTICS_INFER_QUEUE,
@@ -23,6 +22,7 @@ from shared.schemas.events import (
     AnalyticsJobRequested,
     AnalyticsTrainRequest,
 )
+from shared.services.realtime import configure_realtime
 from src.core import config, db
 from src.scheduler import register_jobs
 from src.services.ml.inference.runner import run_for_tournament
@@ -39,12 +39,14 @@ logger = setup_logging(
 broker = make_rabbit_broker(config.settings.rabbitmq_url, logger=logger)
 app = FastStream(broker)
 scheduler = register_jobs()
-redis_client: Redis | None = None
+
+# shared/services/realtime has no settings of its own; every emit() in this
+# process publishes through what this call wires up.
+configure_realtime(redis_url=str(config.settings.redis_url))
 
 
 @app.on_startup
 async def start_worker() -> None:
-    global redis_client
     setup_sentry(
         dsn=config.settings.sentry_dsn,
         traces_sample_rate=config.settings.sentry_traces_sample_rate,
@@ -70,15 +72,6 @@ async def start_worker() -> None:
     )
     if config.settings.worker_metrics_port is not None:
         start_worker_metrics_server(config.settings.worker_metrics_port)
-    # Redis is used to publish analytics_job realtime envelopes for the
-    # gateway WS fan-out. Missing/broken Redis degrades to "no
-    # progress events", not an outright failure.
-    try:
-        redis_client = Redis.from_url(str(config.settings.redis_url))
-        await redis_client.ping()
-    except Exception:
-        logger.exception("Failed to connect to Redis; realtime events disabled")
-        redis_client = None
     scheduler.start()
     logger.info("Analytics worker started")
 
@@ -86,11 +79,6 @@ async def start_worker() -> None:
 @app.on_shutdown
 async def stop_worker() -> None:
     scheduler.shutdown(wait=False)
-    if redis_client is not None:
-        try:
-            await redis_client.aclose()
-        except Exception:
-            logger.exception("Failed to close Redis client")
     logger.info("Analytics worker stopped")
 
 
@@ -112,7 +100,7 @@ async def consume_analytics_job(data: dict, msg: RabbitMessage) -> None:
         event = AnalyticsJobRequested.model_validate(data)
         logger.bind(job_id=event.job_id).info("Consuming analytics job")
         async with db.async_session_maker() as session:
-            await runner_service.run_job(session, redis_client, event.job_id)
+            await runner_service.run_job(session, event.job_id)
 
 
 @broker.subscriber(ANALYTICS_TRAIN_QUEUE)

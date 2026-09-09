@@ -130,25 +130,6 @@ class TournamentStandingsInvalidatedEvent(BaseEvent):
     reason: str = Field(default="results_changed", description="Source/reason for observability")
 
 
-TournamentChangedReason = Literal["bracket_changed", "results_changed", "structure_changed"]
-
-
-class TournamentChangedEvent(BaseEvent):
-    """Event emitted when tournament bracket-related reads become stale.
-
-    Published by: parser-service worker and tournament-service flows
-    Consumed by: app-service and tournament-service APIs for cache invalidation
-    and realtime fan-out
-    """
-
-    event_type: str = Field(default="tournament_changed", frozen=True)
-    tournament_id: int = Field(..., description="Tournament ID that was recalculated")
-    reason: TournamentChangedReason = Field(
-        ...,
-        description="Why bracket-related tournament views should refresh",
-    )
-
-
 class CacheInvalidatedEvent(BaseEvent):
     """Cross-service half of a realtime invalidation.
 

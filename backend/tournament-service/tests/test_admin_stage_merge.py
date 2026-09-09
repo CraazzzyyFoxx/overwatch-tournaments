@@ -99,8 +99,8 @@ class AdminStageMergeTests(IsolatedAsyncioTestCase):
         async def fake_enqueue(_session, tournament_id):
             calls.append(f"enqueue:{tournament_id}")
 
-        async def fake_publish(_session, tournament_id, reason):
-            calls.append(f"publish:{tournament_id}:{reason}")
+        async def fake_publish(_session, tournament_id):
+            calls.append(f"publish:{tournament_id}")
 
         session = SimpleNamespace(
             execute=AsyncMock(
@@ -138,7 +138,7 @@ class AdminStageMergeTests(IsolatedAsyncioTestCase):
             ) as enqueue_recalc,
             patch.object(
                 stage_service.stage_service,
-                "_publish_tournament_changed",
+                "_publish_structure_changed",
                 AsyncMock(side_effect=fake_publish),
             ) as publish_changed,
         ):
@@ -168,13 +168,9 @@ class AdminStageMergeTests(IsolatedAsyncioTestCase):
         session.delete.assert_any_await(source_stage_b)
         session.delete.assert_any_await(source_stage_c)
         enqueue_recalc.assert_awaited_once_with(session, target_stage.tournament_id)
-        publish_changed.assert_awaited_once_with(
-            session,
-            target_stage.tournament_id,
-            "structure_changed",
-        )
+        publish_changed.assert_awaited_once_with(session, target_stage.tournament_id)
         self.assertLess(calls.index("enqueue:99"), calls.index("commit"))
-        self.assertLess(calls.index("publish:99:structure_changed"), calls.index("commit"))
+        self.assertLess(calls.index("publish:99"), calls.index("commit"))
 
 
 class AdminStageDeleteReindexTests(IsolatedAsyncioTestCase):
@@ -203,7 +199,7 @@ class AdminStageDeleteReindexTests(IsolatedAsyncioTestCase):
             patch.object(stage_service.stage_service, "get_stage", AsyncMock(return_value=deleted_stage)),
             patch.object(stage_service.stage_service.encounter_repo, "delete_for_stage", AsyncMock()),
             patch.object(stage_service.stage_service.standing_repo, "delete_for_stage", AsyncMock()),
-            patch.object(stage_service.stage_service, "_publish_tournament_changed", AsyncMock()),
+            patch.object(stage_service.stage_service, "_publish_structure_changed", AsyncMock()),
         ):
             await stage_service.stage_service.delete_stage(session, deleted_stage.id)
 

@@ -17,11 +17,12 @@ from faststream.rabbit import RabbitMessage
 from shared.core import http_status as status
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.services.balancer_realtime import BALANCER_TEAMS_CHANGED
+from shared.services.realtime import Scope, emit, enqueue_invalidation_outbox
 from src.core import db
 from src.core.auth import _get_tournament_workspace_id
 from src.rpc import _common as c
 from src.schemas.team import BalancerTeam, InternalBalancerTeamsPayload
-from src.services.balancer.realtime import emit_balancer_data_event
+from src.services.balancer.realtime import EXPORT_RESOURCES, emit_balancer_data
 from src.services.registered_teams import registered_teams_service
 from src.services.team import team_service
 
@@ -71,10 +72,15 @@ def register(broker: Any, logger: Any) -> None:
                 teams = [team.to_balancer_team() for team in internal_payload.teams]
 
             # ``import_teams`` commits once (the shared orchestrator owns the
-            # boundary) — the previous writer committed internally, so this RPC
-            # has never had a commit of its own.
+            # boundary), so both signals are staged BEFORE it: `emit` reaches
+            # the wire through the commit that carries the write, and after
+            # that call there is no transaction of ours left to ride.
+            await emit_balancer_data(session, tournament_id, BALANCER_TEAMS_CHANGED, actor_user_id=user.id)
+            await emit(session, scope=Scope.tournament(tournament_id), invalidates=EXPORT_RESOURCES)
+            await enqueue_invalidation_outbox(
+                session, scope=Scope.tournament(tournament_id), resources=EXPORT_RESOURCES
+            )
             await team_service.import_teams(session, tournament_id, teams)
-            await emit_balancer_data_event(tournament_id, BALANCER_TEAMS_CHANGED, actor_user_id=user.id)
             return {"imported_teams": len(teams)}
 
         return await c.envelope(logger, "admin.teams_import", op, session_factory=_SF)
@@ -102,7 +108,14 @@ def register(broker: Any, logger: Any) -> None:
 
             result = await registered_teams_service.export_registered(session, tournament_id, team_ids=team_ids)
             if result.imported_teams:
-                await emit_balancer_data_event(tournament_id, BALANCER_TEAMS_CHANGED, actor_user_id=user.id)
+                # The orchestrator already committed, so this needs a commit of
+                # its own — the outbox row is what carries it into a flush.
+                await emit_balancer_data(session, tournament_id, BALANCER_TEAMS_CHANGED, actor_user_id=user.id)
+                await emit(session, scope=Scope.tournament(tournament_id), invalidates=EXPORT_RESOURCES)
+                await enqueue_invalidation_outbox(
+                    session, scope=Scope.tournament(tournament_id), resources=EXPORT_RESOURCES
+                )
+                await session.commit()
             return {
                 "removed_teams": result.removed_teams,
                 "imported_teams": result.imported_teams,

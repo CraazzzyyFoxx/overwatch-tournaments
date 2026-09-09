@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useCallback, useEffect, useRef } from "react";
 
+import { useInvalidation } from "@/hooks/useInvalidation";
 import { useRealtimeTopic } from "@/hooks/useRealtimeTopic";
 import { realtimeClient } from "@/services/realtime.service";
 import balancerService from "@/services/balancer.service";
@@ -15,8 +16,8 @@ import { appendGeneratedVariants, type JobResultContext } from "./balancer-job-r
 import type { BalanceVariant } from "./workspace-helpers";
 
 /**
- * Tournament-scoped balancer topic. Matches `realtime_topics.balancer` on the
- * backend; access is gated by workspace membership in the realtime-service ACL.
+ * Tournament-scoped balancer topic. Access is gated by workspace membership in
+ * the gateway ACL (`tournament:*:balancer`, acl.go).
  */
 export function balancerRealtimeTopic(tournamentId: number | null): string | null {
   return tournamentId != null ? `tournament:${tournamentId}:balancer` : null;
@@ -25,11 +26,7 @@ export function balancerRealtimeTopic(tournamentId: number | null): string | nul
 // Event-type literals mirror shared/services/balancer_realtime.py.
 const PRESENCE_EVENT = "balancer.presence";
 const JOB_EVENT_PREFIX = "balancer_job.";
-const DATA_EVENT_PREFIX = "balancer.";
-// Trailing debounce for data-change refetches: bulk edits emit one event per
-// row and the actor's own edit echoes straight back, so a burst of identical
-// signals must cost one list refetch, not N.
-const DATA_EVENT_INVALIDATE_DEBOUNCE_MS = 400;
+const CONFIG_CHANGED_EVENT = "balancer.config_changed";
 
 type BalancerJobEventData = {
   tournament_id?: number;
@@ -74,74 +71,24 @@ export function useBalancerRealtime({
 }: UseBalancerRealtimeOptions): {
   registerLocalJob: (jobId: string, context: JobResultContext) => void;
 } {
-  const queryClient = useQueryClient();
   const topic = balancerRealtimeTopic(tournamentId);
   const connectionState = useRealtimeStore((state) => state.connectionState);
+  const queryClient = useQueryClient();
 
   // Run-local context (skipped/config) keyed by job id, so the shared succeeded
   // handler can label variants exactly as the initiator's run intended.
   const jobContextRef = useRef<Map<string, JobResultContext>>(new Map());
   // Guard against applying the same job result twice (e.g. live event + replay).
   const appliedJobsRef = useRef<Set<string>>(new Set());
-  // Per-query-key debounce timers for data-change invalidations.
-  const invalidateTimersRef = useRef<Map<string, number>>(new Map());
 
-  const scheduleInvalidate = useCallback(
-    (queryKey: unknown[]) => {
-      const timers = invalidateTimersRef.current;
-      const key = JSON.stringify(queryKey);
-      clearTimeout(timers.get(key));
-      timers.set(
-        key,
-        window.setTimeout(() => {
-          timers.delete(key);
-          void queryClient.invalidateQueries({ queryKey });
-        }, DATA_EVENT_INVALIDATE_DEBOUNCE_MS)
-      );
-    },
-    [queryClient]
-  );
-
-  useEffect(() => {
-    const timers = invalidateTimersRef.current;
-    return () => {
-      for (const timer of timers.values()) {
-        clearTimeout(timer);
-      }
-      timers.clear();
-    };
-  }, []);
+  // The balancer page's query freshness (registrations, saved balance) comes
+  // from the tournament's invalidation topic, not from the balancer events
+  // below: those carry job progress and presence, which no cache holds.
+  useInvalidation({ scopeKind: "tournament", scopeId: tournamentId });
 
   const registerLocalJob = useCallback((jobId: string, context: JobResultContext) => {
     jobContextRef.current.set(jobId, context);
   }, []);
-
-  const invalidateForDataEvent = useCallback(
-    (eventType: string) => {
-      if (tournamentId == null) {
-        return;
-      }
-      const keys: unknown[][] = [];
-      switch (eventType) {
-        case "balancer.registrations_changed":
-          keys.push(["balancer-admin", "registrations", tournamentId]);
-          break;
-        case "balancer.balance_saved":
-        case "balancer.teams_changed":
-          keys.push(["balancer-public", "balance", tournamentId]);
-          break;
-        case "balancer.config_changed":
-          keys.push(["balancer-admin", "tournament-config", tournamentId]);
-          break;
-        default:
-          return;
-      }
-      for (const queryKey of keys) {
-        scheduleInvalidate(queryKey);
-      }
-    },
-    [scheduleInvalidate, tournamentId]
-  );
 
   const handleJobSucceeded = useCallback(
     async (jobId: string) => {
@@ -209,11 +156,18 @@ export function useBalancerRealtime({
         handleJobEvent(eventType, data as BalancerJobEventData);
         return;
       }
-      if (eventType.startsWith(DATA_EVENT_PREFIX)) {
-        invalidateForDataEvent(eventType);
+      if (eventType === CONFIG_CHANGED_EVENT) {
+        // Admin-only read with no server-side cache and no other consumer, so
+        // it refreshes from its own domain event rather than through the
+        // invalidation vocabulary — a shared resource name buys nothing when
+        // there is nobody to keep in agreement. Everything a balancer write
+        // stales for the PUBLIC side travels as tournament resources.
+        void queryClient.invalidateQueries({
+          queryKey: ["balancer-admin", "tournament-config", tournamentId],
+        });
       }
     },
-    [handleJobEvent, invalidateForDataEvent, setPresence]
+    [handleJobEvent, queryClient, setPresence, tournamentId]
   );
 
   useRealtimeTopic(topic, handleEvent);
@@ -254,26 +208,18 @@ export function useBalancerRealtime({
     jobContextRef.current.clear();
   }, [tournamentId, setPresence]);
 
-  // Belt-and-suspenders: cursor replay already catches up data events on
-  // reconnect, but a replay-gap could drop them, so refetch the core queries
-  // whenever the socket comes back after a drop.
+  // Re-seed catch-up replay from the latest cursor for this topic when the
+  // socket comes back: a replay gap would otherwise swallow job events, which
+  // exist nowhere else. The queries are covered by the invalidation topic's own
+  // catch-up.
   const previousConnectionRef = useRef(connectionState);
   useEffect(() => {
     const previous = previousConnectionRef.current;
     previousConnectionRef.current = connectionState;
-    if (previous === "reconnecting" && connectionState === "connected" && tournamentId != null) {
-      void queryClient.invalidateQueries({
-        queryKey: ["balancer-admin", "registrations", tournamentId]
-      });
-      void queryClient.invalidateQueries({
-        queryKey: ["balancer-public", "balance", tournamentId]
-      });
-      // Re-seed catch-up replay from the latest cursor for this topic.
-      if (topic) {
-        realtimeClient.resubscribe(topic);
-      }
+    if (previous === "reconnecting" && connectionState === "connected" && topic) {
+      realtimeClient.resubscribe(topic);
     }
-  }, [connectionState, queryClient, tournamentId, topic]);
+  }, [connectionState, topic]);
 
   return { registerLocalJob };
 }

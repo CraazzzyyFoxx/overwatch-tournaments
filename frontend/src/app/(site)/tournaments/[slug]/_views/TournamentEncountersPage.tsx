@@ -61,7 +61,7 @@ const HEADING_CLASS =
  * `matches` entity, and a shared key would let whichever screen mounted first
  * decide whether the row expansion has any maps to show. The `"maps"` marker in
  * the key keeps the two payloads apart; the shared prefix keeps realtime
- * invalidation (`hooks/tournamentRealtime.helpers`) reaching both.
+ * invalidation (`tournament.encounters`) reaching both.
  *
  * Exported so the statistics section can count played maps out of the same
  * entry instead of fetching every encounter a second time.

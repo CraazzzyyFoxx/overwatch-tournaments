@@ -270,8 +270,11 @@ class RegistrationAuditTests(IsolatedAsyncioTestCase):
         )
 
         # Staged first, so the row rides the transaction the service commits:
-        # reversed, a rejected edit would keep its audit trail.
-        self.assertEqual(["audit", "service"], trace)
+        # reversed, a rejected edit would keep its audit trail. The trailing
+        # commit is the realtime rail's: the handler stages the admin-tool
+        # signal after the service has already committed, so releasing it needs
+        # a commit of its own.
+        self.assertEqual(["audit", "service", "commit"], trace)
 
     async def test_approve_records_the_status_transition(self):
         _, session, _ = await self._invoke(
@@ -335,4 +338,5 @@ class RegistrationAuditTests(IsolatedAsyncioTestCase):
         self.assertEqual("tournament", row.entity_type)
         self.assertEqual(3, row.entity_id)
         self.assertEqual([1, 2, 9], row.after_json["registration_ids"])
-        self.assertEqual(["audit", "service"], trace)
+        # Trailing commit: see test_row_is_staged_before_the_service_commits.
+        self.assertEqual(["audit", "service", "commit"], trace)

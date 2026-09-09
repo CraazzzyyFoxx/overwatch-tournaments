@@ -309,7 +309,7 @@ class RegistrationLifecycleService:
         if resolved_status == "approved":
             await enqueue_registration_approved(session, registration)
         else:
-            self.common._register_registration_changed(session, registration)
+            await self.common._register_registration_changed(session, registration)
         await session.commit()
         return await self.get_registration_by_id(session, registration.id)
 
@@ -438,7 +438,7 @@ class RegistrationLifecycleService:
         elif status_value == "rejected" and previous_status != "rejected":
             await enqueue_registration_rejected(session, registration)
         else:
-            self.common._register_registration_changed(session, registration)
+            await self.common._register_registration_changed(session, registration)
 
         await session.commit()
         if roles is not None or auth_user_id is not None:
@@ -526,7 +526,7 @@ class RegistrationLifecycleService:
             )
         registration.exclude_reason = None
         registration.balancer_status = included_balancer_status(await resolve_roster(session, registration))
-        self.common._register_registration_changed(session, registration)
+        await self.common._register_registration_changed(session, registration)
         await session.commit()
         # Scalar-only mutation; the eagerly-loaded object stays valid after
         # commit (expire_on_commit=False), so no refetch is needed.
@@ -539,7 +539,7 @@ class RegistrationLifecycleService:
     ) -> models.BalancerRegistration:
         registration = await self.get_registration_by_id(session, registration_id)
         registration.status = "withdrawn"
-        self.common._register_registration_changed(session, registration)
+        await self.common._register_registration_changed(session, registration)
         await session.commit()
         # Scalar-only mutation; no refetch needed (expire_on_commit=False).
         return registration
@@ -551,7 +551,7 @@ class RegistrationLifecycleService:
     ) -> models.BalancerRegistration:
         registration = await self.get_registration_by_id(session, registration_id)
         registration.status = "approved"
-        self.common._register_registration_changed(session, registration)
+        await self.common._register_registration_changed(session, registration)
         await session.commit()
         # Scalar-only mutation; no refetch needed (expire_on_commit=False).
         return registration
@@ -566,7 +566,7 @@ class RegistrationLifecycleService:
         registration = await self.get_registration_by_id(session, registration_id)
         registration.deleted_at = datetime.now(UTC)
         registration.deleted_by = deleted_by
-        self.common._register_registration_changed(session, registration)
+        await self.common._register_registration_changed(session, registration)
         await session.commit()
         return registration
 
@@ -598,7 +598,7 @@ class RegistrationLifecycleService:
             )
         registration.balancer_status = balancer_status
         registration.exclude_reason = exclude_reason if balancer_status == EXCLUDED_BALANCER_STATUS else None
-        self.common._register_registration_changed(session, registration)
+        await self.common._register_registration_changed(session, registration)
         await session.commit()
         # Scalar-only mutation; no refetch needed (expire_on_commit=False).
         return registration
@@ -620,7 +620,7 @@ class RegistrationLifecycleService:
         registration.checked_in = True
         registration.checked_in_at = datetime.now(UTC)
         registration.checked_in_by = checked_in_by
-        self.common._register_registration_changed(session, registration)
+        await self.common._register_registration_changed(session, registration)
         await session.commit()
         # Refetch: checked_in_by changed, the serializer needs a loaded
         # .checked_in_by_user.
@@ -640,7 +640,7 @@ class RegistrationLifecycleService:
         # populated (and we skip the refetch — expire_on_commit=False keeps the
         # object valid after commit).
         registration.checked_in_by_user = None
-        self.common._register_registration_changed(session, registration)
+        await self.common._register_registration_changed(session, registration)
         await session.commit()
         return registration
 
@@ -712,7 +712,7 @@ class RegistrationLifecycleService:
         for registration in registrations:
             registration.balancer_status = balancer_status
             registration.exclude_reason = exclude_reason if balancer_status == EXCLUDED_BALANCER_STATUS else None
-            self.common._register_registration_changed(session, registration)
+            await self.common._register_registration_changed(session, registration)
         await session.commit()
         return len(registrations), len(registration_ids) - len(registrations)
 

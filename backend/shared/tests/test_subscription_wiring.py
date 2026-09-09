@@ -61,13 +61,11 @@ class TestBuildResolver:
 
 
 class TestBuildEventSink:
-    def test_no_redis_means_no_sink(self):
-        """Nothing to publish to is not an error: a resolver without a sink resolves
-        exactly as before, it just cannot invalidate anybody's page."""
-        assert build_event_sink(None) is None
-
-    def test_a_redis_handle_yields_a_conforming_sink(self):
-        sink = build_event_sink(object())
+    def test_the_sink_rides_the_session_it_is_built_from(self):
+        """No optional wiring left: the signal is staged on the resolver's own
+        transaction, so there is no configuration under which a resolver
+        silently cannot invalidate anybody's page."""
+        sink = build_event_sink(None)  # type: ignore[arg-type]
         assert callable(getattr(sink, "subscriptions_updated", None))
 
 

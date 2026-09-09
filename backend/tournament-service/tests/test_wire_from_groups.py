@@ -21,7 +21,7 @@ stage_service = importlib.import_module("src.services.admin.stage")
 schemas = importlib.import_module("src.schemas")
 enums = importlib.import_module("shared.core.enums")
 
-stage_service.stage_service._publish_tournament_changed = AsyncMock()
+stage_service.stage_service._publish_structure_changed = AsyncMock()
 
 
 def _group_stage(*, stage_id: int, tournament_id: int, num_groups: int) -> SimpleNamespace:

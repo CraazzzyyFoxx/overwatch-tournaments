@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import asyncio
+from collections.abc import Sequence
 from typing import Any
 
 import sqlalchemy as sa
@@ -8,34 +8,19 @@ from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
-from shared.messaging.config import (
-    TOURNAMENT_CHANGED_EXCHANGE,
-    TOURNAMENT_EVENTS_EXCHANGE,
-)
+from shared.messaging.config import TOURNAMENT_EVENTS_EXCHANGE
 from shared.messaging.outbox import enqueue_outbox_event
 from shared.schemas.events import (
     RegistrationApprovedEvent,
     RegistrationRejectedEvent,
-    TournamentChangedEvent,
-    TournamentChangedReason,
     TournamentStateChangedEvent,
 )
 from shared.services.encounter import events as shared_encounter_events
-from shared.services.notifications import notify, publish_notification_created
+from shared.services.notifications import notify
+from shared.services.realtime import Resource, Scope, emit, enqueue_invalidation_outbox
 from shared.services.scrim_scope import is_scrim_container
 from src import models
-from src.core.redis import get_realtime_redis
 from src.services.computation.jobs import jobs_service
-from src.services.tournament.realtime_commit import register_tournament_realtime_update
-
-#: Recipients whose ``notification.created`` nudge is waiting for this
-#: transaction to commit. Neither decision function below owns a commit -- their
-#: callers do, and one of them approves a whole batch in a loop -- so the signal
-#: cannot be sent inline without risking a "your registration was approved" ping
-#: for a transaction that then rolls back. ``after_commit`` is where the
-#: transaction actually ends, and it is the same hook ``realtime_commit`` already
-#: uses to invalidate caches for exactly this reason.
-_PENDING_SIGNALS_KEY = "notification_signal_recipients"
 
 #: Tournament names already snapshotted in this transaction, keyed by id.
 #: ``bulk_approve_registrations`` decides a whole batch for ONE tournament in a
@@ -45,22 +30,44 @@ _PENDING_SIGNALS_KEY = "notification_signal_recipients"
 #: and re-queried every time.
 _TOURNAMENT_NAMES_KEY = "notification_tournament_names"
 
-# asyncio keeps only a weak reference to a running task, so an unanchored
-# fire-and-forget publish can be collected mid-flight.
-_signal_tasks: set[asyncio.Task[Any]] = set()
+#: Resources that a write to the tournament's shape (stages, teams, the
+#: tournament row itself) stales. ``tournament.structure`` is the route-refresh
+#: resource: the set of sections a page has is decided server-side, so a client
+#: cannot repair it by refetching a query.
+STRUCTURE_RESOURCES: tuple[Resource, ...] = (Resource.TOURNAMENT_STRUCTURE,)
+
+#: Resources a recomputed or hand-edited result stales: the standings, the
+#: encounters feeding their embedded ``matches_history``, and the tournament
+#: read that carries the placement summary.
+RESULT_RESOURCES: tuple[Resource, ...] = (
+    Resource.TOURNAMENT_STANDINGS,
+    Resource.TOURNAMENT_DETAIL,
+    Resource.TOURNAMENT_ENCOUNTERS,
+)
+
+
+async def publish_tournament_invalidation(
+    session: AsyncSession,
+    tournament_id: int,
+    resources: Sequence[Resource],
+) -> None:
+    """Stale ``resources`` for this tournament, locally and cross-service.
+
+    The two halves live in one helper because omitting the second is silent:
+    the page repairs itself while app-service keeps serving its own cached
+    aggregate until its TTL. Writes whose resources no other service caches
+    (an image swap, a preview-access grant) call ``emit`` directly rather than
+    pay for an outbox row nobody reads.
+    """
+    scope = Scope.tournament(tournament_id)
+    await emit(session, scope=scope, invalidates=resources)
+    await enqueue_invalidation_outbox(session, scope=scope, resources=resources)
 
 
 def _session_info(session: AsyncSession) -> dict[Any, Any] | None:
     """The underlying ``Session.info``, the per-transaction scratch space the
     ``after_commit``/``after_rollback`` listeners below drain."""
     return getattr(getattr(session, "sync_session", None) or session, "info", None)
-
-
-def _stage_notification_signal(session: AsyncSession, recipient_auth_user_id: int) -> None:
-    info = _session_info(session)
-    if info is None:
-        return
-    info.setdefault(_PENDING_SIGNALS_KEY, set()).add(int(recipient_auth_user_id))
 
 
 async def _tournament_name(session: AsyncSession, tournament_id: int) -> str:
@@ -79,28 +86,14 @@ async def _tournament_name(session: AsyncSession, tournament_id: int) -> str:
 
 
 @event.listens_for(Session, "after_commit")
-def _publish_notification_signals_after_commit(session: Session) -> None:
-    # Both scratch keys are per-transaction; a session outlives its transactions.
+def _drop_tournament_names_after_commit(session: Session) -> None:
+    # Per-transaction scratch; a session outlives its transactions.
     session.info.pop(_TOURNAMENT_NAMES_KEY, None)
-    recipients: set[int] = session.info.pop(_PENDING_SIGNALS_KEY, set())
-    if not recipients:
-        return
-    try:
-        loop = asyncio.get_running_loop()
-    except RuntimeError:
-        # No loop to publish from; the row is durable, the bell shows it on the
-        # inbox's next read.
-        return
-    for recipient in recipients:
-        task = loop.create_task(publish_notification_created(get_realtime_redis(), recipient_auth_user_id=recipient))
-        _signal_tasks.add(task)
-        task.add_done_callback(_signal_tasks.discard)
 
 
 @event.listens_for(Session, "after_rollback")
-def _drop_notification_signals_after_rollback(session: Session) -> None:
+def _drop_tournament_names_after_rollback(session: Session) -> None:
     session.info.pop(_TOURNAMENT_NAMES_KEY, None)
-    session.info.pop(_PENDING_SIGNALS_KEY, None)
 
 
 async def enqueue_tournament_recalculation(
@@ -121,28 +114,14 @@ async def enqueue_tournament_recalculation(
     # discarded is a permanent per-report cost that looks like health.
     if not await is_scrim_container(session, tournament_id):
         await jobs_service.request_standings_recalculation(session, tournament_id)
-    # The realtime ping still goes out: it is a cache-invalidation notification,
-    # not a computation, and a room's participants are legitimate viewers of the
+    # The realtime invalidation still goes out: it is a cache notification, not a
+    # computation, and a room's participants are legitimate viewers of the
     # container.
-    register_tournament_realtime_update(session, tournament_id, "bracket_changed")
-
-
-async def enqueue_tournament_changed(
-    session: AsyncSession,
-    tournament_id: int,
-    reason: TournamentChangedReason,
-) -> None:
-    await enqueue_outbox_event(
+    await emit(
         session,
-        TournamentChangedEvent(
-            tournament_id=tournament_id,
-            reason=reason,
-            source_service="tournament-service",
-        ),
-        exchange=TOURNAMENT_CHANGED_EXCHANGE,
-        routing_key=f"tournament.changed.{tournament_id}",
+        scope=Scope.tournament(tournament_id),
+        invalidates=[Resource.TOURNAMENT_ENCOUNTERS],
     )
-    register_tournament_realtime_update(session, tournament_id, reason)
 
 
 async def enqueue_encounter_completed(
@@ -187,7 +166,7 @@ async def _notify_registration_decision(
     kind: str,
     workspace_id: int | None,
 ) -> None:
-    """Tell the registrant their entry was decided, and stage their nudge.
+    """Tell the registrant their entry was decided.
 
     A shadow player -- a real competitor with no site account behind their
     ``players.user`` row -- has no inbox, so there is simply no row. That is not
@@ -235,7 +214,6 @@ async def _notify_registration_decision(
             "registration_id": registration.id,
         },
     )
-    _stage_notification_signal(session, int(recipient))
 
 
 async def enqueue_registration_approved(
@@ -260,7 +238,14 @@ async def enqueue_registration_approved(
     await _notify_registration_decision(
         session, registration, player_id, kind="registration.approved", workspace_id=workspace_id
     )
-    register_tournament_realtime_update(session, registration.tournament_id, "registration_changed")
+    await emit(
+        session,
+        scope=Scope.tournament(registration.tournament_id),
+        invalidates=[Resource.TOURNAMENT_REGISTRATIONS],
+        # A row created in this same transaction has no id until it flushes;
+        # entity_ids is optional precision, so no id just means no narrowing.
+        entity_ids={"registration_ids": [registration.id]} if registration.id is not None else None,
+    )
 
 
 async def enqueue_registration_rejected(
@@ -285,7 +270,14 @@ async def enqueue_registration_rejected(
     await _notify_registration_decision(
         session, registration, player_id, kind="registration.rejected", workspace_id=workspace_id
     )
-    register_tournament_realtime_update(session, registration.tournament_id, "registration_changed")
+    await emit(
+        session,
+        scope=Scope.tournament(registration.tournament_id),
+        invalidates=[Resource.TOURNAMENT_REGISTRATIONS],
+        # A row created in this same transaction has no id until it flushes;
+        # entity_ids is optional precision, so no id just means no narrowing.
+        entity_ids={"registration_ids": [registration.id]} if registration.id is not None else None,
+    )
 
 
 async def enqueue_tournament_state_changed(

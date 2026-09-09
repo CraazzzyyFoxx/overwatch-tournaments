@@ -22,7 +22,7 @@ describe("TournamentBracketPage", () => {
     expect(routeSource).not.toContain("stages={");
   });
 
-  it("mounts tournament realtime once from the shared client tournament layout", () => {
+  it("mounts tournament invalidation once from the shared client tournament layout", () => {
     const layoutSource = readFileSync(join(import.meta.dir, "../layout.tsx"), "utf8");
     const clientLayoutSource = readFileSync(
       join(import.meta.dir, "../_components/TournamentClientLayout.tsx"),
@@ -31,7 +31,7 @@ describe("TournamentBracketPage", () => {
 
     expect(layoutSource).toContain("TournamentClientLayout");
     expect(layoutSource).toContain("slug={resolvedParams.slug}");
-    expect(clientLayoutSource).toContain("useTournamentRealtime({");
+    expect(clientLayoutSource).toContain("useInvalidation({");
     expect(clientLayoutSource).toContain("workspaceId: tournament?.workspace_id");
   });
 

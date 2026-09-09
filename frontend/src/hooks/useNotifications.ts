@@ -2,7 +2,7 @@
 
 import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { useRealtimeTopic } from "@/hooks/useRealtimeTopic";
+import { useInvalidation } from "@/hooks/useInvalidation";
 import { notificationQueryKeys } from "@/lib/notification-query-keys";
 import notificationService from "@/services/notification.service";
 import type { NotificationItem } from "@/types/notification.types";
@@ -61,12 +61,11 @@ export function useNotifications(authUserId: number | null | undefined): UseNoti
     enabled
   });
 
-  // `notification.created` is a thin signal: no payload, no replay cursor
-  // (`event_id: 0`). Refetching is therefore the only correct reaction — there
-  // is nothing in the event to patch the cache with.
-  useRealtimeTopic(enabled ? `user:${authUserId}:notifications` : null, () => {
-    void queryClient.invalidateQueries({ queryKey: notificationQueryKeys.list() });
-  });
+  // The inbox is refetched by the shared invalidation consumer: the event names
+  // `user.notifications` and nothing else, and going through it also buys the
+  // coalescing this hook never had — a burst of announcements used to cost one
+  // full inbox read each.
+  useInvalidation({ scopeKind: "user", scopeId: authUserId });
 
   const markRead = useMutation({
     mutationFn: (ids?: number[]) => notificationService.markRead(ids),

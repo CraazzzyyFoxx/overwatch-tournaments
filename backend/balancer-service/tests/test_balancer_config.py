@@ -382,6 +382,9 @@ class TournamentConfigPersistenceTests(IsolatedAsyncioTestCase):
     async def test_upsert_tournament_config_creates_normalized_row(self) -> None:
         session = AsyncMock()
         session.add = MagicMock()
+        # An AsyncSession delegates state to its sync_session; that is where
+        # `emit` stages, and an AsyncMock would answer `.info` with a mock.
+        session.sync_session = SimpleNamespace(info={})
         user = SimpleNamespace(id=42)
 
         with patch.object(balancer_admin_service, "get_tournament_config", AsyncMock(return_value=None)):
@@ -399,10 +402,23 @@ class TournamentConfigPersistenceTests(IsolatedAsyncioTestCase):
         self.assertEqual(result.updated_by, 42)
         session.add.assert_called_once_with(result)
         session.commit.assert_awaited_once()
+        # The admin tool learns of the edit from the same transaction that
+        # writes it, not from a publish scheduled after the fact.
+        scope, event, actor = session.sync_session.info["realtime_staged"].domain[0]
+        self.assertEqual("tournament:77:balancer", scope.domain_topic(event.domain))
+        self.assertEqual("balancer.config_changed", event.event_type)
+        self.assertEqual(42, actor)
+        # The admin tool learns of the edit from the same transaction that
+        # writes it, not from a publish scheduled after the fact.
+        scope, event, actor = session.sync_session.info["realtime_staged"].domain[0]
+        self.assertEqual("tournament:77:balancer", scope.domain_topic(event.domain))
+        self.assertEqual("balancer.config_changed", event.event_type)
+        self.assertEqual(42, actor)
 
     async def test_upsert_tournament_config_updates_existing_row(self) -> None:
         session = AsyncMock()
         session.add = MagicMock()
+        session.sync_session = SimpleNamespace(info={})
         user = SimpleNamespace(id=43)
         existing = SimpleNamespace(
             tournament_id=77,

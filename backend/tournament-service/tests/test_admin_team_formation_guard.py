@@ -224,7 +224,7 @@ def _run_update_unit(monkeypatch, *, draft_status, update: schemas.TournamentUpd
     async def _noop(*args, **kwargs):
         return tournament
 
-    monkeypatch.setattr(admin_tournament, "enqueue_tournament_changed", _noop)
+    monkeypatch.setattr(admin_tournament, "publish_tournament_invalidation", _noop)
     monkeypatch.setattr(admin_tournament.tournament_service, "get_tournament", _noop)
 
     error: BaseAPIException | None = None

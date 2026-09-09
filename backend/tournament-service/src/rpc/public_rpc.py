@@ -44,14 +44,13 @@ from shared.core.enums import PickBanKind, SubscriptionCollectionSource
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.rpc.identity import rehydrate_user
 from shared.services.admission import AdmissionStage
-from shared.services.subscriptions.realtime import publish_subscriptions_updated
+from shared.services.subscriptions.realtime import emit_subscriptions_updated
 from shared.services.subscriptions.wiring import build_resolver, build_store
 from shared.services.tournament.visibility import assert_tournament_viewable
 from src import models, schemas
 from src.core import db
 from src.core.broker import optional_broker
 from src.core.config import settings
-from src.core.redis import get_realtime_redis
 from src.rpc._helpers import (
     _dump,
     _identity,
@@ -128,9 +127,6 @@ def _subscription_resolver(session: Any) -> Any:
         twitch_client_id=settings.twitch_client_id,
         broker=optional_broker(),
         proxy=settings.proxy_url,
-        # A gate that flips somebody's verdict tells the workspace so, so an open
-        # admin list stops showing the stale outcome.
-        redis=get_realtime_redis(),
     )
 
 
@@ -647,15 +643,15 @@ def register(broker: Any, logger: Any) -> None:
                 provider=body.provider,
                 submitted_code=body.code,
             )
-            await session.commit()
             # Redemption writes the entitlement straight through the store, so the
-            # resolver's own signal never fires for it. Published here, after the
-            # commit, which also makes this the one path with no ordering caveat.
-            await publish_subscriptions_updated(
-                get_realtime_redis(),
+            # resolver's own signal never fires for it. Staged before the commit
+            # that owns the write, like every other publisher.
+            await emit_subscriptions_updated(
+                session,
                 form.workspace_id,
-                reason=SubscriptionCollectionSource.redeem,
+                trigger=SubscriptionCollectionSource.redeem,
             )
+            await session.commit()
             return _dump(
                 await subscription_status_for_user(
                     form=form,

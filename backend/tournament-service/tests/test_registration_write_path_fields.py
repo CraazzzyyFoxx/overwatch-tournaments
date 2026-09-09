@@ -346,7 +346,7 @@ class TestAdminProfileUpdateCustomFields(IsolatedAsyncioTestCase):
                 reg_lifecycle.lifecycle_service, "get_registration_by_id", mock.AsyncMock(return_value=registration)
             ),
             mock.patch.object(
-                reg_lifecycle.lifecycle_service.common, "_register_registration_changed", lambda *_a, **_k: None
+                reg_lifecycle.lifecycle_service.common, "_register_registration_changed", mock.AsyncMock()
             ),
         ):
             await reg_lifecycle.lifecycle_service.update_registration_profile(
@@ -414,7 +414,7 @@ class TestAdminProfileUpdateAutoManagedBalancerStatus(IsolatedAsyncioTestCase):
                 reg_lifecycle.lifecycle_service, "get_registration_by_id", mock.AsyncMock(return_value=registration)
             ),
             mock.patch.object(
-                reg_lifecycle.lifecycle_service.common, "_register_registration_changed", lambda *_a, **_k: None
+                reg_lifecycle.lifecycle_service.common, "_register_registration_changed", mock.AsyncMock()
             ),
             mock.patch.object(roster_engine, "for_tournament", _rosters),
         ):

@@ -715,7 +715,7 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
             pick_id = current.id
             session_id = draft.id
 
-        fired = await draft_clock.draft_clock_service.fire_autopick_if_expired(self.Session, None, session_id)
+        fired = await draft_clock.draft_clock_service.fire_autopick_if_expired(self.Session, session_id)
         self.assertTrue(fired)
         async with self.Session() as s:
             pick = await s.get(DraftPick, pick_id)
@@ -728,7 +728,7 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
             await lifecycle.lifecycle_service.start(s, draft)
             await s.commit()  # clock_expires_at ~45s in the future
             session_id = draft.id
-        fired = await draft_clock.draft_clock_service.fire_autopick_if_expired(self.Session, None, session_id)
+        fired = await draft_clock.draft_clock_service.fire_autopick_if_expired(self.Session, session_id)
         self.assertFalse(fired)
 
     async def test_board_snapshot_carries_event_cursor(self) -> None:
@@ -738,7 +738,6 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
             draft = await self._new_session(s)
             await draft_realtime.publish_draft_event(
                 s,
-                None,
                 draft_session=draft,
                 event_type="draft.session_updated",
                 payload={"session_id": draft.id, "status": draft.status},
@@ -919,7 +918,6 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
             draft = await self._new_session(s)
             await draft_realtime.publish_draft_event(
                 s,
-                None,  # no redis: only the durable WorkspaceEvent is written
                 draft_session=draft,
                 event_type="draft.session_updated",
                 payload={"session_id": draft.id, "status": draft.status},

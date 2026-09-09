@@ -5,6 +5,7 @@ responsibilities.
 """
 
 from shared.observability import setup_logging, setup_tracing, start_worker_metrics_server
+from shared.services.realtime import configure_realtime
 from src.bot import LogCollectorBot
 from src.core.config import settings
 from src.core.db import async_engine
@@ -31,6 +32,10 @@ def main() -> None:
             engine=async_engine,
         )
         start_worker_metrics_server(settings.worker_metrics_port)
+        # The Boosty re-sync resolves entitlements, which stages a
+        # workspace.subscriptions invalidation; shared/services/realtime has no
+        # settings of its own to find Redis with.
+        configure_realtime(redis_url=str(settings.redis_url))
 
         bot = LogCollectorBot(settings)
         # `log_handler=None`: logging is already configured via `setup_logging`

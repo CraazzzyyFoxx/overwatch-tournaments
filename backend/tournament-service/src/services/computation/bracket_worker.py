@@ -11,7 +11,7 @@ from src.core import db
 from src.services.admin.stage import stage_service
 from src.services.computation.jobs import jobs_service
 from src.services.standings.swiss_auto_round import swiss_rounds_service
-from src.services.tournament.events import enqueue_tournament_changed
+from src.services.tournament.events import STRUCTURE_RESOURCES, publish_tournament_invalidation
 
 
 async def process_bracket_job(job_id: int) -> None:
@@ -34,7 +34,7 @@ async def process_bracket_job(job_id: int) -> None:
             )
             generated = await _execute_bracket_operation(session, current)
             await jobs_service.request_standings_recalculation(session, current.tournament_id)
-            await enqueue_tournament_changed(session, current.tournament_id, "structure_changed")
+            await publish_tournament_invalidation(session, current.tournament_id, STRUCTURE_RESOURCES)
             await jobs_service.mark_job_succeeded(
                 session,
                 current,

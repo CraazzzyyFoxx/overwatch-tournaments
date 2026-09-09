@@ -499,7 +499,7 @@ class RankAutofillService:
             if apply and changed:
                 if not will_add_to_balancer:
                     sync_included_balancer_status(registration, await resolve_roster(session, registration))
-                self.common._register_registration_changed(session, registration)
+                await self.common._register_registration_changed(session, registration)
 
             players.append(row)
 

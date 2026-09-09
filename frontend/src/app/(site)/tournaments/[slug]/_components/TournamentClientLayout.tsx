@@ -16,12 +16,11 @@ import {
 } from "@/lib/tournament-status";
 import { reachedAtLeast } from "@/lib/tournament-lifecycle";
 import { cn, formatDateRange } from "@/lib/utils";
-import { useTournamentRealtime } from "@/hooks/useTournamentRealtime";
-import { createTrailingCoalescer } from "@/hooks/tournamentRealtime.helpers";
+import { useInvalidation } from "@/hooks/useInvalidation";
+import { createTrailingCoalescer } from "@/lib/realtime-coalesce";
 import { useTournamentQuery } from "../_hooks/useTournamentClientData";
 import { TournamentRouteProvider } from "../_hooks/useTournamentId";
 import { useSyncActiveWorkspace } from "@/hooks/useSyncActiveWorkspace";
-import { useTournamentStreamRealtime } from "@/hooks/useTournamentStreamRealtime";
 import { useTournamentStreamsQuery } from "../_hooks/useTournamentStreams";
 import type { Tournament } from "@/types/tournament.types";
 
@@ -103,10 +102,18 @@ export default function TournamentClientLayout({
 
   React.useEffect(() => () => routeRefresh.cancel(), [routeRefresh]);
 
-  useTournamentRealtime({
-    tournamentId,
+  // The page's single invalidation subscription: every section under this shell
+  // reads keys the tournament scope owns (overview, teams, standings, brackets,
+  // streams), so one consumer keeps all of them fresh.
+  //
+  // `detailRef` is the URL segment, not the numeric id: the overview query stays
+  // keyed by the ref it was fetched with for its whole lifecycle.
+  useInvalidation({
+    scopeKind: "tournament",
+    scopeId: tournamentId,
     workspaceId: tournament?.workspace_id,
-    onStructureChanged: routeRefresh.schedule,
+    detailRef: slug,
+    onRouteRefresh: routeRefresh.schedule,
   });
 
   // Follow the tournament the viewer opened: switch the active workspace to its
@@ -115,19 +122,17 @@ export default function TournamentClientLayout({
 
   // The shell owns the tournament's streams, for two consumers that outlive any
   // one section: the persistent broadcast block below the hero, and the Stream
-  // tab's present-or-absent gate in the nav. It is also the single owner of the
-  // `tournament:{id}:streams` subscription — the sections read the same query
-  // key, so one jittered refetch here keeps all of them fresh.
+  // tab's present-or-absent gate in the nav.
   //
   // Both are gated on the phase (`areStreamsVisible`) at the SOURCE rather than
-  // at each render site: a registration-phase page then makes no stream read and
-  // opens no stream subscription, and the two consumers go quiet on their own —
-  // the dock renders nothing without officials, the nav tab nothing without
-  // entries.
+  // at each render site: a registration-phase page then makes no stream read,
+  // and the two consumers go quiet on their own — the dock renders nothing
+  // without officials, the nav tab nothing without entries. Freshness needs no
+  // subscription of its own: `tournament.streams` arrives on the invalidation
+  // topic above, and an invalidation of a key nobody observes costs nothing.
   const streamsTournamentId =
     tournament && areStreamsVisible(tournament.status) ? tournamentId : undefined;
   const streams = useTournamentStreamsQuery(streamsTournamentId).data;
-  useTournamentStreamRealtime({ tournamentId: streamsTournamentId });
 
   const [heroRef, heroScrolledPast] = useScrolledPast<HTMLDivElement>();
 

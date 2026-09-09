@@ -350,8 +350,8 @@ def register(broker: Any, logger: Any) -> None:
                 member_ids=body.member_ids,
                 balancer_config=body.balancer_config,
             )
+            await emit_pickup_mix_updated(session, workspace_id, change="create", actor_user_id=user.id)
             await session.commit()
-            await emit_pickup_mix_updated(workspace_id, reason="create", actor_user_id=user.id)
             return await _with_roster(session, game)
 
         return await c.envelope(logger, "custom.create", op, session_factory=_SF)
@@ -400,8 +400,8 @@ def register(broker: Any, logger: Any) -> None:
                 member_ids=body.member_ids,
                 actor_user_id=user.id,
             )
+            await emit_pickup_mix_updated(session, workspace_id, change="roster", actor_user_id=user.id)
             await session.commit()
-            await emit_pickup_mix_updated(workspace_id, reason="roster", actor_user_id=user.id)
             return await _with_roster(session, game)
 
         return await c.envelope(logger, "custom.update_roster", op, session_factory=_SF)
@@ -421,8 +421,8 @@ def register(broker: Any, logger: Any) -> None:
                 patch=body.model_dump(exclude_unset=True),
                 actor_user_id=user.id,
             )
+            await emit_pickup_mix_updated(session, workspace_id, change="roster", actor_user_id=user.id)
             await session.commit()
-            await emit_pickup_mix_updated(workspace_id, reason="roster", actor_user_id=user.id)
             return await _with_roster(session, game)
 
         return await c.envelope(logger, "custom.update_player", op, session_factory=_SF)
@@ -449,8 +449,8 @@ def register(broker: Any, logger: Any) -> None:
                 participation={player.workspace_member_id: player.participation for player in body.players},
                 actor_user_id=user.id,
             )
+            await emit_pickup_mix_updated(session, workspace_id, change="roster", actor_user_id=user.id)
             await session.commit()
-            await emit_pickup_mix_updated(workspace_id, reason="roster", actor_user_id=user.id)
             return await _with_roster(session, game)
 
         return await c.envelope(logger, "custom.set_participation", op, session_factory=_SF)
@@ -467,8 +467,8 @@ def register(broker: Any, logger: Any) -> None:
                 custom_game_id=_game_id(data),
                 actor_user_id=user.id,
             )
+            await emit_pickup_mix_updated(session, workspace_id, change="balance", actor_user_id=user.id)
             await session.commit()
-            await emit_pickup_mix_updated(workspace_id, reason="balance", actor_user_id=user.id)
             return await _with_roster(session, game)
 
         return await c.envelope(logger, "custom.balance", op, session_factory=_SF)
@@ -487,8 +487,8 @@ def register(broker: Any, logger: Any) -> None:
                 team_names=body.team_names,
                 actor_user_id=user.id,
             )
+            await emit_pickup_mix_updated(session, workspace_id, change="team_names", actor_user_id=user.id)
             await session.commit()
-            await emit_pickup_mix_updated(workspace_id, reason="team_names", actor_user_id=user.id)
             return await _with_roster(session, game)
 
         return await c.envelope(logger, "custom.set_team_names", op, session_factory=_SF)
@@ -507,8 +507,8 @@ def register(broker: Any, logger: Any) -> None:
                 role_mask=body.role_mask,
                 actor_user_id=user.id,
             )
+            await emit_pickup_mix_updated(session, workspace_id, change="role_mask", actor_user_id=user.id)
             await session.commit()
-            await emit_pickup_mix_updated(workspace_id, reason="role_mask", actor_user_id=user.id)
             return await _with_roster(session, game)
 
         return await c.envelope(logger, "custom.set_role_mask", op, session_factory=_SF)
@@ -527,8 +527,8 @@ def register(broker: Any, logger: Any) -> None:
                 points_per_win=body.points_per_win,
                 actor_user_id=user.id,
             )
+            await emit_pickup_mix_updated(session, workspace_id, change="points_per_win", actor_user_id=user.id)
             await session.commit()
-            await emit_pickup_mix_updated(workspace_id, reason="points_per_win", actor_user_id=user.id)
             return await _with_roster(session, game)
 
         return await c.envelope(logger, "custom.set_points_per_win", op, session_factory=_SF)
@@ -547,8 +547,8 @@ def register(broker: Any, logger: Any) -> None:
                 balancer_config=body.balancer_config,
                 actor_user_id=user.id,
             )
+            await emit_pickup_mix_updated(session, workspace_id, change="balancer_config", actor_user_id=user.id)
             await session.commit()
-            await emit_pickup_mix_updated(workspace_id, reason="balancer_config", actor_user_id=user.id)
             return await _with_roster(session, game)
 
         return await c.envelope(logger, "custom.set_balancer_config", op, session_factory=_SF)
@@ -567,8 +567,8 @@ def register(broker: Any, logger: Any) -> None:
                 new_host_user_id=body.new_host_user_id,
                 actor_user_id=user.id,
             )
+            await emit_pickup_mix_updated(session, workspace_id, change="host", actor_user_id=user.id)
             await session.commit()
-            await emit_pickup_mix_updated(workspace_id, reason="host", actor_user_id=user.id)
             return await _with_roster(session, game)
 
         return await c.envelope(logger, "custom.transfer_host", op, session_factory=_SF)
@@ -587,8 +587,8 @@ def register(broker: Any, logger: Any) -> None:
                 co_host_user_id=body.co_host_user_id,
                 actor_user_id=user.id,
             )
+            await emit_pickup_mix_updated(session, workspace_id, change="co_hosts", actor_user_id=user.id)
             await session.commit()
-            await emit_pickup_mix_updated(workspace_id, reason="co_hosts", actor_user_id=user.id)
             return await _with_roster(session, game)
 
         return await c.envelope(logger, "custom.add_co_host", op, session_factory=_SF)
@@ -608,8 +608,8 @@ def register(broker: Any, logger: Any) -> None:
                 co_host_user_id=_int(data, "co_host_user_id"),
                 actor_user_id=user.id,
             )
+            await emit_pickup_mix_updated(session, workspace_id, change="co_hosts", actor_user_id=user.id)
             await session.commit()
-            await emit_pickup_mix_updated(workspace_id, reason="co_hosts", actor_user_id=user.id)
             return await _with_roster(session, game)
 
         return await c.envelope(logger, "custom.remove_co_host", op, session_factory=_SF)
@@ -630,8 +630,8 @@ def register(broker: Any, logger: Any) -> None:
                 second_uuid=body.second_uuid,
                 actor_user_id=user.id,
             )
+            await emit_pickup_mix_updated(session, workspace_id, change="teams", actor_user_id=user.id)
             await session.commit()
-            await emit_pickup_mix_updated(workspace_id, reason="teams", actor_user_id=user.id)
             return await _with_roster(session, game)
 
         return await c.envelope(logger, "custom.swap_seats", op, session_factory=_SF)
@@ -652,8 +652,8 @@ def register(broker: Any, logger: Any) -> None:
                 map_id=body.map_id,
                 actor_user_id=user.id,
             )
+            await emit_pickup_mix_updated(session, workspace_id, change="outcome", actor_user_id=user.id)
             await session.commit()
-            await emit_pickup_mix_updated(workspace_id, reason="outcome", actor_user_id=user.id)
             return await _with_roster(session, game)
 
         return await c.envelope(logger, "custom.record_outcome", op, session_factory=_SF)
@@ -696,8 +696,8 @@ def register(broker: Any, logger: Any) -> None:
                 custom_game_id=_game_id(data),
                 actor_user_id=user.id,
             )
+            await emit_pickup_mix_updated(session, workspace_id, change="close", actor_user_id=user.id)
             await session.commit()
-            await emit_pickup_mix_updated(workspace_id, reason="close", actor_user_id=user.id)
             return await _with_roster(session, game)
 
         return await c.envelope(logger, "custom.close", op, session_factory=_SF)
@@ -714,8 +714,8 @@ def register(broker: Any, logger: Any) -> None:
                 custom_game_id=_game_id(data),
                 actor_user_id=user.id,
             )
+            await emit_pickup_mix_updated(session, workspace_id, change="delete", actor_user_id=user.id)
             await session.commit()
-            await emit_pickup_mix_updated(workspace_id, reason="delete", actor_user_id=user.id)
             return _dump_game(game, await _game_settings(session, game))
 
         return await c.envelope(logger, "custom.delete", op, session_factory=_SF)
@@ -735,8 +735,8 @@ def register(broker: Any, logger: Any) -> None:
                 raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Workspace admin required")
             custom_game_id = _game_id(data)
             await custom_game_service.hard_delete(session, workspace_id=workspace_id, custom_game_id=custom_game_id)
+            await emit_pickup_mix_updated(session, workspace_id, change="hard_delete", actor_user_id=user.id)
             await session.commit()
-            await emit_pickup_mix_updated(workspace_id, reason="hard_delete", actor_user_id=user.id)
             return {"id": custom_game_id}
 
         return await c.envelope(logger, "custom.hard_delete", op, session_factory=_SF)

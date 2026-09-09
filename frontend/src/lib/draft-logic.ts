@@ -100,10 +100,7 @@ export function applyDraftEvent(
         session: {
           ...board.session,
           status: "paused",
-          // `data.reason` is the pre-rename shape: it now carries the
-          // gateway's cache scope, but a replayed event persisted before the
-          // split still holds the block reason there.
-          blocked_reason: data.blocked_reason ?? data.reason ?? "role_shortage"
+          blocked_reason: data.blocked_reason ?? "role_shortage"
         }
       };
 
@@ -162,28 +159,6 @@ export function canConfirmPick(
     (option) =>
       option.player_id === selection.playerId && option.role === selection.role && option.is_safe
   );
-}
-
-export type DraftInvalidationTarget = "board" | "feasibility" | "options";
-
-export function draftInvalidationTargets(eventType: string): DraftInvalidationTarget[] {
-  if (eventType === "draft.presence") return [];
-  if (
-    eventType === "draft.player_updated" ||
-    eventType === "draft.blocked" ||
-    eventType === "draft.rollback" ||
-    eventType === "draft.session_updated"
-  ) {
-    return ["board", "feasibility", "options"];
-  }
-  if (
-    eventType === "draft.pick_made" ||
-    eventType === "draft.autopicked" ||
-    eventType === "draft.pick_started"
-  ) {
-    return ["feasibility", "options"];
-  }
-  return [];
 }
 
 export interface DraftGating {

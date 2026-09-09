@@ -18,6 +18,7 @@ from shared.observability import (
     setup_tracing,
     start_worker_metrics_server,
 )
+from shared.services.realtime import configure_realtime
 from src.core import config, db
 from src.rpc import jobs_control, mutations
 from src.rpc import reads as rpc_reads
@@ -33,6 +34,10 @@ broker = make_rabbit_broker(
     config.settings.rabbitmq_url, logger=logger, prefetch_count=config.settings.rpc_prefetch_count
 )
 app = FastStream(broker)
+
+# Separate process from the heavy worker, so it configures the realtime rail
+# independently -- job-control mutations stage events on their own sessions.
+configure_realtime(redis_url=str(config.settings.redis_url))
 
 # Typed read + mutation + job-control RPC methods served by the gateway
 # (rpc.analytics.*). The heavy job queues are NOT registered here.

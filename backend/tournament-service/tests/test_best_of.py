@@ -110,18 +110,18 @@ class ApplyBestOfToExistingTests(TestCase):
 
         published: list[tuple] = []
 
-        async def _fake_publish(_session, tournament_id, reason):
-            published.append((tournament_id, reason))
+        async def _fake_publish(_session, tournament_id):
+            published.append(tournament_id)
 
         orig_get_stage = stage_service.stage_service.get_stage
-        orig_publish = stage_service.stage_service._publish_tournament_changed
+        orig_publish = stage_service.stage_service._publish_structure_changed
         stage_service.stage_service.get_stage = _fake_get_stage
-        stage_service.stage_service._publish_tournament_changed = _fake_publish
+        stage_service.stage_service._publish_structure_changed = _fake_publish
         try:
             changed = asyncio.run(stage_service.stage_service.apply_best_of_to_existing(session, stage.id))
         finally:
             stage_service.stage_service.get_stage = orig_get_stage
-            stage_service.stage_service._publish_tournament_changed = orig_publish
+            stage_service.stage_service._publish_structure_changed = orig_publish
         return changed, session, published
 
     def test_rewrites_per_round_and_final_for_elimination(self) -> None:
@@ -141,7 +141,7 @@ class ApplyBestOfToExistingTests(TestCase):
         self.assertEqual([e.best_of for e in encounters], [1, 3, 5])
         self.assertEqual(changed, 2)  # rounds 1 and 3 changed; round 2 unchanged
         self.assertTrue(session.committed)
-        self.assertEqual(published, [(1, "structure_changed")])
+        self.assertEqual(published, [1])
 
     def test_no_final_override_for_group_stage(self) -> None:
         stage = SimpleNamespace(

@@ -13,18 +13,15 @@ from typing import Any
 
 from faststream.rabbit import RabbitMessage
 
-from shared.services.balancer_realtime import (
-    BALANCER_BALANCE_SAVED,
-    BALANCER_CONFIG_CHANGED,
-    BALANCER_TEAMS_CHANGED,
-)
+from shared.services.balancer_realtime import BALANCER_TEAMS_CHANGED
+from shared.services.realtime import Scope, emit, enqueue_invalidation_outbox
 from src import models, schemas
 from src.core import db
 from src.core.auth import _get_balance_workspace_id, _get_tournament_workspace_id
 from src.rpc import _common as c
 from src.services.admin._mappers import serialize_balance, serialize_tournament_config
 from src.services.admin.balancer import balancer_admin_service
-from src.services.balancer.realtime import emit_balancer_data_event, enqueue_tournament_structure_changed
+from src.services.balancer.realtime import EXPORT_RESOURCES, emit_balancer_data
 
 _SF = db.async_session_maker
 
@@ -78,12 +75,8 @@ def register(broker: Any, logger: Any) -> None:
             cfg = await balancer_admin_service.upsert_tournament_config(
                 session, tournament_id, ws_id, body.config_json, user
             )
-            await emit_balancer_data_event(
-                tournament_id,
-                BALANCER_CONFIG_CHANGED,
-                workspace_id=cfg.workspace_id,
-                actor_user_id=user.id,
-            )
+            # The emit lives in the service: it owns the commit, and `emit`
+            # only reaches the wire through the commit that carries the write.
             return serialize_tournament_config(cfg)
 
         return await c.envelope(logger, "admin.tournament_config_upsert", op, session_factory=_SF)
@@ -128,7 +121,7 @@ def register(broker: Any, logger: Any) -> None:
             c.require_workspace_permission(data, user, ws_id, "team", "create")
             body = schemas.BalanceSaveRequest.model_validate(c.payload(data))
             balance = await balancer_admin_service.save_balance(session, tournament_id, body, user)
-            await emit_balancer_data_event(tournament_id, BALANCER_BALANCE_SAVED, actor_user_id=user.id)
+            # Emitted inside `save_balance`, which owns the commit.
             return serialize_balance(balance, already_normalized=True)
 
         return await c.envelope(logger, "admin.balance_save", op, session_factory=_SF)
@@ -142,10 +135,21 @@ def register(broker: Any, logger: Any) -> None:
             ws_id = await _get_balance_workspace_id(session, balance_id)
             c.require_workspace_permission(data, user, ws_id, "team", "create")
             balance, removed_teams, imported_teams = await balancer_admin_service.export_balance(session, balance_id)
-            await emit_balancer_data_event(balance.tournament_id, BALANCER_TEAMS_CHANGED, actor_user_id=user.id)
-            # The balancer topic reaches only the admin tool; this is what makes
-            # the PUBLIC teams/standings/detail reads drop their caches.
-            await enqueue_tournament_structure_changed(session, balance.tournament_id)
+            await emit_balancer_data(
+                session, balance.tournament_id, BALANCER_TEAMS_CHANGED, actor_user_id=user.id
+            )
+            # The balancer topic reaches only the admin tool. Materialization
+            # rewrote tournament.team / player / standing, so the PUBLIC reads
+            # are stale — named here, and mirrored to app-service (which caches
+            # the same three) through the outbox.
+            await emit(
+                session,
+                scope=Scope.tournament(balance.tournament_id),
+                invalidates=EXPORT_RESOURCES,
+            )
+            await enqueue_invalidation_outbox(
+                session, scope=Scope.tournament(balance.tournament_id), resources=EXPORT_RESOURCES
+            )
             await session.commit()
             return schemas.BalanceExportResponse(
                 success=True,
@@ -165,9 +169,18 @@ def register(broker: Any, logger: Any) -> None:
             ws_id = await _get_balance_workspace_id(session, balance_id)
             c.require_workspace_permission(data, user, ws_id, "team", "create")
             balance, updated = await balancer_admin_service.export_balance_ranks(session, balance_id)
-            await emit_balancer_data_event(balance.tournament_id, BALANCER_TEAMS_CHANGED, actor_user_id=user.id)
+            await emit_balancer_data(
+                session, balance.tournament_id, BALANCER_TEAMS_CHANGED, actor_user_id=user.id
+            )
             # Rank export rewrites tournament.player rows the public reads join.
-            await enqueue_tournament_structure_changed(session, balance.tournament_id)
+            await emit(
+                session,
+                scope=Scope.tournament(balance.tournament_id),
+                invalidates=EXPORT_RESOURCES,
+            )
+            await enqueue_invalidation_outbox(
+                session, scope=Scope.tournament(balance.tournament_id), resources=EXPORT_RESOURCES
+            )
             await session.commit()
             return schemas.RanksExportResponse(success=True, updated_players=updated)
 

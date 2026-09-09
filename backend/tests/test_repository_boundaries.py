@@ -49,7 +49,11 @@ APPROVED_DIRECT_WRITE_FILES = {
     "shared/services/bracket/advancement.py",
     "shared/services/bracket/usability.py",
     "shared/services/division_grid/access.py",
-    "shared/services/realtime_publisher.py",
+    # Append-only event journal, not CRUD: the realtime rail writes one
+    # WorkspaceEvent row per staged event from the session's own before_commit
+    # hook, which is where the row has to be created for it to ride the
+    # caller's transaction.
+    "shared/services/realtime/emit.py",
     "shared/services/stage_refs.py",
     "shared/services/team_export/materialization.py",
     "shared/services/team_export/service.py",
@@ -58,7 +62,6 @@ APPROVED_DIRECT_WRITE_FILES = {
     "tournament-service/src/services/admin/team.py",
     "tournament-service/src/services/admin/tournament.py",
     "tournament-service/src/services/registration/service.py",
-    "tournament-service/src/services/tournament/realtime_commit.py",
 }
 
 #: Direct writes that predate their repository and are owed one. Every entry is a
@@ -78,8 +81,6 @@ PENDING_REPOSITORY_MIGRATION = {
     "tournament-service/src/services/encounter/captain.py",
     "tournament-service/src/services/encounter/map_report.py",
     "tournament-service/src/services/encounter/pick_ban_session.py",
-    "tournament-service/src/services/encounter/realtime_commit.py",
-    "tournament-service/src/services/encounter/veto_session.py",
     "tournament-service/src/services/scrim/service.py",
 }
 

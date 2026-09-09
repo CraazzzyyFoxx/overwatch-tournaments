@@ -186,7 +186,7 @@ class SubscriptionEventSink(Protocol):
     A resolver without a sink behaves exactly as before.
     """
 
-    async def subscriptions_updated(self, *, workspace_id: int, reason: str) -> None: ...
+    async def subscriptions_updated(self, *, workspace_id: int, trigger: str) -> None: ...
 
 
 class SubscriptionResolver:
@@ -329,7 +329,7 @@ class SubscriptionResolver:
                 await self._store.upsert_many(workspace_id, provider, to_persist)
 
         if changed:
-            await self._emit_updated(workspace_id=workspace_id, reason=source)
+            await self._emit_updated(workspace_id=workspace_id, trigger=source)
 
         return out
 
@@ -479,17 +479,17 @@ class SubscriptionResolver:
             verdict.source,
         )
 
-    async def _emit_updated(self, *, workspace_id: int, reason: str) -> None:
+    async def _emit_updated(self, *, workspace_id: int, trigger: str) -> None:
         """Signal the workspace that entitlements moved, if a sink is wired.
 
         Swallows failures for the same reason as ``_log``: a client that misses an
         invalidation refetches on its next reconnect, while an admission decision
-        that fails because Redis blinked is a real outage.
+        that fails because staging an event blew up is a real outage.
         """
         if self._event_sink is None:
             return
         try:
-            await self._event_sink.subscriptions_updated(workspace_id=workspace_id, reason=reason)
+            await self._event_sink.subscriptions_updated(workspace_id=workspace_id, trigger=trigger)
         except Exception:  # pragma: no cover - defensive; see docstring
             pass
 

@@ -22,7 +22,6 @@ from shared.core.errors import BaseAPIException as HTTPException
 from shared.rpc.identity import ensure_workspace_permission
 from src import schemas
 from src.core import db
-from src.core.clients import realtime_redis
 from src.core.config import settings
 from src.services.subscription_collection import admin as subscription_admin
 
@@ -106,7 +105,6 @@ def register(broker: Any, logger: Any) -> None:
                 twitch_client_id=settings.twitch_client_id,
                 broker=broker,
                 proxy=settings.proxy_url,
-                redis=realtime_redis,
             )
             return schemas.SubscriptionCollectTriggerResponse(checked=checked)
 

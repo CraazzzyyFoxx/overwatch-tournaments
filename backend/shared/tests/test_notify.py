@@ -15,7 +15,6 @@ the fixture tears down.
 
 from __future__ import annotations
 
-import json
 import sys
 from pathlib import Path
 from unittest import IsolatedAsyncioTestCase
@@ -25,8 +24,9 @@ from pydantic import ValidationError
 backend_root = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(backend_root))
 
-from shared.services import realtime_topics  # noqa: E402
-from shared.services.notifications import notify, publish_notification_created  # noqa: E402
+from shared.services.notifications import notify  # noqa: E402
+from shared.services.realtime import Resource, Scope  # noqa: E402
+from shared.services.realtime.emit import _STAGED_KEY  # noqa: E402
 
 _INVITE = {
     "team_id": 12,
@@ -50,6 +50,9 @@ class _Session:
         self.added: list[object] = []
         self.committed = 0
         self.flushed = 0
+        # ``emit`` hangs its staged events here, the same way SQLAlchemy's
+        # Session.info does.
+        self.info: dict[str, object] = {}
 
     def add(self, row: object) -> None:
         self.added.append(row)
@@ -61,15 +64,45 @@ class _Session:
         self.flushed += 1
 
 
-class _Redis:
-    def __init__(self, fail: bool = False) -> None:
-        self.published: list[tuple[str, str]] = []
-        self.fail = fail
+class RealtimeSignalTests(IsolatedAsyncioTestCase):
+    async def test_a_personal_row_stages_one_invalidation_and_one_signal(self) -> None:
+        session = _Session()
 
-    async def publish(self, channel: str, payload: str) -> None:
-        if self.fail:
-            raise ConnectionError("redis is down")
-        self.published.append((channel, payload))
+        await notify(
+            session,
+            kind="team_invite.received",
+            payload=dict(_INVITE),
+            audience="user",
+            recipient_auth_user_id=7,
+            actor_auth_user_id=3,
+        )
+
+        staged = session.info[_STAGED_KEY]
+        self.assertEqual({Scope.user(7): ({Resource.USER_NOTIFICATIONS}, {})}, staged.invalidations)
+        ((scope, data, actor),) = staged.domain
+        self.assertEqual(Scope.user(7), scope)
+        self.assertEqual("notifications", data.domain)
+        self.assertEqual("notification.created", data.event_type)
+        # Non-durable and empty: the inbox read is the authorized channel, and a
+        # reconnecting client refetches it anyway.
+        self.assertFalse(data.durable)
+        self.assertEqual({}, dict(data.payload))
+        self.assertEqual(3, actor)
+
+    async def test_an_announcement_signals_nobody(self) -> None:
+        # Audience-wide rows have no user topic to land on; the banner query is
+        # how they are read.
+        session = _Session()
+
+        await notify(
+            session,
+            kind="announcement.published",
+            payload={"locales": {"ru": {"title": "Сбор"}}, "default_locale": "ru"},
+            audience="workspace",
+            workspace_id=4,
+        )
+
+        self.assertNotIn(_STAGED_KEY, session.info)
 
 
 class NotifyTests(IsolatedAsyncioTestCase):
@@ -252,22 +285,3 @@ class NotifyTests(IsolatedAsyncioTestCase):
                 )
 
         self.assertEqual([], session.added)
-
-
-class PublishNotificationCreatedTests(IsolatedAsyncioTestCase):
-    async def test_signal_reaches_only_the_recipients_own_topic(self) -> None:
-        redis = _Redis()
-
-        await publish_notification_created(redis, recipient_auth_user_id=7)
-
-        ((channel, raw),) = redis.published
-        self.assertEqual(realtime_topics.realtime_channel("user:7:notifications"), channel)
-        frame = json.loads(raw)
-        self.assertEqual("user:7:notifications", frame["topic"])
-        self.assertEqual("notification.created", frame["event"]["event_type"])
-        # Non-durable: no replay cursor, so a reconnecting client never asks the
-        # durable event log for a signal that was never written to it.
-        self.assertEqual(0, frame["event"]["event_id"])
-
-    async def test_a_broken_redis_does_not_undo_a_committed_notification(self) -> None:
-        await publish_notification_created(_Redis(fail=True), recipient_auth_user_id=7)

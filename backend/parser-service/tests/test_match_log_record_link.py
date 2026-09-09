@@ -93,7 +93,13 @@ class ProcessorCarriesTheRecordId(IsolatedAsyncioTestCase):
         record_service = importlib.import_module("src.services.match_logs.log_records")
 
         with (
-            patch.object(flows.tournament_flows, "get", AsyncMock(return_value=SimpleNamespace(id=1, name="t"))),
+            # workspace_id: the flow stages the workspace-scoped `logs` signal
+            # from this object rather than re-querying for it.
+            patch.object(
+                flows.tournament_flows,
+                "get",
+                AsyncMock(return_value=SimpleNamespace(id=1, name="t", workspace_id=7)),
+            ),
             patch.object(flows.binary_match_logs, "get_log_by_filename", AsyncMock(return_value=b"a\nb")),
             patch.object(record_service, "is_already_processed", AsyncMock(return_value=False)),
             patch.object(record_service, "set_processing", AsyncMock(return_value=record)),

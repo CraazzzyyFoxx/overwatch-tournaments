@@ -166,10 +166,10 @@ class StandingsFlowsService:
         """
         Retrieves all standings for a specific tournament and converts them to Pydantic schemas.
 
-        Standings rows change on a recalculation (results_changed) or a stage
-        restructure (structure_changed); the embedded ``matches_history`` also moves
-        whenever an encounter does (bracket_changed). All three invalidate this
-        cache via tournament_cache_patterns, so a plain TTL cache here is safe.
+        Standings rows change on a recalculation and on a stage restructure; the
+        embedded ``matches_history`` also moves whenever an encounter does. Every
+        one of those publishes a resource whose ``cache_resources`` entry covers
+        this key, so a plain TTL cache here is safe.
 
         Parameters:
             session (AsyncSession): The SQLAlchemy async session.

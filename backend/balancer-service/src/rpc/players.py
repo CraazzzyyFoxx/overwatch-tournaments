@@ -231,8 +231,8 @@ def register(broker: Any, logger: Any) -> None:
                 battle_tag=battle_tag,
                 display_name=display_name,
             )
+            await emit_pickup_mix_updated(session, workspace_id, change="member", actor_user_id=user.id)
             await session.commit()
-            await emit_pickup_mix_updated(workspace_id, reason="member", actor_user_id=user.id)
             # Re-read through the roster query so the answer carries the resolved
             # BattleTag and name, identically shaped to a ``players.list`` row.
             roster = await workspace_roster.list_roster(session, workspace_id=workspace_id, member_ids=[member.id])
@@ -263,8 +263,8 @@ def register(broker: Any, logger: Any) -> None:
                 clear=_clear_payload(data),
                 author_user_id=author_user_id,
             )
+            await emit_pickup_mix_updated(session, workspace_id, change="rank", actor_user_id=user.id)
             await session.commit()
-            await emit_pickup_mix_updated(workspace_id, reason="rank", actor_user_id=user.id)
             return {"ranks": ranks}
 
         return await c.envelope(logger, "players.set_ranks", op, session_factory=_SF)

@@ -95,7 +95,7 @@ class MatchLogReaperTests(IsolatedAsyncioTestCase):
         publish = publish or AsyncMock()
         with (
             patch.object(reaper, "publish_message", publish),
-            patch.object(reaper.logs_realtime, "publish_logs_updated", AsyncMock()) as signal,
+            patch.object(reaper.logs_realtime, "emit_logs_updated", AsyncMock()) as signal,
         ):
             result = await reaper.reclaim_stalled_logs(
                 redis=_FakeRedis(leader=leader),
@@ -121,7 +121,8 @@ class MatchLogReaperTests(IsolatedAsyncioTestCase):
         # a no-op status assignment would never flush.
         self.assertEqual(NOW, record.updated_at)
         self.assertEqual(1, session.commits)
-        # The admin console refetches on this signal.
+        # The admin console refetches on this signal, staged inside the same
+        # transaction as the reset so a failed commit announces nothing.
         signal.assert_awaited_once()
         self.assertEqual(7, signal.await_args.args[1])
 

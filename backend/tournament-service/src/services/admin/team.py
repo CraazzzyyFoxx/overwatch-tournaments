@@ -15,7 +15,7 @@ from shared.repository import (
     resolve_workspace_member_id,
 )
 from src import models, schemas
-from src.services.tournament.events import enqueue_tournament_changed
+from src.services.tournament.events import STRUCTURE_RESOURCES, publish_tournament_invalidation
 
 
 def _prepare_player_create_data(data: schemas.PlayerCreate) -> dict:
@@ -104,8 +104,16 @@ class AdminTeamService:
         self.user_repo = user_repo
         self.standing_repo = standing_repo
 
-    async def _enqueue_team_changed(self, session: AsyncSession, tournament_id: int) -> None:
-        await enqueue_tournament_changed(session, tournament_id, "structure_changed")
+    async def _publish_structure_changed(self, session: AsyncSession, tournament_id: int) -> None:
+        """A roster write moved the tournament's materialized teams.
+
+        Kept at ``tournament.structure`` rather than the narrower
+        ``tournament.teams``: the FIRST team an organizer creates is what makes
+        the page grow a teams section, and that is the one thing a client cannot
+        fix by refetching a query. A later rename pays one redundant route
+        refresh for it, which is what this path already cost before.
+        """
+        await publish_tournament_invalidation(session, tournament_id, STRUCTURE_RESOURCES)
 
     async def _resolve_workspace_member_id(
         self,
@@ -208,7 +216,7 @@ class AdminTeamService:
         # Create team
         team = await self.team_repo.create(session, models.Team(**_prepare_team_create_data(data)))
 
-        await self._enqueue_team_changed(session, data.tournament_id)
+        await self._publish_structure_changed(session, data.tournament_id)
         await session.commit()
         return await self.get_team(session, team.id)
 
@@ -242,7 +250,7 @@ class AdminTeamService:
         for field, value in update_data.items():
             setattr(team, field, value)
 
-        await self._enqueue_team_changed(session, team.tournament_id)
+        await self._publish_structure_changed(session, team.tournament_id)
         await session.commit()
         return await self.get_team(session, team.id)
 
@@ -260,7 +268,7 @@ class AdminTeamService:
 
         team.image_url = image_url
 
-        await self._enqueue_team_changed(session, team.tournament_id)
+        await self._publish_structure_changed(session, team.tournament_id)
         await session.commit()
         return await self.get_team(session, team.id)
 
@@ -274,7 +282,7 @@ class AdminTeamService:
         tournament_id = team.tournament_id
         await self.standing_repo.delete_for_team(session, team_id)
         await self.team_repo.delete(session, team)
-        await self._enqueue_team_changed(session, tournament_id)
+        await self._publish_structure_changed(session, tournament_id)
         await session.commit()
 
     # ─── Player Management ───────────────────────────────────────────────────
@@ -319,7 +327,7 @@ class AdminTeamService:
         # Create player
         player = await self.player_repo.create(session, models.Player(**player_data))
 
-        await self._enqueue_team_changed(session, team.tournament_id)
+        await self._publish_structure_changed(session, team.tournament_id)
         await session.commit()
         return await self.get_player(session, player.id)
 
@@ -332,7 +340,7 @@ class AdminTeamService:
 
         tournament_id = player.tournament_id
         await self.player_repo.delete(session, player)
-        await self._enqueue_team_changed(session, tournament_id)
+        await self._publish_structure_changed(session, tournament_id)
         await session.commit()
 
     # ─── Player CRUD ─────────────────────────────────────────────────────────
@@ -380,7 +388,7 @@ class AdminTeamService:
         # Create player
         player = await self.player_repo.create(session, models.Player(**player_data))
 
-        await self._enqueue_team_changed(session, team.tournament_id)
+        await self._publish_structure_changed(session, team.tournament_id)
         await session.commit()
         return await self.get_player(session, player.id)
 
@@ -408,7 +416,7 @@ class AdminTeamService:
         for field, value in update_data.items():
             setattr(player, field, value)
 
-        await self._enqueue_team_changed(session, player.tournament_id)
+        await self._publish_structure_changed(session, player.tournament_id)
         await session.commit()
         return await self.get_player(session, player.id)
 
@@ -424,7 +432,7 @@ class AdminTeamService:
         for descendant in descendants:
             await session.delete(descendant)
         await self.player_repo.delete(session, player)
-        await self._enqueue_team_changed(session, tournament_id)
+        await self._publish_structure_changed(session, tournament_id)
         await session.commit()
 
 
