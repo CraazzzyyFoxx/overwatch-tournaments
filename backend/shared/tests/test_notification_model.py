@@ -8,8 +8,8 @@ the metadata would prove nothing about enforcement, so every case here goes
 through a real INSERT.
 
 The engine is in-memory SQLite, the same fixture shape
-``test_realtime_transaction.py`` and ``test_encounter_match_delete_cascade.py``
-use: SQLite enforces CHECK constraints and composite primary keys, which is
+``test_encounter_match_delete_cascade.py``
+uses: SQLite enforces CHECK constraints and composite primary keys, which is
 exactly what these tests interrogate. The Postgres-only parts of the DDL are
 not: ``jsonb`` degrades to SQLite ``JSON`` through the shared
 ``install_postgres_type_shims`` shim, and the partial index predicate is a
