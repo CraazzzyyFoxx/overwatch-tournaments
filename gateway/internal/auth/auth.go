@@ -12,6 +12,7 @@ package auth
 import (
 	"context"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -21,8 +22,23 @@ import (
 
 // CookieName is the canonical access-token cookie; LegacyCookieName is read as a
 // fallback during the aqt->owt rename so existing sessions are not logged out.
-const CookieName = "owt_access_token"
+//
+// The prefix is per-deployment (SESSION_COOKIE_PREFIX, default "owt", matching
+// the frontend's NEXT_PUBLIC_COOKIE_PREFIX). A second deployment under the same
+// registrable domain — the dev site at dev.owt.craazzzyyfoxx.me — is otherwise
+// handed production's domain-wide cookie of the same name: the Cookie header
+// carries no Domain, so the two are indistinguishable and the older one wins.
+// Read once at init: the environment does not change under a running process.
+var CookieName = cookiePrefix() + "_access_token"
+
 const LegacyCookieName = "aqt_access_token"
+
+func cookiePrefix() string {
+	if p := strings.TrimSpace(os.Getenv("SESSION_COOKIE_PREFIX")); p != "" {
+		return p
+	}
+	return "owt"
+}
 
 // APIKeyPrefix marks an opaque workspace-scoped API key
 // ("aqt_sk_<public_id>_<secret>" — identity-service's ApiKeyService.PREFIX).
