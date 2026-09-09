@@ -115,6 +115,18 @@ class TournamentRealtimeEventsTests(IsolatedAsyncioTestCase):
         updates = realtime_commit.pop_registered_tournament_realtime_updates(session)
         self.assertEqual(updates, [(42, "structure_changed")])
 
+    async def test_form_changed_survives_every_other_reason(self) -> None:
+        # The form key is in no other reason's plan — not even
+        # structure_changed's — so folding it away would silently drop the only
+        # signal an admin form edit produces.
+        session = SimpleNamespace(info={})
+
+        realtime_commit.register_tournament_realtime_update(session, 42, "registration_form_changed")
+        realtime_commit.register_tournament_realtime_update(session, 42, "structure_changed")
+
+        updates = realtime_commit.pop_registered_tournament_realtime_updates(session)
+        self.assertEqual(set(updates), {(42, "structure_changed"), (42, "registration_form_changed")})
+
     async def test_realtime_update_invalidates_cache_before_publishing(self) -> None:
         calls: list[str] = []
 

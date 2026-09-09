@@ -10,7 +10,15 @@ import { tournamentQueryKeys } from "@/lib/tournament-query-keys";
 // that total order and carried as its own independent signal.
 export type BracketFamilyReason = "bracket_changed" | "results_changed" | "structure_changed";
 
-export type TournamentChangedReason = BracketFamilyReason | "registration_changed";
+// registration_form_changed is narrower still: the form is ADMIN CONFIGURATION,
+// not participant data, so its plan is exactly one key and overlaps nothing.
+// It used to have no event of its own — the form key rode along with
+// registration_changed, which made every signup re-read a config that changes
+// a couple of times per event (~200 reads per real change, measured).
+export type TournamentChangedReason =
+  | BracketFamilyReason
+  | "registration_changed"
+  | "registration_form_changed";
 
 const TOURNAMENT_REASON_RANK: Record<BracketFamilyReason, number> = {
   bracket_changed: 0,
@@ -35,7 +43,7 @@ export function strongerTournamentReason(
 }
 
 type TournamentRealtimeUpdatePlan = {
-  workspaceScope: "bracket" | "results" | "full" | "registration";
+  workspaceScope: "bracket" | "results" | "full" | "registration" | "form";
   queryKeys: readonly (readonly unknown[])[];
   shouldRefreshRoute: boolean;
 };
@@ -65,7 +73,6 @@ function getParticipantQueryPrefixes(
   return [
     tournamentQueryKeys.registration(workspaceId, tournamentId),
     tournamentQueryKeys.registrationsList(workspaceId, tournamentId),
-    tournamentQueryKeys.registrationForm(workspaceId, tournamentId),
   ];
 }
 
@@ -79,6 +86,22 @@ export function getTournamentRealtimeUpdatePlan(
   // numeric id, which is exactly what they key by anyway.
   detailRef: string | number = tournamentId,
 ): TournamentRealtimeUpdatePlan {
+  if (reason === "registration_form_changed") {
+    return {
+      // One key, nothing else: the form is admin configuration. A signup does
+      // not change it (that is registration_changed's business), and the edit
+      // itself stales no participant row, no cached HTTP response
+      // (respcache.go::reasonPatterns returns an empty pattern set for this
+      // reason) and no cashews entry (the form read is uncached on purpose).
+      workspaceScope: "form",
+      queryKeys:
+        workspaceId == null
+          ? []
+          : [tournamentQueryKeys.registrationForm(workspaceId, tournamentId)],
+      shouldRefreshRoute: false,
+    };
+  }
+
   if (reason === "bracket_changed") {
     return {
       workspaceScope: "bracket",
@@ -136,6 +159,14 @@ export function getTournamentRealtimeCatchUpPlan(
     tournamentQueryKeys.standings(tournamentId),
     tournamentQueryKeys.encounters(tournamentId),
     ...getParticipantQueryPrefixes(tournamentId, workspaceId),
+    // The form is no longer part of the participant prefixes (only its own
+    // reason drops it), so name it here explicitly: catch-up runs once per
+    // (re)subscribe, not per event, and it is the safety net for a form edit
+    // whose event was published while this client was disconnected — Redis
+    // pub/sub is at-most-once and the event may never have reached it.
+    ...(workspaceId == null
+      ? []
+      : [tournamentQueryKeys.registrationForm(workspaceId, tournamentId)]),
   ];
 }
 
@@ -154,6 +185,14 @@ function invalidateAdminTournamentQueries(
   scope: TournamentRealtimeUpdatePlan["workspaceScope"],
 ): void {
   const keys = getTournamentWorkspaceQueryKeys(tournamentId);
+
+  if (scope === "form") {
+    // Nothing: the admin form builder owns the edit that produced this event
+    // and holds unsaved local state (RegistrationFormBuilder deliberately
+    // disables refetchOnWindowFocus for that reason), so re-reading it here
+    // would fight the editor that just wrote it.
+    return;
+  }
 
   if (scope === "bracket") {
     void queryClient.invalidateQueries({ queryKey: keys.encounters });

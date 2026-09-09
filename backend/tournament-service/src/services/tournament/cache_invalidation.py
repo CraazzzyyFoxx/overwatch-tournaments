@@ -11,6 +11,7 @@ TournamentCacheInvalidationReason = Literal[
     "results_changed",
     "structure_changed",
     "registration_changed",
+    "registration_form_changed",
 ]
 
 
@@ -48,6 +49,16 @@ def tournament_cache_patterns(
         # bracket_changed event triggers is served pre-write history.
         f"*standings*:{tournament_id}:*",
     )
+    if reason == "registration_form_changed":
+        # Nothing to purge, and that is deliberate rather than an omission: the
+        # registration form has exactly one reader
+        # (``_common_service.get_registration_form``) and it is uncached on
+        # purpose — see registration/admission.py's module docstring, a stale
+        # form is either a false refusal or a false admission. Returning an
+        # empty tuple keeps this reason OUT of the broad fallback below, which
+        # would otherwise purge tournaments/teams/encounters/standings on an
+        # edit that touches none of them.
+        return ()
     if reason == "bracket_changed":
         return _with_prefixes(*bracket_suffixes)
     if reason == "registration_changed":

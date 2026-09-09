@@ -1045,6 +1045,12 @@ class RegistrationService:
             form.built_in_fields_json = built_in_fields_json
             form.custom_fields_json = custom_fields_json
 
+        # Staged BEFORE the commit, like every other write in this service: the
+        # realtime rail persists the event row in this transaction's flush and
+        # publishes it from after_commit. Until this existed a form edit emitted
+        # nothing at all, so open tabs only learned about it by accident, riding
+        # along with the next unrelated registration event.
+        register_tournament_realtime_update(session, tournament_id, "registration_form_changed")
         await session.commit()
         await session.refresh(form)
         return form

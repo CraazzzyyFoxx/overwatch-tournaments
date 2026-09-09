@@ -445,6 +445,13 @@ func reasonPatterns(reason string) []string {
 			"/registration/list",
 			bareTournamentDetailPattern,
 		}
+	case "registration_form_changed":
+		// Empty, NOT nil: the form route is not cached here at all (its only
+		// backend reader is deliberately uncached too — see
+		// registration/admission.py), so an admin form edit stales nothing.
+		// nil would mean "drop everything for this tournament", which is what
+		// this reason used to do by falling through to the default below.
+		return []string{}
 	default:
 		return nil
 	}

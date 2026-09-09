@@ -14,13 +14,20 @@ from shared.services.realtime_transaction import register_realtime_update
 from src.core import config
 from src.services.tournament.cache_invalidation import invalidate_tournament_cache
 
-TournamentRealtimeReason = Literal["bracket_changed", "results_changed", "structure_changed", "registration_changed"]
+TournamentRealtimeReason = Literal[
+    "bracket_changed",
+    "results_changed",
+    "structure_changed",
+    "registration_changed",
+    "registration_form_changed",
+]
 
 _SESSION_KEY = "tournament_realtime_updates"
 _BRACKET_CHANGED: TournamentRealtimeReason = "bracket_changed"
 _RESULTS_CHANGED: TournamentRealtimeReason = "results_changed"
 _STRUCTURE_CHANGED: TournamentRealtimeReason = "structure_changed"
 _REGISTRATION_CHANGED: TournamentRealtimeReason = "registration_changed"
+_FORM_CHANGED: TournamentRealtimeReason = "registration_form_changed"
 
 # asyncio holds only a WEAK reference to a running task, so a fire-and-forget
 # `create_task` whose result nobody keeps can be collected mid-flight and take
@@ -44,6 +51,8 @@ def _normalize_reason(reason: str) -> TournamentRealtimeReason | None:
         return _STRUCTURE_CHANGED
     if reason == _REGISTRATION_CHANGED:
         return _REGISTRATION_CHANGED
+    if reason == _FORM_CHANGED:
+        return _FORM_CHANGED
     return None
 
 
@@ -69,6 +78,13 @@ def _merge_updates(
         # otherwise it needs its own event or its invalidation would be dropped.
         if _REGISTRATION_CHANGED in reasons and _STRUCTURE_CHANGED not in reasons:
             merged.append((tournament_id, _REGISTRATION_CHANGED))
+        # The FORM is admin configuration, not participant data: its plan is
+        # disjoint from every other reason's, including structure_changed's, so
+        # it is never folded away. Before this reason existed the form key rode
+        # along with registration_changed, which meant every signup made every
+        # open tab re-read a config that changes a couple of times per event.
+        if _FORM_CHANGED in reasons:
+            merged.append((tournament_id, _FORM_CHANGED))
     return merged
 
 

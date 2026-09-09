@@ -63,6 +63,9 @@ export function useTournamentRealtime({
   // total-order scalar (see BracketFamilyReason).
   const pendingReasonRef = useRef<BracketFamilyReason | null>(null);
   const pendingRegistrationChangeRef = useRef(false);
+  // Same story for the form: its plan is one key and overlaps nothing, so it
+  // gets its own flag rather than being folded into either of the above.
+  const pendingFormChangeRef = useRef(false);
 
   // Dropped on topic change (a different tournamentId) or unmount -- a
   // reason/flag pending for one tournament's topic must never leak into the
@@ -71,6 +74,7 @@ export function useTournamentRealtime({
     return () => {
       pendingReasonRef.current = null;
       pendingRegistrationChangeRef.current = false;
+      pendingFormChangeRef.current = false;
     };
   }, [topic]);
 
@@ -89,6 +93,11 @@ export function useTournamentRealtime({
       const reason = event.data.reason;
       if (reason === "registration_changed") {
         pendingRegistrationChangeRef.current = true;
+        schedule();
+        return;
+      }
+      if (reason === "registration_form_changed") {
+        pendingFormChangeRef.current = true;
         schedule();
         return;
       }
@@ -115,9 +124,11 @@ export function useTournamentRealtime({
     onFlush: () => {
       const reason = pendingReasonRef.current;
       const hasRegistrationChange = pendingRegistrationChangeRef.current;
+      const hasFormChange = pendingFormChangeRef.current;
       pendingReasonRef.current = null;
       pendingRegistrationChangeRef.current = false;
-      if (!tournamentId || (!reason && !hasRegistrationChange)) {
+      pendingFormChangeRef.current = false;
+      if (!tournamentId || (!reason && !hasRegistrationChange && !hasFormChange)) {
         return;
       }
       if (reason) {
@@ -132,6 +143,13 @@ export function useTournamentRealtime({
       if (hasRegistrationChange && reason !== "structure_changed") {
         applyTournamentRealtimeUpdate(queryClient, tournamentId, workspaceId, "registration_changed", undefined, resolvedDetailRef);
         onUpdate?.("registration_changed");
+      }
+      // Unconditional: no other reason's plan carries the form key, so unlike
+      // registration_changed there is nothing for structure_changed to
+      // supersede here.
+      if (hasFormChange) {
+        applyTournamentRealtimeUpdate(queryClient, tournamentId, workspaceId, "registration_form_changed", undefined, resolvedDetailRef);
+        onUpdate?.("registration_form_changed");
       }
     },
   });

@@ -62,7 +62,6 @@ describe("tournament realtime helpers", () => {
         tournamentQueryKeys.teams(42),
         tournamentQueryKeys.registration(7, 42),
         tournamentQueryKeys.registrationsList(7, 42),
-        tournamentQueryKeys.registrationForm(7, 42),
       ],
       shouldRefreshRoute: true,
     });
@@ -87,8 +86,23 @@ describe("tournament realtime helpers", () => {
         tournamentQueryKeys.detail(42),
         tournamentQueryKeys.registration(7, 42),
         tournamentQueryKeys.registrationsList(7, 42),
-        tournamentQueryKeys.registrationForm(7, 42),
       ],
+      shouldRefreshRoute: false,
+    });
+  });
+
+  it("maps a form edit to the form key alone, leaving participants and detail untouched", () => {
+    expect(getTournamentRealtimeUpdatePlan(42, 7, "registration_form_changed")).toEqual({
+      workspaceScope: "form",
+      queryKeys: [tournamentQueryKeys.registrationForm(7, 42)],
+      shouldRefreshRoute: false,
+    });
+  });
+
+  it("omits the form key for a form edit until the workspace is known", () => {
+    expect(getTournamentRealtimeUpdatePlan(42, null, "registration_form_changed")).toEqual({
+      workspaceScope: "form",
+      queryKeys: [],
       shouldRefreshRoute: false,
     });
   });
@@ -270,6 +284,20 @@ describe("tournament realtime helpers", () => {
         reason: "registration_changed" as const,
         invalidated: [["admin", "tournament", 42]],
         untouched: [
+          ["admin", "stages", 42],
+          ["admin", "tournament", 42, "teams"],
+          ["admin", "tournament", 42, "standings"],
+          ["admin", "tournament", 42, "encounters"],
+          ["standings-table", 42],
+        ],
+      },
+      {
+        // A form edit touches no admin workspace key at all: the admin form
+        // builder is the thing that just wrote it and holds unsaved state.
+        reason: "registration_form_changed" as const,
+        invalidated: [],
+        untouched: [
+          ["admin", "tournament", 42],
           ["admin", "stages", 42],
           ["admin", "tournament", 42, "teams"],
           ["admin", "tournament", 42, "standings"],

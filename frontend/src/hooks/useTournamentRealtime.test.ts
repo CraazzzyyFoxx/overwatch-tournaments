@@ -203,6 +203,31 @@ describe("useTournamentRealtime", () => {
     );
   });
 
+  it("applies a form edit alongside a bracket-family reason instead of dropping it", () => {
+    mount({ tournamentId: 1, workspaceId: 7 });
+
+    fireEvent("tournament:1:bracket", { tournament_id: 1, reason: "structure_changed" });
+    fireEvent("tournament:1:bracket", { tournament_id: 1, reason: "registration_form_changed" });
+
+    act(() => {
+      vi.advanceTimersByTime(2750);
+    });
+
+    // Unlike registration_changed, the form key is in no other reason's plan,
+    // so structure_changed does not supersede it. Before this reason existed
+    // onEvent dropped every unrecognized reason outright.
+    expect(applyTournamentRealtimeUpdate).toHaveBeenCalledTimes(2);
+    expect(applyTournamentRealtimeUpdate).toHaveBeenNthCalledWith(
+      2,
+      expect.anything(),
+      1,
+      7,
+      "registration_form_changed",
+      undefined,
+      1,
+    );
+  });
+
   it("applies both a bracket-family reason and a separate registration_changed refetch when the reason isn't structure_changed", () => {
     mount({ tournamentId: 1 });
 

@@ -485,6 +485,40 @@ func TestBroadcastRegistrationChangedDoesNotOverreachOntoSubroutes(t *testing.T)
 	}
 }
 
+// registration_form_changed is admin configuration: the form route is not
+// cached here at all, so the event must evict NOTHING. Before it had its own
+// case it fell through to the default (nil = drop everything for the
+// tournament), which is exactly the over-invalidation this asserts against.
+func TestBroadcastFormChangedEvictsNothing(t *testing.T) {
+	var tournamentCalls, listCalls, encounterCalls atomic.Int64
+	c := testCache(t)
+	tournamentHandler := c.Wrap(upstream(&tournamentCalls), Rule{Extract: FromPathValue("id")})
+	listHandler := c.Wrap(upstream(&listCalls), Rule{Extract: FromPathValue("tournament_id")})
+	encountersHandler := c.Wrap(upstream(&encounterCalls), Rule{Extract: FromQuery("tournament_id")})
+
+	doGet(tournamentHandler, "/api/v1/tournaments/72", "")
+	doGet(encountersHandler, "/api/v1/encounters?tournament_id=72", "")
+	listReq := httptest.NewRequest(http.MethodGet, "/api/v1/tournaments/72/registration/list", nil)
+	listReq.SetPathValue("tournament_id", "72")
+	listHandler.ServeHTTP(httptest.NewRecorder(), listReq)
+
+	c.Broadcast("tournament:72:bracket", realtimeFrame("registration_form_changed"))
+
+	if rec := doGet(tournamentHandler, "/api/v1/tournaments/72", ""); rec.Header().Get("X-Cache") != "HIT" {
+		t.Fatal("form edit must not evict the tournament-detail entry")
+	}
+	if rec := doGet(encountersHandler, "/api/v1/encounters?tournament_id=72", ""); rec.Header().Get("X-Cache") != "HIT" {
+		t.Fatal("form edit must not evict the encounters entry")
+	}
+	listReq2 := httptest.NewRequest(http.MethodGet, "/api/v1/tournaments/72/registration/list", nil)
+	listReq2.SetPathValue("tournament_id", "72")
+	rec2 := httptest.NewRecorder()
+	listHandler.ServeHTTP(rec2, listReq2)
+	if rec2.Header().Get("X-Cache") != "HIT" {
+		t.Fatal("form edit must not evict the registration/list entry")
+	}
+}
+
 // Reasons this gateway doesn't recognize — a future backend reason, a
 // malformed frame, or the draft topic's board-patch payload (no reason field
 // at all) — must fall back to invalidating everything for the tournament,

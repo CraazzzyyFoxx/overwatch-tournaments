@@ -21,7 +21,13 @@ cache_invalidation = importlib.import_module("src.services.tournament.cache_inva
 # prefix the key starts with, so any pattern that does not start with one of
 # these is unroutable and raises ``NotConfiguredError`` at runtime.
 _CONFIGURED_PREFIXES = ("fastapi:", "backend:")
-_REASONS = ("bracket_changed", "results_changed", "structure_changed", "registration_changed")
+_REASONS = (
+    "bracket_changed",
+    "results_changed",
+    "structure_changed",
+    "registration_changed",
+    "registration_form_changed",
+)
 
 
 class TournamentCacheInvalidationTests(TestCase):
@@ -32,6 +38,13 @@ class TournamentCacheInvalidationTests(TestCase):
         self.assertFalse(any("encounters*:None:" in pattern for pattern in patterns))
         self.assertFalse(any("tournaments/42" in pattern for pattern in patterns))
         self.assertFalse(any("teams" in pattern for pattern in patterns))
+
+    def test_form_change_invalidates_nothing(self) -> None:
+        # The registration form has one reader and it is uncached on purpose
+        # (registration/admission.py), so this reason must purge nothing at
+        # all — and above all must not fall through to the broad fallback that
+        # wipes tournaments/teams/encounters/standings.
+        self.assertEqual(cache_invalidation.tournament_cache_patterns(42, "registration_form_changed"), ())
 
     def test_results_change_invalidates_all_tournament_reads(self) -> None:
         patterns = cache_invalidation.tournament_cache_patterns(42, "results_changed")
