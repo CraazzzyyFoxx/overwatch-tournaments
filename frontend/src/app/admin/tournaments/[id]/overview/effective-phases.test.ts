@@ -10,6 +10,7 @@ describe("effectivePhases", () => {
         schedule: ["registration", "check_in", "live"],
       }).map((p) => p.key),
     ).toEqual([
+      "announcement",
       "registration",
       "check_in",
       "live",
@@ -26,6 +27,7 @@ describe("effectivePhases", () => {
         schedule: ["registration", "draft", "live"],
       }).map((p) => p.key),
     ).toEqual([
+      "announcement",
       "registration",
       "check_in",
       "draft",
@@ -67,6 +69,7 @@ describe("effectivePhases", () => {
       currentStatus: "live",
     });
     expect(phases.map((p) => [p.key, p.reached])).toEqual([
+      ["announcement", true],
       ["registration", true],
       ["check_in", true],
       ["live", true],
@@ -93,6 +96,7 @@ describe("effectivePhases", () => {
     });
 
     expect(phases.map((p) => p.key)).toEqual([
+      "announcement",
       "registration",
       "check_in",
       "live",
@@ -118,6 +122,7 @@ describe("effectivePhases", () => {
     });
 
     expect(phases.map((p) => p.key)).toEqual([
+      "announcement",
       "registration",
       "check_in",
       "live",

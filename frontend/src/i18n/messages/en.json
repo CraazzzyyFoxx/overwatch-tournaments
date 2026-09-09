@@ -176,6 +176,7 @@
     "tournaments": "Tournaments",
     "league": "League",
     "statusBadge": {
+      "announcement": "Announced",
       "draft": "Draft",
       "registration": "Registration",
       "check_in": "Check-in",

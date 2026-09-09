@@ -25,7 +25,7 @@ player-facing subset see [`../frontend/src/i18n/GLOSSARY.md`](../frontend/src/i1
 | Term | Meaning |
 | --- | --- |
 | **Tournament** | The top-level competitive event inside a workspace. Owns its lifecycle state machine, registration, stages, and standings. |
-| **Phase** | Where a tournament is in its lifecycle: registration, check-in, draft, live, finished. Drives what the public page and the admin surfaces offer. |
+| **Phase** | Where a tournament is in its lifecycle: announcement, registration, check-in, draft, live, finished. Drives what the public page and the admin surfaces offer. A tournament starts announced — public and readable, with nothing to do until its registration window opens. |
 | **Stage** | One competitive segment of a tournament — a group stage or a playoff. Not to be confused with *phase*, which is lifecycle, not competition. |
 | **Stage item / stage item input** | The current bracket model: a stage decomposes into items (a group, a bracket round), and items declare their inputs. `group` is the legacy model kept for historical tournaments. |
 | **Group stage / round-robin / Swiss** | Stage formats. Round-robin plays every pairing; Swiss pairs by current score for a fixed number of rounds. |

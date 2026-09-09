@@ -1,10 +1,15 @@
 """Tournament lifecycle state machine and schedule helpers.
 
-Phases run REGISTRATION -> [CHECK_IN] -> [DRAFT] -> LIVE -> [PLAYOFFS] ->
-COMPLETED <-> ARCHIVED. CHECK_IN is optional and DRAFT is the team-draft
-phase (team_formation="draft" only), so forward transitions may skip phases.
-Rollback edges cover prior effective phases so admins can e.g. reopen
+Phases run ANNOUNCEMENT -> REGISTRATION -> [CHECK_IN] -> [DRAFT] -> LIVE ->
+[PLAYOFFS] -> COMPLETED <-> ARCHIVED. CHECK_IN is optional and DRAFT is the
+team-draft phase (team_formation="draft" only), so forward transitions may skip
+phases. Rollback edges cover prior effective phases so admins can e.g. reopen
 registration without the superuser ``force`` bypass.
+
+ANNOUNCEMENT is where every tournament starts: public and readable, but with
+nothing to do yet. It carries no schedule row of its own — it ends when the
+REGISTRATION row comes due, which is the same clock that used to leave a fresh
+tournament sitting in REGISTRATION with registration closed.
 
 Time-driven automation (the tournament-worker tick) advances the status
 forward only, using ``tournament_phase_schedule`` rows: a row's ``starts_at``
@@ -20,8 +25,21 @@ from shared.core.enums import TournamentStatus
 from shared.core.errors import ApiExc, ApiHTTPException
 
 _VALID_TRANSITIONS: dict[TournamentStatus, frozenset[TournamentStatus]] = {
+    TournamentStatus.ANNOUNCEMENT: frozenset(
+        {
+            TournamentStatus.REGISTRATION,
+            TournamentStatus.CHECK_IN,
+            TournamentStatus.DRAFT,
+            TournamentStatus.LIVE,
+        }
+    ),
     TournamentStatus.REGISTRATION: frozenset(
-        {TournamentStatus.CHECK_IN, TournamentStatus.DRAFT, TournamentStatus.LIVE}
+        {
+            TournamentStatus.CHECK_IN,
+            TournamentStatus.DRAFT,
+            TournamentStatus.LIVE,
+            TournamentStatus.ANNOUNCEMENT,
+        }
     ),
     TournamentStatus.CHECK_IN: frozenset(
         {TournamentStatus.DRAFT, TournamentStatus.LIVE, TournamentStatus.REGISTRATION}
@@ -49,13 +67,14 @@ IN_PLAY_STATUSES: tuple[TournamentStatus, ...] = (TournamentStatus.LIVE, Tournam
 # Canonical ordering of lifecycle phases; automation only ever moves forward
 # along this order.
 PHASE_ORDER: dict[TournamentStatus, int] = {
-    TournamentStatus.REGISTRATION: 0,
-    TournamentStatus.CHECK_IN: 1,
-    TournamentStatus.DRAFT: 2,
-    TournamentStatus.LIVE: 3,
-    TournamentStatus.PLAYOFFS: 4,
-    TournamentStatus.COMPLETED: 5,
-    TournamentStatus.ARCHIVED: 6,
+    TournamentStatus.ANNOUNCEMENT: 0,
+    TournamentStatus.REGISTRATION: 1,
+    TournamentStatus.CHECK_IN: 2,
+    TournamentStatus.DRAFT: 3,
+    TournamentStatus.LIVE: 4,
+    TournamentStatus.PLAYOFFS: 5,
+    TournamentStatus.COMPLETED: 6,
+    TournamentStatus.ARCHIVED: 7,
 }
 
 # Phases that may carry a ``tournament_phase_schedule`` row. PLAYOFFS and
@@ -70,9 +89,11 @@ SCHEDULABLE_STATUSES: frozenset[TournamentStatus] = frozenset(
 )
 
 # Statuses the automation tick moves *from* (time drives transitions only up
-# to LIVE).
+# to LIVE). ANNOUNCEMENT is in: the REGISTRATION row's ``starts_at`` is what
+# opens the tournament, and nobody should have to click for that.
 AUTO_TRANSITION_SOURCE_STATUSES: frozenset[TournamentStatus] = frozenset(
     {
+        TournamentStatus.ANNOUNCEMENT,
         TournamentStatus.REGISTRATION,
         TournamentStatus.DRAFT,
         TournamentStatus.CHECK_IN,

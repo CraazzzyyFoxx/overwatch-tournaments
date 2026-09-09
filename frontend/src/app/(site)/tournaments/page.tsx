@@ -51,6 +51,7 @@ const SORT_QUERY: Record<SortBy, { sort: "start_date" | "participants_count"; or
 
 /** Chip counts before the facets land, so the toolbar never renders `NaN`. */
 const NO_STATUS_COUNTS: Record<TournamentStatus, number> = {
+  announcement: 0,
   draft: 0,
   registration: 0,
   check_in: 0,

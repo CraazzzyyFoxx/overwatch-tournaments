@@ -298,6 +298,9 @@ def is_ascending_stat(stat: LogStatsName) -> bool:
 
 
 class TournamentStatus(StrEnum):
+    # First phase: the tournament exists and is public, but nothing can be done
+    # with it yet. It ends when the REGISTRATION schedule row comes due.
+    ANNOUNCEMENT = "announcement"
     REGISTRATION = "registration"
     DRAFT = "draft"
     CHECK_IN = "check_in"

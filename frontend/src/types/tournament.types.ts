@@ -8,7 +8,14 @@ import type { TournamentLink } from "@/types/stream.types";
 // ─── Enums ──────────────────────────────────────────────────────────────────
 
 export type TournamentStatus =
-  "registration" | "draft" | "check_in" | "live" | "playoffs" | "completed" | "archived";
+  | "announcement"
+  | "registration"
+  | "draft"
+  | "check_in"
+  | "live"
+  | "playoffs"
+  | "completed"
+  | "archived";
 
 export type StageType = "round_robin" | "single_elimination" | "double_elimination" | "swiss";
 
