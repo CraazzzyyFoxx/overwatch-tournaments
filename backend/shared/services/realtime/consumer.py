@@ -18,6 +18,7 @@ from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
 from typing import Any
 
 from cashews import cache
+from faststream.rabbit import RabbitMessage
 
 from shared.schemas.events import CacheInvalidatedEvent
 
@@ -83,8 +84,11 @@ def register_invalidation_consumer(
     if channel is not None:
         subscriber_kwargs["channel"] = channel
 
+    # `msg` MUST be annotated RabbitMessage: with a loose annotation FastStream
+    # treats it as another payload field, every message fails validation and is
+    # rejected straight into the DLQ (observed on the dev stand, 5/5 messages).
     @broker.subscriber(queue, **subscriber_kwargs)
-    async def process_cache_invalidated(data: dict[str, Any], msg: Any) -> None:
+    async def process_cache_invalidated(data: dict[str, Any], msg: RabbitMessage) -> None:
         async with observe_message_processing(
             queue=queue,
             handler="process_cache_invalidated",
