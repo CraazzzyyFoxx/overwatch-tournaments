@@ -559,6 +559,7 @@ services:
         NEXT_PUBLIC_SITE_FAVICON: ${NEXT_PUBLIC_SITE_FAVICON}
         NEXT_PUBLIC_GA_ID: ${NEXT_PUBLIC_GA_ID}
         NEXT_PUBLIC_YM_ID: ${NEXT_PUBLIC_YM_ID}
+        NEXT_PUBLIC_APP_VERSION: ${IMAGE_TAG:-}
     environment:
       - NEXT_PUBLIC_SITE_URL=https://owt.craazzzyyfoxx.me
       - NEXT_PUBLIC_SITE_NAME=Overwatch Tournaments

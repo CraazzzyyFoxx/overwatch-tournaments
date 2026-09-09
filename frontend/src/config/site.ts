@@ -25,3 +25,8 @@ export const GA_ID = process.env.NEXT_PUBLIC_GA_ID;
 
 // Yandex Metrica counter id (numeric). Unset disables Metrica.
 export const YM_ID = process.env.NEXT_PUBLIC_YM_ID;
+
+// Release version shown in the footer. CI passes the deployed git tag
+// (`v1.2.3`) as a build arg, so it is baked into the bundle; unset in local
+// dev, where the footer then renders no version at all.
+export const APP_VERSION = process.env.NEXT_PUBLIC_APP_VERSION;
