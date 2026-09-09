@@ -179,9 +179,7 @@ def test_run_due_transitions_skips_opening_registration_without_a_form() -> None
     ):
         results = asyncio.run(auto_transitions.run_due_transitions(session_factory))
 
-    assert results == [
-        {"tournament_id": 5, "status": "skipped", "reason": "registration_form_missing"}
-    ]
+    assert results == [{"tournament_id": 5, "status": "skipped", "reason": "registration_form_missing"}]
     transition.assert_not_awaited()
 
 

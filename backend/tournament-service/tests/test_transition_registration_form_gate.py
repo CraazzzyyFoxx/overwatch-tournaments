@@ -92,16 +92,10 @@ def test_the_status_is_left_untouched_when_the_guard_refuses() -> None:
     session = SimpleNamespace(commit=AsyncMock())
     with (
         patch.object(tournament_service.tournament_repo, "get", AsyncMock(return_value=tournament)),
-        patch.object(
-            tournament_service.registration_form_repo, "get_by_tournament", AsyncMock(return_value=None)
-        ),
+        patch.object(tournament_service.registration_form_repo, "get_by_tournament", AsyncMock(return_value=None)),
     ):
         with pytest.raises(BaseAPIException):
-            asyncio.run(
-                tournament_service.transition_status(
-                    session, tournament.id, TournamentStatus.REGISTRATION
-                )
-            )
+            asyncio.run(tournament_service.transition_status(session, tournament.id, TournamentStatus.REGISTRATION))
 
     assert tournament.status is TournamentStatus.ANNOUNCEMENT
     session.commit.assert_not_awaited()
@@ -132,4 +126,3 @@ def test_a_tournament_cannot_be_created_with_registration_already_open() -> None
 
     assert excinfo.value.status_code == 409
     assert [detail["code"] for detail in excinfo.value.detail] == ["registration_form_missing"]
-

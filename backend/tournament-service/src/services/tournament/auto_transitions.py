@@ -77,8 +77,8 @@ async def run_due_transitions(
                 # saves the form, and a 409 per pass would be a log flood, not a
                 # signal. Skipping leaves it in its current phase, which is what
                 # "registration is not ready" means.
-                if target == TournamentStatus.REGISTRATION and not await (
-                    admin_tournament_service.has_registration_form(session, tournament_id)
+                if target == TournamentStatus.REGISTRATION and not await admin_tournament_service.has_registration_form(
+                    session, tournament_id
                 ):
                     results.append(
                         {

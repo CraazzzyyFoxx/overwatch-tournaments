@@ -54,9 +54,7 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    op.execute(
-        "ALTER TYPE tournament.tournamentstatus ADD VALUE IF NOT EXISTS 'announcement' BEFORE 'registration'"
-    )
+    op.execute("ALTER TYPE tournament.tournamentstatus ADD VALUE IF NOT EXISTS 'announcement' BEFORE 'registration'")
     op.execute("ALTER TABLE tournament.tournament ALTER COLUMN status DROP DEFAULT")
 
 
@@ -65,6 +63,5 @@ def downgrade() -> None:
     drop one, and rebuilding the type would need an exclusive lock on every
     table and index referencing it, for a downgrade nobody runs."""
     op.execute(
-        "ALTER TABLE tournament.tournament "
-        "ALTER COLUMN status SET DEFAULT 'registration'::tournament.tournamentstatus"
+        "ALTER TABLE tournament.tournament ALTER COLUMN status SET DEFAULT 'registration'::tournament.tournamentstatus"
     )

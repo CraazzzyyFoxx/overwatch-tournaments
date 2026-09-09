@@ -552,10 +552,7 @@ class AdminTournamentService:
                 detail=[
                     ApiExc(
                         code="registration_form_missing",
-                        msg=(
-                            "This tournament has no registration form yet. Save one before opening "
-                            "registration."
-                        ),
+                        msg=("This tournament has no registration form yet. Save one before opening registration."),
                     )
                 ],
             )
