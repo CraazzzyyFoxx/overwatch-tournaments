@@ -2,8 +2,8 @@
 
 Hosts every ``rpc.app.*`` subscriber (public reads via the shared CRUD read
 engine + bespoke reads, workspace writes, binary base64 endpoints) plus the
-``tournament_changed`` cache-invalidation consumer. Replaces the HTTP
-app-service (compose ``backend``) behind the Go gateway.
+``cache.invalidated`` invalidation consumer. Replaces the HTTP app-service
+(compose ``backend``) behind the Go gateway.
 
 Run with: ``faststream run serve:app``.
 """
@@ -12,7 +12,12 @@ from cashews import cache
 from faststream import FastStream
 from faststream.rabbit import Channel
 
-from shared.messaging.config import CACHE_INVALIDATION_APP_QUEUE, CACHE_INVALIDATION_EXCHANGE
+from shared.messaging.config import (
+    CACHE_INVALIDATION_APP_DLQ,
+    CACHE_INVALIDATION_APP_QUEUE,
+    CACHE_INVALIDATION_EXCHANGE,
+)
+from shared.messaging.topology import declare_dead_letter_queue
 from shared.observability import (
     make_rabbit_broker,
     setup_logging,
@@ -135,6 +140,9 @@ binary.register(broker, logger)
 @app.on_startup
 async def start_worker() -> None:
     await broker.connect()
+    # The invalidation queue dead-letters here; without the declaration a
+    # poison message routes to a non-existent queue and vanishes.
+    await declare_dead_letter_queue(broker, CACHE_INVALIDATION_APP_DLQ)
     await clients.s3_client.start()
     setup_sentry(
         dsn=config.settings.sentry_dsn,
