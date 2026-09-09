@@ -10,7 +10,11 @@
 
 COMPOSE = docker compose
 PROD_COMPOSE = docker compose -f docker-compose.production.yml
-MONITORING_COMPOSE = docker compose -f docker-compose.monitoring.yml
+# Log storage (loki+promtail) and traces (tempo+otel-collector) are compose
+# profiles: metrics run everywhere, those two only where there is RAM to spare.
+#   make monitoring-up MONITORING_PROFILES="logs traces"
+MONITORING_PROFILES ?=
+MONITORING_COMPOSE = docker compose -f docker-compose.monitoring.yml $(foreach p,$(MONITORING_PROFILES),--profile $(p))
 # Контур бэкапов: свой проект (owt-backup) и свой env-файл, чтобы жизненный цикл
 # не зависел от прода. См. docs/backup-rustfs.md.
 BACKUP_ENV = ops/backup/backup.env
@@ -25,14 +29,19 @@ BACKUP_COMPOSE = docker compose -f docker-compose.backup.yml --env-file $(BACKUP
 # (scheduled jobs would multi-fire) and its jobs aren't idempotent — it needs
 # leader-election first.
 #
-# Sizes: small = quiet 15G box, medium = normal, large = burst / event day.
+# Sizes, calibrated by measured CPU per request (one faststream process = one
+# event loop = 1 core ceiling, ~0.85 usable): tournament ~46 ms/req on its
+# hottest uncacheable route (registration/form) = ~18 rps per replica, app-svc
+# ~20 ms on live routes plus ~107 ms per response-cache miss on user profiles,
+# identity ~6-12 ms and bounded by SESSIONS, not rps (the gateway caches each
+# validate_token verdict for 30s). small = this 4 CPU / 8G box, large needs 8.
 # `make prod-up` / `make prod-scale` / GitHub release all honour PROD_SIZE so a
 # plain `docker compose up -d` cannot silently restore leftover replica counts.
 # Override a size on the CLI, e.g. make prod-up PROD_SIZE=medium
 # or poke one service: make prod-up PROD_SCALE='app-svc=2 balancer-svc=2'
 PROD_SIZE ?= small
-PROD_SCALE_small  := app-svc=1 identity-svc=1 tournament-svc=1 frontend=1
-PROD_SCALE_medium := app-svc=2 identity-svc=2 tournament-svc=2 frontend=2
+PROD_SCALE_small  := app-svc=1 identity-svc=1 tournament-svc=2 frontend=2
+PROD_SCALE_medium := app-svc=2 identity-svc=1 tournament-svc=2 frontend=2
 PROD_SCALE_large  := app-svc=2 identity-svc=2 tournament-svc=4 frontend=3
 PROD_SCALE ?= $(PROD_SCALE_$(PROD_SIZE))
 
@@ -58,7 +67,8 @@ help:
 	@echo "  make prod-medium    - Scale production to medium (2 of each)"
 	@echo "  make prod-large     - Scale production to large (4 tournament, 3 frontend)"
 	@echo ""
-	@echo "  make monitoring-up  - Start monitoring stack (requires prod-up first)"
+	@echo "  make monitoring-up  - Start monitoring stack, metrics only (requires prod-up first)"
+	@echo "                        add MONITORING_PROFILES=\"logs traces\" for loki/tempo"
 	@echo "  make monitoring-down- Stop monitoring stack"
 	@echo "  make monitoring-logs- Follow monitoring logs"
 	@echo "  make monitoring-ps  - Show monitoring services"

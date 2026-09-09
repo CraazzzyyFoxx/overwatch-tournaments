@@ -147,14 +147,6 @@ scrape_configs:
         target_label: instance
         replacement: nginx
 
-  - job_name: promtail
-    static_configs:
-      - targets: ["promtail:9080"]
-    relabel_configs:
-      - source_labels: [__address__]
-        target_label: instance
-        replacement: promtail
-
   # --------------------------------------------------------------------------
   # Infrastructure: host (node-exporter), containers (cAdvisor), PostgreSQL
   # --------------------------------------------------------------------------
@@ -182,14 +174,3 @@ scrape_configs:
         target_label: instance
         replacement: postgres
 
-  # --------------------------------------------------------------------------
-  # Observability stack internals
-  # --------------------------------------------------------------------------
-  - job_name: otel-collector
-    static_configs:
-      - targets: ["otel-collector:8888"]
-
-  - job_name: tempo
-    static_configs:
-      - targets: ["tempo:3200"]
-    metrics_path: /metrics
