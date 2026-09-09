@@ -10,8 +10,14 @@ from sqlalchemy.orm import selectinload
 from shared.core import http_status as status
 from shared.core import tournament_state
 from shared.core.enums import StageType, TournamentStatus
+from shared.core.errors import ApiExc, ApiHTTPException
 from shared.core.errors import BaseAPIException as HTTPException
-from shared.repository import ChallongeSourceRepository, StandingRepository, TournamentRepository
+from shared.repository import (
+    ChallongeSourceRepository,
+    RegistrationFormRepository,
+    StandingRepository,
+    TournamentRepository,
+)
 from shared.services.division_grid import cache as division_grid_cache
 from shared.services.division_grid.access import get_workspace_division_grid_version_id
 from shared.services.draft_guards import assert_no_active_draft_session
@@ -70,10 +76,12 @@ class AdminTournamentService:
         tournament_repo: TournamentRepository = TournamentRepository(),
         challonge_source_repo: ChallongeSourceRepository = ChallongeSourceRepository(),
         standing_repo: StandingRepository = StandingRepository(),
+        registration_form_repo: RegistrationFormRepository = RegistrationFormRepository(),
     ) -> None:
         self.tournament_repo = tournament_repo
         self.challonge_source_repo = challonge_source_repo
         self.standing_repo = standing_repo
+        self.registration_form_repo = registration_form_repo
 
     async def _link_tournament_challonge_source(
         self,
@@ -196,7 +204,27 @@ class AdminTournamentService:
         return await self.get_tournament(session, tournament_id)
 
     async def create_tournament(self, session: AsyncSession, data: schemas.TournamentCreate) -> models.Tournament:
-        """Create a new tournament"""
+        """Create a new tournament.
+
+        REGISTRATION is refused outright here, with no ``force`` counterpart: the
+        registration form belongs to a tournament that does not exist yet, so a
+        tournament created straight into REGISTRATION cannot possibly have one.
+        Create it (announced, the default) and transition once the form is saved.
+        """
+        if data.status == TournamentStatus.REGISTRATION:
+            raise ApiHTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=[
+                    ApiExc(
+                        code="registration_form_missing",
+                        msg=(
+                            "A tournament cannot be created with registration already open — it has "
+                            "no registration form yet. Create it, save the form, then open registration."
+                        ),
+                    )
+                ],
+            )
+
         existing_tournament = await self.tournament_repo.get_by(
             session,
             workspace_id=data.workspace_id,
@@ -459,6 +487,18 @@ class AdminTournamentService:
         target = TournamentStatus.LIVE if tournament.is_finished else TournamentStatus.COMPLETED
         return await self.transition_status(session, tournament_id, target, force=True)
 
+    async def has_registration_form(self, session: AsyncSession, tournament_id: int) -> bool:
+        """Whether the tournament has a saved registration form.
+
+        "Saved" is row-existence, the same thing the admin dashboard reports as
+        ``registration_form_configured``: the upsert writes one row per
+        tournament and there is no half-saved state below it.
+
+        Public because the worker tick asks the same question with a different
+        answer in mind — it skips the tournament, where an admin gets a 409.
+        """
+        return await self.registration_form_repo.get_by_tournament(session, tournament_id) is not None
+
     async def transition_status(
         self,
         session: AsyncSession,
@@ -473,6 +513,15 @@ class AdminTournamentService:
         Manual transitions (``automated=False``) pause time-driven automation by
         setting ``auto_transitions_enabled = False`` in the same transaction, so
         the tick never fights an admin decision.
+
+        REGISTRATION additionally requires a saved registration form. The status
+        is what the public page announces and what the register button reads, so
+        entering it without a form advertises a sign-up that cannot be completed
+        — the exact mismatch ANNOUNCEMENT was added to end. ``force`` bypasses
+        this the same way it bypasses the transition matrix: it is the
+        superuser-only "I know what I am doing" switch, and a Challonge-sourced
+        tournament that never takes its own registrations is the case that needs
+        it.
         """
         tournament = await self.tournament_repo.get(
             session,
@@ -489,6 +538,27 @@ class AdminTournamentService:
 
         if not force:
             tournament_state.validate_transition(tournament.status, target_status)
+
+        if (
+            not force
+            and target_status == TournamentStatus.REGISTRATION
+            and not await self.has_registration_form(session, tournament_id)
+        ):
+            # ``ApiExc`` list, not a bare dict: that is the shape the frontend's
+            # `parseApiError` reads, so the organizer sees the sentence below
+            # instead of a generic "An error occurred".
+            raise ApiHTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=[
+                    ApiExc(
+                        code="registration_form_missing",
+                        msg=(
+                            "This tournament has no registration form yet. Save one before opening "
+                            "registration."
+                        ),
+                    )
+                ],
+            )
 
         old_status = _status_value(tournament.status)
         tournament.status = target_status

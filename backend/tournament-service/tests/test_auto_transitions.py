@@ -150,6 +150,69 @@ def test_run_due_transitions_skips_not_due_and_vanished_candidates() -> None:
     transition.assert_not_awaited()
 
 
+def test_run_due_transitions_skips_opening_registration_without_a_form() -> None:
+    """A due REGISTRATION row on a tournament with no form leaves it where it is.
+
+    The tick re-evaluates this candidate every 30 s, so the admin path's 409
+    would be a log flood here; the phase simply does not advance until someone
+    saves the form.
+    """
+    formless = SimpleNamespace(
+        id=5,
+        status=enums.TournamentStatus.ANNOUNCEMENT,
+        phase_schedule=[_schedule_row(enums.TournamentStatus.REGISTRATION, timedelta(minutes=-5))],
+    )
+    sessions = [
+        _session_returning(_result_with_ids([5])),
+        _session_returning(_result_with_row(formless)),
+    ]
+    session_factory = Mock(side_effect=[_FakeSessionCtx(s) for s in sessions])
+
+    transition = AsyncMock()
+    with (
+        patch.object(auto_transitions.admin_tournament_service, "transition_status", transition),
+        patch.object(
+            auto_transitions.admin_tournament_service,
+            "has_registration_form",
+            AsyncMock(return_value=False),
+        ),
+    ):
+        results = asyncio.run(auto_transitions.run_due_transitions(session_factory))
+
+    assert results == [
+        {"tournament_id": 5, "status": "skipped", "reason": "registration_form_missing"}
+    ]
+    transition.assert_not_awaited()
+
+
+def test_run_due_transitions_opens_registration_once_the_form_exists() -> None:
+    announced = SimpleNamespace(
+        id=6,
+        status=enums.TournamentStatus.ANNOUNCEMENT,
+        phase_schedule=[_schedule_row(enums.TournamentStatus.REGISTRATION, timedelta(minutes=-5))],
+    )
+    sessions = [
+        _session_returning(_result_with_ids([6])),
+        _session_returning(_result_with_row(announced)),
+    ]
+    session_factory = Mock(side_effect=[_FakeSessionCtx(s) for s in sessions])
+
+    transition = AsyncMock(return_value=announced)
+    with (
+        patch.object(auto_transitions.admin_tournament_service, "transition_status", transition),
+        patch.object(
+            auto_transitions.admin_tournament_service,
+            "has_registration_form",
+            AsyncMock(return_value=True),
+        ),
+    ):
+        results = asyncio.run(auto_transitions.run_due_transitions(session_factory))
+
+    assert results[0]["status"] == "success"
+    assert results[0]["old_status"] == enums.TournamentStatus.ANNOUNCEMENT.value
+    assert results[0]["new_status"] == enums.TournamentStatus.REGISTRATION.value
+
+
 # ─── Real-DB integration tests ───────────────────────────────────────────────
 
 

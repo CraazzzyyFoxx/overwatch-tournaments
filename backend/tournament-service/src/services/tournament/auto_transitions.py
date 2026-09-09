@@ -20,6 +20,7 @@ from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from shared.core import tournament_state
+from shared.core.enums import TournamentStatus
 from src import models
 from src.services.admin.tournament import tournament_service as admin_tournament_service
 
@@ -69,6 +70,23 @@ async def run_due_transitions(
                 schedule = list(tournament.phase_schedule)
                 target = tournament_state.next_due_status(tournament.status, schedule, now)
                 if target is None:
+                    continue
+
+                # Same prerequisite the admin path enforces, but the tick cannot
+                # raise on it: this candidate is due every 30 s until someone
+                # saves the form, and a 409 per pass would be a log flood, not a
+                # signal. Skipping leaves it in its current phase, which is what
+                # "registration is not ready" means.
+                if target == TournamentStatus.REGISTRATION and not await (
+                    admin_tournament_service.has_registration_form(session, tournament_id)
+                ):
+                    results.append(
+                        {
+                            "tournament_id": tournament_id,
+                            "status": "skipped",
+                            "reason": "registration_form_missing",
+                        }
+                    )
                     continue
 
                 old_status = tournament.status
