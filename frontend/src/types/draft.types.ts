@@ -195,7 +195,13 @@ export interface DraftEventData {
   clock_expires_at?: string | null;
   remaining_ms?: number;
   count_bucket?: string;
+  /** Cache-scoping hint stamped by the publisher (`draft_progress`), NOT a
+   *  business reason — see backend draft/realtime.py. */
   reason?: string;
+  /** Why the draft paused, on `draft.blocked`. */
+  blocked_reason?: string;
+  /** Why an autopick fired, on `draft.autopicked`. Informational. */
+  autopick_reason?: string;
   target_role?: DraftRole | null;
   target_rank_value?: number | null;
   pick_version?: number;

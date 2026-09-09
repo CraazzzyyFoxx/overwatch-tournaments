@@ -28,7 +28,11 @@ from typing import Any
 
 from loguru import logger
 from redis.asyncio import Redis
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.messaging import TOURNAMENT_CHANGED_EXCHANGE
+from shared.messaging.outbox import enqueue_outbox_event
+from shared.schemas.events import TournamentChangedEvent
 from shared.schemas.realtime import WorkspaceEventEnvelope
 from shared.services import realtime_topics
 from shared.services.balancer_realtime import BALANCER_JOB_PROGRESS, publish_balancer_event
@@ -40,6 +44,7 @@ __all__ = (
     "emit_balancer_data_event",
     "emit_balancer_job_event",
     "emit_balancer_job_progress",
+    "enqueue_tournament_structure_changed",
 )
 
 _redis_client: Redis | None = None
@@ -107,6 +112,41 @@ async def emit_balancer_data_event(
     )
     _pending_publishes.add(task)
     task.add_done_callback(_pending_publishes.discard)
+
+
+async def enqueue_tournament_structure_changed(session: AsyncSession, tournament_id: int) -> None:
+    """Tell every layer that this tournament's PUBLIC reads are stale.
+
+    The ``balancer.*`` events above reach only the admin tool: the gateway's
+    response cache ignores the balancer topic by construction
+    (``respcache.go``: only ``:bracket`` and ``:draft`` invalidate), and no
+    cashews pattern is purged for it either. But an export runs
+    ``TeamMaterializationService`` — it DELETEs and re-INSERTs
+    ``tournament.team`` / ``player`` / ``standing`` — so the public teams list,
+    standings and tournament detail are stale the moment it commits, and until
+    this existed a spectator saw pre-export data until the caches expired
+    (gateway TTL, then cashews' 5-minute tournament reads).
+
+    Goes through the transactional outbox rather than a direct publish: this is
+    a cross-service signal, and tournament-service's
+    ``handle_tournament_changed_event`` is what owns the two invalidations it
+    triggers (``invalidate_tournament_cache`` + a bracket-topic realtime event
+    carrying the reason, which is what lets the gateway scope its eviction).
+    Unlike the fire-and-forget Redis signals here, a failed publish is retried.
+
+    ``structure_changed`` and not something narrower: an export rewrites team
+    rows AND the standings that hang off them.
+    """
+    await enqueue_outbox_event(
+        session,
+        TournamentChangedEvent(
+            tournament_id=int(tournament_id),
+            reason="structure_changed",
+            source_service="balancer-service",
+        ),
+        exchange=TOURNAMENT_CHANGED_EXCHANGE,
+        routing_key=f"tournament.changed.{int(tournament_id)}",
+    )
 
 
 async def emit_balancer_job_event(

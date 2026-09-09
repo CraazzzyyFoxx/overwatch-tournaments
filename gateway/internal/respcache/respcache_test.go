@@ -519,6 +519,35 @@ func TestBroadcastFormChangedEvictsNothing(t *testing.T) {
 	}
 }
 
+// A draft pick evicts nothing: it writes only draft tables, and the export
+// that does rewrite teams/standings announces itself as structure_changed
+// through the tournament.changed outbox instead. Before draft events carried
+// a reason they hit the default branch and dropped every entry for the
+// tournament, twice per pick.
+func TestBroadcastDraftProgressEvictsNothing(t *testing.T) {
+	var tournamentCalls, encounterCalls atomic.Int64
+	c := testCache(t)
+	tournamentHandler := c.Wrap(upstream(&tournamentCalls), Rule{Extract: FromPathValue("id")})
+	encountersHandler := c.Wrap(upstream(&encounterCalls), Rule{Extract: FromQuery("tournament_id")})
+
+	doGet(tournamentHandler, "/api/v1/tournaments/72", "")
+	doGet(encountersHandler, "/api/v1/encounters?tournament_id=72", "")
+
+	c.Broadcast("tournament:72:draft", []byte(
+		`{"op":"event","topic":"tournament:72:draft","event":{"event_id":1,`+
+			`"event_type":"draft.pick_made","schema_version":1,`+
+			`"occurred_at":"2026-01-01T00:00:00Z","actor_user_id":null,`+
+			`"data":{"resource":"draft.board","session_id":3,"reason":"draft_progress"}}}`,
+	))
+
+	if rec := doGet(tournamentHandler, "/api/v1/tournaments/72", ""); rec.Header().Get("X-Cache") != "HIT" {
+		t.Fatal("a draft pick must not evict the tournament-detail entry")
+	}
+	if rec := doGet(encountersHandler, "/api/v1/encounters?tournament_id=72", ""); rec.Header().Get("X-Cache") != "HIT" {
+		t.Fatal("a draft pick must not evict the encounters entry")
+	}
+}
+
 // Reasons this gateway doesn't recognize — a future backend reason, a
 // malformed frame, or the draft topic's board-patch payload (no reason field
 // at all) — must fall back to invalidating everything for the tournament,

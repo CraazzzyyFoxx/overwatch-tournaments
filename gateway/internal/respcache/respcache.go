@@ -427,8 +427,7 @@ func isBareTournamentDetailKey(key string) bool {
 // reasonPatterns returns the cached-entry URL substrings a reason can have
 // staled, or nil (invalidate everything) for a reason outside this table —
 // including results_changed/structure_changed (which can touch nearly
-// everything), and anything unparseable or missing entirely (e.g. the draft
-// topic's board-patch payloads carry no reason field at all).
+// everything) and anything unparseable or missing entirely.
 //
 // over-invalidation is a cache miss; under-invalidation is a stale page, so
 // unknown reasons default to invalidating everything for the tournament.
@@ -451,6 +450,15 @@ func reasonPatterns(reason string) []string {
 		// registration/admission.py), so an admin form edit stales nothing.
 		// nil would mean "drop everything for this tournament", which is what
 		// this reason used to do by falling through to the default below.
+		return []string{}
+	case "draft_progress":
+		// Also empty, NOT nil. A draft pick writes only draft tables: the
+		// public tournament.team/player/standing rows are materialized by
+		// TeamMaterializationService, i.e. on export only, and the export
+		// paths publish their own structure_changed through the
+		// tournament.changed outbox. Until draft events carried this reason
+		// they fell through to the default below, so a draft day cost 250+
+		// full-tournament evictions (two events per pick) at peak spectating.
 		return []string{}
 	default:
 		return nil

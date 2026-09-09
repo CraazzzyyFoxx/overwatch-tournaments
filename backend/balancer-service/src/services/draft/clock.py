@@ -136,7 +136,7 @@ class DraftClockService:
                         "session_id": draft.id,
                         "pick_id": result.pick.id,
                         "draft_team_id": result.pick.draft_team_id,
-                        "reason": result.blocked_reason,
+                        "blocked_reason": result.blocked_reason,
                     },
                 )
             else:
@@ -150,7 +150,10 @@ class DraftClockService:
                         "pick_id": result.pick.id,
                         "draft_team_id": result.pick.draft_team_id,
                         "picked_player_id": result.pick.picked_player_id,
-                        "reason": "timeout",
+                        # Not `reason`: publish_draft_event owns that field as
+                        # the gateway's cache scope. No consumer reads this one
+                        # (draft-logic branches on event_type), it is a trace.
+                        "autopick_reason": "timeout",
                     },
                 )
             if result.completed:
@@ -173,7 +176,7 @@ class DraftClockService:
                         "session_id": draft.id,
                         "pick_id": result.next_pick.id,
                         "draft_team_id": result.next_pick.draft_team_id,
-                        "reason": result.blocked_reason,
+                        "blocked_reason": result.blocked_reason,
                     },
                 )
             elif result.next_pick is not None:

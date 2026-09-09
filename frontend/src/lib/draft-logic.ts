@@ -100,7 +100,10 @@ export function applyDraftEvent(
         session: {
           ...board.session,
           status: "paused",
-          blocked_reason: data.reason ?? "role_shortage"
+          // `data.reason` is the pre-rename shape: it now carries the
+          // gateway's cache scope, but a replayed event persisted before the
+          // split still holds the block reason there.
+          blocked_reason: data.blocked_reason ?? data.reason ?? "role_shortage"
         }
       };
 

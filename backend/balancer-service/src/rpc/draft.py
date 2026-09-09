@@ -45,6 +45,7 @@ from src.core.config import config
 from src.domain.draft import rules
 from src.domain.draft.entities import DraftResult
 from src.rpc import _common as c
+from src.services.balancer.realtime import enqueue_tournament_structure_changed
 from src.services.draft import clock as clock_svc
 from src.services.draft import realtime as draft_rt
 from src.services.draft.board import board_service
@@ -214,7 +215,9 @@ async def _publish_result(
                 "session_id": draft.id,
                 "pick_id": result.pick.id,
                 "draft_team_id": result.pick.draft_team_id,
-                "reason": result.blocked_reason,
+                # `blocked_reason`, not `reason`: the latter is the gateway's
+                # cache-scoping field (publish_draft_event stamps it).
+                "blocked_reason": result.blocked_reason,
             },
             actor_user_id=actor_user_id,
         )
@@ -247,7 +250,7 @@ async def _publish_result(
                 "session_id": draft.id,
                 "pick_id": result.next_pick.id,
                 "draft_team_id": result.next_pick.draft_team_id,
-                "reason": result.blocked_reason,
+                "blocked_reason": result.blocked_reason,
             },
             actor_user_id=actor_user_id,
         )
@@ -654,6 +657,11 @@ def register(broker: Any, logger: Any) -> None:
                 payload={"session_id": updated.id, "status": updated.status, "export_status": updated.export_status},
                 actor_user_id=user.id,
             )
+            # Materializing the drafted rosters rewrote tournament.team /
+            # player / standing, so the PUBLIC reads are stale. Until the draft
+            # events carried a reason this was covered by accident: a
+            # reason-less payload made the gateway drop the whole tournament.
+            await enqueue_tournament_structure_changed(session, updated.tournament_id)
             await session.commit()
             return await board_service.session_read(session, updated)
 
@@ -671,6 +679,7 @@ def register(broker: Any, logger: Any) -> None:
             # Ranks only: no team is removed or created, so no draft lifecycle
             # event — nothing about the session itself changed.
             updated = await export_service.export_ranks(session, draft)
+            await enqueue_tournament_structure_changed(session, draft.tournament_id)
             await session.commit()
             return schemas.RanksExportResponse(success=True, updated_players=updated)
 

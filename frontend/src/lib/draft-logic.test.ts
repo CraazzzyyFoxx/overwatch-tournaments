@@ -261,11 +261,22 @@ describe("draft safety state", () => {
   });
 
   it("pauses on blocked while keeping the current pick unresolved", () => {
-    const next = applyDraftEvent(makeBoard(), ev("draft.blocked", { reason: "role_shortage" }));
+    const next = applyDraftEvent(
+      makeBoard(),
+      ev("draft.blocked", { blocked_reason: "role_shortage", reason: "draft_progress" })
+    );
 
     expect(next.session.status).toBe("paused");
     expect(next.session.blocked_reason).toBe("role_shortage");
     expect(next.current_pick?.status).toBe("on_clock");
+  });
+
+  // Pre-rename shape: `reason` carried the block reason before it became the
+  // gateway's cache-scoping field. Replay can still hand us one of these.
+  it("reads the block reason off the legacy reason field", () => {
+    const next = applyDraftEvent(makeBoard(), ev("draft.blocked", { reason: "role_shortage" }));
+
+    expect(next.session.blocked_reason).toBe("role_shortage");
   });
 
   it("builds real presence from authenticated IDs and anonymous count", () => {

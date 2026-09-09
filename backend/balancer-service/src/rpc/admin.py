@@ -24,7 +24,7 @@ from src.core.auth import _get_balance_workspace_id, _get_tournament_workspace_i
 from src.rpc import _common as c
 from src.services.admin._mappers import serialize_balance, serialize_tournament_config
 from src.services.admin.balancer import balancer_admin_service
-from src.services.balancer.realtime import emit_balancer_data_event
+from src.services.balancer.realtime import emit_balancer_data_event, enqueue_tournament_structure_changed
 
 _SF = db.async_session_maker
 
@@ -143,6 +143,10 @@ def register(broker: Any, logger: Any) -> None:
             c.require_workspace_permission(data, user, ws_id, "team", "create")
             balance, removed_teams, imported_teams = await balancer_admin_service.export_balance(session, balance_id)
             await emit_balancer_data_event(balance.tournament_id, BALANCER_TEAMS_CHANGED, actor_user_id=user.id)
+            # The balancer topic reaches only the admin tool; this is what makes
+            # the PUBLIC teams/standings/detail reads drop their caches.
+            await enqueue_tournament_structure_changed(session, balance.tournament_id)
+            await session.commit()
             return schemas.BalanceExportResponse(
                 success=True,
                 removed_teams=removed_teams,
@@ -162,6 +166,9 @@ def register(broker: Any, logger: Any) -> None:
             c.require_workspace_permission(data, user, ws_id, "team", "create")
             balance, updated = await balancer_admin_service.export_balance_ranks(session, balance_id)
             await emit_balancer_data_event(balance.tournament_id, BALANCER_TEAMS_CHANGED, actor_user_id=user.id)
+            # Rank export rewrites tournament.player rows the public reads join.
+            await enqueue_tournament_structure_changed(session, balance.tournament_id)
+            await session.commit()
             return schemas.RanksExportResponse(success=True, updated_players=updated)
 
         return await c.envelope(logger, "admin.balance_ranks_export", op, session_factory=_SF)
