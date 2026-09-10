@@ -2,11 +2,14 @@
 
 Two entry points, and the split between them is NOT the stage:
 
-- :func:`resolve_admission` answers for a whole list without forcing anything.
+- :func:`resolve_admission` answers for a whole list without touching a provider.
   Participants pages and the admin table use it, and it is the reason every read
   below is batched: resolving per registration serializes behind Discord's
   per-guild rate-limit bucket, so a 200-row page would spend minutes in one
-  bucket. ``force_refresh`` is ``False`` -- a stale ``active`` is fine for a badge.
+  bucket. It passes ``allow_stale`` -- a stored ``active`` of any age is fine for
+  a badge, and a user nobody has collected yet is ``unknown`` until the
+  collector's next sweep. Refreshing from the list read is what made every other
+  page load of a 120-row table cost one Twitch call per registrant.
 - :func:`resolve_admission_for_gate` answers for ONE registration and forces a
   live provider look. That is the moment a stale ``active`` must not be trusted,
   and one user is one provider call, so it is cheap.
@@ -65,6 +68,7 @@ class RequirementEvaluator(Protocol):
         auth_user_ids: Sequence[int],
         requirement: SubscriptionRequirement,
         force_refresh: bool = False,
+        allow_stale: bool = False,
         source: str = ...,
     ) -> dict[int, tuple[Outcome, dict[str, SubscriptionVerdict]]]: ...
 
@@ -144,6 +148,7 @@ async def _subscriptions(
     *,
     resolver: RequirementEvaluator | None,
     force_refresh: bool,
+    allow_stale: bool = False,
     source: SubscriptionCollectionSource,
     stage: AdmissionStage,
 ) -> dict[int, SubscriptionSignal]:
@@ -168,6 +173,7 @@ async def _subscriptions(
         auth_user_ids=user_ids,
         requirement=rule,
         force_refresh=force_refresh,
+        allow_stale=allow_stale,
         source=source,
     )
 
@@ -277,6 +283,7 @@ async def resolve_admission(
         config,
         resolver=resolver,
         force_refresh=False,
+        allow_stale=True,
         source=SubscriptionCollectionSource.scheduled,
         stage=stage,
     )

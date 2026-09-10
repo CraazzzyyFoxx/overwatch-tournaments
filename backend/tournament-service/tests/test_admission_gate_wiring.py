@@ -170,6 +170,7 @@ class _Resolver:
         auth_user_ids: Any,
         requirement: SubscriptionRequirement,
         force_refresh: bool = False,
+        allow_stale: bool = False,
         source: str = "scheduled",
     ) -> dict[int, Any]:
         self.calls.append(

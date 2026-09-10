@@ -238,6 +238,34 @@ class TestCaching(IsolatedAsyncioTestCase):
         assert result[1]["boosty"].state == SubscriptionState.INACTIVE
         assert strategy.calls
 
+    async def test_allow_stale_reuses_an_old_row_and_never_calls_the_provider(self):
+        """The display read: a TTL-expired row is still the answer, a user with no
+        row is `unknown`, and nothing is fetched, persisted or logged."""
+        store = _FakeStore(
+            configs={"boosty": _enabled("boosty")},
+            stored={(1, "boosty"): _stored(SubscriptionState.ACTIVE, tier=2, age_seconds=SUBSCRIPTION_TTL_SECONDS * 4)},
+        )
+        strategy = _FakeStrategy(default=_verdict(SubscriptionState.INACTIVE))
+        result = await _resolver(store, {"boosty": strategy}).resolve(
+            workspace_id=WS, auth_user_ids=[1, 2], providers=["boosty"], allow_stale=True
+        )
+        assert result[1]["boosty"].tier_rank == 2
+        assert result[2]["boosty"].state == SubscriptionState.UNKNOWN
+        assert strategy.calls == []
+        assert store.upserts == []
+
+    async def test_force_refresh_wins_over_allow_stale(self):
+        store = _FakeStore(
+            configs={"boosty": _enabled("boosty")},
+            stored={(1, "boosty"): _stored(SubscriptionState.ACTIVE, tier=2, age_seconds=1)},
+        )
+        strategy = _FakeStrategy(default=_verdict(SubscriptionState.INACTIVE))
+        result = await _resolver(store, {"boosty": strategy}).resolve(
+            workspace_id=WS, auth_user_ids=[1], providers=["boosty"], force_refresh=True, allow_stale=True
+        )
+        assert result[1]["boosty"].state == SubscriptionState.INACTIVE
+        assert strategy.calls
+
 
 class TestChallengeCodeIsAuthoritative(IsolatedAsyncioTestCase):
     async def test_live_redeemed_code_is_never_refetched(self):

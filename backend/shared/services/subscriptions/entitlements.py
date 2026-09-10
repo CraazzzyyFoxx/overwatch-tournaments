@@ -216,8 +216,19 @@ class SubscriptionResolver:
         auth_user_ids: Sequence[int],
         providers: Sequence[str],
         force_refresh: bool = False,
+        allow_stale: bool = False,
         source: str = SubscriptionCollectionSource.scheduled,
     ) -> dict[int, dict[str, SubscriptionVerdict]]:
+        """Verdict per ``(user, provider)``.
+
+        ``allow_stale`` is the display read: a stored verdict is used however old it
+        is, a user with no row answers ``unknown``, and no provider is ever called.
+        The participants page and the admin table render 100+ registrants at once
+        and the TTL is shorter than the collector's sweep, so without this every
+        other page load paid one Twitch call per registrant (measured: 2.7 s for
+        119 rows). Freshness is the collector's job; a gate that must not trust a
+        stale ``active`` passes ``force_refresh`` instead, which wins over this.
+        """
         user_ids = list(dict.fromkeys(auth_user_ids))
         wanted = list(dict.fromkeys(providers))
         if not user_ids or not wanted:
@@ -253,7 +264,7 @@ class SubscriptionResolver:
                 if (
                     row is not None
                     and accepts_source(method, row.source)
-                    and self._is_usable(row, force_refresh=force_refresh)
+                    and self._is_usable(row, force_refresh=force_refresh, allow_stale=allow_stale)
                 ):
                     out[uid][provider] = row.to_verdict()
                 else:
@@ -270,6 +281,13 @@ class SubscriptionResolver:
                 # derived from the absence of a row, and a redemption overwrites it.
                 for uid in stale:
                     out[uid][provider] = self._no_code_redeemed()
+                continue
+
+            if allow_stale and not force_refresh:
+                # Nothing fetched, nothing persisted, nothing logged: a badge is not
+                # a check, and the collector will fill the row on its next sweep.
+                for uid in stale:
+                    out[uid][provider] = self._unknown("not_collected")
                 continue
 
             try:
@@ -342,6 +360,7 @@ class SubscriptionResolver:
         auth_user_ids: Sequence[int],
         requirement: SubscriptionRequirement,
         force_refresh: bool = False,
+        allow_stale: bool = False,
         source: str = SubscriptionCollectionSource.scheduled,
     ) -> dict[int, tuple[Outcome, dict[str, SubscriptionVerdict]]]:
         user_ids = list(dict.fromkeys(auth_user_ids))
@@ -353,6 +372,7 @@ class SubscriptionResolver:
             auth_user_ids=user_ids,
             providers=requirement.providers,
             force_refresh=force_refresh,
+            allow_stale=allow_stale,
             source=source,
         )
         return {
@@ -518,17 +538,22 @@ class SubscriptionResolver:
             return "no_strategy_for_provider"
         return None
 
-    def _is_usable(self, row: StoredEntitlement, *, force_refresh: bool) -> bool:
+    def _is_usable(self, row: StoredEntitlement, *, force_refresh: bool, allow_stale: bool = False) -> bool:
         now = self._now()
         expired = row.expires_at is not None and row.expires_at <= now
 
         # A redeemed challenge code has nothing to re-poll: it is conclusive until
         # its own expiry. `force_refresh` (check-in) must not revoke it by asking
-        # Discord, which knows nothing about codes.
+        # Discord, which knows nothing about codes -- and `allow_stale` must not
+        # resurrect one past its expiry: the code's date is a fact, not a cache age.
         if row.source == SubscriptionSource.CHALLENGE_CODE:
             return not expired
 
-        if force_refresh or expired or row.checked_at is None:
+        if force_refresh:
+            return False
+        if allow_stale:
+            return True
+        if expired or row.checked_at is None:
             return False
         return (now - row.checked_at).total_seconds() < self._ttl_seconds
 
