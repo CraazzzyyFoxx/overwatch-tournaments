@@ -62,7 +62,7 @@ def flex_role_mode(form: Any | None) -> str:
     config = (getattr(form, "built_in_fields_json", None) or {}).get("flex_role")
     if not isinstance(config, Mapping):
         return "optional"
-    if config.get("enabled", True) is False:
+    if str(config.get("enabled", True)).strip().lower() in ("false", "0"):
         return "optional"
     mode = config.get("mode")
     return mode if mode in ("all_roles", "forced") else "optional"
@@ -92,7 +92,10 @@ class RosterRole:
 
     @property
     def is_playable(self) -> bool:
-        return self.rank is not None
+        # ``> 0``, not ``is not None``: the balancer loader drops ``rank <= 0``
+        # (``player_loader.parse_player_node``), so a zero here would be a player
+        # the draft can pick and the balance run silently loses.
+        return self.rank is not None and self.rank > 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -114,8 +117,10 @@ class PlayerRoster:
     auth_user_id: int | None
     workspace_member_id: int | None
     roles: tuple[RosterRole, ...]
-    #: Full flex: more than one role and every one of them primary. Under the
-    #: ``forced`` mode the write path makes this true for everybody.
+    #: Full flex: more than one PLAYABLE declared role and every one of them
+    #: primary; ``forced`` mode makes it true for anyone with more than one
+    #: playable role. Computed by the engine from the same roles as ``roles`` --
+    #: never from raw registration rows, which count inactive/unranked ones.
     is_full_flex: bool
     #: Registration answers the draft board and the admin table both read.
     notes: str | None = None

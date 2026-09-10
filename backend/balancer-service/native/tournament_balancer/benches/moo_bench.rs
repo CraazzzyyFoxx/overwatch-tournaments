@@ -1,5 +1,5 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use moo_core::bench_api as api;
+use tournament_balancer::bench_api as api;
 
 /// Полный пересчёт objectives на 40 командах (горячий путь polish).
 fn bench_objectives(c: &mut Criterion) {

@@ -434,7 +434,7 @@ mod quality_harness;
 mod tests;
 
 #[pymodule]
-fn moo_core(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
+fn tournament_balancer(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(run_moo_optimizer, m)?)?;
     Ok(())
 }

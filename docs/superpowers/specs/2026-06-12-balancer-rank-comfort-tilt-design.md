@@ -51,7 +51,7 @@ composite = sqrt( (1 - tilt) * balance_norm²  +  tilt * comfort_norm² )
 ```
 
 где `balance_norm`, `comfort_norm` — текущая пер-фронтовая min-max нормализация
-([objectives.rs::normalize_objectives](../../../backend/balancer-service/native/moo_core/src/objectives.rs)).
+([objectives.rs::normalize_objectives](../../../backend/balancer-service/native/tournament_balancer/src/objectives.rs)).
 
 **Инвариант дефолта:** при `tilt = 0.5` формула даёт
 `sqrt(0.5)·sqrt(balance_norm² + comfort_norm²)` — монотонная (×const) трансформация
@@ -66,11 +66,11 @@ composite = sqrt( (1 - tilt) * balance_norm²  +  tilt * comfort_norm² )
 `knee_scores` параметризуется двумя весами: `knee_scores(objectives, w_balance, w_comfort)`,
 формула `sqrt(w_balance·balance_norm² + w_comfort·comfort_norm²)`.
 
-1. **Финальный ранг** ([runner.rs:280](../../../backend/balancer-service/native/moo_core/src/runner.rs)):
+1. **Финальный ранг** ([runner.rs:280](../../../backend/balancer-service/native/tournament_balancer/src/runner.rs)):
    порядок возвращаемых вариантов, выбор primary, отображаемый `score`.
    → передаёт `(1.0 - tilt, tilt)`, где `tilt = ctx.config.rank_comfort_tilt`.
 2. **Внутренние archive-операции** во время поиска
-   ([archive.rs::archive_selection_order](../../../backend/balancer-service/native/moo_core/src/archive.rs),
+   ([archive.rs::archive_selection_order](../../../backend/balancer-service/native/tournament_balancer/src/archive.rs),
    `archive_select_elites`): прунинг архива и инжекция элит.
    → передают единичные веса `(1.0, 1.0)` — формула `sqrt(b² + c²)`, **байт-идентичная**
    текущей. Поведение поиска и элит не меняется вообще (не только порядок), любые тесты
@@ -78,7 +78,7 @@ composite = sqrt( (1 - tilt) * balance_norm²  +  tilt * comfort_norm² )
 
 ## Изменения по компонентам
 
-### Rust (`backend/balancer-service/native/moo_core`)
+### Rust (`backend/balancer-service/native/tournament_balancer`)
 
 | Файл | Изменение |
 |---|---|

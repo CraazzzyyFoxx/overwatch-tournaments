@@ -9,7 +9,7 @@ from src.services.balancer.config.defaults import AlgorithmConfig
 
 class TournamentBalancerBackend:
     """Adapter over the in-house Rust NSGA-II optimizer (``moo_backend.py``,
-    native crate ``moo_core``) -- the default, N-team-capable algorithm used
+    native crate ``tournament_balancer``) -- the default, N-team-capable algorithm used
     for tournament balancing (and anything else not pinned to ``mix_balancer``).
 
     ``moo_backend`` still returns its native ``(teams, metrics dict)`` tuples

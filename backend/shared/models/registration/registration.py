@@ -3,7 +3,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint, func
-from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from shared.core import db, enums
@@ -244,11 +243,6 @@ class BalancerRegistration(db.TimeStampIntegerMixin):
         back_populates="members",
         foreign_keys=[registration_team_id],
     )
-
-    @hybrid_property
-    def is_flex_computed(self) -> bool:
-        """True when the player has more than one role and all are primary (full flex)."""
-        return len(self.roles) > 1 and all(role.is_primary for role in self.roles)
 
 
 class BalancerRegistrationRole(db.TimeStampIntegerMixin):

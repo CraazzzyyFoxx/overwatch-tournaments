@@ -90,12 +90,15 @@ def test_flex_only_mask_keeps_the_player_and_synthesizes_the_best_rank() -> None
     player = _tank_and_support_player()
 
     assert player.ratings[FLEX_SLOT_CODE] == 3100
-    assert player.preferences[0] == FLEX_SLOT_CODE
+    # A flex slot is not a preference: nothing the player did not declare
+    # appears in their role order, so ``primary_role`` stays honest.
+    assert FLEX_SLOT_CODE not in player.preferences
+    assert player.primary_role is None
 
 
 def test_flex_slot_costs_no_discomfort() -> None:
-    # entities.py:48 — flex is preferences[0], so its index * 100 is 0. Without
-    # the prepend it would land on the "playable but unpreferred" 1000 branch.
+    # entities.py prices a playable flex slot at 0 explicitly -- it is a slot
+    # with no role, so nobody is out of place on it.
     assert _tank_and_support_player().discomfort_map[FLEX_SLOT_CODE] == 0
 
 
@@ -122,9 +125,11 @@ def test_hybrid_mask_carries_both_the_role_rating_and_the_flex_rating() -> None:
     assert player is not None
     assert player.ratings["tank"] == 2600
     assert player.ratings[FLEX_SLOT_CODE] == 3100
-    # Flex outranks the role preference: a flex slot is never a compromise.
-    assert player.preferences[0] == FLEX_SLOT_CODE
-    assert "tank" in player.preferences
+    # A flex slot is never a compromise, and the player's own role order is
+    # untouched by the roster fielding one.
+    assert player.discomfort_map[FLEX_SLOT_CODE] == 0
+    assert player.preferences == ["tank"]
+    assert player.primary_role == "tank"
 
 
 # ---------------------------------------------------------------------------
@@ -245,8 +250,10 @@ def test_native_request_carries_the_flex_mask_and_flex_ratings() -> None:
     assert request["mask"] == FLEX_ONLY_MASK
     assert len(request["players"]) == 6
     for entry in request["players"]:
+        # The Rust core prices a playable flex slot itself (context.rs); the
+        # rating is what makes it playable, and preferences stay real roles.
         assert FLEX_SLOT_CODE in entry["ratings"]
-        assert entry["preferences"][0] == FLEX_SLOT_CODE
+        assert FLEX_SLOT_CODE not in entry["preferences"]
         assert entry["seed_role"] == FLEX_SLOT_CODE
 
 

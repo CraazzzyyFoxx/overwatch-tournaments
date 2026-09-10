@@ -95,7 +95,7 @@ class MooBackendRuntimeTests(TestCase):
         with patch.dict(os.environ, {"BALANCER_MOO_BACKEND": "python"}, clear=False):
             with patch("src.domain.balancer.moo_backend.platform.system", return_value="Linux"):
                 with patch("src.domain.balancer.moo_backend._load_native_module", return_value=None):
-                    with self.assertRaisesRegex(RuntimeError, "moo_core"):
+                    with self.assertRaisesRegex(RuntimeError, "tournament_balancer"):
                         run_moo_optimizer(
                             [self.player],
                             1,

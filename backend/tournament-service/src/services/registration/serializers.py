@@ -14,6 +14,7 @@ from shared.domain.roster import PlayerRoster, RosterRole
 from src import models, schemas
 from src.schemas.admission import AdmissionRead
 from src.schemas.registration import RegistrationFormRead
+from src.services.registration.validation import is_flex_submission
 
 
 def loaded_relationship_or_none(instance: object, attribute: str):
@@ -110,7 +111,15 @@ def serialize_registration(
         notes=registration.notes,
         admin_notes=registration.admin_notes,
         custom_fields_json=registration.custom_fields_json,
-        is_flex=bool(sorted_roles) and all(role.is_primary for role in sorted_roles),
+        # The roster is the one flex predicate (``PlayerRoster.is_full_flex``,
+        # computed over playable declared roles). Without a roster there is no
+        # rank information here, so fall back to the write-path predicate over
+        # the declared-active rows -- never a third inline copy.
+        is_flex=(
+            roster.is_full_flex
+            if roster is not None
+            else is_flex_submission([role for role in sorted_roles if role.is_active])
+        ),
         status=registration.status,
         balancer_status=registration.balancer_status,
         status_meta=schemas.StatusMetaRead(**resolved_status_meta),

@@ -2,11 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Add workspace-scoped custom (pickup) games that autobalance a hand-picked roster via the moo_core engine, plus a per-member "rank book" that supplies the ranks.
+**Goal:** Add workspace-scoped custom (pickup) games that autobalance a hand-picked roster via the tournament_balancer engine, plus a per-member "rank book" that supplies the ranks.
 
 **Architecture:** Approach B — a first-class `CustomGame` entity (no `tournament_id`, no `BalancerBalance`, no tournament pollution) hosted in `balancer-service`, reusing only the pure `run_balance` engine. A separate, independently-shippable **Workspace Rank Book** (`(workspace, rater, player, role) → rank`) feeds the game's ranks through a resolution service (self / member / aggregate-median / OW-rank fallback).
 
-**Tech Stack:** Python 3 (FastStream RabbitMQ RPC, SQLAlchemy async, Alembic), Rust `moo_core` (via `run_balance`), Go gateway (`edge.RouteSpec`-style routes), Next.js 16 + react-query + shadcn frontend.
+**Tech Stack:** Python 3 (FastStream RabbitMQ RPC, SQLAlchemy async, Alembic), Rust `tournament_balancer` (via `run_balance`), Go gateway (`edge.RouteSpec`-style routes), Next.js 16 + react-query + shadcn frontend.
 
 ## Global Constraints
 
@@ -14,7 +14,7 @@
 - New tables use the **`balancer`** Postgres schema (same as `BalancerBalance`).
 - RPC handlers read the request **body from `data["payload"]`** (via `c.payload(data)`), path/query from the top level — never `data.get("<bodyfield>")`.
 - Workspace RBAC: gate writes with `c.require_workspace_permission(data, user, workspace_id, "<resource>", "<action>")`; this already bypasses superusers. Gateway WS-ACL must decode `is_superuser` (already handled for balancer routes).
-- Roles are `HeroClass` (`TANK`/`DAMAGE`/`SUPPORT`); SQLAlchemy `Enum` persists the member NAME. moo_core uses role keys `tank`/`dps`/`support` — map `DAMAGE→dps` at the engine boundary (reuse `services/balancer/algorithm/input_roles.py` / `team._resolve_hero_role`).
+- Roles are `HeroClass` (`TANK`/`DAMAGE`/`SUPPORT`); SQLAlchemy `Enum` persists the member NAME. tournament_balancer uses role keys `tank`/`dps`/`support` — map `DAMAGE→dps` at the engine boundary (reuse `services/balancer/algorithm/input_roles.py` / `team._resolve_hero_role`).
 - Tests: `pytest` (backend), `bun test` + `npx tsc --noEmit` + `npx eslint` (frontend). Integration tests run against **anak_dev only** (never prod); they skip when the DB is unreachable.
 - Migrations are NEVER run against prod. Set a migration's `down_revision` to the value reported by `alembic heads` on the working branch.
 - Commit after each task. Do NOT push unless asked.
@@ -634,7 +634,7 @@ Extend `__all__`. Update the migration `cgame0002` to create both tables (mirror
 
 ---
 
-### Task 9: Balance integration (stateless moo_core)
+### Task 9: Balance integration (stateless tournament_balancer)
 
 **Files:**
 - Create: `backend/balancer-service/src/services/custom_game_balance.py`
@@ -652,7 +652,7 @@ Extend `__all__`. Update the migration `cgame0002` to create both tables (mirror
 - [ ] **Step 3: Run → FAIL.**
 - [ ] **Step 4: Implement** `build_input_data` + `balance_game` using `run_balance` (no `tournament_id`, no `BalancerBalance` write).
 - [ ] **Step 5: Run → PASS.**
-- [ ] **Step 6: Commit** `feat(custom-games): stateless moo_core balance for custom games`.
+- [ ] **Step 6: Commit** `feat(custom-games): stateless tournament_balancer balance for custom games`.
 
 ---
 
@@ -736,6 +736,6 @@ Extend `__all__`. Update the migration `cgame0002` to create both tables (mirror
 
 ## Self-Review
 
-- **Spec coverage:** Rank book model/service/RPC/gateway/UI (Tasks 1–6) ✔; selectable rank source self/member/aggregate-median + OW fallback (Task 2, 8) ✔; custom game model/lifecycle/roster/seeding (Tasks 7–8) ✔; stateless moo_core balance (Task 9) ✔; outcome winner+per-map (Tasks 8, 10) ✔; RPC + gateway `/api/v1/{rank-book,custom-games}` (Tasks 4,5,10,11) ✔; frontend (6,12) ✔; RBAC `custom_game`+`rank_book` per-workspace + superuser bypass (Task 3 + `require_workspace_permission`) ✔; no tournament pollution (Task 13 Step 4) ✔. Deferred items (logs/stats, OpenSkill rating, leaderboard, queue, realtime) are absent by design.
+- **Spec coverage:** Rank book model/service/RPC/gateway/UI (Tasks 1–6) ✔; selectable rank source self/member/aggregate-median + OW fallback (Task 2, 8) ✔; custom game model/lifecycle/roster/seeding (Tasks 7–8) ✔; stateless tournament_balancer balance (Task 9) ✔; outcome winner+per-map (Tasks 8, 10) ✔; RPC + gateway `/api/v1/{rank-book,custom-games}` (Tasks 4,5,10,11) ✔; frontend (6,12) ✔; RBAC `custom_game`+`rank_book` per-workspace + superuser bypass (Task 3 + `require_workspace_permission`) ✔; no tournament pollution (Task 13 Step 4) ✔. Deferred items (logs/stats, OpenSkill rating, leaderboard, queue, realtime) are absent by design.
 - **Discovery points (not placeholders — concrete reuse of named existing code):** OW-rank resolver (Task 2 Step 4), `input_data`/variant shape (Task 9 Step 1), balancer RPC test harness + `c.envelope`/`async_session_maker` names (Tasks 4,10), gateway balancer route entry to mirror (Task 5), reusable balancer FE components (Tasks 6,12). Each names the exact file to read.
-- **Type consistency:** `RankSource`/`source_type` strings (`self|member|aggregate`) consistent across Tasks 2/7/8/10; `resolve_ranks` signature consistent between Task 2 (def) and Tasks 8/9 (use); `CustomGameStatus` values consistent; role keying (`HeroClass` stored as NAME, mapped to `tank/dps/support` only at the moo_core boundary) consistent across Tasks 1/7/9.
+- **Type consistency:** `RankSource`/`source_type` strings (`self|member|aggregate`) consistent across Tasks 2/7/8/10; `resolve_ranks` signature consistent between Task 2 (def) and Tasks 8/9 (use); `CustomGameStatus` values consistent; role keying (`HeroClass` stored as NAME, mapped to `tank/dps/support` only at the tournament_balancer boundary) consistent across Tasks 1/7/9.

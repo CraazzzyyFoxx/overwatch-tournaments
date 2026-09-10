@@ -88,14 +88,15 @@ export const ROLE_ACCENTS: Record<string, RoleAccent> = {
   },
 };
 
-const ROLE_ICON_NAMES: Record<string, "Tank" | "Damage" | "Support"> = {
+const ROLE_ICON_NAMES: Record<RoleCode, "Tank" | "Damage" | "Support"> = {
   tank: "Tank",
   dps: "Damage",
   support: "Support",
 };
 
-export function getRoleIconName(roleCode: string): "Tank" | "Damage" | "Support" {
-  return ROLE_ICON_NAMES[roleCode] ?? "Support";
+/** A `flex` slot code has no icon of its own — narrow with `isRoleSlotCode` first. */
+export function getRoleIconName(roleCode: RoleCode): "Tank" | "Damage" | "Support" {
+  return ROLE_ICON_NAMES[roleCode];
 }
 
 /** Draft role accent colors (CSS custom properties) shared across the draft-room UI. */

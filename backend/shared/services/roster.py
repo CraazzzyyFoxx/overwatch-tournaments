@@ -184,27 +184,29 @@ class RosterEngine:
     ) -> tuple[BalancerRegistrationRole | HeroClass, ...]:
         """The roles this registration declares, in priority order.
 
-        ``optional``: the active rows, as written. ``all_roles``/``forced``: all
-        three, because role is not a constraint there -- a row the sheet import
-        left inactive (its rank did not parse) still names a role the player can
-        be drafted on, and a role with no row at all is synthesized. A bare
-        ``HeroClass`` in the result is such a synthesized role.
+        ``optional``: the active rows, as written. ``all_roles``/``forced``: the
+        rows in the registrant's order (primary first), then every role with no
+        row at all synthesized after them in canonical order -- role is not a
+        constraint there, so a row the sheet import left inactive (its rank did
+        not parse) still names a role the player can be drafted on. A bare
+        ``HeroClass`` in the result is such a synthesized role. The registrant's
+        own priority is never replaced by the enum order: it is what the
+        balancer's discomfort is built from. A registration with no rows gets no
+        lead -- there is nobody's choice to stand in for.
         """
         rows = sorted(reg.roles or [], key=lambda row: (row.priority, row.id or 0))
-        if mode == "optional":
-            return tuple(row for row in rows if row.is_active and _parse_role(row.role) is not None)
-
         by_role: dict[HeroClass, BalancerRegistrationRole] = {}
         for row in rows:
             role = _parse_role(row.role)
-            if role is not None and role not in by_role:
-                by_role[role] = row
-        lead = next(
-            (role for role, row in by_role.items() if row.is_primary),
-            next(iter(by_role), HeroClass.damage),
-        )
-        ordered = (lead, *(role for role in HERO_TYPE_CLASSES if role is not lead))
-        return tuple(by_role.get(role, role) for role in ordered)
+            if role is None or role in by_role:
+                continue
+            if mode == "optional" and not row.is_active:
+                continue
+            by_role[role] = row
+        declared = sorted(by_role.values(), key=lambda row: not row.is_primary)
+        if mode == "optional":
+            return tuple(declared)
+        return (*declared, *(role for role in HERO_TYPE_CLASSES if role not in by_role))
 
     # -- ranks ---------------------------------------------------------------
 
@@ -310,11 +312,14 @@ class RosterEngine:
         mode: str,
     ) -> PlayerRoster:
         entries: list[RosterRole] = []
+        from_row: set[HeroClass] = set()
         for priority, entry in enumerate(declared):
             row = None if isinstance(entry, HeroClass) else entry
             role = entry if isinstance(entry, HeroClass) else _parse_role(entry.role)
             if role is None:
                 continue
+            if row is not None:
+                from_row.add(role)
             rank = resolved.get(role, ResolvedRank(None, "none"))
             entries.append(
                 RosterRole(
@@ -335,12 +340,27 @@ class RosterEngine:
             # per-role catalogue still reports each role's own rating where it
             # exists, because the draft SHOWS it: stamping the maximum over a real
             # rating turned the role chooser into one number printed three times.
-            best = max((entry.rank for entry in entries if entry.rank is not None), default=None)
+            best = max((entry.rank for entry in entries if entry.is_playable), default=None)
             if best is not None:
                 entries = [
-                    entry if entry.rank is not None else RosterRole(**{**_as_dict(entry), "rank": best})
+                    entry if entry.is_playable else RosterRole(**{**_as_dict(entry), "rank": best})
                     for entry in entries
                 ]
+
+        # THE flex predicate. Over the roles the player actually declared AND can
+        # play -- the raw ``registration_role`` rows also count inactive/unranked
+        # ones, which is how a single-role tank used to reach the balancer as
+        # ``isFullFlex``. Synthesized roles carry no ``is_primary`` and must not
+        # veto an ``all_roles`` registrant who marked every declared role primary.
+        # ``forced`` makes every role primary by contract, whether or not the rows
+        # were rewritten since the form flipped to it.
+        declared_playable = [entry for entry in entries if entry.is_playable and entry.role in from_row]
+        playable_count = sum(1 for entry in entries if entry.is_playable)
+        is_full_flex = (
+            playable_count > 1
+            if mode == "forced"
+            else len(declared_playable) > 1 and all(entry.is_primary for entry in declared_playable)
+        )
 
         member = reg.workspace_member
         player = member.player if member is not None else None
@@ -352,7 +372,7 @@ class RosterEngine:
             auth_user_id=player.auth_user_id if player is not None else None,
             workspace_member_id=reg.workspace_member_id,
             roles=tuple(entries),
-            is_full_flex=bool(reg.is_flex_computed),
+            is_full_flex=is_full_flex,
             notes=reg.notes,
             admin_notes=reg.admin_notes,
             custom_fields=dict(reg.custom_fields_json or {}),

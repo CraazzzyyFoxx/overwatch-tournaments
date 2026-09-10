@@ -866,7 +866,7 @@ class RegistrationService:
             ],
         )
         status_meta_map = await get_status_metas_map(session, workspace_id=workspace_id)
-        rosters = await _public_rosters(session, [registration], show_ranks=form.show_ranks)
+        rosters = await _public_rosters(session, [registration])
         return _reg_to_read(
             registration,
             workspace_id=workspace_id,
@@ -978,7 +978,7 @@ class RegistrationService:
         form = await _common_service.get_registration_form(session, tournament_id)
         admissions = await self.resolve_admission_list(session, registrations, form=form)
         show_ranks = form.show_ranks if form is not None else False
-        rosters = await _public_rosters(session, registrations, show_ranks=show_ranks)
+        rosters = await _public_rosters(session, registrations)
 
         history_map, history_count_map, division_grids = await _build_tournament_history(
             session,

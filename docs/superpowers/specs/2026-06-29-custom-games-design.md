@@ -9,7 +9,7 @@
 
 ## Context & goal
 
-The platform is tournament-centric: `Tournament → Stage → Encounter → Match/Statistics`, and `Team`/`Player`, the **balancer** (config + `BalancerBalance`), **draft**, **match-log** (`LogProcessingRecord`), stats and analytics are all keyed on `tournament_id`. The **moo_core** balancing engine (`balancer-service/native/moo_core`, Rust/pyo3) is a *pure function*: roster + ranks + config → balanced teams. Only the service layer around it (config, persisted `BalancerBalance`, Form UI, realtime) is `tournament_id`-bound.
+The platform is tournament-centric: `Tournament → Stage → Encounter → Match/Statistics`, and `Team`/`Player`, the **balancer** (config + `BalancerBalance`), **draft**, **match-log** (`LogProcessingRecord`), stats and analytics are all keyed on `tournament_id`. The **tournament_balancer** balancing engine (`balancer-service/native/tournament_balancer`, Rust/pyo3) is a *pure function*: roster + ranks + config → balanced teams. Only the service layer around it (config, persisted `BalancerBalance`, Form UI, realtime) is `tournament_id`-bound.
 
 **Custom games** are organizer-run **balanced pickup games inside a workspace**, distinct from tournaments. Long-term they also accumulate an optional persistent in-house rating/leaderboard, but the **primary** workflow is the lobby leader controlling player ranks manually. Phase 1 delivers the game lifecycle + the per-member rank book that feeds it.
 
@@ -18,15 +18,15 @@ The platform is tournament-centric: `Tournament → Stage → Encounter → Matc
 1. **Purpose:** balanced pickups (#1) that will later feed an optional in-house ladder (#3).
 2. **Outcome granularity:** always record winner + per-map score; match-log upload is **optional** and deferred to a later phase.
 3. **Entry (MVP):** organizer hand-picks the roster from workspace players. Self-serve queue/signup is later.
-4. **Team formation:** autobalance via the moo_core engine (organizer can manually tweak via drag-and-drop).
+4. **Team formation:** autobalance via the tournament_balancer engine (organizer can manually tweak via drag-and-drop).
 5. **Rating:** OpenSkill-from-OW-rank is the eventual model, but **optional and secondary** — deferred to Phase 2. The primary rank input is the manual rank book below.
-6. **Architecture:** **Approach B** — first-class `CustomGame` entity that reuses *only* the moo_core engine (stateless), no `tournament_id` / `BalancerBalance` persistence, no tournament pollution.
+6. **Architecture:** **Approach B** — first-class `CustomGame` entity that reuses *only* the tournament_balancer engine (stateless), no `tournament_id` / `BalancerBalance` persistence, no tournament pollution.
 7. **Rank book:** a per-rater, per-player, per-role rank layer scoped to the workspace. The custom game balances from a **selectable rank source** (organizer's own book / a chosen member's book / aggregate).
 8. **Aggregate method:** **median** across raters (robust to a single outlier opinion).
 
 ## Hosting
 
-`balancer-service` owns custom games and the rank book (moo_core is in-process there; the service is already workspace-scoped with the right ACL patterns). ORM models live in `backend/shared/models/` (shared owns all models); migrations in `backend/migrations`.
+`balancer-service` owns custom games and the rank book (tournament_balancer is in-process there; the service is already workspace-scoped with the right ACL patterns). ORM models live in `backend/shared/models/` (shared owns all models); migrations in `backend/migrations`.
 
 ## Component 1 — Workspace Rank Book
 
@@ -62,10 +62,10 @@ Batch variant `resolve_ranks(...)` for a full roster (one query per source, no N
 - Teams are represented as index `0..team_count-1` (no separate team table for MVP); the winner references `team_index`.
 
 ### Lifecycle / state machine
-`draft` (build roster, choose rank source, set/override ranks) → **balance** (moo_core assigns `team_index` + writes `result_json`; organizer may re-run or DnD-tweak) → `balanced` → **record outcome** (winner + per-map) → `completed`. `cancelled` is a terminal escape from any pre-`completed` state.
+`draft` (build roster, choose rank source, set/override ranks) → **balance** (tournament_balancer assigns `team_index` + writes `result_json`; organizer may re-run or DnD-tweak) → `balanced` → **record outcome** (winner + per-map) → `completed`. `cancelled` is a terminal escape from any pre-`completed` state.
 
 ### Balancing integration
-A `rpc.balancer.custom.balance` loads the roster + per-player `rank_value` + `config_json` and calls the **same pure moo_core entry point** the tournament balance uses — factored out so no `tournament_id` / `BalancerBalance` / config persistence is touched. The result is written to `custom_game.result_json` and per-player `team_index`. Manual DnD reuses the balancer's in-memory recompute logic on the custom roster (no realtime in Phase 1).
+A `rpc.balancer.custom.balance` loads the roster + per-player `rank_value` + `config_json` and calls the **same pure tournament_balancer entry point** the tournament balance uses — factored out so no `tournament_id` / `BalancerBalance` / config persistence is touched. The result is written to `custom_game.result_json` and per-player `team_index`. Manual DnD reuses the balancer's in-memory recompute logic on the custom roster (no realtime in Phase 1).
 
 ## API / RPC surface
 
@@ -90,7 +90,7 @@ New RBAC resource `custom_game` (`create/read/update/delete`), gated **per works
 ## Testing
 
 - Unit: rank resolution (self / member / aggregate-median / OW-rank fallback / unrated), batch resolution (no N+1), seeding on roster add, lifecycle transitions, outcome validation.
-- Engine: a deterministic moo_core balance call over a fixed roster+ranks (seeded) produces stable team assignment.
+- Engine: a deterministic tournament_balancer balance call over a fixed roster+ranks (seeded) produces stable team assignment.
 - Integration (anak_dev): create game → set rank source → add roster → balance → record outcome → read back; rank-book set/get/aggregate.
 - Frontend: `tsc` + `eslint` + component tests for the rank grid and the game editor.
 
@@ -101,7 +101,7 @@ New RBAC resource `custom_game` (`create/read/update/delete`), gated **per works
 
 ## Risks / notes
 
-- **moo_core factoring:** confirm the pure engine entry point is callable without the tournament balance job scaffolding; if it's entangled, a small refactor to expose a `balance(players, config) -> result` function is part of Phase 1.
+- **tournament_balancer factoring:** confirm the pure engine entry point is callable without the tournament balance job scaffolding; if it's entangled, a small refactor to expose a `balance(players, config) -> result` function is part of Phase 1.
 - **Player pool:** "workspace players" = the set of players visible in the workspace (via its tournaments/registrations). Define the exact query for the rank-book player list during implementation.
-- **dps↔damage role naming** must use the existing bridge so the rank book and moo_core agree on role keys.
+- **dps↔damage role naming** must use the existing bridge so the rank book and tournament_balancer agree on role keys.
 - No tournament pollution: custom games never create `Tournament`/`Team`/`Player`/`BalancerBalance` rows.

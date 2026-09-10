@@ -1,4 +1,4 @@
-"""Интеграционные тесты нативного moo_core: освобождение GIL и валидация входа.
+"""Интеграционные тесты нативного tournament_balancer: освобождение GIL и валидация входа.
 
 Выполняются только там, где собран нативный модуль (Linux/Docker);
 на остальных платформах скипаются целиком.
@@ -13,7 +13,7 @@ from typing import Any
 
 import pytest
 
-moo_core = pytest.importorskip("moo_core", reason="native moo_core module is not installed")
+tournament_balancer = pytest.importorskip("tournament_balancer", reason="native tournament_balancer module is not installed")
 
 pytestmark = pytest.mark.skipif(platform.system() != "Linux", reason="Rust MOO backend is Linux-only")
 
@@ -89,7 +89,7 @@ def test_event_loop_stays_responsive_during_native_run() -> None:
         ticker_task = asyncio.create_task(ticker())
         # Достаточно длинный прогон, чтобы event loop успел сделать десятки тиков
         payload = _payload(8, generation_count=400)
-        response = await asyncio.to_thread(moo_core.run_moo_optimizer, payload)
+        response = await asyncio.to_thread(tournament_balancer.run_moo_optimizer, payload)
         done.set()
         await ticker_task
         assert json.loads(response)["variants"], "optimizer must return variants"
@@ -103,11 +103,11 @@ def test_native_rejects_player_slot_mismatch() -> None:
     """Избыток/недобор игроков должен падать сразу с понятной ошибкой,
     а не молча терять игроков."""
     with pytest.raises(ValueError, match="slots"):
-        moo_core.run_moo_optimizer(_payload(2, drop_players=1))
+        tournament_balancer.run_moo_optimizer(_payload(2, drop_players=1))
 
 
 def test_native_run_is_deterministic() -> None:
     payload = _payload(4)
-    first = moo_core.run_moo_optimizer(payload)
-    second = moo_core.run_moo_optimizer(payload)
+    first = tournament_balancer.run_moo_optimizer(payload)
+    second = tournament_balancer.run_moo_optimizer(payload)
     assert first == second

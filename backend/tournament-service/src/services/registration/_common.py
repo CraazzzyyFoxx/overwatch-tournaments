@@ -84,7 +84,7 @@ def apply_all_roles(
     about the mode.
 
     ``force_primary`` separates the two modes: ``forced`` marks every role
-    primary (yielding ``is_flex_computed``), ``all_roles`` leaves the registrant's
+    primary (yielding ``PlayerRoster.is_full_flex``), ``all_roles`` leaves the registrant's
     own choice alone and backfills the missing roles as non-primary. It cannot
     invent that choice, so a payload naming no priority stays invalid — see
     ``validation.py``.

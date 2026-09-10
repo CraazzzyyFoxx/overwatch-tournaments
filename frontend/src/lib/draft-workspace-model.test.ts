@@ -77,13 +77,22 @@ describe("extended filterDraftPlayers search", () => {
     const out = filterDraftPlayers(players, { role: "all", sort: "rank", query: "tank" });
     expect(out.map((p) => p.id)).toEqual([1]);
   });
-  it("offers every role for a flex player, in the role list and the filter", () => {
-    // A flex player declared tank+dps, but the server counts them as supply for
-    // support too and only keeps the draft feasible if they can be picked
-    // there. Hiding support left them unpickable on every offered role.
-    const flex = mkPlayer({ id: 3, primary_role: "dps", secondary_roles: ["tank"], is_flex: true });
-    expect(playerRoles(flex)).toEqual(["dps", "tank", "support"]);
-    expect(filterDraftPlayers([flex], { role: "support", sort: "rank", query: "" }).map((p) => p.id)).toEqual([3]);
+  it("offers a flex player only the roles the server says are playable", () => {
+    // `is_flex` is never consulted server-side: a pick is validated through
+    // `PlayerRoster.covers(role)`, so offering an unranked role only produced a
+    // pick the server rejected. A flex player ranked on all three still gets
+    // all three, because all three land in primary + secondary_roles.
+    const flex = mkPlayer({
+      id: 3, primary_role: "dps", secondary_roles: ["tank"], is_flex: true,
+      role_ranks: { dps: 3200, tank: 3000 },
+    });
+    expect(playerRoles(flex)).toEqual(["dps", "tank"]);
+    expect(filterDraftPlayers([flex], { role: "support", sort: "rank", query: "" })).toEqual([]);
+    const fullFlex = mkPlayer({
+      id: 5, primary_role: "dps", secondary_roles: ["tank", "support"], is_flex: true,
+      role_ranks: { dps: 3200, tank: 3000, support: 2900 },
+    });
+    expect(playerRoles(fullFlex)).toEqual(["dps", "tank", "support"]);
     // Not flex: still exactly what was declared.
     const strict = mkPlayer({ id: 4, primary_role: "dps", secondary_roles: ["tank"] });
     expect(playerRoles(strict)).toEqual(["dps", "tank"]);

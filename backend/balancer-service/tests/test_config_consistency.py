@@ -149,7 +149,7 @@ def test_public_config_keys_are_algorithm_fields() -> None:
 # Python <-> Rust ring: native payload <-> ConfigSpec
 # ---------------------------------------------------------------------------
 
-MOO_CORE_LIB_RS = BALANCER_SERVICE_ROOT / "native" / "tournament_balancer" / "src" / "lib.rs"
+TOURNAMENT_BALANCER_LIB_RS = BALANCER_SERVICE_ROOT / "native" / "tournament_balancer" / "src" / "lib.rs"
 
 # Present in ConfigSpec, deliberately never sent: the Rust doc-comment says
 # "Принимается по wire опционально; в Python UI пока не выставляется".
@@ -163,8 +163,8 @@ def _rust_config_spec_fields() -> tuple[set[str], set[str]]:
     ``shared/tests/test_gateway_raw_sql_matches_models.py``: compare a
     hand-written artefact against its canon.
     """
-    source = MOO_CORE_LIB_RS.read_text(encoding="utf-8")
-    assert "struct ConfigSpec {" in source, f"ConfigSpec not found in {MOO_CORE_LIB_RS}"
+    source = TOURNAMENT_BALANCER_LIB_RS.read_text(encoding="utf-8")
+    assert "struct ConfigSpec {" in source, f"ConfigSpec not found in {TOURNAMENT_BALANCER_LIB_RS}"
     body = source.split("struct ConfigSpec {", 1)[1].split("\n}", 1)[0]
 
     all_fields: set[str] = set()
@@ -266,7 +266,7 @@ def test_rust_only_allowlist_has_no_stale_entries() -> None:
 # Python <-> Rust ring: roster slot codes <-> role-impact index detection
 # ---------------------------------------------------------------------------
 
-MOO_CORE_CONTEXT_RS = BALANCER_SERVICE_ROOT / "native" / "tournament_balancer" / "src" / "context.rs"
+TOURNAMENT_BALANCER_CONTEXT_RS = BALANCER_SERVICE_ROOT / "native" / "tournament_balancer" / "src" / "context.rs"
 
 
 def _rust_role_idx_spellings() -> set[str]:
@@ -276,11 +276,11 @@ def _rust_role_idx_spellings() -> set[str]:
     ``shared/tests/test_gateway_raw_sql_matches_models.py``: compare a canon
     against a hand-written artefact by reading it.
     """
-    source = MOO_CORE_CONTEXT_RS.read_text(encoding="utf-8")
+    source = TOURNAMENT_BALANCER_CONTEXT_RS.read_text(encoding="utf-8")
     role_idx_block = "".join(line for line in source.splitlines(keepends=True) if "eq_ignore_ascii_case" in line)
     spellings = {match.lower() for match in re.findall(r'eq_ignore_ascii_case\("([^"]+)"\)', role_idx_block)}
 
-    assert spellings, f"parsed no role spellings out of {MOO_CORE_CONTEXT_RS} — the parser or the file changed"
+    assert spellings, f"parsed no role spellings out of {TOURNAMENT_BALANCER_CONTEXT_RS} — the parser or the file changed"
     return spellings
 
 

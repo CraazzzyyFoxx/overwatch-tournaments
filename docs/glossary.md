@@ -46,7 +46,7 @@ player-facing subset see [`../frontend/src/i18n/GLOSSARY.md`](../frontend/src/i1
 | **Roster shape** | How many slots a team has and which roles they ask for — e.g. `{tank: 1, dps: 2, support: 2}` or six flex slots. Resolved server-side in `backend/shared/domain/roster_shape.py` and sent to the client already resolved; `team_size` and `draft_rounds` are derived from it there and never recomputed on the client. |
 | **Slot** | One position in a roster shape (a role slot or a flex slot). In map veto, a slot is instead one map of a series. |
 | **Substitute** | A roster member who replaces another; substitution chains are rendered under the player they replace. |
-| **Balancer** | The team-building solver: a multi-objective genetic search implemented in the native Rust `moo_core` crate and driven by `balancer-service`. |
+| **Balancer** | The team-building solver: a multi-objective genetic search implemented in the native Rust `tournament_balancer` crate and driven by `balancer-service`. |
 | **Draft** | The live alternative to the balancer: captains pick players in a snake order, server-authoritative clock, optimistic concurrency on `version`. |
 | **Rank layer** | Where a player's rank number came from. A workspace has a shared canon; each ranking author additionally keeps their own book, and an author rank overrides canon for that author only. The two dictionaries are never merged. |
 | **Division** | A rank band. `division_grid` versions the SR ranges and maps between versions so ranks stay comparable across seasons. |

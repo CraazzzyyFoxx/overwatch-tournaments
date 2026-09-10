@@ -179,7 +179,7 @@ services:
   # balancer-service HTTP decommissioned: /api/balancer is served by the headless
   # balancer-svc (rpc.balancer.* config/admin/draft/jobs) behind the gateway.
   # The worker also consumes the balancer job queue + runs the draft clock + Rust
-  # moo_core. The dead SSE job-stream endpoint was removed (progress flows over the
+  # tournament_balancer. The dead SSE job-stream endpoint was removed (progress flows over the
   # tournament:{id}:balancer WS topic).
 
   # analytics-service HTTP decommissioned: /api/analytics is served by the headless

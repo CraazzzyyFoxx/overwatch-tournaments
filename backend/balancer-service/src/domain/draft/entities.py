@@ -186,7 +186,7 @@ class RoleEditResult:
 
 # --- autopick fit scoring (domain/draft/fit.py) ------------------------------
 
-# Role-impact weights — mirror moo_core/src/lib.rs (tank 1.4 / dps 1.0 / support 1.1).
+# Role-impact weights — mirror native/tournament_balancer/src/lib.rs (tank 1.4 / dps 1.0 / support 1.1).
 DEFAULT_ROLE_IMPACT: dict[HeroClass, float] = {
     HeroClass.tank: 1.4,
     HeroClass.damage: 1.0,

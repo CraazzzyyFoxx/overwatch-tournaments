@@ -33,7 +33,7 @@
 | Барьер | Место |
 |---|---|
 | Роль игрока в экспорте — обязательный `Literal` | `tournament-service/src/schemas/team.py:30` `BalancerTeamMember.role` |
-| Rust отвергает пустую маску | `moo_core/src/context.rs:14-16` `"role_mask cannot be empty"` |
+| Rust отвергает пустую маску | `tournament_balancer/src/context.rs:14-16` `"role_mask cannot be empty"` |
 | Игрок без рейтинга под роль из маски отбрасывается целиком | `balancer/algorithm/player_loader.py:33-42` |
 | Драфт считает цели слотов из числа, а не из конфигурации | `draft/feasibility.py:82` |
 | Фронт рисует ровно три ролевых счётчика | `TeamRosters.tsx:169-175`, `:288-296` |

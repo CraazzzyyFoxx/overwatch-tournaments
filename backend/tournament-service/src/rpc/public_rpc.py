@@ -469,7 +469,7 @@ def register(broker: Any, logger: Any) -> None:
                     profiles_open=chips.profiles_open,
                     subscription_outcome=chips.subscription_outcome,
                     subscription_verdicts=chips.subscription_verdicts,
-                    roster=(await _public_rosters(session, [reg], show_ranks=show_ranks)).get(reg.id),
+                    roster=(await _public_rosters(session, [reg])).get(reg.id),
                 )
             )
 
@@ -515,7 +515,7 @@ def register(broker: Any, logger: Any) -> None:
                     workspace_id=form.workspace_id,
                     status_meta_map=status_meta_map,
                     show_ranks=form.show_ranks,
-                    roster=(await _public_rosters(session, [updated], show_ranks=form.show_ranks)).get(updated.id),
+                    roster=(await _public_rosters(session, [updated])).get(updated.id),
                 )
             )
 
@@ -587,9 +587,7 @@ def register(broker: Any, logger: Any) -> None:
                     workspace_id=workspace_id,
                     status_meta_map=status_meta_map,
                     show_ranks=form.show_ranks if form else False,
-                    roster=(
-                        await _public_rosters(session, [checked_in], show_ranks=form.show_ranks if form else False)
-                    ).get(checked_in.id),
+                    roster=(await _public_rosters(session, [checked_in])).get(checked_in.id),
                 )
             )
 

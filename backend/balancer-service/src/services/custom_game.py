@@ -197,7 +197,7 @@ def _recompute_variant_stats(variant: dict[str, Any]) -> None:
 
     Mirrors the solver's own arithmetic for the three metrics that are pure
     functions of the roster (``calculate_team_stats`` / ``calculate_objective_breakdown``
-    in ``moo_core``): a team's average is the mean of its seats' ratings, the
+    in ``tournament_balancer``): a team's average is the mean of its seats' ratings, the
     spread is the gap between the strongest and weakest team's *total* rating,
     and the standard deviation is the sample stdev of the teams' averages.
 
@@ -563,9 +563,11 @@ class CustomGameService:
         if not lineup:
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="empty_lineup")
         # If the lineup does not divide evenly into full teams, `run_balance`'s own
-        # overflow trim (`domain.balancer.runtime._prepare_balance_context`) benches
-        # whoever has the lowest `Player.rotation_priority` among the players not
-        # pinned to a seat -- reusing the same fairness rank the "Apply rotation hints" button
+        # overflow trim (`domain.balancer.runtime._prepare_balance_context`) sorts the
+        # players not pinned to a seat by `Player.rotation_priority` ascending and
+        # benches the TAIL -- the HIGHEST values, i.e. those `rotation_priority()`
+        # ranks least owed a seat (a long sat-out streak drives it negative and
+        # protects the player). Same fairness rank the "Apply rotation hints" button
         # reads, computed here and carried through as one number per player, since
         # `player_loader.load_players_from_dict` sorts its input by uuid and would
         # otherwise discard any ordering placed on `lineup` itself. Left at every

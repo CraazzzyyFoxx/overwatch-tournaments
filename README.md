@@ -67,7 +67,7 @@ Production places Traefik in front of the repository-managed nginx edge for TLS 
 | [`backend/identity-service`](./backend/identity-service/README.md)     | `identity-svc`                      | JWT sessions, OAuth, RBAC, memberships, API keys, custom domains, and player linking                               |
 | [`backend/tournament-service`](./backend/tournament-service/README.md) | `tournament-svc`                    | Tournament lifecycle, registration, brackets, standings, Challonge/Sheets sync, map veto, and transactional outbox |
 | [`backend/parser-service`](./backend/parser-service/README.md)         | `parser-svc`                        | Match-log ingestion, parsing, rank synchronization, achievements, and backfills                                    |
-| [`backend/balancer-service`](./backend/balancer-service/README.md)     | `balancer-svc`                      | Genetic team balancing, native Rust `moo_core`, and live captain drafts                                            |
+| [`backend/balancer-service`](./backend/balancer-service/README.md)     | `balancer-svc`                      | Genetic team balancing, native Rust `tournament_balancer`, and live captain drafts                                            |
 | [`backend/analytics-service`](./backend/analytics-service/README.md)   | `analytics-svc`, `analytics-worker` | Analytics RPC plus long-running ML training and inference jobs                                                     |
 | [`backend/stream-service`](./backend/stream-service/README.md)         | `stream-svc`                        | Twitch live-status polling and public tournament stream state                                                      |
 | [`backend/discord-service`](./backend/discord-service/README.md)       | `discord-worker`                    | Discord bot, match-log upload, notifications, and commands                                                         |
@@ -82,7 +82,7 @@ The edge implementation is documented separately in [`gateway/README.md`](./gate
 | Frontend                | Next.js 16.2, React 19.2, TypeScript 5.9, Tailwind CSS 4, Radix/Shadcn, TanStack Query/Table, Zustand, Vitest |
 | Gateway                 | Go 1.25, `net/http`, RabbitMQ, Redis, PostgreSQL/pgx, OpenTelemetry                                           |
 | Backend                 | Python 3.14, FastStream, SQLAlchemy 2, Pydantic 2, Alembic, pytest                                            |
-| Balancing and analytics | Rust `moo_core`, OpenSkill, LightGBM/XGBoost, Bayesian and Monte Carlo workflows                              |
+| Balancing and analytics | Rust `tournament_balancer`, OpenSkill, LightGBM/XGBoost, Bayesian and Monte Carlo workflows                              |
 | Data and messaging      | PostgreSQL 16, Redis Stack, RabbitMQ 3.13, S3-compatible object storage                                       |
 | Operations              | Docker Compose, nginx, Prometheus, Grafana, Loki, Tempo, OpenTelemetry Collector, Sentry                      |
 

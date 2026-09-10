@@ -29,7 +29,9 @@ def parse_player_node(
         for json_role, stats in sorted(raw_classes.items()):
             if not stats.get("isActive", False):
                 continue
-            rank = stats.get("rank", 0)
+            # ``None`` (an ``owt-1`` declared-but-unranked role that slipped past
+            # its ``isActive: false``) reads as unranked, not as a TypeError.
+            rank = stats.get("rank") or 0
             if rank <= 0:
                 continue
             algorithm_role = resolve_input_role_name(json_role, mask)
@@ -38,9 +40,10 @@ def parse_player_node(
             # Roles the roster does not field are kept out of the preference
             # list (nothing can be assigned to them) but stay in ``ratings``:
             # they are what a flex rating is synthesized from, and the saved
-            # balance reports them as the player's full ``all_ratings``.
+            # balance reports them as the player's full ``all_ratings``. ``flex``
+            # itself is never a preference -- it is a slot, priced separately.
             ratings[algorithm_role] = rank
-            if algorithm_role in mask:
+            if algorithm_role in mask and algorithm_role != FLEX_SLOT_CODE:
                 role_priorities.append((stats.get("priority", 99), algorithm_role))
             subtype = stats.get("subtype") or ""
             if subtype:
@@ -57,12 +60,11 @@ def parse_player_node(
             # actually plays — the same "ready to play anything" policy the
             # draft applies (see tests/test_forced_flex_parity.py). Taken over
             # the ranks collected above, before this synthesized entry joins
-            # them.
+            # them. Being in ``ratings`` is what makes the slot playable and
+            # (entities.py / the Rust core) free of discomfort; ``preferences``
+            # stays the player's real roles, so ``preferences[0]`` IS their main
+            # role everywhere it is read.
             ratings[FLEX_SLOT_CODE] = max(ratings.values())
-            # First preference, which makes the flex slot free of discomfort
-            # (entities.py) and keeps a flex assignment out of the off-role
-            # count (result_serializer.py).
-            preferences = [FLEX_SLOT_CODE, *(role for role in preferences if role != FLEX_SLOT_CODE)]
         elif not preferences:
             # No slot this player can fill: dropped, exactly as before flex
             # slots existed.
@@ -80,8 +82,10 @@ def parse_player_node(
             rotation_priority=rotation_priority,
         )
     except Exception as exc:
-        logger.warning(f"Failed to parse player {uuid}: {exc}")
-        return None
+        # One malformed node used to be swallowed into ``None`` -- the run then
+        # "succeeded" with a player quietly missing. Surface it: the caller maps
+        # ``ValueError`` to a 422 naming the player.
+        raise ValueError(f"Failed to parse player {uuid}: {exc}") from exc
 
 
 def load_players_from_dict(

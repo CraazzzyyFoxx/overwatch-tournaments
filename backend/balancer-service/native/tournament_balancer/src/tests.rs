@@ -250,6 +250,7 @@ fn variant_metrics(
                     .get(uuid)
                     .expect("missing original player metadata");
                 if !original.is_flex
+                    && !role.eq_ignore_ascii_case("flex")
                     && !original.preferences.is_empty()
                     && original.preferences[0] != *role
                 {
@@ -343,6 +344,55 @@ fn validation_rejects_player_slot_mismatch() {
     let request = mini_request(2, vec![mini_player("a", "Tank", 1000)]);
     let err = Context::from_request(request).expect_err("undersupply must fail");
     assert!(err.contains("1 players"), "error should name counts: {err}");
+}
+
+// --- Flex-слот -------------------------------------------------------
+
+#[test]
+fn flex_slot_is_free_of_discomfort_and_keeps_the_main_role() {
+    // Маска {Tank:1, flex:1}: танк-мейн с рейтингом на dps вне маски.
+    // Слот flex стоит 0 дискомфорта (он без роли), Tank — 0 (основная роль),
+    // а first_preference остаётся Tank, а не flex.
+    let mut tank = player("t", "Tank", &[("Tank", 3000), ("Damage", 2000), ("flex", 3000)], &["Tank"]);
+    tank.is_flex = false;
+    let mut second = player("f", "flex", &[("Tank", 2500), ("flex", 2500)], &["Tank"]);
+    second.is_flex = false;
+    let third = player("g", "Tank", &[("Tank", 2600), ("flex", 2600)], &["Tank"]);
+    let fourth = player("h", "flex", &[("Tank", 2400), ("flex", 2400)], &["Tank"]);
+    let request = NativeRequest {
+        players: vec![tank, second, third, fourth],
+        num_teams: 2,
+        seed: 1,
+        mask: [("Tank".to_string(), 1usize), ("flex".to_string(), 1usize)]
+            .into_iter()
+            .collect(),
+        config: regression_config(),
+    };
+    let ctx = Context::from_request(request).expect("flex fixture should be valid");
+    let tank_idx = ctx.roles.iter().position(|r| r == "Tank").unwrap();
+    let flex_idx = ctx.roles.iter().position(|r| r == "flex").unwrap();
+    let t = ctx.players.iter().find(|p| p.uuid == "t").unwrap();
+    assert_eq!(t.discomfort[tank_idx], 0);
+    assert_eq!(t.discomfort[flex_idx], 0);
+    assert_eq!(t.first_preference, Some(tank_idx));
+}
+
+#[test]
+fn flex_in_preferences_never_becomes_the_main_role() {
+    let legacy = player("l", "Tank", &[("Tank", 3000), ("flex", 3000)], &["flex", "Tank"]);
+    let other = player("o", "Tank", &[("Tank", 2000)], &["Tank"]);
+    let request = NativeRequest {
+        players: vec![legacy, other],
+        num_teams: 2,
+        seed: 1,
+        mask: [("Tank".to_string(), 1usize)].into_iter().collect(),
+        config: regression_config(),
+    };
+    // Один слот на команду: мини-фикстура из двух танков.
+    let ctx = Context::from_request(request).expect("fixture should be valid");
+    let tank_idx = ctx.roles.iter().position(|r| r == "Tank").unwrap();
+    let l = ctx.players.iter().find(|p| p.uuid == "l").unwrap();
+    assert_eq!(l.first_preference, Some(tank_idx));
 }
 
 #[test]

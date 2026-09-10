@@ -12,11 +12,16 @@ from src.domain.balancer.entities import Player, Team
 from src.services.balancer.config.defaults import AlgorithmConfig
 
 
+#: The native crate (``native/tournament_balancer``), importable as a plain module
+#: once ``maturin develop`` has built it.
+NATIVE_MODULE = "tournament_balancer"
+
+
 def _load_native_module():
     try:
-        return importlib.import_module("moo_core")
+        return importlib.import_module(NATIVE_MODULE)
     except ImportError as exc:
-        raise RuntimeError("Rust MOO backend requires moo_core to be installed") from exc
+        raise RuntimeError(f"Rust MOO backend requires {NATIVE_MODULE} to be installed") from exc
 
 
 def _serialize_native_request(
@@ -211,7 +216,7 @@ def run_moo_optimizer(
 
     native_module = _load_native_module()
     if native_module is None:
-        raise RuntimeError("Rust MOO backend requires moo_core to be installed")
+        raise RuntimeError(f"Rust MOO backend requires {NATIVE_MODULE} to be installed")
     logger.info("Running moo via Rust backend")
     return _run_native_backend(
         native_module,

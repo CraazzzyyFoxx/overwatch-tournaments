@@ -8,13 +8,15 @@ demands 12 Support slots. ``FeasibilityReport.structural_min_off_role`` lets
 the caller compare the actual result against the theoretical floor.
 
 Off-role definition matches ``result_serializer.teams_to_json``: a player is
-off-role when ``not is_flex AND assigned_role != preferences[0]``. Flex
-players are never marked off-role.
+off-role when ``not is_flex AND assigned_role != primary_role`` and the slot is
+a role slot. Flex players are never marked off-role, and neither is anyone on a
+``flex`` slot (it names no role).
 
 Approach: bipartite matching with role-slot capacities. Each role has
-``mask[role] * num_teams`` slots. A non-flex player has an edge to its 1st
-preference slots only. A flex player has edges to all slots of any role it
-can play. Maximum matching = max # players placeable WITHOUT being off-role.
+``mask[role] * num_teams`` slots. A non-flex player has an edge to its main
+role's slots and to every ``flex`` slot. A flex player has edges to all slots
+of any role it can play. Maximum matching = max # players placeable WITHOUT
+being off-role.
 ``structural_min_off_role = total_slots - max_matching``.
 """
 
@@ -23,6 +25,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 
+from shared.domain.roster_shape import FLEX_SLOT_CODE
 from src.domain.balancer.entities import Player
 from src.domain.matching import maximum_bipartite_matching
 
@@ -30,7 +33,7 @@ from src.domain.matching import maximum_bipartite_matching
 @dataclass(frozen=True)
 class RoleFeasibility:
     role: str
-    supply: int  # non-flex players whose 1st preference is this role
+    supply: int  # non-flex players whose main role is this one (everyone, for ``flex``)
     demand: int  # mask[role] * num_teams
     flex_supply: int  # flex players who can play this role
 
@@ -79,11 +82,10 @@ def analyze_feasibility(
                 if role in player.ratings:
                     flex_supply[role] += 1
             continue
-        if not player.preferences:
-            continue
-        first = player.preferences[0]
-        if first in role_capacity:
-            supply[first] += 1
+        if FLEX_SLOT_CODE in role_capacity:
+            supply[FLEX_SLOT_CODE] += 1
+        if player.primary_role in role_capacity:
+            supply[player.primary_role] += 1
 
     matched = _max_no_off_role_matching(players_list, role_capacity)
     structural_min = max(0, total_slots - matched)
@@ -132,8 +134,11 @@ def _max_no_off_role_matching(
             for role in role_capacity:
                 if role in player.ratings:
                     eligible_roles.add(role)
-        elif player.preferences and player.preferences[0] in role_capacity:
-            eligible_roles.add(player.preferences[0])
+        else:
+            if FLEX_SLOT_CODE in role_capacity:
+                eligible_roles.add(FLEX_SLOT_CODE)
+            if player.primary_role in role_capacity:
+                eligible_roles.add(player.primary_role)
         slot_indices: list[int] = []
         for role in eligible_roles:
             slot_indices.extend(slots_per_role[role])

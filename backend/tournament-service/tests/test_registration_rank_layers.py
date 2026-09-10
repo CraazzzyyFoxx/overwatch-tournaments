@@ -73,7 +73,6 @@ def _registration(
         workspace_member=SimpleNamespace(player_id=77, player=None) if member_id is not None else None,
         battle_tag="Player#1234",
         display_name="Player",
-        is_flex_computed=False,
         notes=None,
         admin_notes=None,
         custom_fields_json=None,

@@ -26,7 +26,7 @@
 |---|---|---|
 | Python-бэкенд ↔ TypeScript-фронтенд | 36 | 8 |
 | Внутри Python-бэкенда (сервис↔сервис) | 18 | ~6 |
-| Python ↔ Rust `moo_core`, балансер ↔ драфт | 8 | 3 |
+| Python ↔ Rust `tournament_balancer`, балансер ↔ драфт | 8 | 3 |
 | **Всего** | **62** | **~17** |
 
 **Ни одно из 62 не защищено контракт-тестом, кодогеном или общим модулем.**
@@ -85,7 +85,7 @@ Pydantic-модели 6 сервисов
 | 4 | `parser-service/src/services/admin/team.py` | Нет null-guard на `workspace_member` → AttributeError. **Код недостижим** (см. класс C) | C |
 | 5 | `tournament-service/.../serializers.py:87` | Порог флекса `>=1` роль против `>=2` в модели → админка показывает флекс, экспорт шлёт `isFullFlex=false` | D |
 | 6 | `balancer-service/.../balance_analytics.py:132-137` | Потерян guard на `is_flex` → `off_role_count` аналитики ≠ `statistics.off_role_count` того же баланса | D |
-| ~~7~~ | `moo_core/src/lib.rs:151` | **НЕ БАГ (снят при проверке).** `team_crossover_share` действительно не отправляется из `moo_backend.py`, но имеет `#[serde(default)]`, а его Rust-докстринг прямо говорит «Принимается по wire опционально; в Python UI пока не выставляется» — намеренное неэкспонирование. Аналогично `rating_scale_ceiling`: он вне `PUBLIC_CONFIG_KEYS` потому, что применяется Python-side в `RatingNormalizer` и не является ручкой солвера. Оба зафиксированы как документированные исключения в `tests/test_config_consistency.py` | D |
+| ~~7~~ | `tournament_balancer/src/lib.rs:151` | **НЕ БАГ (снят при проверке).** `team_crossover_share` действительно не отправляется из `moo_backend.py`, но имеет `#[serde(default)]`, а его Rust-докстринг прямо говорит «Принимается по wire опционально; в Python UI пока не выставляется» — намеренное неэкспонирование. Аналогично `rating_scale_ceiling`: он вне `PUBLIC_CONFIG_KEYS` потому, что применяется Python-side в `RatingNormalizer` и не является ручкой солвера. Оба зафиксированы как документированные исключения в `tests/test_config_consistency.py` | D |
 | 8 | `frontend/src/types/balancer.types.ts:5-43` | Нет `team_max_pain_weight`, `time_limit_ms`; мёртвые `intra_team_variance_weight`, `role_spread_weight`; UI крутит `algorithm`, который бэкенд безусловно выбрасывает (`public_contract.py:78-82`) | D |
 | 9 | `draft/selection.py:438`, `rpc/draft.py:441` | `FitConfig()` без аргументов → **override `tank_impact_weight` игнорируется драфтом** | D |
 | 10 | `draft/feasibility.py:139` vs `selection.py:286` | Два источника playable-роли внутри драфта → драфт предлагает пик, который сам же отклоняет (**тупик на часах**) | D |
@@ -206,12 +206,12 @@ Pydantic-модели 6 сервисов
 | Правило | Копий | Где | Разошлось? |
 |---|---|---|---|
 | **Флекс-регистрация** | 4 | `shared/models/registration/registration.py:200` (`>1 роль && all primary` — канон); `tournament-service/.../serializers.py:87` (`>=1`); `tournament-service/.../sheet_parsing.py:460` (по строке `'flex'`, роли не смотрит); `frontend/.../registration/types.ts:44`; `frontend/.../workspace-helpers.ts:428` (`length>0`) | **ДА** (баг 5) |
-| **Discomfort** | 3+1 | `balancer/algorithm/entities.py:44-51`; `moo_core/src/context.rs:100-119`; `draft/suggestions.py:58-63`; `moo_core/src/quality_harness.rs:98-99` (bench) | **ДА**, двумя способами. (1) Для flex без ранга балансер даёт 5000, драфт — 0. (2) Для игрока с одной приоритетной ролью и двумя играбельными балансер даёт 0/100/200, драфт — 0/1000/1000: `preference_order` в драфте несёт **только** primary (`rpc/draft.py:424`, `selection.py:420`), а балансер строит полный порядок из `priority` (`player_loader.py:44`). `forced` это скрывал (везде нули), режим `all_roles` делает видимым у каждого регистранта. Закреплено `TestDiscomfortDivergesFromTheBalancer` |
+| **Discomfort** | 3+1 | `balancer/algorithm/entities.py:44-51`; `tournament_balancer/src/context.rs:100-119`; `draft/suggestions.py:58-63`; `tournament_balancer/src/quality_harness.rs:98-99` (bench) | **ДА**, двумя способами. (1) Для flex без ранга балансер даёт 5000, драфт — 0. (2) Для игрока с одной приоритетной ролью и двумя играбельными балансер даёт 0/100/200, драфт — 0/1000/1000: `preference_order` в драфте несёт **только** primary (`rpc/draft.py:424`, `selection.py:420`), а балансер строит полный порядок из `priority` (`player_loader.py:44`). `forced` это скрывал (везде нули), режим `all_roles` делает видимым у каждого регистранта. Закреплено `TestDiscomfortDivergesFromTheBalancer` |
 | **Кто оценивается по макс-ранку** | 3 | `tournament-service/.../_common.py` (`all_roles_required`); `balancer-service/.../draft/lifecycle.py` (`_all_roles_required`); `frontend/.../workspace-helpers.ts` (`ratesByMaxRank`) | Нет: закреплено `test_forced_flex_parity.py` ↔ `forced-flex-parity.test.ts` на общих фикстурах `docs/superpowers/fixtures/forced-flex-eff-rank.json`. Само сплющивание — ещё одна пара: `_map_registration` ↔ `flattenRolesToMaxRank` |
 | **Off-role** | 4 | `result_serializer.py:72` (канон); `feasibility_analyzer.py:130-136`; `admin/balance_analytics.py:132-137`; `quality_harness.rs:98-99` | **ДА** (баг 6) |
 | **`can_play` / playable роли** | 7 | `entities.py:60`; `context.rs:100`; `feasibility_analyzer.py:79,133`; `draft/selection.py:279-289` (два варианта); `draft/feasibility.py:137-140`; `rpc/draft.py:419-422` (инлайн-дубль) | **ДА**, двумя независимыми способами (баг 10) |
-| **Ключи конфига балансера** | 10 | `defaults.py:15-149`; `public_contract.py:10-46`; `provider.py:16-52`, `:55-89`, `:97+`; `schemas/balancer.py:6-105`; `presets.py`; `moo_backend.py:49-84`; `moo_core/src/lib.rs:88-160`; `frontend/.../balancer.types.ts:5-43,107-149`; `balancer-config-helpers.ts:20-29` | **ДА** (баги 7, 8) |
-| **Веса влияния роли** | 4 | `draft/suggestions.py:19-22`; `moo_core/src/lib.rs:16-24`; `config/defaults.py:93-95`; bench/test-фикстуры | Числа совпадают (1.4/1.0/1.1), но драфт игнорирует override (баг 9) |
+| **Ключи конфига балансера** | 10 | `defaults.py:15-149`; `public_contract.py:10-46`; `provider.py:16-52`, `:55-89`, `:97+`; `schemas/balancer.py:6-105`; `presets.py`; `moo_backend.py:49-84`; `tournament_balancer/src/lib.rs:88-160`; `frontend/.../balancer.types.ts:5-43,107-149`; `balancer-config-helpers.ts:20-29` | **ДА** (баги 7, 8) |
+| **Веса влияния роли** | 4 | `draft/suggestions.py:19-22`; `tournament_balancer/src/lib.rs:16-24`; `config/defaults.py:93-95`; bench/test-фикстуры | Числа совпадают (1.4/1.0/1.1), но драфт игнорирует override (баг 9) |
 | **Division grid** | 2 | `shared/division_grid.py:120` (`_build_default_grid`); `frontend/src/lib/division-grid.ts:12` (построчный порт: тот же `bases`, та же формула `offset=(5-tier)*100`, тот же URL иконок, та же сортировка) | Нет |
 | **OW2 rank mapping** | 2 | `parser-service/.../overwatch_rank/mapping.py:24,50`; `frontend/src/lib/ow-rank-mapping.ts:20,30` | Нет |
 | **Регекс BattleTag** | 4 | `app-service/src/core/config.py:9`; `parser-service/src/core/config.py:10`; `frontend/.../registration/validation.ts:39`; `frontend/.../form/_components/formConfig.ts:28` | Нет, но `buildRegex:63` использует `^(?:p)$` против Python `fullmatch` |
@@ -225,7 +225,7 @@ Pydantic-модели 6 сервисов
 | **`DEFAULT_MAX_TOP_HEROES`** | 2 | `shared/hero_catalog.py:20`; `frontend/.../UnifiedRegistrationForm.tsx:179` (литерал `5`) | Нет |
 | **`VetoUnavailableReason`** | 2 | `encounter/veto_session.py:41-42` — бэкенд объявляет зеркалом **себя**: «mirrors the frontend's VetoUnavailableReason union»; `frontend/src/types/tournament.types.ts:167` | Нет |
 | **Предикат пула балансера** | 3 | `draft/lifecycle.py:501-527` (`load_pool`); `registration/export.py:63-81` («Mirror the panel's in balancer rule»); `frontend/.../workspace-helpers.ts:432` | Условия дословно совпадают; расходятся только `nullslast` и eager-load |
-| **Командные агрегаты** | 3 | `entities.py:126-197`; `moo_core/src/objectives.rs:47-137`; `result_serializer.py:75-86` (третий независимый пересчёт `sub_role_collision_count`) | Формулы совпадают; `low_rank_pairs` есть только в Rust |
+| **Командные агрегаты** | 3 | `entities.py:126-197`; `tournament_balancer/src/objectives.rs:47-137`; `result_serializer.py:75-86` (третий независимый пересчёт `sub_role_collision_count`) | Формулы совпадают; `low_rank_pairs` есть только в Rust |
 | **Перечисления** | ~15 | `shared/core/enums.py:206-286` ↔ `frontend/src/types/draft.types.ts:3-10` (файл признаётся: «mirror the balancer-service DTOs»), `tournament.types.ts`, `tournament-status.ts:20,116` | `DraftRoundRule` вообще без TS-аналога |
 
 ---
