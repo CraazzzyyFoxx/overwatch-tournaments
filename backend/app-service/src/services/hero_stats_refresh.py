@@ -68,6 +68,21 @@ class HeroStatsRefresher:
         # such transaction runs at a time (advisory lock below), so it cannot multiply
         # across sessions the way a global bump would.
         await session.execute(sa.text("SET LOCAL work_mem = '768MB'"))
+        # The view's ``eligible`` CTE joins ``matches.statistics`` against its own
+        # (match, user, hero) qualification, and the planner answers it with a
+        # nested loop: 188,995 inner index scans on
+        # ``ix_match_statistics_match_user_round``, each fetching ``name``/``value``
+        # from the heap and discarding ~116 rows per 24 kept. That is 2.5M buffer
+        # touches for a 4.5M-row result — enough to evict the entire working set of
+        # a 2 GB ``shared_buffers`` once an hour, every hour. Forbidding the nested
+        # loop for this transaction turns it into a hash join over two scans:
+        # measured on a production restore (27.3M rows) 5055 ms -> 2538 ms and
+        # 2.53M -> 695k buffers. The small joins downstream (``best`` hydrates one
+        # metadata row per (hero, stat)) are unaffected at those cardinalities, and
+        # a covering index on the inner side — the only way to keep the nested loop
+        # and lose the heap fetches — would cost 336 MB of write-amplified index for
+        # one hourly job.
+        await session.execute(sa.text("SET LOCAL enable_nestloop = off"))
         got_lock = (await session.execute(sa.text(f"SELECT pg_try_advisory_xact_lock({_ADVISORY_LOCK_KEY})"))).scalar()
         if not got_lock:
             return False
