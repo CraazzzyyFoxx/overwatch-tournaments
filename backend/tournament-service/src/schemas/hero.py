@@ -8,8 +8,6 @@ from shared.schemas.catalog import (
     HeroPlaytimePaginationParams,
     HeroPlaytimeQueryPaginationParams,
     HeroRead,
-    HeroStatsPaginationParams,
-    HeroStatsQueryPaginationParams,
 )
 
 __all__ = (
@@ -18,8 +16,6 @@ __all__ = (
     "HeroPlaytime",
     "HeroPlaytimeQueryPaginationParams",
     "HeroPlaytimePaginationParams",
-    "HeroStatsPaginationParams",
-    "HeroStatsQueryPaginationParams",
     "HeroLeaderboardEntry",
     "HeroLeaderboardQueryParams",
     "HeroLeaderboardParams",

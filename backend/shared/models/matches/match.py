@@ -97,7 +97,7 @@ Encounter.has_logs = column_property(
 )
 
 
-class MatchStatistics(db.TimeStampIntegerMixin):
+class MatchStatistics(db.Base):
     __tablename__ = "statistics"
 
     __table_args__ = (
@@ -129,16 +129,37 @@ class MatchStatistics(db.TimeStampIntegerMixin):
         {"schema": "matches"},
     )
 
-    match_id: Mapped[int] = mapped_column(ForeignKey(Match.id, ondelete="CASCADE"), index=True)
+    # Declared here instead of inherited from ``TimeStampIntegerMixin`` so this
+    # table carries the surrogate key WITHOUT the mixin's ``created_at`` /
+    # ``updated_at``: 16 bytes on every one of 27M rows (425 MB measured on a
+    # production restore, migration ``statslim01``) that nothing ever reads. A
+    # row's lifetime is its match's — the parser deletes and re-inserts a match's
+    # rows wholesale on every log re-parse — so an insertion timestamp answers no
+    # question anyone asks, and there is no retention or audit built on it.
+    #
+    # The PRIMARY KEY constraint behind this column is dropped in the database
+    # (migration ``statdrop01``, 585 MB of index no query used); the mapper keeps
+    # ``primary_key=True`` because SQLAlchemy requires a primary key at metadata
+    # level, and Alembic never autogenerates primary-key changes. Nothing loads
+    # this table as an ORM entity, so the identity map is inert either way.
+    id: Mapped[int] = mapped_column(BigInteger(), primary_key=True, sort_order=-1000)
+
+    match_id: Mapped[int] = mapped_column(ForeignKey(Match.id, ondelete="CASCADE"))
     # No standalone index on ``round`` / ``hero_id``: both are low-cardinality and
     # dead in production (see migration ``statidx001``); the composite indexes
     # above serve every access pattern that touches them.
+    #
+    # ``match_id``, ``user_id`` and ``name`` carry no standalone index either
+    # (migration ``statdrop01``): the first two are strict prefixes of the
+    # composites above, and a lone index on a 48-label enum is never selective
+    # enough to be chosen. ``team_id`` keeps its own — it is only ever a join
+    # key (``services.user.queries.compare``), never a prefix of anything here.
     round: Mapped[int] = mapped_column(Integer())
     team_id: Mapped[int] = mapped_column(ForeignKey(Team.id, ondelete="CASCADE"), index=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey(User.id, ondelete="CASCADE"), index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey(User.id, ondelete="CASCADE"))
     hero_id: Mapped[int | None] = mapped_column(ForeignKey(Hero.id, ondelete="CASCADE"), nullable=True)
 
-    name: Mapped[enums.LogStatsName] = mapped_column(Enum(enums.LogStatsName), index=True)
+    name: Mapped[enums.LogStatsName] = mapped_column(Enum(enums.LogStatsName))
     value: Mapped[float] = mapped_column(Float())
 
 
