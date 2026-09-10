@@ -227,7 +227,25 @@ export default function MyTeamPanel({
    *  would answer `slot_taken`. */
   const offerableSlots = ROSTER_SLOT_CODES.filter((code) => (team.open_slots[code] ?? 0) > 0);
   const pendingInvites = team.invites.filter((invite) => invite.state === "pending");
-  const benchOpen = team.max_substitutes - team.substitutes_used > 0;
+  /** Every slot code this roster actually uses, reconstructed from the rows that
+   *  hold one. A substitute covers a slot that is by definition FULL, so
+   *  `open_slots` — the starter shortfall — can never name it: on a complete
+   *  roster it is empty, which left the bench with nothing to select. */
+  const shapeSlots = new Set<string>([
+    ...Object.keys(team.open_slots),
+    ...team.members.map((member) => member.slot_code ?? ""),
+    ...team.invites.map((invite) => invite.slot_code),
+  ]);
+  const benchSlots = ROSTER_SLOT_CODES.filter((code) => shapeSlots.has(code));
+  /** Pending substitute offers reserve a bench place — the same arithmetic
+   *  `can_offer` does server-side, so the checkbox never promises a seat the
+   *  server answers `bench_full` for. */
+  const benchOpen =
+    team.max_substitutes -
+      team.substitutes_used -
+      pendingInvites.filter((invite) => invite.is_substitute).length >
+    0;
+  const selectableSlots = inviteSubstitute ? benchSlots : offerableSlots;
   /** Filtered in memory: this is tens of rows at most, and a round-trip per
    *  keystroke would out-cost the whole list. */
   const freeAgents = freeAgentsQuery.data?.items ?? [];
@@ -402,8 +420,9 @@ export default function MyTeamPanel({
             size="sm"
             disabled={busy}
             onClick={() => {
-              setInviteSlot(offerableSlots[0] ?? null);
-              setInviteSubstitute(offerableSlots.length === 0);
+              const substituteOnly = offerableSlots.length === 0;
+              setInviteSubstitute(substituteOnly);
+              setInviteSlot((substituteOnly ? benchSlots : offerableSlots)[0] ?? null);
               setIssuedToken(null);
               setPickerSearch("");
               setTargetRegistrationId(null);
@@ -477,7 +496,7 @@ export default function MyTeamPanel({
               <fieldset className="grid gap-1.5">
                 <legend className="text-sm font-medium">{t("invite.slotLabel")}</legend>
                 <div className="flex flex-wrap gap-2">
-                  {offerableSlots.map((code) => {
+                  {selectableSlots.map((code) => {
                     const selected = inviteSlot === code;
                     return (
                       <label
@@ -513,7 +532,16 @@ export default function MyTeamPanel({
                 <Label className="flex items-center gap-2 text-sm">
                   <Checkbox
                     checked={inviteSubstitute}
-                    onCheckedChange={(checked) => setInviteSubstitute(checked === true)}
+                    onCheckedChange={(checked) => {
+                      const substitute = checked === true;
+                      setInviteSubstitute(substitute);
+                      // The two modes offer different slot lists; a selection kept
+                      // across the toggle can leave no radio checked at all.
+                      const next = substitute ? benchSlots : offerableSlots;
+                      setInviteSlot((current) =>
+                        current && next.includes(current) ? current : (next[0] ?? null)
+                      );
+                    }}
                   />
                   {t("invite.substituteLabel")}
                 </Label>

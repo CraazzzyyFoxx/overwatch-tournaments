@@ -148,6 +148,10 @@ export default defineConfig({
       // The captain's half of the same mode. Separate from the i18n mount test
       // above because it drives the dialog rather than only rendering it.
       "src/components/registration/MyTeamPanel.picker.test.tsx",
+      // The bench half of the same dialog: a full starting roster reports no open
+      // slots, and unrun this file would report green while substitute invites
+      // were unreachable on exactly the teams that need them.
+      "src/components/registration/MyTeamPanel.bench.test.tsx",
       // The invite ledger. Unrun, a green suite would coexist with a section that
       // fetches on every mount or renders raw i18n key paths.
       "src/components/registration/InviteHistorySection.behavior.test.tsx",
