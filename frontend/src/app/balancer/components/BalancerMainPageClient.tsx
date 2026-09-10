@@ -30,7 +30,10 @@ import { notify } from "@/lib/notify";
 import balancerAdminService from "@/services/balancer-admin.service";
 import balancerService from "@/services/balancer.service";
 import { useWorkspaceStore } from "@/stores/workspace.store";
-import type { BalancerRoleCode } from "@/types/balancer-admin.types";
+import type {
+  BalancerPlayerExportFormat,
+  BalancerRoleCode
+} from "@/types/balancer-admin.types";
 import type { BalancerConfig } from "@/types/balancer.types";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -433,17 +436,27 @@ export function BalancerMainPageClient() {
   });
 
   const exportPlayersMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async ({
+      format,
+      includePrivate
+    }: {
+      format: BalancerPlayerExportFormat;
+      includePrivate: boolean;
+    }) => {
       const selectedTournamentId = tournamentId;
       if (!selectedTournamentId) throw new Error("Select a tournament first");
-      const payload = await balancerAdminService.exportPlayers(selectedTournamentId);
+      const payload = await balancerAdminService.exportPlayers(
+        selectedTournamentId,
+        format,
+        includePrivate
+      );
       return { payload, tournamentId: selectedTournamentId };
     },
     onSuccess: ({ payload, tournamentId: exportedTournamentId }) => {
       const playerCount = Object.keys(payload.players).length;
       downloadPlayersExport(payload, exportedTournamentId);
       notify.success("Players exported", {
-        description: `${playerCount} player${playerCount === 1 ? "" : "s"} downloaded.`
+        description: `${playerCount} player${playerCount === 1 ? "" : "s"} downloaded as ${payload.format}.`
       });
     }
   });
@@ -808,7 +821,9 @@ export function BalancerMainPageClient() {
         isRunPending={runBalanceMutation.isPending}
         onImportBalance={startJsonImport}
         isImportPending={importBalanceMutation.isPending}
-        onExportPlayers={() => exportPlayersMutation.mutate()}
+        onExportPlayers={(format, includePrivate) =>
+          exportPlayersMutation.mutate({ format, includePrivate })
+        }
         isExportPlayersPending={exportPlayersMutation.isPending}
         jobStatus={jobState.status}
         jobMessage={jobState.message}

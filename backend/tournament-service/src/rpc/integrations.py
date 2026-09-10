@@ -36,17 +36,21 @@ from __future__ import annotations
 from datetime import date
 from typing import Any
 
+import sqlalchemy as sa
 from faststream.rabbit.annotations import RabbitMessage
 
 from shared.core.errors import BaseAPIException as HTTPException
+from shared.domain.roster import flex_role_mode
 from shared.repository import WorkspaceRepository
 from shared.rpc.identity import ensure_workspace_permission
 from shared.services.audit import record_admin_audit
 from shared.services.division_grid.access import (
+    get_effective_division_grid,
     require_grid_version_read_access,
     require_marketplace_source_access,
 )
 from shared.services.roster import roster_engine
+from shared.services.roster_shape_access import get_effective_roster_shape
 from src import models, schemas
 from src.clients.challonge import challonge_client
 from src.core import auth
@@ -107,6 +111,55 @@ async def _get_source_workspace_or_404(
         source_is_hidden=source_workspace.is_hidden,
     )
     return source_workspace
+
+
+# --- player pool export -------------------------------------------------------
+
+#: ``xv-1`` is the solver's own input contract (``player_data_file`` of
+#: ``POST /api/v1/balancer/jobs``) and is frozen; ``owt-1`` is our snapshot,
+#: a strict superset of it (see ``RosterEngine.full_export``).
+PLAYER_EXPORT_FORMATS: tuple[str, ...] = ("xv-1", "owt-1")
+PLAYER_EXPORT_DEFAULT_FORMAT = "xv-1"
+
+
+async def _owt_player_export(
+    session: Any,
+    tournament_id: int,
+    rosters: Any,
+    *,
+    include_private: bool,
+) -> dict[str, Any]:
+    """Assemble the ``owt-1`` document: rosters plus the context to replay them.
+
+    The roster shape is what makes a flex tournament exportable at all -- the
+    solver reads the flex slot count from the tournament, never from the file,
+    so a payload without it cannot be re-run anywhere else.
+    """
+    tournament = await session.get(models.Tournament, tournament_id)
+    if tournament is None:
+        raise HTTPException(status_code=404, detail="Tournament not found")
+    workspace_id = tournament.workspace_id
+    shape = await get_effective_roster_shape(session, tournament_id=tournament_id, workspace_id=workspace_id)
+    form = await session.scalar(
+        sa.select(models.BalancerRegistrationForm).where(
+            models.BalancerRegistrationForm.tournament_id == tournament_id
+        )
+    )
+    grid = await get_effective_division_grid(session, workspace_id, tournament_id)
+    return roster_engine.full_export(
+        rosters,
+        shape=shape,
+        flex_role_mode=flex_role_mode(form),
+        grid=grid,
+        include_private=include_private,
+        source={
+            "tournament_id": tournament_id,
+            "tournament_name": tournament.name,
+            "workspace_id": workspace_id,
+            "scope": "pool",
+            "division_grid_version_id": grid.version_id,
+        },
+    )
 
 
 # --- envelope wrapper ---------------------------------------------------------
@@ -521,10 +574,24 @@ def register(broker: Any, logger: Any) -> None:
             await auth.require_tournament_id_permission(
                 session, user, tournament_id=tournament_id, resource="player", action="read"
             )
+            export_format = _q1(data, "format") or PLAYER_EXPORT_DEFAULT_FORMAT
+            if export_format not in PLAYER_EXPORT_FORMATS:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Unknown export format {export_format!r}; expected one of {', '.join(PLAYER_EXPORT_FORMATS)}",
+                )
             # One payload, one source: the same rosters the balance job and the
             # draft read, serialized by the engine rather than re-derived here.
             rosters = await roster_engine.for_tournament(session, tournament_id, pool_only=True)
-            payload = roster_engine.balancer_input(rosters.values())
+            if export_format == "xv-1":
+                payload = roster_engine.balancer_input(rosters.values())
+            else:
+                payload = await _owt_player_export(
+                    session,
+                    tournament_id,
+                    rosters.values(),
+                    include_private=bool(_q1(data, "include_private", _bool, default=False)),
+                )
             return _dump(schemas.BalancerPlayerExportResponse(**payload))
 
         return await _run(logger, op)

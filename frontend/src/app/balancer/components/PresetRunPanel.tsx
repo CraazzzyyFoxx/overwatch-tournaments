@@ -22,6 +22,16 @@ import {
   SelectValue
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger
+} from "@/components/ui/dropdown-menu";
+import type { BalancerPlayerExportFormat } from "@/types/balancer-admin.types";
 import { PANEL_CLASS, PRESET_LABELS } from "./balancer-page-helpers";
 import { WorkspaceCounter } from "./WorkspaceCounter";
 
@@ -46,7 +56,7 @@ type PresetRunPanelProps = {
   isRunPending: boolean;
   onImportBalance: (file: File) => void;
   isImportPending: boolean;
-  onExportPlayers: () => void;
+  onExportPlayers: (format: BalancerPlayerExportFormat, includePrivate: boolean) => void;
   isExportPlayersPending: boolean;
   jobStatus: string | null;
   jobMessage: string | null;
@@ -76,6 +86,7 @@ export function PresetRunPanel({
 }: Readonly<PresetRunPanelProps>) {
   const [headerSlot, setHeaderSlot] = useState<HTMLElement | null>(null);
   const importFileRef = useRef<HTMLInputElement>(null);
+  const [includePrivate, setIncludePrivate] = useState(false);
 
   /* eslint-disable react-hooks/set-state-in-effect -- The portal target is outside this client component and is only available after hydration. */
   useEffect(() => {
@@ -172,22 +183,53 @@ export function PresetRunPanel({
         )}
         Load balance JSON
       </Button>
-      <Button
-        type="button"
-        variant="outline"
-        onClick={onExportPlayers}
-        disabled={isExportPlayersPending}
-        className="h-8 shrink-0 rounded-lg border-[color:var(--aqt-border-2)] bg-black/15 px-2 text-sm text-[color:var(--aqt-fg-muted)] hover:bg-white/[0.05] hover:text-[color:var(--aqt-fg)] sm:px-3"
-        aria-label="Export players"
-        title="Export players"
-      >
-        {isExportPlayersPending ? (
-          <Loader2 className="h-3.5 w-3.5 animate-spin sm:mr-1.5" />
-        ) : (
-          <Download className="h-3.5 w-3.5 sm:mr-1.5" />
-        )}
-        <span className="hidden sm:inline">Export players</span>
-      </Button>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={isExportPlayersPending}
+            className="h-8 shrink-0 rounded-lg border-[color:var(--aqt-border-2)] bg-black/15 px-2 text-sm text-[color:var(--aqt-fg-muted)] hover:bg-white/[0.05] hover:text-[color:var(--aqt-fg)] sm:px-3"
+            aria-label="Export players"
+            title="Export players"
+          >
+            {isExportPlayersPending ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin sm:mr-1.5" />
+            ) : (
+              <Download className="h-3.5 w-3.5 sm:mr-1.5" />
+            )}
+            <span className="hidden sm:inline">Export players</span>
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-72">
+          <DropdownMenuLabel>Export players</DropdownMenuLabel>
+          <DropdownMenuItem onSelect={() => onExportPlayers("owt-1", includePrivate)}>
+            <div>
+              <div>Full snapshot</div>
+              <div className="text-xs text-[color:var(--aqt-fg-dim)]">
+                Every role, rank source, division and roster shape — flex included.
+              </div>
+            </div>
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => onExportPlayers("xv-1", false)}>
+            <div>
+              <div>Solver input (xv-1)</div>
+              <div className="text-xs text-[color:var(--aqt-fg-dim)]">
+                Playable roles only — what a balance job accepts as an upload.
+              </div>
+            </div>
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuCheckboxItem
+            checked={includePrivate}
+            onCheckedChange={(checked) => setIncludePrivate(checked === true)}
+            // Kept open so the choice and the export are one interaction.
+            onSelect={(event) => event.preventDefault()}
+          >
+            <span className="text-xs">Include notes, custom fields and contacts</span>
+          </DropdownMenuCheckboxItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </>
   );
 

@@ -665,7 +665,14 @@ DOCS: dict[str, dict] = {
     },
     "rpc.tournament.sheet_players_export": {
         "summary": "Export sheet players",
-        "description": "Exports a tournament's active registrations as a players payload; requires player-read permission on the tournament.",
+        "description": (
+            "Exports a tournament's balancer pool as a players payload; requires player-read permission on the "
+            "tournament. `format=xv-1` (default) is the solver's own input contract, accepted as-is by the "
+            "balance-job upload. `format=owt-1` is the full snapshot: the same player nodes plus per-player `owt` "
+            "metadata (identity ids, every declared role with its rank source, division and top heroes, workflow "
+            "status) and the tournament's roster shape including flex slots. `include_private=1` adds the "
+            "organizer-only block (notes, admin notes, custom-field answers, contacts, smurf tags)."
+        ),
     },
     # ── registration admin ─────────────────────────────────────────────────
     "rpc.tournament.reg_form_get": {

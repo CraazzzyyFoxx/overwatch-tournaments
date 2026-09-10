@@ -24,6 +24,7 @@ import {
   BalanceExportResponse,
   RanksExportResponse,
   BalanceSaveInput,
+  BalancerPlayerExportFormat,
   BalancerPlayerExportResponse,
   BalancerRegistrationRankHistoryEntry,
   BalancerTournamentConfig,
@@ -204,8 +205,15 @@ export default class balancerAdminService {
     return { ok: false, status: response.status, error };
   }
 
-  static async exportPlayers(tournamentId: number): Promise<BalancerPlayerExportResponse> {
-    const response = await apiFetch(`/api/v1/admin/balancer/tournaments/${tournamentId}/players/export`
+  static async exportPlayers(
+    tournamentId: number,
+    format: BalancerPlayerExportFormat = "xv-1",
+    includePrivate = false
+  ): Promise<BalancerPlayerExportResponse> {
+    const query = new URLSearchParams({ format });
+    if (includePrivate) query.set("include_private", "1");
+    const response = await apiFetch(
+      `/api/v1/admin/balancer/tournaments/${tournamentId}/players/export?${query}`
     );
     return response.json();
   }

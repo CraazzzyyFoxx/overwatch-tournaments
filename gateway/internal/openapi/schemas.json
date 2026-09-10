@@ -8822,7 +8822,25 @@
       "summary": "Get sheet mapping catalog"
     },
     "rpc.tournament.sheet_players_export": {
-      "description": "Exports a tournament's active registrations as a players payload; requires player-read permission on the tournament.",
+      "description": "Exports a tournament's balancer pool as a players payload; requires player-read permission on the tournament. `format=xv-1` (default) is the solver's own input contract, accepted as-is by the balance-job upload. `format=owt-1` is the full snapshot: the same player nodes plus per-player `owt` metadata (identity ids, every declared role with its rank source, division and top heroes, workflow status) and the tournament's roster shape including flex slots. `include_private=1` adds the organizer-only block (notes, admin notes, custom-field answers, contacts, smurf tags).",
+      "query_params": [
+        {
+          "name": "format",
+          "required": false,
+          "schema": {
+            "description": "xv-1 (solver input, default) or owt-1 (full snapshot)",
+            "type": "string"
+          }
+        },
+        {
+          "name": "include_private",
+          "required": false,
+          "schema": {
+            "description": "owt-1 only: add notes, admin notes, custom fields and contacts",
+            "type": "boolean"
+          }
+        }
+      ],
       "response": {
         "array": false,
         "ref": "tournament.BalancerPlayerExportResponse"
@@ -28883,15 +28901,50 @@
       "type": "object"
     },
     "tournament.BalancerPlayerExportResponse": {
+      "description": "Both player-pool export formats.\n\n``xv-1`` is the solver's input contract and carries ``format``/``players``\nonly. ``owt-1`` is our full snapshot: the same player nodes plus an ``owt``\nblock on each, and the three context fields below. See\n``shared.services.roster.RosterEngine.full_export``.",
       "properties": {
         "format": {
           "title": "Format",
           "type": "string"
         },
+        "generated_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Generated At"
+        },
         "players": {
           "additionalProperties": true,
           "title": "Players",
           "type": "object"
+        },
+        "roster": {
+          "anyOf": [
+            {
+              "$ref": "#/components/schemas/tournament.BalancerPlayerExportRoster"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "source": {
+          "anyOf": [
+            {
+              "$ref": "#/components/schemas/tournament.BalancerPlayerExportSource"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "required": [
@@ -28899,6 +28952,98 @@
         "players"
       ],
       "title": "BalancerPlayerExportResponse",
+      "type": "object"
+    },
+    "tournament.BalancerPlayerExportRoster": {
+      "description": "The team shape the export was taken under, flex slot included.",
+      "properties": {
+        "flex_role_mode": {
+          "title": "Flex Role Mode",
+          "type": "string"
+        },
+        "flex_slots": {
+          "title": "Flex Slots",
+          "type": "integer"
+        },
+        "slots": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "Slots",
+          "type": "object"
+        },
+        "team_size": {
+          "title": "Team Size",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "slots",
+        "team_size",
+        "flex_slots",
+        "flex_role_mode"
+      ],
+      "title": "BalancerPlayerExportRoster",
+      "type": "object"
+    },
+    "tournament.BalancerPlayerExportSource": {
+      "description": "Where an ``owt-1`` export came from -- enough to replay or re-import it.",
+      "properties": {
+        "division_grid_version_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Division Grid Version Id"
+        },
+        "player_key": {
+          "title": "Player Key",
+          "type": "string"
+        },
+        "scope": {
+          "title": "Scope",
+          "type": "string"
+        },
+        "tournament_id": {
+          "title": "Tournament Id",
+          "type": "integer"
+        },
+        "tournament_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tournament Name"
+        },
+        "workspace_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Workspace Id"
+        }
+      },
+      "required": [
+        "tournament_id",
+        "player_key",
+        "scope"
+      ],
+      "title": "BalancerPlayerExportSource",
       "type": "object"
     },
     "tournament.BalancerRankAutofillStage": {

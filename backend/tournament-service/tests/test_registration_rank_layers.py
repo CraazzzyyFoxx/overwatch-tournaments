@@ -77,6 +77,18 @@ def _registration(
         notes=None,
         admin_notes=None,
         custom_fields_json=None,
+        status="approved",
+        balancer_status="in_balancer",
+        exclude_reason=None,
+        checked_in=False,
+        registration_team_id=None,
+        team_slot_code=None,
+        is_substitute=False,
+        discord_nick=None,
+        twitch_nick=None,
+        boosty_nick=None,
+        stream_pov=False,
+        smurf_tags_json=None,
         roles=[
             SimpleNamespace(
                 id=index,

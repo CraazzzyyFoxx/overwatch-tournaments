@@ -25,6 +25,7 @@ completed draft pick freezes as a historical fact.
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
+from datetime import UTC, datetime
 from typing import Any
 
 import sqlalchemy as sa
@@ -36,6 +37,7 @@ from shared.core.enums import HERO_TYPE_CLASSES, HeroClass
 from shared.division_grid import DivisionGrid
 from shared.domain.member_rank import RankScope, ResolvedRank
 from shared.domain.roster import HeroRef, PlayerRoster, RosterRole, flex_role_mode
+from shared.domain.roster_shape import RosterShape
 from shared.models.registration.registration import (
     BalancerRegistration,
     BalancerRegistrationForm,
@@ -354,6 +356,18 @@ class RosterEngine:
             notes=reg.notes,
             admin_notes=reg.admin_notes,
             custom_fields=dict(reg.custom_fields_json or {}),
+            status=reg.status,
+            balancer_status=reg.balancer_status,
+            exclude_reason=reg.exclude_reason,
+            checked_in=bool(reg.checked_in),
+            registration_team_id=reg.registration_team_id,
+            team_slot_code=reg.team_slot_code,
+            is_substitute=bool(reg.is_substitute),
+            discord_nick=reg.discord_nick,
+            twitch_nick=reg.twitch_nick,
+            boosty_nick=reg.boosty_nick,
+            stream_pov=bool(reg.stream_pov),
+            smurf_tags=tuple(reg.smurf_tags_json or ()),
         )
 
     # -- algorithm input -----------------------------------------------------
@@ -374,10 +388,9 @@ class RosterEngine:
         for roster in rosters:
             if not roster.is_draftable:
                 continue
-            uuid = str(getattr(roster, key))
-            players[uuid] = {
+            players[str(getattr(roster, key))] = {
                 "identity": {
-                    "name": roster.battle_tag or roster.display_name or f"registration-{roster.registration_id}",
+                    "name": _export_name(roster),
                     "isFullFlex": roster.is_full_flex,
                 },
                 "stats": {
@@ -394,6 +407,106 @@ class RosterEngine:
             }
         return {"format": "xv-1", "players": players}
 
+    # -- full snapshot -------------------------------------------------------
+
+    def full_export(
+        self,
+        rosters: Iterable[PlayerRoster],
+        *,
+        shape: RosterShape,
+        flex_role_mode: str,
+        grid: DivisionGrid | None = None,
+        source: Mapping[str, Any] | None = None,
+        key: str = "registration_id",
+        include_private: bool = False,
+    ) -> dict[str, Any]:
+        """``owt-1``: everything the roster projection knows, losslessly.
+
+        A STRICT SUPERSET of :meth:`balancer_input`. Every player node still
+        carries the ``xv-1`` ``identity``/``stats.classes`` pair verbatim, and
+        ``player_loader.parse_player_node`` reads nothing else, so an ``owt-1``
+        file uploads into the balance-job endpoint unchanged -- pinned by
+        ``balancer-service/tests/test_owt_export_is_solver_input``.
+
+        Two deliberate widenings over ``xv-1``:
+
+        * declared-but-unranked roles are emitted with ``isActive: false``
+          instead of being dropped, which is what makes the file answer "is this
+          player ranked yet". The loader tests ``isActive`` BEFORE it compares
+          the rank, so a ``null`` rank cannot reach its ``rank <= 0``.
+        * ``roster`` carries the shape the run would use, flex slot included.
+          The solver takes the flex mask from the tournament rather than the
+          file, so without it an export cannot be replayed.
+        """
+        players: dict[str, Any] = {}
+        for roster in rosters:
+            primary = roster.primary
+            owt: dict[str, Any] = {
+                "registration_id": roster.registration_id,
+                "battle_tag": roster.battle_tag,
+                "display_name": roster.display_name,
+                "player_id": roster.player_id,
+                "auth_user_id": roster.auth_user_id,
+                "workspace_member_id": roster.workspace_member_id,
+                "is_full_flex": roster.is_full_flex,
+                # What a role-less (flex) slot is worth for this player -- the
+                # same "best playable rank" the solver synthesizes for it.
+                "flex_rating": roster.best_rank,
+                "draftable": roster.is_draftable,
+                "ranked_complete": roster.is_ranked_complete,
+                "primary_role": primary.role.slot_code if primary is not None else None,
+                "sub_role": roster.sub_role,
+                "status": roster.status,
+                "balancer_status": roster.balancer_status,
+                "checked_in": roster.checked_in,
+                "registration_team_id": roster.registration_team_id,
+                "team_slot_code": roster.team_slot_code,
+                "is_substitute": roster.is_substitute,
+                "roles": [_role_export(entry, grid) for entry in roster.roles],
+            }
+            if include_private:
+                owt["private"] = {
+                    "notes": roster.notes,
+                    "admin_notes": roster.admin_notes,
+                    "exclude_reason": roster.exclude_reason,
+                    "custom_fields": dict(roster.custom_fields),
+                    "discord_nick": roster.discord_nick,
+                    "twitch_nick": roster.twitch_nick,
+                    "boosty_nick": roster.boosty_nick,
+                    "stream_pov": roster.stream_pov,
+                    "smurf_tags": list(roster.smurf_tags),
+                }
+            players[str(getattr(roster, key))] = {
+                "identity": {
+                    "name": _export_name(roster),
+                    "isFullFlex": roster.is_full_flex,
+                },
+                "stats": {
+                    "classes": {
+                        entry.role.slot_code: {
+                            "isActive": entry.is_playable,
+                            "rank": entry.rank,
+                            "priority": entry.priority,
+                            "subtype": entry.subrole,
+                        }
+                        for entry in roster.roles
+                    }
+                },
+                "owt": owt,
+            }
+        return {
+            "format": "owt-1",
+            "generated_at": datetime.now(UTC).isoformat(),
+            "source": {"player_key": key, **dict(source or {})},
+            "roster": {
+                "slots": shape.slots,
+                "team_size": shape.team_size,
+                "flex_slots": shape.flex_slots,
+                "flex_role_mode": flex_role_mode,
+            },
+            "players": players,
+        }
+
 
 def _as_dict(entry: RosterRole) -> dict[str, Any]:
     return {
@@ -404,6 +517,31 @@ def _as_dict(entry: RosterRole) -> dict[str, Any]:
         "priority": entry.priority,
         "subrole": entry.subrole,
         "top_heroes": entry.top_heroes,
+    }
+
+
+def _export_name(roster: PlayerRoster) -> str:
+    return roster.battle_tag or roster.display_name or f"registration-{roster.registration_id}"
+
+
+def _role_export(entry: RosterRole, grid: DivisionGrid | None) -> dict[str, Any]:
+    # A tier-less grid is a legitimate workspace state (nobody configured one);
+    # ``resolve_division`` raises on it, and a decorative label is never worth
+    # failing the export for.
+    resolvable = grid is not None and bool(grid.tiers) and entry.rank is not None
+    tier = grid.resolve_division(entry.rank) if resolvable else None  # type: ignore[union-attr, arg-type]
+    return {
+        "role": entry.role.slot_code,
+        "rank": entry.rank,
+        "source": entry.source,
+        "is_primary": entry.is_primary,
+        "priority": entry.priority,
+        "subrole": entry.subrole,
+        "playable": entry.is_playable,
+        "division": None if tier is None else {"number": tier.number, "name": tier.name},
+        "top_heroes": [
+            {"hero_id": hero.id, "slug": hero.slug, "image_path": hero.image_path} for hero in entry.top_heroes
+        ],
     }
 
 

@@ -41,7 +41,7 @@ var IntegrationsRoutes = []edge.RouteSpec{
 	{Method: "GET", Pattern: "/api/v1/admin/balancer/tournaments/{tournament_id}/sheet/mapping-catalog", Queue: "rpc.tournament.sheet_mapping_catalog", IDParam: "tournament_id", Query: []string{"include_headers"}, Auth: edge.AuthRequired},
 	{Method: "POST", Pattern: "/api/v1/admin/balancer/tournaments/{tournament_id}/sheet/suggest-mapping", Queue: "rpc.tournament.sheet_suggest_mapping", IDParam: "tournament_id", Body: true, Auth: edge.AuthRequired},
 	{Method: "POST", Pattern: "/api/v1/admin/balancer/tournaments/{tournament_id}/sheet/preview", Queue: "rpc.tournament.sheet_preview", IDParam: "tournament_id", Body: true, Auth: edge.AuthRequired},
-	{Method: "GET", Pattern: "/api/v1/admin/balancer/tournaments/{tournament_id}/players/export", Queue: "rpc.tournament.sheet_players_export", IDParam: "tournament_id", Auth: edge.AuthRequired},
+	{Method: "GET", Pattern: "/api/v1/admin/balancer/tournaments/{tournament_id}/players/export", Queue: "rpc.tournament.sheet_players_export", IDParam: "tournament_id", Query: []string{"format", "include_private"}, Auth: edge.AuthRequired},
 }
 
 // DivisionGridRoutes are the public division-grid endpoints. Their patterns are

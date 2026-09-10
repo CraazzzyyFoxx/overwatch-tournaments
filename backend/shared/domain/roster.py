@@ -121,6 +121,25 @@ class PlayerRoster:
     notes: str | None = None
     admin_notes: str | None = None
     custom_fields: Mapping[str, Any] = field(default_factory=dict)
+    # ── Registration workflow, carried so a pool export is a full snapshot ──
+    # Read straight off the registration row the engine already holds; no
+    # consumer of the roster projection is required to look at them, which is
+    # why every one has a default.
+    status: str | None = None
+    balancer_status: str | None = None
+    exclude_reason: str | None = None
+    checked_in: bool = False
+    registration_team_id: int | None = None
+    #: Captain-assigned roster slot (``RosterSlotCode``) -- NOT derivable from
+    #: ``roles``: ``flex`` is a slot, never a rated role.
+    team_slot_code: str | None = None
+    is_substitute: bool = False
+    # ── Contact/private answers ─────────────────────────────────────────────
+    discord_nick: str | None = None
+    twitch_nick: str | None = None
+    boosty_nick: str | None = None
+    stream_pov: bool = False
+    smurf_tags: tuple[str, ...] = ()
 
     # -- roles ---------------------------------------------------------------
 

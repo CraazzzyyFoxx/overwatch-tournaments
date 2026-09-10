@@ -565,7 +565,12 @@ export function downloadPlayersExport(
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
-  anchor.download = `balancer-players-${tournamentId ?? "export"}.json`;
+  // The two formats are not interchangeable, so the file says which one it is:
+  // `xv-1` keeps its historical name, ours is prefixed by the format.
+  anchor.download =
+    payload.format === "owt-1"
+      ? `owt-players-${tournamentId ?? "export"}.json`
+      : `balancer-players-${tournamentId ?? "export"}.json`;
   anchor.click();
   URL.revokeObjectURL(url);
 }
