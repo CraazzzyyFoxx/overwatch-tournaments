@@ -644,6 +644,17 @@ class RefreshTokenRepository(BaseRepository[models.RefreshToken]):
         result = await session.execute(query)
         return result.scalars().all()
 
+    async def delete_expired_before(self, session: AsyncSession, cutoff: datetime) -> int:
+        """Drop tokens whose ``expires_at`` is before ``cutoff``; returns the count.
+
+        Rotation inserts a row per refresh and revocation only flags it, so
+        without this the table grows forever (84k of 87k rows revoked or expired
+        on a production restore). Nothing authenticates against an expired row;
+        the session lists only lose history older than the cutoff.
+        """
+        result = await session.execute(sa.delete(models.RefreshToken).where(models.RefreshToken.expires_at < cutoff))
+        return int(result.rowcount or 0)
+
 
 class OAuthConnectionRepository(BaseRepository[models.OAuthConnection]):
     def __init__(self) -> None:

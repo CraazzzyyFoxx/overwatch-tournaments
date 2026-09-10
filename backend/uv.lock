@@ -1091,6 +1091,7 @@ source = { virtual = "identity-service" }
 dependencies = [
     { name = "aiobotocore" },
     { name = "alembic" },
+    { name = "apscheduler" },
     { name = "asyncpg" },
     { name = "bcrypt" },
     { name = "cachetools" },
@@ -1129,6 +1130,7 @@ dependencies = [
 requires-dist = [
     { name = "aiobotocore", specifier = ">=2.17.0" },
     { name = "alembic", specifier = ">=1.14.0" },
+    { name = "apscheduler", specifier = ">=3.10.4" },
     { name = "asyncpg", specifier = ">=0.30.0" },
     { name = "bcrypt", specifier = ">=4.2.1" },
     { name = "cachetools", specifier = ">=6.2.3" },
