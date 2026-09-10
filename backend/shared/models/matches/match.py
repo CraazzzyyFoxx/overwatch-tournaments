@@ -183,7 +183,14 @@ mv_hero_global_stats = table(
 )
 
 
-class MatchKillFeed(db.TimeStampIntegerMixin):
+class MatchKillFeed(db.Base):
+    """One kill from a parsed match log. Written per match, read per match.
+
+    ``db.Base`` with an explicit ``id`` (migration ``matchslim01``): the mixin's
+    ``created_at``/``updated_at`` recorded when the log was (re)parsed, which is
+    the match's fact, not the kill's, and nothing read them.
+    """
+
     __tablename__ = "kill_feed"
     __table_args__ = (
         # FK indexes created CONCURRENTLY by perfidx03 (declared here so the
@@ -195,6 +202,7 @@ class MatchKillFeed(db.TimeStampIntegerMixin):
         {"schema": "matches"},
     )
 
+    id: Mapped[int] = mapped_column(BigInteger(), primary_key=True, sort_order=-1000)
     match_id: Mapped[int] = mapped_column(ForeignKey(Match.id, ondelete="CASCADE"), index=True)
     time: Mapped[float] = mapped_column(Float())
     round: Mapped[int] = mapped_column(Integer())
@@ -211,7 +219,13 @@ class MatchKillFeed(db.TimeStampIntegerMixin):
     is_environmental: Mapped[bool] = mapped_column(Boolean())
 
 
-class MatchEvent(db.TimeStampIntegerMixin):
+class MatchEvent(db.Base):
+    """One non-kill event (assist, ultimate, swap, rez) from a parsed match log.
+
+    Same shape as ``MatchKillFeed``: explicit ``id``, no mixin timestamps
+    (migration ``matchslim01``).
+    """
+
     __tablename__ = "event"
     __table_args__ = (
         # FK indexes created CONCURRENTLY by perfidx03.
@@ -222,6 +236,7 @@ class MatchEvent(db.TimeStampIntegerMixin):
         {"schema": "matches"},
     )
 
+    id: Mapped[int] = mapped_column(BigInteger(), primary_key=True, sort_order=-1000)
     match_id: Mapped[int] = mapped_column(ForeignKey(Match.id, ondelete="CASCADE"), index=True)
     time: Mapped[float] = mapped_column(Float())
     round: Mapped[int] = mapped_column(Integer())
