@@ -90,7 +90,6 @@ def parse_competitive(competitive: dict[str, Any] | None) -> list[ParsedRank]:
                         tier=None,
                         season=season,
                         is_ranked=False,
-                        raw=None,
                     )
                 )
                 continue
@@ -104,7 +103,6 @@ def parse_competitive(competitive: dict[str, Any] | None) -> list[ParsedRank]:
                     tier=tier,
                     season=season,
                     is_ranked=division is not None and tier is not None,
-                    raw=role_data,
                 )
             )
     return ranks

@@ -10,7 +10,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
-from typing import Any, Literal
+from typing import Literal
 
 from shared.core import enums
 from shared.core.errors import BaseAPIException as HTTPException
@@ -40,7 +40,6 @@ class ParsedRank:
     tier: int | None
     season: int | None
     is_ranked: bool
-    raw: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
