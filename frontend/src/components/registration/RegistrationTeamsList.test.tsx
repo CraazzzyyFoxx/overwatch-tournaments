@@ -140,3 +140,26 @@ describe("registered teams list own-team dedup", () => {
     expect(getMyRegistration).not.toHaveBeenCalled();
   });
 });
+
+describe("registered teams list open slots", () => {
+  it("draws one row per slot nobody has taken", async () => {
+    // The shortfall used to be a sentence under a roster of glyphs, which left a
+    // one-player card stretched to the height of a full one and made the one
+    // question this section answers ("where can I still join?") the only thing
+    // you had to read instead of see.
+    authStatus = "unauthenticated";
+    authUser = null;
+    listPublic.mockResolvedValue({
+      items: [team({ id: 2, name: "Short", open_slots: { dps: 2, support: 1 } })],
+      unassigned_players: 0
+    });
+
+    const container = await mount();
+    const openRows = [...container.querySelectorAll("li")].filter(
+      (row) => row.textContent === "Open"
+    );
+    expect(openRows).toHaveLength(3);
+    // The old footer sentence is gone with it, not printed twice.
+    expect(container.textContent).not.toContain("Still needed");
+  });
+});

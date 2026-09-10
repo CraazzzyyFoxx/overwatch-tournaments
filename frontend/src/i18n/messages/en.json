@@ -410,6 +410,7 @@
       "empty": "No teams have registered yet.",
       "count": "{count, plural, =1 {# team} other {# teams}}",
       "shortfall": "Still needed: {slots}",
+      "openSlot": "Open",
       "complete": "Roster complete",
       "substitutes": "{used} of {max} substitutes",
       "freeAgents": "{count, plural, =1 {# player is} other {# players are}} registered without a team and can be invited."
