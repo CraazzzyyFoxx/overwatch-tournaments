@@ -990,19 +990,23 @@ class RegistrationService:
         registrations_read = []
         for r in registrations:
             chips = AdmissionChips.of(admissions.get(r.id))
+            read = _reg_to_read(
+                r,
+                workspace_id=workspace_id,
+                status_meta_map=status_meta_map,
+                show_ranks=show_ranks,
+                admission=chips.admission,
+                profiles_open=chips.profiles_open,
+                subscription_outcome=chips.subscription_outcome,
+                subscription_verdicts=chips.subscription_verdicts,
+                roster=rosters.get(r.id),
+            )
+            # ``dict(read)``, not ``model_dump()``: the nested reads stay model
+            # instances, which pydantic accepts as-is instead of dumping them to
+            # dicts and validating the whole tree a second time per row.
             registrations_read.append(
                 RegistrationListRead(
-                    **_reg_to_read(
-                        r,
-                        workspace_id=workspace_id,
-                        status_meta_map=status_meta_map,
-                        show_ranks=show_ranks,
-                        admission=chips.admission,
-                        profiles_open=chips.profiles_open,
-                        subscription_outcome=chips.subscription_outcome,
-                        subscription_verdicts=chips.subscription_verdicts,
-                        roster=rosters.get(r.id),
-                    ).model_dump(),
+                    **dict(read),
                     tournament_history=history_map.get(r.id, []),
                     tournament_history_count=history_count_map.get(r.id, 0),
                 )

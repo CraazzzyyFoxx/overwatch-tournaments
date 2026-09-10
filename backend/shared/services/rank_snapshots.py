@@ -10,8 +10,11 @@ from __future__ import annotations
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.core.enums import HERO_TYPE_CLASSES
+from shared.core.social import SocialProvider
 from shared.division_grid import DivisionGrid
 from shared.domain.player_sub_roles import canonical_to_registration_role
+from shared.models.identity.social import SocialAccount
 from shared.models.ranks.overwatch_rank import UserRankSnapshot
 
 
@@ -34,31 +37,34 @@ async def fetch_latest_ow_ranks_by_account(
     if not user_ids:
         return {}
 
-    # Postgres DISTINCT ON keeps the first row per (user, account, role) after
-    # ordering by captured_at DESC — same result as the previous row_number()
-    # window, but resolved in a single pass without a subquery materialization.
-    query = (
-        sa.select(
-            UserRankSnapshot.user_id,
-            UserRankSnapshot.battle_tag,
-            UserRankSnapshot.role,
-            UserRankSnapshot.rank_value,
-        )
-        .distinct(
-            UserRankSnapshot.user_id,
-            UserRankSnapshot.social_account_id,
-            UserRankSnapshot.role,
-        )
+    # ``rank_snapshot`` is an append-only time series (one row per poll, per
+    # role, every ``interval_seconds``), so "newest per account and role" must
+    # not read the history: a ``DISTINCT ON`` over ``user_id IN (...)`` fetched
+    # and sorted every snapshot the requested users ever had -- millions of rows
+    # after a season -- on every registrations-list render. Instead, enumerate
+    # the small (account x role) set and probe once per pair; with
+    # ``ix_rank_snapshot_latest_ranked`` each probe is a single index descent.
+    roles = sa.values(sa.column("role", sa.String), name="roles").data([(role.name,) for role in HERO_TYPE_CLASSES])
+    latest = (
+        sa.select(UserRankSnapshot.battle_tag, UserRankSnapshot.rank_value)
         .where(
-            UserRankSnapshot.user_id.in_(user_ids),
+            UserRankSnapshot.social_account_id == SocialAccount.id,
+            UserRankSnapshot.role == roles.c.role,
             UserRankSnapshot.rank_value.is_not(None),
             UserRankSnapshot.is_ranked.is_(True),
         )
-        .order_by(
-            UserRankSnapshot.user_id,
-            UserRankSnapshot.social_account_id,
-            UserRankSnapshot.role,
-            UserRankSnapshot.captured_at.desc(),
+        .order_by(UserRankSnapshot.captured_at.desc())
+        .limit(1)
+        .lateral("latest")
+    )
+    query = (
+        sa.select(SocialAccount.user_id, latest.c.battle_tag, roles.c.role, latest.c.rank_value)
+        .select_from(SocialAccount)
+        .join(roles, sa.true())
+        .join(latest, sa.true())
+        .where(
+            SocialAccount.user_id.in_(user_ids),
+            SocialAccount.provider == SocialProvider.BATTLENET,
         )
     )
     result = await session.execute(query)
