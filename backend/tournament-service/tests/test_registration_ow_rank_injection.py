@@ -71,7 +71,6 @@ def test_a_role_the_engine_did_not_rate_is_reported_unplayable() -> None:
     assert out.is_declared_active is True
 
 
-
 def test_single_role_registration_is_not_flex() -> None:
     """Flex needs MORE than one role, every one primary. The admin table used to
     call every single-role registration flex (its predicate had no ``len > 1``),

@@ -115,7 +115,9 @@ def test_domain_event_and_invalidation_are_separate_rows(session: Session) -> No
             session,
             scope=Scope.tournament(42),
             invalidates=[Resource.TOURNAMENT_TEAMS],
-            data=DomainEvent(domain="draft", event_type="draft.pick_made", payload={"pick_id": 3}, resource="draft.board"),
+            data=DomainEvent(
+                domain="draft", event_type="draft.pick_made", payload={"pick_id": 3}, resource="draft.board"
+            ),
         )
     )
     session.commit()

@@ -13,7 +13,9 @@ from typing import Any
 
 import pytest
 
-tournament_balancer = pytest.importorskip("tournament_balancer", reason="native tournament_balancer module is not installed")
+tournament_balancer = pytest.importorskip(
+    "tournament_balancer", reason="native tournament_balancer module is not installed"
+)
 
 pytestmark = pytest.mark.skipif(platform.system() != "Linux", reason="Rust MOO backend is Linux-only")
 

@@ -78,4 +78,3 @@ async def publish_event_to_redis_url(
     finally:
         if not closing:
             await redis.aclose()
-

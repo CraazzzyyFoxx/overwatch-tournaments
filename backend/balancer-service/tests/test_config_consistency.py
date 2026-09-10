@@ -280,7 +280,9 @@ def _rust_role_idx_spellings() -> set[str]:
     role_idx_block = "".join(line for line in source.splitlines(keepends=True) if "eq_ignore_ascii_case" in line)
     spellings = {match.lower() for match in re.findall(r'eq_ignore_ascii_case\("([^"]+)"\)', role_idx_block)}
 
-    assert spellings, f"parsed no role spellings out of {TOURNAMENT_BALANCER_CONTEXT_RS} — the parser or the file changed"
+    assert spellings, (
+        f"parsed no role spellings out of {TOURNAMENT_BALANCER_CONTEXT_RS} — the parser or the file changed"
+    )
     return spellings
 
 

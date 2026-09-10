@@ -11,7 +11,6 @@ from src.domain.balancer.determinism import build_balancer_seed, derive_balancer
 from src.domain.balancer.entities import Player, Team
 from src.services.balancer.config.defaults import AlgorithmConfig
 
-
 #: The native crate (``native/tournament_balancer``), importable as a plain module
 #: once ``maturin develop`` has built it.
 NATIVE_MODULE = "tournament_balancer"

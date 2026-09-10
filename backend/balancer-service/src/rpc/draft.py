@@ -703,9 +703,7 @@ def register(broker: Any, logger: Any) -> None:
                 actor_player_ids=public_user_ids,
                 is_admin=is_admin,
             )
-            await _publish_result(
-                session, draft, result, made_event="draft.pick_made", actor_user_id=public_user_id
-            )
+            await _publish_result(session, draft, result, made_event="draft.pick_made", actor_user_id=public_user_id)
             await session.commit()
             return await board_service.session_read(session, draft)
 
@@ -721,9 +719,7 @@ def register(broker: Any, logger: Any) -> None:
             payload = schemas.DraftPickAutopickRequest.model_validate(c.payload(data))
             draft, pick = await _load_pick(session, pick_id)
             result = await selection_service.autopick(session, draft, pick, expected_version=payload.expected_version)
-            await _publish_result(
-                session, draft, result, made_event="draft.autopicked", actor_user_id=None
-            )
+            await _publish_result(session, draft, result, made_event="draft.autopicked", actor_user_id=None)
             await session.commit()
             return await board_service.session_read(session, draft)
 
@@ -772,9 +768,7 @@ def register(broker: Any, logger: Any) -> None:
                     },
                 ),
             )
-            await _publish_result(
-                session, draft, result, made_event="draft.pick_made", actor_user_id=public_user_id
-            )
+            await _publish_result(session, draft, result, made_event="draft.pick_made", actor_user_id=public_user_id)
             await session.commit()
             return await board_service.session_read(session, draft)
 

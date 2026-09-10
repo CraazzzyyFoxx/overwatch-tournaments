@@ -135,9 +135,7 @@ def register(broker: Any, logger: Any) -> None:
             ws_id = await _get_balance_workspace_id(session, balance_id)
             c.require_workspace_permission(data, user, ws_id, "team", "create")
             balance, removed_teams, imported_teams = await balancer_admin_service.export_balance(session, balance_id)
-            await emit_balancer_data(
-                session, balance.tournament_id, BALANCER_TEAMS_CHANGED, actor_user_id=user.id
-            )
+            await emit_balancer_data(session, balance.tournament_id, BALANCER_TEAMS_CHANGED, actor_user_id=user.id)
             # The balancer topic reaches only the admin tool. Materialization
             # rewrote tournament.team / player / standing, so the PUBLIC reads
             # are stale — named here, and mirrored to app-service (which caches
@@ -169,9 +167,7 @@ def register(broker: Any, logger: Any) -> None:
             ws_id = await _get_balance_workspace_id(session, balance_id)
             c.require_workspace_permission(data, user, ws_id, "team", "create")
             balance, updated = await balancer_admin_service.export_balance_ranks(session, balance_id)
-            await emit_balancer_data(
-                session, balance.tournament_id, BALANCER_TEAMS_CHANGED, actor_user_id=user.id
-            )
+            await emit_balancer_data(session, balance.tournament_id, BALANCER_TEAMS_CHANGED, actor_user_id=user.id)
             # Rank export rewrites tournament.player rows the public reads join.
             await emit(
                 session,

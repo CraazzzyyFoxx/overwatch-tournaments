@@ -343,8 +343,7 @@ class RosterEngine:
             best = max((entry.rank for entry in entries if entry.is_playable), default=None)
             if best is not None:
                 entries = [
-                    entry if entry.is_playable else RosterRole(**{**_as_dict(entry), "rank": best})
-                    for entry in entries
+                    entry if entry.is_playable else RosterRole(**{**_as_dict(entry), "rank": best}) for entry in entries
                 ]
 
         # THE flex predicate. Over the roles the player actually declared AND can

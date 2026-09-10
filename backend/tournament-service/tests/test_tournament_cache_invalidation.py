@@ -32,9 +32,7 @@ from shared.services.realtime import Resource, Scope  # noqa: E402
 # unroutable and raises ``NotConfiguredError`` at runtime.
 _CONFIGURED_PREFIXES = ("fastapi:", "backend:")
 
-_ALL_TOURNAMENT_RESOURCES = frozenset(
-    resource for resource in Resource if str(resource).startswith("tournament.")
-)
+_ALL_TOURNAMENT_RESOURCES = frozenset(resource for resource in Resource if str(resource).startswith("tournament."))
 
 
 class InvalidateTournamentResourcesTests(IsolatedAsyncioTestCase):
@@ -92,6 +90,4 @@ class InvalidateTournamentResourcesTests(IsolatedAsyncioTestCase):
         # Not a pattern-shape assertion (that is test_cache_resources.py) but the
         # end-to-end one: cashews itself must accept every pattern the whole
         # tournament vocabulary produces, in a single union.
-        await cache_invalidation.invalidate_tournament_resources(
-            Scope.tournament(42), _ALL_TOURNAMENT_RESOURCES
-        )
+        await cache_invalidation.invalidate_tournament_resources(Scope.tournament(42), _ALL_TOURNAMENT_RESOURCES)

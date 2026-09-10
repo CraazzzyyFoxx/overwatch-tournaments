@@ -25,9 +25,7 @@ _CONFIGURED_PREFIXES = ("fastapi:", "backend:")
 
 
 def _manifest_tournament_resources() -> set[str]:
-    return {
-        name for name, spec in load_manifest()["resources"].items() if spec["scope"] == "tournament"
-    }
+    return {name for name, spec in load_manifest()["resources"].items() if spec["scope"] == "tournament"}
 
 
 class CacheResourceTableTests(IsolatedAsyncioTestCase):

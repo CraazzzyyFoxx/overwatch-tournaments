@@ -48,5 +48,3 @@ BALANCER_PRESENCE = "balancer.presence"
 # Ephemeral live-drag overlay: client-originated over the socket and fanned out
 # to co-subscribers by the gateway, never persisted.
 BALANCER_DRAG = "balancer.drag"
-
-

@@ -46,7 +46,6 @@ def _staged_resources(session: SimpleNamespace, scope: Scope) -> set[Resource]:
     return _staged_invalidations(session)[scope][0]
 
 
-
 class TournamentProducerResourceTests(IsolatedAsyncioTestCase):
     async def test_recalculation_stales_encounters_only(self) -> None:
         # ``scalar`` answers the scrim-container probe the recalculation makes
@@ -82,9 +81,7 @@ class TournamentProducerResourceTests(IsolatedAsyncioTestCase):
         session = _fake_session()
 
         with patch.object(tournament_events, "enqueue_invalidation_outbox", AsyncMock()) as outbox:
-            await tournament_events.publish_tournament_invalidation(
-                session, 42, tournament_events.STRUCTURE_RESOURCES
-            )
+            await tournament_events.publish_tournament_invalidation(session, 42, tournament_events.STRUCTURE_RESOURCES)
 
         self.assertEqual(_staged_resources(session, Scope.tournament(42)), {Resource.TOURNAMENT_STRUCTURE})
         self.assertEqual(outbox.await_args.kwargs["scope"], Scope.tournament(42))
@@ -100,9 +97,7 @@ class TournamentProducerResourceTests(IsolatedAsyncioTestCase):
             patch.object(tournament_events, "enqueue_outbox_event", AsyncMock()),
         ):
             await tournament_events.enqueue_tournament_recalculation(session, 42)
-            await tournament_events.publish_tournament_invalidation(
-                session, 42, tournament_events.STRUCTURE_RESOURCES
-            )
+            await tournament_events.publish_tournament_invalidation(session, 42, tournament_events.STRUCTURE_RESOURCES)
 
         self.assertEqual(list(_staged_invalidations(session)), [Scope.tournament(42)])
         self.assertEqual(

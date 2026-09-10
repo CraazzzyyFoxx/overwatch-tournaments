@@ -103,7 +103,6 @@ class _FakeRedis:
         self.hashes.pop(key, None)
 
 
-
 def _snapshot(login: str, user_id: str | None = None) -> helix.StreamSnapshot:
     return helix.StreamSnapshot(
         channel=login,
