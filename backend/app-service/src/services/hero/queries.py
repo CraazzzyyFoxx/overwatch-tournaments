@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.division_grid import DivisionGrid, division_case_expr
 from shared.services.tournament.visibility import visible_tournament_ids_subquery
-from src import models, schemas
+from src import models
 from src.core import enums, pagination
 
 __all__ = ("HeroQueries", "queries")
@@ -69,28 +69,6 @@ _STAT_COLUMN_MAP: dict[enums.LogStatsName, str] = {
 
 class HeroQueries:
     """Analytical hero SQL (leaderboard, per-map playtime, stat aggregates)."""
-
-    async def get_heroes_stats(
-        self,
-        session: AsyncSession,
-        params: schemas.HeroStatsPaginationParams,
-    ) -> tuple[typing.Sequence[tuple[models.Hero, float]], int]:
-        """Paginated heroes with their summed ``params.stat`` value, plus the total hero count."""
-        total_query = sa.select(sa.func.count(models.Hero.id))
-
-        query = (
-            sa.select(models.Hero, sa.func.sum(models.MatchStatistics.value))
-            .select_from(models.Hero)
-            .join(models.MatchStatistics, models.MatchStatistics.hero_id == models.Hero.id)
-            .where(sa.and_(models.MatchStatistics.name == params.stat))
-            .group_by(models.Hero.id)
-            .order_by(sa.func.sum(models.MatchStatistics.value).desc())
-        )
-
-        query = params.apply_pagination(query)
-        result = await session.execute(query)
-        total = await session.execute(total_query)
-        return result.all(), total.scalar()  # type: ignore
 
     async def get_heroes_playtime_by_maps(
         self,

@@ -1,8 +1,20 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useId, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Ban, ChevronDown, FolderInput, Loader2, RotateCcw, Users } from "lucide-react";
+import {
+  Ban,
+  ChevronDown,
+  Crown,
+  FolderInput,
+  LifeBuoy,
+  Loader2,
+  MoreHorizontal,
+  RotateCcw,
+  Users,
+  X,
+  type LucideIcon
+} from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
 
 import { type Tone } from "@/components/admin/tone";
@@ -23,6 +35,13 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger
+} from "@/components/ui/dropdown-menu";
+import RosterSlotGlyph from "@/components/registration/RosterSlotGlyph";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
@@ -98,6 +117,27 @@ function memberName(member: RegistrationTeamMember): string {
 }
 
 /**
+ * Captain / substitute marker.
+ *
+ * The glyph replaces the word: on a card whose whole job is fitting every team
+ * on one screen, "Captain" spelled out cost more width than the name beside it.
+ * Same vocabulary as the public roster (`RegistrationTeamsList`), and the name
+ * is still announced — hidden text, not a missing label.
+ */
+function RosterMark({
+  icon: Icon,
+  label,
+  className
+}: Readonly<{ icon: LucideIcon; label: string; className?: string }>) {
+  return (
+    <span className={cn("inline-flex shrink-0", className)} title={label}>
+      <Icon aria-hidden className="size-3.5" />
+      <span className="sr-only">{label}</span>
+    </span>
+  );
+}
+
+/**
  * One team's whole invite ledger, organizer side.
  *
  * Collapsed and unfetched until asked for: the chips above already answer the
@@ -114,12 +154,16 @@ function TeamInviteHistory({
   tournamentId,
   workspaceId,
   teamId,
-  slotLabel
+  slotLabel,
+  meta
 }: Readonly<{
   tournamentId: number;
   workspaceId: number;
   teamId: number;
   slotLabel: (code: string | null) => string;
+  /** Rendered on the trigger's own line — a second full-width row for one
+   *  short counter is the kind of thing that made this card three screens. */
+  meta?: ReactNode;
 }>) {
   const t = useTranslations("registrationTeams");
   const format = useFormatter();
@@ -136,20 +180,23 @@ function TeamInviteHistory({
 
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
-      <CollapsibleTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          className="flex h-auto w-full justify-between px-2 py-1.5 text-xs"
-        >
-          <span>{t("history.toggle")}</span>
-          <ChevronDown
-            aria-hidden
-            className={cn("size-4 transition-transform", open && "rotate-180")}
-          />
-        </Button>
-      </CollapsibleTrigger>
+      <div className="flex items-center justify-between gap-2">
+        {meta}
+        <CollapsibleTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="ml-auto h-6 gap-1 px-1.5 text-caption font-normal text-muted-foreground"
+          >
+            {t("history.toggle")}
+            <ChevronDown
+              aria-hidden
+              className={cn("size-3.5 transition-transform", open && "rotate-180")}
+            />
+          </Button>
+        </CollapsibleTrigger>
+      </div>
       <CollapsibleContent className="space-y-1 pt-2">
         {historyQuery.isLoading ? (
           <Skeleton className="h-12 w-full rounded-md" />
@@ -357,7 +404,7 @@ export function RegistrationTeamsCard({
   return (
     <>
       <Card>
-        <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-3">
+        <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-3 pb-3">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
               <Users className="size-4 text-primary" aria-hidden />
@@ -394,7 +441,7 @@ export function RegistrationTeamsCard({
             )}
           </div>
         </CardHeader>
-        <CardContent className="space-y-3">
+        <CardContent className="space-y-2">
           {/* The export materializes registered TEAMS. A player on no team is
               invisible to it, and on a team-registration tournament neither the
               balancer nor the draft runs either — so they silently never become a
@@ -418,157 +465,184 @@ export function RegistrationTeamsCard({
           )}
 
           {teamsQuery.isLoading ? (
-            <div className="space-y-2">
-              <Skeleton className="h-24 w-full rounded-lg" />
-              <Skeleton className="h-24 w-full rounded-lg" />
+            <div className="grid gap-2 xl:grid-cols-2">
+              <Skeleton className="h-20 w-full rounded-lg" />
+              <Skeleton className="h-20 w-full rounded-lg" />
             </div>
           ) : teams.length === 0 ? (
             <EmptyNote icon={Users} title={t("list.empty")}>
               {t("admin.emptyHint")}
             </EmptyNote>
           ) : (
-            teams.map((team) => (
-              <div key={team.id} className="space-y-3 rounded-lg border border-border p-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-medium">{team.name}</span>
+            /* Two columns from `xl`. One team is about 700px of content, so a
+               full-width row per team spent half of a 1500px admin viewport on
+               nothing and pushed the fifth team below the fold — on the one
+               screen whose question ("who is still short?") is answered by
+               seeing every team at once. */
+            <div className="grid gap-2 xl:grid-cols-2">
+              {teams.map((team) => (
+                <div
+                  key={team.id}
+                  className="space-y-1.5 rounded-lg border border-border p-2.5"
+                >
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <span className="truncate font-medium">{team.name}</span>
                     <StatusPill tone={STATUS_TONE[team.status]}>
                       {t(`status.${team.status}`)}
                     </StatusPill>
                     {team.exported_team_id != null && (
-                      <Badge variant="outline">{tCommon("rostered")}</Badge>
+                      <Badge variant="outline">{t("admin.inTournament")}</Badge>
                     )}
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
+                    {/* The whole point of the card: what is still missing. A full
+                        roster already says so in its status pill, so only the
+                        shortfall gets words of its own — the sentence that used
+                        to repeat "Roster complete" under the pill was a line per
+                        team saying nothing new. */}
+                    {!team.is_complete && (
+                      <span className="text-caption font-medium text-warning">
+                        {t("list.shortfall", { slots: formatShortfall(team.open_slots, tSlot) })}
+                      </span>
+                    )}
+                    {/* The admin's one row-actions convention (DESIGN.md): the
+                        two labelled buttons cost ~260px of the row a two-column
+                        grid no longer has. An action the caller may not perform
+                        is absent, never disabled. */}
                     {canManageTeams && team.exported_team_id == null && (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        disabled={resetCapMutation.isPending}
-                        onClick={() => setResetTarget(team)}
-                      >
-                        <RotateCcw className="mr-2 h-4 w-4" aria-hidden />
-                        {t("admin.resetCap")}
-                      </Button>
-                    )}
-                    {canManageTeams &&
-                      team.exported_team_id == null &&
-                      (team.status === "forming" || team.status === "complete") && (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            setWithdrawMembers(true);
-                            setRejectTarget(team);
-                          }}
+                      <DropdownMenu>
+                        <DropdownMenuTrigger
+                          aria-label={t("admin.rowActions", { team: team.name })}
+                          className="ml-auto inline-flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         >
-                          <Ban className="mr-2 h-4 w-4" aria-hidden />
-                          {t("admin.reject")}
-                        </Button>
-                      )}
-                  </div>
-                </div>
-
-                {/* The whole point of the card: what is still missing. */}
-                {team.is_complete ? (
-                  <p className="text-sm font-medium text-success">{t("list.complete")}</p>
-                ) : (
-                  <p className="text-sm font-medium text-warning">
-                    {t("list.shortfall", { slots: formatShortfall(team.open_slots, tSlot) })}
-                  </p>
-                )}
-
-                {team.members.length > 0 && (
-                  <ul className="flex flex-wrap gap-2">
-                    {team.members.map((member) => (
-                      <li
-                        key={member.registration_id}
-                        className="flex items-center gap-2 rounded-md border border-border px-2 py-1 text-xs"
-                      >
-                        <span className="font-medium">{memberName(member)}</span>
-                        <span className="text-muted-foreground">{slotLabel(member.slot_code)}</span>
-                        {member.is_captain && (
-                          <Badge variant="secondary">{t("member.captain")}</Badge>
-                        )}
-                        {member.is_substitute && (
-                          <Badge variant="outline">{t("member.substitute")}</Badge>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-
-                {team.max_substitutes > 0 && (
-                  <p className="text-xs text-muted-foreground">
-                    {t("list.substitutes", {
-                      used: team.substitutes_used,
-                      max: team.max_substitutes
-                    })}
-                  </p>
-                )}
-
-                {team.invites.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">{t("invite.pendingEmpty")}</p>
-                ) : (
-                  <ul className="flex flex-wrap gap-2">
-                    {team.invites.map((invite) => (
-                      <li
-                        key={invite.id}
-                        className="flex flex-wrap items-center gap-2 rounded-md border border-border px-2 py-1 text-xs"
-                      >
-                        <StatusPill tone={inviteTone(invite.state)}>
-                          {t(`inviteState.${invite.state}`)}
-                        </StatusPill>
-                        <span className="text-muted-foreground">{slotLabel(invite.slot_code)}</span>
-                        <span className="text-muted-foreground">
-                          {invite.target_battle_tag
-                            ? t("invite.targetLabel", { name: invite.target_battle_tag })
-                            : t("invite.linkLabel")}
-                        </span>
-                        {invite.is_substitute && (
-                          <span className="text-muted-foreground">{t("member.substitute")}</span>
-                        )}
-                        {invite.expires_at && (
-                          <span className="text-muted-foreground">
-                            {t("invite.expiresAt", {
-                              date: format.dateTime(new Date(invite.expires_at), EXPIRY_STAMP)
-                            })}
-                          </span>
-                        )}
-                        {/* An organizer reaching into someone else's roster. Its
-                            own label and a destructive variant keep it from
-                            reading like the captain's own "Revoke" — the two are
-                            the same effect but not the same act, and the ledger
-                            records which one happened. */}
-                        {canManageTeams && invite.state === "pending" && (
-                          <Button
-                            type="button"
-                            variant="destructive"
-                            size="sm"
-                            className="h-6 px-2 text-xs"
-                            disabled={revokeInviteMutation.isPending}
-                            onClick={() =>
-                              revokeInviteMutation.mutate({ teamId: team.id, inviteId: invite.id })
-                            }
+                          <MoreHorizontal aria-hidden className="size-4" />
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-56">
+                          <DropdownMenuItem
+                            className="gap-2"
+                            onSelect={() => setResetTarget(team)}
                           >
-                            {t("admin.revokeInvite")}
-                          </Button>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                )}
+                            <RotateCcw aria-hidden className="size-3.5" />
+                            {t("admin.resetCap")}
+                          </DropdownMenuItem>
+                          {(team.status === "forming" || team.status === "complete") && (
+                            <DropdownMenuItem
+                              className="gap-2 text-danger focus:text-danger"
+                              onSelect={() => {
+                                setWithdrawMembers(true);
+                                setRejectTarget(team);
+                              }}
+                            >
+                              <Ban aria-hidden className="size-3.5" />
+                              {t("admin.reject")}
+                            </DropdownMenuItem>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
+                  </div>
 
-                <TeamInviteHistory
-                  tournamentId={tournamentId}
-                  workspaceId={workspaceId}
-                  teamId={team.id}
-                  slotLabel={slotLabel}
-                />
-              </div>
-            ))
+                  {/* Roster and open invites in one wrapping strip: they fill the
+                      same slots, and the dashed chip is what says "offered, not
+                      taken". Two separate lists left one of them empty on most
+                      teams — and "No open invites." was a whole line spent on
+                      the ordinary case. */}
+                  {(team.members.length > 0 || team.invites.length > 0) && (
+                    <ul className="flex flex-wrap items-center gap-1.5">
+                      {team.members.map((member) => (
+                        <li
+                          key={member.registration_id}
+                          className="flex items-center gap-1.5 rounded-md border border-border px-1.5 py-0.5 text-caption"
+                        >
+                          <RosterSlotGlyph code={member.slot_code} size={14} />
+                          <span className="font-medium">{memberName(member)}</span>
+                          {member.is_captain && (
+                            <RosterMark
+                              icon={Crown}
+                              label={t("member.captain")}
+                              className="text-warning"
+                            />
+                          )}
+                          {member.is_substitute && (
+                            <RosterMark
+                              icon={LifeBuoy}
+                              label={t("member.substitute")}
+                              className="text-muted-foreground"
+                            />
+                          )}
+                        </li>
+                      ))}
+                      {team.invites.map((invite) => (
+                        <li
+                          key={invite.id}
+                          className="flex items-center gap-1.5 rounded-md border border-dashed border-border px-1.5 py-0.5 text-caption"
+                        >
+                          <StatusPill tone={inviteTone(invite.state)}>
+                            {t(`inviteState.${invite.state}`)}
+                          </StatusPill>
+                          <RosterSlotGlyph code={invite.slot_code} size={14} />
+                          <span className="text-muted-foreground">
+                            {invite.target_battle_tag ?? t("invite.linkLabel")}
+                          </span>
+                          {invite.is_substitute && (
+                            <RosterMark
+                              icon={LifeBuoy}
+                              label={t("member.substitute")}
+                              className="text-muted-foreground"
+                            />
+                          )}
+                          {invite.expires_at && (
+                            <span className="text-muted-foreground">
+                              {t("invite.expiresAt", {
+                                date: format.dateTime(new Date(invite.expires_at), EXPIRY_STAMP)
+                              })}
+                            </span>
+                          )}
+                          {/* An organizer reaching into someone else's roster. Its
+                              own label and the danger tone keep it from reading
+                              like the captain's own "Revoke" — the two are the
+                              same effect but not the same act, and the ledger
+                              records which one happened. */}
+                          {canManageTeams && invite.state === "pending" && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              aria-label={t("admin.revokeInvite")}
+                              title={t("admin.revokeInvite")}
+                              className="size-6 text-danger [&_svg]:size-3.5"
+                              disabled={revokeInviteMutation.isPending}
+                              onClick={() =>
+                                revokeInviteMutation.mutate({ teamId: team.id, inviteId: invite.id })
+                              }
+                            >
+                              <X aria-hidden />
+                            </Button>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+
+                  <TeamInviteHistory
+                    tournamentId={tournamentId}
+                    workspaceId={workspaceId}
+                    teamId={team.id}
+                    slotLabel={slotLabel}
+                    meta={
+                      /* Only once someone is actually on the bench: "0 of 2
+                         substitutes" under every team is a constant, not news. */
+                      team.substitutes_used > 0 ? (
+                        <span className="text-caption text-muted-foreground">
+                          {t("list.substitutes", {
+                            used: team.substitutes_used,
+                            max: team.max_substitutes
+                          })}
+                        </span>
+                      ) : null
+                    }
+                  />
+                </div>
+              ))}
+            </div>
           )}
         </CardContent>
       </Card>

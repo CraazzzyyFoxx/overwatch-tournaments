@@ -2,14 +2,19 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { PLATFORM_ZONE } from "./host";
 
-// Canonical cookie names, written by oauth-callback.ts (login) and
-// auth/refresh/route.ts (refresh). LEGACY_* names are read as a fallback
-// during the aqt->owt rename so existing sessions are not logged out; they
-// are never written, only read and cleared.
-export const ACCESS_TOKEN_COOKIE = "owt_access_token";
-export const REFRESH_TOKEN_COOKIE = "owt_refresh_token";
-const LEGACY_ACCESS_TOKEN_COOKIE = "aqt_access_token";
-const LEGACY_REFRESH_TOKEN_COOKIE = "aqt_refresh_token";
+// Canonical cookie names come from ./cookie-names, which namespaces them per
+// deployment (NEXT_PUBLIC_COOKIE_PREFIX) so a second deployment under the same
+// registrable domain cannot be handed production's session cookie. LEGACY_*
+// names are read as a fallback during the aqt->owt rename so existing sessions
+// are not logged out; they are never written, only read and cleared.
+import {
+  ACCESS_TOKEN_COOKIE,
+  REFRESH_TOKEN_COOKIE,
+  LEGACY_ACCESS_TOKEN_COOKIE,
+  LEGACY_REFRESH_TOKEN_COOKIE
+} from "./cookie-names";
+
+export { ACCESS_TOKEN_COOKIE, REFRESH_TOKEN_COOKIE };
 
 const IS_PROD = process.env.NODE_ENV === "production";
 // owt_access_token/owt_refresh_token are set Domain-wide (SSO across

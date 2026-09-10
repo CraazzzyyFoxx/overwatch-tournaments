@@ -230,24 +230,37 @@ def _reg_to_read(
     branch in every consumer -- which is how the five client-side re-derivations
     of this answer got started.
     """
-    roles = (
-        [
+    if roster is not None:
+        # The roster, not the rows: under ``all_roles``/``forced`` the engine
+        # synthesizes the roles the DB never stored, and the public table used to
+        # publish one role while the balancer and the draft acted on three.
+        # ``is_primary``/``priority`` come from the same place for the same reason.
+        roles = [
+            RegistrationRoleRead(
+                role=entry.role.slot_code,
+                subrole=entry.subrole,
+                is_primary=entry.is_primary,
+                priority=entry.priority,
+                # The engine's answer, or nothing: a role it did not rate is a role
+                # the player cannot be picked on, and printing the raw column there
+                # advertised a rating the balancer would never honour.
+                rank_value=roster.rank_on(entry.role) if show_ranks else None,
+                top_heroes=[hero.slug for hero in entry.top_heroes],
+            )
+            for entry in sorted(roster.roles, key=lambda entry: (not entry.is_primary, entry.priority))
+        ]
+    else:
+        roles = [
             RegistrationRoleRead(
                 role=r.role,
                 subrole=r.subrole,
                 is_primary=r.is_primary,
                 priority=r.priority,
-                # The engine's answer, or nothing: a role it did not rate is a role
-                # the player cannot be picked on, and printing the raw column there
-                # advertised a rating the balancer would never honour.
-                rank_value=roster.rank_on(r.role) if show_ranks and roster is not None else None,
+                rank_value=None,
                 top_heroes=[he.hero.slug for he in sorted(r.hero_entries, key=lambda he: he.priority)],
             )
-            for r in sorted(reg.roles, key=lambda r: (not r.is_primary, r.priority))
+            for r in sorted(reg.roles or [], key=lambda r: (not r.is_primary, r.priority))
         ]
-        if reg.roles
-        else []
-    )
 
     # ``registration_team`` must be eager-loaded by the caller: the model marks it
     # "never lazy-loaded in async code", and a lazy load here would raise
@@ -302,21 +315,19 @@ def _reg_to_read(
     )
 
 
-async def _public_rosters(
-    session: AsyncSession,
-    registrations: Sequence[Any],
-    *,
-    show_ranks: bool,
-) -> dict[int, PlayerRoster]:
-    """Resolved rosters for the public participants list, or nothing when the
-    form hides ranks.
+async def _public_rosters(session: AsyncSession, registrations: Sequence[Any]) -> dict[int, PlayerRoster]:
+    """Resolved rosters for the public participants list.
+
+    Always resolved, rank publication or not: the ROLE list itself comes from the
+    roster (``all_roles``/``forced`` synthesize roles no DB row names), and
+    ``show_ranks`` only decides whether ``_reg_to_read`` prints the number.
 
     The workspace is resolved here rather than pushed onto all five call sites:
     every caller already has the registrations, and one tournament's worth of
     them shares a tenancy. Rows must carry ``registration_read_loaders()``, which
     folds in everything the engine reads.
     """
-    if not show_ranks or not registrations:
+    if not registrations:
         return {}
     tournament_id = registrations[0].tournament_id
     workspace_id = await _resolve_tournament_workspace(session, tournament_id)

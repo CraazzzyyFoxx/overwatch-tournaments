@@ -137,9 +137,21 @@ async function mount() {
 async function click(node: Element | null | undefined) {
   expect(node).toBeTruthy();
   await act(async () => {
+    // Radix opens a dropdown on `pointerdown`; everything else answers `click`.
+    node?.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
     node?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
   });
   await settle();
+}
+
+/** The row's `⋯` menu, opened. Its items are portaled outside the container. */
+async function rowMenu(scope: ParentNode, team: string): Promise<HTMLElement[]> {
+  await click(scope.querySelector(`button[aria-label='Actions for ${team}']`));
+  return [...document.body.querySelectorAll<HTMLElement>("[role='menuitem']")];
+}
+
+function menuItem(items: HTMLElement[], text: string): HTMLElement | undefined {
+  return items.find((item) => (item.textContent ?? "").includes(text));
 }
 
 function buttonWithText(scope: ParentNode, text: string): HTMLButtonElement | undefined {
@@ -194,8 +206,21 @@ describe("RegistrationTeamsCard", () => {
     expect(scope.textContent).toContain("2 teams");
     expect(scope.textContent).toContain("Nyx");
     expect(scope.textContent).toContain("Captain");
-    expect(scope.textContent).toContain("0 of 1 substitutes");
+    // A bench nobody is on is a constant, not news: "0 of 1 substitutes" under
+    // every team was one wasted line per row on the screen whose job is fitting
+    // every team at once.
+    expect(scope.textContent).not.toContain("0 of 1 substitutes");
     expect(listAdmin).toHaveBeenCalledWith(TOURNAMENT_ID, { includeTerminal: false });
+  });
+
+  it("names the bench once someone is on it", async () => {
+    listAdmin
+      .mockReset()
+      .mockResolvedValue({ items: [team({ substitutes_used: 1 })], total: 1 });
+
+    const scope = await mount();
+
+    expect(scope.textContent).toContain("1 of 1 substitutes");
   });
 
   it("warns the organizer about players the export cannot place", async () => {
@@ -270,11 +295,8 @@ describe("RegistrationTeamsCard", () => {
     // a permission bug, not a typo.
     const scope = await mount();
 
-    await click(
-      [...scope.querySelectorAll("button")].find((button) =>
-        (button.textContent ?? "").includes("Withdraw invite")
-      )
-    );
+    // Icon-only, so the accessible name is the only name it has.
+    await click(scope.querySelector("button[aria-label='Withdraw invite']"));
 
     expect(revokeInviteAdmin).toHaveBeenCalledWith(TOURNAMENT_ID, 5);
   });
@@ -285,11 +307,7 @@ describe("RegistrationTeamsCard", () => {
     // provided. It is still someone else's roster, hence the confirm.
     const scope = await mount();
 
-    await click(
-      [...scope.querySelectorAll("button")].find((button) =>
-        (button.textContent ?? "").includes("Reset invite count")
-      )
-    );
+    await click(menuItem(await rowMenu(scope, "Team Alpha"), "Reset invite count"));
     expect(resetInviteCap).not.toHaveBeenCalled();
 
     await click(
@@ -314,8 +332,9 @@ describe("RegistrationTeamsCard", () => {
 
     expect(scope.textContent).toContain("Pending");
     expect(scope.textContent).toContain("Expires");
-    // The complete team has none, and says so rather than rendering an empty gap.
-    expect(scope.textContent).toContain("No open invites.");
+    // The complete team has none — and stays silent about it: a line reading
+    // "No open invites." on every settled team is the noise this card drowned in.
+    expect(scope.textContent).not.toContain("No open invites.");
   });
 
   it("refetches with terminal teams when the toggle flips", async () => {
@@ -329,7 +348,7 @@ describe("RegistrationTeamsCard", () => {
   it("withdraws the members by default when a team is rejected", async () => {
     const scope = await mount();
 
-    await click(buttonWithText(scope, "Reject team"));
+    await click(menuItem(await rowMenu(scope, "Team Alpha"), "Reject team"));
     const dialog = confirmDialog();
     expect(dialog?.textContent).toContain("Reject Team Alpha?");
     expect(dialog?.querySelector("[role='checkbox']")?.getAttribute("data-state")).toBe("checked");
@@ -343,7 +362,7 @@ describe("RegistrationTeamsCard", () => {
   it("honours an unchecked withdraw box", async () => {
     const scope = await mount();
 
-    await click(buttonWithText(scope, "Reject team"));
+    await click(menuItem(await rowMenu(scope, "Team Alpha"), "Reject team"));
     const dialog = confirmDialog();
     await click(dialog?.querySelector("[role='checkbox']"));
     await click(buttonWithText(dialog!, "Reject team"));
@@ -393,7 +412,7 @@ describe("RegistrationTeamsCard", () => {
     );
 
     const scope = await mount();
-    await click(buttonWithText(scope, "Reject team"));
+    await click(menuItem(await rowMenu(scope, "Team Alpha"), "Reject team"));
     await click(buttonWithText(confirmDialog()!, "Reject team"));
 
     // The server's English `msg` must never reach the organizer.

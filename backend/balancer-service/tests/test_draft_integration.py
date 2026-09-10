@@ -715,7 +715,7 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
             pick_id = current.id
             session_id = draft.id
 
-        fired = await draft_clock.draft_clock_service.fire_autopick_if_expired(self.Session, None, session_id)
+        fired = await draft_clock.draft_clock_service.fire_autopick_if_expired(self.Session, session_id)
         self.assertTrue(fired)
         async with self.Session() as s:
             pick = await s.get(DraftPick, pick_id)
@@ -728,7 +728,7 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
             await lifecycle.lifecycle_service.start(s, draft)
             await s.commit()  # clock_expires_at ~45s in the future
             session_id = draft.id
-        fired = await draft_clock.draft_clock_service.fire_autopick_if_expired(self.Session, None, session_id)
+        fired = await draft_clock.draft_clock_service.fire_autopick_if_expired(self.Session, session_id)
         self.assertFalse(fired)
 
     async def test_board_snapshot_carries_event_cursor(self) -> None:
@@ -738,7 +738,6 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
             draft = await self._new_session(s)
             await draft_realtime.publish_draft_event(
                 s,
-                None,
                 draft_session=draft,
                 event_type="draft.session_updated",
                 payload={"session_id": draft.id, "status": draft.status},
@@ -822,6 +821,37 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
             self.assertEqual(len(available), 6)
             # ranks read back from the pool
             self.assertTrue(all(rosters[p.id].best_rank >= 3000 for p in players))
+
+    async def test_load_drops_an_available_seat_pulled_from_the_pool_but_keeps_a_picked_one(self) -> None:
+        # A registration excluded (or banned, or soft-deleted) mid-draft used to
+        # keep its roster -- and therefore stayed pickable -- because every seat
+        # resolved with ``include_deleted`` and no pool filter. An AVAILABLE seat
+        # must now resolve through the pool predicate; a PICKED seat must not,
+        # or a frozen pick would vanish off the board.
+        async with self.Session() as s:
+            draft = await self._new_session(s)
+            players = (
+                await s.scalars(sa.select(lifecycle.DraftPlayer).where(lifecycle.DraftPlayer.session_id == draft.id))
+            ).all()
+            captain = next(p for p in players if p.status == DraftPlayerStatus.PICKED.value)
+            available = next(p for p in players if p.status == DraftPlayerStatus.AVAILABLE.value)
+            await s.execute(
+                sa.update(BalancerRegistration)
+                .where(BalancerRegistration.id == available.registration_id)
+                .values(balancer_status="excluded")
+            )
+            await s.execute(
+                sa.update(BalancerRegistration)
+                .where(BalancerRegistration.id == captain.registration_id)
+                .values(deleted_at=datetime.now(UTC))
+            )
+            await s.commit()
+
+            rosters = await draft_rosters.load(s, draft, list(players))
+
+            self.assertNotIn(available.id, rosters)
+            self.assertIn(captain.id, rosters)
+            self.assertEqual(len(rosters), len(players) - 1)
 
     async def test_seed_from_pool_weakest_first_orders_seats_by_rank(self) -> None:
         from shared.core.enums import DraftCaptainOrder
@@ -919,7 +949,6 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
             draft = await self._new_session(s)
             await draft_realtime.publish_draft_event(
                 s,
-                None,  # no redis: only the durable WorkspaceEvent is written
                 draft_session=draft,
                 event_type="draft.session_updated",
                 payload={"session_id": draft.id, "status": draft.status},

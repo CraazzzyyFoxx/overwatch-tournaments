@@ -81,7 +81,7 @@ class InternalBalancerTeam(BaseModel):
 
     @staticmethod
     def _map_role(role_name: str) -> RosterSlotCode | None:
-        # ``moo_core``/dual-write roster keys are the HeroClass display spelling
+        # ``tournament_balancer``/dual-write roster keys are the HeroClass display spelling
         # ("Tank"/"Damage"/"Support"/"Flex") but tolerate any case; parse
         # leniently and drop to the canonical draft/balancer wire code.
         parsed = HeroClass.parse(role_name)

@@ -54,7 +54,7 @@ from shared.repository import (
 )
 from shared.services import pick_ban_engine as engine
 from shared.services.bracket.usability import is_encounter_live
-from src.services.encounter.realtime_commit import register_map_veto_realtime_update
+from src.services.encounter.realtime_commit import emit_pick_ban_update
 from src.services.encounter.veto_session import (
     BRACKET_PRESET,
     CUSTOM_PRESET,
@@ -512,7 +512,7 @@ class PickBanSessionService:
                     )
                 )
 
-        register_map_veto_realtime_update(session, encounter.id, kind=kind.value)
+        await emit_pick_ban_update(session, encounter.id, kind=kind.value)
         if commit:
             try:
                 await session.commit()
@@ -545,7 +545,7 @@ class PickBanSessionService:
         await session.flush()
         # Unconditional even if the re-ensure below no-ops: the room just lost its
         # session (same reasoning as veto_session.reset_veto_session).
-        register_map_veto_realtime_update(session, encounter.id, kind=kind.value)
+        await emit_pick_ban_update(session, encounter.id, kind=kind.value)
         pick_ban = await self.ensure_pick_ban_session(session, encounter, kind, commit=False)
         if commit:
             await session.commit()
@@ -786,7 +786,7 @@ class PickBanSessionService:
                 )
             )
 
-        register_map_veto_realtime_update(session, pick_ban.encounter_id, kind=str(pick_ban.kind))
+        await emit_pick_ban_update(session, pick_ban.encounter_id, kind=str(pick_ban.kind))
         if commit:
             await session.commit()
         else:

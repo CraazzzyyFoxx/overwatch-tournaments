@@ -19,11 +19,7 @@ import type {
 } from "@/types/draft.types";
 import type { RealtimeConnectionState, RealtimeEventEnvelope } from "@/types/realtime.types";
 
-import {
-  applyDraftEvent,
-  draftInvalidationTargets,
-  presenceFromEvent
-} from "@/lib/draft-logic";
+import { applyDraftEvent, presenceFromEvent } from "@/lib/draft-logic";
 
 const MAX_PENDING_DRAFT_EVENTS = 100;
 const EMPTY_DRAFT_PRESENCE: DraftPresenceState = { users: {}, anonymous_viewer_count: 0 };
@@ -114,26 +110,10 @@ export function useDraftRealtime(
         setPresenceState({ topic, value: presenceFromEvent(event.data, event.occurred_at) });
         return;
       }
-
+      // The draft topic is DATA only: nothing here evicts another consumer's
+      // cache. What a draft genuinely stales for everyone else — the
+      // materialized export — arrives as a tournament invalidation.
       const cachedBoard = queryClient.getQueryData<DraftBoard | null | undefined>(queryKey);
-      const targets = draftInvalidationTargets(event.event_type);
-      if (targets.includes("feasibility")) {
-        queryClient.invalidateQueries({
-          queryKey: tournamentQueryKeys.draftFeasibility(event.data.session_id)
-        });
-      }
-      if (targets.includes("options")) {
-        const affectedPickId = event.data.pick_id ?? cachedBoard?.current_pick?.id;
-        if (affectedPickId != null) {
-          queryClient.invalidateQueries({
-            queryKey: tournamentQueryKeys.draftPickOptions(affectedPickId)
-          });
-        }
-      }
-      if (targets.includes("board")) {
-        queryClient.invalidateQueries({ queryKey });
-        return;
-      }
 
       if (!cachedBoard) {
         const pending = pendingEventsRef.current;
@@ -151,6 +131,22 @@ export function useDraftRealtime(
         queryKey,
         event,
       });
+
+      // Two derived reads the patch cannot fold in: feasibility is keyed by
+      // SESSION id, which does not change when a pick lands, and pick options
+      // by pick id, which a role edit changes without advancing the pick.
+      // Deliberately handled here instead of through the invalidation
+      // vocabulary: no server cache holds either of them and no other consumer
+      // has an opinion about them, so there is nothing for a shared resource
+      // name to keep in agreement.
+      const sessionId = cachedBoard.session?.id;
+      if (sessionId != null) {
+        void queryClient.invalidateQueries({ queryKey: tournamentQueryKeys.draftFeasibility(sessionId) });
+      }
+      const affectedPickId = event.data.pick_id ?? cachedBoard.current_pick?.id;
+      if (affectedPickId != null) {
+        void queryClient.invalidateQueries({ queryKey: tournamentQueryKeys.draftPickOptions(affectedPickId) });
+      }
     },
     [queryClient, queryKey, topic]
   );

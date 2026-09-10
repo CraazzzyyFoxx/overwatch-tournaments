@@ -20,7 +20,7 @@ from src.core import config, pagination, utils
 __all__ = ("AchievementQueries", "UserAchievementRow", "queries")
 
 # Cache-key prefix for the per-workspace rarity aggregate. Invalidated broadly on
-# ``TournamentChangedEvent`` (see ``services.tournament_events``) — earned
+# a ``tournament.standings`` invalidation (see ``services.cache_resources``) — earned
 # achievements and the player denominator both move with tournament/match data.
 _RARITY_MAP_CACHE_KEY = "backend:achievement_rarity_map:{workspace_id}"
 
@@ -182,7 +182,7 @@ class AchievementQueries:
         denominator). It does not depend on whose profile is being viewed, so it is
         cached per ``workspace_id`` (TTL ``achievements_cache_ttl``) instead of being
         recomputed on every "Achievements" tab open. Invalidated on
-        ``TournamentChangedEvent`` (services.tournament_events).
+        a ``tournament.standings`` invalidation (services.cache_resources).
         """
         rarity_subq = get_rarity_subq(workspace_id=workspace_id)
         result = await session.execute(sa.select(rarity_subq.c.achievement_rule_id, rarity_subq.c.rarity))

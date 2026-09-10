@@ -4,7 +4,8 @@ import { authService, OAuthLinkAuthRequiredError, OAuthLinkFailedError } from "@
 import { getForwardedClientHeaders } from "@/lib/forward-client-headers";
 import { getTokenMaxAgeSeconds } from "@/lib/jwt";
 import { resolveHost, PLATFORM_ZONE } from "@/lib/host";
-import { getAccessToken } from "@/lib/auth-cookies";
+import { ACCESS_TOKEN_COOKIE, REFRESH_TOKEN_COOKIE, getAccessToken } from "@/lib/auth-cookies";
+import { CSRF_COOKIE, GUARD_COOKIE } from "@/lib/cookie-names";
 import { internalApiOrigin } from "@/lib/api-routes";
 import type { OAuthProviderName } from "@/types/auth.types";
 
@@ -24,7 +25,7 @@ const COOKIE_DOMAIN = `.${PLATFORM_ZONE}`;
 
 // Browser-binding CSRF cookie set by startOAuthLogin (oauth-login.ts). Single
 // use: read once here, forwarded raw to the backend, then always cleared.
-const CSRF_COOKIE = "owt_oauth_csrf";
+// Deployment-scoped name — see cookie-names.ts.
 
 // Task 10R fix 1: the single-use, HOST-ONLY guard cookie set by
 // oauth-login.ts's custom-domain apex bounce, on THIS exact domain, before
@@ -35,7 +36,7 @@ const CSRF_COOKIE = "owt_oauth_csrf";
 // See oauth-login.ts's module docstring for the full browser-binding
 // rationale. Exported so both routes share one definition instead of
 // duplicating the literal.
-export const GUARD_COOKIE = "owt_xdomain_guard";
+export { GUARD_COOKIE };
 
 // Clears the single-use guard cookie. Host-only (no `domain` attribute) --
 // must match exactly what oauth-login.ts set, or the delete won't take.
@@ -383,7 +384,7 @@ export async function handleOAuthCallback(request: Request): Promise<NextRespons
     const target = safeRedirectTarget(result.redirect, origin);
 
     const response = NextResponse.redirect(target);
-    response.cookies.set("owt_access_token", result.access_token, {
+    response.cookies.set(ACCESS_TOKEN_COOKIE, result.access_token, {
       httpOnly: false,
       sameSite: "lax",
       secure: IS_PROD,
@@ -392,7 +393,7 @@ export async function handleOAuthCallback(request: Request): Promise<NextRespons
       ...(IS_PROD ? { domain: COOKIE_DOMAIN } : {})
     });
 
-    response.cookies.set("owt_refresh_token", result.refresh_token, {
+    response.cookies.set(REFRESH_TOKEN_COOKIE, result.refresh_token, {
       httpOnly: true,
       sameSite: "lax",
       secure: IS_PROD,

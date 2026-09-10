@@ -26,7 +26,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { AdminFilterBar } from "@/components/admin/kit/AdminFilterBar";
 import { useAdminFilters, type FilterDef } from "@/components/admin/kit/useAdminFilters";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { useRealtimeCoalescedRefetch } from "@/hooks/useRealtimeCoalescedRefetch";
+import { useInvalidation } from "@/hooks/useInvalidation";
 import { notify } from "@/lib/notify";
 import { cn } from "@/lib/utils";
 import adminService from "@/services/admin.service";
@@ -46,13 +46,11 @@ import { EmptyNote } from "@/components/admin/kit/EmptyNote";
 const PAGE_SIZE = 25;
 /**
  * Poll cadence used only while the queue still has work. When nothing is
- * pending the console is driven by the `workspace:{id}:logs` realtime signal
- * (parser publishes it on every completion), so an idle tab costs no requests —
- * the old console polled every 10s forever.
+ * pending the console is driven by the `workspace.logs` invalidation (parser
+ * publishes it on every completion), so an idle tab costs no requests — the old
+ * console polled every 10s forever.
  */
 const ACTIVE_QUEUE_POLL_MS = 10_000;
-/** Collapse a burst of completions into one refetch. */
-const REALTIME_REFRESH_DEBOUNCE_MS = 500;
 
 type LogFilter = LogProcessingStatus;
 
@@ -233,16 +231,15 @@ export function TournamentLogsTab({
     void historyQuery.refetch();
   };
 
-  // Parser signals completions on the workspace topic, so the console stays live
-  // without polling. Coalesced: a batch upload emits one signal per file.
-  useRealtimeCoalescedRefetch(
-    enabled && workspaceId != null ? `workspace:${workspaceId}:logs` : null,
-    {
-      minDelayMs: REALTIME_REFRESH_DEBOUNCE_MS,
-      onEvent: (_event, schedule) => schedule(),
-      onFlush: refreshAll
-    }
-  );
+  // Parser completions arrive as `workspace.logs`, which stales exactly this
+  // console's history key — and the stats query keyed under it. `tournamentId`
+  // is what tells the registry which of the two variants of that key exists
+  // here: the signal is workspace-wide, the console is mounted per tournament.
+  useInvalidation({
+    scopeKind: "workspace",
+    scopeId: enabled ? workspaceId : null,
+    tournamentId
+  });
 
   const retryLogMutation = useMutation({
     mutationFn: (recordId: number) => adminService.retryLogRecord(recordId),

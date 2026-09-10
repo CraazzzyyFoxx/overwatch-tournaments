@@ -34,11 +34,11 @@ from shared.repository import (
 from shared.services import social_identity
 from shared.services.admission import AdmissionConfig, AdmissionEvaluation
 from shared.services.admission.resolve import resolve_admission
+from shared.services.realtime import Resource, Scope, emit
 from shared.services.subscriptions.wiring import build_resolver
 from src import models
 from src.core.broker import optional_broker
 from src.core.config import settings
-from src.core.redis import get_realtime_redis
 from src.schemas.registration import (
     RegistrationCreate,
     RegistrationFormUpsert,
@@ -62,7 +62,6 @@ from src.services.registration._common import (
 from src.services.registration.validation import validate_registration_input, validation_service
 from src.services.registration.windows import is_check_in_window_active, is_registration_open
 from src.services.tournament.events import enqueue_registration_approved
-from src.services.tournament.realtime_commit import register_tournament_realtime_update
 
 __all__ = (
     "RegistrationService",
@@ -194,6 +193,20 @@ class RegistrationService:
         self.user_repo = user_repo
         self.social_account_repo = social_account_repo
         self.validation = validation
+
+    async def _registration_changed(
+        self,
+        session: AsyncSession,
+        registration: models.BalancerRegistration,
+    ) -> None:
+        await emit(
+            session,
+            scope=Scope.tournament(registration.tournament_id),
+            invalidates=[Resource.TOURNAMENT_REGISTRATIONS],
+            # A row created in this same transaction has no id until it flushes;
+            # entity_ids is optional precision, so no id just means no narrowing.
+            entity_ids={"registration_ids": [registration.id]} if registration.id is not None else None,
+        )
 
     async def get_registration(
         self,
@@ -620,7 +633,11 @@ class RegistrationService:
         if auto_approve:
             await enqueue_registration_approved(session, registration)
         else:
-            register_tournament_realtime_update(session, tournament_id, "registration_changed")
+            await emit(
+                session,
+                scope=Scope.tournament(tournament_id),
+                invalidates=[Resource.TOURNAMENT_REGISTRATIONS],
+            )
         await session.commit()
         await session.refresh(registration)
         return registration
@@ -650,7 +667,7 @@ class RegistrationService:
                 # PATCH body — replacing wholesale would wipe the omitted answers.
                 value = {**(registration.custom_fields_json or {}), **value}
             setattr(registration, column, value)
-        register_tournament_realtime_update(session, registration.tournament_id, "registration_changed")
+        await self._registration_changed(session, registration)
         await session.commit()
         await session.refresh(registration)
         return registration
@@ -701,7 +718,7 @@ class RegistrationService:
         if registration.checked_in:
             raise HTTPException(status_code=409, detail="Cannot withdraw after check-in")
         registration.status = "withdrawn"
-        register_tournament_realtime_update(session, registration.tournament_id, "registration_changed")
+        await self._registration_changed(session, registration)
         await session.commit()
 
     async def check_in_registration(
@@ -720,7 +737,7 @@ class RegistrationService:
         registration.checked_in = True
         registration.checked_in_at = datetime.now(UTC)
         registration.checked_in_by = checked_in_by
-        register_tournament_realtime_update(session, registration.tournament_id, "registration_changed")
+        await self._registration_changed(session, registration)
         await session.commit()
         await session.refresh(registration)
         return registration
@@ -849,7 +866,7 @@ class RegistrationService:
             ],
         )
         status_meta_map = await get_status_metas_map(session, workspace_id=workspace_id)
-        rosters = await _public_rosters(session, [registration], show_ranks=form.show_ranks)
+        rosters = await _public_rosters(session, [registration])
         return _reg_to_read(
             registration,
             workspace_id=workspace_id,
@@ -898,7 +915,6 @@ class RegistrationService:
             twitch_client_id=settings.twitch_client_id,
             broker=optional_broker(),
             proxy=settings.proxy_url,
-            redis=get_realtime_redis(),
         )
         # Gated on the form flag, not on ``enforces_subscription``: that property is
         # derived FROM the rule we are about to load. A tournament with the toggle
@@ -962,7 +978,7 @@ class RegistrationService:
         form = await _common_service.get_registration_form(session, tournament_id)
         admissions = await self.resolve_admission_list(session, registrations, form=form)
         show_ranks = form.show_ranks if form is not None else False
-        rosters = await _public_rosters(session, registrations, show_ranks=show_ranks)
+        rosters = await _public_rosters(session, registrations)
 
         history_map, history_count_map, division_grids = await _build_tournament_history(
             session,
@@ -974,19 +990,23 @@ class RegistrationService:
         registrations_read = []
         for r in registrations:
             chips = AdmissionChips.of(admissions.get(r.id))
+            read = _reg_to_read(
+                r,
+                workspace_id=workspace_id,
+                status_meta_map=status_meta_map,
+                show_ranks=show_ranks,
+                admission=chips.admission,
+                profiles_open=chips.profiles_open,
+                subscription_outcome=chips.subscription_outcome,
+                subscription_verdicts=chips.subscription_verdicts,
+                roster=rosters.get(r.id),
+            )
+            # ``dict(read)``, not ``model_dump()``: the nested reads stay model
+            # instances, which pydantic accepts as-is instead of dumping them to
+            # dicts and validating the whole tree a second time per row.
             registrations_read.append(
                 RegistrationListRead(
-                    **_reg_to_read(
-                        r,
-                        workspace_id=workspace_id,
-                        status_meta_map=status_meta_map,
-                        show_ranks=show_ranks,
-                        admission=chips.admission,
-                        profiles_open=chips.profiles_open,
-                        subscription_outcome=chips.subscription_outcome,
-                        subscription_verdicts=chips.subscription_verdicts,
-                        roster=rosters.get(r.id),
-                    ).model_dump(),
+                    **dict(read),
                     tournament_history=history_map.get(r.id, []),
                     tournament_history_count=history_count_map.get(r.id, 0),
                 )
@@ -1045,6 +1065,16 @@ class RegistrationService:
             form.built_in_fields_json = built_in_fields_json
             form.custom_fields_json = custom_fields_json
 
+        # Staged before the commit that owns the write: the rail persists the
+        # row in this transaction and publishes it from after_commit. Until this
+        # existed a form edit emitted nothing at all, so open tabs only learned
+        # about it by accident, riding along with the next unrelated
+        # registration event.
+        await emit(
+            session,
+            scope=Scope.tournament(tournament_id),
+            invalidates=[Resource.TOURNAMENT_REGISTRATION_FORM],
+        )
         await session.commit()
         await session.refresh(form)
         return form

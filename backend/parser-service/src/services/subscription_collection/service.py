@@ -133,7 +133,6 @@ class SubscriptionCollectionService:
         proxy: str | None = None,
         batch_size: int = 50,
         source: str = SubscriptionCollectionSource.scheduled,
-        redis: Any | None = None,
     ) -> int:
         """Sweep every tournament that gates on a subscription, refreshing verdicts.
 
@@ -163,7 +162,6 @@ class SubscriptionCollectionService:
             twitch_client_id=twitch_client_id,
             broker=active_broker,
             proxy=proxy,
-            redis=redis,
         )
 
         total_processed = 0

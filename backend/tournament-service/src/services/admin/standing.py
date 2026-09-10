@@ -8,7 +8,7 @@ from shared.core.errors import BaseAPIException as HTTPException
 from shared.repository import StandingRepository, TournamentRepository
 from src import models, schemas
 from src.services.computation.jobs import jobs_service
-from src.services.tournament.events import enqueue_tournament_changed
+from src.services.tournament.events import RESULT_RESOURCES, publish_tournament_invalidation
 
 
 class AdminStandingService:
@@ -20,6 +20,9 @@ class AdminStandingService:
     ) -> None:
         self.standing_repo = standing_repo
         self.tournament_repo = tournament_repo
+
+    async def _publish_results_changed(self, session: AsyncSession, tournament_id: int) -> None:
+        await publish_tournament_invalidation(session, tournament_id, RESULT_RESOURCES)
 
     async def get_standing(self, session: AsyncSession, standing_id: int) -> models.Standing:
         standing = await self.standing_repo.get(
@@ -54,11 +57,7 @@ class AdminStandingService:
         for field, value in update_data.items():
             setattr(standing, field, value)
 
-        await enqueue_tournament_changed(
-            session,
-            standing.tournament_id,
-            "results_changed",
-        )
+        await self._publish_results_changed(session, standing.tournament_id)
         await session.commit()
         return await self.get_standing(session, standing.id)
 
@@ -69,11 +68,7 @@ class AdminStandingService:
         if not standing:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Standing not found")
 
-        await enqueue_tournament_changed(
-            session,
-            standing.tournament_id,
-            "results_changed",
-        )
+        await self._publish_results_changed(session, standing.tournament_id)
         await self.standing_repo.delete(session, standing)
         await session.commit()
 

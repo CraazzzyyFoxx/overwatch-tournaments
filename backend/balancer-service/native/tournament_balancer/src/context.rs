@@ -38,6 +38,11 @@ impl Context {
             .iter()
             .position(|r| r.eq_ignore_ascii_case("Damage") || r.eq_ignore_ascii_case("dps"));
         let support_role_idx = roles.iter().position(|r| r.eq_ignore_ascii_case("Support"));
+        // Слот без роли: игрок на нём никогда не "вне роли". Python-сторона
+        // (entities.Player.discomfort_map) считает так же; раньше это
+        // достигалось подстановкой `flex` первым в preferences, что ломало всё,
+        // что читало preferences[0] как основную роль.
+        let flex_role_idx = roles.iter().position(|r| r.eq_ignore_ascii_case("flex"));
 
         // Валидация входа: без неё избыток игроков молча выпадает из результата
         // (ensure_feasibility закрывает только вакансии), а недобор падает
@@ -104,14 +109,14 @@ impl Context {
             let mut discomfort = Vec::with_capacity(roles.len());
             let mut subclasses = Vec::with_capacity(roles.len());
 
-            for role in &roles {
+            for (role_idx, role) in roles.iter().enumerate() {
                 let rating = player.ratings.get(role).copied().unwrap_or_default();
                 let role_is_playable = player.ratings.contains_key(role);
                 ratings.push(rating);
                 can_play.push(role_is_playable);
                 subclasses.push(player.subclasses.get(role).cloned());
 
-                let pain = if player.is_flex && role_is_playable {
+                let pain = if role_is_playable && (player.is_flex || flex_role_idx == Some(role_idx)) {
                     0
                 } else if let Some(position) = player
                     .preferences
@@ -138,9 +143,12 @@ impl Context {
                     .unwrap_or(0) as f64
                     <= low_rank_threshold;
 
+            // Основная роль игрока. `flex` — слот, не роль: даже если клиент
+            // прислал его в preferences, основной ролью он не становится.
             let first_preference = player
                 .preferences
-                .first()
+                .iter()
+                .find(|role| !role.eq_ignore_ascii_case("flex"))
                 .and_then(|role| role_index.get(role.as_str()).copied());
 
             players.push(PlayerData {

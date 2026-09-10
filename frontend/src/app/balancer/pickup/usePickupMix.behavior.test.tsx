@@ -46,10 +46,16 @@ vi.mock("@/services/workspace-player.service", () => ({
   },
 }));
 
-const realtimeCalls: Array<{ topic: unknown; onFlush: () => void }> = [];
+type CoalescedOptions = {
+  onEvent: (event: { data?: { resources?: string[] } }, schedule: () => void) => void;
+  onFlush: () => void;
+};
+const realtimeCalls: Array<{ topic: unknown } & CoalescedOptions> = [];
+// One level below `useInvalidation`, so the hook's own resource bookkeeping is
+// exercised while the websocket is not.
 vi.mock("@/hooks/useRealtimeCoalescedRefetch", () => ({
-  useRealtimeCoalescedRefetch: (topic: unknown, options: { onFlush: () => void }) => {
-    realtimeCalls.push({ topic, onFlush: options.onFlush });
+  useRealtimeCoalescedRefetch: (topic: unknown, options: CoalescedOptions) => {
+    realtimeCalls.push({ topic, ...options });
   },
 }));
 
@@ -160,7 +166,7 @@ describe("usePickupMix", () => {
     expect(client.getQueryState(playerKey)?.isInvalidated).toBe(true);
   });
 
-  it("subscribes to this workspace's pickup_mix topic and refetches both caches on a signal", async () => {
+  it("subscribes to this workspace's invalidation topic and refetches both caches on pickup_mix", async () => {
     const { client } = await mount();
     const playerKey = ["workspace-players", WORKSPACE_ID];
     const gameKey = ["custom-games", WORKSPACE_ID];
@@ -171,8 +177,9 @@ describe("usePickupMix", () => {
     // stable across them regardless.
     expect(realtimeCalls.length).toBeGreaterThan(0);
     const latest = realtimeCalls[realtimeCalls.length - 1];
-    expect(latest.topic).toBe(`workspace:${WORKSPACE_ID}:pickup_mix`);
+    expect(latest.topic).toBe(`workspace:${WORKSPACE_ID}:invalidation`);
 
+    latest.onEvent({ data: { resources: ["workspace.pickup_mix"] } }, () => {});
     latest.onFlush();
 
     expect(client.getQueryState(playerKey)?.isInvalidated).toBe(true);

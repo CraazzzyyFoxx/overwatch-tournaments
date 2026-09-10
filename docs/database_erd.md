@@ -12,7 +12,7 @@ schema name — `ranks/` writes to `overwatch_rank`, `ingestion/` to `log_proces
 > `--check` and fails on drift, so the diagrams cannot fall behind the models again.
 
 <!-- ERD:auto _alembic_head -->
-Alembic head: **`annstat01`** (50 revisions in `backend/migrations/versions/`).
+Alembic head: **`ranktrim01`** (54 revisions in `backend/migrations/versions/`).
 <!-- /ERD:auto -->
 
 **Reading the diagrams**
@@ -747,8 +747,6 @@ erDiagram
     }
     OVERWATCH_RANK_RANK_SNAPSHOT {
         bigint id PK
-        timestamptz created_at
-        timestamptz updated_at "nullable"
         bigint user_id FK
         bigint social_account_id FK
         varchar(255) battle_tag
@@ -760,7 +758,6 @@ erDiagram
         int rank_value "nullable"
         varchar(64) mapping_version "nullable"
         boolean is_ranked
-        jsonb raw_payload "nullable"
         timestamptz captured_at
         varchar(32) source
     }
@@ -2007,8 +2004,6 @@ erDiagram
     }
     MATCHES_STATISTICS {
         bigint id PK
-        timestamptz created_at
-        timestamptz updated_at "nullable"
         bigint match_id FK
         int round
         bigint team_id FK

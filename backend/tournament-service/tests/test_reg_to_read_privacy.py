@@ -22,8 +22,8 @@ from shared.domain.roster import PlayerRoster, RosterRole  # noqa: E402
 from src.schemas.registration_build import _reg_to_read  # noqa: E402
 
 
-def _roster(rank: int | None, source: str = "registration") -> PlayerRoster:
-    """A one-role roster, as the engine would hand it to the serializer."""
+def _roster(rank: int | None, source: str = "registration", *extra: RosterRole) -> PlayerRoster:
+    """A one-role roster plus any ``extra`` entries, as the engine hands it over."""
     return PlayerRoster(
         registration_id=1,
         battle_tag="Player#1234",
@@ -40,6 +40,7 @@ def _roster(rank: int | None, source: str = "registration") -> PlayerRoster:
                 priority=0,
                 subrole=None,
             ),
+            *extra,
         ),
         is_full_flex=False,
     )
@@ -111,17 +112,22 @@ def test_follow_reg_uses_inherited_workspace_rank():
     assert read.roles[0].rank_value == 3200
 
 
-def test_a_role_the_engine_did_not_rate_publishes_no_rank():
-    """The raw column is never a fallback: an unrated role is unplayable, and
-    printing its stored number advertised a rating nothing else honours."""
+def test_public_roles_come_from_the_roster_not_the_rows():
+    """``all_roles``/``forced`` synthesize roles no DB row carries, so the public
+    table reads the roster -- it used to publish one role while the balancer and
+    the draft acted on three. An unrated role still publishes no number: the raw
+    column is never a fallback for a rating nothing else honours."""
     stub = _reg_stub()
     stub.roles = [
-        SimpleNamespace(role="dps", subrole=None, is_primary=True, priority=0, rank_value=3200, hero_entries=[])
+        SimpleNamespace(role="tank", subrole=None, is_primary=True, priority=0, rank_value=3200, hero_entries=[])
     ]
+    synthesized = RosterRole(
+        role=HeroClass.damage, rank=None, source="none", is_primary=False, priority=1, subrole=None
+    )
 
-    read = _reg_to_read(stub, workspace_id=1, show_ranks=True, roster=_roster(2500))
+    read = _reg_to_read(stub, workspace_id=1, show_ranks=True, roster=_roster(3200, "registration", synthesized))
 
-    assert read.roles[0].rank_value is None
+    assert [(role.role, role.rank_value) for role in read.roles] == [("tank", 3200), ("dps", None)]
 
 
 def test_read_payload_includes_profile_visibility():

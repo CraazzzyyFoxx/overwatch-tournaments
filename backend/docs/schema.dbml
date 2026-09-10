@@ -1,6 +1,6 @@
 // Anak Tournaments — PostgreSQL schema dumped from SQLAlchemy metadata.
 // Open in VS Code (DBML extension) or paste into https://dbdiagram.io
-// Tables: 121
+// Tables: 126
 
 Project anak_tournaments {
   database_type: "PostgreSQL"
@@ -220,6 +220,7 @@ Enum stagetype {
 }
 
 Enum tournamentstatus {
+  announcement
   registration
   draft
   check_in
@@ -245,11 +246,11 @@ Table achievements.evaluation_result {
   run_id uuid
   indexes {
     (achievement_rule_id, workspace_member_id, tournament_id, match_id) [unique, name: "uq_eval_result_rule_user_tournament_match"]
-    (match_id) [name: "ix_achievements_evaluation_result_match_id"]
     (workspace_member_id) [name: "ix_achievements_evaluation_result_workspace_member_id"]
     (achievement_rule_id) [name: "ix_achievements_evaluation_result_achievement_rule_id"]
     (tournament_id) [name: "ix_achievements_evaluation_result_tournament_id"]
     (run_id) [name: "ix_achievements_evaluation_result_run_id"]
+    (match_id) [name: "ix_achievements_evaluation_result_match_id"]
   }
 }
 
@@ -268,8 +269,8 @@ Table achievements.evaluation_run {
   error_message VARCHAR
   id uuid [pk, increment, default: `gen_random_uuid()`]
   indexes {
-    (id) [name: "ix_achievements_evaluation_run_id"]
     (workspace_id) [name: "ix_achievements_evaluation_run_workspace_id"]
+    (id) [name: "ix_achievements_evaluation_run_id"]
   }
 }
 
@@ -285,10 +286,10 @@ Table achievements.override {
   reason VARCHAR [not null]
   granted_by bigint [not null]
   indexes {
-    (tournament_id) [name: "ix_achievements_override_tournament_id"]
-    (match_id) [name: "ix_achievements_override_match_id"]
     (workspace_member_id) [name: "ix_achievements_override_workspace_member_id"]
+    (tournament_id) [name: "ix_achievements_override_tournament_id"]
     (achievement_rule_id) [name: "ix_achievements_override_achievement_rule_id"]
+    (match_id) [name: "ix_achievements_override_match_id"]
   }
 }
 
@@ -313,8 +314,8 @@ Table achievements.rule {
   min_tournament_id int
   indexes {
     (workspace_id, slug) [unique, name: "uq_achievement_rule_workspace_slug"]
-    (slug) [name: "ix_achievements_rule_slug"]
     (workspace_id) [name: "ix_achievements_rule_workspace_id"]
+    (slug) [name: "ix_achievements_rule_slug"]
   }
 }
 
@@ -347,10 +348,10 @@ Table analytics.anomaly_feedback {
   "note" text
   indexes {
     (tournament_id, player_id, kind) [unique, name: "uq_analytics_anomaly_feedback"]
-    (tournament_id) [name: "ix_analytics_anomaly_feedback_tournament_id"]
     (kind) [name: "ix_analytics_anomaly_feedback_kind"]
     (reviewer_user_id) [name: "ix_analytics_anomaly_feedback_reviewer_user_id"]
     (player_id) [name: "ix_analytics_anomaly_feedback_player_id"]
+    (tournament_id) [name: "ix_analytics_anomaly_feedback_tournament_id"]
   }
 }
 
@@ -370,11 +371,11 @@ Table analytics.job {
   started_at timestamptz
   finished_at timestamptz
   indexes {
-    (requested_by_user_id) [name: "ix_analytics_job_requested_by_user_id"]
     (tournament_id) [name: "ix_analytics_job_tournament_id"]
-    (workspace_id) [unique, name: "uq_analytics_job_one_running_per_workspace"]
-    (workspace_id) [name: "ix_analytics_job_workspace_id"]
     (status) [name: "ix_analytics_job_status"]
+    (workspace_id) [name: "ix_analytics_job_workspace_id"]
+    (workspace_id) [unique, name: "uq_analytics_job_one_running_per_workspace"]
+    (requested_by_user_id) [name: "ix_analytics_job_requested_by_user_id"]
   }
 }
 
@@ -411,10 +412,10 @@ Table analytics.ml_model_artifact {
   is_active boolean [not null, default: false]
   indexes {
     (algorithm_id, model_kind, role, version) [unique, name: "uq_analytics_ml_model_artifact"]
+    (training_cutoff_tournament_id) [name: "ix_analytics_ml_model_artifact_training_cutoff_tournament_id"]
     (is_active) [name: "ix_analytics_ml_model_artifact_is_active"]
     (model_kind) [name: "ix_analytics_ml_model_artifact_model_kind"]
     (algorithm_id) [name: "ix_analytics_ml_model_artifact_algorithm_id"]
-    (training_cutoff_tournament_id) [name: "ix_analytics_ml_model_artifact_training_cutoff_tournament_id"]
   }
 }
 
@@ -441,9 +442,9 @@ Table analytics.performance {
   base_value float
   indexes {
     (tournament_id, player_id, algorithm_id) [unique, name: "uq_analytics_performance"]
+    (player_id) [name: "ix_analytics_performance_player_id"]
     (tournament_id) [name: "ix_analytics_performance_tournament_id"]
     (algorithm_id) [name: "ix_analytics_performance_algorithm_id"]
-    (player_id) [name: "ix_analytics_performance_player_id"]
   }
 }
 
@@ -461,10 +462,10 @@ Table analytics.player_anomaly {
   source_encounter_id bigint
   indexes {
     (tournament_id, player_id, kind, source_encounter_id) [unique, name: "uq_analytics_player_anomaly"]
-    (kind) [name: "ix_analytics_player_anomaly_kind"]
     (source_encounter_id) [name: "ix_analytics_player_anomaly_source_encounter_id"]
     (player_id) [name: "ix_analytics_player_anomaly_player_id"]
     (tournament_id) [name: "ix_analytics_player_anomaly_tournament_id"]
+    (kind) [name: "ix_analytics_player_anomaly_kind"]
   }
 }
 
@@ -481,8 +482,8 @@ Table analytics.player_shift {
   shift int
   indexes {
     (tournament_id, player_id) [unique, name: "uq_analytics_player_shift"]
-    (tournament_id) [name: "ix_analytics_player_shift_tournament_id"]
     (player_id) [name: "ix_analytics_player_shift_player_id"]
+    (tournament_id) [name: "ix_analytics_player_shift_tournament_id"]
   }
 }
 
@@ -501,9 +502,9 @@ Table analytics.shifts {
   log_coverage float [not null, default: 0]
   indexes {
     (tournament_id, player_id, algorithm_id) [unique, name: "uq_analytics_shifts"]
+    (algorithm_id) [name: "ix_analytics_shifts_algorithm_id"]
     (tournament_id) [name: "ix_analytics_shifts_tournament_id"]
     (player_id) [name: "ix_analytics_shifts_player_id"]
-    (algorithm_id) [name: "ix_analytics_shifts_algorithm_id"]
   }
 }
 
@@ -524,9 +525,9 @@ Table analytics.standings_distribution {
   position_histogram json [not null]
   indexes {
     (tournament_id, team_id, algorithm_id) [unique, name: "uq_analytics_standings_distribution"]
-    (tournament_id) [name: "ix_analytics_standings_distribution_tournament_id"]
     (algorithm_id) [name: "ix_analytics_standings_distribution_algorithm_id"]
     (team_id) [name: "ix_analytics_standings_distribution_team_id"]
+    (tournament_id) [name: "ix_analytics_standings_distribution_tournament_id"]
   }
 }
 
@@ -554,7 +555,6 @@ Table auth.api_key {
   public_id VARCHAR(32) [not null, unique]
   secret_hash VARCHAR(128) [not null]
   name VARCHAR(100) [not null]
-  scopes_json json [not null, default: `[]`]
   limits_json json [not null, default: `{}`]
   config_policy_json json [not null, default: `{}`]
   expires_at timestamptz
@@ -562,11 +562,16 @@ Table auth.api_key {
   last_used_at timestamptz
   indexes {
     (public_id, revoked_at) [name: "ix_api_key_public_id_active"]
-    (workspace_id) [name: "ix_auth_api_key_workspace_id"]
-    (auth_user_id, workspace_id) [name: "ix_api_key_owner_workspace"]
     (auth_user_id) [name: "ix_auth_api_key_auth_user_id"]
+    (auth_user_id, workspace_id) [name: "ix_api_key_owner_workspace"]
     (public_id) [unique, name: "ix_auth_api_key_public_id"]
+    (workspace_id) [name: "ix_auth_api_key_workspace_id"]
   }
+}
+
+Table auth.api_key_scope {
+  api_key_id bigint [pk]
+  scope VARCHAR(64) [pk, increment]
 }
 
 Table auth.oauth_connections {
@@ -586,8 +591,8 @@ Table auth.oauth_connections {
   provider_data json
   indexes {
     (provider, provider_user_id) [unique, name: "uq_provider_user"]
-    (provider_user_id) [name: "ix_auth_oauth_connections_provider_user_id"]
     (provider) [name: "ix_auth_oauth_connections_provider"]
+    (provider_user_id) [name: "ix_auth_oauth_connections_provider_user_id"]
   }
 }
 
@@ -600,9 +605,9 @@ Table auth.permissions {
   action VARCHAR(50) [not null]
   description text
   indexes {
-    (name) [unique, name: "ix_auth_permissions_name"]
     (resource) [name: "ix_auth_permissions_resource"]
     (action) [name: "ix_auth_permissions_action"]
+    (name) [unique, name: "ix_auth_permissions_name"]
   }
 }
 
@@ -645,10 +650,10 @@ Table auth.roles {
   is_system boolean [not null]
   workspace_id bigint
   indexes {
-    (workspace_id) [name: "ix_auth_roles_workspace_id"]
-    (name) [unique, name: "uq_roles_name_global"]
     (name) [name: "ix_auth_roles_name"]
+    (name) [unique, name: "uq_roles_name_global"]
     (name, workspace_id) [unique, name: "uq_roles_name_workspace"]
+    (workspace_id) [name: "ix_auth_roles_workspace_id"]
   }
 }
 
@@ -681,9 +686,9 @@ Table auth.user_permission_deny {
   created_by bigint
   reason text
   indexes {
+    (workspace_id) [name: "ix_auth_user_permission_deny_workspace_id"]
     (user_id, permission_id) [unique, name: "uq_user_permission_deny_user_perm_workspace"]
     (user_id) [name: "ix_user_permission_deny_user_id"]
-    (workspace_id) [name: "ix_auth_user_permission_deny_workspace_id"]
   }
 }
 
@@ -700,6 +705,7 @@ Table auth.user_roles {
 
 TableGroup auth {
   auth.api_key
+  auth.api_key_scope
   auth.oauth_connections
   auth.permissions
   auth.refresh_token
@@ -756,16 +762,22 @@ Table balancer.custom_game {
   updated_at timestamptz
   workspace_id bigint [not null]
   host_user_id bigint
-  co_host_user_ids jsonb
   name VARCHAR(255) [not null]
   status VARCHAR(16) [not null, default: `draft`]
-  config_json jsonb
-  result_json jsonb
-  outcome_json jsonb
+  points_per_win int
+  balancer_config_json jsonb
+  balancer_config_version int [not null, default: 1]
+  balance_result_json jsonb
+  balance_result_version int [not null, default: 1]
   indexes {
     (host_user_id) [name: "ix_balancer_custom_game_host_user_id"]
     (workspace_id) [name: "ix_balancer_custom_game_workspace_id"]
   }
+}
+
+Table balancer.custom_game_co_host {
+  custom_game_id bigint [pk]
+  user_id bigint [pk]
 }
 
 Table balancer.custom_game_player {
@@ -774,17 +786,36 @@ Table balancer.custom_game_player {
   updated_at timestamptz
   custom_game_id bigint [not null]
   workspace_member_id bigint [not null]
-  team_index int
   sort_order int [not null, default: 0]
-  is_active boolean [not null, default: true]
-  must_play boolean [not null, default: false]
+  participation VARCHAR(16) [not null, default: `pool`]
+  role_selection_mode VARCHAR(16) [not null, default: `all_ranked`]
   is_flex boolean [not null, default: false]
-  roles_json jsonb
   indexes {
     (custom_game_id, workspace_member_id) [unique, name: "uq_custom_game_player_member"]
     (custom_game_id) [name: "ix_balancer_custom_game_player_custom_game_id"]
     (workspace_member_id) [name: "ix_balancer_custom_game_player_workspace_member_id"]
   }
+}
+
+Table balancer.custom_game_player_role {
+  custom_game_player_id bigint [pk]
+  role VARCHAR(16) [pk, increment]
+  priority int [not null]
+  indexes {
+    (custom_game_player_id, priority) [unique, name: "uq_custom_game_player_role_priority"]
+  }
+}
+
+Table balancer.custom_game_role_slot {
+  custom_game_id bigint [pk]
+  role VARCHAR(16) [pk, increment]
+  slot_count int [not null]
+}
+
+Table balancer.custom_game_team_name {
+  custom_game_id bigint [pk]
+  team_index int [pk, increment]
+  name VARCHAR(60) [not null]
 }
 
 Table balancer.draft_audit_event {
@@ -800,8 +831,8 @@ Table balancer.draft_audit_event {
   before_json json [not null]
   after_json json [not null]
   indexes {
-    (actor_auth_user_id) [name: "ix_balancer_draft_audit_event_actor_auth_user_id"]
     (session_id, created_at) [name: "ix_draft_audit_session_created"]
+    (actor_auth_user_id) [name: "ix_balancer_draft_audit_event_actor_auth_user_id"]
   }
 }
 
@@ -827,9 +858,9 @@ Table balancer.draft_pick {
   version int [not null, default: 0]
   indexes {
     (session_id, overall_no) [unique, name: "uq_draft_pick_session_overall"]
-    (session_id, status) [name: "ix_draft_pick_session_status"]
     (picked_player_id) [name: "ix_balancer_draft_pick_picked_player_id"]
     (draft_team_id) [name: "ix_balancer_draft_pick_draft_team_id"]
+    (session_id, status) [name: "ix_draft_pick_session_status"]
   }
 }
 
@@ -838,52 +869,18 @@ Table balancer.draft_player {
   created_at timestamptz [not null, default: `now()`]
   updated_at timestamptz
   session_id bigint [not null]
+  registration_id bigint [not null]
   workspace_member_id bigint
-  battle_tag VARCHAR(255)
-  primary_role VARCHAR(16) [not null]
-  sub_role VARCHAR(128)
-  is_flex boolean [not null, default: false]
-  division_number int
-  rank_value int
   status VARCHAR(16) [not null, default: `available`]
   is_captain boolean [not null, default: false]
   drafted_by_team_id bigint
-  additional_info json [not null, default: `{}`]
   version int [not null, default: 0]
   indexes {
-    (session_id, workspace_member_id) [unique, name: "uq_draft_player_session_member"]
+    (session_id, registration_id) [unique, name: "uq_draft_player_session_registration"]
+    (registration_id) [name: "ix_balancer_draft_player_registration_id"]
     (workspace_member_id) [name: "ix_balancer_draft_player_workspace_member_id"]
     (session_id, status) [name: "ix_draft_player_session_status"]
     (drafted_by_team_id) [name: "ix_balancer_draft_player_drafted_by_team_id"]
-  }
-}
-
-Table balancer.draft_player_role {
-  id bigint [pk, increment]
-  created_at timestamptz [not null, default: `now()`]
-  updated_at timestamptz
-  draft_player_id bigint [not null]
-  role VARCHAR(16) [not null]
-  rank_value int
-  is_secondary boolean [not null, default: false]
-  priority int [not null, default: 0]
-  indexes {
-    (draft_player_id, role) [unique, name: "uq_draft_player_role"]
-    (draft_player_id) [name: "ix_balancer_draft_player_role_draft_player_id"]
-  }
-}
-
-Table balancer.draft_player_role_hero {
-  id bigint [pk, increment]
-  created_at timestamptz [not null, default: `now()`]
-  updated_at timestamptz
-  draft_player_role_id bigint [not null]
-  hero_id bigint [not null]
-  priority int [not null]
-  indexes {
-    (draft_player_role_id, hero_id) [unique, name: "uq_draft_player_role_hero_hero"]
-    (draft_player_role_id, priority) [unique, name: "uq_draft_player_role_hero_priority"]
-    (draft_player_role_id) [name: "ix_balancer_draft_player_role_hero_draft_player_role_id"]
   }
 }
 
@@ -908,11 +905,11 @@ Table balancer.draft_session {
   settings_json json [not null, default: `{}`]
   version int [not null, default: 0]
   indexes {
-    (status, created_at) [name: "ix_draft_session_status_created"]
+    (tournament_id, status) [name: "ix_draft_session_tournament_status"]
     (workspace_id) [name: "ix_balancer_draft_session_workspace_id"]
     (source_balance_id) [name: "ix_balancer_draft_session_source_balance_id"]
+    (status, created_at) [name: "ix_draft_session_status_created"]
     (tournament_id) [unique, name: "uq_draft_session_active_tournament"]
-    (tournament_id, status) [name: "ix_draft_session_tournament_status"]
   }
 }
 
@@ -928,10 +925,10 @@ Table balancer.draft_team {
   exported_team_id bigint
   indexes {
     (session_id, draft_position) [unique, name: "uq_draft_team_session_position"]
-    (session_id) [name: "ix_balancer_draft_team_session_id"]
-    (captain_auth_user_id) [name: "ix_balancer_draft_team_captain_auth_user_id"]
     (exported_team_id) [name: "ix_balancer_draft_team_exported_team_id"]
     (captain_workspace_member_id) [name: "ix_balancer_draft_team_captain_workspace_member_id"]
+    (session_id) [name: "ix_balancer_draft_team_session_id"]
+    (captain_auth_user_id) [name: "ix_balancer_draft_team_captain_auth_user_id"]
   }
 }
 
@@ -945,11 +942,11 @@ Table balancer.member_rank {
   role VARCHAR(16) [not null]
   rank_value int [not null]
   indexes {
+    (workspace_id) [name: "ix_balancer_member_rank_workspace_id"]
     (workspace_id, author_user_id, workspace_member_id, role) [unique, name: "uq_member_rank_author"]
     (author_user_id) [name: "ix_balancer_member_rank_author_user_id"]
     (workspace_member_id) [name: "ix_balancer_member_rank_workspace_member_id"]
     (workspace_id, workspace_member_id, role) [unique, name: "uq_member_rank_canon"]
-    (workspace_id) [name: "ix_balancer_member_rank_workspace_id"]
   }
 }
 
@@ -986,12 +983,12 @@ Table balancer.registration {
   team_slot_code VARCHAR(16)
   is_substitute boolean [not null, default: false]
   indexes {
-    (tournament_id) [name: "ix_balancer_registration_tournament_id"]
     (tournament_id, workspace_member_id) [unique, name: "uq_balancer_registration_user"]
     (tournament_id, status, balancer_status) [name: "ix_balancer_registration_tournament_balancer_status"]
+    (tournament_id) [name: "ix_balancer_registration_tournament_id"]
     (tournament_id, battle_tag_normalized) [unique, name: "uq_balancer_registration_tournament_tag_active"]
-    (registration_team_id) [name: "ix_balancer_registration_registration_team_id"]
     (workspace_member_id) [name: "ix_balancer_registration_workspace_member_id"]
+    (registration_team_id) [name: "ix_balancer_registration_registration_team_id"]
   }
 }
 
@@ -1029,8 +1026,8 @@ Table balancer.registration_google_sheet_binding {
   row_hash VARCHAR(128)
   last_seen_at timestamptz
   indexes {
-    (registration_id) [unique, name: "uq_balancer_registration_google_sheet_binding_registration"]
     (feed_id, source_record_key) [unique, name: "uq_balancer_registration_google_sheet_binding_key"]
+    (registration_id) [unique, name: "uq_balancer_registration_google_sheet_binding_registration"]
     (feed_id) [name: "ix_balancer_registration_google_sheet_binding_feed_id"]
   }
 }
@@ -1082,8 +1079,8 @@ Table balancer.registration_role_hero {
   hero_id bigint [not null]
   priority int [not null]
   indexes {
-    (role_id, priority) [unique, name: "uq_reg_role_hero_role_priority"]
     (role_id, hero_id) [unique, name: "uq_reg_role_hero_role_hero"]
+    (role_id, priority) [unique, name: "uq_reg_role_hero_role_priority"]
     (role_id) [name: "ix_balancer_registration_role_hero_role_id"]
   }
 }
@@ -1104,8 +1101,8 @@ Table balancer.registration_status {
   excludes_from_ready boolean [not null, default: false]
   indexes {
     (workspace_id, scope, slug, kind) [unique, name: "uq_balancer_registration_status_workspace_scope_slug"]
-    (workspace_id) [name: "ix_balancer_registration_status_workspace_id"]
     (workspace_id, scope) [name: "ix_balancer_registration_status_workspace_scope"]
+    (workspace_id) [name: "ix_balancer_registration_status_workspace_id"]
   }
 }
 
@@ -1129,12 +1126,12 @@ Table balancer.registration_team {
   invite_cap_reset_at timestamptz
   invite_cap_reset_by bigint
   indexes {
-    (tournament_id, name_normalized) [unique, name: "uq_balancer_registration_team_name_active"]
-    (tournament_id) [name: "ix_balancer_registration_team_tournament_id"]
     (tournament_id, status) [name: "ix_balancer_registration_team_tournament_status"]
     (captain_registration_id) [name: "ix_balancer_registration_team_captain_registration_id"]
     (exported_team_id) [name: "ix_balancer_registration_team_exported_team_id"]
     (workspace_id) [name: "ix_balancer_registration_team_workspace_id"]
+    (tournament_id, name_normalized) [unique, name: "uq_balancer_registration_team_name_active"]
+    (tournament_id) [name: "ix_balancer_registration_team_tournament_id"]
   }
 }
 
@@ -1157,10 +1154,10 @@ Table balancer.registration_team_invite {
   accepted_at timestamptz
   accepted_registration_id bigint
   indexes {
-    (team_id) [name: "ix_balancer_registration_team_invite_team_id"]
     (token_sha256) [unique, name: "uq_balancer_registration_team_invite_token"]
-    (team_id, state) [name: "ix_balancer_registration_team_invite_team_state"]
     (target_auth_user_id) [name: "ix_balancer_registration_team_invite_target_auth_user_id"]
+    (team_id) [name: "ix_balancer_registration_team_invite_team_id"]
+    (team_id, state) [name: "ix_balancer_registration_team_invite_team_state"]
   }
 }
 
@@ -1196,8 +1193,8 @@ Table balancer.team_slot {
   is_captain boolean [not null, default: false]
   sort_order int [not null, default: 0]
   indexes {
-    (team_id) [name: "ix_balancer_team_slot_team_id"]
     (battle_tag_normalized) [name: "ix_balancer_team_slot_battle_tag_normalized"]
+    (team_id) [name: "ix_balancer_team_slot_team_id"]
   }
 }
 
@@ -1231,12 +1228,14 @@ TableGroup balancer {
   balancer.balance
   balancer.balance_variant
   balancer.custom_game
+  balancer.custom_game_co_host
   balancer.custom_game_player
+  balancer.custom_game_player_role
+  balancer.custom_game_role_slot
+  balancer.custom_game_team_name
   balancer.draft_audit_event
   balancer.draft_pick
   balancer.draft_player
-  balancer.draft_player_role
-  balancer.draft_player_role_hero
   balancer.draft_session
   balancer.draft_team
   balancer.member_rank
@@ -1262,16 +1261,11 @@ Table casual.match {
   created_at timestamptz [not null, default: `now()`]
   updated_at timestamptz
   custom_game_id bigint [not null]
-  workspace_id bigint [not null]
-  home_team_id bigint [not null]
-  away_team_id bigint [not null]
-  home_score int [not null]
-  away_score int [not null]
   map_id bigint
   recorded_by bigint
   indexes {
-    (workspace_id) [name: "ix_casual_match_workspace_id"]
     (custom_game_id) [name: "ix_casual_match_custom_game_id"]
+    (map_id) [name: "ix_casual_match_map_id"]
   }
 }
 
@@ -1280,12 +1274,13 @@ Table casual.player {
   created_at timestamptz [not null, default: `now()`]
   updated_at timestamptz
   team_id bigint [not null]
-  workspace_member_id bigint [not null]
+  workspace_member_id bigint
+  display_name_snapshot VARCHAR(255) [not null]
   role heroclass
   rank int [not null]
   indexes {
-    (workspace_member_id) [name: "ix_casual_player_workspace_member_id"]
     (team_id) [name: "ix_casual_player_team_id"]
+    (workspace_member_id) [name: "ix_casual_player_workspace_member_id"]
   }
 }
 
@@ -1293,10 +1288,13 @@ Table casual.team {
   id bigint [pk, increment]
   created_at timestamptz [not null, default: `now()`]
   updated_at timestamptz
-  workspace_id bigint [not null]
+  match_id bigint [not null]
+  side VARCHAR(8) [not null]
   name VARCHAR(255) [not null]
+  score int [not null]
   indexes {
-    (workspace_id) [name: "ix_casual_team_workspace_id"]
+    (match_id, side) [unique, name: "uq_casual_team_match_side"]
+    (match_id) [name: "ix_casual_team_match_id"]
   }
 }
 
@@ -1337,11 +1335,11 @@ Table log_processing.record {
   content_hash VARCHAR(64)
   attempts int [not null, default: 0]
   indexes {
-    (uploader_id) [name: "ix_log_processing_record_uploader_id"]
-    (attached_encounter_id) [name: "ix_log_processing_record_attached_encounter_id"]
     (tournament_id) [name: "ix_log_processing_record_tournament_id"]
-    (status, created_at) [name: "ix_log_processing_record_status_created"]
+    (uploader_id) [name: "ix_log_processing_record_uploader_id"]
     (content_hash) [name: "ix_log_processing_record_content_hash"]
+    (status, created_at) [name: "ix_log_processing_record_status_created"]
+    (attached_encounter_id) [name: "ix_log_processing_record_attached_encounter_id"]
   }
 }
 
@@ -1367,13 +1365,13 @@ Table matches.event {
   related_hero_id bigint
   name matchevent [not null]
   indexes {
+    (match_id) [name: "ix_matches_event_match_id"]
     (related_team_id) [name: "ix_matches_assists_related_team_id"]
+    (user_id) [name: "ix_matches_event_user_id"]
     (related_hero_id) [name: "ix_matches_assists_related_hero_id"]
     (team_id) [name: "ix_matches_event_team_id"]
-    (user_id) [name: "ix_matches_event_user_id"]
     (hero_id) [name: "ix_matches_assists_hero_id"]
     (related_user_id) [name: "ix_matches_assists_related_user_id"]
-    (match_id) [name: "ix_matches_event_match_id"]
   }
 }
 
@@ -1396,13 +1394,13 @@ Table matches.kill_feed {
   is_critical_hit boolean [not null]
   is_environmental boolean [not null]
   indexes {
-    (match_id) [name: "ix_matches_kill_feed_match_id"]
-    (killer_team_id) [name: "ix_matches_kill_feed_killer_team_id"]
-    (victim_id) [name: "ix_matches_kill_feed_victim_id"]
-    (victim_team_id) [name: "ix_matches_kill_feed_victim_team_id"]
     (victim_hero_id) [name: "ix_matches_kill_feed_victim_hero_id"]
-    (killer_id) [name: "ix_matches_kill_feed_killer_id"]
+    (match_id) [name: "ix_matches_kill_feed_match_id"]
     (killer_hero_id) [name: "ix_matches_kill_feed_killer_hero_id"]
+    (victim_team_id) [name: "ix_matches_kill_feed_victim_team_id"]
+    (victim_id) [name: "ix_matches_kill_feed_victim_id"]
+    (killer_team_id) [name: "ix_matches_kill_feed_killer_team_id"]
+    (killer_id) [name: "ix_matches_kill_feed_killer_id"]
   }
 }
 
@@ -1423,11 +1421,11 @@ Table matches.match {
   map_id bigint [not null]
   map_index int
   indexes {
-    (home_team_id) [name: "ix_matches_match_home_team_id"]
-    (map_id) [name: "ix_matches_match_map_id"]
     (log_record_id) [name: "ix_matches_match_log_record_id"]
     (encounter_id) [name: "ix_matches_match_encounter_id"]
     (away_team_id) [name: "ix_matches_match_away_team_id"]
+    (home_team_id) [name: "ix_matches_match_home_team_id"]
+    (map_id) [name: "ix_matches_match_map_id"]
   }
 }
 
@@ -1451,8 +1449,6 @@ Table matches.stat_baselines {
 
 Table matches.statistics {
   id bigint [pk, increment]
-  created_at timestamptz [not null, default: `now()`]
-  updated_at timestamptz
   match_id bigint [not null]
   round int [not null]
   team_id bigint [not null]
@@ -1461,16 +1457,13 @@ Table matches.statistics {
   name logstatsname [not null]
   value float [not null]
   indexes {
-    (match_id, name, round) [name: "ix_match_statistics_match_name_round"]
-    (user_id) [name: "ix_matches_statistics_user_id"]
-    (match_id, user_id, round) [name: "ix_match_statistics_match_user_round"]
-    (user_id, hero_id, name) [name: "ix_match_statistics_user_hero_r0"]
-    (name) [name: "ix_matches_statistics_name"]
     (team_id) [name: "ix_matches_statistics_team_id"]
     (user_id, round, name) [name: "ix_match_statistics_user_round_name"]
     (user_id, name) [name: "ix_match_statistics_user_name_r0"]
     (match_id, user_id, hero_id) [name: "ix_match_statistics_playtime_r0"]
-    (match_id) [name: "ix_matches_statistics_match_id"]
+    (match_id, name, round) [name: "ix_match_statistics_match_name_round"]
+    (match_id, user_id, round) [name: "ix_match_statistics_match_user_round"]
+    (user_id, hero_id, name) [name: "ix_match_statistics_user_hero_r0"]
   }
 }
 
@@ -1559,8 +1552,8 @@ Table overwatch_rank.battle_tag_state {
   last_error text
   priority_tier smallint [not null, default: 0]
   indexes {
-    (priority_tier, last_checked_at) [name: "ix_battle_tag_state_priority"]
     (status, next_eligible_at, last_checked_at) [name: "ix_battle_tag_state_due"]
+    (priority_tier, last_checked_at) [name: "ix_battle_tag_state_priority"]
   }
 }
 
@@ -1582,8 +1575,6 @@ Table overwatch_rank.fetch_log {
 
 Table overwatch_rank.rank_snapshot {
   id bigint [pk, increment]
-  created_at timestamptz [not null, default: `now()`]
-  updated_at timestamptz
   user_id bigint [not null]
   social_account_id bigint [not null]
   battle_tag VARCHAR(255) [not null]
@@ -1595,13 +1586,13 @@ Table overwatch_rank.rank_snapshot {
   rank_value int
   mapping_version VARCHAR(64)
   is_ranked boolean [not null, default: true]
-  raw_payload jsonb
   captured_at timestamptz [not null, default: `now()`]
   source VARCHAR(32) [not null, default: `scheduled`]
   indexes {
+    (social_account_id, role) [name: "ix_rank_snapshot_latest_ranked"]
+    (captured_at) [name: "ix_overwatch_rank_rank_snapshot_captured_at"]
     (user_id, captured_at) [name: "ix_rank_snapshot_user_captured"]
     (social_account_id, role, platform, captured_at) [name: "ix_rank_snapshot_series_captured"]
-    (captured_at) [name: "ix_overwatch_rank_rank_snapshot_captured_at"]
   }
 }
 
@@ -1621,9 +1612,9 @@ Table players.favorite_player {
   player_id bigint [not null]
   indexes {
     (auth_user_id, player_id) [unique, name: "uq_favorite_player_auth_user_player"]
+    (auth_user_id) [name: "ix_players_favorite_player_auth_user_id"]
     (auth_user_id) [name: "ix_favorite_player_auth_user"]
     (player_id) [name: "ix_players_favorite_player_player_id"]
-    (auth_user_id) [name: "ix_players_favorite_player_auth_user_id"]
   }
 }
 
@@ -1657,10 +1648,10 @@ Table players.social_account_visibility {
   account_id bigint [not null]
   workspace_id bigint
   indexes {
-    (account_id) [name: "ix_social_account_visibility_account_id"]
-    (account_id) [unique, name: "uq_social_visibility_global"]
     (workspace_id) [name: "ix_social_account_visibility_workspace_id"]
     (account_id, workspace_id) [unique, name: "uq_social_visibility_workspace"]
+    (account_id) [name: "ix_social_account_visibility_account_id"]
+    (account_id) [unique, name: "uq_social_visibility_global"]
   }
 }
 
@@ -1692,8 +1683,8 @@ Table players.user_merge_audit {
   preview_snapshot_json json [not null]
   indexes {
     (operator_auth_user_id) [name: "ix_players_user_merge_audit_operator_auth_user_id"]
-    (target_user_id) [name: "ix_players_user_merge_audit_target_user_id"]
     (source_user_id) [name: "ix_players_user_merge_audit_source_user_id"]
+    (target_user_id) [name: "ix_players_user_merge_audit_target_user_id"]
   }
 }
 
@@ -1747,11 +1738,11 @@ Table division_grid {
   archived_at timestamptz
   indexes {
     (workspace_id, slug) [unique]
+    (source_grid_id) [name: "ix_division_grid_source_grid_id"]
+    (source_key) [name: "ix_division_grid_source_key"]
     (source_fingerprint) [name: "ix_division_grid_source_fingerprint"]
     (source_workspace_id) [name: "ix_division_grid_source_workspace_id"]
     (workspace_id) [name: "ix_division_grid_workspace_id"]
-    (source_grid_id) [name: "ix_division_grid_source_grid_id"]
-    (source_key) [name: "ix_division_grid_source_key"]
   }
 }
 
@@ -1772,9 +1763,9 @@ Table division_grid_import_job {
   finished_at timestamptz
   indexes {
     (workspace_id, idempotency_key) [unique]
-    (workspace_id) [name: "ix_division_grid_import_job_workspace_id"]
     (requested_by_user_id) [name: "ix_division_grid_import_job_requested_by_user_id"]
     (source_workspace_id) [name: "ix_division_grid_import_job_source_workspace_id"]
+    (workspace_id) [name: "ix_division_grid_import_job_workspace_id"]
   }
 }
 
@@ -1788,8 +1779,8 @@ Table division_grid_mapping {
   is_complete boolean [not null, default: false]
   indexes {
     (source_version_id, target_version_id) [unique]
-    (target_version_id) [name: "ix_division_grid_mapping_target_version_id"]
     (source_version_id) [name: "ix_division_grid_mapping_source_version_id"]
+    (target_version_id) [name: "ix_division_grid_mapping_target_version_id"]
   }
 }
 
@@ -1804,8 +1795,8 @@ Table division_grid_mapping_rule {
   is_primary boolean [not null, default: false]
   indexes {
     (source_tier_id) [name: "ix_division_grid_mapping_rule_source_tier_id"]
-    (mapping_id) [name: "ix_division_grid_mapping_rule_mapping_id"]
     (target_tier_id) [name: "ix_division_grid_mapping_rule_target_tier_id"]
+    (mapping_id) [name: "ix_division_grid_mapping_rule_mapping_id"]
   }
 }
 
@@ -1824,8 +1815,8 @@ Table division_grid_tier {
   ow_rank_min bigint
   ow_rank_max bigint
   indexes {
-    (version_id, slug) [unique]
     (version_id, sort_order) [unique]
+    (version_id, slug) [unique]
     (version_id) [name: "ix_division_grid_tier_version_id"]
   }
 }
@@ -1863,6 +1854,32 @@ Table event_outbox {
   indexes {
     (status, next_attempt_at) [name: "ix_event_outbox_status_next_attempt"]
   }
+}
+
+Table notification {
+  id bigint [pk, increment]
+  audience VARCHAR(16) [not null]
+  recipient_auth_user_id bigint
+  workspace_id bigint
+  source_workspace_id bigint
+  kind VARCHAR(64) [not null]
+  payload_json jsonb [not null, default: `'{}'`]
+  actor_auth_user_id bigint
+  published_at timestamptz [not null, default: `now()`]
+  expires_at timestamptz
+  created_at timestamptz [not null, default: `now()`]
+  indexes {
+    (recipient_auth_user_id) [name: "ix_notification_recipient_published"]
+    (audience) [name: "ix_notification_audience_published"]
+    (source_workspace_id) [name: "ix_notification_source_workspace_published"]
+  }
+}
+
+Table notification_read {
+  auth_user_id bigint [pk]
+  notification_id bigint [pk]
+  read_at timestamptz [not null, default: `now()`]
+  deleted_at timestamptz
 }
 
 Table settings {
@@ -1910,15 +1927,16 @@ Table workspace {
   discord_guild_verified_at timestamptz
   discord_guild_verified_by_auth_user_id bigint
   owner_id bigint
+  verification_status VARCHAR(16) [not null, default: `unverified`]
   default_division_grid_version_id bigint
   default_roster_slots_json jsonb
   newcomer_scope VARCHAR(16) [not null, default: `global`]
   indexes {
+    (custom_domain) [unique, name: "ix_workspace_custom_domain"]
     (owner_id) [name: "ix_workspace_owner_id"]
+    (subdomain) [unique, name: "ix_workspace_subdomain"]
     (slug) [unique, name: "ix_workspace_slug"]
     (default_division_grid_version_id) [name: "ix_workspace_default_division_grid_version_id"]
-    (subdomain) [unique, name: "ix_workspace_subdomain"]
-    (custom_domain) [unique, name: "ix_workspace_custom_domain"]
   }
 }
 
@@ -1930,8 +1948,8 @@ Table workspace_member {
   player_id bigint [not null]
   display_name VARCHAR(255)
   indexes {
-    (id, workspace_id) [unique, name: "uq_workspace_member_id_workspace"]
     (workspace_id, player_id) [unique, name: "uq_workspace_member_workspace_player"]
+    (id, workspace_id) [unique, name: "uq_workspace_member_id_workspace"]
     (workspace_id) [name: "ix_workspace_member_workspace_id"]
     (player_id) [name: "ix_workspace_member_player_id"]
   }
@@ -1946,6 +1964,8 @@ TableGroup public {
   division_grid_tier
   division_grid_version
   event_outbox
+  notification
+  notification_read
   settings
   workspace
   workspace_member
@@ -1964,11 +1984,11 @@ Table realtime.workspace_event {
   payload jsonb [not null]
   occurred_at timestamptz [not null, default: `now()`]
   indexes {
-    (tournament_id) [name: "ix_realtime_workspace_event_tournament_id"]
-    (actor_user_id) [name: "ix_realtime_workspace_event_actor_user_id"]
     (topic, id) [name: "ix_realtime_workspace_event_topic_id"]
     (workspace_id) [name: "ix_realtime_workspace_event_workspace_id"]
     (occurred_at) [name: "ix_realtime_workspace_event_occurred_at"]
+    (tournament_id) [name: "ix_realtime_workspace_event_tournament_id"]
+    (actor_user_id) [name: "ix_realtime_workspace_event_actor_user_id"]
   }
 }
 
@@ -1993,10 +2013,10 @@ Table subscriptions.check_log {
   reason VARCHAR(64)
   error text
   indexes {
+    (auth_user_id, created_at) [name: "ix_subscription_check_log_user_created"]
     (created_at) [name: "ix_subscription_check_log_created_at"]
     (workspace_id) [name: "ix_subscriptions_check_log_workspace_id"]
     (state, created_at) [name: "ix_subscription_check_log_state_created"]
-    (auth_user_id, created_at) [name: "ix_subscription_check_log_user_created"]
   }
 }
 
@@ -2016,9 +2036,9 @@ Table subscriptions.entitlement {
   evidence_json json
   indexes {
     (workspace_id, auth_user_id, provider) [unique, name: "uq_subscription_entitlement_scope"]
+    (workspace_id) [name: "ix_subscriptions_entitlement_workspace_id"]
     (workspace_id, provider) [name: "ix_subscription_entitlement_workspace_provider"]
     (auth_user_id) [name: "ix_subscriptions_entitlement_auth_user_id"]
-    (workspace_id) [name: "ix_subscriptions_entitlement_workspace_id"]
   }
 }
 
@@ -2067,8 +2087,8 @@ Table tournament.challonge_match_mapping {
   challonge_match_id int [not null]
   encounter_id bigint [not null]
   indexes {
-    (source_id, encounter_id) [unique, name: "uq_challonge_match_mapping_source_encounter"]
     (source_id, challonge_match_id) [unique, name: "uq_challonge_match_mapping_source_match"]
+    (source_id, encounter_id) [unique, name: "uq_challonge_match_mapping_source_encounter"]
     (encounter_id) [name: "ix_challonge_match_mapping_encounter"]
     (source_id) [name: "ix_challonge_match_mapping_source"]
   }
@@ -2124,9 +2144,9 @@ Table tournament.challonge_sync_log {
   after_json json
   error_message text
   indexes {
+    (source_id) [name: "ix_tournament_challonge_sync_log_source_id"]
     (tournament_id) [name: "ix_tournament_challonge_sync_log_tournament_id"]
     (tournament_id) [name: "ix_challonge_sync_log_tournament_created"]
-    (source_id) [name: "ix_tournament_challonge_sync_log_source_id"]
   }
 }
 
@@ -2149,10 +2169,10 @@ Table tournament.computation_job {
   started_at timestamptz
   finished_at timestamptz
   indexes {
+    (idempotency_key) [unique, name: "uq_tournament_computation_job_active_key"]
     (status) [name: "ix_tournament_computation_job_status"]
     (tournament_id) [name: "ix_tournament_computation_job_tournament_id"]
     (tournament_id, kind) [name: "ix_tournament_computation_job_tournament_kind"]
-    (idempotency_key) [unique, name: "uq_tournament_computation_job_active_key"]
     (stage_item_id) [name: "ix_tournament_computation_job_stage_item_id"]
     (requested_by_user_id) [name: "ix_tournament_computation_job_requested_by_user_id"]
     (stage_id) [name: "ix_tournament_computation_job_stage_id"]
@@ -2182,14 +2202,14 @@ Table tournament.encounter {
   result_status encounterresultstatus [not null, default: `none`]
   confirmed_at timestamptz
   indexes {
+    (home_team_id) [name: "ix_tournament_encounter_home_team_id"]
+    (tournament_id, status) [name: "ix_encounter_tournament_status"]
+    (stage_id) [name: "ix_tournament_encounter_stage_id"]
     (away_team_id) [name: "ix_tournament_encounter_away_team_id"]
     (round) [name: "ix_tournament_encounter_round"]
-    (tournament_id, status) [name: "ix_encounter_tournament_status"]
     (tournament_id, status) [name: "ix_encounter_status_live_upcoming"]
-    (home_team_id) [name: "ix_tournament_encounter_home_team_id"]
     (tournament_id) [name: "ix_tournament_encounter_tournament_id"]
     (stage_item_id) [name: "ix_tournament_encounter_stage_item_id"]
-    (stage_id) [name: "ix_tournament_encounter_stage_id"]
   }
 }
 
@@ -2255,9 +2275,9 @@ Table tournament.encounter_map_report {
   away_score int [not null]
   indexes {
     (encounter_id, map_id, map_index, team_id) [unique, name: "uq_encounter_map_report_encounter_map_index_team"]
-    (encounter_id) [name: "ix_tournament_encounter_map_report_encounter_id"]
     (team_id) [name: "ix_tournament_encounter_map_report_team_id"]
     (map_id) [name: "ix_tournament_encounter_map_report_map_id"]
+    (encounter_id) [name: "ix_tournament_encounter_map_report_encounter_id"]
   }
 }
 
@@ -2272,8 +2292,8 @@ Table tournament.encounter_pick_ban_ledger {
   round int [not null]
   indexes {
     (encounter_id, kind, item_id, banned_by_side) [unique, name: "uq_encounter_pick_ban_ledger_entry"]
-    (item_id) [name: "ix_tournament_encounter_pick_ban_ledger_item_id"]
     (encounter_id) [name: "ix_tournament_encounter_pick_ban_ledger_encounter_id"]
+    (item_id) [name: "ix_tournament_encounter_pick_ban_ledger_item_id"]
   }
 }
 
@@ -2333,9 +2353,9 @@ Table tournament.encounter_saved_view {
   sort_order int [not null, default: 0]
   indexes {
     (workspace_id, auth_user_id, name) [unique, name: "uq_encounter_saved_view_workspace_user_name"]
-    (workspace_id, auth_user_id) [name: "ix_encounter_saved_view_workspace_user"]
     (auth_user_id) [name: "ix_tournament_encounter_saved_view_auth_user_id"]
     (workspace_id) [name: "ix_tournament_encounter_saved_view_workspace_id"]
+    (workspace_id, auth_user_id) [name: "ix_encounter_saved_view_workspace_user"]
   }
 }
 
@@ -2417,8 +2437,8 @@ Table tournament.pick_ban_entry {
   team_id bigint
   protected_by pickbanside
   indexes {
-    (session_id, action_index) [unique, name: "uq_pick_ban_entry_session_action_index"]
     (team_id) [name: "ix_tournament_pick_ban_entry_team_id"]
+    (session_id, action_index) [unique, name: "uq_pick_ban_entry_session_action_index"]
     (item_id) [name: "ix_tournament_pick_ban_entry_item_id"]
     (session_id) [name: "ix_tournament_pick_ban_entry_session_id"]
   }
@@ -2467,12 +2487,12 @@ Table tournament.player {
   workspace_member_id bigint [not null]
   team_id bigint [not null]
   indexes {
-    (team_id, workspace_member_id) [name: "ix_player_team_workspace_member"]
-    (workspace_member_id, tournament_id) [name: "ix_player_workspace_member_tournament"]
     (tournament_id, role, sub_role) [name: "ix_player_tournament_role_sub_role"]
     (related_player_id) [name: "ix_player_related_player_id"]
     (tournament_id) [name: "ix_tournament_player_tournament_id"]
     (workspace_member_id, tournament_id) [name: "ix_player_member_not_sub"]
+    (team_id, workspace_member_id) [name: "ix_player_team_workspace_member"]
+    (workspace_member_id, tournament_id) [name: "ix_player_workspace_member_tournament"]
   }
 }
 
@@ -2517,11 +2537,11 @@ Table tournament.scrim_room {
   indexes {
     (token) [unique, name: "uq_scrim_room_token"]
     (encounter_id) [unique, name: "uq_scrim_room_encounter"]
-    (workspace_id) [name: "ix_tournament_scrim_room_workspace_id"]
-    (created_by_auth_user_id) [name: "ix_tournament_scrim_room_created_by_auth_user_id"]
-    (stage_id) [name: "ix_tournament_scrim_room_stage_id"]
     (tournament_id) [name: "ix_tournament_scrim_room_tournament_id"]
+    (stage_id) [name: "ix_tournament_scrim_room_stage_id"]
+    (workspace_id) [name: "ix_tournament_scrim_room_workspace_id"]
     (created_by_auth_user_id) [name: "ix_scrim_room_open_by_creator"]
+    (created_by_auth_user_id) [name: "ix_tournament_scrim_room_created_by_auth_user_id"]
   }
 }
 
@@ -2532,8 +2552,8 @@ Table tournament.slug_redirect {
   old_slug VARCHAR [not null, unique]
   tournament_id bigint [not null]
   indexes {
-    (tournament_id) [name: "ix_tournament_slug_redirect_tournament_id"]
     (old_slug) [unique, name: "ix_tournament_slug_redirect_old_slug"]
+    (tournament_id) [name: "ix_tournament_slug_redirect_tournament_id"]
   }
 }
 
@@ -2566,6 +2586,7 @@ Table tournament.stage_item {
   name VARCHAR [not null]
   type stageitemtype [not null]
   "order" int [not null]
+  advance_count int
   indexes {
     (stage_id) [name: "ix_tournament_stage_item_stage_id"]
   }
@@ -2582,8 +2603,8 @@ Table tournament.stage_item_input {
   source_stage_item_id bigint
   source_position int
   indexes {
-    (team_id) [name: "ix_tournament_stage_item_input_team_id"]
     (stage_item_id) [name: "ix_tournament_stage_item_input_stage_item_id"]
+    (team_id) [name: "ix_tournament_stage_item_input_team_id"]
   }
 }
 
@@ -2603,15 +2624,17 @@ Table tournament.standing {
   lose int [not null]
   points float [not null]
   buchholz float
+  full_buchholz float
+  tie_group int
   tb int
   score_differential int
   indexes {
-    (stage_id, stage_item_id, team_id) [name: "ix_standing_stage_stage_item_team"]
-    (team_id) [name: "ix_tournament_standing_team_id"]
-    (tournament_id) [name: "ix_tournament_standing_tournament_id"]
-    (tournament_id, overall_position) [name: "ix_standing_tournament_position"]
     (stage_id) [name: "ix_tournament_standing_stage_id"]
     (stage_item_id) [name: "ix_tournament_standing_stage_item_id"]
+    (tournament_id, overall_position) [name: "ix_standing_tournament_position"]
+    (team_id) [name: "ix_tournament_standing_team_id"]
+    (stage_id, stage_item_id, team_id) [name: "ix_standing_stage_stage_item_team"]
+    (tournament_id) [name: "ix_tournament_standing_tournament_id"]
   }
 }
 
@@ -2642,7 +2665,7 @@ Table tournament.tournament {
   is_finished boolean [not null, default: false]
   is_hidden boolean [not null, default: false]
   team_formation VARCHAR [not null, default: `balancer`]
-  status tournamentstatus [not null, default: `registration`]
+  status tournamentstatus [not null]
   start_date timestamptz
   end_date timestamptz
   auto_transitions_enabled boolean [not null, default: true]
@@ -2652,11 +2675,13 @@ Table tournament.tournament {
   loss_points float [not null, default: 0.0]
   division_grid_version_id bigint
   roster_slots_json jsonb
+  cover_image_url VARCHAR
+  logo_url VARCHAR
   indexes {
-    (division_grid_version_id) [name: "ix_tournament_tournament_division_grid_version_id"]
-    (slug) [unique, name: "ix_tournament_tournament_slug"]
-    (workspace_id) [name: "ix_tournament_tournament_workspace_id"]
     (is_hidden) [name: "ix_tournament_tournament_is_hidden"]
+    (division_grid_version_id) [name: "ix_tournament_tournament_division_grid_version_id"]
+    (workspace_id) [name: "ix_tournament_tournament_workspace_id"]
+    (slug) [unique, name: "ix_tournament_tournament_slug"]
   }
 }
 
@@ -2687,8 +2712,8 @@ Table tournament.tournament_phase_schedule {
   ends_at timestamptz
   indexes {
     (tournament_id, status) [unique, name: "uq_tournament_phase_schedule_phase"]
-    (starts_at) [name: "ix_tournament_tournament_phase_schedule_starts_at"]
     (tournament_id) [name: "ix_tournament_tournament_phase_schedule_tournament_id"]
+    (starts_at) [name: "ix_tournament_tournament_phase_schedule_starts_at"]
   }
 }
 
@@ -2700,8 +2725,8 @@ Table tournament.tournament_preview_access {
   auth_user_id bigint [not null]
   indexes {
     (tournament_id, auth_user_id) [unique, name: "uq_tournament_preview_access_tournament_user"]
-    (tournament_id) [name: "ix_tournament_tournament_preview_access_tournament_id"]
     (auth_user_id) [name: "ix_tournament_tournament_preview_access_auth_user_id"]
+    (tournament_id) [name: "ix_tournament_tournament_preview_access_tournament_id"]
   }
 }
 
@@ -2785,6 +2810,7 @@ Ref: analytics.standings_distribution.team_id > tournament.team.id [delete: casc
 Ref: analytics.standings_distribution.algorithm_id > analytics.algorithms.id [delete: cascade]
 Ref: auth.api_key.auth_user_id > auth.user.id [delete: cascade]
 Ref: auth.api_key.workspace_id > workspace.id [delete: cascade]
+Ref: auth.api_key_scope.api_key_id > auth.api_key.id [delete: cascade]
 Ref: auth.oauth_connections.auth_user_id > auth.user.id [delete: cascade]
 Ref: auth.refresh_token.user_id > auth.user.id [delete: cascade]
 Ref: auth.role_permissions.role_id > auth.roles.id [delete: cascade]
@@ -2802,8 +2828,13 @@ Ref: balancer.balance.saved_by > auth.user.id [delete: set null]
 Ref: balancer.balance_variant.balance_id > balancer.balance.id [delete: cascade]
 Ref: balancer.custom_game.workspace_id > workspace.id [delete: cascade]
 Ref: balancer.custom_game.host_user_id > auth.user.id [delete: set null]
+Ref: balancer.custom_game_co_host.custom_game_id > balancer.custom_game.id [delete: cascade]
+Ref: balancer.custom_game_co_host.user_id > auth.user.id [delete: cascade]
 Ref: balancer.custom_game_player.custom_game_id > balancer.custom_game.id [delete: cascade]
 Ref: balancer.custom_game_player.workspace_member_id > workspace_member.id [delete: cascade]
+Ref: balancer.custom_game_player_role.custom_game_player_id > balancer.custom_game_player.id [delete: cascade]
+Ref: balancer.custom_game_role_slot.custom_game_id > balancer.custom_game.id [delete: cascade]
+Ref: balancer.custom_game_team_name.custom_game_id > balancer.custom_game.id [delete: cascade]
 Ref: balancer.draft_audit_event.session_id > balancer.draft_session.id [delete: cascade]
 Ref: balancer.draft_audit_event.actor_auth_user_id > auth.user.id [delete: set null]
 Ref: balancer.draft_pick.session_id > balancer.draft_session.id [delete: cascade]
@@ -2811,11 +2842,9 @@ Ref: balancer.draft_pick.draft_team_id > balancer.draft_team.id [delete: cascade
 Ref: balancer.draft_pick.picked_player_id > balancer.draft_player.id [delete: set null]
 Ref: balancer.draft_pick.picked_by_workspace_member_id > workspace_member.id [delete: set null]
 Ref: balancer.draft_player.session_id > balancer.draft_session.id [delete: cascade]
+Ref: balancer.draft_player.registration_id > balancer.registration.id [delete: restrict]
 Ref: balancer.draft_player.workspace_member_id > workspace_member.id [delete: set null]
 Ref: balancer.draft_player.drafted_by_team_id > balancer.draft_team.id [delete: set null]
-Ref: balancer.draft_player_role.draft_player_id > balancer.draft_player.id [delete: cascade]
-Ref: balancer.draft_player_role_hero.draft_player_role_id > balancer.draft_player_role.id [delete: cascade]
-Ref: balancer.draft_player_role_hero.hero_id > overwatch.hero.id [delete: cascade]
 Ref: balancer.draft_session.tournament_id > tournament.tournament.id [delete: cascade]
 Ref: balancer.draft_session.workspace_id > workspace.id [delete: cascade]
 Ref: balancer.draft_session.current_pick_id > balancer.draft_pick.id [delete: set null]
@@ -2863,14 +2892,11 @@ Ref: balancer.tournament_config.updated_by > auth.user.id [delete: set null]
 Ref: balancer.workspace_config.workspace_id > workspace.id [delete: cascade]
 Ref: balancer.workspace_config.updated_by > auth.user.id [delete: set null]
 Ref: casual.match.custom_game_id > balancer.custom_game.id [delete: cascade]
-Ref: casual.match.workspace_id > workspace.id [delete: cascade]
-Ref: casual.match.home_team_id > casual.team.id [delete: cascade]
-Ref: casual.match.away_team_id > casual.team.id [delete: cascade]
 Ref: casual.match.map_id > overwatch.map.id [delete: set null]
 Ref: casual.match.recorded_by > auth.user.id [delete: set null]
 Ref: casual.player.team_id > casual.team.id [delete: cascade]
-Ref: casual.player.workspace_member_id > workspace_member.id [delete: cascade]
-Ref: casual.team.workspace_id > workspace.id [delete: cascade]
+Ref: casual.player.workspace_member_id > workspace_member.id [delete: set null]
+Ref: casual.team.match_id > casual.match.id [delete: cascade]
 Ref: log_processing.discord_channel.tournament_id > tournament.tournament.id [delete: cascade]
 Ref: log_processing.record.tournament_id > tournament.tournament.id [delete: cascade]
 Ref: log_processing.record.uploader_id > players.user.id [delete: set null]

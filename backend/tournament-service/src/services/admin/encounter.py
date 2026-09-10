@@ -1,8 +1,5 @@
 """Admin service layer for encounter CRUD operations"""
 
-from collections.abc import Iterable
-
-from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -20,22 +17,13 @@ from shared.repository import (
 from src import models, schemas
 from src.core import enums
 from src.services.encounter.pick_ban_session import pick_ban_session_service
-from src.services.tournament.cache_invalidation import invalidate_tournament_cache
-from src.services.tournament.events import (
-    enqueue_tournament_recalculation,
-)
+from src.services.tournament.events import enqueue_tournament_recalculation
 
-
-async def _invalidate_encounter_reads(tournament_ids: Iterable[int]) -> None:
-    """Clear encounter reads before an admin mutation returns to the client."""
-    for tournament_id in sorted(set(tournament_ids)):
-        try:
-            await invalidate_tournament_cache(tournament_id, "bracket_changed")
-        except Exception:
-            logger.exception(
-                "Failed to invalidate encounter cache after admin write",
-                tournament_id=tournament_id,
-            )
+# ``enqueue_tournament_recalculation`` emits ``tournament.encounters``, and the
+# realtime rail drops this service's cached encounter reads from that emit's
+# after-commit hook, before the event reaches any client. The explicit
+# post-commit purge these writes used to do was the same drop, minus that
+# ordering guarantee.
 
 
 def _reject_completed_status(new_status: str | None) -> None:
@@ -194,7 +182,6 @@ class AdminEncounterService:
         session.add(encounter)
         await enqueue_tournament_recalculation(session, data.tournament_id)
         await session.commit()
-        await _invalidate_encounter_reads([data.tournament_id])
         await session.refresh(encounter)
 
         return encounter
@@ -269,7 +256,6 @@ class AdminEncounterService:
 
         await enqueue_tournament_recalculation(session, tournament_id)
         await session.commit()
-        await _invalidate_encounter_reads([tournament_id])
         await session.refresh(encounter)
 
         return encounter
@@ -319,8 +305,6 @@ class AdminEncounterService:
         if tournament_id is not None:
             await enqueue_tournament_recalculation(session, tournament_id)
         await session.commit()
-        if tournament_id is not None:
-            await _invalidate_encounter_reads([tournament_id])
         await session.refresh(match)
 
         return match
@@ -338,7 +322,6 @@ class AdminEncounterService:
         await session.delete(encounter)
         await enqueue_tournament_recalculation(session, tournament_id)
         await session.commit()
-        await _invalidate_encounter_reads([tournament_id])
 
 
 encounter_service = AdminEncounterService()

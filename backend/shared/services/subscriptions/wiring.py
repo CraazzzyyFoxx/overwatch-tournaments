@@ -24,7 +24,7 @@ from shared.services.subscriptions.entitlements import (
     SubscriptionEventSink,
     SubscriptionResolver,
 )
-from shared.services.subscriptions.realtime import RedisSubscriptionEventSink
+from shared.services.subscriptions.realtime import SessionSubscriptionEventSink
 from shared.services.subscriptions.store import SqlCheckLogSink, SqlEntitlementStore
 from shared.services.subscriptions.strategies import (
     BoostyDiscordStrategy,
@@ -38,14 +38,14 @@ def build_log_sink(session: AsyncSession) -> CheckLogSink:
     return SqlCheckLogSink(session)
 
 
-def build_event_sink(redis: Any | None) -> SubscriptionEventSink | None:
-    """Realtime invalidation sink, or ``None`` when the caller has no Redis.
+def build_event_sink(session: AsyncSession) -> SubscriptionEventSink:
+    """Realtime invalidation sink, riding the resolver's own transaction.
 
-    Optional rather than required so a test (or a CLI one-off) can build a working
-    resolver with nothing but a session: no sink means no signal, and every
-    admission decision is unaffected.
+    Takes no Redis: the signal is staged on the session and published from its
+    ``after_commit``, so there is no client to thread through and no way for a
+    caller to end up with a resolver that silently signals nothing.
     """
-    return RedisSubscriptionEventSink(redis) if redis is not None else None
+    return SessionSubscriptionEventSink(session)
 
 
 def build_store(session: AsyncSession) -> EntitlementStore:
@@ -84,7 +84,6 @@ def build_resolver(
     twitch_client_id: str | None = None,
     broker: Any | None = None,
     proxy: str | None = None,
-    redis: Any | None = None,
 ) -> SubscriptionResolver:
     return SubscriptionResolver(
         store=build_store(session),
@@ -100,6 +99,6 @@ def build_resolver(
         # organizer later asks "why was this player refused?" about.
         log_sink=build_log_sink(session),
         # ...and tells the workspace when a verdict actually moved, so an open page
-        # shows it without polling. Absent Redis, silently no signal.
-        event_sink=build_event_sink(redis),
+        # shows it without polling.
+        event_sink=build_event_sink(session),
     )

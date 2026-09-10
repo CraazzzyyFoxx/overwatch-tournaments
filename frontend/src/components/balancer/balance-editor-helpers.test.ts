@@ -2,6 +2,7 @@ import {
   canPlayerPlayRole,
   deriveRoleDiscomfort,
   moveBalancePlayer,
+  rosterCapacity,
   type BalanceDropTarget,
 } from "@/components/balancer/balance-editor-helpers";
 import {
@@ -41,7 +42,7 @@ function makePlayer(overrides: Partial<InternalBalancePlayer> = {}): InternalBal
 }
 
 function emptyRoster(): Record<BalancerRosterKey, InternalBalancePlayer[]> {
-  return { Tank: [], Damage: [], Support: [] };
+  return { Tank: [], Damage: [], Support: [], Flex: [] };
 }
 
 function makePayload(
@@ -105,7 +106,8 @@ describe("moveBalancePlayer role validation", () => {
       role_preferences: ["Damage", "Tank"],
       all_ratings: { Damage: 2900, Tank: 2800 },
     });
-    const payload = makePayload([{ Damage: [flexTank] }, {}]);
+    // Team 0 fields a Tank seat, so the shape has one and team 1's is free.
+    const payload = makePayload([{ Tank: [makePlayer({ uuid: "12" })], Damage: [flexTank] }, {}]);
     const target: BalanceDropTarget = { kind: "role-container", teamIndex: 1, roleKey: "Tank" };
 
     const next = moveBalancePlayer(payload, "11", target);
@@ -183,6 +185,26 @@ describe("moveBalancePlayer role validation", () => {
   });
 });
 
+describe("rosterCapacity", () => {
+  it("reads the shape off the fullest team, flex bucket included", () => {
+    const payload = makePayload([
+      { Tank: [makePlayer({ uuid: "1" })], Flex: [makePlayer({ uuid: "2" }), makePlayer({ uuid: "3" })] },
+      { Tank: [makePlayer({ uuid: "4" })], Flex: [makePlayer({ uuid: "5" })] },
+    ]);
+    expect(rosterCapacity(payload)).toEqual({ Tank: 1, Damage: 0, Support: 0, Flex: 2 });
+  });
+
+  it("lets a flex-rated player move into a free flex seat", () => {
+    const mover = makePlayer({ uuid: "9", all_ratings: { Damage: 2500, Flex: 2500 } });
+    const payload = makePayload([
+      { Flex: [mover, makePlayer({ uuid: "1" })] },
+      { Flex: [makePlayer({ uuid: "2" })] },
+    ]);
+    const next = moveBalancePlayer(payload, "9", { kind: "role-container", teamIndex: 1, roleKey: "Flex" });
+    expect(next?.teams[1].roster.Flex.map((player) => player.uuid)).toEqual(["2", "9"]);
+  });
+});
+
 describe("deriveRoleDiscomfort", () => {
   it("returns 0 for a flex player on a playable role", () => {
     const player = makePlayer({ is_flex: true, all_ratings: { Tank: 3000, Damage: 2900 } });
@@ -221,7 +243,7 @@ describe("moveBalancePlayer rank + discomfort recompute", () => {
       assigned_rating: 2900,
       role_discomfort: 0,
     });
-    const payload = makePayload([{ Damage: [dps] }, {}]);
+    const payload = makePayload([{ Tank: [makePlayer({ uuid: "52" })], Damage: [dps] }, {}]);
     const target: BalanceDropTarget = { kind: "role-container", teamIndex: 1, roleKey: "Tank" };
 
     const next = moveBalancePlayer(payload, "50", target);
@@ -232,7 +254,7 @@ describe("moveBalancePlayer rank + discomfort recompute", () => {
     // Preferences are NOT reordered (true primary remains first).
     expect(moved?.role_preferences).toEqual(["Damage", "Tank"]);
     expect(next?.teams[1].average_mmr).toBeCloseTo(2800, 5);
-    expect(next?.teams[0].average_mmr).toBeCloseTo(0, 5);
+    expect(next?.teams[0].average_mmr).toBeCloseTo(makePlayer().assigned_rating, 5);
   });
 
   it("derives discomfort when all_discomforts is absent (legacy payload)", () => {
@@ -243,7 +265,7 @@ describe("moveBalancePlayer rank + discomfort recompute", () => {
       all_discomforts: undefined,
       assigned_rating: 2900,
     });
-    const payload = makePayload([{ Damage: [dps] }, {}]);
+    const payload = makePayload([{ Tank: [makePlayer({ uuid: "53" })], Damage: [dps] }, {}]);
     const target: BalanceDropTarget = { kind: "role-container", teamIndex: 1, roleKey: "Tank" };
 
     const next = moveBalancePlayer(payload, "51", target);

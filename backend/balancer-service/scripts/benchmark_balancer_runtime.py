@@ -109,7 +109,7 @@ def _summarize_runs(player_count: int, runs: list[dict[str, Any]]) -> dict[str, 
 
 
 def _build_arg_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Manual balancer runtime benchmark for Linux + moo_core.")
+    parser = argparse.ArgumentParser(description="Manual balancer runtime benchmark for Linux + tournament_balancer.")
     parser.add_argument(
         "--input",
         type=Path,

@@ -1,8 +1,8 @@
 """Tests for the background Challonge auto-sync (pull) orchestration.
 
 Covers ``sync_active_challonge_tournaments`` (the worker job) and the
-``_import_cache_invalidation_reason`` helper that decides which ``tournament_changed`` reason an
-import should emit so the read cache is invalidated consistently.
+``_import_invalidated_resources`` helper that decides which resources an import
+staled, so the read caches are dropped consistently.
 
 The heavy ``import_tournament`` and the active-tournament selector are mocked — these tests assert
 orchestration (no-op gates, per-tournament isolation, aggregation), not Challonge I/O.
@@ -52,7 +52,7 @@ def _settings(*, enabled: bool = True, username: str = "user", api_key: str = "k
     )
 
 
-class CacheInvalidationReasonTests(IsolatedAsyncioTestCase):
+class ImportInvalidatedResourcesTests(IsolatedAsyncioTestCase):
     @staticmethod
     def _stats(**overrides: int) -> dict:
         base = {
@@ -68,23 +68,23 @@ class CacheInvalidationReasonTests(IsolatedAsyncioTestCase):
         base.update(overrides)
         return base
 
-    async def test_no_change_returns_none(self) -> None:
-        self.assertIsNone(challonge_sync._import_cache_invalidation_reason(self._stats()))
+    async def test_no_change_stales_nothing(self) -> None:
+        self.assertEqual(challonge_sync._import_invalidated_resources(self._stats()), ())
 
-    async def test_results_change_when_only_matches(self) -> None:
+    async def test_score_only_sync_stales_results_not_structure(self) -> None:
         self.assertEqual(
-            challonge_sync._import_cache_invalidation_reason(self._stats(matches_synced=3, updated=2)),
-            "results_changed",
+            challonge_sync._import_invalidated_resources(self._stats(matches_synced=3, updated=2)),
+            challonge_sync.RESULT_RESOURCES,
         )
 
-    async def test_structure_change_takes_precedence(self) -> None:
+    async def test_reshaping_import_stales_structure(self) -> None:
         self.assertEqual(
-            challonge_sync._import_cache_invalidation_reason(self._stats(matches_synced=3, stages_created=1)),
-            "structure_changed",
+            challonge_sync._import_invalidated_resources(self._stats(matches_synced=3, stages_created=1)),
+            challonge_sync.STRUCTURE_RESOURCES,
         )
         self.assertEqual(
-            challonge_sync._import_cache_invalidation_reason(self._stats(bracket_links_updated=1)),
-            "structure_changed",
+            challonge_sync._import_invalidated_resources(self._stats(bracket_links_updated=1)),
+            challonge_sync.STRUCTURE_RESOURCES,
         )
 
 

@@ -3,13 +3,15 @@
 import { useQuery } from "@tanstack/react-query";
 import { Crown, LifeBuoy } from "lucide-react";
 import { useTranslations } from "next-intl";
+import { useId } from "react";
 
 import RosterSlotGlyph from "@/components/registration/RosterSlotGlyph";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
 import { REGISTRATION_TEAM_STATUS_TONE } from "@/lib/registration-team-tone";
-import { formatShortfall } from "@/lib/registration-team-shortfall";
+import { ROSTER_SLOT_CODES, type RosterSlotCode } from "@/lib/roster-shape";
 import { tournamentQueryKeys } from "@/lib/tournament-query-keys";
 import { cn } from "@/lib/utils";
 import registrationService from "@/services/registration.service";
@@ -17,90 +19,143 @@ import registrationTeamService from "@/services/registration-team.service";
 import type { RegistrationTeam, RegistrationTeamMember } from "@/types/registration-team.types";
 import type { Tournament } from "@/types/tournament.types";
 
+/** Canonical reading order of a roster: tank, damage, support, flex. */
+const SLOT_RANK = new Map<string, number>(ROSTER_SLOT_CODES.map((code, index) => [code, index]));
+
 function RosterRow({ member }: Readonly<{ member: RegistrationTeamMember }>) {
   const t = useTranslations();
 
   return (
-    <li className="flex items-center gap-2 text-sm">
+    <li className="flex items-center gap-2 text-body">
       <RosterSlotGlyph code={member.slot_code} />
-      <span className="min-w-0 flex-1 truncate text-[color:var(--aqt-fg)]">
-        {member.display_name ?? member.battle_tag ?? "—"}
+      {/* Name and its markers are one group: with the name on `flex-1` the crown
+          drifted to the far edge of the card and read as a column of its own. */}
+      <span className="flex min-w-0 items-center gap-1.5">
+        <span className="truncate text-[color:var(--aqt-fg)]">
+          {member.display_name ?? member.battle_tag ?? "—"}
+        </span>
+        {member.is_captain ? (
+          <span
+            className="inline-flex shrink-0 text-[color:var(--aqt-gold)]"
+            title={t("registrationTeams.member.captain")}
+          >
+            <Crown className="size-3.5" aria-hidden />
+            <span className="sr-only">{t("registrationTeams.member.captain")}</span>
+          </span>
+        ) : null}
+        {member.is_substitute ? (
+          <span
+            className="inline-flex shrink-0 text-[color:var(--aqt-fg-dim)]"
+            title={t("registrationTeams.member.substitute")}
+          >
+            <LifeBuoy className="size-3.5" aria-hidden />
+            <span className="sr-only">{t("registrationTeams.member.substitute")}</span>
+          </span>
+        ) : null}
       </span>
-      {member.is_captain ? (
-        <span
-          className="inline-flex items-center gap-1 text-xs text-[color:var(--aqt-gold)]"
-          title={t("registrationTeams.member.captain")}
-        >
-          <Crown className="size-3.5" aria-hidden />
-          <span className="sr-only">{t("registrationTeams.member.captain")}</span>
-        </span>
-      ) : null}
-      {member.is_substitute ? (
-        <span
-          className="inline-flex items-center gap-1 text-xs text-[color:var(--aqt-fg-dim)]"
-          title={t("registrationTeams.member.substitute")}
-        >
-          <LifeBuoy className="size-3.5" aria-hidden />
-          <span className="sr-only">{t("registrationTeams.member.substitute")}</span>
-        </span>
-      ) : null}
+    </li>
+  );
+}
+
+/**
+ * A slot nobody has taken yet, drawn in the roster instead of described under it.
+ *
+ * The shortfall used to be one sentence in the footer while the roster above it
+ * was a list of glyphs — so the one question this section answers ("who can I
+ * still join?") was the only thing you had to read rather than see. Drawing the
+ * gap also stops a one-player card from being stretched to the height of a full
+ * one by the grid, which was most of the dead space on this page.
+ */
+function OpenSlotRow({ code }: Readonly<{ code: RosterSlotCode }>) {
+  const t = useTranslations();
+
+  return (
+    <li className="flex items-center gap-2 text-body opacity-60">
+      <RosterSlotGlyph code={code} />
+      <span className="truncate text-[color:var(--aqt-fg-muted)]">
+        {t("registrationTeams.list.openSlot")}
+      </span>
     </li>
   );
 }
 
 function RegistrationTeamCard({ team }: Readonly<{ team: RegistrationTeam }>) {
   const t = useTranslations();
-  const tSlot = useTranslations("rosterShape.slotCodes");
-  // Starters before substitutes, captain first — the order a roster is read in.
+  const headingId = useId();
+  // Starters before substitutes, canonical slot order inside each, captain first
+  // within a slot — the order a roster is read in, and the same shape in every
+  // card so two rosters can be compared by looking at them.
   const roster = [...team.members].sort(
     (a, b) =>
       Number(a.is_substitute) - Number(b.is_substitute) ||
+      (SLOT_RANK.get(a.slot_code ?? "") ?? ROSTER_SLOT_CODES.length) -
+        (SLOT_RANK.get(b.slot_code ?? "") ?? ROSTER_SLOT_CODES.length) ||
       Number(b.is_captain) - Number(a.is_captain)
+  );
+  const openSlots = ROSTER_SLOT_CODES.flatMap((code) =>
+    Array.from({ length: team.open_slots[code] ?? 0 }, () => code)
   );
 
   return (
-    <article className="relative flex flex-col gap-3 overflow-hidden rounded-xl border border-[color:var(--aqt-border)] bg-[color:var(--aqt-overlay-1)] p-4 shadow-md backdrop-blur-md sm:p-5">
-      <header className="flex items-start justify-between gap-2">
-        <h3 className="min-w-0 flex-1 truncate font-onest text-base font-semibold text-[color:var(--aqt-fg)]">
+    <article
+      aria-labelledby={headingId}
+      className="relative flex flex-col gap-3 overflow-hidden rounded-xl border border-[color:var(--aqt-border)] bg-[color:var(--aqt-overlay-1)] p-4 shadow-md backdrop-blur-md sm:p-5"
+    >
+      <header className="flex items-center justify-between gap-2">
+        <Avatar className="size-7 shrink-0 rounded-md border border-[color:var(--aqt-border)]">
+          {team.image_url ? <AvatarImage src={team.image_url} alt="" /> : null}
+          <AvatarFallback className="rounded-md bg-[color:var(--aqt-overlay-2)] text-label font-semibold">
+            {team.name.slice(0, 1).toUpperCase()}
+          </AvatarFallback>
+        </Avatar>
+        <h3
+          id={headingId}
+          title={team.name}
+          className="min-w-0 flex-1 truncate font-onest text-heading font-semibold text-[color:var(--aqt-fg)]"
+        >
           {team.name}
         </h3>
-        <Badge variant="outline" className={cn("shrink-0", REGISTRATION_TEAM_STATUS_TONE[team.status])}>
+        <Badge
+          variant="outline"
+          className={cn("shrink-0", REGISTRATION_TEAM_STATUS_TONE[team.status])}
+        >
           {t(`registrationTeams.status.${team.status}`)}
         </Badge>
       </header>
 
       {/*
-        Members only, never `team.invites`: the public endpoint omits them
-        server-side precisely so the roster cannot leak who was asked and
-        declined. Rendering them here would put that back.
+        Members and open slots only, never `team.invites`: the public endpoint
+        omits them server-side precisely so the roster cannot leak who was asked
+        and declined. Rendering them here would put that back.
       */}
       <ul className="flex flex-col gap-1.5">
-        {roster.map((member) => (
-          <RosterRow key={member.registration_id} member={member} />
+        {roster
+          .filter((member) => !member.is_substitute)
+          .map((member) => (
+            <RosterRow key={member.registration_id} member={member} />
+          ))}
+        {openSlots.map((code, index) => (
+          <OpenSlotRow key={`${code}-${index}`} code={code} />
         ))}
+        {roster
+          .filter((member) => member.is_substitute)
+          .map((member) => (
+            <RosterRow key={member.registration_id} member={member} />
+          ))}
       </ul>
 
-      <footer className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-[color:var(--aqt-border)] pt-2 text-xs">
-        <span
-          className={
-            team.is_complete
-              ? "text-[color:var(--aqt-teal)]"
-              : "text-[color:var(--aqt-fg-muted)]"
-          }
-        >
-          {team.is_complete
-            ? t("registrationTeams.list.complete")
-            : t("registrationTeams.list.shortfall", { slots: formatShortfall(team.open_slots, tSlot) })}
-        </span>
-        {team.max_substitutes > 0 ? (
-          <span className="text-[color:var(--aqt-fg-dim)]">
-            {t("registrationTeams.list.substitutes", {
-              used: team.substitutes_used,
-              max: team.max_substitutes
-            })}
-          </span>
-        ) : null}
-      </footer>
+      {/* Only once someone is actually on the bench: "0 of 2 substitutes" under
+          every card is a tournament constant, not a fact about this team. The
+          status pill above already carries "complete", and the missing slots are
+          drawn in the list rather than spelled out again down here. */}
+      {team.substitutes_used > 0 ? (
+        <footer className="border-t border-[color:var(--aqt-border)] pt-2 text-caption text-[color:var(--aqt-fg-dim)]">
+          {t("registrationTeams.list.substitutes", {
+            used: team.substitutes_used,
+            max: team.max_substitutes
+          })}
+        </footer>
+      ) : null}
     </article>
   );
 }
@@ -150,7 +205,7 @@ export default function RegistrationTeamsList({
         <Skeleton className="h-6 w-48" />
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {Array.from({ length: 3 }, (_, index) => (
-            <Skeleton key={index} className="h-44 w-full rounded-xl" />
+            <Skeleton key={index} className="h-48 w-full rounded-xl" />
           ))}
         </div>
       </section>
@@ -164,14 +219,16 @@ export default function RegistrationTeamsList({
   return (
     <section className="flex flex-col gap-3">
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        <h2 className="font-onest text-lg font-semibold text-[color:var(--aqt-fg)]">
+        <h2 className="font-onest text-heading font-semibold text-[color:var(--aqt-fg)]">
           {t("registrationTeams.list.title")}
         </h2>
-        <span className="text-sm text-[color:var(--aqt-fg-muted)]">
+        <span className="text-body text-[color:var(--aqt-fg-muted)]">
           {t("registrationTeams.list.count", { count: teams.length })}
         </span>
+        {/* Muted, not amber: on this card amber means "roster still short", and
+            free agents are an opportunity, not a warning. */}
         {freeAgents > 0 ? (
-          <span className="text-sm text-[color:var(--aqt-amber)]">
+          <span className="text-body text-[color:var(--aqt-fg-dim)]">
             {t("registrationTeams.list.freeAgents", { count: freeAgents })}
           </span>
         ) : null}

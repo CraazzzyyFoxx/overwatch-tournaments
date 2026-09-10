@@ -39,7 +39,7 @@ from shared.repository import (
 from shared.services import pick_ban_engine as engine
 from src.services.encounter import pick_ban_undo
 from src.services.encounter.pick_ban_session import PickBanSessionService, pick_ban_session_service
-from src.services.encounter.realtime_commit import register_map_veto_realtime_update
+from src.services.encounter.realtime_commit import emit_pick_ban_update
 
 
 def auto_complete_decider_entry(sequence: list[str], pool: list[PickBanEntry]) -> PickBanEntry | None:
@@ -415,7 +415,7 @@ class PickBanActionService:
         if engine.get_current_step(pick_ban.resolved_sequence_json, pool) is None:
             pick_ban.status = MapVetoSessionStatus.COMPLETED.value
 
-        register_map_veto_realtime_update(session, encounter_id, kind=kind.value)
+        await emit_pick_ban_update(session, encounter_id, kind=kind.value)
         await session.commit()
         await session.refresh(entry)
         return entry
@@ -548,7 +548,7 @@ class PickBanActionService:
                 ),
             )
 
-        register_map_veto_realtime_update(session, encounter_id, kind=kind.value)
+        await emit_pick_ban_update(session, encounter_id, kind=kind.value)
         await session.commit()
         await session.refresh(entry)
         await self.auto_complete_decider(session, encounter_id, kind, pick_ban=pick_ban, pool=pool)
@@ -735,7 +735,7 @@ class PickBanActionService:
                 ),
             )
 
-        register_map_veto_realtime_update(session, encounter_id, kind=kind.value)
+        await emit_pick_ban_update(session, encounter_id, kind=kind.value)
         await session.commit()
         await session.refresh(entry)
         # Resolve a decider step that becomes current as a DIRECT RESULT of this

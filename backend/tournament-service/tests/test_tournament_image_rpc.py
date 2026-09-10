@@ -131,16 +131,16 @@ class SetTournamentImage(IsolatedAsyncioTestCase):
 
     async def _call(self, tournament, *, slot, url):
         session = self._Session(tournament)
-        registered: list[tuple[int, str]] = []
+        registered: list[tuple[int, tuple]] = []
 
-        def fake_register(_session, tournament_id, reason):
-            registered.append((tournament_id, reason))
+        async def fake_emit(_session, *, scope, invalidates):
+            registered.append((scope.id, tuple(invalidates)))
 
         async def fake_get_tournament(_session, tournament_id):
             return SimpleNamespace(id=tournament_id, reloaded=True)
 
         with (
-            patch.object(admin_tournament, "register_tournament_realtime_update", fake_register),
+            patch.object(admin_tournament, "emit", fake_emit),
             patch.object(admin_tournament.tournament_service, "get_tournament", fake_get_tournament),
         ):
             result = await admin_tournament.tournament_service.set_tournament_image(
@@ -163,7 +163,7 @@ class SetTournamentImage(IsolatedAsyncioTestCase):
         self.assertIsNone(row.logo_url, "the cover slot must not touch the logo")
         # The listener this arms is what purges the cached public read; without it
         # the page serves the old banner for the whole TTL.
-        self.assertEqual([(TOURNAMENT_ID, "structure_changed")], registered)
+        self.assertEqual([(TOURNAMENT_ID, (admin_tournament.Resource.TOURNAMENT_DETAIL,))], registered)
         self.assertEqual(1, session.commits)
         self.assertTrue(result.reloaded)
 

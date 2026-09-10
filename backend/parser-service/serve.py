@@ -46,6 +46,7 @@ from shared.schemas.events import (
     ProcessTournamentLogsEvent,
     UploadMatchLogEvent,
 )
+from shared.services.realtime import configure_realtime
 from src import models
 from src.clients.overfast import overfast_catalog_client
 from src.core import config, db
@@ -75,7 +76,6 @@ from src.services.achievement.engine.consumer import (
     handle_achievement_evaluate_deferred,
 )
 from src.services.match_logs import flows as logs_flows
-from src.services.match_logs import realtime as logs_realtime
 from src.services.match_logs import reaper as logs_reaper
 from src.services.match_logs import uploads as upload_service
 from src.services.match_logs.binary import binary_match_logs
@@ -138,6 +138,10 @@ set_worker_broker(broker)
 # The cashews singleton is process-global with no default backend; configure it
 # before any subscriber runs so cache reads/invalidation are routable.
 configure_cache()
+
+# Same reason and same place as configure_cache: shared/services/realtime has no
+# settings of its own, and every emit() in this process publishes through it.
+configure_realtime(redis_url=str(config.settings.redis_url))
 
 # Typed-RPC subscribers for parser-unique domains served behind the gateway.
 rpc_logs.register(broker, logger)
@@ -281,14 +285,6 @@ async def process_match_log_async(data: dict, msg: RabbitMessage) -> None:
             await publish_match_log_result(broker, event.tournament_id, event.filename, "failed", logger=log)
             metrics.count("parser.match_log.processed", 1, attributes={"status": "failed"})
             log.exception(f"Failed to process match log tournament_id={event.tournament_id} filename={event.filename}")
-            try:
-                async with db.async_session_maker() as session:
-                    failed_workspace_id = await session.scalar(
-                        sa.select(models.Tournament.workspace_id).where(models.Tournament.id == event.tournament_id)
-                    )
-                await logs_realtime.publish_logs_updated(realtime_redis, failed_workspace_id, reason="failed")
-            except Exception:
-                log.exception("Failed to emit logs.updated realtime signal")
             raise
         else:
             await publish_match_log_result(broker, event.tournament_id, event.filename, "done", logger=log)
@@ -301,7 +297,6 @@ async def process_match_log_async(data: dict, msg: RabbitMessage) -> None:
             )
             if workspace_id is None:
                 raise RuntimeError(f"Tournament {event.tournament_id} not found")
-            await logs_realtime.publish_logs_updated(realtime_redis, workspace_id, reason="done")
             achievement_event = AchievementEvaluateEvent(
                 workspace_id=workspace_id,
                 tournament_id=event.tournament_id,

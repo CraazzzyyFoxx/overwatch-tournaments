@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -8,7 +8,6 @@ import {
   AlertTriangle,
   ArrowRight,
   ClipboardList,
-  FolderInput,
   Gauge,
   Loader2,
   Pencil,
@@ -48,7 +47,6 @@ import {
 } from "@/components/ui/table";
 import { notify } from "@/lib/notify";
 import adminService from "@/services/admin.service";
-import balancerAdminService from "@/services/balancer-admin.service";
 import type {
   ChallongeTeamMapping,
   ChallongeTeamPreviewParticipant,
@@ -188,7 +186,6 @@ export function TournamentTeamsTab({
 }: Readonly<TournamentTeamsTabProps>) {
   const queryClient = useQueryClient();
   const tableStyles = getAdminDetailTableStyles("compact");
-  const importTeamsFileRef = useRef<HTMLInputElement>(null);
 
   const router = useRouter();
   const pathname = usePathname();
@@ -234,14 +231,6 @@ export function TournamentTeamsTab({
       notify.success("Teams synced from Challonge", {
         description: summarizeChallongeSyncResult(result)
       });
-    }
-  });
-
-  const importTeamsMutation = useMutation({
-    mutationFn: (file: File) => balancerAdminService.importTeamsFromJson(tournamentId, file),
-    onSuccess: async (result) => {
-      invalidateTournamentWorkspace(queryClient, tournamentId);
-      notify.success("Teams imported", { description: `${result.imported_teams} teams created.` });
     }
   });
 
@@ -413,33 +402,6 @@ export function TournamentTeamsTab({
           </div>
           <div className="flex flex-wrap gap-2">
             {syncTeamsButton}
-            {canImportTeams ? (
-              <>
-                <input
-                  ref={importTeamsFileRef}
-                  type="file"
-                  accept="application/json"
-                  className="hidden"
-                  onChange={(event) => {
-                    const file = event.target.files?.[0];
-                    if (file) importTeamsMutation.mutate(file);
-                    event.target.value = "";
-                  }}
-                />
-                <Button
-                  variant="outline"
-                  onClick={() => importTeamsFileRef.current?.click()}
-                  disabled={importTeamsMutation.isPending}
-                >
-                  {importTeamsMutation.isPending ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
-                  ) : (
-                    <FolderInput className="mr-2 h-4 w-4" aria-hidden />
-                  )}
-                  Import from JSON
-                </Button>
-              </>
-            ) : null}
             {canImportTeams ? (
               <Button asChild variant="outline">
                 {/* D30/A-O2: the sole UI entry to the balancer tool after the shell removal (v3.1). */}

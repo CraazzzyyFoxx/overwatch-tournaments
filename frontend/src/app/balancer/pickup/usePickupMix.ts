@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { useRealtimeCoalescedRefetch } from "@/hooks/useRealtimeCoalescedRefetch";
+import { useInvalidation } from "@/hooks/useInvalidation";
 import { notify } from "@/lib/notify";
 import {
   customGameKeys,
@@ -99,18 +99,9 @@ export function usePickupMix(workspaceId: number, pickedGameId: number | null) {
   });
 
   // Another host editing this workspace's mixes (roster, ranks, bench, role
-  // order) in a different tab/session: this thin, non-durable signal (see
-  // `pickup_mix_realtime.py`) is the only way that becomes visible here
-  // without a manual reload. Debounced like the subscriptions signal: a
-  // burst of edits collapses into one refetch instead of one per event.
-  useRealtimeCoalescedRefetch(`workspace:${workspaceId}:pickup_mix`, {
-    minDelayMs: 500,
-    onEvent: (_event, schedule) => schedule(),
-    onFlush: () => {
-      void queryClient.invalidateQueries({ queryKey: customGameKeys.all(workspaceId) });
-      void queryClient.invalidateQueries({ queryKey: workspacePlayerKeys.all(workspaceId) });
-    },
-  });
+  // order) in a different tab/session: `workspace.pickup_mix` is the only way
+  // that becomes visible here without a manual reload.
+  useInvalidation({ scopeKind: "workspace", scopeId: workspaceId });
 
   const applyGame = (game: CustomGame) => {
     queryClient.setQueryData(customGameKeys.one(workspaceId, game.id), game);

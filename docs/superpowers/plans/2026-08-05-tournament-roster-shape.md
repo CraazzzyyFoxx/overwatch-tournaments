@@ -6,7 +6,7 @@
 
 **Architecture:** Канон живёт в `shared/domain/roster_shape.py` рядом с `player_sub_roles.py`. Разрешается трёхуровневой цепочкой `tournament.roster_slots_json` → `workspace.default_roster_slots_json` → встроенный дефолт через `shared/services/roster_shape_access.py` — структурное зеркало уже работающего `division_grid_access.py`. Все локальные копии правила удаляются, включая обе TS-функции: фронт получает готовую форму с API (образец «server-driven конфиг», реестр зеркал стр. 239).
 
-**Tech Stack:** Python 3.12 / FastAPI / SQLAlchemy 2 / Alembic / Pydantic v2 (7 сервисов в uv-workspace), Next.js 15 / React 19 / TypeScript / Vitest, Rust `moo_core` (не меняется).
+**Tech Stack:** Python 3.12 / FastAPI / SQLAlchemy 2 / Alembic / Pydantic v2 (7 сервисов в uv-workspace), Next.js 15 / React 19 / TypeScript / Vitest, Rust `tournament_balancer` (не меняется).
 
 **Design doc:** `docs/superpowers/specs/2026-08-05-tournament-roster-shape-design.md` — читать перед началом, там Decision Log с обоснованием каждого выбора.
 
@@ -1269,5 +1269,5 @@ git add -A && git commit -m "chore: re-export gateway manifest for roster shape 
 Docker Desktop в этой среде не поднимается (демон недоступен по `npipe:////./pipe/dockerDesktopLinuxEngine`), поэтому три пункта НЕ выполнены и обязательны перед релизом:
 
 1. **`make migrate`** — ревизии `roster0001` (две nullable JSONB-колонки) и `roster0002` (`DROP COLUMN balancer.draft_session.team_size`) написаны и проверены AST-тестами против моделей, но НИ РАЗУ не применялись к реальной базе. Единственный head — `roster0002`.
-2. **Пересборка Rust `moo_core` под Linux.** В `native/moo_core/src/context.rs` изменена одна строка: `dps_role_idx` теперь принимает и `"Damage"`, и `"dps"`. Без пересборки нативного модуля правка не вступит в силу, и `dps_impact_weight` продолжит молча игнорироваться при lowercase-маске. Расхождение стережёт `test_config_consistency.py::test_rust_recognizes_every_canonical_role_code`, но он проверяет ИСХОДНИК, а не собранный артефакт.
+2. **Пересборка Rust `tournament_balancer` под Linux.** В `native/tournament_balancer/src/context.rs` изменена одна строка: `dps_role_idx` теперь принимает и `"Damage"`, и `"dps"`. Без пересборки нативного модуля правка не вступит в силу, и `dps_impact_weight` продолжит молча игнорироваться при lowercase-маске. Расхождение стережёт `test_config_consistency.py::test_rust_recognizes_every_canonical_role_code`, но он проверяет ИСХОДНИК, а не собранный артефакт.
 3. **Браузерная проверка:** вкладка Settings турнира → редактор формы ростера (пресеты, степперы, живой итог, предпросмотр, наследование, блокировка при живом драфте); затем полный прогон драфта на `{"flex": 6}` от создания сессии до экспорта команд и один прогон балансера на той же форме.

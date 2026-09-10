@@ -2,15 +2,22 @@
 
 Hosts every ``rpc.app.*`` subscriber (public reads via the shared CRUD read
 engine + bespoke reads, workspace writes, binary base64 endpoints) plus the
-``tournament_changed`` cache-invalidation consumer. Replaces the HTTP
-app-service (compose ``backend``) behind the Go gateway.
+``cache.invalidated`` invalidation consumer. Replaces the HTTP app-service
+(compose ``backend``) behind the Go gateway.
 
 Run with: ``faststream run serve:app``.
 """
 
 from cashews import cache
 from faststream import FastStream
+from faststream.rabbit import Channel
 
+from shared.messaging.config import (
+    CACHE_INVALIDATION_APP_DLQ,
+    CACHE_INVALIDATION_APP_QUEUE,
+    CACHE_INVALIDATION_EXCHANGE,
+)
+from shared.messaging.topology import declare_dead_letter_queue
 from shared.observability import (
     make_rabbit_broker,
     setup_logging,
@@ -18,6 +25,9 @@ from shared.observability import (
     setup_tracing,
     start_worker_metrics_server,
 )
+from shared.schemas.events import CacheInvalidatedEvent
+from shared.services.realtime import Resource, configure_realtime
+from shared.services.realtime.consumer import register_invalidation_consumer
 from src.core import clients, config, db
 from src.core.caching import configure_cache
 from src.rpc import (
@@ -39,7 +49,8 @@ from src.rpc import (
     users_admin,
     workspaces,
 )
-from src.services import hero_stats_refresh, tournament_events
+from src.services import hero_stats_refresh
+from src.services.cache_resources import RESOURCE_CACHE_PATTERNS, invalidate_local
 
 logger = setup_logging(
     service_name="app-svc",
@@ -54,12 +65,40 @@ broker = make_rabbit_broker(
 app = FastStream(broker)
 
 # The cashews singleton is process-global and has no default backend. The
-# @cache-decorated flows AND the tournament_changed invalidation consumer both
-# raise NotConfiguredError without this — call it before any subscriber runs.
+# @cache-decorated flows AND the invalidation consumer both raise
+# NotConfiguredError without this — call it before any subscriber runs.
 configure_cache()
 
-# Cache-invalidation consumer (single owner of TOURNAMENT_CHANGED_APP_QUEUE).
-tournament_events.register(broker, logger)
+# Same reason, for the realtime rail: cache_invalidator is what makes an
+# invalidation this process emits drop its own keys before anything publishes.
+configure_realtime(redis_url=str(config.settings.redis_url), cache_invalidator=invalidate_local)
+
+# Isolated channel: cache-invalidation bursts must not compete with RPC QoS.
+_INVALIDATION_CHANNEL = Channel(prefetch_count=4)
+
+
+async def _refresh_hero_stats(event: CacheInvalidatedEvent) -> None:
+    """Debounced refresh of the global hero-stats materialized view.
+
+    Gated on ``tournament.standings`` — the resource that carries "match data
+    moved". The old consumer said the same thing as "any reason except
+    bracket_changed", which nobody could read as a statement about hero stats.
+    """
+    if Resource.TOURNAMENT_STANDINGS in event.resources:
+        hero_stats_refresh.hero_stats_refresh_service.request_refresh(db.async_session_maker, logger)
+
+
+# Single owner of CACHE_INVALIDATION_APP_QUEUE (the app-worker). The HTTP
+# service must not host it too — two consumers would round-robin the messages.
+register_invalidation_consumer(
+    broker,
+    logger,
+    queue=CACHE_INVALIDATION_APP_QUEUE,
+    exchange=CACHE_INVALIDATION_EXCHANGE,
+    patterns=RESOURCE_CACHE_PATTERNS,
+    channel=_INVALIDATION_CHANNEL,
+    on_event=_refresh_hero_stats,
+)
 
 # Phase 1 — public reads.
 # hero/map/gamemode/achievement get+list via the shared CRUD read engine:
@@ -101,6 +140,9 @@ binary.register(broker, logger)
 @app.on_startup
 async def start_worker() -> None:
     await broker.connect()
+    # The invalidation queue dead-letters here; without the declaration a
+    # poison message routes to a non-existent queue and vanishes.
+    await declare_dead_letter_queue(broker, CACHE_INVALIDATION_APP_DLQ)
     await clients.s3_client.start()
     setup_sentry(
         dsn=config.settings.sentry_dsn,

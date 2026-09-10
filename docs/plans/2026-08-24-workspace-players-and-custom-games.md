@@ -4,7 +4,7 @@
 
 **Goal:** Балансер видит и ранжирует игроков workspace без заявки; кастомки балансятся из пула/книги хоста поверх того же канона.
 
-**Architecture:** `workspace_player` — identity балансера. Канон рангов — `workspace_player_rank`. Заявка = допуск на турнир + опциональный pin-оверрайд. Хост кастомки держит свой поднабор (`host_player`) и книгу (`host_player_rank`), канон не трогает. `moo_core.run_balance` без изменений. Кастомка — отдельная сущность, без `tournament_id` / `BalancerBalance`.
+**Architecture:** `workspace_player` — identity балансера. Канон рангов — `workspace_player_rank`. Заявка = допуск на турнир + опциональный pin-оверрайд. Хост кастомки держит свой поднабор (`host_player`) и книгу (`host_player_rank`), канон не трогает. `tournament_balancer.run_balance` без изменений. Кастомка — отдельная сущность, без `tournament_id` / `BalancerBalance`.
 
 **Tech Stack:** SQLAlchemy/Alembic (`balancer` schema), balancer-service RPC, tournament-service registration write path, Next.js Players/custom-games tab.
 
@@ -81,7 +81,7 @@ flowchart TB
   HOST --> RES
   CANON --> RES
   OW --> RES
-  RES --> MOO["moo_core.run_balance"]
+  RES --> MOO["tournament_balancer.run_balance"]
 ```
 
 ### Резолвер
@@ -141,7 +141,7 @@ sequenceDiagram
   participant HP as host_player
   participant HR as host_player_rank
   participant CG as custom_game
-  participant MOO as moo_core
+  participant MOO as tournament_balancer
 
   H->>DIR: все workspace_player этого ws
   H->>HP: add в свой пул
@@ -285,7 +285,7 @@ Query keys — workspace-scoped, не `tournamentQueryKeys`.
 
 ## Implementation steps
 
-Каждый шаг — один PR. После шага 1 существующие тесты балансера зелёные. `moo_core` не трогать.
+Каждый шаг — один PR. После шага 1 существующие тесты балансера зелёные. `tournament_balancer` не трогать.
 
 ### Step 1 — Models + migration
 

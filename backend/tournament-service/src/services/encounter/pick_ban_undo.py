@@ -36,7 +36,7 @@ from shared.models.tournament.pick_ban import EncounterPickBanLedger, PickBanEnt
 from shared.repository import EncounterPickBanLedgerRepository, PickBanEntryRepository
 from shared.services import pick_ban_engine as engine
 from src.services.encounter.pick_ban_session import PickBanSessionService, pick_ban_session_service
-from src.services.encounter.realtime_commit import register_map_veto_realtime_update
+from src.services.encounter.realtime_commit import emit_pick_ban_update
 
 
 def clear_undo_request(pick_ban: PickBanSession) -> None:
@@ -173,7 +173,7 @@ class PickBanUndoService:
                 apply_undo(pick_ban, entries, now=datetime.now(UTC))
                 await self._forget_ledger_rows(session, encounter_id, kind, keys)
 
-        register_map_veto_realtime_update(session, encounter_id, kind=kind.value)
+        await emit_pick_ban_update(session, encounter_id, kind=kind.value)
         await session.commit()
         return undo_state(pick_ban, pool)
 

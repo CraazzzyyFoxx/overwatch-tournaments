@@ -567,7 +567,7 @@ id регистрации вместо случайного uuid4, `stats.classe
 
 | Область | Результат |
 |---|---|
-| balancer-service | `627 passed, 1 skipped, 0 failed` (пропуск — опциональное нативное `moo_core`) |
+| balancer-service | `627 passed, 1 skipped, 0 failed` (пропуск — опциональное нативное `tournament_balancer`) |
 | tournament-service | `1325 passed, 46 skipped, 0 failed` |
 | shared | `944 passed, 12 skipped, 0 failed` |
 | gateway | `go build ./...` + `go test ./internal/...` — зелёное |

@@ -12,7 +12,6 @@
     "registered": "registered",
     "players": "players",
     "inTeams": "in teams",
-    "rostered": "Rostered",
     "done": "done",
     "format": "Format",
     "teamFormation": "Team Formation",
@@ -411,6 +410,7 @@
       "empty": "No teams have registered yet.",
       "count": "{count, plural, =1 {# team} other {# teams}}",
       "shortfall": "Still needed: {slots}",
+      "openSlot": "Open",
       "complete": "Roster complete",
       "substitutes": "{used} of {max} substitutes",
       "freeAgents": "{count, plural, =1 {# player is} other {# players are}} registered without a team and can be invited."
@@ -517,6 +517,8 @@
       "resetCap": "Reset invite count",
       "resetCapSuccess": "Invite count reset for {team}.",
       "resetCapConfirm": "Let {team} issue invites again? Past invites stay in the history.",
+      "inTournament": "In tournament",
+      "rowActions": "Actions for {team}",
       "emptyHint": "Captains create teams from this tournament's registration page once it opens."
     },
     "errors": {

@@ -36,6 +36,7 @@ from shared.repository import (
     GoogleSheetBindingRepository,
     GoogleSheetFeedRepository,
 )
+from shared.services.realtime import Resource, Scope, emit
 from shared.services.roster import roster_engine
 from src import models
 from src.domain.registration.mapping_catalog import (
@@ -72,7 +73,6 @@ from src.services.registration._common import (
     sync_included_balancer_status,
 )
 from src.services.registration.service import registration_service
-from src.services.tournament.realtime_commit import register_tournament_realtime_update
 
 logger = logging.getLogger(__name__)
 
@@ -736,7 +736,11 @@ class SheetSyncService:
             else:
                 feed.last_error = None
             if created or updated or withdrawn:
-                register_tournament_realtime_update(session, tournament_id, "registration_changed")
+                await emit(
+                    session,
+                    scope=Scope.tournament(tournament_id),
+                    invalidates=[Resource.TOURNAMENT_REGISTRATIONS],
+                )
             await session.commit()
             await session.refresh(feed)
             return SheetSyncResult(

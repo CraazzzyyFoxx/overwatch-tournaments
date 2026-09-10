@@ -18,12 +18,14 @@ from shared.repository import (
     TournamentRepository,
     WorkspaceBalancerConfigRepository,
 )
+from shared.services.balancer_realtime import BALANCER_BALANCE_SAVED, BALANCER_CONFIG_CHANGED
 from shared.services.team_export import ExportPlan, sync_player_ranks, team_materialization
 from src import models, schemas
 from src.schemas.team import InternalBalancerTeamsPayload
 from src.services.admin.balancer_dual_write import BalancerVariantService, balancer_variant_service
 from src.services.balancer.config.provider import normalize_tournament_config_payload, serialize_saved_config_payload
 from src.services.balancer.config.public_contract import normalize_balance_response_payload
+from src.services.balancer.realtime import emit_balancer_data
 from src.services.team import to_materialization_teams
 
 __all__ = ("BalancerAdminService", "balancer_admin_service", "materialize_balance_teams")
@@ -137,6 +139,7 @@ class BalancerAdminService:
                 },
             )
 
+        await emit_balancer_data(session, tournament_id, BALANCER_CONFIG_CHANGED, actor_user_id=auth_user.id)
         await session.commit()
         return tournament_config
 
@@ -221,6 +224,7 @@ class BalancerAdminService:
         algorithm = normalized_config_json.get("algorithm", "unknown") if normalized_config_json else "unknown"
         await self.variants.sync(session, balance, payload, algorithm=algorithm)
 
+        await emit_balancer_data(session, tournament_id, BALANCER_BALANCE_SAVED, actor_user_id=auth_user.id)
         await session.commit()
         # expire_on_commit=False keeps the instance usable after commit, and the
         # response (``serialize_balance``) never touches the teams relationship —
@@ -278,6 +282,10 @@ class BalancerAdminService:
         Non-destructive counterpart to :meth:`export_balance`: no team is removed
         or created, so a bracket built on those teams survives. Returns the balance
         and how many player ranks actually changed.
+
+        Does NOT commit: the caller stages the staleness this causes and commits
+        both together, so no client can be told about ranks that a later failure
+        rolls back.
         """
         balance = await self.balances.get_for_export(session, balance_id)
         if balance is None:
@@ -289,7 +297,6 @@ class BalancerAdminService:
             balance.tournament_id,
             to_materialization_teams([team.to_balancer_team() for team in payload.teams]),
         )
-        await session.commit()
         return balance, updated
 
 

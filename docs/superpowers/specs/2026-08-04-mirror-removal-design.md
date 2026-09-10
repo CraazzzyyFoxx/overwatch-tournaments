@@ -165,7 +165,7 @@ Python↔Rust это физически неприменимо.
 
 Один параметр перечислен в десяти местах (`defaults.py`, `public_contract.py`,
 `provider.py` ×3, `schemas/balancer.py`, `presets.py`, `moo_backend.py`,
-`moo_core/src/lib.rs`, фронт ×2). Это уже дало два бага: фронт потерял
+`tournament_balancer/src/lib.rs`, фронт ×2). Это уже дало два бага: фронт потерял
 `team_max_pain_weight` и `time_limit_ms` и тащит два мёртвых ключа (№8), драфт вообще
 не читает конфиг (№9). Третий (№7, `team_crossover_share`) при проверке **снят**: поле
 имеет `#[serde(default)]` и его Rust-докстринг объявляет неэкспонирование намеренным.

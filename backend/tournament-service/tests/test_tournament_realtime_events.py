@@ -1,3 +1,16 @@
+"""What each tournament write announces, in resources.
+
+The publisher now names WHAT went stale, never WHY. These tests pin the resource
+set each producer stages, the union that replaces the old "strongest reason
+wins" merge, and the one surviving reason->resource translation: the legacy
+``tournament.changed`` consumer, kept only until parser-service and
+balancer-service stop publishing to that exchange.
+
+Staging is inspected through ``session.info["realtime_staged"]`` because these
+are fake sessions with no database behind them; the rail's own persistence and
+publication contract is covered by ``backend/tests/test_realtime_emit.py``.
+"""
+
 from __future__ import annotations
 
 import importlib
@@ -14,126 +27,80 @@ sys.path.insert(0, str(backend_root / "tournament-service"))
 
 os.environ["DEBUG"] = "true"
 
-events = importlib.import_module("src.services.tournament.recalculation_events")
+recalculation_events = importlib.import_module("src.services.tournament.recalculation_events")
 tournament_events = importlib.import_module("src.services.tournament.events")
-realtime_commit = importlib.import_module("src.services.tournament.realtime_commit")
-realtime_pubsub = importlib.import_module("src.services.tournament.realtime_pubsub")
+
+from shared.services.realtime import Resource, Scope  # noqa: E402
 
 
-class TournamentRealtimeEventsTests(IsolatedAsyncioTestCase):
-    async def test_changed_event_invalidates_cache_and_publishes_pubsub_update(self) -> None:
-        invalidate = AsyncMock()
-        publish = AsyncMock()
+def _fake_session(**extra: object) -> SimpleNamespace:
+    return SimpleNamespace(info={}, add=Mock(), flush=AsyncMock(), **extra)
 
-        with (
-            patch.object(events, "invalidate_tournament_cache", invalidate),
-            patch.object(events, "publish_tournament_update", publish),
-        ):
-            await events.handle_tournament_changed_event({"tournament_id": 42, "reason": "results_changed"})
 
-        invalidate.assert_awaited_once_with(42, "results_changed")
-        publish.assert_awaited_once_with(42, "results_changed")
+def _staged_invalidations(session: SimpleNamespace) -> dict:
+    staged = session.info.get("realtime_staged")
+    return {} if staged is None else staged.invalidations
 
-    async def test_changed_outbox_event_registers_post_commit_realtime_update(self) -> None:
-        session = SimpleNamespace(info={}, add=Mock(), flush=AsyncMock())
 
-        await tournament_events.enqueue_tournament_changed(session, 42, "structure_changed")
+def _staged_resources(session: SimpleNamespace, scope: Scope) -> set[Resource]:
+    return _staged_invalidations(session)[scope][0]
 
-        updates = realtime_commit.pop_registered_tournament_realtime_updates(session)
-        self.assertEqual(updates, [(42, "structure_changed")])
 
-    async def test_recalculation_outbox_event_registers_bracket_realtime_update(self) -> None:
-        # ``scalar`` answers the scrim-container probe the recalculation now makes
-        # before queueing a job (docs/plans/2026-08-12-scrim-rooms.md §5);
-        # ``None`` means "an ordinary tournament".
-        session = SimpleNamespace(info={}, add=Mock(), flush=AsyncMock(), scalar=AsyncMock(return_value=None))
+class TournamentProducerResourceTests(IsolatedAsyncioTestCase):
+    async def test_recalculation_stales_encounters_only(self) -> None:
+        # ``scalar`` answers the scrim-container probe the recalculation makes
+        # before queueing a job; ``None`` means "an ordinary tournament".
+        session = _fake_session(scalar=AsyncMock(return_value=None))
 
         with patch.object(tournament_events.jobs_service, "request_standings_recalculation", AsyncMock()) as request:
             await tournament_events.enqueue_tournament_recalculation(session, 42)
 
         request.assert_awaited_once_with(session, 42)
-        updates = realtime_commit.pop_registered_tournament_realtime_updates(session)
-        self.assertEqual(updates, [(42, "bracket_changed")])
+        self.assertEqual(_staged_resources(session, Scope.tournament(42)), {Resource.TOURNAMENT_ENCOUNTERS})
 
-    async def test_registration_outbox_event_registers_registration_realtime_update(self) -> None:
-        # BalancerRegistration has no denormalized workspace_id column anymore —
-        # enqueue_registration_approved derives it via a tournament lookup. The
-        # event's user_id is likewise resolved from the workspace_member anchor
-        # (dbarch02 dropped registration.user_id); None here skips that lookup.
-        session = SimpleNamespace(info={}, add=Mock(), flush=AsyncMock(), scalar=AsyncMock(return_value=3))
-        registration = SimpleNamespace(
-            id=7,
-            tournament_id=42,
-            workspace_member_id=None,
-            battle_tag="Player#1234",
-        )
-
-        await tournament_events.enqueue_registration_approved(session, registration)
-
-        updates = realtime_commit.pop_registered_tournament_realtime_updates(session)
-        self.assertEqual(updates, [(42, "registration_changed")])
-
-    async def test_post_commit_realtime_updates_collapse_structure_over_results(self) -> None:
-        session = SimpleNamespace(info={})
-
-        realtime_commit.register_tournament_realtime_update(session, 42, "results_changed")
-        realtime_commit.register_tournament_realtime_update(session, 42, "structure_changed")
-
-        updates = realtime_commit.pop_registered_tournament_realtime_updates(session)
-        self.assertEqual(updates, [(42, "structure_changed")])
-
-    async def test_post_commit_realtime_updates_collapse_results_over_bracket(self) -> None:
-        session = SimpleNamespace(info={})
-
-        realtime_commit.register_tournament_realtime_update(session, 42, "bracket_changed")
-        realtime_commit.register_tournament_realtime_update(session, 42, "results_changed")
-
-        updates = realtime_commit.pop_registered_tournament_realtime_updates(session)
-        self.assertEqual(updates, [(42, "results_changed")])
-
-    async def test_registration_changed_emits_alongside_a_disjoint_bracket_family_reason(self) -> None:
-        # registration_changed's plan (registration/registrationsList/
-        # registrationForm) is disjoint from results_changed's plan
-        # (detail/heroPlaytime/standings/encounters) — neither is a superset of
-        # the other, so both must be published or one invalidation is dropped.
-        session = SimpleNamespace(info={})
-
-        realtime_commit.register_tournament_realtime_update(session, 42, "results_changed")
-        realtime_commit.register_tournament_realtime_update(session, 42, "registration_changed")
-
-        updates = realtime_commit.pop_registered_tournament_realtime_updates(session)
-        self.assertEqual(set(updates), {(42, "results_changed"), (42, "registration_changed")})
-
-    async def test_structure_changed_absorbs_registration_changed(self) -> None:
-        # structure_changed's plan already includes the registration keys, so a
-        # redundant second event would add nothing.
-        session = SimpleNamespace(info={})
-
-        realtime_commit.register_tournament_realtime_update(session, 42, "registration_changed")
-        realtime_commit.register_tournament_realtime_update(session, 42, "structure_changed")
-
-        updates = realtime_commit.pop_registered_tournament_realtime_updates(session)
-        self.assertEqual(updates, [(42, "structure_changed")])
-
-    async def test_realtime_update_invalidates_cache_before_publishing(self) -> None:
-        calls: list[str] = []
-
-        async def invalidate(tournament_id: int, reason: str) -> None:
-            calls.append(f"invalidate:{tournament_id}:{reason}")
-
-        async def publish(tournament_id: int, reason: str) -> None:
-            calls.append(f"publish:{tournament_id}:{reason}")
+    async def test_registration_decision_stales_registrations_and_names_the_row(self) -> None:
+        # BalancerRegistration has no denormalized workspace_id column —
+        # enqueue_registration_approved derives it via a tournament lookup, and
+        # the event's user_id likewise comes from the workspace_member anchor.
+        session = _fake_session(scalar=AsyncMock(return_value=3))
+        registration = SimpleNamespace(id=77, tournament_id=42, battle_tag="tag#1", workspace_member_id=5)
 
         with (
-            patch.object(realtime_commit, "invalidate_tournament_cache", side_effect=invalidate),
-            patch.object(realtime_pubsub, "publish_tournament_update", side_effect=publish),
+            patch.object(tournament_events, "_notify_registration_decision", AsyncMock()),
+            patch.object(tournament_events, "enqueue_outbox_event", AsyncMock()),
         ):
-            await realtime_commit.publish_tournament_realtime_updates([(42, "bracket_changed")])
+            await tournament_events.enqueue_registration_approved(session, registration)
 
+        resources, entity_ids = _staged_invalidations(session)[Scope.tournament(42)]
+        self.assertEqual(resources, {Resource.TOURNAMENT_REGISTRATIONS})
+        self.assertEqual(entity_ids, {"registration_ids": [77]})
+
+    async def test_publish_invalidation_stages_both_halves(self) -> None:
+        # Forgetting the cross-service half is silent: the page repairs itself
+        # while app-service serves its cached aggregate until the TTL.
+        session = _fake_session()
+
+        with patch.object(tournament_events, "enqueue_invalidation_outbox", AsyncMock()) as outbox:
+            await tournament_events.publish_tournament_invalidation(session, 42, tournament_events.STRUCTURE_RESOURCES)
+
+        self.assertEqual(_staged_resources(session, Scope.tournament(42)), {Resource.TOURNAMENT_STRUCTURE})
+        self.assertEqual(outbox.await_args.kwargs["scope"], Scope.tournament(42))
+        self.assertEqual(outbox.await_args.kwargs["resources"], tournament_events.STRUCTURE_RESOURCES)
+
+    async def test_two_writes_in_one_transaction_union_into_one_invalidation(self) -> None:
+        # Replaces the old "strongest reason wins" merge: union is commutative
+        # and idempotent, so no producer has to know what the others staged.
+        session = _fake_session(scalar=AsyncMock(return_value=None))
+
+        with (
+            patch.object(tournament_events.jobs_service, "request_standings_recalculation", AsyncMock()),
+            patch.object(tournament_events, "enqueue_outbox_event", AsyncMock()),
+        ):
+            await tournament_events.enqueue_tournament_recalculation(session, 42)
+            await tournament_events.publish_tournament_invalidation(session, 42, tournament_events.STRUCTURE_RESOURCES)
+
+        self.assertEqual(list(_staged_invalidations(session)), [Scope.tournament(42)])
         self.assertEqual(
-            calls,
-            [
-                "invalidate:42:bracket_changed",
-                "publish:42:bracket_changed",
-            ],
+            _staged_resources(session, Scope.tournament(42)),
+            {Resource.TOURNAMENT_ENCOUNTERS, Resource.TOURNAMENT_STRUCTURE},
         )

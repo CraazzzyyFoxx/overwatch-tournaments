@@ -4,10 +4,9 @@
  * immediately, then suppress repeats for a cooldown window) or the trailing
  * edge (wait for a quiet period, resetting on every new `schedule()` call).
  *
- * Originally written for tournament bracket realtime updates but also
- * consumed by stream realtime (`useTournamentStreamRealtime.ts`) -- moved
- * here, out of `hooks/tournamentRealtime.helpers.ts`, since neither
- * coalescer is tournament-specific.
+ * Originally written for tournament bracket realtime updates, now the timing
+ * layer under `useRealtimeCoalescedRefetch` and the route refresh of the public
+ * tournament shell — neither coalescer is tournament-specific.
  */
 
 export type CoalescerClock<TTimer> = {

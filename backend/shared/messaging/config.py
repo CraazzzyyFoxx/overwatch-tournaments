@@ -244,48 +244,48 @@ DIVISION_GRID_IMPORT_JOBS_DLQ = RabbitQueue(
     durable=True,
 )
 
-TOURNAMENT_CHANGED_EXCHANGE = RabbitExchange(
-    "tournament.changed",
+# Cache invalidation, cross-service. One topic exchange, one queue per service
+# that owns a cache, routing key `cache.invalidated.<scope_kind>.<scope_id>`.
+# Replaces the tournament.changed contour: the payload names the stale
+# RESOURCES, so a consumer maps them onto its own keys instead of re-deriving
+# intent from a shared "reason" enum.
+CACHE_INVALIDATION_EXCHANGE = RabbitExchange(
+    "cache.invalidation",
     type=ExchangeType.TOPIC,
     durable=True,
 )
 
-TOURNAMENT_CHANGED_TOURNAMENT_QUEUE = RabbitQueue(
-    "tournament_changed_tournament_service",
+CACHE_INVALIDATION_TOURNAMENT_QUEUE = RabbitQueue(
+    "cache_invalidation_tournament_service",
     durable=True,
-    routing_key="tournament.changed.*",
+    routing_key="cache.invalidated.#",
     arguments={
         "x-dead-letter-exchange": "dlx",
-        "x-dead-letter-routing-key": "tournament_changed_tournament_service.dlq",
+        "x-dead-letter-routing-key": "cache_invalidation_tournament_service.dlq",
         "x-message-ttl": 300000,  # 5 minutes
     },
 )
 
-TOURNAMENT_CHANGED_TOURNAMENT_DLQ = RabbitQueue(
-    "tournament_changed_tournament_service.dlq",
+CACHE_INVALIDATION_TOURNAMENT_DLQ = RabbitQueue(
+    "cache_invalidation_tournament_service.dlq",
     durable=True,
 )
 
-TOURNAMENT_CHANGED_APP_QUEUE = RabbitQueue(
-    "tournament_changed_app_service",
+CACHE_INVALIDATION_APP_QUEUE = RabbitQueue(
+    "cache_invalidation_app_service",
     durable=True,
-    routing_key="tournament.changed.*",
+    routing_key="cache.invalidated.#",
     arguments={
         "x-dead-letter-exchange": "dlx",
-        "x-dead-letter-routing-key": "tournament_changed_app_service.dlq",
+        "x-dead-letter-routing-key": "cache_invalidation_app_service.dlq",
         "x-message-ttl": 300000,  # 5 minutes
     },
 )
 
-TOURNAMENT_CHANGED_APP_DLQ = RabbitQueue(
-    "tournament_changed_app_service.dlq",
+CACHE_INVALIDATION_APP_DLQ = RabbitQueue(
+    "cache_invalidation_app_service.dlq",
     durable=True,
 )
-
-# Publishers provide an explicit topic routing key, so this queue argument is
-# used only as the observable destination name by the shared publish helper.
-TOURNAMENT_CHANGED_QUEUE = TOURNAMENT_CHANGED_TOURNAMENT_QUEUE
-TOURNAMENT_CHANGED_DLQ = TOURNAMENT_CHANGED_TOURNAMENT_DLQ
 
 TOURNAMENT_EVENTS_EXCHANGE = RabbitExchange(
     "tournament.events",

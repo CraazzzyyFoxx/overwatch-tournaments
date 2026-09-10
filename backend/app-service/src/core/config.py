@@ -23,7 +23,7 @@ class Settings(BaseServiceSettings):
     # (tournaments, tournament_stats, heroes, encounters, maps, teammates,
     # matches_summary, compare, ...). Their inputs only change on tournament
     # ingestion, which fires a TournamentChangedEvent that broadly drops every
-    # user_* key (see services.tournament_events). The TTL is just a safety net,
+    # user_* key (see services.cache_resources). The TTL is just a safety net,
     # so it is aligned with the sibling read domains at 5 minutes.
     users_cache_ttl: int = 60 * 5
     # ``user_profile`` is *identity-derived* (name/avatar/socials). App-side

@@ -57,6 +57,8 @@ __all__ = (
     "MappingValidationError",
     "MappingValueCategoryRead",
     "BalancerPlayerExportResponse",
+    "BalancerPlayerExportRoster",
+    "BalancerPlayerExportSource",
     "BalancerRegistrationCreateRequest",
     "BalancerRegistrationRead",
     "BalancerRankAutofillStage",
@@ -81,9 +83,43 @@ __all__ = (
 )
 
 
+class BalancerPlayerExportSource(BaseModel):
+    """Where an ``owt-1`` export came from -- enough to replay or re-import it."""
+
+    tournament_id: int
+    tournament_name: str | None = None
+    workspace_id: int | None = None
+    #: Which roster field the ``players`` keys carry (``registration_id``).
+    player_key: str
+    #: Which registrations the file covers; ``pool`` is the balancer pool.
+    scope: str
+    division_grid_version_id: int | None = None
+
+
+class BalancerPlayerExportRoster(BaseModel):
+    """The team shape the export was taken under, flex slot included."""
+
+    slots: dict[str, int]
+    team_size: int
+    flex_slots: int
+    #: ``optional`` | ``all_roles`` | ``forced``.
+    flex_role_mode: str
+
+
 class BalancerPlayerExportResponse(BaseModel):
+    """Both player-pool export formats.
+
+    ``xv-1`` is the solver's input contract and carries ``format``/``players``
+    only. ``owt-1`` is our full snapshot: the same player nodes plus an ``owt``
+    block on each, and the three context fields below. See
+    ``shared.services.roster.RosterEngine.full_export``.
+    """
+
     format: str
     players: dict[str, Any]
+    generated_at: str | None = None
+    source: BalancerPlayerExportSource | None = None
+    roster: BalancerPlayerExportRoster | None = None
 
 
 class BalancerGoogleSheetFeedUpsert(BaseModel):

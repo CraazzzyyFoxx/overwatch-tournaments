@@ -75,19 +75,17 @@ export function optionForSelection(
 /**
  * The roles this player may be picked on, primary first.
  *
- * `is_flex` means "no fixed role": the server lets a flex player fill any role
- * slot (`rules.role_is_legal`) and its feasibility model counts them as supply
- * for every role (`build_feasibility_state`), so the safe pick the solver is
- * holding open can be a role the player never declared. Offering only the
- * declared roles hid exactly that option and left a flex player unpickable —
- * every offered role blocked with `role_shortage` — from the very first pick.
+ * Exactly what the server will accept: `resolve_pick_slot` validates a pick
+ * through `PlayerRoster.covers(role)`, i.e. the role must be one the player has
+ * a rank on (`playable`). `is_flex` is NOT consulted there, so it must not
+ * widen the offer here either — a flex player's roles are whatever landed in
+ * `primary_role` + `secondary_roles`, which the server derives from the same
+ * playable set (all three when all three are ranked).
  */
 export function playerRoles(player: DraftPlayer): DraftRole[] {
-  const declared = player.is_flex
-    ? (["tank", "dps", "support"] as DraftRole[])
-    : (player.secondary_roles as DraftRole[]);
   // `primary_role` is null once the player has no playable role left; nothing
   // may be substituted for it.
+  const declared = player.secondary_roles as DraftRole[];
   return Array.from(
     new Set<DraftRole>(player.primary_role ? [player.primary_role, ...declared] : declared)
   );
@@ -110,8 +108,6 @@ export function safeRoleForPlayer(
     (option) => option.player_id === player.id && option.is_safe
   );
   if (safe.length === 0) return null;
-  // A safe role the player never declared can only come from the server (a
-  // flex player), so it still beats returning nothing.
   return playerRoles(player).find((role) => safe.some((option) => option.role === role)) ?? safe[0].role;
 }
 

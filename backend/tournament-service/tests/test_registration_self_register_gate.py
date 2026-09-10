@@ -557,7 +557,7 @@ def test_admin_check_in_ignores_the_check_in_window() -> None:
     the self-service path (``registration_service.check_in_registration``) is
     window-gated."""
     from types import SimpleNamespace
-    from unittest.mock import patch
+    from unittest.mock import AsyncMock, patch
 
     from src.services.registration import lifecycle
 
@@ -577,7 +577,7 @@ def test_admin_check_in_ignores_the_check_in_window() -> None:
 
     with (
         patch.object(type(service), "get_registration_by_id", fake_get),
-        patch.object(service.common, "_register_registration_changed", lambda *a, **k: None),
+        patch.object(service.common, "_register_registration_changed", AsyncMock()),
     ):
         result = asyncio.run(service.check_in_registration(session, 7, checked_in_by=99))
 

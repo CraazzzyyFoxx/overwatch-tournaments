@@ -138,7 +138,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --package ${APP_PATH}-service \
         --no-install-package nvidia-nccl-cu12
 
-# Build the moo_core Rust extension (native/tournament_balancer). Cargo's
+# Build the tournament_balancer Rust extension (native/tournament_balancer). Cargo's
 # crate registry/git caches and the build target dir are persisted across
 # builds via BuildKit cache mounts, so crates are downloaded once and
 # compilation is incremental. maturin is already installed into the venv by

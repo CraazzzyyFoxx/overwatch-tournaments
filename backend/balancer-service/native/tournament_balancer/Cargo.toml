@@ -1,10 +1,10 @@
 [package]
-name = "moo_core"
+name = "tournament_balancer"
 version = "0.1.0"
 edition = "2021"
 
 [lib]
-name = "moo_core"
+name = "tournament_balancer"
 crate-type = ["cdylib", "rlib"]
 
 [features]

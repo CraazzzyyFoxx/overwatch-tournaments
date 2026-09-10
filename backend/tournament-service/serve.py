@@ -6,6 +6,9 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from shared.messaging.config import (
+    CACHE_INVALIDATION_EXCHANGE,
+    CACHE_INVALIDATION_TOURNAMENT_DLQ,
+    CACHE_INVALIDATION_TOURNAMENT_QUEUE,
     DIVISION_GRID_IMPORT_JOBS_DLQ,
     DIVISION_GRID_IMPORT_JOBS_QUEUE,
     TOURNAMENT_BRACKET_JOBS_DLQ,
@@ -26,6 +29,8 @@ from shared.observability import (
     start_worker_metrics_server,
 )
 from shared.schemas.events import TournamentComputationJobEvent
+from shared.services.realtime import configure_realtime
+from shared.services.realtime.consumer import register_invalidation_consumer
 from src.core import config, db
 from src.core.broker import set_worker_broker
 from src.core.caching import configure_cache
@@ -48,12 +53,10 @@ from src.services.challonge import sync as challonge_sync
 from src.services.computation.bracket_worker import process_bracket_job
 from src.services.computation.standings_worker import process_standings_job
 from src.services.division_grid.import_jobs import process_import_job, recover_stale_import_jobs
-
-# Import for side effects: registers the SQLAlchemy after-commit listeners that
-# publish encounter map-veto realtime signals (encounter:{id}:map-veto).
-from src.services.encounter import realtime_commit as _encounter_realtime_commit  # noqa: F401
 from src.services.registration import sheet_sync
 from src.services.tournament import auto_transitions, recalculation_events
+from src.services.tournament.cache_invalidation import invalidate_tournament_resources
+from src.services.tournament.cache_resources import RESOURCE_CACHE_PATTERNS
 
 logger = setup_logging(
     service_name="tournament-svc",
@@ -79,6 +82,22 @@ set_worker_broker(broker)
 # The cashews cache is a process-global singleton; the worker must configure it
 # (like the API does) or after-commit cache invalidation raises NotConfiguredError.
 configure_cache()
+
+# Same reason, same place: ``emit`` publishes through this Redis URL and drops
+# this service's own cashews keys through the invalidator before doing so.
+configure_realtime(
+    redis_url=str(config.settings.redis_url),
+    cache_invalidator=invalidate_tournament_resources,
+)
+
+# Cross-service half: resources another service stales that this one caches.
+register_invalidation_consumer(
+    broker,
+    logger,
+    queue=CACHE_INVALIDATION_TOURNAMENT_QUEUE,
+    exchange=CACHE_INVALIDATION_EXCHANGE,
+    patterns=RESOURCE_CACHE_PATTERNS,
+)
 
 # Typed read RPC methods served by the gateway (rpc.tournament.*).
 rpc_reads.register(broker, logger)
@@ -134,27 +153,29 @@ async def auto_transition_tournaments() -> None:
             logger.info("Tournament auto-transitions applied", results=results)
 
 
-async def purge_stale_bracket_events(
+async def purge_stale_realtime_events(
     session_factory: async_sessionmaker[AsyncSession] = db.async_session_maker,
 ) -> None:
-    async with observe_scheduled_job("bracket_workspace_event_purge"), session_factory() as session:
-        # `LIKE 'tournament:%:bracket'` matches `realtime_topics.bracket(tournament_id)`'s
-        # exact format (`f"tournament:{id}:bracket"`) -- if that format ever
-        # changes this pattern must move with it. Bracket-only, not pregame/draft:
-        # those sessions have no upper bound on duration (design:
-        # docs/plans/2026-08-24-realtime-shared-library.md §4.2/D2/D10).
-        #
-        # The pattern is BOUND, not inlined into the SQL string: a literal `:`
-        # inside `text()` is parsed as a bind-parameter marker (here `:bracket`),
-        # not a plain character, and raises `InvalidRequestError` at execute time
-        # if left inline with no value supplied for it.
-        await session.execute(
-            text(
-                "DELETE FROM realtime.workspace_event "
-                "WHERE topic LIKE :bracket_pattern AND occurred_at < now() - interval '7 days'"
-            ),
-            {"bracket_pattern": "tournament:%:bracket"},
-        )
+    """Drop realtime rows nobody can still replay: brackets and invalidations.
+
+    Two statements, one per topic family, each a single unbatched DELETE (design
+    decision D2 of docs/plans/2026-08-24-realtime-shared-library.md). Bracket and
+    invalidation only, never pregame/draft: those sessions have no upper bound on
+    duration, so a 7-day floor would cut a live one.
+
+    The patterns are BOUND, not inlined: a literal `:` inside ``text()`` is
+    parsed as a bind-parameter marker (here `:bracket`), not a plain character,
+    and raises ``InvalidRequestError`` at execute time with no value supplied.
+    """
+    async with observe_scheduled_job("realtime_workspace_event_purge"), session_factory() as session:
+        for pattern in ("tournament:%:bracket", "%:invalidation"):
+            await session.execute(
+                text(
+                    "DELETE FROM realtime.workspace_event "
+                    "WHERE topic LIKE :topic_pattern AND occurred_at < now() - interval '7 days'"
+                ),
+                {"topic_pattern": pattern},
+            )
         await session.commit()
 
 
@@ -164,6 +185,7 @@ async def start_worker() -> None:
     await declare_dead_letter_queue(broker, TOURNAMENT_BRACKET_JOBS_DLQ)
     await declare_dead_letter_queue(broker, TOURNAMENT_STANDINGS_JOBS_DLQ)
     await declare_dead_letter_queue(broker, DIVISION_GRID_IMPORT_JOBS_DLQ)
+    await declare_dead_letter_queue(broker, CACHE_INVALIDATION_TOURNAMENT_DLQ)
     setup_sentry(
         dsn=config.settings.sentry_dsn,
         traces_sample_rate=config.settings.sentry_traces_sample_rate,
@@ -215,10 +237,10 @@ async def start_worker() -> None:
         id="auto_transition_tournaments",
     )
     scheduler.add_job(
-        purge_stale_bracket_events,
+        purge_stale_realtime_events,
         "interval",
         days=1,
-        id="bracket_workspace_event_purge",
+        id="realtime_workspace_event_purge",
     )
     scheduler.start()
     logger.info("Tournament worker scheduler started")

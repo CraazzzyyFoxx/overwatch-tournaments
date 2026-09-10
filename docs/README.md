@@ -47,7 +47,7 @@ Individual services document their own RPC surface and scheduled work:
 [`tournament-service`](../backend/tournament-service/README.md),
 [`parser-service`](../backend/parser-service/README.md),
 [`balancer-service`](../backend/balancer-service/README.md)
-(and its native solver, [`moo_core`](../backend/balancer-service/native/mix_balancer/README.md)),
+(and its native solver, [`tournament_balancer`](../backend/balancer-service/native/mix_balancer/README.md)),
 [`analytics-service`](../backend/analytics-service/README.md),
 [`stream-service`](../backend/stream-service/README.md),
 [`discord-service`](../backend/discord-service/README.md).
@@ -59,6 +59,7 @@ Procedures for an operator. Commands are meant to be run verbatim.
 | Runbook | When |
 | --- | --- |
 | [`backup-rustfs.md`](./backup-rustfs.md) | PostgreSQL dumps, two-site S3 replication, verification, restore |
+| [`dev-site.md`](./dev-site.md) | The dev deployment at `dev.owt.craazzzyyfoxx.me` — what differs from production, deploy, data refresh |
 | [`challonge_normalization_phase2_runbook.md`](./challonge_normalization_phase2_runbook.md) | Running the gated destructive migration — and the pattern for any future one |
 | [`superpowers/plans/2026-07-06-subdomains-ops-runbook.md`](./superpowers/plans/2026-07-06-subdomains-ops-runbook.md) | Workspace subdomains and custom domains: DNS, certificates, verification |
 | [`../backend/analytics-service/docs/runbook-shift-recompute.md`](../backend/analytics-service/docs/runbook-shift-recompute.md) | Recomputing OpenSkill rating shifts |

@@ -174,7 +174,7 @@ class CreateJobTests(IsolatedAsyncioTestCase):
             patch(f"{JOBS}._payload_parser", FakeParser()),
             patch(f"{JOBS}.is_api_key_principal", return_value=False),
             patch(f"{JOBS}.BalancerJobPublisher", FakePublisher),
-            patch(f"{JOBS}.emit_balancer_job_event", emit),
+            patch(f"{JOBS}._emit_job", emit),
             patch(f"{JOBS}.get_effective_roster_shape", _shape_resolver()),
         ):
             await jobs.create_job(
@@ -193,7 +193,6 @@ class CreateJobTests(IsolatedAsyncioTestCase):
         self.assertEqual(args[1], "balancer_job.queued")
         self.assertEqual(kwargs["job_id"], "job-xyz")
         self.assertEqual(kwargs["status"], "queued")
-        self.assertEqual(kwargs["workspace_id"], 77)
         self.assertEqual(kwargs["actor_user_id"], 9)
 
     async def test_api_key_create_job_reserves_limit_and_stores_metadata(self) -> None:

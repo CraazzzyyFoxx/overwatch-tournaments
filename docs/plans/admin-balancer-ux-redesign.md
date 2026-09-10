@@ -43,7 +43,7 @@
 |---|---|
 | `overview` | Пайплайн-stepper по эффективной цепочке фаз (D19); TournamentStatusControl; **living checklist** (§3); метрики; сводка синков; баннер «Draft live → Teams» при live-драфте |
 | `registration` | **Полноценная таблица регистраций** (перенос текущей `/balancer/registrations` целиком). Контекст: path-param; workspace-каталоги (статусы, саброли) — от workspace турнира (в хабе store уже выровнен по нему). Гейт `team.read`. **Sub-routes**: `registration/form`, `registration/rank-autofill`, `registration/feed`. Счётчики для checklist — readiness-endpoint (§7) |
-| `teams` | Ручной CRUD всегда (substitutions). Mode-панель по `team_formation` (`balancer | draft`): *balancer* — готовность пула, saved balance, exported_at, **«Open balancer»**; *draft* — DraftSetupWizard / AdminControlRoom / Previous draft + бейдж «Draft live». Challonge team-sync, Import JSON. Guard смены `team_formation` при активной draft-сессии (§7.4) |
+| `teams` | Ручной CRUD всегда (substitutions). Mode-панель по `team_formation` (`balancer | draft`): *balancer* — готовность пула, saved balance, exported_at, **«Open balancer»**; *draft* — DraftSetupWizard / AdminControlRoom / Previous draft + бейдж «Draft live». Challonge team-sync. Импорт балансa из JSON живёт только в балансере («Load balance JSON»). Guard смены `team_formation` при активной draft-сессии (§7.4) |
 | `stages` | StageManager (Фаза 1 as-is; Фаза 2 — декомпозиция) + Map Veto секцией |
 | `matches` | Sub-tabs: Results · Logs |
 | `settings` | Как сейчас + Integrations (Challonge); чекбокс `is_finished` удаляется (§7) |

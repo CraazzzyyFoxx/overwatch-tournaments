@@ -56,7 +56,6 @@ from src.services.computation import jobs as computation_jobs
 from src.services.encounter.captain import captain_service
 from src.services.encounter.report_form import report_form_service
 from src.services.tournament import flows as tournament_flows
-from src.services.tournament.cache_invalidation import invalidate_tournament_cache
 from src.services.tournament.schedule import schedule_service
 
 
@@ -379,8 +378,6 @@ def register(broker: Any, logger: Any) -> None:
                 after={"auth_user_id": auth_user_id},
             )
             row = await preview_access.preview_access_service.add_preview_access(session, tournament_id, auth_user_id)
-            # Refresh the (viewer-agnostic) cached tournament read so the badge/state update.
-            await invalidate_tournament_cache(tournament_id, "structure_changed")
             return preview_access.serialize_entry(row)
 
         return await _run(logger, op)
@@ -404,7 +401,6 @@ def register(broker: Any, logger: Any) -> None:
                 after={"auth_user_id": auth_user_id},
             )
             await preview_access.preview_access_service.remove_preview_access(session, tournament_id, auth_user_id)
-            await invalidate_tournament_cache(tournament_id, "structure_changed")
             return None
 
         return await _run(logger, op)

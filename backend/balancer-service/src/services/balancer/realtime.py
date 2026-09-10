@@ -1,115 +1,67 @@
 """Realtime fan-out for balancer-service edits and job lifecycle.
 
-Publishes to the tournament-scoped ``tournament:{id}:balancer`` topic shared
-with tournament-service (registration edits). Two kinds of events originate
-here:
+Everything here is DATA on the tournament-scoped ``tournament:{id}:balancer``
+topic: what the admin tool renders, never what a cache should drop. The
+staleness an export causes is announced separately, by the export's own call
+site, as a tournament-scoped invalidation.
+
+Two families:
 
 * data-edit signals (``balancer.balance_saved`` / ``balancer.teams_changed`` /
-  ``balancer.config_changed``) — clients invalidate the matching queries;
-* job lifecycle (``balancer_job.*``) — broadcast job progress to everyone with
-  the page open.
+  ``balancer.config_changed``) — durable, so a reconnecting admin replays them;
+* job lifecycle (``balancer_job.*``) — durable for the queued/running/
+  succeeded/failed transitions, non-durable for the high-frequency progress
+  ticks, which a late joiner re-derives from the REST job-status snapshot.
 
-Each emitter runs in its own short-lived session so it never entangles with
-the request/worker transaction that already committed. The Redis client is a
-module-level singleton (its connection pool is reused across events) instead
-of a fresh TCP connection per event. Data-edit signals are scheduled as
-fire-and-forget tasks (mutation responses never wait on the extra DB session +
-Redis round-trip; ordering between them is irrelevant), while job lifecycle
-events stay awaited so queued/running/succeeded transitions keep their strict
-order for cursor replay. Failures are swallowed — the frontend self-heals via
-reconnect refetch (data) or the REST job-status snapshot (jobs).
+Every call stages on the CALLER's session and is published by ``emit``'s
+after-commit hook. The module used to open its own short-lived session per
+event and fire the publish off as a detached task — which meant an event could
+describe state its own transaction never committed, and could outlive it.
 """
 
 from __future__ import annotations
 
-import asyncio
-from datetime import UTC, datetime
 from typing import Any
 
-from loguru import logger
-from redis.asyncio import Redis
+from shared.services.balancer_realtime import BALANCER_JOB_PROGRESS
+from shared.services.realtime import DomainEvent, Resource, Scope, emit
 
-from shared.schemas.realtime import WorkspaceEventEnvelope
-from shared.services import realtime_topics
-from shared.services.balancer_realtime import BALANCER_JOB_PROGRESS, publish_balancer_event
-from shared.services.realtime_publisher import publish_envelope_to_redis
-from src.core import db
-from src.core.config import config
+__all__ = ("EXPORT_RESOURCES", "emit_balancer_data", "emit_job_lifecycle", "emit_job_progress")
 
-__all__ = (
-    "emit_balancer_data_event",
-    "emit_balancer_job_event",
-    "emit_balancer_job_progress",
-)
-
-_redis_client: Redis | None = None
-# Strong references so fire-and-forget publish tasks are not garbage-collected
-# mid-flight (asyncio only keeps weak refs to running tasks).
-_pending_publishes: set[asyncio.Task[None]] = set()
+# What every path through ``TeamMaterializationService`` stales: it DELETEs and
+# re-INSERTs tournament.team / player / standing, so the teams list, the
+# standings hanging off them and the set of sections the tournament page has all
+# move at once. app-service caches the same three, which is why each of these
+# call sites also enqueues the cross-service outbox row.
+EXPORT_RESOURCES = (Resource.TOURNAMENT_TEAMS, Resource.TOURNAMENT_STANDINGS, Resource.TOURNAMENT_STRUCTURE)
+_DOMAIN = "balancer"
 
 
-def _get_redis() -> Redis:
-    global _redis_client
-    if _redis_client is None:
-        _redis_client = Redis.from_url(config.redis_url, decode_responses=True)
-    return _redis_client
-
-
-async def _emit(
+async def emit_balancer_data(
+    session: Any,
     tournament_id: int,
     event_type: str,
     *,
-    workspace_id: int | None,
-    payload: dict[str, Any] | None,
-    actor_user_id: int | None,
-) -> None:
-    try:
-        async with db.async_session_maker() as session:
-            async with session.begin():
-                await publish_balancer_event(
-                    session,
-                    _get_redis(),
-                    tournament_id=tournament_id,
-                    workspace_id=workspace_id,
-                    event_type=event_type,
-                    payload=payload,
-                    actor_user_id=actor_user_id,
-                )
-    except Exception:
-        logger.exception(
-            "Failed to publish balancer event",
-            tournament_id=tournament_id,
-            event_type=event_type,
-        )
-
-
-async def emit_balancer_data_event(
-    tournament_id: int,
-    event_type: str,
-    *,
-    workspace_id: int | None = None,
     payload: dict[str, Any] | None = None,
     actor_user_id: int | None = None,
 ) -> None:
-    """Schedule a ``balancer.*_changed`` data-edit broadcast off the request path.
+    """Stage a ``balancer.*_changed`` data-edit broadcast.
 
-    The caller's mutation has already committed, so ordering is preserved: the
-    event (persisted in its own session) always describes committed state.
+    Call before the commit that owns the edit — including when that commit
+    belongs to the service being called (``team_materialization.run`` and the
+    admin service both own their boundary), in which case staging happens
+    before the call rather than after it.
     """
-    task = asyncio.create_task(
-        _emit(
-            tournament_id,
-            event_type,
-            workspace_id=workspace_id,
-            payload=payload,
-            actor_user_id=actor_user_id,
-        )
+    await emit(
+        session,
+        scope=Scope.tournament(tournament_id),
+        data=DomainEvent(domain=_DOMAIN, event_type=event_type, payload=payload or {}),
+        actor_user_id=actor_user_id,
     )
-    _pending_publishes.add(task)
-    task.add_done_callback(_pending_publishes.discard)
 
 
-async def emit_balancer_job_event(
+async def emit_job_lifecycle(
+    session: Any,
     tournament_id: int,
     event_type: str,
     *,
@@ -117,64 +69,56 @@ async def emit_balancer_job_event(
     status: str,
     progress: dict[str, Any] | None = None,
     error: str | None = None,
-    workspace_id: int | None = None,
     actor_user_id: int | None = None,
 ) -> None:
-    """Persist + broadcast a ``balancer_job.*`` lifecycle event to all viewers.
+    """Stage a durable ``balancer_job.*`` lifecycle transition.
 
-    Used for the durable transitions (queued/running/succeeded/failed) so a
-    late joiner catches up via cursor replay. Stays awaited (unlike the
-    data-edit signals) so transitions land in order. Continuous progress ticks
-    go through :func:`emit_balancer_job_progress` (ephemeral) instead.
+    Durable so a late joiner catches up via cursor replay; the transitions are
+    few and strictly ordered, unlike the progress ticks below.
     """
-    await _emit(
-        tournament_id,
-        event_type,
-        workspace_id=workspace_id,
-        payload={
-            "job_id": job_id,
-            "status": status,
-            "progress": progress or {},
-            "error": error,
-        },
+    await emit(
+        session,
+        scope=Scope.tournament(tournament_id),
+        data=DomainEvent(
+            domain=_DOMAIN,
+            event_type=event_type,
+            payload={
+                "job_id": job_id,
+                "status": status,
+                "progress": progress or {},
+                "error": error,
+            },
+        ),
         actor_user_id=actor_user_id,
     )
 
 
-async def emit_balancer_job_progress(
+async def emit_job_progress(
+    session: Any,
     tournament_id: int,
     *,
     job_id: str,
     status: str,
     progress: dict[str, Any] | None,
-    redis: Redis | None = None,
 ) -> None:
-    """Broadcast an ephemeral ``balancer_job.progress`` tick (Redis only).
+    """Stage an ephemeral ``balancer_job.progress`` tick.
 
-    Progress is high-frequency and transient, so it is NOT persisted to the
-    event log (``event_id=0`` keeps the frontend replay cursor untouched).
-    Late joiners still see the last durable lifecycle state plus the next tick.
-    Pass an existing ``redis`` client to override the shared singleton.
+    Not durable: progress is high-frequency and transient, and persisting it
+    would fill the replay log with ticks no reconnecting client needs — it sees
+    the last durable lifecycle state plus the next tick.
     """
-    envelope = WorkspaceEventEnvelope(
-        event_id=0,
-        event_type=BALANCER_JOB_PROGRESS,
-        schema_version=1,
-        occurred_at=datetime.now(UTC),
-        actor_user_id=None,
-        data={
-            "tournament_id": int(tournament_id),
-            "job_id": job_id,
-            "status": status,
-            "progress": progress or {},
-        },
+    await emit(
+        session,
+        scope=Scope.tournament(tournament_id),
+        data=DomainEvent(
+            domain=_DOMAIN,
+            event_type=BALANCER_JOB_PROGRESS,
+            payload={
+                "tournament_id": int(tournament_id),
+                "job_id": job_id,
+                "status": status,
+                "progress": progress or {},
+            },
+            durable=False,
+        ),
     )
-    client = redis if redis is not None else _get_redis()
-    try:
-        await publish_envelope_to_redis(
-            client,
-            topic=realtime_topics.balancer(tournament_id),
-            envelope=envelope,
-        )
-    except Exception:
-        logger.exception("Failed to publish balancer job progress", tournament_id=tournament_id)

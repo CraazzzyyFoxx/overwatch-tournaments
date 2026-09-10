@@ -1,10 +1,7 @@
-"""Regression coverage for `MemberSubscriptionSyncService`'s Redis wiring.
+"""Coverage for `MemberSubscriptionSyncService.resync`.
 
-`Settings` used to omit `redis_url` entirely, so `settings.redis_url` raised
-`AttributeError` inside `_build_redis_client` -- silently swallowed by its
-broad `except Exception`, permanently disabling realtime subscription-cache
-invalidation on Discord member/role events even though `REDIS_URL` was set in
-the environment the whole time. See `src/core/config.py`.
+Redis is no longer touched here: cache invalidation rides the unified realtime
+rail, wired once in `main.py` from `settings.redis_url`.
 """
 
 import sys
@@ -19,16 +16,6 @@ from src.services.subscription_sync import MemberSubscriptionSyncService  # noqa
 
 
 class SubscriptionSyncServiceTests(IsolatedAsyncioTestCase):
-    async def test_build_redis_client_uses_settings_redis_url(self) -> None:
-        service = MemberSubscriptionSyncService(settings=real_settings, session_maker=MagicMock())
-
-        client = service._build_redis_client()
-        try:
-            self.assertIsNotNone(client)
-        finally:
-            if client is not None:
-                await client.aclose()
-
     async def test_resync_skips_redis_when_no_workspace_matches(self) -> None:
         """No workspace for the guild -> returns before touching Redis or the resolver."""
         workspaces = MagicMock()

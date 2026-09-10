@@ -6,12 +6,12 @@
 
 **Architecture:** `composite_score` (knee-distance) параметризуется двумя весами `(w_balance, w_comfort)`. Внутренние archive-операции поиска зовут с `(1.0, 1.0)` — байт-идентично текущему. Финальный ранг в `runner.rs` зовёт с `(1 - tilt, tilt)`, где `tilt ∈ [0,1]` (дефолт `0.5` = текущее поведение). Значение `tilt` прокидывается из UI-слайдера через Python-конфиг и JSON в Rust `ConfigSpec`.
 
-**Tech Stack:** Rust (pyo3 / `moo_core`), Python (FastAPI, Pydantic, pytest), TypeScript/React (Next.js, shadcn/ui + `@radix-ui/react-slider`), vitest/eslint/tsc.
+**Tech Stack:** Rust (pyo3 / `tournament_balancer`), Python (FastAPI, Pydantic, pytest), TypeScript/React (Next.js, shadcn/ui + `@radix-ui/react-slider`), vitest/eslint/tsc.
 
 **Спецификация:** [docs/superpowers/specs/2026-06-12-balancer-rank-comfort-tilt-design.md](../specs/2026-06-12-balancer-rank-comfort-tilt-design.md)
 
 **Команды (справочно):**
-- Rust: `cargo test --manifest-path backend/balancer-service/native/moo_core/Cargo.toml`
+- Rust: `cargo test --manifest-path backend/balancer-service/native/tournament_balancer/Cargo.toml`
 - Rust fmt/lint: `cargo fmt --manifest-path .../Cargo.toml` / `cargo clippy --manifest-path .../Cargo.toml`
 - Python: из `backend/balancer-service` → `uv run pytest tests/test_config_consistency.py tests/test_balancer_config.py -v`
 - Frontend: из `frontend` → `pnpm exec tsc --noEmit`, `pnpm exec eslint <path>`
@@ -166,9 +166,9 @@ git commit -m "refactor(balancer): drop dead per-field applies_to metadata (fron
 ## Task 3: Rust — поле `rank_comfort_tilt` в `ConfigSpec`
 
 **Files:**
-- Modify: `backend/balancer-service/native/moo_core/src/lib.rs` (default-fn + `ConfigSpec`)
-- Modify: `backend/balancer-service/native/moo_core/src/bench_api.rs:7-43` (`bench_config`)
-- Modify: `backend/balancer-service/native/moo_core/src/tests.rs:12-...` (`regression_config` и любые другие литералы `ConfigSpec`)
+- Modify: `backend/balancer-service/native/tournament_balancer/src/lib.rs` (default-fn + `ConfigSpec`)
+- Modify: `backend/balancer-service/native/tournament_balancer/src/bench_api.rs:7-43` (`bench_config`)
+- Modify: `backend/balancer-service/native/tournament_balancer/src/tests.rs:12-...` (`regression_config` и любые другие литералы `ConfigSpec`)
 
 - [ ] **Step 1: Добавить default-функцию рядом с остальными `default_*` в `lib.rs`**
 
@@ -195,7 +195,7 @@ fn default_rank_comfort_tilt() -> f64 {
 Найти литералы:
 
 ```bash
-rg -n "ConfigSpec \{" backend/balancer-service/native/moo_core/src
+rg -n "ConfigSpec \{" backend/balancer-service/native/tournament_balancer/src
 ```
 
 В каждом (`bench_api.rs::bench_config`, `tests.rs::regression_config`, и любых других) добавить строку:
@@ -206,13 +206,13 @@ rg -n "ConfigSpec \{" backend/balancer-service/native/moo_core/src
 
 - [ ] **Step 4: Собрать — должно компилироваться**
 
-Run: `cargo build --manifest-path backend/balancer-service/native/moo_core/Cargo.toml`
+Run: `cargo build --manifest-path backend/balancer-service/native/tournament_balancer/Cargo.toml`
 Expected: OK (нет ошибки «missing field rank_comfort_tilt»).
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add backend/balancer-service/native/moo_core/src/lib.rs backend/balancer-service/native/moo_core/src/bench_api.rs backend/balancer-service/native/moo_core/src/tests.rs
+git add backend/balancer-service/native/tournament_balancer/src/lib.rs backend/balancer-service/native/tournament_balancer/src/bench_api.rs backend/balancer-service/native/tournament_balancer/src/tests.rs
 git commit -m "feat(balancer): add rank_comfort_tilt field to native ConfigSpec (default 0.5)"
 ```
 
@@ -221,9 +221,9 @@ git commit -m "feat(balancer): add rank_comfort_tilt field to native ConfigSpec 
 ## Task 4: Rust — взвешенный `knee_scores` + проводка в ранг
 
 **Files:**
-- Modify: `backend/balancer-service/native/moo_core/src/archive.rs` (`knee_scores`, два внутренних вызова)
-- Modify: `backend/balancer-service/native/moo_core/src/runner.rs:280`
-- Test: `backend/balancer-service/native/moo_core/src/tests.rs`
+- Modify: `backend/balancer-service/native/tournament_balancer/src/archive.rs` (`knee_scores`, два внутренних вызова)
+- Modify: `backend/balancer-service/native/tournament_balancer/src/runner.rs:280`
+- Test: `backend/balancer-service/native/tournament_balancer/src/tests.rs`
 
 - [ ] **Step 1: Написать падающий unit-тест**
 
@@ -266,7 +266,7 @@ fn knee_scores_weights_shift_priority() {
 
 - [ ] **Step 2: Запустить — тест падает (сигнатура `knee_scores` ещё одноаргументная)**
 
-Run: `cargo test --manifest-path backend/balancer-service/native/moo_core/Cargo.toml knee_scores_weights_shift_priority`
+Run: `cargo test --manifest-path backend/balancer-service/native/tournament_balancer/Cargo.toml knee_scores_weights_shift_priority`
 Expected: FAIL компиляции — `knee_scores` принимает 1 аргумент, передано 3.
 
 - [ ] **Step 3: Сменить сигнатуру/формулу `knee_scores` в `archive.rs`**
@@ -326,23 +326,23 @@ pub(crate) fn knee_scores(objectives: &[Objectives], w_balance: f64, w_comfort: 
 
 - [ ] **Step 6: Запустить новый тест + весь набор Rust**
 
-Run: `cargo test --manifest-path backend/balancer-service/native/moo_core/Cargo.toml`
+Run: `cargo test --manifest-path backend/balancer-service/native/tournament_balancer/Cargo.toml`
 Expected: PASS (включая `knee_scores_weights_shift_priority`).
 
 - [ ] **Step 7: Регресс quality-harness (дефолтный tilt=0.5 в литералах → идентичность)**
 
-Run: `cargo test --manifest-path backend/balancer-service/native/moo_core/Cargo.toml harness -- --ignored --nocapture`
+Run: `cargo test --manifest-path backend/balancer-service/native/tournament_balancer/Cargo.toml harness -- --ignored --nocapture`
 Expected: PASS, медианы метрик не регрессируют.
 
 - [ ] **Step 8: fmt + clippy**
 
-Run: `cargo fmt --manifest-path backend/balancer-service/native/moo_core/Cargo.toml && cargo clippy --manifest-path backend/balancer-service/native/moo_core/Cargo.toml -- -D warnings`
+Run: `cargo fmt --manifest-path backend/balancer-service/native/tournament_balancer/Cargo.toml && cargo clippy --manifest-path backend/balancer-service/native/tournament_balancer/Cargo.toml -- -D warnings`
 Expected: чисто.
 
 - [ ] **Step 9: Commit**
 
 ```bash
-git add backend/balancer-service/native/moo_core/src/archive.rs backend/balancer-service/native/moo_core/src/runner.rs backend/balancer-service/native/moo_core/src/tests.rs
+git add backend/balancer-service/native/tournament_balancer/src/archive.rs backend/balancer-service/native/tournament_balancer/src/runner.rs backend/balancer-service/native/tournament_balancer/src/tests.rs
 git commit -m "feat(balancer): weight balance/comfort in variant ranking via rank_comfort_tilt"
 ```
 
@@ -666,15 +666,15 @@ git commit -m "feat(balancer): rank tilt slider control in config drawer"
 
 **Files:** нет правок — только сборка и ручная проверка.
 
-- [ ] **Step 1: Пересобрать нативный модуль `moo_core` для Python**
+- [ ] **Step 1: Пересобрать нативный модуль `tournament_balancer` для Python**
 
-Из `backend/balancer-service/native/moo_core`:
+Из `backend/balancer-service/native/tournament_balancer`:
 
 ```bash
 maturin develop --release
 ```
 
-> Если в репо используется иной build-механизм для нативного модуля (justfile / make / docker), применить его. Цель — чтобы установленный `moo_core` содержал поле `rank_comfort_tilt`.
+> Если в репо используется иной build-механизм для нативного модуля (justfile / make / docker), применить его. Цель — чтобы установленный `tournament_balancer` содержал поле `rank_comfort_tilt`.
 
 - [ ] **Step 2: Поднять стек и прогнать баланс**
 

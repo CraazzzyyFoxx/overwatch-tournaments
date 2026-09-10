@@ -81,6 +81,21 @@ class HeroGlobalStatsRefreshTests(IsolatedAsyncioTestCase):
         )
         self.assertTrue(session.committed)
 
+    async def test_nested_loops_are_disabled_before_the_refresh(self) -> None:
+        # The view's ``eligible`` CTE self-joins matches.statistics; the nested-loop
+        # plan costs 2.5M buffer touches and twice the wall clock of the hash join
+        # (measured: 15.0s -> 7.5s on a production restore). Ordering matters —
+        # after the REFRESH the setting would apply to nothing.
+        session = _FakeSession()
+
+        await refresher.refresh(session)
+
+        self.assertIn("SET LOCAL enable_nestloop = off", session.statements)
+        self.assertLess(
+            session.statements.index("SET LOCAL enable_nestloop = off"),
+            next(i for i, s in enumerate(session.statements) if s.startswith("REFRESH MATERIALIZED VIEW")),
+        )
+
     async def test_second_request_in_the_window_is_debounced(self) -> None:
         refresh = AsyncMock(return_value=True)
         maker = _SessionMaker(_FakeSession())

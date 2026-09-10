@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  BALANCE_ROSTER_KEYS,
   TEAM_BADGE_ACCENTS,
   calculateTeamAverageFromPayload,
   calculateTeamTotalFromPayload,
@@ -15,6 +14,7 @@ import {
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import type {
+  BalancerRosterKey,
   InternalBalancePayload,
 } from "@/types/balancer-admin.types";
 import type { DivisionGrid } from "@/types/workspace.types";
@@ -26,6 +26,8 @@ import type { RemoteDrag } from "./useBalancerDragGhosts";
 type BalanceEditorTeamCardProps = {
   team: InternalBalancePayload["teams"][number];
   teamIndex: number;
+  /** Roster buckets to draw, in order — the ones the tournament's shape fields. */
+  bucketKeys: BalancerRosterKey[];
   divisionGrid: DivisionGrid;
   selectedPlayerId?: number | null;
   collapsed: boolean;
@@ -40,6 +42,7 @@ type BalanceEditorTeamCardProps = {
 export function BalanceEditorTeamCard({
   team,
   teamIndex,
+  bucketKeys,
   divisionGrid,
   selectedPlayerId,
   activeDrag = null,
@@ -125,7 +128,7 @@ export function BalanceEditorTeamCard({
             </TableHead>
           </TableRow>
         </TableHeader>
-        {BALANCE_ROSTER_KEYS.map((roleKey) => (
+        {bucketKeys.map((roleKey) => (
           <DroppableRoleSection
             key={`${team.id}-${roleKey}`}
             teamIndex={teamIndex}

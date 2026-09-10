@@ -140,7 +140,7 @@ one before the row is written, so a burst of writes yields one event, not one pe
 | `registration_google_sheet_sync` | 5 min | Pulls due Google Sheets registration feeds |
 | `challonge_active_sync` | `CHALLONGE_AUTO_SYNC_INTERVAL_MINUTES` (default 5) | Pulls Challonge → local for active tournaments |
 | `division_grid_import_recovery` | 5 min (plus once at startup) | Re-dispatches import jobs stranded by a restart |
-| `bracket_workspace_event_purge` | 1 day | Deletes `realtime.workspace_event` rows on `tournament:%:bracket` older than 7 days |
+| `realtime_workspace_event_purge` | 1 day | Deletes `realtime.workspace_event` rows on `tournament:%:bracket` and `%:invalidation` older than 7 days |
 
 Registration windows and invite caps are *not* scheduled: registration openness is evaluated from the
 `REGISTRATION` phase-schedule row on every read and write, and invite caps are reset on demand

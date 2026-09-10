@@ -117,7 +117,7 @@ export const TEAM_BADGE_ACCENTS = [
   "border-indigo-400/20 bg-indigo-500/10 text-indigo-200"
 ];
 
-export const BALANCE_ROSTER_KEYS: BalancerRosterKey[] = ["Tank", "Damage", "Support"];
+export const BALANCE_ROSTER_KEYS: BalancerRosterKey[] = ["Tank", "Damage", "Support", "Flex"];
 
 export const PANEL_CLASS =
   "rounded-xl border border-border bg-card";

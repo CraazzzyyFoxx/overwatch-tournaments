@@ -247,9 +247,9 @@ class TournamentFlowsService:
 
     @cache(
         ttl=config.settings.tournaments_cache_ttl,
-        # Key deliberately contains "tournaments/{id}" so the existing
-        # invalidation pattern `*tournaments/{tournament_id}*` (see
-        # cache_invalidation.tournament_cache_patterns) purges it on change.
+        # Key deliberately contains "tournaments/{id}:" so the invalidation
+        # pattern behind ``Resource.TOURNAMENT_DETAIL`` (see
+        # ``cache_resources._detail``) purges it on change.
         key="tournaments/{id}:{entities}",
         prefix="fastapi:",
     )

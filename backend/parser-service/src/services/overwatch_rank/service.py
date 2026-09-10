@@ -491,7 +491,6 @@ class RankStateService:
                         rank_value=mapping.map_division_tier_to_rank_value(parsed.division, parsed.tier, lookup),
                         mapping_version=mapping_version,
                         is_ranked=parsed.is_ranked,
-                        raw_payload=parsed.raw,
                         captured_at=now,
                         source=source,
                     )

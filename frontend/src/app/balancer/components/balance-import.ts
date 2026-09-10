@@ -11,6 +11,7 @@ import {
   calculateTeamDiscomfortFromPayload,
   calculateTeamVarianceFromPayload
 } from "./balancer-page-helpers";
+import { recalculateBalanceStatistics } from "@/components/balancer/balance-editor-helpers";
 
 const FORMAT_HINT =
   'Expected the internal balance format written by "Download JSON": { "teams": [{ "name": …, "roster": { "Tank": [{ "uuid", "name", "assigned_rating" }] } }] }.';
@@ -70,14 +71,16 @@ function parseTeam(raw: unknown, index: number): InternalBalanceTeam {
   );
   if (unknownRole !== undefined) {
     throw new Error(
-      `Team "${name}" has an unsupported roster role "${unknownRole}". Use Tank, Damage or Support.`
+      `Team "${name}" has an unsupported roster role "${unknownRole}". Use Tank, Damage, Support or Flex.`
     );
   }
 
-  const parsedRoster = { Tank: [], Damage: [], Support: [] } as Record<
-    BalancerRosterKey,
-    InternalBalancePlayer[]
-  >;
+  const parsedRoster: Record<BalancerRosterKey, InternalBalancePlayer[]> = {
+    Tank: [],
+    Damage: [],
+    Support: [],
+    Flex: []
+  };
   for (const roleKey of BALANCE_ROSTER_KEYS) {
     const players = roster[roleKey];
     if (players === undefined || players === null) {
@@ -140,7 +143,7 @@ export function parseImportedBalancePayload(text: string): InternalBalancePayloa
     throw new Error("Balance JSON contains no teams.");
   }
 
-  return {
+  const payload: InternalBalancePayload = {
     teams: raw.teams.map(parseTeam),
     statistics: isRecord(raw.statistics)
       ? (raw.statistics as InternalBalancePayload["statistics"])
@@ -150,5 +153,16 @@ export function parseImportedBalancePayload(text: string): InternalBalancePayloa
           parsePlayer(player, `Benched player #${index + 1}`)
         )
       : []
+  };
+
+  // `PUT .../balance` validates statistics against the solver's `Statistics`
+  // schema, where average_mmr, mmr_std_dev, total_teams and players_per_team are
+  // required. A file written by hand — or trimmed to the documented
+  // `{ teams: [...] }` minimum — imports fine and then 422s on save, so the
+  // derivable fields are filled in. Whatever the file states wins: only the
+  // solver knows its own objective scores.
+  return {
+    ...payload,
+    statistics: { ...recalculateBalanceStatistics(payload), ...payload.statistics }
   };
 }

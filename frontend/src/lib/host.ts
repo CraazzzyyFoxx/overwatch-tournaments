@@ -1,4 +1,8 @@
-export const PLATFORM_ZONE = "owt.craazzzyyfoxx.me";
+// Build-time (client bundle) and runtime (SSR/middleware) both read this env
+// var; the dev deployment sets it to its own host so that host is the apex
+// rather than a `dev` tenant subdomain of production. Mirrors the backend
+// shared/tenancy/hostnames.py PLATFORM_ZONE.
+export const PLATFORM_ZONE = process.env.NEXT_PUBLIC_PLATFORM_ZONE || "owt.craazzzyyfoxx.me";
 
 const RESERVED = new Set([
   "www", "api", "auth", "admin", "app", "assets", "static", "cdn", "mail", "ws",

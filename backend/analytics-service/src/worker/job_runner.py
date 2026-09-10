@@ -6,14 +6,13 @@ import logging
 import traceback
 import typing
 
-from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.jobs import JOB_KIND_COMPUTE, JOB_KIND_TRAIN_ML, job_runtime, update_progress
 from src.services.analytics.flows import flows_service
 from src.services.ml.inference.runner import run_for_tournament
 from src.services.ml.training.orchestrator import train_all_models
-from src.worker.job_realtime import publish_job_event
+from src.worker.job_realtime import emit_job_event
 
 logger = logging.getLogger(__name__)
 
@@ -33,16 +32,14 @@ class AnalyticsJobRunner:
     async def _emit(
         self,
         session: AsyncSession,
-        redis: Redis | None,
         job,
         *,
         status: str,
         error: str | None = None,
     ) -> None:
         try:
-            await publish_job_event(
+            await emit_job_event(
                 session,
-                redis,
                 job_id=int(job.id),
                 workspace_id=job.workspace_id,
                 tournament_id=int(job.tournament_id),
@@ -53,12 +50,11 @@ class AnalyticsJobRunner:
                 actor_user_id=job.requested_by_user_id,
             )
         except Exception:
-            logger.exception("Failed to publish analytics_job realtime event")
+            logger.exception("Failed to stage analytics_job realtime event")
 
     async def _run_compute(
         self,
         session: AsyncSession,
-        redis: Redis | None,
         job,
     ) -> dict[str, typing.Any]:
         summary: dict[str, typing.Any] = {}
@@ -66,9 +62,9 @@ class AnalyticsJobRunner:
         workspace_id = job.workspace_id
         tournament_id = int(job.tournament_id)
 
+        # update_progress stages its own tick; the runner only announces the
+        # job's own status transitions.
         await update_progress(session, job_id, stage="ratings_recalc", state="running")
-        job = await self.runtime.get(session, job_id)
-        await self._emit(session, redis, job, status="running")
         try:
             algos: typing.Iterable[str] | None = list(job.algorithms) if job.algorithms else None
             algorithms = await flows_service.recalculate_analytics(
@@ -97,8 +93,6 @@ class AnalyticsJobRunner:
             raise
 
         await update_progress(session, job_id, stage="ml_inference", state="running")
-        job = await self.runtime.get(session, job_id)
-        await self._emit(session, redis, job, status="running")
         try:
             ml = await run_for_tournament(
                 session,
@@ -124,7 +118,6 @@ class AnalyticsJobRunner:
     async def _run_train_ml(
         self,
         session: AsyncSession,
-        redis: Redis | None,
         job,
     ) -> dict[str, typing.Any]:
         job_id = int(job.id)
@@ -132,8 +125,6 @@ class AnalyticsJobRunner:
         training_workspace_ids = getattr(job, "training_workspace_ids", None)
 
         await update_progress(session, job_id, stage="train", state="running")
-        job = await self.runtime.get(session, job_id)
-        await self._emit(session, redis, job, status="running")
         model_kinds = list(job.algorithms) if job.algorithms else None
         try:
             summary = await train_all_models(
@@ -169,7 +160,6 @@ class AnalyticsJobRunner:
     async def run_job(
         self,
         session: AsyncSession,
-        redis: Redis | None,
         job_id: int,
     ) -> None:
         job = await self.runtime.get(session, job_id)
@@ -178,31 +168,30 @@ class AnalyticsJobRunner:
             return
         job_id = int(job.id)
 
+        # Every _emit is staged on the transaction its status change belongs to,
+        # so a mark_* that fails to commit announces nothing.
         await self.runtime.mark_running(session, job_id)
+        await self._emit(session, job, status="running")
         await session.commit()
-        job = await self.runtime.get(session, job_id)
-        await self._emit(session, redis, job, status="running")
 
         try:
             if job.kind == JOB_KIND_TRAIN_ML:
-                await self._run_train_ml(session, redis, job)
+                await self._run_train_ml(session, job)
             elif job.kind == JOB_KIND_COMPUTE:
-                await self._run_compute(session, redis, job)
+                await self._run_compute(session, job)
             else:
                 raise RuntimeError(f"unknown job kind: {job.kind!r}")
         except Exception as exc:
             tb = traceback.format_exc(limit=10)
             await self._rollback_after_failure(session)
             await self.runtime.mark_failed(session, job_id, error=f"{exc}\n{tb}")
+            await self._emit(session, job, status="failed", error=str(exc))
             await session.commit()
-            job = await self.runtime.get(session, job_id)
-            await self._emit(session, redis, job, status="failed", error=str(exc))
             return
 
         await self.runtime.mark_succeeded(session, job_id)
+        await self._emit(session, job, status="succeeded")
         await session.commit()
-        job = await self.runtime.get(session, job_id)
-        await self._emit(session, redis, job, status="succeeded")
 
 
 runner_service = AnalyticsJobRunner()

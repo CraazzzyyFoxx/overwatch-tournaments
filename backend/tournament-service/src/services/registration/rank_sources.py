@@ -17,7 +17,7 @@ from typing import Any
 
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import aliased, selectinload
 
 from shared.core import enums
 from shared.core.social import SocialProvider
@@ -551,22 +551,43 @@ class RankSourcesService:
         now: datetime,
         week_window: timedelta = OW_RANK_WEEK_WINDOW,
     ) -> dict[int, dict[str, _OwRankSignals]]:
-        """Return per (social_account_id, rank_role) the weekly OW rank composite + latest snapshot."""
+        """Return per (social_account_id, rank_role) the weekly OW rank composite + latest snapshot.
+
+        The window ``_compute_ow_week_rank_value`` applies -- the last ``week_window``
+        from ``now``, or from the group's newest snapshot when nothing is that recent
+        -- is applied here in SQL, per (account, role), so the read is bounded by a
+        week of polls per group instead of the account's whole history. Python
+        re-applies the same window on what comes back, so the result is identical;
+        only the rows that never survive it stop being fetched.
+        """
         if not social_account_ids:
             return {}
-        # Plain ``sa.select``: ``RankSnapshotRepository`` is not exported from
-        # ``shared.repository`` (its ``ranks`` module is missing from the package
-        # __init__), and this multi-predicate ordered fetch is a service-level query
-        # rather than CRUD anyway (rule 7).
+        snap = models.UserRankSnapshot
+        accounts = sa.values(sa.column("id", sa.BigInteger), name="accounts").data(
+            [(account_id,) for account_id in sorted(set(social_account_ids))]
+        )
+        roles = sa.values(sa.column("role", sa.String), name="roles").data(
+            [(role,) for role in sorted(set(RANK_ROLE_BY_REGISTRATION_ROLE.values()))]
+        )
+        ranked = (
+            snap.social_account_id == accounts.c.id,
+            snap.role == roles.c.role,
+            snap.rank_value.is_not(None),
+            snap.is_ranked.is_(True),
+        )
+        # One index descent per (account, role) on ``ix_rank_snapshot_latest_ranked``.
+        newest = sa.select(sa.func.max(snap.captured_at).label("captured_at")).where(*ranked).lateral("newest")
+        cutoff = now - week_window
+        threshold = sa.case((newest.c.captured_at >= cutoff, cutoff), else_=newest.c.captured_at - week_window)
+        window = sa.select(snap).where(*ranked, snap.captured_at >= threshold).lateral("window")
+        window_snap = aliased(snap, window)
         result = await session.execute(
-            sa.select(models.UserRankSnapshot)
-            .where(
-                models.UserRankSnapshot.social_account_id.in_(social_account_ids),
-                models.UserRankSnapshot.role.in_(set(RANK_ROLE_BY_REGISTRATION_ROLE.values())),
-                models.UserRankSnapshot.rank_value.is_not(None),
-                models.UserRankSnapshot.is_ranked.is_(True),
-            )
-            .order_by(models.UserRankSnapshot.captured_at.desc(), models.UserRankSnapshot.id.desc())
+            sa.select(window_snap)
+            .select_from(accounts)
+            .join(roles, sa.true())
+            .join(newest, sa.true())
+            .join(window, sa.true())
+            .order_by(window_snap.captured_at.desc(), window_snap.id.desc())
         )
         return _group_ow_rank_signals(result.scalars().all(), now, week_window)
 

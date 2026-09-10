@@ -363,7 +363,13 @@ def resolve_pick_slot(
     if not roster.covers(requested):
         raise _err("illegal_role", "Player cannot play the requested role", status_code=422)
     lead = roster.primary
-    role = requested or (lead.role if lead is not None else HeroClass.damage)
+    if lead is None:  # unreachable while ``is_draftable`` holds; never guess a role
+        raise _err(
+            "player_unranked",
+            "This player has no ranked role in the balancer and cannot be picked",
+            status_code=422,
+        )
+    role = requested or lead.role
     if role_openings(shape, counts).get(role, 0) <= 0:
         raise _err(
             "slot_filled",

@@ -22,6 +22,7 @@ from shared.observability import (
     setup_tracing,
     start_worker_metrics_server,
 )
+from shared.services.realtime import configure_realtime
 from src.core import config, db
 from src.core.broker import set_worker_broker
 from src.rpc import admin as rpc_admin
@@ -44,6 +45,10 @@ app = FastStream(broker)
 # subscriber, so it resolves the connected broker through src.core.broker rather
 # than being handed one.
 set_worker_broker(broker)
+
+# The poll tick stages its stream.updated / tournament.streams events through
+# shared/services/realtime, which has no settings of its own.
+configure_realtime(redis_url=str(config.settings.redis_url))
 
 rpc_reads.register(broker, logger)
 rpc_admin.register(broker, logger)

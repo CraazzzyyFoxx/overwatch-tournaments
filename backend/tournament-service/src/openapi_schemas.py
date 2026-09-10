@@ -216,7 +216,17 @@ OPERATIONS: dict[str, Op] = {
         request=schemas.BalancerGoogleSheetMappingPreviewRequest,
         response=schemas.BalancerGoogleSheetMappingPreviewResponse,
     ),
-    "rpc.tournament.sheet_players_export": Op(response=schemas.BalancerPlayerExportResponse),
+    "rpc.tournament.sheet_players_export": Op(
+        response=schemas.BalancerPlayerExportResponse,
+        query_params=(
+            QueryParam("format", description="xv-1 (solver input, default) or owt-1 (full snapshot)"),
+            QueryParam(
+                "include_private",
+                "boolean",
+                description="owt-1 only: add notes, admin notes, custom fields and contacts",
+            ),
+        ),
+    ),
     # ── registration admin ─────────────────────────────────────────────────
     "rpc.tournament.reg_form_get": Op(response=reg_schemas.RegistrationFormRead),
     "rpc.tournament.reg_form_upsert": Op(

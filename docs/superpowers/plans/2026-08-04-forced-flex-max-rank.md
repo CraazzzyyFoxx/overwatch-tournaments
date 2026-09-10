@@ -12,7 +12,7 @@
 `replace_registration_roles` админка+Sheets), после чего `is_flex_computed`
 истинно автоматически. Макс-ранг — **политика** о рангах: производная на двух
 границах чтения (`createSyntheticPlayerFromRegistration` на фронте,
-`_map_registration` в драфте). Python-солвер и Rust-ядро `moo_core` **не
+`_map_registration` в драфте). Python-солвер и Rust-ядро `tournament_balancer` **не
 изменяются**: право играть роль в балансере это наличие ключа роли в `ratings`
 (`context.rs:100`), поэтому сплющивание рангов на все три роли даёт eligibility
 бесплатно.

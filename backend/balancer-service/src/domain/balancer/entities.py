@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from shared.domain.roster_shape import FLEX_SLOT_CODE
 from src.domain.balancer.statistics import _sample_stdev_from_sums
 
 
@@ -11,6 +12,7 @@ class Player:
         "name",
         "ratings",
         "preferences",
+        "primary_role",
         "subclasses",
         "discomfort_map",
         "is_captain",
@@ -37,7 +39,14 @@ class Player:
         self.uuid = uuid
         self.name = name
         self.ratings = ratings
-        self.preferences = preferences
+        # Real roles only, the player's own order. ``flex`` is a SLOT, never a
+        # preference: the discomfort rule below and the Rust core
+        # (``tournament_balancer::context``) both price it explicitly, so nothing
+        # has to smuggle it into this list to make it free.
+        self.preferences = [role for role in preferences if role != FLEX_SLOT_CODE]
+        # The player's main role -- what off-role counting, feasibility supply
+        # and captain choice mean by "their role".
+        self.primary_role: str | None = self.preferences[0] if self.preferences else None
         self.subclasses: dict[str, str] = subclasses or {}
         self.is_captain = False
         self.is_flex = is_flex
@@ -61,16 +70,19 @@ class Player:
 
         self.discomfort_map = {}
         for role in self._mask:
-            if is_flex and role in ratings:
+            if role in ratings and (is_flex or role == FLEX_SLOT_CODE):
+                # A flex player is at home on any role they play; a flex slot
+                # names no role, so nobody is out of place on it.
                 self.discomfort_map[role] = 0
-            elif role in preferences:
-                self.discomfort_map[role] = preferences.index(role) * 100
+            elif role in self.preferences:
+                self.discomfort_map[role] = self.preferences.index(role) * 100
             else:
                 self.discomfort_map[role] = 1000 if role in ratings else 5000
 
     @property
     def max_rating(self) -> int:
-        return self.ratings[self.preferences[0]] if self.preferences else self._max_rating
+        """Rating on the player's own main role; their best rating without one."""
+        return self.ratings[self.primary_role] if self.primary_role in self.ratings else self._max_rating
 
     def get_rating(self, role: str) -> int:
         return self.ratings.get(role, 0)

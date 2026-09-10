@@ -2,7 +2,7 @@
 
 A lightweight, pure-Python replica of the balancer's per-player discomfort
 heuristic (``domain/balancer/entities.py``) and role-impact weights
-(Rust ``moo_core`` ``lib.rs``). It scores a *single* candidate against a team's
+(Rust ``tournament_balancer`` ``lib.rs``). It scores a *single* candidate against a team's
 open role capacity — it is NOT the full multi-objective genetic solver — so
 autopick and ``/suggestions`` stay synchronous and deterministic.
 """

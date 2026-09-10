@@ -63,9 +63,19 @@ from src.services.encounter.pick_ban_session import (  # noqa: E402
     REASON_WAITING_MAP,
     pick_ban_session_service,
 )
-from src.services.encounter.realtime_commit import (  # noqa: E402
-    pop_registered_map_veto_realtime_updates,
-)
+
+
+def staged_topics(session: Any) -> list[str]:
+    """The realtime topics ``emit`` staged on this session, in call order.
+
+    The topic is the whole contract for a pick-ban signal: it names the room
+    that must refetch, and the payload adds nothing a subscriber branches on.
+    """
+    staged = session.info.get("realtime_staged")
+    if staged is None:
+        return []
+    return [scope.domain_topic(data.domain) for scope, data, _actor in staged.domain]
+
 
 # ── the store ────────────────────────────────────────────────────────────────
 
@@ -596,7 +606,7 @@ class PregameLoopTests(IsolatedAsyncioTestCase):
         # unresolved path used to commit silently, so the opponent had to reload.
         map_one = await self.ban_out_the_map_round()
         await self.ban_out_the_hero_round()
-        pop_registered_map_veto_realtime_updates(self.store)
+        self.store.info.pop("realtime_staged", None)
 
         result = await map_report_service.submit_map_report(
             self.store,
@@ -610,8 +620,8 @@ class PregameLoopTests(IsolatedAsyncioTestCase):
 
         self.assertFalse(result["resolved"], "one claim resolves nothing on its own")
         self.assertEqual(
-            [(self.encounter_id, "hero"), (self.encounter_id, "map")],
-            pop_registered_map_veto_realtime_updates(self.store),
+            [f"encounter:{self.encounter_id}:map-veto", f"encounter:{self.encounter_id}:pick-ban:hero"],
+            staged_topics(self.store),
         )
 
 

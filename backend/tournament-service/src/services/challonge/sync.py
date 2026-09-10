@@ -50,6 +50,7 @@ from shared.services.challonge_refs import resolve_encounter_challonge
 from shared.services.distributed_lock import distributed_lock
 from shared.services.encounter.result_audit import record_result_transition
 from shared.services.encounter_naming import build_encounter_name
+from shared.services.realtime import Resource
 from shared.services.stage_refs import StageRefs, resolve_stage_refs_from_group
 from src import models, schemas
 from src.clients.challonge import challonge_client
@@ -58,9 +59,11 @@ from src.services.encounter.finalize import finalize_service
 from src.services.encounter.pick_ban_session import pick_ban_session_service
 from src.services.team.service import team_service
 from src.services.tournament.events import (
+    RESULT_RESOURCES,
+    STRUCTURE_RESOURCES,
     enqueue_encounter_completed,
-    enqueue_tournament_changed,
     enqueue_tournament_recalculation,
+    publish_tournament_invalidation,
 )
 
 _AMBIGUOUS = -1
@@ -460,12 +463,12 @@ def _iter_challonge_link_specs(
     return specs
 
 
-def _import_cache_invalidation_reason(stats: dict) -> str | None:
-    """Pick the ``tournament_changed`` reason for an import, or None if nothing changed.
+def _import_invalidated_resources(stats: dict) -> tuple[Resource, ...]:
+    """What an import actually staled, or an empty tuple for a no-op import.
 
-    ``structure_changed`` (stages/groups/stage-inputs/bracket-links) clears the full read-cache
-    pattern set (tournaments + teams + encounters); ``results_changed`` covers score/status
-    updates. Returns None for a no-op import so we don't emit spurious change events.
+    Stages/groups/stage-inputs/bracket-links reshape the page itself; a plain
+    score or status sync only moves the results. Empty means nothing changed, so
+    we publish no event at all rather than a spurious one.
     """
     if (
         stats["stages_created"]
@@ -474,10 +477,10 @@ def _import_cache_invalidation_reason(stats: dict) -> str | None:
         or stats["bracket_links_created"]
         or stats["bracket_links_updated"]
     ):
-        return "structure_changed"
+        return STRUCTURE_RESOURCES
     if stats["created"] or stats["updated"] or stats["matches_synced"]:
-        return "results_changed"
-    return None
+        return RESULT_RESOURCES
+    return ()
 
 
 def _source_matches_encounter(source: _ImportSource, encounter: models.Encounter) -> bool:
@@ -1998,13 +2001,13 @@ class ChallongeSyncService:
                 if stats["matches_synced"] > 0:
                     await enqueue_tournament_recalculation(session, tournament_id)
 
-                # Invalidate read cache + push realtime via the outbox so it works regardless of
-                # the calling process: cashews is configured only in the API, so a direct
-                # invalidate_tournament_cache() from the worker (auto-sync) would be a no-op. The
-                # TournamentChangedEvent is drained and applied by the API-side subscriber instead.
-                change_reason = _import_cache_invalidation_reason(stats)
-                if change_reason is not None:
-                    await enqueue_tournament_changed(session, tournament_id, change_reason)
+                # Both halves ride the caller's transaction: the worker process
+                # that runs auto-sync configures cashews and the realtime rail
+                # itself now, so the local drop lands here, and the outbox row
+                # still carries it to every other service that caches this.
+                resources = _import_invalidated_resources(stats)
+                if resources:
+                    await publish_tournament_invalidation(session, tournament_id, resources)
                 await session.commit()
             logger.info(f"Challonge import for tournament {tournament_id}: {stats}")
             return stats

@@ -24,8 +24,8 @@ export type { BuiltInFieldConfig, FieldValidationConfig };
 
 /** Registration/draft wire code — the non-flex slice of `PlayerRoleSlotCode`. */
 export type BalancerRoleCode = Exclude<PlayerRoleSlotCode, "flex">;
-/** Capitalized roster key — the non-flex slice of `PlayerRoleOption`. */
-export type BalancerRosterKey = Exclude<PlayerRoleOption, "Flex">;
+/** Capitalized roster bucket key — a role, or the role-less `Flex` slot. */
+export type BalancerRosterKey = PlayerRoleOption;
 export type BalancerRoleSubtype = string;
 /** Layers a registration role's rank can resolve from, strongest first. */
 export type RegistrationRankSource = "registration" | "workspace" | "ow" | "none";
@@ -170,9 +170,31 @@ export interface BalancerTournamentSummary {
   workspace_id: number;
 }
 
+/**
+ * `xv-1` is the solver's own input contract (a file in this shape uploads
+ * straight into a balance job); `owt-1` is our snapshot — the same player nodes
+ * plus an `owt` block on each, and the roster shape the export was taken under.
+ */
+export type BalancerPlayerExportFormat = "xv-1" | "owt-1";
+
 export interface BalancerPlayerExportResponse {
   format: string;
   players: Record<string, unknown>;
+  generated_at?: string | null;
+  source?: {
+    tournament_id: number;
+    tournament_name?: string | null;
+    workspace_id?: number | null;
+    player_key: string;
+    scope: string;
+    division_grid_version_id?: number | null;
+  } | null;
+  roster?: {
+    slots: Record<string, number>;
+    team_size: number;
+    flex_slots: number;
+    flex_role_mode: string;
+  } | null;
 }
 
 export interface RegistrationUserExportResponse {

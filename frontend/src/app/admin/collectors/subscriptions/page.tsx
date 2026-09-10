@@ -1,8 +1,5 @@
 "use client";
 
-import { useCallback } from "react";
-import { useQueryClient } from "@tanstack/react-query";
-
 import { SubscriptionHealthDashboard } from "@/components/admin/collectors/subscription-health";
 import { SubscriptionTaskHistory } from "@/components/admin/collectors/subscription-history";
 import { SubscriptionSettingsPanel } from "@/components/admin/collectors/subscription-settings";
@@ -10,13 +7,8 @@ import { useCollectorTab } from "@/components/admin/collectors/useCollectorTab";
 import { AdminTabs } from "@/components/admin/kit/AdminTabs";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { usePermissions } from "@/hooks/usePermissions";
-import { useRealtimeCoalescedRefetch } from "@/hooks/useRealtimeCoalescedRefetch";
+import { useInvalidation } from "@/hooks/useInvalidation";
 import { useWorkspaceStore } from "@/stores/workspace.store";
-
-// Collapse a burst into one refetch: a sweep publishes one signal per resolve
-// pass, but a manual re-check of a player registered in several workspaces still
-// lands several in a row.
-const REALTIME_REFRESH_DEBOUNCE_MS = 500;
 
 /**
  * The Boosty/Twitch subscription collector: health, check history and config.
@@ -41,20 +33,13 @@ export default function SubscriptionCollectorPage() {
   ]);
 
   // Every query on this page lives under the `["admin","subscriptions"]` prefix,
-  // so one invalidation covers health and the check log. The signal is
-  // workspace-scoped, which is exactly this page's scope.
-  const queryClient = useQueryClient();
-  const refetchAll = useCallback(() => {
-    void queryClient.invalidateQueries({ queryKey: ["admin", "subscriptions"] });
-  }, [queryClient]);
-  useRealtimeCoalescedRefetch(
-    currentWorkspaceId != null && canRead ? `workspace:${currentWorkspaceId}:subscriptions` : null,
-    {
-      minDelayMs: REALTIME_REFRESH_DEBOUNCE_MS,
-      onEvent: (_event, schedule) => schedule(),
-      onFlush: refetchAll
-    }
-  );
+  // which is exactly what `workspace.subscriptions` stales — health and the
+  // check log in one drop. `canRead` gates the subscription too: without the
+  // permission the page renders a placeholder and has nothing to refresh.
+  useInvalidation({
+    scopeKind: "workspace",
+    scopeId: canRead ? currentWorkspaceId : null
+  });
 
   if (!canRead) {
     return (

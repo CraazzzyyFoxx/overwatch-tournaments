@@ -1,8 +1,6 @@
-// Canonical access-token cookie name. LEGACY_ACCESS_TOKEN_COOKIE is read as a
-// fallback during the aqt->owt rename so existing sessions are not logged out;
-// it is never written.
-const ACCESS_TOKEN_COOKIE = "owt_access_token";
-const LEGACY_ACCESS_TOKEN_COOKIE = "aqt_access_token";
+// Cookie names are deployment-scoped — see ./cookie-names. The legacy name is
+// read as a fallback during the aqt->owt rename; it is never written.
+import { ACCESS_TOKEN_COOKIE, LEGACY_ACCESS_TOKEN_COOKIE } from "./cookie-names";
 
 // Outcome of an access-token refresh attempt. The distinction matters: only a
 // genuinely dead session ("unauthenticated" — the refresh endpoint returned 401)

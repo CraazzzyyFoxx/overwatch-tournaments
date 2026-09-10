@@ -108,7 +108,7 @@ export function StandingsBrowser({
   });
 
   // The hub shell already holds this exact key, so mounting the tab costs no
-  // request; realtime addresses it too (tournamentRealtime.helpers).
+  // request; realtime addresses it too (`tournament.standings`).
   const standingsQuery = useQuery({
     queryKey:
       scopeTournamentId != null

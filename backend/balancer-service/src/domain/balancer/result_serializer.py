@@ -4,6 +4,7 @@ import statistics
 import typing
 from collections import Counter
 
+from shared.domain.roster_shape import FLEX_SLOT_CODE
 from src.domain.balancer.backends.base import BalanceMetrics
 from src.domain.balancer.entities import Player, Team
 from src.domain.balancer.feasibility_analyzer import FeasibilityReport
@@ -70,7 +71,7 @@ def teams_to_json(
     for team in teams:
         for role, players in team.roster.items():
             for player in players:
-                if not player.is_flex and player.preferences and player.preferences[0] != role:
+                if _is_off_role(player, role):
                     off_role_count += 1
 
     sub_role_collision_count = 0
@@ -133,6 +134,16 @@ def teams_to_json(
         ]
 
     return result
+
+
+def _is_off_role(player: Player, role: str) -> bool:
+    """Off-role: a non-flex player sitting on a role slot that is not their main
+    role. A flex SLOT names no role, so nobody is off-role on it -- and
+    ``primary_role`` (not ``preferences[0]``, which the loader sets to ``flex``
+    whenever the roster fields one) is what "their main role" means."""
+    if player.is_flex or role == FLEX_SLOT_CODE:
+        return False
+    return player.primary_role is not None and player.primary_role != role
 
 
 def _build_response_payload(

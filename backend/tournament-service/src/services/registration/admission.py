@@ -35,7 +35,6 @@ from shared.services.admission.resolve import resolve_admission_for_gate
 from shared.services.subscriptions.wiring import build_resolver
 from src.core.broker import optional_broker
 from src.core.config import settings
-from src.core.redis import get_realtime_redis
 from src.services.registration._common import _common_service
 
 __all__ = ("assert_admitted_at", "build_admission_resolver", "load_admission_config")
@@ -55,9 +54,6 @@ def build_admission_resolver(session: AsyncSession) -> Any:
         twitch_client_id=settings.twitch_client_id,
         broker=optional_broker(),
         proxy=settings.proxy_url,
-        # A gate that flips somebody's verdict tells the workspace so, so an open
-        # admin list stops showing the stale outcome.
-        redis=get_realtime_redis(),
     )
 
 

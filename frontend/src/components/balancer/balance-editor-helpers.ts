@@ -15,11 +15,21 @@ import {
   sampleStdDev,
 } from "@/app/balancer/components/balancer-page-helpers";
 
-const BALANCE_EDITOR_ROLE_CAPACITY: Record<BalancerRosterKey, number> = {
-  Tank: 1,
-  Damage: 2,
-  Support: 2,
-};
+/**
+ * How many seats each bucket has, read off the payload itself: the solver fills
+ * every slot of the tournament's roster shape, so the fullest team IS the
+ * shape. Moves and swaps conserve the per-bucket total, so the maximum never
+ * drops below the original capacity while the payload is edited.
+ */
+export function rosterCapacity(payload: InternalBalancePayload): Record<BalancerRosterKey, number> {
+  const capacity: Record<BalancerRosterKey, number> = { Tank: 0, Damage: 0, Support: 0, Flex: 0 };
+  for (const team of payload.teams) {
+    for (const roleKey of Object.keys(team.roster) as BalancerRosterKey[]) {
+      capacity[roleKey] = Math.max(capacity[roleKey] ?? 0, team.roster[roleKey]?.length ?? 0);
+    }
+  }
+  return capacity;
+}
 
 export type BalancePlayerLocation = {
   teamIndex: number;
@@ -191,6 +201,7 @@ export function moveBalancePlayer(
   }
 
   const next = cloneBalancePayload(payload);
+  const capacity = rosterCapacity(payload);
   const sourcePlayers = next.teams[from.teamIndex].roster[from.roleKey];
   const [player] = sourcePlayers.splice(from.playerIndex, 1);
   if (!player) {
@@ -219,7 +230,7 @@ export function moveBalancePlayer(
       from.teamIndex !== target.teamIndex ||
       from.roleKey !== target.roleKey
     ) {
-      if (targetPlayers.length >= BALANCE_EDITOR_ROLE_CAPACITY[target.roleKey]) {
+      if (targetPlayers.length >= capacity[target.roleKey]) {
         return null;
       }
 
@@ -249,7 +260,7 @@ export function moveBalancePlayer(
       return recalculateBalancePayloadStats(next);
     }
 
-    if (targetPlayers.length < BALANCE_EDITOR_ROLE_CAPACITY[target.roleKey]) {
+    if (targetPlayers.length < capacity[target.roleKey]) {
       if (from.roleKey !== target.roleKey && !canPlayerPlayRole(player, target.roleKey)) {
         return null;
       }
@@ -290,7 +301,7 @@ export function moveBalancePlayer(
     return recalculateBalancePayloadStats(next);
   }
 
-  if (targetPlayers.length >= BALANCE_EDITOR_ROLE_CAPACITY[target.roleKey]) {
+  if (targetPlayers.length >= capacity[target.roleKey]) {
     return null;
   }
 
@@ -365,7 +376,7 @@ function recalculateBalancePayloadStats(
  * (balance/comfort/composite) cannot be recomputed client-side and are
  * preserved from the previous statistics (they reflect the original solve).
  */
-function recalculateBalanceStatistics(
+export function recalculateBalanceStatistics(
   payload: InternalBalancePayload,
 ): InternalBalancePayload["statistics"] {
   const previous = payload.statistics ?? {};
@@ -388,6 +399,11 @@ function recalculateBalanceStatistics(
 
   return {
     ...previous,
+    // `total_teams`/`players_per_team` mirror `result_serializer.teams_to_json`
+    // (roster slot count = the largest roster) and are required by the save
+    // endpoint's `Statistics` schema, so they are always written, not inherited.
+    total_teams: teams.length,
+    players_per_team: Math.max(...teams.map((team) => countTeamPlayers(team))),
     average_mmr: mean(teamAverages),
     mmr_std_dev: sampleStdDev(teamAverages),
     average_total_rating: mean(teamTotals),

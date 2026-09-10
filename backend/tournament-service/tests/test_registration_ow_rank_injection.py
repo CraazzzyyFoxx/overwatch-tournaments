@@ -17,7 +17,7 @@ models = importlib.import_module("src.models")
 serializers = importlib.import_module("src.services.registration.serializers")
 player_sub_roles = importlib.import_module("shared.domain.player_sub_roles")
 from shared.core.enums import HeroClass  # noqa: E402
-from shared.domain.roster import RosterRole  # noqa: E402
+from shared.domain.roster import PlayerRoster, RosterRole  # noqa: E402
 
 
 def test_snapshot_role_translates_damage_to_dps() -> None:
@@ -69,3 +69,35 @@ def test_a_role_the_engine_did_not_rate_is_reported_unplayable() -> None:
     assert out.is_active is False
     # The declared flag is still reported, because the editor toggles it.
     assert out.is_declared_active is True
+
+
+def test_single_role_registration_is_not_flex() -> None:
+    """Flex needs MORE than one role, every one primary. The admin table used to
+    call every single-role registration flex (its predicate had no ``len > 1``),
+    and the roster's ``is_full_flex`` is now the one answer when there is one."""
+    registration = models.BalancerRegistration(
+        id=1,
+        tournament_id=7,
+        display_name="Player",
+        battle_tag="Player#1234",
+        status="pending",
+        balancer_status="pending",
+        # Server-side defaults are not applied to a transient instance.
+        checked_in=False,
+        stream_pov=False,
+        roles=[_role_model("tank", 500)],
+    )
+    roster = PlayerRoster(
+        registration_id=1,
+        battle_tag="Player#1234",
+        display_name="Player",
+        player_id=None,
+        auth_user_id=None,
+        workspace_member_id=None,
+        roles=(_entry("tank", 500),),
+        is_full_flex=False,
+    )
+
+    assert serializers.serialize_registration(registration, workspace_id=1, roster=roster).is_flex is False
+    # No roster resolved: same predicate as the write path, over declared-active rows.
+    assert serializers.serialize_registration(registration, workspace_id=1).is_flex is False

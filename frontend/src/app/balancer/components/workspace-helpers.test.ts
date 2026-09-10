@@ -467,8 +467,9 @@ describe("synthetic registration helpers", () => {
     ).toBe("needs_fix");
   });
 
-  it("derives flex only when all roles are primary", () => {
+  it("carries the API's flex flag onto the synthetic player", () => {
     const flexRegistration = createRegistration({
+      is_flex: true,
       roles: [
         {
           role: "tank",
@@ -496,6 +497,7 @@ describe("synthetic registration helpers", () => {
 
   it("builds flex applications without a primary role", () => {
     const registration = createRegistration({
+      is_flex: true,
       roles: [
         {
           role: "tank",

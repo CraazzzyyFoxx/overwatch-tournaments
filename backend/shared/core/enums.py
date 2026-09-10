@@ -36,7 +36,7 @@ class HeroClass(StrEnum):
 
         Diverges from the canonical value only for ``damage`` -> ``dps``. This is
         what ``DraftPlayerRole.role``, ``BalancerRegistrationRole.role``,
-        ``Tournament.roster_slots_json`` keys and the Rust ``moo_core`` payload
+        ``Tournament.roster_slots_json`` keys and the Rust ``tournament_balancer`` payload
         already persist/expect -- unchanged by this being one enum instead of three.
         """
         return "dps" if self is HeroClass.damage else self.name

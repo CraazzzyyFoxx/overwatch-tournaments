@@ -162,6 +162,25 @@ make monitoring-ps                                        # status
 
 `make monitoring-up` is equivalent to `docker compose -f docker-compose.monitoring.yml up -d`.
 
+### Tiers: metrics always, logs and traces on demand
+
+Metrics (prometheus, alertmanager, grafana, every exporter) always start. Log
+storage (`loki` + `promtail`) and traces (`tempo` + `otel-collector`) sit behind
+the compose profiles `logs` and `traces`, because together they cost ~470M of
+RSS plus page cache — on a 4 CPU / 8G box that memory belongs to PostgreSQL,
+whose working set is several GB:
+
+```bash
+make monitoring-up                                   # metrics only (default)
+make monitoring-up MONITORING_PROFILES="logs traces" # everything
+```
+
+Grafana keeps its Loki and Tempo datasources either way — they resolve lazily,
+so with the profiles off those datasources simply return errors and the
+`Application Logs` / tracing dashboards stay empty. Prometheus does not scrape
+`promtail`, `tempo` or `otel-collector`, so a metrics-only host raises no
+`TargetDown` alert for them.
+
 ## 3. Verify the deployment
 
 Follow logs if any service is restarting or unhealthy:
@@ -181,7 +200,7 @@ Provisioned datasources:
 - Tempo -> `${TEMPO_URL}` (default `http://tempo:3200`)
 
 Dashboards are provisioned into the `OWT` folder; the default home dashboard
-is `Application Logs`.
+is `Infrastructure` (`Application Logs` needs the `logs` profile).
 
 ### Prometheus targets
 

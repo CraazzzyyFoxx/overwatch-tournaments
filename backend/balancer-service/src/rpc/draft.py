@@ -33,6 +33,7 @@ from shared.repository.draft import (
     DraftSessionRepository,
 )
 from shared.repository.identity import UserRepository
+from shared.services.realtime import Scope, emit, enqueue_invalidation_outbox
 from shared.services.roster_shape_access import get_effective_roster_shape
 from src import schemas
 from src.core import db
@@ -45,6 +46,7 @@ from src.core.config import config
 from src.domain.draft import rules
 from src.domain.draft.entities import DraftResult
 from src.rpc import _common as c
+from src.services.balancer.realtime import EXPORT_RESOURCES
 from src.services.draft import clock as clock_svc
 from src.services.draft import realtime as draft_rt
 from src.services.draft.board import board_service
@@ -196,7 +198,6 @@ def _seed_diff(
 
 async def _publish_result(
     session: AsyncSession,
-    redis: Redis | None,
     draft: DraftSession,
     result: DraftResult,
     *,
@@ -207,21 +208,21 @@ async def _publish_result(
         # Nothing was picked (role shortage) — the block is the whole story.
         await draft_rt.publish_draft_event(
             session,
-            redis,
             draft_session=draft,
             event_type="draft.blocked",
             payload={
                 "session_id": draft.id,
                 "pick_id": result.pick.id,
                 "draft_team_id": result.pick.draft_team_id,
-                "reason": result.blocked_reason,
+                # `blocked_reason`, never `reason`: the vocabulary has exactly
+                # one meaning per field, and this one is the business cause.
+                "blocked_reason": result.blocked_reason,
             },
             actor_user_id=actor_user_id,
         )
         return
     await draft_rt.publish_draft_event(
         session,
-        redis,
         draft_session=draft,
         event_type=made_event,
         payload=_pick_event_payload(draft, result.pick),
@@ -230,7 +231,6 @@ async def _publish_result(
     if result.completed:
         await draft_rt.publish_draft_event(
             session,
-            redis,
             draft_session=draft,
             event_type="draft.completed",
             payload={"session_id": draft.id, "status": draft.status},
@@ -240,21 +240,19 @@ async def _publish_result(
         # is paused: no pick_started, it would flip clients back to live.
         await draft_rt.publish_draft_event(
             session,
-            redis,
             draft_session=draft,
             event_type="draft.blocked",
             payload={
                 "session_id": draft.id,
                 "pick_id": result.next_pick.id,
                 "draft_team_id": result.next_pick.draft_team_id,
-                "reason": result.blocked_reason,
+                "blocked_reason": result.blocked_reason,
             },
             actor_user_id=actor_user_id,
         )
     elif result.next_pick is not None:
         await draft_rt.publish_draft_event(
             session,
-            redis,
             draft_session=draft,
             event_type="draft.pick_started",
             payload={
@@ -280,7 +278,7 @@ async def _lifecycle_action(
         extra["pick_id"] = current.id
         extra["clock_expires_at"] = current.clock_expires_at.isoformat() if current.clock_expires_at else None
     await draft_rt.publish_draft_event(
-        session, redis, draft_session=draft, event_type=event_type, payload=extra, actor_user_id=user.id
+        session, draft_session=draft, event_type=event_type, payload=extra, actor_user_id=user.id
     )
     await session.commit()
     if draft.status == DraftStatus.LIVE.value:
@@ -387,7 +385,6 @@ def register(broker: Any, logger: Any) -> None:
             if result.committed:
                 await draft_rt.publish_draft_event(
                     session,
-                    _redis(logger),
                     draft_session=draft,
                     event_type="draft.player_updated",
                     payload=_player_updated_payload(
@@ -452,7 +449,6 @@ def register(broker: Any, logger: Any) -> None:
             )
             await draft_rt.publish_draft_event(
                 session,
-                _redis(logger),
                 draft_session=draft,
                 event_type="draft.session_updated",
                 payload={"session_id": draft.id, "status": draft.status},
@@ -513,7 +509,6 @@ def register(broker: Any, logger: Any) -> None:
 
                 await draft_rt.publish_draft_event(
                     session,
-                    _redis(logger),
                     draft_session=draft,
                     event_type="draft.session_updated",
                     payload={"session_id": draft.id, "status": draft.status},
@@ -562,7 +557,6 @@ def register(broker: Any, logger: Any) -> None:
             if moved:
                 await draft_rt.publish_draft_event(
                     session,
-                    _redis(logger),
                     draft_session=draft,
                     event_type="draft.session_updated",
                     payload={"session_id": draft.id, "status": draft.status, "picks_reordered": moved},
@@ -624,7 +618,6 @@ def register(broker: Any, logger: Any) -> None:
             # by this session and would otherwise never learn it is gone.
             await draft_rt.publish_draft_event(
                 session,
-                _redis(logger),
                 draft_session=draft,
                 event_type="draft.session_updated",
                 payload={"session_id": draft.id, "status": draft.status, "deleted": True},
@@ -648,11 +641,18 @@ def register(broker: Any, logger: Any) -> None:
             updated, _removed, _imported = await export_service.export(session, draft)
             await draft_rt.publish_draft_event(
                 session,
-                _redis(logger),
                 draft_session=updated,
                 event_type="draft.completed",
                 payload={"session_id": updated.id, "status": updated.status, "export_status": updated.export_status},
                 actor_user_id=user.id,
+            )
+            # Materializing the drafted rosters rewrote tournament.team /
+            # player / standing, so the PUBLIC reads are stale. Named here for
+            # this service's own clients, and mirrored to app-service (which
+            # caches the same three) through the transactional outbox.
+            await emit(session, scope=Scope.tournament(updated.tournament_id), invalidates=EXPORT_RESOURCES)
+            await enqueue_invalidation_outbox(
+                session, scope=Scope.tournament(updated.tournament_id), resources=EXPORT_RESOURCES
             )
             await session.commit()
             return await board_service.session_read(session, updated)
@@ -671,6 +671,10 @@ def register(broker: Any, logger: Any) -> None:
             # Ranks only: no team is removed or created, so no draft lifecycle
             # event — nothing about the session itself changed.
             updated = await export_service.export_ranks(session, draft)
+            await emit(session, scope=Scope.tournament(draft.tournament_id), invalidates=EXPORT_RESOURCES)
+            await enqueue_invalidation_outbox(
+                session, scope=Scope.tournament(draft.tournament_id), resources=EXPORT_RESOURCES
+            )
             await session.commit()
             return schemas.RanksExportResponse(success=True, updated_players=updated)
 
@@ -699,9 +703,7 @@ def register(broker: Any, logger: Any) -> None:
                 actor_player_ids=public_user_ids,
                 is_admin=is_admin,
             )
-            await _publish_result(
-                session, _redis(logger), draft, result, made_event="draft.pick_made", actor_user_id=public_user_id
-            )
+            await _publish_result(session, draft, result, made_event="draft.pick_made", actor_user_id=public_user_id)
             await session.commit()
             return await board_service.session_read(session, draft)
 
@@ -717,9 +719,7 @@ def register(broker: Any, logger: Any) -> None:
             payload = schemas.DraftPickAutopickRequest.model_validate(c.payload(data))
             draft, pick = await _load_pick(session, pick_id)
             result = await selection_service.autopick(session, draft, pick, expected_version=payload.expected_version)
-            await _publish_result(
-                session, _redis(logger), draft, result, made_event="draft.autopicked", actor_user_id=None
-            )
+            await _publish_result(session, draft, result, made_event="draft.autopicked", actor_user_id=None)
             await session.commit()
             return await board_service.session_read(session, draft)
 
@@ -768,9 +768,7 @@ def register(broker: Any, logger: Any) -> None:
                     },
                 ),
             )
-            await _publish_result(
-                session, _redis(logger), draft, result, made_event="draft.pick_made", actor_user_id=public_user_id
-            )
+            await _publish_result(session, draft, result, made_event="draft.pick_made", actor_user_id=public_user_id)
             await session.commit()
             return await board_service.session_read(session, draft)
 

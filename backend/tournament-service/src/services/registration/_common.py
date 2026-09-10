@@ -26,11 +26,11 @@ from shared.domain.player_sub_roles import REGISTRATION_ROLE_CODES, normalize_su
 from shared.domain.roster import FlexRoleMode, PlayerRoster
 from shared.hero_catalog import HeroCatalog
 from shared.repository import RegistrationFormRepository, TournamentRepository
+from shared.services.realtime import Resource, Scope, emit
 from shared.services.roster import roster_engine
 from src import models
 from src.domain.registration.utils import DEFAULT_SORT_PRIORITY_SENTINEL
 from src.schemas.registration import CustomFieldDefinition
-from src.services.tournament.realtime_commit import register_tournament_realtime_update
 
 VALID_REGISTRATION_STATUSES = get_builtin_status_values("registration")
 VALID_BALANCER_STATUSES = get_builtin_status_values("balancer")
@@ -84,7 +84,7 @@ def apply_all_roles(
     about the mode.
 
     ``force_primary`` separates the two modes: ``forced`` marks every role
-    primary (yielding ``is_flex_computed``), ``all_roles`` leaves the registrant's
+    primary (yielding ``PlayerRoster.is_full_flex``), ``all_roles`` leaves the registrant's
     own choice alone and backfills the missing roles as non-primary. It cannot
     invent that choice, so a payload naming no priority stays invalid — see
     ``validation.py``.
@@ -240,12 +240,19 @@ class RegistrationCommonService:
         self.form_repo = form_repo
         self.tournament_repo = tournament_repo
 
-    def _register_registration_changed(
+    async def _register_registration_changed(
         self,
         session: AsyncSession,
         registration: models.BalancerRegistration,
     ) -> None:
-        register_tournament_realtime_update(session, registration.tournament_id, "registration_changed")
+        await emit(
+            session,
+            scope=Scope.tournament(registration.tournament_id),
+            invalidates=[Resource.TOURNAMENT_REGISTRATIONS],
+            # A row created in this same transaction has no id until it flushes;
+            # entity_ids is optional precision, so no id just means no narrowing.
+            entity_ids={"registration_ids": [registration.id]} if registration.id is not None else None,
+        )
 
     async def get_tournament_grid(self, session: AsyncSession, tournament_id: int) -> DivisionGrid:
         # Analytical, not CRUD: the fallback is a join + order + limit across two

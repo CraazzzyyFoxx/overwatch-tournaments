@@ -281,6 +281,42 @@ class FlexGuardTests(TestCase):
         )
 
 
+class AdditionalRolesRequiredTests(TestCase):
+    """``additional_roles.required``: the submission must cover more than the
+    priority role. The guard used to read ``not is_flex and not any(not
+    is_primary)`` over an ``is_flex`` missing its ``len > 1`` term, i.e.
+    ``¬P ∧ P`` -- the organizer's toggle never rejected anything.
+    """
+
+    FORM = {"additional_roles": {"enabled": True, "required": True}}
+
+    def test_single_primary_role_is_rejected(self) -> None:
+        with pytest.raises(HTTPException) as exc:
+            validation.validate_registration_input(
+                _form(self.FORM),
+                _payload([{"role": "tank", "is_primary": True}]),
+            )
+        assert exc.value.status_code == 422
+
+    def test_secondary_role_satisfies_it(self) -> None:
+        validation.validate_registration_input(
+            _form(self.FORM),
+            _payload([{"role": "tank", "is_primary": True}, {"role": "dps", "is_primary": False}]),
+        )
+
+    def test_full_flex_satisfies_it(self) -> None:
+        validation.validate_registration_input(
+            _form(self.FORM),
+            _payload(
+                [
+                    {"role": "tank", "is_primary": True},
+                    {"role": "dps", "is_primary": True},
+                    {"role": "support", "is_primary": True},
+                ]
+            ),
+        )
+
+
 class AllRolesModeGuardTests(TestCase):
     """``all_roles``: exactly one priority role, or flex. Nothing in between.
 

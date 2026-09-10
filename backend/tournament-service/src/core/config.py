@@ -23,7 +23,6 @@ class Settings(BaseServiceSettings):
     # on a short TTL instead of targeted invalidation (the key has no
     # tournament_id for the invalidation patterns to match on).
     match_cache_ttl: int = 30
-    realtime_pubsub_channel: str = "tournament.changed"
 
     # Subscription-entitlement providers. Both optional: without them the
     # resolver still answers, reporting `unknown` (fail open) with a reason, so a

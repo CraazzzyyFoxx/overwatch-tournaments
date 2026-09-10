@@ -1,9 +1,9 @@
 """Thin realtime signal for pickup-mix roster/rank changes.
 
-A ``pickup_mix.updated`` broadcast on ``workspace:{id}:pickup_mix``. It carries
-no row data -- only "something in this workspace's mixes changed, refetch" --
-for the same reason ``subscription.updated`` does (see
-``shared.services.subscriptions.realtime``):
+A ``workspace.pickup_mix`` invalidation plus a ``pickup_mix.updated`` broadcast
+on ``workspace:{id}:pickup_mix``. The data event carries no row data -- only
+"something in this workspace's mixes changed" -- for the same reason
+``subscription.updated`` does (see ``shared.services.subscriptions.realtime``):
 
 - A roster edit, a bench toggle, a rank correction and a newly-seeded host rank
   all collapse into the same two refetches on the consumer side (the
@@ -19,46 +19,40 @@ edits, workspace rank writes), so it lives here rather than in ``shared``.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from typing import Any
 
-from loguru import logger
-from redis.asyncio import Redis
-
-from shared.schemas.realtime import WorkspaceEventEnvelope
-from shared.services import realtime_topics
-from shared.services.realtime_publisher import publish_envelope_to_redis
-from src.core.config import config
+from shared.services.realtime import DomainEvent, Resource, Scope, emit
 
 __all__ = ("PICKUP_MIX_UPDATED", "emit_pickup_mix_updated")
 
 PICKUP_MIX_UPDATED = "pickup_mix.updated"
 
-_redis_client: Redis | None = None
 
+async def emit_pickup_mix_updated(
+    session: Any,
+    workspace_id: int,
+    *,
+    change: str,
+    actor_user_id: int | None = None,
+) -> None:
+    """Stage the signal on the transaction that made the edit.
 
-def _get_redis() -> Redis:
-    global _redis_client
-    if _redis_client is None:
-        _redis_client = Redis.from_url(config.redis_url, decode_responses=True)
-    return _redis_client
+    ``change`` (``roster``/``rank``/``member``/``balance``/...) names which
+    mutation fired and is diagnostic only -- every consumer refetches the same
+    two query families regardless.
 
-
-async def emit_pickup_mix_updated(workspace_id: int, *, reason: str, actor_user_id: int | None = None) -> None:
-    """Best-effort publish, called after the caller's mutation has committed.
-
-    ``reason`` (``roster``/``rank``/``member``) is diagnostic only -- every
-    consumer refetches the same two query families regardless of which one
-    fired.
+    Must run before the caller's ``commit()``: ``emit`` publishes from the
+    session's ``after_commit``, so a rolled-back edit announces nothing.
     """
-    envelope = WorkspaceEventEnvelope(
-        event_id=0,  # non-durable: no replay cursor, clients refetch on subscribe
-        event_type=PICKUP_MIX_UPDATED,
-        schema_version=1,
-        occurred_at=datetime.now(UTC),
+    await emit(
+        session,
+        scope=Scope.workspace(int(workspace_id)),
+        invalidates=[Resource.WORKSPACE_PICKUP_MIX],
+        data=DomainEvent(
+            domain="pickup_mix",
+            event_type=PICKUP_MIX_UPDATED,
+            payload={"workspace_id": int(workspace_id), "change": change},
+            durable=False,
+        ),
         actor_user_id=actor_user_id,
-        data={"workspace_id": int(workspace_id), "reason": reason},
     )
-    try:
-        await publish_envelope_to_redis(_get_redis(), topic=realtime_topics.pickup_mix(workspace_id), envelope=envelope)
-    except Exception:  # pragma: no cover - best-effort signal
-        logger.exception(f"Failed to publish pickup_mix.updated for workspace {workspace_id}")

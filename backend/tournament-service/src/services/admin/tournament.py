@@ -21,6 +21,7 @@ from shared.repository import (
 from shared.services.division_grid import cache as division_grid_cache
 from shared.services.division_grid.access import get_workspace_division_grid_version_id
 from shared.services.draft_guards import assert_no_active_draft_session
+from shared.services.realtime import Resource, Scope, emit
 from shared.services.registration_team_guards import assert_no_registered_teams
 from shared.services.roster_shape_access import invalidate_roster_shape_cache
 from shared.services.tournament.computation import request_bracket_job
@@ -29,8 +30,11 @@ from src import models, schemas
 from src.clients.challonge import challonge_client
 from src.services.admin.stage import stage_service
 from src.services.challonge.sync import sync_service
-from src.services.tournament.events import enqueue_tournament_changed, enqueue_tournament_state_changed
-from src.services.tournament.realtime_commit import register_tournament_realtime_update
+from src.services.tournament.events import (
+    STRUCTURE_RESOURCES,
+    enqueue_tournament_state_changed,
+    publish_tournament_invalidation,
+)
 
 GROUP_STAGE_TYPES = {StageType.ROUND_ROBIN, StageType.SWISS}
 
@@ -181,13 +185,13 @@ class AdminTournamentService:
         fields at all — a PATCH body must not be able to point the banner at an
         arbitrary URL.
 
-        ``register_tournament_realtime_update`` rather than
-        ``enqueue_tournament_changed``: an image swap changes nothing a bracket or
-        standings recompute would read, so the outbox event would be pure noise —
-        but the after-commit listener it arms is also the only thing that purges
-        the cashews key behind ``flows.get_read`` (``tournaments/{id}:{entities}``).
-        Without it the public page keeps serving the previous banner for the whole
-        TTL, and the organizer sees the upload "not work".
+        ``tournament.detail`` rather than ``tournament.structure``: an image swap
+        changes nothing a bracket or standings recompute would read and adds no
+        page section, so neither the cross-service outbox row nor a client route
+        refresh is warranted — but the cashews key behind ``flows.get_read``
+        (``tournaments/{id}:{entities}``) still has to go, or the public page
+        keeps serving the previous banner for the whole TTL and the organizer
+        sees the upload "not work".
         """
         tournament = await self.tournament_repo.get(session, tournament_id)
 
@@ -199,7 +203,11 @@ class AdminTournamentService:
         else:
             tournament.logo_url = url
 
-        register_tournament_realtime_update(session, tournament_id, "structure_changed")
+        await emit(
+            session,
+            scope=Scope.tournament(tournament_id),
+            invalidates=[Resource.TOURNAMENT_DETAIL],
+        )
         await session.commit()
         return await self.get_tournament(session, tournament_id)
 
@@ -262,7 +270,7 @@ class AdminTournamentService:
         )
 
         tournament = await self.tournament_repo.create(session, models.Tournament(**payload))
-        await enqueue_tournament_changed(session, tournament.id, "structure_changed")
+        await publish_tournament_invalidation(session, tournament.id, STRUCTURE_RESOURCES)
         await session.commit()
         await division_grid_cache.invalidate_tournament(tournament.id)
         await division_grid_cache.invalidate_workspace(tournament.workspace_id)
@@ -347,7 +355,7 @@ class AdminTournamentService:
         for field, value in update_data.items():
             setattr(tournament, field, value)
 
-        await enqueue_tournament_changed(session, tournament_id, "structure_changed")
+        await publish_tournament_invalidation(session, tournament_id, STRUCTURE_RESOURCES)
         await session.commit()
         if should_invalidate_grid:
             await division_grid_cache.invalidate_tournament(tournament_id)
@@ -408,7 +416,7 @@ class AdminTournamentService:
 
         workspace_id = tournament.workspace_id
         await self.standing_repo.delete_for_tournament(session, tournament_id)
-        await enqueue_tournament_changed(session, tournament_id, "structure_changed")
+        await publish_tournament_invalidation(session, tournament_id, STRUCTURE_RESOURCES)
         await self.tournament_repo.delete(session, tournament)
         await session.commit()
         await division_grid_cache.invalidate_tournament(tournament_id)
@@ -569,7 +577,7 @@ class AdminTournamentService:
             old_status=old_status,
             new_status=_status_value(tournament.status),
         )
-        await enqueue_tournament_changed(session, tournament_id, "structure_changed")
+        await publish_tournament_invalidation(session, tournament_id, STRUCTURE_RESOURCES)
         await session.commit()
         await self._maybe_auto_start_group_stage(
             session,

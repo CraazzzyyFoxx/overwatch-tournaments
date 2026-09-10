@@ -4,7 +4,7 @@ import { getForwardedClientHeaders } from "@/lib/forward-client-headers";
 import { getTokenMaxAgeSeconds } from "@/lib/jwt";
 import { authService } from "@/services/auth.service";
 import { PLATFORM_ZONE, isPlatformHost } from "@/lib/host";
-import { clearAuthCookies, getRefreshToken } from "@/lib/auth-cookies";
+import { ACCESS_TOKEN_COOKIE, REFRESH_TOKEN_COOKIE, clearAuthCookies, getRefreshToken } from "@/lib/auth-cookies";
 import { ApiError } from "@/lib/api-error";
 import { publicHostname } from "@/lib/request-origin";
 
@@ -42,7 +42,7 @@ export async function POST(request: Request) {
     // the login cookies host-only there.
     const domainAttr = IS_PROD && isPlatformHost(publicHostname(request)) ? { domain: COOKIE_DOMAIN } : {};
 
-    response.cookies.set("owt_access_token", tokens.access_token, {
+    response.cookies.set(ACCESS_TOKEN_COOKIE, tokens.access_token, {
       httpOnly: false,
       sameSite: "lax",
       secure: IS_PROD,
@@ -51,7 +51,7 @@ export async function POST(request: Request) {
       ...domainAttr
     });
 
-    response.cookies.set("owt_refresh_token", tokens.refresh_token, {
+    response.cookies.set(REFRESH_TOKEN_COOKIE, tokens.refresh_token, {
       httpOnly: true,
       sameSite: "lax",
       secure: IS_PROD,

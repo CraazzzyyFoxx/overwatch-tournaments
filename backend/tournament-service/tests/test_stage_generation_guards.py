@@ -90,7 +90,7 @@ class GenerateEncountersGuardTests(IsolatedAsyncioTestCase):
                 stage_service.stage_service, "_create_encounters_from_skeleton", AsyncMock(return_value=[new_encounter])
             ) as create,
             patch.object(stage_service, "enqueue_tournament_recalculation", AsyncMock()),
-            patch.object(stage_service.stage_service, "_publish_tournament_changed", AsyncMock()),
+            patch.object(stage_service.stage_service, "_publish_structure_changed", AsyncMock()),
         ):
             result = await stage_service.stage_service.generate_encounters(session, 77, commit=False)
 
@@ -155,7 +155,7 @@ class GenerateEncountersGuardTests(IsolatedAsyncioTestCase):
                 stage_service.stage_service, "_create_encounters_from_skeleton", AsyncMock(return_value=new_encounters)
             ) as create,
             patch.object(stage_service, "enqueue_tournament_recalculation", AsyncMock()),
-            patch.object(stage_service.stage_service, "_publish_tournament_changed", AsyncMock()),
+            patch.object(stage_service.stage_service, "_publish_structure_changed", AsyncMock()),
         ):
             result = await stage_service.stage_service.generate_encounters(session, 99, commit=False)
 
@@ -190,7 +190,7 @@ class GenerateEncountersGuardTests(IsolatedAsyncioTestCase):
             patch.object(stage_service.stage_service, "_load_team_names", AsyncMock(return_value={})),
             patch.object(stage_service.stage_service, "_create_encounters_from_skeleton", AsyncMock(return_value=[])),
             patch.object(stage_service, "enqueue_tournament_recalculation", AsyncMock()),
-            patch.object(stage_service.stage_service, "_publish_tournament_changed", AsyncMock()),
+            patch.object(stage_service.stage_service, "_publish_structure_changed", AsyncMock()),
         ):
             await stage_service.stage_service.generate_encounters(session, 99, commit=False)
 
@@ -217,7 +217,7 @@ class GenerateEncountersGuardTests(IsolatedAsyncioTestCase):
                 stage_service.stage_service, "_create_encounters_from_skeleton", AsyncMock(return_value=[])
             ) as create,
             patch.object(stage_service, "enqueue_tournament_recalculation", AsyncMock()),
-            patch.object(stage_service.stage_service, "_publish_tournament_changed", AsyncMock()),
+            patch.object(stage_service.stage_service, "_publish_structure_changed", AsyncMock()),
         ):
             await stage_service.stage_service.generate_encounters(session, 99, commit=False)
 
@@ -250,7 +250,7 @@ class GenerateEncountersGuardTests(IsolatedAsyncioTestCase):
                 stage_service.stage_service, "_create_encounters_from_skeleton", AsyncMock(return_value=[])
             ) as create,
             patch.object(stage_service, "enqueue_tournament_recalculation", AsyncMock()),
-            patch.object(stage_service.stage_service, "_publish_tournament_changed", AsyncMock()),
+            patch.object(stage_service.stage_service, "_publish_structure_changed", AsyncMock()),
         ):
             await stage_service.stage_service.generate_encounters(session, 99, commit=False)
 
@@ -280,7 +280,7 @@ class GenerateEncountersGuardTests(IsolatedAsyncioTestCase):
             ),
             patch.object(stage_service.stage_service, "_create_encounters_from_skeleton", AsyncMock()) as create,
             patch.object(stage_service, "enqueue_tournament_recalculation", AsyncMock()),
-            patch.object(stage_service.stage_service, "_publish_tournament_changed", AsyncMock()),
+            patch.object(stage_service.stage_service, "_publish_structure_changed", AsyncMock()),
         ):
             result = await stage_service.stage_service.generate_encounters(session, 99, commit=False)
 
@@ -349,7 +349,7 @@ class DeactivateStageGuardTests(IsolatedAsyncioTestCase):
 
         with (
             patch.object(stage_service.stage_service, "get_stage", AsyncMock(side_effect=[stage, stage])),
-            patch.object(stage_service.stage_service, "_publish_tournament_changed", AsyncMock()) as notify,
+            patch.object(stage_service.stage_service, "_publish_structure_changed", AsyncMock()) as notify,
         ):
             result = await stage_service.stage_service.deactivate_stage(session, 5, commit=False)
 

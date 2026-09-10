@@ -119,7 +119,7 @@ services:
       - ./backend/env/common.env
       - ./backend/env/discord.env
     environment:
-      - TRACING_ENABLED=true
+      - TRACING_ENABLED=${TRACING_ENABLED:-true}
       - OTLP_ENDPOINT=http://otel-collector:4317
       - OTEL_TRACES_SAMPLER=parentbased_traceidratio
       - OTEL_TRACES_SAMPLER_ARG=0.1
@@ -179,7 +179,7 @@ services:
   # balancer-service HTTP decommissioned: /api/balancer is served by the headless
   # balancer-svc (rpc.balancer.* config/admin/draft/jobs) behind the gateway.
   # The worker also consumes the balancer job queue + runs the draft clock + Rust
-  # moo_core. The dead SSE job-stream endpoint was removed (progress flows over the
+  # tournament_balancer. The dead SSE job-stream endpoint was removed (progress flows over the
   # tournament:{id}:balancer WS topic).
 
   # analytics-service HTTP decommissioned: /api/analytics is served by the headless
@@ -205,7 +205,7 @@ services:
       - ./backend/env/common.env
       - ./backend/env/parser.env
     environment:
-      - TRACING_ENABLED=true
+      - TRACING_ENABLED=${TRACING_ENABLED:-true}
       - OTLP_ENDPOINT=http://otel-collector:4317
       - OTEL_TRACES_SAMPLER=parentbased_traceidratio
       - OTEL_TRACES_SAMPLER_ARG=0.1
@@ -252,7 +252,7 @@ services:
       - ./backend/env/common.env
       - ./backend/env/tournament.env
     environment:
-      - TRACING_ENABLED=true
+      - TRACING_ENABLED=${TRACING_ENABLED:-true}
       - OTLP_ENDPOINT=http://otel-collector:4317
       - OTEL_TRACES_SAMPLER=parentbased_traceidratio
       - OTEL_TRACES_SAMPLER_ARG=0.1
@@ -299,7 +299,7 @@ services:
       - ./backend/env/common.env
       - ./backend/env/app.env
     environment:
-      - TRACING_ENABLED=true
+      - TRACING_ENABLED=${TRACING_ENABLED:-true}
       - OTLP_ENDPOINT=http://otel-collector:4317
       - OTEL_TRACES_SAMPLER=parentbased_traceidratio
       - OTEL_TRACES_SAMPLER_ARG=0.1
@@ -346,7 +346,7 @@ services:
       - ./backend/env/common.env
       - ./backend/env/balancer.env
     environment:
-      - TRACING_ENABLED=true
+      - TRACING_ENABLED=${TRACING_ENABLED:-true}
       - OTLP_ENDPOINT=http://otel-collector:4317
       - OTEL_TRACES_SAMPLER=parentbased_traceidratio
       - OTEL_TRACES_SAMPLER_ARG=0.1
@@ -396,7 +396,7 @@ services:
       - ./backend/env/common.env
       - ./backend/env/analytics.env
     environment:
-      - TRACING_ENABLED=true
+      - TRACING_ENABLED=${TRACING_ENABLED:-true}
       - OTLP_ENDPOINT=http://otel-collector:4317
       - OTEL_TRACES_SAMPLER=parentbased_traceidratio
       - OTEL_TRACES_SAMPLER_ARG=0.1
@@ -446,7 +446,7 @@ services:
       - ./backend/env/common.env
       - ./backend/env/analytics.env
     environment:
-      - TRACING_ENABLED=true
+      - TRACING_ENABLED=${TRACING_ENABLED:-true}
       - OTLP_ENDPOINT=http://otel-collector:4317
       - OTEL_TRACES_SAMPLER=parentbased_traceidratio
       - OTEL_TRACES_SAMPLER_ARG=0.1
@@ -496,7 +496,7 @@ services:
       - ./backend/env/common.env
       - ./backend/env/stream.env
     environment:
-      - TRACING_ENABLED=true
+      - TRACING_ENABLED=${TRACING_ENABLED:-true}
       - OTLP_ENDPOINT=http://otel-collector:4317
       - OTEL_TRACES_SAMPLER=parentbased_traceidratio
       - OTEL_TRACES_SAMPLER_ARG=0.1
@@ -553,16 +553,20 @@ services:
       dockerfile: prod.Dockerfile
       args:
         NEXT_PUBLIC_CACHE_POLICY: ${NEXT_PUBLIC_CACHE_POLICY}
-        NEXT_PUBLIC_SITE_NAME: Overwatch Tournaments
-        NEXT_PUBLIC_SITE_URL: https://owt.craazzzyyfoxx.me
+        NEXT_PUBLIC_SITE_NAME: ${SITE_NAME:-Overwatch Tournaments}
+        NEXT_PUBLIC_SITE_URL: ${SITE_URL:-https://owt.craazzzyyfoxx.me}
+        NEXT_PUBLIC_PLATFORM_ZONE: ${PLATFORM_ZONE:-owt.craazzzyyfoxx.me}
+        NEXT_PUBLIC_COOKIE_PREFIX: ${COOKIE_PREFIX:-owt}
         NEXT_PUBLIC_SITE_ICON: ${NEXT_PUBLIC_SITE_ICON}
         NEXT_PUBLIC_SITE_FAVICON: ${NEXT_PUBLIC_SITE_FAVICON}
         NEXT_PUBLIC_GA_ID: ${NEXT_PUBLIC_GA_ID}
         NEXT_PUBLIC_YM_ID: ${NEXT_PUBLIC_YM_ID}
         NEXT_PUBLIC_APP_VERSION: ${IMAGE_TAG:-}
     environment:
-      - NEXT_PUBLIC_SITE_URL=https://owt.craazzzyyfoxx.me
-      - NEXT_PUBLIC_SITE_NAME=Overwatch Tournaments
+      - NEXT_PUBLIC_SITE_URL=${SITE_URL:-https://owt.craazzzyyfoxx.me}
+      - NEXT_PUBLIC_SITE_NAME=${SITE_NAME:-Overwatch Tournaments}
+      - NEXT_PUBLIC_PLATFORM_ZONE=${PLATFORM_ZONE:-owt.craazzzyyfoxx.me}
+      - NEXT_PUBLIC_COOKIE_PREFIX=${COOKIE_PREFIX:-owt}
       - NEXT_PUBLIC_CACHE_POLICY=${NEXT_PUBLIC_CACHE_POLICY}
       - NEXT_PUBLIC_GA_ID=${NEXT_PUBLIC_GA_ID}
       - NEXT_PUBLIC_YM_ID=${NEXT_PUBLIC_YM_ID}
@@ -618,7 +622,7 @@ services:
       - ./backend/env/auth.env
       - ./backend/env/identity.env
     environment:
-      - TRACING_ENABLED=true
+      - TRACING_ENABLED=${TRACING_ENABLED:-true}
       - OTLP_ENDPOINT=http://otel-collector:4317
       - OTEL_TRACES_SAMPLER=parentbased_traceidratio
       - OTEL_TRACES_SAMPLER_ARG=0.1
@@ -669,10 +673,10 @@ services:
       # In prod the frontend is a compose service (dev default points at the host).
       - UPSTREAM_FRONTEND=http://frontend:3000
       # Tag Sentry events as production (the DSN lives in backend/env/gateway.env).
-      - SENTRY_ENVIRONMENT=production
+      - SENTRY_ENVIRONMENT=${SENTRY_ENVIRONMENT:-production}
       # OpenTelemetry tracing into the shared otel-collector (same block as the
       # Python services), so gateway spans join the distributed traces in Tempo.
-      - TRACING_ENABLED=true
+      - TRACING_ENABLED=${TRACING_ENABLED:-true}
       - OTLP_ENDPOINT=http://otel-collector:4317
       - OTEL_TRACES_SAMPLER=parentbased_traceidratio
       - OTEL_TRACES_SAMPLER_ARG=0.1

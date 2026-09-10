@@ -61,41 +61,6 @@ function render(subject: DraftPlayer, divisionGrid: { tiers: typeof GRID.tiers }
   );
 }
 
-describe("player inspector flex roles", () => {
-  test("offers the undeclared role a flex player can still be picked on", () => {
-    // The server counts a flex player as supply for every role, so with a tight
-    // pool the only safe option can be a role they never declared. Rendering
-    // just the declared ones left every offered role blocked and the player
-    // unpickable — with nothing drafted yet.
-    const html = renderToStaticMarkup(
-      <PlayerInspector
-        player={player({ primary_role: "dps", secondary_roles: ["tank"], is_flex: true })}
-        role="dps"
-        options={{
-          pick_id: 1,
-          pick_version: 0,
-          draft_team_id: 2,
-          options: [
-            { player_id: 7, role: "dps", is_safe: false, reason_code: "role_shortage", unmatched_slots: [], blocking_player_ids: [], suggestion_score: null },
-            { player_id: 7, role: "tank", is_safe: false, reason_code: "role_shortage", unmatched_slots: [], blocking_player_ids: [], suggestion_score: null },
-            { player_id: 7, role: "support", is_safe: true, reason_code: null, unmatched_slots: [], blocking_player_ids: [], suggestion_score: 1 }
-          ]
-        }}
-        safetyRequired
-        onRoleChange={() => {}}
-        onClose={() => {}}
-        divisionGrid={{ tiers: [] }}
-      />
-    );
-
-    // All three roles are buttons, and exactly the two blocked ones are
-    // aria-disabled — the safe support option is reachable.
-    expect((html.match(/sr-only">roles\./g) ?? []).length).toBe(3);
-    expect((html.match(/aria-disabled="true"/g) ?? []).length).toBe(2);
-  });
-});
-
-
 describe("player inspector registration answers", () => {
   test("renders each draft-visible custom field with its label", () => {
     const html = render(

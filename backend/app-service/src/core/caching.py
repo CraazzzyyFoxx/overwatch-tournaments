@@ -9,7 +9,7 @@ from src.core import config
 # cashews has no default backend: it routes every operation (get/set/delete_match)
 # to the backend whose registered prefix the key starts with, and raises
 # ``NotConfiguredError`` for keys that match no prefix. Cache-invalidation
-# patterns are generated from this tuple (see ``services.tournament_events``) so
+# patterns are generated from this tuple (see ``services.cache_resources``) so
 # they always stay routable and in sync with ``configure_cache``.
 CACHE_PREFIXES: tuple[str, ...] = ("fastapi:", "backend:")
 # cashews prepends ``lock:`` to a decorated cache key when ``lock=True``.

@@ -1,6 +1,6 @@
-"""Normalize moo_core/dual-write roster role names to the canonical wire code.
+"""Normalize tournament_balancer/dual-write roster role names to the canonical wire code.
 
-``moo_core`` (the native balancer engine) and the legacy dual-write path key
+``tournament_balancer`` (the native balancer engine) and the legacy dual-write path key
 team rosters by the ``HeroClass`` display spelling (``Tank``/``Damage``/
 ``Support``/``Flex``), but callers have historically tolerated any case. This
 is the single place that bridges those roster keys to the canonical

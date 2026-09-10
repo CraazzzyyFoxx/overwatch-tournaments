@@ -42,9 +42,9 @@ The heavy solve itself is the native crate's; everything above is this service's
 
 ### Native solver
 
-`tournament_balancer` is the default backend, an in-house Rust crate `moo_core`
+`tournament_balancer` is the default backend, an in-house Rust crate of the same name
 (`native/tournament_balancer`, PyO3 + maturin, `rayon` for parallel evaluation). Python imports it
-as a plain module (`importlib.import_module("moo_core")`), serializes the request to JSON, and calls
+as a plain module (`importlib.import_module("tournament_balancer")`), serializes the request to JSON, and calls
 it through `asyncio.to_thread` so the GIL-releasing solve never blocks the event loop
 (`src/domain/balancer/moo_backend.py`).
 
@@ -59,8 +59,8 @@ the API surfaces variants and not a single team set.
 and documented in [`native/mix_balancer/README.md`](native/mix_balancer/README.md). It brute-forces
 every player/role split, so it returns the true optimum instead of a GA approximation, but only for
 exactly two equal teams. Both extensions are Linux-only compiled artifacts; `mix_balancer` degrades
-to `tournament_balancer` with a warning when it is absent, `moo_core` does not degrade at all
-(`RuntimeError: Rust MOO backend requires moo_core to be installed`).
+to the `tournament_balancer` backend with a warning when it is absent; `tournament_balancer` does not degrade at all
+(`RuntimeError: Rust MOO backend requires tournament_balancer to be installed`).
 
 ## Interface
 
@@ -225,9 +225,9 @@ with forced polling; production runs the bare command with a no-op healthcheck
 `rabbitmq` only; Postgres is external. Resource limits are 2 CPU / 512 MB in dev and 4 CPU / 768 MB
 in production, sized for the solver rather than for request handling.
 
-The native extensions are built during the image build (maturin for `moo_core`, scikit-build-core +
+The native extensions are built during the image build (maturin for `tournament_balancer`, scikit-build-core +
 CMake for `mix_balancer`) and are Linux-only, so a non-Linux host runs the Python side without them:
-mix balancing falls back, tournament balancing fails, and the tests that need `moo_core` skip.
+mix balancing falls back, tournament balancing fails, and the tests that need `tournament_balancer` skip.
 
 ## Operational notes
 

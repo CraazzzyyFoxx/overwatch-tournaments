@@ -100,7 +100,6 @@ class DraftClockService:
     async def fire_autopick_if_expired(
         self,
         session_factory: SessionFactory,
-        redis: Redis | None,
         session_id: int,
     ) -> bool:
         """If the current pick is ON_CLOCK and past its deadline, autopick it.
@@ -129,20 +128,18 @@ class DraftClockService:
                 # Nothing was picked (role shortage) — the block is the whole story.
                 await draft_rt.publish_draft_event(
                     session,
-                    redis,
                     draft_session=draft,
                     event_type="draft.blocked",
                     payload={
                         "session_id": draft.id,
                         "pick_id": result.pick.id,
                         "draft_team_id": result.pick.draft_team_id,
-                        "reason": result.blocked_reason,
+                        "blocked_reason": result.blocked_reason,
                     },
                 )
             else:
                 await draft_rt.publish_draft_event(
                     session,
-                    redis,
                     draft_session=draft,
                     event_type="draft.autopicked",
                     payload={
@@ -150,13 +147,16 @@ class DraftClockService:
                         "pick_id": result.pick.id,
                         "draft_team_id": result.pick.draft_team_id,
                         "picked_player_id": result.pick.picked_player_id,
-                        "reason": "timeout",
+                        # A trace, not a signal: no consumer reads it
+                        # (draft-logic branches on event_type). Named
+                        # `autopick_reason` so it cannot be read as anything
+                        # but this pick's cause.
+                        "autopick_reason": "timeout",
                     },
                 )
             if result.completed:
                 await draft_rt.publish_draft_event(
                     session,
-                    redis,
                     draft_session=draft,
                     event_type="draft.completed",
                     payload={"session_id": draft.id, "status": draft.status},
@@ -166,20 +166,18 @@ class DraftClockService:
                 # draft is paused: no pick_started, it would flip clients to live.
                 await draft_rt.publish_draft_event(
                     session,
-                    redis,
                     draft_session=draft,
                     event_type="draft.blocked",
                     payload={
                         "session_id": draft.id,
                         "pick_id": result.next_pick.id,
                         "draft_team_id": result.next_pick.draft_team_id,
-                        "reason": result.blocked_reason,
+                        "blocked_reason": result.blocked_reason,
                     },
                 )
             elif result.next_pick is not None:
                 await draft_rt.publish_draft_event(
                     session,
-                    redis,
                     draft_session=draft,
                     event_type="draft.pick_started",
                     payload={
@@ -236,7 +234,7 @@ class DraftClockService:
                 if nudged:
                     continue  # state changed (manual pick / pause) — re-read
                 if status == DraftStatus.LIVE.value and expires is not None:
-                    await self.fire_autopick_if_expired(session_factory, redis, session_id)
+                    await self.fire_autopick_if_expired(session_factory, session_id)
         except Exception:  # noqa: BLE001
             logger.exception("Draft clock loop error", session_id=session_id)
         finally:

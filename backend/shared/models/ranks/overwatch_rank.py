@@ -1,7 +1,7 @@
 from datetime import datetime
-from typing import Any
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     DateTime,
     ForeignKey,
@@ -10,8 +10,8 @@ from sqlalchemy import (
     SmallInteger,
     String,
     Text,
+    text,
 )
-from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from shared.core import db, enums
@@ -26,7 +26,7 @@ __all__ = (
 RANK_SCHEMA = "overwatch_rank"
 
 
-class UserRankSnapshot(db.TimeStampIntegerMixin):
+class UserRankSnapshot(db.Base):
     """A single observation of a battle.net account's competitive rank.
 
     One row is written per scheduled run, per battle tag, per role, per
@@ -35,6 +35,13 @@ class UserRankSnapshot(db.TimeStampIntegerMixin):
     mapped integer (see the rank-mapping service) so the value stays compatible
     with the existing DivisionGrid/balancer scale. Attached to the domain
     ``players.user`` — never to ``auth.user``.
+
+    ``db.Base`` rather than ``TimeStampIntegerMixin`` (migration ``ranktrim01``):
+    the table grows by a few million rows a month, and the mixin's
+    ``created_at`` duplicated ``captured_at`` while ``updated_at`` was NULL on
+    every row of an append-only series. The raw OverFast role object that used
+    to ride along as ``raw_payload`` (three icon URLs per row, over half the
+    heap) is gone for the same reason: nothing ever read it.
     """
 
     __tablename__ = "rank_snapshot"
@@ -47,8 +54,21 @@ class UserRankSnapshot(db.TimeStampIntegerMixin):
             "platform",
             "captured_at",
         ),
+        # The "newest ranked snapshot per (account, role)" probe behind
+        # ``shared.services.rank_snapshots.fetch_latest_ow_ranks_by_account``:
+        # one index descent per pair instead of a sort over the whole history.
+        # Partial so an account unranked in a role does not walk its history.
+        Index(
+            "ix_rank_snapshot_latest_ranked",
+            "social_account_id",
+            "role",
+            text("captured_at DESC"),
+            postgresql_where=text("rank_value IS NOT NULL AND is_ranked IS TRUE"),
+        ),
         {"schema": RANK_SCHEMA},
     )
+
+    id: Mapped[int] = mapped_column(BigInteger(), primary_key=True, sort_order=-1000)
 
     # Not individually indexed: the composite indexes below cover these columns
     # as their leftmost prefix.
@@ -72,9 +92,6 @@ class UserRankSnapshot(db.TimeStampIntegerMixin):
     mapping_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     is_ranked: Mapped[bool] = mapped_column(Boolean(), server_default="true")
-
-    # Relevant `competitive` sub-object from /summary (not the whole profile).
-    raw_payload: Mapped[dict[str, Any] | None] = mapped_column(JSONB(), nullable=True)
 
     captured_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=db.func.now(), index=True)
     source: Mapped[str] = mapped_column(String(32), server_default=enums.RankCollectionSource.scheduled.value)

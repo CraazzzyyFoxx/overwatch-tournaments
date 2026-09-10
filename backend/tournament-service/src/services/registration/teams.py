@@ -44,10 +44,10 @@ from shared.repository import (
     BalancerRegistrationTeamRepository,
     TournamentRepository,
 )
-from shared.services.notifications import notify, publish_notification_created
+from shared.services.notifications import notify
+from shared.services.realtime import Resource, Scope, emit
 from shared.services.roster_shape_access import get_tournament_roster_slots, get_workspace_roster_slots
 from src import models
-from src.core.redis import get_realtime_redis
 from src.schemas.registration import RegistrationCreate, RegistrationRead
 from src.schemas.registration_team import (
     RegistrationFreeAgentRead,
@@ -72,7 +72,6 @@ from src.services.registration.team_rate_limits import (
     assert_invite_attempt_allowed,
 )
 from src.services.registration.windows import is_registration_open
-from src.services.tournament.realtime_commit import register_tournament_realtime_update
 
 __all__ = (
     "DEFAULT_INVITE_TTL",
@@ -414,7 +413,11 @@ class RegistrationTeamService:
                 max_substitutes=max_substitutes,
             )
         )
-        register_tournament_realtime_update(session, tournament_id, "registration_changed")
+        await emit(
+            session,
+            scope=Scope.tournament(tournament_id),
+            invalidates=[Resource.TOURNAMENT_REGISTRATIONS],
+        )
         try:
             await session.commit()
         except IntegrityError as exc:
@@ -483,7 +486,11 @@ class RegistrationTeamService:
         await self._assert_captain(session, team, auth_user)
         _assert_mutable(team)
         team.image_url = image_url
-        register_tournament_realtime_update(session, team.tournament_id, "registration_changed")
+        await emit(
+            session,
+            scope=Scope.tournament(team.tournament_id),
+            invalidates=[Resource.TOURNAMENT_REGISTRATIONS],
+        )
         await session.commit()
         # Scalar-only mutation; expire_on_commit=False keeps the instance renderable
         # by ``describe_team`` without a refresh round-trip.
@@ -681,8 +688,6 @@ class RegistrationTeamService:
                 },
             )
         await session.commit()
-        if target_auth_user_id is not None:
-            await publish_notification_created(get_realtime_redis(), recipient_auth_user_id=target_auth_user_id)
         return invite, raw_token
 
     async def count_invites_against_cap(
@@ -933,20 +938,19 @@ class RegistrationTeamService:
         answer: str,
         responder: models.AuthUser,
         responder_name: str,
-    ) -> int | None:
+    ) -> None:
         """Tell the captain how their offer was answered.
 
-        Returns the recipient so the caller can send the realtime nudge once its
-        own commit has landed, or ``None`` when there is nobody to tell: a team
-        whose captain registration was hard-deleted, or a captain who is a shadow
-        player (``players.user.auth_user_id IS NULL``). Neither is an error — the
-        roster change itself stands, it just goes unannounced.
+        Nobody to tell is not an error: a team whose captain registration was
+        hard-deleted, or a captain who is a shadow player
+        (``players.user.auth_user_id IS NULL``). The roster change itself stands,
+        it just goes unannounced.
 
         The recipient is derived from the team's own captain row, never from
         anything the answering account supplied.
         """
         if captain_registration_id is None:
-            return None
+            return
         captain_auth_user_id = await session.scalar(
             sa.select(models.User.auth_user_id)
             .join(models.WorkspaceMember, models.WorkspaceMember.player_id == models.User.id)
@@ -957,7 +961,7 @@ class RegistrationTeamService:
             .where(models.BalancerRegistration.id == captain_registration_id)
         )
         if captain_auth_user_id is None:
-            return None
+            return
         await notify(
             session,
             kind="team_invite.answered",
@@ -972,7 +976,6 @@ class RegistrationTeamService:
                 "responder_name": responder_name,
             },
         )
-        return int(captain_auth_user_id)
 
     async def accept_invite(
         self,
@@ -1077,8 +1080,12 @@ class RegistrationTeamService:
         team.status = _status_for(
             await self._occupancy(session, team, shape, max_substitutes=max_substitutes),
         )
-        register_tournament_realtime_update(session, team.tournament_id, "registration_changed")
-        recipient = await self._notify_invite_answered(
+        await emit(
+            session,
+            scope=Scope.tournament(team.tournament_id),
+            invalidates=[Resource.TOURNAMENT_REGISTRATIONS],
+        )
+        await self._notify_invite_answered(
             session,
             team_id=team.id,
             team_name=team.name,
@@ -1093,8 +1100,6 @@ class RegistrationTeamService:
             await session.commit()
         except IntegrityError as exc:
             raise _fail(409, "already_registered", "You are already registered for this tournament") from exc
-        if recipient is not None:
-            await publish_notification_created(get_realtime_redis(), recipient_auth_user_id=recipient)
         return team, registration_id
 
     async def decline_invite(
@@ -1123,7 +1128,6 @@ class RegistrationTeamService:
                 ).where(models.BalancerRegistrationTeam.id == invite.team_id)
             )
         ).one_or_none()
-        recipient: int | None = None
         if team_row is not None:
             # The battle tag the captain picked them by, not the account handle:
             # a targeted invite was chosen off the free-agent list, which shows
@@ -1132,7 +1136,7 @@ class RegistrationTeamService:
             tags = await self._battle_tags_by_account(
                 session, tournament_id=team_row.tournament_id, auth_user_ids={auth_user.id}
             )
-            recipient = await self._notify_invite_answered(
+            await self._notify_invite_answered(
                 session,
                 team_id=invite.team_id,
                 team_name=team_row.name,
@@ -1144,8 +1148,6 @@ class RegistrationTeamService:
                 responder_name=tags.get(auth_user.id) or auth_user.username,
             )
         await session.commit()
-        if recipient is not None:
-            await publish_notification_created(get_realtime_redis(), recipient_auth_user_id=recipient)
 
     # ── roster edits ─────────────────────────────────────────────────────────
 
@@ -1170,7 +1172,11 @@ class RegistrationTeamService:
         registration.is_substitute = False
         await session.flush()
         team.status = _status_for(await self._occupancy(session, team, shape, max_substitutes=max_substitutes))
-        register_tournament_realtime_update(session, team.tournament_id, "registration_changed")
+        await emit(
+            session,
+            scope=Scope.tournament(team.tournament_id),
+            invalidates=[Resource.TOURNAMENT_REGISTRATIONS],
+        )
 
     async def kick_member(
         self,
@@ -1299,7 +1305,11 @@ class RegistrationTeamService:
         team.status = TEAM_DISBANDED
         team.deleted_at = datetime.now(UTC)
         team.deleted_by = auth_user.id
-        register_tournament_realtime_update(session, team.tournament_id, "registration_changed")
+        await emit(
+            session,
+            scope=Scope.tournament(team.tournament_id),
+            invalidates=[Resource.TOURNAMENT_REGISTRATIONS],
+        )
         await session.commit()
 
     # ── organizer flows ──────────────────────────────────────────────────────
@@ -1427,7 +1437,11 @@ class RegistrationTeamService:
         team.status = TEAM_REJECTED
         team.deleted_at = datetime.now(UTC)
         team.deleted_by = auth_user.id
-        register_tournament_realtime_update(session, team.tournament_id, "registration_changed")
+        await emit(
+            session,
+            scope=Scope.tournament(team.tournament_id),
+            invalidates=[Resource.TOURNAMENT_REGISTRATIONS],
+        )
         await session.commit()
         return team
 

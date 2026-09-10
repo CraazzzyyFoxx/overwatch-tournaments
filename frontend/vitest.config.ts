@@ -148,6 +148,10 @@ export default defineConfig({
       // The captain's half of the same mode. Separate from the i18n mount test
       // above because it drives the dialog rather than only rendering it.
       "src/components/registration/MyTeamPanel.picker.test.tsx",
+      // The bench half of the same dialog: a full starting roster reports no open
+      // slots, and unrun this file would report green while substitute invites
+      // were unreachable on exactly the teams that need them.
+      "src/components/registration/MyTeamPanel.bench.test.tsx",
       // The invite ledger. Unrun, a green suite would coexist with a section that
       // fetches on every mount or renders raw i18n key paths.
       "src/components/registration/InviteHistorySection.behavior.test.tsx",
@@ -222,12 +226,15 @@ export default defineConfig({
       "src/app/(site)/tournaments/[slug]/_components/TournamentLinkChips.behavior.test.tsx",
       // Same file-level rule as `src/components`: the bracket folder also holds a
       // `bun:test` file (`TournamentBracketPage.test.ts`).
-      // File-level, not a directory glob: `src/hooks` also holds
-      // `tournamentRealtime.helpers.test.ts`, which imports `bun:test`.
+      // File-level, not a directory glob: `src/hooks` also holds `bun:test`
+      // files.
       "src/app/(site)/tournaments/[slug]/bracket/bracketLiveStreams.test.ts",
       "src/hooks/useRealtimeCoalescedRefetch.test.ts",
-      "src/hooks/useTournamentRealtime.test.ts",
-      "src/hooks/useRealtimePatchedQuery.test.ts"
+      "src/hooks/useRealtimePatchedQuery.test.ts",
+      "src/hooks/useInvalidation.test.ts",
+      // The manifest parity gate: this one is the reason a resource cannot be
+      // published without the client knowing which queries it stales.
+      "src/lib/realtime-resources.test.ts"
     ]
   }
 });

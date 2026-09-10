@@ -34,8 +34,6 @@ __all__ = (
     "HeroPlaytimePaginationParams",
     "HeroPlaytimeQueryPaginationParams",
     "HeroRead",
-    "HeroStatsPaginationParams",
-    "HeroStatsQueryPaginationParams",
     "MapRead",
 )
 
@@ -80,19 +78,6 @@ class HeroPlaytimePaginationParams(pagination.PaginationSortParams):
     user_id: int | typing.Literal["all"] = "all"
     # role: enums.HeroRole | typing.Literal["all"] = "all"
     tournament_id: int | None = None
-
-
-class HeroStatsQueryPaginationParams(pagination.PaginationSortQueryParams):
-    user_id: int | typing.Literal["all"] = "all"
-    group_by: typing.Literal["overall", "match"] = "overall"
-    stat: enums.LogStatsName = enums.LogStatsName.KDA
-
-
-@dataclass
-class HeroStatsPaginationParams(pagination.PaginationSortParams):
-    user_id: int | typing.Literal["all"] = "all"
-    group_by: typing.Literal["overall", "match"] = "overall"
-    stat: enums.LogStatsName = enums.LogStatsName.HeroTimePlayed
 
 
 class HeroLeaderboardEntry(BaseModel):

@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { AlertCircle, Brain, CheckCircle2, Loader2, PlayCircle } from "lucide-react";
 import { useTranslations } from "next-intl";
 
@@ -14,6 +14,7 @@ import {
   DialogHeader,
   DialogTitle
 } from "@/components/ui/dialog";
+import { useInvalidation } from "@/hooks/useInvalidation";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useRealtimeTopic } from "@/hooks/useRealtimeTopic";
 import { notify } from "@/lib/notify";
@@ -95,7 +96,6 @@ export default function MLAdminToolbar({ tournamentId, workspaceId }: Readonly<M
     return t("analytics.job.sampleSelected", { count: selectedCount });
   };
 
-  const queryClient = useQueryClient();
   const { isSuperuser } = usePermissions();
   const workspaces = useWorkspaceStore((state) => state.workspaces);
   const [liveJob, setLiveJob] = React.useState<AnalyticsJob | null>(null);
@@ -133,9 +133,11 @@ export default function MLAdminToolbar({ tournamentId, workspaceId }: Readonly<M
     setLiveJob((prev) => (prev?.id === refreshedLiveJob.id ? refreshedLiveJob : prev));
   }, [refreshedLiveJob]);
 
-  const topic = workspaceId != null ? `workspace:${workspaceId}:analytics_jobs` : null;
+  // The domain topic carries the running job: progress frames have no cache to
+  // drop, they drive this toolbar's own state. What a finished job stales
+  // (`workspace.analytics_jobs`) arrives separately, on the invalidation topic.
   useRealtimeTopic<AnalyticsJobRealtimePayload>(
-    topic,
+    workspaceId != null ? `workspace:${workspaceId}:analytics_jobs` : null,
     (event) => {
       const payload = event.data;
       if (!payload) return;
@@ -158,16 +160,11 @@ export default function MLAdminToolbar({ tournamentId, workspaceId }: Readonly<M
         created_at: prev?.created_at ?? new Date().toISOString(),
         updated_at: new Date().toISOString()
       }));
-
-      if (TERMINAL_STATUSES.has(payload.status)) {
-        queryClient.invalidateQueries({ queryKey: ["analytics", "performance-v2"] });
-        queryClient.invalidateQueries({ queryKey: ["analytics-standings-distribution"] });
-        queryClient.invalidateQueries({ queryKey: ["analytics-match-quality"] });
-        queryClient.invalidateQueries({ queryKey: ["analytics"] });
-      }
     },
-    [queryClient]
+    []
   );
+
+  useInvalidation({ scopeKind: "workspace", scopeId: workspaceId });
 
   const isActive = isLiveJobActive;
   const trainingWorkspaceIds = React.useMemo(() => {

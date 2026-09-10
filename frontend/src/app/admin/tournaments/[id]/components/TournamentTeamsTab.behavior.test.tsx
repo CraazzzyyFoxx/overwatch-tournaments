@@ -31,9 +31,6 @@ vi.mock("@/services/admin.service", () => ({
     syncTeamsFromChallonge: (...args: unknown[]) => syncTeamsFromChallonge(...args)
   }
 }));
-vi.mock("@/services/balancer-admin.service", () => ({
-  default: { importTeamsFromJson: vi.fn() }
-}));
 vi.mock("@/lib/notify", () => ({
   notify: { success: vi.fn(), error: vi.fn(), info: vi.fn(), apiError: vi.fn() }
 }));

@@ -6,6 +6,7 @@ match a separate column and are resolved elsewhere.
 
 from __future__ import annotations
 
+import os
 import re
 
 __all__ = (
@@ -17,7 +18,12 @@ __all__ = (
     "normalize_custom_domain",
 )
 
-PLATFORM_ZONE = "owt.craazzzyyfoxx.me"
+# Env-overridable so a second deployment (e.g. the dev site at
+# dev.owt.craazzzyyfoxx.me) is its OWN apex: without this its host reads as the
+# `dev` tenant subdomain of production, every request resolves to a workspace
+# that does not exist, and its session cookies (Domain=.owt.craazzzyyfoxx.me)
+# would collide with production's.
+PLATFORM_ZONE = os.getenv("PLATFORM_ZONE", "owt.craazzzyyfoxx.me")
 
 RESERVED_SUBDOMAINS = frozenset({"www", "api", "auth", "admin", "app", "assets", "static", "cdn", "mail", "ws"})
 

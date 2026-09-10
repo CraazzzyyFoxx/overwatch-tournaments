@@ -125,16 +125,16 @@ class SetTeamImage(IsolatedAsyncioTestCase):
 
     async def _call(self, team, image_url):
         session = self._Session(team)
-        enqueued: list[tuple[int, str]] = []
+        enqueued: list[tuple[int, tuple]] = []
 
-        async def fake_enqueue(_session, tournament_id, reason):
-            enqueued.append((tournament_id, reason))
+        async def fake_publish(_session, tournament_id, resources):
+            enqueued.append((tournament_id, resources))
 
         async def fake_get_team(_session, team_id):
             return SimpleNamespace(id=team_id, reloaded=True)
 
         with (
-            patch.object(team_service, "enqueue_tournament_changed", fake_enqueue),
+            patch.object(team_service, "publish_tournament_invalidation", fake_publish),
             patch.object(team_service.team_service, "get_team", fake_get_team),
         ):
             result = await team_service.team_service.set_team_image(session, TEAM_ID, image_url)
@@ -146,9 +146,9 @@ class SetTeamImage(IsolatedAsyncioTestCase):
         result, session, enqueued = await self._call(team, PUBLIC_URL)
 
         self.assertEqual(PUBLIC_URL, team.image_url)
-        # Same event update_team/delete_team enqueue, so caches and standings
-        # recompute for the team's tournament.
-        self.assertEqual([(TOURNAMENT_ID, "structure_changed")], enqueued)
+        # Same invalidation update_team/delete_team publish, so the tournament's
+        # cached reads and its cross-service aggregates both drop.
+        self.assertEqual([(TOURNAMENT_ID, team_service.STRUCTURE_RESOURCES)], enqueued)
         self.assertEqual(1, session.commits)
         self.assertTrue(result.reloaded)
 
@@ -158,7 +158,7 @@ class SetTeamImage(IsolatedAsyncioTestCase):
         _, _, enqueued = await self._call(team, None)
 
         self.assertIsNone(team.image_url)
-        self.assertEqual([(TOURNAMENT_ID, "structure_changed")], enqueued)
+        self.assertEqual([(TOURNAMENT_ID, team_service.STRUCTURE_RESOURCES)], enqueued)
 
     async def test_missing_team_404s(self):
         with self.assertRaises(Exception) as ctx:

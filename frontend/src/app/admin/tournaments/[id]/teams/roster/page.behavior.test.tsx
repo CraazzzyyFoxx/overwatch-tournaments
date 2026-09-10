@@ -75,9 +75,6 @@ vi.mock("@/services/admin.service", () => ({
     syncTeamsFromChallonge: mocks.syncTeamsFromChallonge
   }
 }));
-vi.mock("@/services/balancer-admin.service", () => ({
-  default: { importTeamsFromJson: vi.fn() }
-}));
 vi.mock("@/lib/notify", () => ({
   notify: { success: vi.fn(), error: vi.fn(), info: vi.fn(), apiError: vi.fn() }
 }));
@@ -172,13 +169,12 @@ describe("teams roster route", () => {
     expect(byText("button", "Sync teams")).toBeTruthy();
   });
 
-  it("withholds sync and import without team.create", async () => {
+  it("withholds sync without team.create", async () => {
     mocks.granted = new Set(["team.update"]);
 
     await render();
 
     expect(byText("button", "Sync teams")).toBeUndefined();
-    expect(byText("button", "Import from JSON")).toBeUndefined();
     // `team.update` alone still reaches the shared teams workspace.
     expect(byText("a", "Manage teams")).toBeTruthy();
   });

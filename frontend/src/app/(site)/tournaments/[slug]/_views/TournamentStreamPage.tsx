@@ -55,13 +55,12 @@ import { getPublicPageQueryPresentation } from "./publicPageQueryPresentation";
  *
  * ## Freshness
  *
- * There is no `useTournamentStreamRealtime` call in this view on purpose.
+ * There is no realtime subscription in this view on purpose.
  * `TournamentClientLayout` — the ancestor of every tournament section — already
- * subscribes to `tournament:{id}:streams` for the broadcast block and the nav
- * gate, and its refetch invalidates `tournamentQueryKeys.streams(id)`, which is
- * the very key this view reads. A second subscription here would add a second
- * jittered coalescer racing to invalidate the same key, i.e. a duplicate of a
- * mechanism that already covers this page. Keep the single owner.
+ * consumes the tournament's invalidation topic, and `tournament.streams` stales
+ * `tournamentQueryKeys.streams(id)`, which is the very key this view reads. A
+ * second subscription here would only duplicate a mechanism that already covers
+ * this page. Keep the single owner.
  */
 const TournamentStreamPage = ({ tournamentId }: { tournamentId: number }) => {
   const t = useTranslations();

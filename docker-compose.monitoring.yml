@@ -209,7 +209,12 @@ services:
           cpus: '0.05'
           memory: 32M
 
+  # Log and trace storage are optional tiers: on a small box (4 CPU / 8G) they
+  # cost ~470M of RSS and page cache that PostgreSQL needs far more than the
+  # site needs 7-day log search. Metrics (prometheus/grafana/exporters) always
+  # run; enable these with `make monitoring-up MONITORING_PROFILES="logs traces"`.
   loki:
+    profiles: ["logs"]
     image: grafana/loki:3.3.2
     restart: unless-stopped
     environment:
@@ -230,6 +235,7 @@ services:
           memory: 128M
 
   tempo:
+    profiles: ["traces"]
     image: grafana/tempo:2.7.0
     restart: unless-stopped
     environment:
@@ -250,6 +256,7 @@ services:
           memory: 128M
 
   otel-collector:
+    profiles: ["traces"]
     # 0.145.0 is the first release shipping the Sentry Exporter (alpha) used by
     # monitoring/otel/otel-collector.yml.
     image: otel/opentelemetry-collector-contrib:0.157.0
@@ -282,6 +289,7 @@ services:
           memory: 64M
 
   promtail:
+    profiles: ["logs"]
     image: grafana/promtail:3.3.2
     restart: unless-stopped
     command: -config.file=/etc/promtail/promtail.yml
@@ -309,7 +317,9 @@ services:
       GF_SECURITY_ADMIN_PASSWORD: "${GRAFANA_ADMIN_PASSWORD:-changeme}"
       GF_USERS_ALLOW_SIGN_UP: "false"
       GF_SERVER_ROOT_URL: "${GRAFANA_ROOT_URL:-http://localhost:3001}"
-      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: "/var/lib/grafana/dashboards/logs.json"
+      # Metrics are the only tier that always runs; logs.json/tracing.json are
+      # empty unless the "logs"/"traces" profiles are enabled.
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: "/var/lib/grafana/dashboards/infrastructure.json"
       TEMPO_URL: "${TEMPO_URL:-http://tempo:3200}"
     volumes:
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
@@ -319,10 +329,10 @@ services:
       - "${GRAFANA_PORT:-3001}:3000"
     networks:
       - app-network
+    # Only prometheus: the loki/tempo datasources resolve lazily at query time,
+    # so grafana must not depend on tiers that may be profiled off.
     depends_on:
       - prometheus
-      - loki
-      - tempo
     deploy:
       resources:
         limits:

@@ -12,26 +12,38 @@ for candidate in (str(REPO_BACKEND_ROOT), str(BALANCER_SERVICE_ROOT)):
         sys.path.insert(0, candidate)
 
 
+from shared.services.realtime import Resource, Scope  # noqa: E402
 from src.services import pickup_mix_realtime  # noqa: E402
 
 
 class PickupMixRealtimeTests(IsolatedAsyncioTestCase):
-    async def test_publishes_a_non_durable_envelope_on_the_workspace_topic(self) -> None:
-        with patch.object(pickup_mix_realtime, "publish_envelope_to_redis", new=AsyncMock()) as publish:
-            await pickup_mix_realtime.emit_pickup_mix_updated(7, reason="roster", actor_user_id=9)
+    """What the rail is told, not how it delivers it.
 
-        publish.assert_awaited_once()
-        kwargs = publish.await_args.kwargs
-        self.assertEqual(kwargs["topic"], "workspace:7:pickup_mix")
-        envelope = kwargs["envelope"]
-        self.assertEqual(envelope.event_id, 0)
-        self.assertEqual(envelope.event_type, pickup_mix_realtime.PICKUP_MIX_UPDATED)
-        self.assertEqual(envelope.actor_user_id, 9)
-        self.assertEqual(envelope.data, {"workspace_id": 7, "reason": "roster"})
+    Delivery (staging, union, publish-after-commit) is pinned once in
+    ``backend/tests/test_realtime_emit.py``; what matters here is the audience
+    and the resource, because getting either wrong sends a workspace's roster
+    to the wrong people or leaves a stale one on screen.
+    """
 
-    async def test_a_publish_failure_is_swallowed(self) -> None:
-        with patch.object(
-            pickup_mix_realtime, "publish_envelope_to_redis", new=AsyncMock(side_effect=RuntimeError("down"))
-        ):
-            await pickup_mix_realtime.emit_pickup_mix_updated(7, reason="rank")
-        # No exception propagated -- a broadcast never fails the mutation it rides on.
+    async def test_a_roster_edit_stales_the_workspace_pickup_mix(self) -> None:
+        session = object()
+
+        with patch.object(pickup_mix_realtime, "emit", new=AsyncMock()) as staged:
+            await pickup_mix_realtime.emit_pickup_mix_updated(session, 7, change="roster", actor_user_id=9)
+
+        staged.assert_awaited_once()
+        args, kwargs = staged.await_args
+        self.assertIs(session, args[0])
+        self.assertEqual(Scope.workspace(7), kwargs["scope"])
+        self.assertEqual([Resource.WORKSPACE_PICKUP_MIX], kwargs["invalidates"])
+        self.assertEqual(9, kwargs["actor_user_id"])
+
+    async def test_the_data_event_is_non_durable_and_carries_no_row_data(self) -> None:
+        with patch.object(pickup_mix_realtime, "emit", new=AsyncMock()) as staged:
+            await pickup_mix_realtime.emit_pickup_mix_updated(object(), 7, change="rank")
+
+        data = staged.await_args.kwargs["data"]
+        self.assertEqual("pickup_mix", data.domain)
+        self.assertEqual(pickup_mix_realtime.PICKUP_MIX_UPDATED, data.event_type)
+        self.assertFalse(data.durable)
+        self.assertEqual({"workspace_id": 7, "change": "rank"}, dict(data.payload))

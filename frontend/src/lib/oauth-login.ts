@@ -3,6 +3,7 @@ import { authService } from "@/services/auth.service";
 import type { OAuthProviderName } from "@/types/auth.types";
 import { resolveHost, PLATFORM_ZONE } from "@/lib/host";
 import { publicOrigin, publicHostname } from "@/lib/request-origin";
+import { CSRF_COOKIE, GUARD_COOKIE } from "@/lib/cookie-names";
 
 // Browser-binding CSRF cookie for the OAuth start->callback round trip. The
 // signed state (produced by the backend) carries origin/redirect/action and
@@ -11,7 +12,7 @@ import { publicOrigin, publicHostname } from "@/lib/request-origin";
 // <img>/<a> to /auth/discord/login) cannot read or set this cookie for the
 // victim, so the callback's cookie/state-hash comparison (Task 11) fails
 // closed on login/linking CSRF.
-const CSRF_COOKIE = "owt_oauth_csrf";
+// Deployment-scoped name — see cookie-names.ts.
 const CSRF_COOKIE_MAX_AGE_SECONDS = 10 * 60;
 
 // Task 10R fix 1: the SAME browser-binding pattern as CSRF_COOKIE above,
@@ -32,7 +33,7 @@ const CSRF_COOKIE_MAX_AGE_SECONDS = 10 * 60;
 // then the ticket's `lg` field -- the raw value is never put in a URL, never
 // logged, and never sent anywhere except back to identity-svc at redemption
 // time (by /auth/sso, /auth/link/complete) for a constant-time compare.
-const GUARD_COOKIE = "owt_xdomain_guard";
+// Deployment-scoped name — see cookie-names.ts.
 const GUARD_COOKIE_MAX_AGE_SECONDS = CSRF_COOKIE_MAX_AGE_SECONDS;
 
 function generateSecureToken(): string {

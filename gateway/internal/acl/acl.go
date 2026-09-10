@@ -79,6 +79,17 @@ type Registry struct {
 // spectating topics are public UNLESS the tournament is hidden (issue #115).
 func New(resolver WorkspaceResolver, members MembershipChecker, vis VisibilityChecker) *Registry {
 	r := &Registry{resolver: resolver, members: members, vis: vis}
+	// Invalidation topics carry no data — only the names of resources that
+	// went stale — but they are gated exactly like the domain topics of the
+	// same scope: which tournaments/workspaces exist, and when they change, is
+	// itself information. There is deliberately no global invalidation topic
+	// for that reason (design: 2026-09-09-unified-event-delivery.md D2), and
+	// no encounter one (an encounter write stales tournament.encounters).
+	r.register("tournament:*:invalidation", r.allowSpectateTournament)
+	r.register("user:*:invalidation", r.allowOwnNotifications)
+	// workspace:*:invalidation is already covered by the workspace:*:* rule
+	// below; a separate registration would be dead code the first-match loop
+	// never reaches.
 	r.register("tournament:*:bracket", r.allowSpectateTournament)     // public unless hidden
 	r.register("tournament:*:draft", r.allowSpectateTournament)       // public unless hidden
 	r.register("encounter:*:map-veto", r.allowSpectateEncounter)      // public unless hidden

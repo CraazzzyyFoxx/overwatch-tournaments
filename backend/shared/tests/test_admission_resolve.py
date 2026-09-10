@@ -103,6 +103,7 @@ class _Resolver:
         auth_user_ids: Any,
         requirement: Any,
         force_refresh: bool = False,
+        allow_stale: bool = False,
         source: Any = SubscriptionCollectionSource.scheduled,
     ) -> dict[int, tuple[Outcome, dict[str, SubscriptionVerdict]]]:
         ids = list(auth_user_ids)
@@ -111,6 +112,7 @@ class _Resolver:
                 "workspace_id": workspace_id,
                 "auth_user_ids": ids,
                 "force_refresh": force_refresh,
+                "allow_stale": allow_stale,
                 "source": source,
             }
         )
@@ -231,13 +233,15 @@ class ForcingTests(IsolatedAsyncioTestCase):
     async def test_a_list_read_never_forces_and_logs_as_scheduled(self):
         """A badge is not a decision. Forcing here would put every open admin table
         on the provider's rate limit, and tagging it as a check-in attempt would
-        make the audit trail unreadable."""
+        make the audit trail unreadable. It also accepts stale rows: refreshing
+        from a list read paid one provider call per registrant every TTL."""
         session = _Session([(1, 101)])
         resolver = _Resolver()
 
         await resolve_admission(session, [_reg(1)], config=_config(subscription=True), resolver=resolver)
 
         assert resolver.calls[0]["force_refresh"] is False
+        assert resolver.calls[0]["allow_stale"] is True
         assert resolver.calls[0]["source"] is SubscriptionCollectionSource.scheduled
 
     async def test_a_gate_forces_and_names_its_stage(self):
@@ -258,6 +262,7 @@ class ForcingTests(IsolatedAsyncioTestCase):
                 )
 
                 assert resolver.calls[0]["force_refresh"] is True
+                assert resolver.calls[0]["allow_stale"] is False
                 assert resolver.calls[0]["source"] is source
 
 

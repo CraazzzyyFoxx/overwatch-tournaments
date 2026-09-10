@@ -19,6 +19,7 @@ import os
 from dataclasses import dataclass
 from typing import Any
 from unittest import IsolatedAsyncioTestCase
+from unittest.mock import patch
 
 os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
 os.environ.setdefault("POSTGRES_USER", "postgres")
@@ -28,6 +29,7 @@ os.environ.setdefault("POSTGRES_HOST", "localhost")
 os.environ.setdefault("POSTGRES_PORT", "5432")
 
 from shared.schemas.settings import StreamCollectionConfig  # noqa: E402
+from shared.services.realtime import Resource, Scope  # noqa: E402
 from src.services import helix, poller  # noqa: E402
 from src.services.state import StreamStateStore  # noqa: E402
 from src.services.targets import ParticipantChannel  # noqa: E402
@@ -83,7 +85,6 @@ class _FakeRedis:
         self.hashes: dict[str, dict[str, str]] = {}
         self.ttls: dict[str, int] = {}
         self.strings: dict[str, str] = {}
-        self.published: list[tuple[str, dict[str, Any]]] = []
 
     def pipeline(self, transaction: bool = False) -> _FakePipeline:
         return _FakePipeline(self.hashes, self.ttls)
@@ -100,9 +101,6 @@ class _FakeRedis:
     async def delete(self, key: str) -> None:
         self.strings.pop(key, None)
         self.hashes.pop(key, None)
-
-    async def publish(self, channel: str, payload: str) -> None:
-        self.published.append((channel, json.loads(payload)))
 
 
 def _snapshot(login: str, user_id: str | None = None) -> helix.StreamSnapshot:
@@ -153,6 +151,23 @@ class _FakeTargetsService:
         return {tid: self.links.get(tid, []) for tid in tournament_ids}
 
 
+class _FakeSession:
+    """Records what the tick staged and that the tick committed it.
+
+    The tick announces through ``emit``, so what a subscriber eventually sees is
+    decided by the staged scope/resource/payload plus the commit. How staging
+    turns into a published frame is pinned once, in
+    ``backend/tests/test_realtime_emit.py``.
+    """
+
+    def __init__(self) -> None:
+        self.staged: list[dict[str, Any]] = []
+        self.commits = 0
+
+    async def commit(self) -> None:
+        self.commits += 1
+
+
 class _TickCase(IsolatedAsyncioTestCase):
     """Wires the target queries to plain in-memory data."""
 
@@ -160,6 +175,7 @@ class _TickCase(IsolatedAsyncioTestCase):
         self.redis = _FakeRedis()
         self.cfg = StreamCollectionConfig(enabled=True, interval_seconds=60, batch_size=100)
         self.targets = _FakeTargetsService()
+        self.session = _FakeSession()
 
     def _tournament(self, tournament_id: int, *, hidden: bool = False) -> None:
         self.targets.tournaments.append(_Tournament(tournament_id=tournament_id, workspace_id=1, is_hidden=hidden))
@@ -183,7 +199,13 @@ class _TickCase(IsolatedAsyncioTestCase):
         }
 
     async def _run(self, fetch: _Fetcher, *, cfg: StreamCollectionConfig | None = None) -> int:
-        return await poller.run_poll_tick(object(), self.redis, cfg or self.cfg, fetch=fetch, targets=self.targets)
+        async def _record(_session: Any, **kwargs: Any) -> None:
+            self.session.staged.append(kwargs)
+
+        with patch.object(poller, "emit", _record):
+            return await poller.run_poll_tick(
+                self.session, self.redis, cfg or self.cfg, fetch=fetch, targets=self.targets
+            )
 
 
 class GateTests(_TickCase):
@@ -216,7 +238,7 @@ class GateTests(_TickCase):
 
         self.assertEqual(processed, 0)
         self.assertIn("stream:poll:last_run", self.redis.strings)
-        self.assertEqual(self.redis.published, [])
+        self.assertEqual(self.session.staged, [])
 
     async def test_missing_credentials_write_nothing(self) -> None:
         self._tournament(7)
@@ -238,13 +260,17 @@ class PublishTests(_TickCase):
 
         await self._run(_Fetcher(_batch(["castera", "casterb"], logins=["castera", "casterb"])))
 
-        self.assertEqual(len(self.redis.published), 1)
-        channel, frame = self.redis.published[0]
-        self.assertEqual(channel, "realtime:tournament:7:streams")
-        self.assertEqual(frame["topic"], "tournament:7:streams")
-        self.assertEqual(frame["event"]["event_type"], "stream.updated")
-        self.assertEqual(frame["event"]["event_id"], 0)
-        self.assertEqual(frame["event"]["data"], {"tournament_id": 7, "live_count": 2})
+        (staged,) = self.session.staged
+        self.assertEqual(Scope.tournament(7), staged["scope"])
+        self.assertEqual([Resource.TOURNAMENT_STREAMS], staged["invalidates"])
+        data = staged["data"]
+        self.assertEqual("streams", data.domain)
+        self.assertEqual("stream.updated", data.event_type)
+        # No replay cursor: a reconnecting spectator refetches the RPC, which
+        # is also the only thing that applies the visibility rules.
+        self.assertFalse(data.durable)
+        self.assertEqual({"tournament_id": 7, "live_count": 2}, dict(data.payload))
+        self.assertEqual(1, self.session.commits)
 
     async def test_unchanged_live_set_does_not_publish(self) -> None:
         self._tournament(7)
@@ -253,7 +279,7 @@ class PublishTests(_TickCase):
 
         await self._run(_Fetcher(_batch(["caster"], logins=["caster"])))
 
-        self.assertEqual(self.redis.published, [])
+        self.assertEqual(self.session.staged, [])
         # Still rewritten: viewer count, title and the TTL all go stale otherwise.
         self.assertEqual(self.redis.ttls[StreamStateStore.live_key(7)], 3 * self.cfg.interval_seconds)
         self.assertEqual(self._live(7)["twitch:caster"]["viewer_count"], 12)
@@ -265,8 +291,8 @@ class PublishTests(_TickCase):
 
         await self._run(_Fetcher(_batch([], logins=["caster"])))
 
-        self.assertEqual(len(self.redis.published), 1)
-        self.assertEqual(self.redis.published[0][1]["event"]["data"]["live_count"], 0)
+        (staged,) = self.session.staged
+        self.assertEqual(0, staged["data"].payload["live_count"])
         self.assertEqual(self._live(7), {})
 
     async def test_hidden_tournament_is_stored_but_never_announced(self) -> None:
@@ -276,7 +302,7 @@ class PublishTests(_TickCase):
         await self._run(_Fetcher(_batch(["caster"], logins=["caster"])))
 
         self.assertEqual(list(self._live(7)), ["twitch:caster"])
-        self.assertEqual(self.redis.published, [])
+        self.assertEqual(self.session.staged, [])
 
 
 class FanOutTests(_TickCase):
@@ -293,7 +319,7 @@ class FanOutTests(_TickCase):
         self.assertEqual(fetcher.calls[0]["logins"], ["caster"])
         self.assertEqual(list(self._live(7)), ["twitch:caster"])
         self.assertEqual(list(self._live(8)), ["twitch:caster"])
-        self.assertEqual(len(self.redis.published), 2)
+        self.assertEqual(len(self.session.staged), 2)
 
     async def test_verified_participants_are_queried_by_stable_id(self) -> None:
         self._tournament(7)
@@ -352,7 +378,7 @@ class RateLimitGateTests(_TickCase):
         self.assertEqual(list(self._live(7)), ["twitch:castera"])
         # Never polled — must not be recorded as offline.
         self.assertEqual(list(self._live(8)), ["twitch:casterb"])
-        self.assertEqual([topic for topic, _ in self.redis.published], ["realtime:tournament:7:streams"])
+        self.assertEqual([Scope.tournament(7)], [row["scope"] for row in self.session.staged])
 
 
 class PollStatusTests(_TickCase):

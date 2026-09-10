@@ -113,7 +113,7 @@ def _validate_roles(
             _validation_error(f"Invalid sub-role '{subrole}' for {role_code}.")
 
 
-def _is_flex_submission(roles: list[Any]) -> bool:
+def is_flex_submission(roles: list[Any]) -> bool:
     """A flex registration selects every role as primary.
 
     Requires more than one role so a lone primary role (a normal single-role
@@ -146,7 +146,7 @@ def _validate_role_heroes(
         return
 
     max_heroes = _resolve_max_heroes(config)
-    is_flex = _is_flex_submission(roles)
+    is_flex = is_flex_submission(roles)
     any_selected = False
 
     for role in roles:
@@ -386,8 +386,15 @@ def validate_registration_input(
     if additional_roles_config and additional_roles_config.enabled and additional_roles_config.required:
         if not partial or (provided_fields is not None and "roles" in provided_fields):
             roles = built_in_payload_values["roles"] or []
-            is_flex = bool(roles) and all(getattr(role, "is_primary", False) for role in roles)
-            if not is_flex and not any(not getattr(role, "is_primary", False) for role in roles):
+            # "Covers more than the priority role": either an explicit
+            # non-primary row, or a full-flex submission (>1 role, every one
+            # primary). The old guard read `not is_flex and not any(not
+            # is_primary)` with an `is_flex` that lacked the `len > 1` term --
+            # `¬P ∧ P` for a non-empty list, so the toggle never fired.
+            covers_additional = is_flex_submission(roles) or any(
+                not getattr(role, "is_primary", False) for role in roles
+            )
+            if not covers_additional:
                 _validation_error("At least one additional role is required.")
 
     # Validate role codes and sub-roles against the workspace catalog / form config.
@@ -402,7 +409,7 @@ def validate_registration_input(
         # Flex availability guard: when the organizer disabled the Flex role,
         # reject an all-primary (full-flex) submission.
         flex_config = built_in_fields.get("flex_role")
-        if flex_config is not None and not flex_config.enabled and _is_flex_submission(submitted_roles):
+        if flex_config is not None and not flex_config.enabled and is_flex_submission(submitted_roles):
             _validation_error("Flex registration is not available for this tournament.")
 
         # ``all_roles``: every role is mandatory and the registrant names exactly

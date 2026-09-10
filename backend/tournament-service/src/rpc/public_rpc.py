@@ -44,14 +44,13 @@ from shared.core.enums import PickBanKind, SubscriptionCollectionSource
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.rpc.identity import rehydrate_user
 from shared.services.admission import AdmissionStage
-from shared.services.subscriptions.realtime import publish_subscriptions_updated
+from shared.services.subscriptions.realtime import emit_subscriptions_updated
 from shared.services.subscriptions.wiring import build_resolver, build_store
 from shared.services.tournament.visibility import assert_tournament_viewable
 from src import models, schemas
 from src.core import db
 from src.core.broker import optional_broker
 from src.core.config import settings
-from src.core.redis import get_realtime_redis
 from src.rpc._helpers import (
     _dump,
     _identity,
@@ -128,9 +127,6 @@ def _subscription_resolver(session: Any) -> Any:
         twitch_client_id=settings.twitch_client_id,
         broker=optional_broker(),
         proxy=settings.proxy_url,
-        # A gate that flips somebody's verdict tells the workspace so, so an open
-        # admin list stops showing the stale outcome.
-        redis=get_realtime_redis(),
     )
 
 
@@ -473,7 +469,7 @@ def register(broker: Any, logger: Any) -> None:
                     profiles_open=chips.profiles_open,
                     subscription_outcome=chips.subscription_outcome,
                     subscription_verdicts=chips.subscription_verdicts,
-                    roster=(await _public_rosters(session, [reg], show_ranks=show_ranks)).get(reg.id),
+                    roster=(await _public_rosters(session, [reg])).get(reg.id),
                 )
             )
 
@@ -519,7 +515,7 @@ def register(broker: Any, logger: Any) -> None:
                     workspace_id=form.workspace_id,
                     status_meta_map=status_meta_map,
                     show_ranks=form.show_ranks,
-                    roster=(await _public_rosters(session, [updated], show_ranks=form.show_ranks)).get(updated.id),
+                    roster=(await _public_rosters(session, [updated])).get(updated.id),
                 )
             )
 
@@ -591,9 +587,7 @@ def register(broker: Any, logger: Any) -> None:
                     workspace_id=workspace_id,
                     status_meta_map=status_meta_map,
                     show_ranks=form.show_ranks if form else False,
-                    roster=(
-                        await _public_rosters(session, [checked_in], show_ranks=form.show_ranks if form else False)
-                    ).get(checked_in.id),
+                    roster=(await _public_rosters(session, [checked_in])).get(checked_in.id),
                 )
             )
 
@@ -647,15 +641,15 @@ def register(broker: Any, logger: Any) -> None:
                 provider=body.provider,
                 submitted_code=body.code,
             )
-            await session.commit()
             # Redemption writes the entitlement straight through the store, so the
-            # resolver's own signal never fires for it. Published here, after the
-            # commit, which also makes this the one path with no ordering caveat.
-            await publish_subscriptions_updated(
-                get_realtime_redis(),
+            # resolver's own signal never fires for it. Staged before the commit
+            # that owns the write, like every other publisher.
+            await emit_subscriptions_updated(
+                session,
                 form.workspace_id,
-                reason=SubscriptionCollectionSource.redeem,
+                trigger=SubscriptionCollectionSource.redeem,
             )
+            await session.commit()
             return _dump(
                 await subscription_status_for_user(
                     form=form,

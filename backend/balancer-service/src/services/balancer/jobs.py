@@ -19,6 +19,7 @@ from shared.services.balancer_realtime import (
 )
 from shared.services.roster import roster_engine
 from shared.services.roster_shape_access import get_effective_roster_shape
+from src.core import db
 from src.core.job_store import get_job_store
 from src.core.metrics import (
     BALANCER_JOB_QUEUE_WAIT_SECONDS,
@@ -43,8 +44,8 @@ from src.services.balancer.progress import (
 )
 from src.services.balancer.publisher import BalancerJobPublisher
 from src.services.balancer.realtime import (
-    emit_balancer_job_event,
-    emit_balancer_job_progress,
+    emit_job_lifecycle,
+    emit_job_progress,
 )
 from src.services.balancer.request_parser import BalancerRequestParser
 from src.services.balancer.solver import run_balance
@@ -130,6 +131,28 @@ def _runtime(store=None) -> JobService:
     return JobService(store=RedisMetaStore(store or get_job_store()), concurrency=Unlimited())
 
 
+# The job store is Redis; neither the queue-time RPC (a read) nor the worker
+# writes anything to Postgres. `emit` publishes on a session's commit, so the
+# event row is the only write there is and it needs a session of its own — the
+# one case where opening one here is not the old "publish from a side session
+# after the fact" pattern, because there is no other transaction to ride.
+# Best-effort throughout: a broadcast must never fail the job it describes.
+async def _emit_job(tournament_id: int, event_type: str, **fields: Any) -> None:
+    try:
+        async with db.async_session_maker() as session, session.begin():
+            await emit_job_lifecycle(session, tournament_id, event_type, **fields)
+    except Exception:
+        logger.exception("Failed to publish balancer job event", tournament_id=tournament_id)
+
+
+async def _emit_job_progress(tournament_id: int, **fields: Any) -> None:
+    try:
+        async with db.async_session_maker() as session, session.begin():
+            await emit_job_progress(session, tournament_id, **fields)
+    except Exception:
+        logger.exception("Failed to publish balancer job progress", tournament_id=tournament_id)
+
+
 async def create_job(
     *,
     session,
@@ -202,12 +225,11 @@ async def create_job(
     # Broadcast to everyone with the tournament's balancer page open. Admin jobs
     # carry a tournament_id; API-key/public jobs without one are not fanned out.
     if tournament_id is not None:
-        await emit_balancer_job_event(
+        await _emit_job(
             tournament_id,
             BALANCER_JOB_QUEUED,
             job_id=job_id,
             status="queued",
-            workspace_id=workspace_id,
             actor_user_id=user.id,
         )
 
@@ -291,12 +313,11 @@ async def create_tournament_job(
             detail="Failed to enqueue balancer job",
         ) from exc
 
-    await emit_balancer_job_event(
+    await _emit_job(
         tournament_id,
         BALANCER_JOB_QUEUED,
         job_id=job_id,
         status="queued",
-        workspace_id=workspace_id,
         actor_user_id=user.id,
     )
     return CreateJobResponse(job_id=job_id, status="queued", **_build_job_urls(job_id))
@@ -375,13 +396,12 @@ async def execute_balance_job(job_id: str, *, progress_clock=None) -> None:
     # mark_* reassigns `current_meta`. Admin jobs carry a tournament_id; jobs
     # without one (API-key/public) skip realtime broadcasting entirely.
     rt_tournament_id = current_meta.get("tournament_id") if isinstance(current_meta, dict) else None
-    rt_workspace_id = current_meta.get("workspace_id") if isinstance(current_meta, dict) else None
     rt_actor_id = current_meta.get("created_by") if isinstance(current_meta, dict) else None
 
     async def publish_job_progress(update: dict[str, Any]) -> None:
         if rt_tournament_id is None:
             return
-        await emit_balancer_job_progress(
+        await _emit_job_progress(
             int(rt_tournament_id),
             job_id=job_id,
             status=str(update.get("status", "running")),
@@ -397,14 +417,13 @@ async def execute_balance_job(job_id: str, *, progress_clock=None) -> None:
     ) -> None:
         if rt_tournament_id is None:
             return
-        await emit_balancer_job_event(
+        await _emit_job(
             int(rt_tournament_id),
             event_type,
             job_id=job_id,
             status=status_value,
             progress=progress,
             error=error,
-            workspace_id=int(rt_workspace_id) if rt_workspace_id is not None else None,
             actor_user_id=int(rt_actor_id) if rt_actor_id is not None else None,
         )
 
