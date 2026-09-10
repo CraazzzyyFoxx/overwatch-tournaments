@@ -58,7 +58,4 @@ logs/
 # AI agent tooling
 .claude/
 frontend-redesign/
-# Local agent scratch: worktrees, transcripts and one-off deploy helpers. Never
-# belongs in the tree — a committed worktree pointer breaks every other checkout.
-.aislop/
 OWT Design System/
