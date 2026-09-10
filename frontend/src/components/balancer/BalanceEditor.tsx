@@ -33,6 +33,7 @@ import {
   findBalancePlayerLocation,
   moveBalancePlayer,
   resolveBalanceDropTarget,
+  rosterCapacity,
   type BalanceActiveDrag,
 } from "./balance-editor-helpers";
 import { useBalancerDragGhosts } from "./useBalancerDragGhosts";
@@ -74,6 +75,15 @@ export const BalanceEditor = forwardRef<HTMLDivElement, BalanceEditorProps>(func
   } | null>(null);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
   const teamCards = useMemo(() => value?.teams ?? [], [value]);
+  // The buckets this tournament's roster shape actually fields (a 1-2-2 shape
+  // has no Flex row, an all-flex shape has only one): the same capacity read
+  // the move rules gate on, so the card never shows a seat nobody can fill.
+  const bucketKeys = useMemo(() => {
+    if (!value) return BALANCE_ROSTER_KEYS;
+    const capacity = rosterCapacity(value);
+    const fielded = BALANCE_ROSTER_KEYS.filter((roleKey) => capacity[roleKey] > 0);
+    return fielded.length > 0 ? fielded : BALANCE_ROSTER_KEYS;
+  }, [value]);
 
   const { remoteDrags, broadcastDragStart, broadcastDragOver, broadcastDragEnd } =
     useBalancerDragGhosts({ topic: realtimeTopic, currentUserId });
@@ -104,11 +114,9 @@ export const BalanceEditor = forwardRef<HTMLDivElement, BalanceEditorProps>(func
     }
     return {
       currentRole: activePlayer.roleKey,
-      playableRoles: BALANCE_ROSTER_KEYS.filter((role) =>
-        canPlayerPlayRole(activePlayer.player, role),
-      ),
+      playableRoles: bucketKeys.filter((role) => canPlayerPlayRole(activePlayer.player, role)),
     };
-  }, [activePlayer]);
+  }, [activePlayer, bucketKeys]);
 
   if (!value || teamCards.length === 0) {
     return (
@@ -204,6 +212,7 @@ export const BalanceEditor = forwardRef<HTMLDivElement, BalanceEditorProps>(func
               key={`${team.id}-${teamIndex}`}
               team={team}
               teamIndex={teamIndex}
+              bucketKeys={bucketKeys}
               divisionGrid={divisionGrid}
               selectedPlayerId={selectedPlayerId}
               collapsed={collapsedTeamIds.includes(team.id)}

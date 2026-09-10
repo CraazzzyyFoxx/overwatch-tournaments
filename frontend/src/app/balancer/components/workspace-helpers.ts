@@ -359,7 +359,8 @@ function normalizeInternalPayload(payload: InternalBalancePayload): InternalBala
       roster: {
         Tank: team.roster.Tank ?? [],
         Damage: team.roster.Damage ?? [],
-        Support: team.roster.Support ?? []
+        Support: team.roster.Support ?? [],
+        Flex: team.roster.Flex ?? []
       }
     }))
   };
@@ -379,20 +380,20 @@ export function buildVariantFromSavedBalance(balance: SavedBalance): BalanceVari
  * Solver role spelling -> the editor's roster key.
  *
  * A balance response is keyed by the canonical roster slot codes of
- * `shared/domain/roster_shape.py` (`tank`/`dps`/`support`), because the solver's
- * role mask is now a projection of the tournament roster shape. The editor and
- * every persisted `result_json` are keyed by the display names, so the response
- * is re-keyed on the way in. Both spellings are accepted: runs and saved
- * balances produced before the roster shape landed carry the display names.
- *
- * `flex` is deliberately absent — the three-column editor has no bucket for it,
- * so a flex roster shape is unsupported here rather than half-rendered.
+ * `shared/domain/roster_shape.py` (`tank`/`dps`/`support`/`flex`), because the
+ * solver's role mask is a projection of the tournament roster shape. The editor
+ * and every persisted `result_json` are keyed by the display names, so the
+ * response is re-keyed on the way in. Both spellings are accepted: runs and
+ * saved balances produced before the roster shape landed carry the display
+ * names.
  */
 const ROSTER_KEY_BY_SOLVER_ROLE: Record<string, BalancerRosterKey> = {
   ...API_ROLE_KEYS,
+  flex: "Flex",
   Tank: "Tank",
   Damage: "Damage",
-  Support: "Support"
+  Support: "Support",
+  Flex: "Flex"
 };
 
 /**
@@ -426,7 +427,8 @@ export function convertBalanceResponseToInternalPayload(
       const roster: Record<BalancerRosterKey, InternalBalancePlayer[]> = {
         Tank: [],
         Damage: [],
-        Support: []
+        Support: [],
+        Flex: []
       };
       for (const [role, players] of Object.entries(team.roster)) {
         const rosterKey = ROSTER_KEY_BY_SOLVER_ROLE[role];
@@ -454,10 +456,6 @@ function getRegistrationDisplayName(registration: AdminRegistration): string {
   return registration.battle_tag ?? registration.display_name ?? `registration-${registration.id}`;
 }
 
-function isRegistrationFlex(registration: AdminRegistration): boolean {
-  return registration.roles.length > 0 && registration.roles.every((role) => role.is_primary);
-}
-
 export function isRegistrationIncludedInBalancer(registration: AdminRegistration): boolean {
   return !registration.deleted_at && !registration.balancer_status_meta.excludes_from_balancer;
 }
@@ -476,7 +474,7 @@ export function createSyntheticPlayerFromRegistration(
   grid: DivisionGrid = DEFAULT_DIVISION_GRID
 ): BalancerPlayerRecord {
   const battleTag = getRegistrationDisplayName(registration);
-  const isFlex = isRegistrationFlex(registration);
+  const isFlex = registration.is_flex;
   return {
     id: registration.id,
     tournament_id: registration.tournament_id,
@@ -510,7 +508,7 @@ export function createSyntheticApplicationFromRegistration(
   player: BalancerPlayerRecord | null = null
 ): BalancerApplication {
   const sortedRoles = [...registration.roles].sort((left, right) => left.priority - right.priority);
-  const isFlex = isRegistrationFlex(registration);
+  const isFlex = registration.is_flex;
   const primaryRole = isFlex
     ? null
     : (sortedRoles.find((role) => role.is_primary)?.role ?? sortedRoles[0]?.role ?? null);

@@ -71,14 +71,16 @@ function parseTeam(raw: unknown, index: number): InternalBalanceTeam {
   );
   if (unknownRole !== undefined) {
     throw new Error(
-      `Team "${name}" has an unsupported roster role "${unknownRole}". Use Tank, Damage or Support.`
+      `Team "${name}" has an unsupported roster role "${unknownRole}". Use Tank, Damage, Support or Flex.`
     );
   }
 
-  const parsedRoster = { Tank: [], Damage: [], Support: [] } as Record<
-    BalancerRosterKey,
-    InternalBalancePlayer[]
-  >;
+  const parsedRoster: Record<BalancerRosterKey, InternalBalancePlayer[]> = {
+    Tank: [],
+    Damage: [],
+    Support: [],
+    Flex: []
+  };
   for (const roleKey of BALANCE_ROSTER_KEYS) {
     const players = roster[roleKey];
     if (players === undefined || players === null) {

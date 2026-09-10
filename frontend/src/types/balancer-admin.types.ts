@@ -24,8 +24,8 @@ export type { BuiltInFieldConfig, FieldValidationConfig };
 
 /** Registration/draft wire code — the non-flex slice of `PlayerRoleSlotCode`. */
 export type BalancerRoleCode = Exclude<PlayerRoleSlotCode, "flex">;
-/** Capitalized roster key — the non-flex slice of `PlayerRoleOption`. */
-export type BalancerRosterKey = Exclude<PlayerRoleOption, "Flex">;
+/** Capitalized roster bucket key — a role, or the role-less `Flex` slot. */
+export type BalancerRosterKey = PlayerRoleOption;
 export type BalancerRoleSubtype = string;
 /** Layers a registration role's rank can resolve from, strongest first. */
 export type RegistrationRankSource = "registration" | "workspace" | "ow" | "none";
