@@ -27,21 +27,25 @@ RANK_SCHEMA = "overwatch_rank"
 
 
 class UserRankSnapshot(db.Base):
-    """A single observation of a battle.net account's competitive rank.
+    """One observed CHANGE of a battle.net account's competitive rank.
 
-    One row is written per scheduled run, per battle tag, per role, per
-    platform — a full time series (history is "every run"). Native OverFast
-    ``division``/``tier`` are always stored; ``rank_value`` is the optional
-    mapped integer (see the rank-mapping service) so the value stays compatible
-    with the existing DivisionGrid/balancer scale. Attached to the domain
-    ``players.user`` — never to ``auth.user``.
+    One row per battle tag, per role, per platform, written only when the poll
+    finds something different from the series' last row (migration
+    ``rankdedup01``; ``parser-service`` ``changed_ranks``). The first poll of an
+    account records every role, unranked ones included, so every later
+    transition -- ranked to unranked too -- has a row to be read against. A
+    poll that changes nothing writes nothing; the state row's
+    ``last_success_at`` is what proves the account was checked. Native
+    OverFast ``division``/``tier`` are always stored; ``rank_value`` is the
+    optional mapped integer (see the rank-mapping service) so the value stays
+    compatible with the existing DivisionGrid/balancer scale. Attached to the
+    domain ``players.user`` -- never to ``auth.user``.
 
     ``db.Base`` rather than ``TimeStampIntegerMixin`` (migration ``ranktrim01``):
-    the table grows by a few million rows a month, and the mixin's
-    ``created_at`` duplicated ``captured_at`` while ``updated_at`` was NULL on
-    every row of an append-only series. The raw OverFast role object that used
-    to ride along as ``raw_payload`` (three icon URLs per row, over half the
-    heap) is gone for the same reason: nothing ever read it.
+    the mixin's ``created_at`` duplicated ``captured_at`` while ``updated_at``
+    was NULL on every row of an append-only series. The raw OverFast role object
+    that used to ride along as ``raw_payload`` is gone for the same reason:
+    nothing ever read it.
     """
 
     __tablename__ = "rank_snapshot"
@@ -127,10 +131,6 @@ class BattleTagRankState(db.TimeStampIntegerMixin):
     # Not individually indexed: covered by the composite indexes below.
     last_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_success_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    last_snapshot_id: Mapped[int | None] = mapped_column(
-        ForeignKey(f"{RANK_SCHEMA}.rank_snapshot.id", ondelete="SET NULL"),
-        nullable=True,
-    )
 
     status: Mapped[str] = mapped_column(String(32), server_default=enums.RankCollectionStatus.pending.value)
     consecutive_failures: Mapped[int] = mapped_column(Integer(), server_default="0")

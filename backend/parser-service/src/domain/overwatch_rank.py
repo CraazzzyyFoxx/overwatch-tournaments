@@ -8,6 +8,7 @@ boundary.
 from __future__ import annotations
 
 import math
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Literal
@@ -19,6 +20,8 @@ from shared.domain import ow_ladder
 __all__ = (
     "ParsedRank",
     "RankFetchResult",
+    "RankSeriesState",
+    "changed_ranks",
     "RankLookup",
     "DEFAULT_OW2_DIVISION_BASE",
     "build_default_lookup",
@@ -55,6 +58,48 @@ class RankFetchResult:
     status: enums.RankCollectionStatus
     ranks: list[ParsedRank] = field(default_factory=list)
     error: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class RankSeriesState:
+    """What the last stored snapshot of one (platform, role) series says."""
+
+    division: str | None
+    tier: int | None
+    is_ranked: bool
+    rank_value: int | None
+
+    @classmethod
+    def of(cls, rank: ParsedRank, rank_value: int | None) -> RankSeriesState:
+        return cls(division=rank.division, tier=rank.tier, is_ranked=rank.is_ranked, rank_value=rank_value)
+
+
+def changed_ranks(
+    observed: Iterable[tuple[ParsedRank, int | None]],
+    latest: Mapping[tuple[str, str], RankSeriesState],
+) -> list[tuple[ParsedRank, int | None]]:
+    """The observations worth a row: those that differ from their series' last one.
+
+    ``rank_snapshot`` is a series of *changes*, not of polls. A poll that finds
+    every role where the previous poll left it writes nothing -- 99.4% of the
+    rows the collector used to write (2.54M on a production restore) were
+    identical to the row before them. A series with no row yet is a change by
+    definition, so the first poll of an account still records every role,
+    unranked ones included: that is the marker every later transition is read
+    against, and "went unranked" is a transition too.
+
+    ``observed`` pairs each parsed rank with the ``rank_value`` the current
+    mapping gives it, and the mapped value is part of the comparison: the
+    balancer reads ``rank_value``, so a mapping change with the same native
+    division/tier must land a row too, or the latest one keeps quoting the old
+    ladder. ``season`` is not compared -- a new season is only meaningful through
+    the rank it resets.
+    """
+    return [
+        (rank, rank_value)
+        for rank, rank_value in observed
+        if latest.get((rank.platform, rank.role)) != RankSeriesState.of(rank, rank_value)
+    ]
 
 
 #: Lower bound (bottom tier) rank_value per native division.

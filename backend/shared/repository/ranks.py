@@ -54,7 +54,7 @@ def _seed_next_eligible(interval_seconds: int) -> sa.ColumnElement[datetime]:
 
 
 class RankSnapshotRepository(BaseRepository[models.UserRankSnapshot]):
-    """``ranks.user_rank_snapshot`` — one row per fetch, per role/platform."""
+    """``overwatch_rank.rank_snapshot`` — one row per observed rank change, per role/platform."""
 
     def __init__(self) -> None:
         super().__init__(models.UserRankSnapshot)
@@ -65,6 +65,16 @@ class RankFetchLogRepository(BaseRepository[models.RankFetchLog]):
 
     def __init__(self) -> None:
         super().__init__(models.RankFetchLog)
+
+    async def delete_older_than(self, session: AsyncSession, cutoff: datetime) -> int:
+        """Drop rows created before ``cutoff``; returns how many went.
+
+        The task feed reads the newest few hundred rows and the health dashboard
+        the last 24 hours, so nothing older than the retention window is ever
+        read. ``ix_fetch_log_created_at`` exists for this range.
+        """
+        result = await session.execute(sa.delete(models.RankFetchLog).where(models.RankFetchLog.created_at < cutoff))
+        return int(result.rowcount or 0)
 
 
 class BattleTagRankStateRepository(BaseRepository[models.BattleTagRankState]):
