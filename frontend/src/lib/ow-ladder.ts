@@ -38,7 +38,7 @@ export interface LadderTier {
 /** Sub-tiers per division, tier 1 the top and tier `TIERS_PER_DIVISION` the bottom. */
 const TIERS_PER_DIVISION: number = generated.tiers_per_division;
 
-/** Public bucket holding one PNG per tier slug (`bronze-5.png` … `champion-1.png`). */
+/** Site-relative directory of the default OW2 rank icons (`bronze-5.png` … `champion-1.png`). */
 export const DIVISION_ICON_BASE: string = generated.division_icon_base;
 
 /**

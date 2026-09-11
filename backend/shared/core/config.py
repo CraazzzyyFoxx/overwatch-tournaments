@@ -97,7 +97,7 @@ class BaseServiceSettings(BaseSettings):
     s3_secret_key: str | None = None
     s3_endpoint_url: str | None = None
     s3_bucket_name: str = "aqt"
-    s3_public_url: str | None = None  # e.g. "https://static.nl.craazzzyyfoxx.me/aqt"
+    s3_public_url: str | None = None  # e.g. "https://s3.example/aqt"
 
     # Observability
     sentry_dsn: str | None = None

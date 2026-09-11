@@ -5,7 +5,6 @@
 
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import Image from "next/image";
 import { ArrowRight } from "lucide-react";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -323,7 +322,10 @@ function RankMappingSection({
     setCells((current) =>
       current.map((cell, i) =>
         i === index
-          ? { ...cell, rank_value: resolveRankFromDivision(grid, divisionNumber) ?? cell.rank_value }
+          ? {
+              ...cell,
+              rank_value: resolveRankFromDivision(grid, divisionNumber) ?? cell.rank_value
+            }
           : cell
       )
     );
@@ -342,13 +344,17 @@ function RankMappingSection({
       </CardHeader>
       <CardContent className="space-y-4">
         <p className="text-sm text-muted-foreground">
-          Map each competitive rank to a rank value on the Overwatch ladder. The
-          division&apos;s lower bound is stored; each workspace resolves it against
-          its own grid.
+          Map each competitive rank to a rank value on the Overwatch ladder. The division&apos;s
+          lower bound is stored; each workspace resolves it against its own grid.
         </p>
 
         <div className="overflow-hidden rounded-md border">
-          <div className={cn(EYEBROW_CLASS, "grid grid-cols-[minmax(140px,1fr)_24px_minmax(0,1.4fr)] gap-3 border-b bg-muted/40 px-4 py-2")}>
+          <div
+            className={cn(
+              EYEBROW_CLASS,
+              "grid grid-cols-[minmax(140px,1fr)_24px_minmax(0,1.4fr)] gap-3 border-b bg-muted/40 px-4 py-2"
+            )}
+          >
             <span>OverFast rank</span>
             <span />
             <span>Ladder division</span>
@@ -381,7 +387,8 @@ function RankMappingSection({
                     <SelectValue>
                       {tier ? (
                         <span className="flex items-center gap-2">
-                          <Image src={tier.icon_url} alt="" width={20} height={20} />
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={tier.icon_url} alt="" width={20} height={20} />
                           <span className="truncate">{tier.name}</span>
                           <span className="ml-auto text-xs tabular-nums text-muted-foreground">
                             {tier.rank_min}
@@ -397,7 +404,8 @@ function RankMappingSection({
                     {internalTiers.map((t) => (
                       <SelectItem key={t.number} value={String(t.number)}>
                         <span className="flex items-center gap-2">
-                          <Image src={t.icon_url} alt="" width={18} height={18} />
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={t.icon_url} alt="" width={18} height={18} />
                           {t.name}
                         </span>
                       </SelectItem>

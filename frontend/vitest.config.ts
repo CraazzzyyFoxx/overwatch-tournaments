@@ -187,11 +187,13 @@ export default defineConfig({
       // Was in the same unrun state when the register-button gate got its first
       // real test: the stream-visibility cases in it had never executed either.
       "src/lib/tournament-status.test.ts",
+      "src/lib/division-grid.test.ts",
       "src/components/Header.mobile-layout.test.ts",
       "src/components/WorkspaceBootstrap.helpers.test.ts",
       // File-level: `src/components` holds both runners' tests, so a directory
       // glob here would drag the `bun:test` files into vitest.
       "src/components/TeamName.behavior.test.tsx",
+      "src/components/DivisionIcon.behavior.test.tsx",
       "src/components/HoverPrefetchLink.behavior.test.tsx",
       "src/components/EncounterRostersModal.behavior.test.tsx",
       "src/components/BracketView.behavior.test.tsx",

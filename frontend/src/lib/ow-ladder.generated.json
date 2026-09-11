@@ -1,7 +1,7 @@
 {
   "_generated_by": "backend/scripts/export_ow_ladder.py -- do not edit by hand",
   "_source": "backend/shared/domain/ow_ladder.py",
-  "division_icon_base": "https://static.nl.craazzzyyfoxx.me/aqt/assets/divisions",
+  "division_icon_base": "/divisions",
   "ow_divisions_desc": [
     "ultimate",
     "grandmaster",
@@ -63,7 +63,7 @@
   "tier_span": 100,
   "tiers": [
     {
-      "icon_url": "https://static.nl.craazzzyyfoxx.me/aqt/assets/divisions/champion-1.png",
+      "icon_url": "/divisions/champion-1.png",
       "name": "Champion 1",
       "number": 1,
       "rank_max": null,
@@ -71,7 +71,7 @@
       "slug": "champion-1"
     },
     {
-      "icon_url": "https://static.nl.craazzzyyfoxx.me/aqt/assets/divisions/champion-2.png",
+      "icon_url": "/divisions/champion-2.png",
       "name": "Champion 2",
       "number": 2,
       "rank_max": 4899,
@@ -79,7 +79,7 @@
       "slug": "champion-2"
     },
     {
-      "icon_url": "https://static.nl.craazzzyyfoxx.me/aqt/assets/divisions/champion-3.png",
+      "icon_url": "/divisions/champion-3.png",
       "name": "Champion 3",
       "number": 3,
       "rank_max": 4799,
@@ -87,7 +87,7 @@
       "slug": "champion-3"
     },
     {
-      "icon_url": "https://static.nl.craazzzyyfoxx.me/aqt/assets/divisions/champion-4.png",
+      "icon_url": "/divisions/champion-4.png",
       "name": "Champion 4",
       "number": 4,
       "rank_max": 4699,
@@ -95,7 +95,7 @@
       "slug": "champion-4"
     },
     {
-      "icon_url": "https://static.nl.craazzzyyfoxx.me/aqt/assets/divisions/champion-5.png",
+      "icon_url": "/divisions/champion-5.png",
       "name": "Champion 5",
       "number": 5,
       "rank_max": 4599,
@@ -103,7 +103,7 @@
       "slug": "champion-5"
     },
     {
-      "icon_url": "https://static.nl.craazzzyyfoxx.me/aqt/assets/divisions/grandmaster-1.png",
+      "icon_url": "/divisions/grandmaster-1.png",
       "name": "Grandmaster 1",
       "number": 6,
       "rank_max": 4499,
@@ -111,7 +111,7 @@
       "slug": "grandmaster-1"
     },
     {
-      "icon_url": "https://static.nl.craazzzyyfoxx.me/aqt/assets/divisions/grandmaster-2.png",
+      "icon_url": "/divisions/grandmaster-2.png",
       "name": "Grandmaster 2",
       "number": 7,
       "rank_max": 4399,
@@ -119,7 +119,7 @@
       "slug": "grandmaster-2"
     },
     {
-      "icon_url": "https://static.nl.craazzzyyfoxx.me/aqt/assets/divisions/grandmaster-3.png",
+      "icon_url": "/divisions/grandmaster-3.png",
       "name": "Grandmaster 3",
       "number": 8,
       "rank_max": 4299,
@@ -127,7 +127,7 @@
       "slug": "grandmaster-3"
     },
     {
-      "icon_url": "https://static.nl.craazzzyyfoxx.me/aqt/assets/divisions/grandmaster-4.png",
+      "icon_url": "/divisions/grandmaster-4.png",
       "name": "Grandmaster 4",
       "number": 9,
       "rank_max": 4199,
@@ -135,7 +135,7 @@
       "slug": "grandmaster-4"
     },
     {
-      "icon_url": "https://static.nl.craazzzyyfoxx.me/aqt/assets/divisions/grandmaster-5.png",
+      "icon_url": "/divisions/grandmaster-5.png",
       "name": "Grandmaster 5",
       "number": 10,
       "rank_max": 4099,
@@ -143,7 +143,7 @@
       "slug": "grandmaster-5"
     },
     {
-      "icon_url": "https://static.nl.craazzzyyfoxx.me/aqt/assets/divisions/master-1.png",
+      "icon_url": "/divisions/master-1.png",
       "name": "Master 1",
       "number": 11,
       "rank_max": 3999,
@@ -151,7 +151,7 @@
       "slug": "master-1"
     },
     {
-      "icon_url": "https://static.nl.craazzzyyfoxx.me/aqt/assets/divisions/master-2.png",
+      "icon_url": "/divisions/master-2.png",
       "name": "Master 2",
       "number": 12,
       "rank_max": 3899,
@@ -159,7 +159,7 @@
       "slug": "master-2"
     },
     {
-      "icon_url": "https://static.nl.craazzzyyfoxx.me/aqt/assets/divisions/master-3.png",
+      "icon_url": "/divisions/master-3.png",
       "name": "Master 3",
       "number": 13,
       "rank_max": 3799,
@@ -167,7 +167,7 @@
       "slug": "master-3"
     },
     {
-      "icon_url": "https://static.nl.craazzzyyfoxx.me/aqt/assets/divisions/master-4.png",
+      "icon_url": "/divisions/master-4.png",
       "name": "Master 4",
       "number": 14,
       "rank_max": 3699,
@@ -175,7 +175,7 @@
       "slug": "master-4"
     },
     {
-      "icon_url": "https://static.nl.craazzzyyfoxx.me/aqt/assets/divisions/master-5.png",
+      "icon_url": "/divisions/master-5.png",
       "name": "Master 5",
       "number": 15,
       "rank_max": 3599,
@@ -183,7 +183,7 @@
       "slug": "master-5"
     },
     {
-      "icon_url": "https://static.nl.craazzzyyfoxx.me/aqt/assets/divisions/diamond-1.png",
+      "icon_url": "/divisions/diamond-1.png",
       "name": "Diamond 1",
       "number": 16,
       "rank_max": 3499,
@@ -191,7 +191,7 @@
       "slug": "diamond-1"
     },
     {
-      "icon_url": "https://static.nl.craazzzyyfoxx.me/aqt/assets/divisions/diamond-2.png",
+      "icon_url": "/divisions/diamond-2.png",
       "name": "Diamond 2",
       "number": 17,
       "rank_max": 3399,
@@ -199,7 +199,7 @@
       "slug": "diamond-2"
     },
     {
-      "icon_url": "https://static.nl.craazzzyyfoxx.me/aqt/assets/divisions/diamond-3.png",
+      "icon_url": "/divisions/diamond-3.png",
       "name": "Diamond 3",
       "number": 18,
       "rank_max": 3299,
@@ -207,7 +207,7 @@
       "slug": "diamond-3"
     },
     {
-      "icon_url": "https://static.nl.craazzzyyfoxx.me/aqt/assets/divisions/diamond-4.png",
+      "icon_url": "/divisions/diamond-4.png",
       "name": "Diamond 4",
       "number": 19,
       "rank_max": 3199,
@@ -215,7 +215,7 @@
       "slug": "diamond-4"
     },
     {
-      "icon_url": "https://static.nl.craazzzyyfoxx.me/aqt/assets/divisions/diamond-5.png",
+      "icon_url": "/divisions/diamond-5.png",
       "name": "Diamond 5",
       "number": 20,
       "rank_max": 3099,
@@ -223,7 +223,7 @@
       "slug": "diamond-5"
     },
     {
-      "icon_url": "https://static.nl.craazzzyyfoxx.me/aqt/assets/divisions/emerald-1.png",
+      "icon_url": "/divisions/emerald-1.png",
       "name": "Emerald 1",
       "number": 21,
       "rank_max": 2999,
@@ -231,7 +231,7 @@
       "slug": "emerald-1"
     },
     {
-      "icon_url": "https://static.nl.craazzzyyfoxx.me/aqt/assets/divisions/emerald-2.png",
+      "icon_url": "/divisions/emerald-2.png",
       "name": "Emerald 2",
       "number": 22,
       "rank_max": 2899,
@@ -239,7 +239,7 @@
       "slug": "emerald-2"
     },
     {
-      "icon_url": "https://static.nl.craazzzyyfoxx.me/aqt/assets/divisions/emerald-3.png",
+      "icon_url": "/divisions/emerald-3.png",
       "name": "Emerald 3",
       "number": 23,
       "rank_max": 2799,
@@ -247,7 +247,7 @@
       "slug": "emerald-3"
     },
     {
-      "icon_url": "https://static.nl.craazzzyyfoxx.me/aqt/assets/divisions/emerald-4.png",
+      "icon_url": "/divisions/emerald-4.png",
       "name": "Emerald 4",
       "number": 24,
       "rank_max": 2699,
@@ -255,7 +255,7 @@
       "slug": "emerald-4"
     },
     {
-      "icon_url": "https://static.nl.craazzzyyfoxx.me/aqt/assets/divisions/emerald-5.png",
+      "icon_url": "/divisions/emerald-5.png",
       "name": "Emerald 5",
       "number": 25,
       "rank_max": 2599,
@@ -263,7 +263,7 @@
       "slug": "emerald-5"
     },
     {
-      "icon_url": "https://static.nl.craazzzyyfoxx.me/aqt/assets/divisions/platinum-1.png",
+      "icon_url": "/divisions/platinum-1.png",
       "name": "Platinum 1",
       "number": 26,
       "rank_max": 2499,
@@ -271,7 +271,7 @@
       "slug": "platinum-1"
     },
     {
-      "icon_url": "https://static.nl.craazzzyyfoxx.me/aqt/assets/divisions/platinum-2.png",
+      "icon_url": "/divisions/platinum-2.png",
       "name": "Platinum 2",
       "number": 27,
       "rank_max": 2399,
@@ -279,7 +279,7 @@
       "slug": "platinum-2"
     },
     {
-      "icon_url": "https://static.nl.craazzzyyfoxx.me/aqt/assets/divisions/platinum-3.png",
+      "icon_url": "/divisions/platinum-3.png",
       "name": "Platinum 3",
       "number": 28,
       "rank_max": 2299,
@@ -287,7 +287,7 @@
       "slug": "platinum-3"
     },
     {
-      "icon_url": "https://static.nl.craazzzyyfoxx.me/aqt/assets/divisions/platinum-4.png",
+      "icon_url": "/divisions/platinum-4.png",
       "name": "Platinum 4",
       "number": 29,
       "rank_max": 2199,
@@ -295,7 +295,7 @@
       "slug": "platinum-4"
     },
     {
-      "icon_url": "https://static.nl.craazzzyyfoxx.me/aqt/assets/divisions/platinum-5.png",
+      "icon_url": "/divisions/platinum-5.png",
       "name": "Platinum 5",
       "number": 30,
       "rank_max": 2099,
@@ -303,7 +303,7 @@
       "slug": "platinum-5"
     },
     {
-      "icon_url": "https://static.nl.craazzzyyfoxx.me/aqt/assets/divisions/gold-1.png",
+      "icon_url": "/divisions/gold-1.png",
       "name": "Gold 1",
       "number": 31,
       "rank_max": 1999,
@@ -311,7 +311,7 @@
       "slug": "gold-1"
     },
     {
-      "icon_url": "https://static.nl.craazzzyyfoxx.me/aqt/assets/divisions/gold-2.png",
+      "icon_url": "/divisions/gold-2.png",
       "name": "Gold 2",
       "number": 32,
       "rank_max": 1899,
@@ -319,7 +319,7 @@
       "slug": "gold-2"
     },
     {
-      "icon_url": "https://static.nl.craazzzyyfoxx.me/aqt/assets/divisions/gold-3.png",
+      "icon_url": "/divisions/gold-3.png",
       "name": "Gold 3",
       "number": 33,
       "rank_max": 1799,
@@ -327,7 +327,7 @@
       "slug": "gold-3"
     },
     {
-      "icon_url": "https://static.nl.craazzzyyfoxx.me/aqt/assets/divisions/gold-4.png",
+      "icon_url": "/divisions/gold-4.png",
       "name": "Gold 4",
       "number": 34,
       "rank_max": 1699,
@@ -335,7 +335,7 @@
       "slug": "gold-4"
     },
     {
-      "icon_url": "https://static.nl.craazzzyyfoxx.me/aqt/assets/divisions/gold-5.png",
+      "icon_url": "/divisions/gold-5.png",
       "name": "Gold 5",
       "number": 35,
       "rank_max": 1599,
@@ -343,7 +343,7 @@
       "slug": "gold-5"
     },
     {
-      "icon_url": "https://static.nl.craazzzyyfoxx.me/aqt/assets/divisions/silver-1.png",
+      "icon_url": "/divisions/silver-1.png",
       "name": "Silver 1",
       "number": 36,
       "rank_max": 1499,
@@ -351,7 +351,7 @@
       "slug": "silver-1"
     },
     {
-      "icon_url": "https://static.nl.craazzzyyfoxx.me/aqt/assets/divisions/silver-2.png",
+      "icon_url": "/divisions/silver-2.png",
       "name": "Silver 2",
       "number": 37,
       "rank_max": 1399,
@@ -359,7 +359,7 @@
       "slug": "silver-2"
     },
     {
-      "icon_url": "https://static.nl.craazzzyyfoxx.me/aqt/assets/divisions/silver-3.png",
+      "icon_url": "/divisions/silver-3.png",
       "name": "Silver 3",
       "number": 38,
       "rank_max": 1299,
@@ -367,7 +367,7 @@
       "slug": "silver-3"
     },
     {
-      "icon_url": "https://static.nl.craazzzyyfoxx.me/aqt/assets/divisions/silver-4.png",
+      "icon_url": "/divisions/silver-4.png",
       "name": "Silver 4",
       "number": 39,
       "rank_max": 1199,
@@ -375,7 +375,7 @@
       "slug": "silver-4"
     },
     {
-      "icon_url": "https://static.nl.craazzzyyfoxx.me/aqt/assets/divisions/silver-5.png",
+      "icon_url": "/divisions/silver-5.png",
       "name": "Silver 5",
       "number": 40,
       "rank_max": 1099,
@@ -383,7 +383,7 @@
       "slug": "silver-5"
     },
     {
-      "icon_url": "https://static.nl.craazzzyyfoxx.me/aqt/assets/divisions/bronze-1.png",
+      "icon_url": "/divisions/bronze-1.png",
       "name": "Bronze 1",
       "number": 41,
       "rank_max": 999,
@@ -391,7 +391,7 @@
       "slug": "bronze-1"
     },
     {
-      "icon_url": "https://static.nl.craazzzyyfoxx.me/aqt/assets/divisions/bronze-2.png",
+      "icon_url": "/divisions/bronze-2.png",
       "name": "Bronze 2",
       "number": 42,
       "rank_max": 899,
@@ -399,7 +399,7 @@
       "slug": "bronze-2"
     },
     {
-      "icon_url": "https://static.nl.craazzzyyfoxx.me/aqt/assets/divisions/bronze-3.png",
+      "icon_url": "/divisions/bronze-3.png",
       "name": "Bronze 3",
       "number": 43,
       "rank_max": 799,
@@ -407,7 +407,7 @@
       "slug": "bronze-3"
     },
     {
-      "icon_url": "https://static.nl.craazzzyyfoxx.me/aqt/assets/divisions/bronze-4.png",
+      "icon_url": "/divisions/bronze-4.png",
       "name": "Bronze 4",
       "number": 44,
       "rank_max": 699,
@@ -415,7 +415,7 @@
       "slug": "bronze-4"
     },
     {
-      "icon_url": "https://static.nl.craazzzyyfoxx.me/aqt/assets/divisions/bronze-5.png",
+      "icon_url": "/divisions/bronze-5.png",
       "name": "Bronze 5",
       "number": 45,
       "rank_max": 599,
