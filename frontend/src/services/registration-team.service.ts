@@ -125,17 +125,21 @@ const registrationTeamService = {
     await apiFetch(`/api/v1/registration-teams/${teamId}`, { method: "DELETE" });
   },
 
-  /** Organizer refuses a team. `withdrawMembers` defaults to true server-side:
-   *  leaving members approved strands them with a live registration for a
-   *  tournament they cannot play in. */
+  /** Reject the team without withdrawing players unless explicitly requested. */
   async reject(
     tournamentId: number,
     teamId: number,
-    options?: { withdrawMembers?: boolean },
+    options: { withdrawMembers?: boolean; reason: string },
   ): Promise<RegistrationTeam> {
     const response = await apiFetch(
       `/api/v1/admin/balancer/tournaments/${tournamentId}/registration-teams/${teamId}/reject`,
-      { method: "POST", body: { withdraw_members: options?.withdrawMembers ?? true } },
+      {
+        method: "POST",
+        body: {
+          withdraw_members: options.withdrawMembers ?? false,
+          reason: options.reason,
+        },
+      },
     );
     return response.json();
   },
@@ -153,7 +157,7 @@ const registrationTeamService = {
   }> {
     const response = await apiFetch(
       `/api/balancer/tournaments/${tournamentId}/registered-teams/export`,
-      { method: "POST", body: teamIds?.length ? { team_ids: teamIds } : {} },
+      { method: "POST", body: teamIds !== undefined ? { team_ids: teamIds } : {} },
     );
     return response.json();
   },
@@ -226,6 +230,119 @@ const registrationTeamService = {
       `/api/v1/admin/balancer/tournaments/${tournamentId}/registration-teams/${teamId}/invite-cap/reset`,
       { method: "POST" },
     );
+  },
+
+  async rename(teamId: number, name: string): Promise<RegistrationTeam> {
+    const response = await apiFetch(`/api/v1/registration-teams/${teamId}`, {
+      method: "PATCH",
+      body: { name },
+    });
+    return response.json();
+  },
+
+  async placeMember(
+    teamId: number,
+    registrationId: number,
+    input: { slot_code: string; is_substitute?: boolean; swap_with_registration_id?: number | null },
+  ): Promise<RegistrationTeam> {
+    const response = await apiFetch(
+      `/api/v1/registration-teams/${teamId}/members/${registrationId}/place`,
+      { method: "POST", body: input },
+    );
+    return response.json();
+  },
+
+  async setManager(teamId: number, registrationId: number, isManager: boolean): Promise<RegistrationTeam> {
+    const response = await apiFetch(
+      `/api/v1/registration-teams/${teamId}/members/${registrationId}/manager`,
+      { method: "POST", body: { is_manager: isManager } },
+    );
+    return response.json();
+  },
+
+  async extendInvite(
+    teamId: number,
+    inviteId: number,
+    input?: { ttl_days?: number | null; rotate_token?: boolean },
+  ): Promise<RegistrationTeamInviteCreated> {
+    const response = await apiFetch(
+      `/api/v1/registration-teams/${teamId}/invites/${inviteId}/extend`,
+      { method: "POST", body: input ?? {} },
+    );
+    return response.json();
+  },
+
+  async lockRoster(teamId: number): Promise<RegistrationTeam> {
+    const response = await apiFetch(`/api/v1/registration-teams/${teamId}/lock`, { method: "POST" });
+    return response.json();
+  },
+
+  async checkInRoster(teamId: number, excludeRegistrationIds: number[] = []): Promise<RegistrationTeam> {
+    const response = await apiFetch(`/api/v1/registration-teams/${teamId}/check-in`, {
+      method: "POST",
+      body: { exclude_registration_ids: excludeRegistrationIds },
+    });
+    return response.json();
+  },
+
+  async coverSubscription(
+    teamId: number,
+    input?: { code?: string | null; provider?: string },
+  ): Promise<RegistrationTeam> {
+    const response = await apiFetch(`/api/v1/registration-teams/${teamId}/subscription/cover`, {
+      method: "POST",
+      body: input ?? {},
+    });
+    return response.json();
+  },
+
+  async renameAdmin(tournamentId: number, teamId: number, name: string): Promise<RegistrationTeam> {
+    const response = await apiFetch(
+      `/api/v1/admin/balancer/tournaments/${tournamentId}/registration-teams/${teamId}`,
+      { method: "PATCH", body: { name } },
+    );
+    return response.json();
+  },
+
+  async unlockRoster(tournamentId: number, teamId: number): Promise<RegistrationTeam> {
+    const response = await apiFetch(
+      `/api/v1/admin/balancer/tournaments/${tournamentId}/registration-teams/${teamId}/unlock`,
+      { method: "POST" },
+    );
+    return response.json();
+  },
+
+  async setAdmission(
+    tournamentId: number,
+    teamId: number,
+    admission: "pending" | "accepted" | "waitlisted",
+  ): Promise<RegistrationTeam> {
+    const response = await apiFetch(
+      `/api/v1/admin/balancer/tournaments/${tournamentId}/registration-teams/${teamId}/admission`,
+      { method: "POST", body: { admission } },
+    );
+    return response.json();
+  },
+
+  async setNotes(tournamentId: number, teamId: number, notes: string | null): Promise<RegistrationTeam> {
+    const response = await apiFetch(
+      `/api/v1/admin/balancer/tournaments/${tournamentId}/registration-teams/${teamId}/notes`,
+      { method: "POST", body: { notes } },
+    );
+    return response.json();
+  },
+
+  async placeMemberAdmin(
+    tournamentId: number,
+    teamId: number,
+    registrationId: number,
+    input: { slot_code: string; is_substitute?: boolean },
+  ): Promise<RegistrationTeam> {
+    const response = await apiFetch(
+      `/api/v1/admin/balancer/tournaments/${tournamentId}/registration-teams/${teamId}/members/${registrationId}/place`,
+      { method: "POST", body: input },
+    );
+    return response.json();
   },
 
   /**

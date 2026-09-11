@@ -81,7 +81,14 @@ async function render(team: RegistrationTeam): Promise<HTMLElement> {
     createRoot(container).render(
       <NextIntlClientProvider locale="en" messages={en}>
         <QueryClientProvider client={client}>
-          <MyTeamPanel workspaceId={1} tournamentId={1} team={team} isCaptain />
+          <MyTeamPanel
+            workspaceId={1}
+            tournamentId={1}
+            team={team}
+            isCaptain
+            registrationOpen
+            checkInAvailable={false}
+          />
         </QueryClientProvider>
       </NextIntlClientProvider>
     );

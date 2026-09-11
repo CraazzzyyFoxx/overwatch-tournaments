@@ -12,11 +12,10 @@
  * to this feature rather than added to `ERROR_CODE_MESSAGES`, which is a small
  * English-only generic fallback table and not locale-aware.
  *
- * Unmapped codes fall through to the generic `getApiErrorMessage` path, so a new
- * backend code degrades to the old behaviour instead of rendering blank.
+ * Unknown codes use a localized recovery message, never raw server text.
  */
 
-import { ApiError, getApiErrorMessage } from "@/lib/api-error";
+import { ApiError } from "@/lib/api-error";
 
 /**
  * Every code the team-registration flows can return, grouped by origin.
@@ -26,6 +25,7 @@ import { ApiError, getApiErrorMessage } from "@/lib/api-error";
  * translation is caught before a user hits it.
  */
 export const REGISTRATION_TEAM_ERROR_CODES = [
+  "request_failed",
   // team creation / naming
   "team_name_required",
   "team_name_invalid",
@@ -72,6 +72,25 @@ export const REGISTRATION_TEAM_ERROR_CODES = [
   "invite_rate_limited",
   "accept_rate_limited",
   "rate_limit_unavailable",
+  "roster_locked",
+  "team_not_complete",
+  "check_in_closed",
+  "member_not_approved",
+  "subscription_not_team_scoped",
+  "subscription_not_active",
+  "admission_invalid",
+  "invite_not_a_link",
+  "captain_is_not_manager",
+  "cannot_move_captain",
+  "team_rank_unrated",
+  "team_rank_too_low",
+  "team_rank_too_high",
+  "team_rank_spread",
+  "team_identity_taken",
+  "discord_guild_not_configured",
+  "discord_not_linked",
+  "discord_guild_not_member",
+  "discord_guild_unreachable",
 ] as const;
 
 export type RegistrationTeamErrorCode = (typeof REGISTRATION_TEAM_ERROR_CODES)[number];
@@ -126,7 +145,7 @@ export function translateRegistrationTeamError(
       if (translatable) return t(code);
     }
   }
-  return getApiErrorMessage(error, fallback);
+  return fallback ?? t("request_failed");
 }
 
 /** The machine code of a thrown error, when it is one this feature knows. */

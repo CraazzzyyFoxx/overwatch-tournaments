@@ -46,7 +46,10 @@ const KINDS = [
   "team_invite.answered",
   "registration.approved",
   "registration.rejected",
-  "encounter.report_disputed"
+  "encounter.report_disputed",
+  "team.kicked",
+  "team.rejected",
+  "team.disbanded"
 ] as const;
 
 const ALL_KINDS = "all";

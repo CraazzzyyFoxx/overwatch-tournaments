@@ -16,7 +16,14 @@ const item: NotificationItem = {
 
 describe("notification destinations", () => {
   it("opens the participant surface from numeric tournament snapshots", () => {
-    for (const kind of ["team_invite.received", "registration.approved", "registration.rejected"]) {
+    for (const kind of [
+      "team_invite.received",
+      "registration.approved",
+      "registration.rejected",
+      "team.kicked",
+      "team.rejected",
+      "team.disbanded",
+    ]) {
       expect(notificationHref({ ...item, kind, payload: { tournament_id: 42 } })).toBe(
         "/tournaments/42/participants"
       );

@@ -24,6 +24,8 @@ export interface RegistrationTeamMember {
   slot_code: string | null;
   is_substitute: boolean;
   is_captain: boolean;
+  is_manager?: boolean;
+  checked_in?: boolean;
   status: string;
 }
 
@@ -66,6 +68,15 @@ export interface RegistrationTeam {
   is_complete: boolean;
   substitutes_used: number;
   max_substitutes: number;
+  admission?: "pending" | "accepted" | "waitlisted";
+  rejection_reason?: string | null;
+  organizer_notes?: string | null;
+  roster_locked_at?: string | null;
+  subscription_covered?: boolean;
+  subscription_expires_at?: string | null;
+  checked_in_count?: number;
+  check_in_total?: number;
+  eligibility_issues?: { code: string; registration_id: number | null; blocking: boolean }[];
 }
 
 export interface RegistrationTeamListResponse {

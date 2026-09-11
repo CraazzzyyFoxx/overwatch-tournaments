@@ -28,7 +28,10 @@ type KindMessageKey = `notifications.kinds.${
   | "registration.approved"
   | "registration.rejected"
   | "encounter.report_disputed"
-  | "announcement.published"}`;
+  | "announcement.published"
+  | "team.kicked"
+  | "team.rejected"
+  | "team.disbanded"}`;
 
 interface NotificationListProps {
   headingId: string;
@@ -83,6 +86,9 @@ function getKindConfig(kind: string) {
         className: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
       };
     case "registration.rejected":
+    case "team.kicked":
+    case "team.rejected":
+    case "team.disbanded":
       return {
         icon: XCircle,
         className: "bg-rose-500/10 text-rose-400 border-rose-500/20"

@@ -256,9 +256,9 @@ export default function TournamentClientLayout({
                   tournament={tournament}
                   href={`${overviewHref}#phases`}
                 />
-                {teamsCount > 0 ? (
+                {teamsCount > 0 || tournament.team_formation === "registration" ? (
                   <HeroStamp
-                    label={t("tournamentDetail.overview.numbers.teams")}
+                    label={t(tournament.team_formation === "registration" ? "registrationTeams.list.inTournament" : "tournamentDetail.overview.numbers.teams")}
                     value={teamsCount}
                   />
                 ) : null}

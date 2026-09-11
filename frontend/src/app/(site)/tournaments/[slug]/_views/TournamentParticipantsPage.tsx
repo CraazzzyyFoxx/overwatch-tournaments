@@ -51,6 +51,7 @@ import {
 import { cn, hexToRgba } from "@/lib/utils";
 import { activeRequirements, formatAdmissionReason, formatRequirementName } from "@/lib/admission";
 import { formatShortfall } from "@/lib/registration-team-shortfall";
+import { getRegistrationTeamStatus } from "@/lib/registration-team-tone";
 import { reachedAtLeast } from "@/lib/tournament-lifecycle";
 import { isPhaseWindowActive } from "@/lib/tournament-status";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
@@ -468,7 +469,7 @@ function MyRegistrationCard({
     ...requirementSteps,
     {
       key: "balancing",
-      label: t("registration.myCard.steps.balancing"),
+      label: t(tournament.team_formation === "registration" ? "registrationTeams.myCard.playerEligibility" : "registration.myCard.steps.balancing"),
       tone: balancerReady
         ? "done"
         : isTerminal
@@ -491,7 +492,7 @@ function MyRegistrationCard({
   let teamHint: { text: string; tone: string } | null = null;
   if (teamBrief) {
     const teamValues = { team: teamBrief.name };
-    if (myTeam?.exported_team_id != null) {
+    if (myTeam && getRegistrationTeamStatus(myTeam) === "exported") {
       teamHint = {
         text: t("registrationTeams.myCard.exported", teamValues),
         tone: "font-medium text-[color:var(--aqt-emerald)]"

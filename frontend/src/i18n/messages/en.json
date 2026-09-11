@@ -396,6 +396,7 @@
     "status": {
       "forming": "Forming",
       "complete": "Roster complete",
+      "exported": "In tournament",
       "rejected": "Rejected",
       "disbanded": "Disbanded"
     },
@@ -406,13 +407,17 @@
       "revoked": "Revoked"
     },
     "list": {
-      "title": "Registered teams",
-      "empty": "No teams have registered yet.",
+      "title": "Team applications",
+      "empty": "No team applications yet. A captain registers a team and invites players to its roster.",
       "count": "{count, plural, =1 {# team} other {# teams}}",
       "shortfall": "Still needed: {slots}",
       "openSlot": "Open",
       "complete": "Roster complete",
       "substitutes": "{used} of {max} substitutes",
+      "inTournament": "Teams in tournament",
+      "loadError": "Unable to load team applications. Try again.",
+      "stateHint": "A complete roster does not mean tournament entry: the organizer adds the team. Player requirements are shown separately.",
+      "ownTeamAbove": "Your team is included in this count; its roster and actions are shown above.",
       "freeAgents": "{count, plural, =1 {# player is} other {# players are}} registered without a team and can be invited."
     },
     "create": {
@@ -440,6 +445,11 @@
     },
     "invite": {
       "action": "Invite a player",
+      "actionSlot": "Invite to the {slot} slot",
+      "actionBench": "Invite a substitute",
+      "modeLabel": "How to invite",
+      "modeLinkHint": "A link is not reserved for an account: whoever joins with it first takes the slot.",
+      "modeAccountHint": "The invite goes to the player you pick, and only they can take the slot.",
       "title": "Invite a player",
       "slotLabel": "Slot",
       "substituteLabel": "Invite as a substitute",
@@ -459,7 +469,10 @@
       "pendingEmpty": "No open invites.",
       "expiresAt": "Expires {date}",
       "targetLabel": "Invited {name}",
-      "linkLabel": "Shareable link"
+      "linkLabel": "Shareable link",
+      "extend": "Extend",
+      "rotate": "New link",
+      "extendSuccess": "Invite extended."
     },
     "accept": {
       "title": "Join {team}",
@@ -482,7 +495,12 @@
       "leaveSuccess": "You left the team.",
       "makeCaptain": "Make captain",
       "makeCaptainConfirm": "Hand captaincy to {name}? You will no longer be able to edit the roster.",
-      "makeCaptainSuccess": "Captaincy transferred."
+      "makeCaptainSuccess": "Captaincy transferred.",
+      "manager": "Manager",
+      "makeManager": "Make manager",
+      "removeManager": "Remove manager",
+      "toBench": "To bench",
+      "toStart": "To start"
     },
     "disband": {
       "action": "Disband the team",
@@ -491,13 +509,23 @@
     },
     "myCard": {
       "teamLabel": "Team",
+      "playerEligibility": "Player requirements",
       "logoSaved": "Team logo updated.",
       "logoRemoved": "Team logo removed.",
       "incomplete": "Your team {team} is still incomplete: {shortfall}. Until the roster is full it cannot enter the tournament.",
       "complete": "Your team {team} has a full roster and is waiting for the organizer.",
       "exported": "Your team {team} is in the tournament.",
       "rejected": "Your team {team} was rejected by an organizer.",
-      "disbanded": "Your team {team} was disbanded."
+      "disbanded": "Your team {team} was disbanded.",
+      "rosterCount": "Starters: {filled} of {total}",
+      "rejectionReason": "Reason for rejection: {reason}",
+      "blocked": {
+        "rejected": "An organizer rejected this team — the roster can no longer change.",
+        "disbanded": "This team is disbanded — the roster can no longer change.",
+        "exported": "This team is in the tournament — the organizer froze its roster.",
+        "locked": "The captain locked this roster. Ask an organizer to unlock it to make changes.",
+        "closed": "Registration is closed — the roster can no longer change."
+      }
     },
     "admin": {
       "title": "Registered teams",
@@ -519,9 +547,63 @@
       "resetCapConfirm": "Let {team} issue invites again? Past invites stay in the history.",
       "inTournament": "In tournament",
       "rowActions": "Actions for {team}",
-      "emptyHint": "Captains create teams from this tournament's registration page once it opens."
+      "emptyHint": "Captains create teams from this tournament's registration page once it opens.",
+      "unlock": "Unlock roster",
+      "unlockSuccess": "Roster unlocked.",
+      "notes": "Organizer notes",
+      "notesSave": "Save notes",
+      "notesSuccess": "Notes saved.",
+      "admission": "Admission",
+      "admissionSuccess": "Admission updated.",
+      "place": "Place player",
+      "placeRegistrationId": "Registration id",
+      "placeSuccess": "Player placed.",
+      "rejectReason": "Reason for rejection",
+      "rejectReasonRequired": "Give a reason: the team captain will read it.",
+      "rejectConsequences": "The team application is rejected and its roster stops changing.",
+      "rejectConsequence": "What happens to the players' registrations",
+      "rejectPreserve": "Keep the players registered: they can accept an invite from another team.",
+      "rejectAndWithdraw": "Reject and withdraw registrations",
+      "rejectKeepPlayers": "Reject, keep registrations",
+      "rejectionReason": "Reason for rejection: {reason}",
+      "search": "Search by name or captain",
+      "filterStatus": "State",
+      "filters": {
+        "all": "All",
+        "forming": "Forming",
+        "complete": "Roster complete",
+        "exported": "In tournament",
+        "terminal": "Rejected and disbanded"
+      },
+      "noResults": "No teams found",
+      "clearFilters": "Clear filters",
+      "selectTeam": "Select team {team}",
+      "selectedCount": "Teams selected: {count}",
+      "inspect": "Open",
+      "inspectTeam": "Open team {team}",
+      "captainSummary": "Captain: {name}",
+      "rosterSummary": "Starters: {starters} of {required} · substitutes: {bench} of {maxBench}",
+      "problemCount": "Admission problems: {count}",
+      "exportSelected": "Add selected teams",
+      "reExport": "Export again",
+      "exportConfirmHint": "Once added the roster is frozen: further changes go through the organizer.",
+      "exportResult": "Teams added: {imported}. Replaced: {removed}. Players created: {players}. Skipped: {skipped}.",
+      "exportSelectionChanged": "The team list changed. Check the selection and try again.",
+      "skipReason": {
+        "team_incomplete": "roster incomplete",
+        "team_empty": "roster has no players",
+        "team_waitlisted": "team is waitlisted",
+        "team_subscription_uncovered": "team subscription unpaid"
+      },
+      "loadFailed": "Unable to load the teams.",
+      "actionFailed": "Unable to complete the action. Try again.",
+      "retry": "Retry",
+      "entryView": "What to show",
+      "teamsView": "Teams",
+      "playersView": "Players"
     },
     "errors": {
+      "request_failed": "Unable to complete the action. Try again.",
       "team_name_required": "Enter a team name.",
       "team_name_invalid": "A team name cannot contain “#”.",
       "team_name_taken": "A team with this name is already registered.",
@@ -556,7 +638,26 @@
       "registration_terminal": "Your registration for this tournament is no longer active, so you cannot take a team slot.",
       "registration_not_found": "That registration is not in this tournament.",
       "player_not_free": "That player already joined a team. Pick someone else.",
-      "player_has_no_account": "That player has no site account. Send them a link instead."
+      "player_has_no_account": "That player has no site account. Send them a link instead.",
+      "roster_locked": "This roster is locked.",
+      "team_not_complete": "The roster must be complete before it can be locked.",
+      "check_in_closed": "Check-in is not open for this tournament.",
+      "member_not_approved": "Every member must be approved before team check-in.",
+      "subscription_not_team_scoped": "This tournament does not use team subscription.",
+      "subscription_not_active": "No active subscription to attach to this team.",
+      "admission_invalid": "Admission must be pending, accepted or waitlisted.",
+      "invite_not_a_link": "Only a link invite can rotate its token.",
+      "captain_is_not_manager": "The captain already commands the roster.",
+      "cannot_move_captain": "Transfer captaincy before moving the captain to another team.",
+      "team_rank_unrated": "A starter has no rank for this roster.",
+      "team_rank_too_low": "A starter is below the minimum rank.",
+      "team_rank_too_high": "A starter is above the maximum rank.",
+      "team_rank_spread": "Starter ranks are too far apart.",
+      "team_identity_taken": "A Discord identity on this roster is already on another team.",
+      "discord_guild_not_configured": "Discord membership is required but no server is bound.",
+      "discord_not_linked": "A player has no linked Discord account.",
+      "discord_guild_not_member": "A player is not in the required Discord server.",
+      "discord_guild_unreachable": "Discord membership could not be verified."
     },
     "landing": {
       "title": "Team invite",
@@ -564,8 +665,10 @@
       "invitedTo": "You have been invited to join {team} in {tournament}.",
       "slot": "Slot offered: {slot}",
       "slotSubstitute": "Slot offered: {slot} (substitute)",
-      "signInHint": "Sign in to take this slot. The invite is held for you until you do.",
+      "signInHint": "Sign in to accept the invite. This link is not reserved for an account: the first person to join takes the slot.",
       "signInAction": "Sign in",
+      "retry": "Retry loading",
+      "formLoadError": "Unable to load the registration form. Try again.",
       "dead": {
         "expired": "This invite has expired. Ask the captain for a new link.",
         "accepted": "This invite has already been used. Ask the captain for a new link.",
@@ -587,7 +690,8 @@
     "picker": {
       "label": "Invite a registered player",
       "search": "Search by battle tag",
-      "linkInstead": "Or create a shareable link",
+      "required": "Pick a player, or switch to a shareable link invite.",
+      "loadError": "Unable to load the free agents list.",
       "empty": "Nobody is registered without a team right now.",
       "noMatch": "No free agent matches that.",
       "selected": "Inviting {name}",
@@ -610,6 +714,36 @@
         "revoked": "Withdrawn",
         "expired": "Expired"
       }
+    },
+    "lock": {
+      "action": "Lock roster",
+      "success": "Roster locked.",
+      "locked": "Roster locked"
+    },
+    "checkIn": {
+      "action": "Check in roster",
+      "success": "Roster checked in.",
+      "exclude": "Skip {name}",
+      "counts": "{done} of {total} checked in"
+    },
+    "cover": {
+      "action": "Cover subscription",
+      "code": "Subscription code",
+      "submit": "Attach",
+      "success": "Team subscription attached.",
+      "covered": "Team subscription covered"
+    },
+    "rename": {
+      "save": "Rename",
+      "success": "Team renamed."
+    },
+    "eligibility": {
+      "title": "Eligibility"
+    },
+    "admission": {
+      "pending": "Pending",
+      "accepted": "Accepted",
+      "waitlisted": "Waitlisted"
     }
   },
   "accountSettings": {
@@ -4847,11 +4981,24 @@
         "hint": "When enabled, player rank values will be displayed on the public participants page. When disabled, rank values are completely hidden and omitted from backend payloads."
       },
       "team": {
-        "title": "Team bench",
-        "description": "Substitutes sit outside the starter roster. Zero turns the bench off.",
+        "title": "Registered teams",
+        "description": "Bench size, who pays the subscription, and the starter-rank / identity rules that apply before export.",
         "maxSubstitutes": "Substitutes per team",
         "maxSubstitutesHint": "How many extra players a registered team may take. They do not fill a starter slot and do not complete the roster.",
-        "maxSubstitutesAria": "Maximum substitutes per team"
+        "maxSubstitutesAria": "Maximum substitutes per team",
+        "scope": "Who pays",
+        "scopeHint": "Player (default) still gates each registrant. Team lets the captain cover the whole roster with one code or entitlement.",
+        "scopePlayer": "Each player",
+        "scopeTeam": "The team (captain pays)",
+        "scopeAria": "Subscription scope",
+        "rankMin": "Minimum starter rank",
+        "rankMax": "Maximum starter rank",
+        "rankSpread": "Maximum rank spread",
+        "rankHint": "Applies to starters only. Leave empty for no limit. Substitutes are ignored.",
+        "uniqueIdentity": "Unique Discord identity",
+        "uniqueIdentityHint": "Refuse a roster whose Discord nick or linked account is already on another live team.",
+        "requireDiscordGuild": "Require Discord server membership",
+        "requireDiscordGuildHint": "Every starter and substitute must be in the workspace Discord server. Fail closed if the check cannot run."
       },
       "unsavedChanges": "Unsaved changes",
       "saveChanges": "Save changes",
@@ -5462,6 +5609,11 @@
       },
       "announcement": {
         "published": "New announcement"
+      },
+      "team": {
+        "kicked": "You were removed from {team_name} ({tournament_name})",
+        "rejected": "Team {team_name} was rejected from {tournament_name}. {reason}",
+        "disbanded": "{team_name} was disbanded ({tournament_name})"
       }
     },
     "admin": {
@@ -5556,6 +5708,11 @@
         },
         "encounter": {
           "report_disputed": "Report disputed"
+        },
+        "team": {
+          "kicked": "Removed from team",
+          "rejected": "Team rejected",
+          "disbanded": "Team disbanded"
         }
       },
       "columns": {

@@ -1,13 +1,15 @@
 // @vitest-environment happy-dom
 //
 // The captain's half of targeted invites: picking a free agent instead of minting
-// a shareable link. Two failure modes are worth pinning and neither is visual.
+// a shareable link. Three failure modes are worth pinning and none are visual.
 //
-// 1. The payload. `target_registration_id` must be ABSENT (not null) for a link
+// 1. The mode. "Create a link" and "Invite a registered player" are separate
+//    choices, so a submit in link mode must never carry an addressee and a
+//    submit in targeted mode must never fall back to a link.
+// 2. The payload. `target_registration_id` must be ABSENT (not null) for a link
 //    invite, because presence is what selects the addressing mode server-side.
-// 2. The dialog. A targeted invite returns no token, so a dialog that waits for
-//    one shows an empty link box forever. That branch was unreachable until this
-//    mode existed, so nothing had ever exercised it.
+// 3. The dialog. A targeted invite returns no token, so a dialog that waits for
+//    one shows an empty link box forever.
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { NextIntlClientProvider } from "next-intl";
 import { act } from "react";
@@ -88,7 +90,14 @@ async function openDialog(): Promise<HTMLElement> {
     createRoot(container).render(
       <NextIntlClientProvider locale="en" messages={en}>
         <QueryClientProvider client={client}>
-          <MyTeamPanel workspaceId={1} tournamentId={1} team={TEAM} isCaptain />
+          <MyTeamPanel
+            workspaceId={1}
+            tournamentId={1}
+            team={TEAM}
+            isCaptain
+            registrationOpen
+            checkInAvailable={false}
+          />
         </QueryClientProvider>
       </NextIntlClientProvider>
     );
@@ -131,6 +140,19 @@ function selectAgent(text: string): void {
   (input as HTMLInputElement).click();
 }
 
+/** The two invite modes are radios like the free-agent rows, so the same
+ *  label-then-input activation works for both. */
+async function chooseTargetedMode(): Promise<void> {
+  await act(async () => {
+    selectAgent(en.registrationTeams.invite.modeAccount);
+  });
+  await act(async () => {
+    const { promise, resolve } = Promise.withResolvers<void>();
+    setTimeout(resolve, 0);
+    await promise;
+  });
+}
+
 beforeEach(() => {
   invite.mockReset().mockResolvedValue({ id: 5, token: null });
   listFreeAgents.mockReset().mockResolvedValue({ items: AGENTS, total: AGENTS.length });
@@ -141,18 +163,20 @@ beforeEach(() => {
 });
 
 describe("captain's free-agent picker", () => {
-  it("only fetches candidates once the dialog is open", async () => {
-    // A list nobody opened is a request nobody asked for, on a page that already
-    // makes several.
+  it("fetches candidates only once the targeted mode is chosen", async () => {
+    // A list nobody asked for is a request nobody asked for: link invites never
+    // need it, and the dialog opens on the link mode.
+    await openDialog();
     expect(listFreeAgents).not.toHaveBeenCalled();
 
-    await openDialog();
+    await chooseTargetedMode();
 
     expect(listFreeAgents).toHaveBeenCalledWith(1);
   });
 
   it("offers each candidate with their roles, translated", async () => {
     await openDialog();
+    await chooseTargetedMode();
     const text = document.body.textContent ?? "";
 
     expect(text).toContain("Ana#1111");
@@ -166,6 +190,7 @@ describe("captain's free-agent picker", () => {
 
   it("sends target_registration_id once a candidate is chosen", async () => {
     await openDialog();
+    await chooseTargetedMode();
 
     await act(async () => {
       selectAgent("Ana#1111");
@@ -185,6 +210,10 @@ describe("captain's free-agent picker", () => {
     // different request than "no target" — and would resolve nothing.
     await openDialog();
 
+    expect(
+      document.querySelector<HTMLInputElement>('input[name="invite-target-agent"]')
+    ).toBeNull();
+
     await act(async () => {
       findButton(en.registrationTeams.invite.submit).dispatchEvent(
         new MouseEvent("click", { bubbles: true })
@@ -199,6 +228,7 @@ describe("captain's free-agent picker", () => {
     // returns none, so a dialog that stayed open would show an empty box where
     // the copyable link goes.
     await openDialog();
+    await chooseTargetedMode();
 
     await act(async () => {
       selectAgent("Zen#2222");
@@ -225,6 +255,7 @@ describe("captain's free-agent picker", () => {
     listFreeAgents.mockResolvedValue({ items: [], total: 0 });
 
     await openDialog();
+    await chooseTargetedMode();
 
     expect(document.body.textContent).toContain(en.registrationTeams.picker.empty);
     expect(document.body.textContent).not.toContain(en.registrationTeams.picker.noMatch);

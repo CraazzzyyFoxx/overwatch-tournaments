@@ -1119,7 +1119,7 @@ export default function TournamentOverviewPage({
             <OverviewCard title={t("tournamentDetail.overview.numbers.title")}>
               <div className="grid gap-2 sm:grid-cols-2">
                 <StatTile
-                  label={t("tournamentDetail.overview.numbers.teams")}
+                  label={t(tournament.team_formation === "registration" ? "registrationTeams.list.inTournament" : "tournamentDetail.overview.numbers.teams")}
                   value={String(teamsCount)}
                 />
                 <StatTile
@@ -1313,7 +1313,7 @@ export default function TournamentOverviewPage({
           <OverviewCard title={t("tournamentDetail.overview.numbers.title")}>
             <div className="grid gap-2 sm:grid-cols-2">
               <StatTile
-                label={t("tournamentDetail.overview.numbers.teams")}
+                label={t(tournament.team_formation === "registration" ? "registrationTeams.list.inTournament" : "tournamentDetail.overview.numbers.teams")}
                 value={String(teamsCount)}
               />
               <StatTile

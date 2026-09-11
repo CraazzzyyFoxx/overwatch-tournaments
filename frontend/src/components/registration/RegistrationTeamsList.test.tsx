@@ -99,14 +99,6 @@ describe("registered teams list own-team dedup", () => {
     expect(container.textContent).not.toContain("Mine");
   });
 
-  it("disappears entirely when the only registered team is the viewer's own", async () => {
-    getMyRegistration.mockResolvedValue({ team: { id: 1 } });
-    listPublic.mockResolvedValue({ items: [team({ id: 1, name: "Mine" })], unassigned_players: 0 });
-
-    const container = await mount();
-
-    expect(container.textContent).toBe("");
-  });
 
   it("still shows other teams once the viewer's own is filtered out", async () => {
     getMyRegistration.mockResolvedValue({ team: { id: 1 } });
@@ -119,10 +111,7 @@ describe("registered teams list own-team dedup", () => {
 
     expect(container.textContent).toContain("Rivals");
     expect(container.textContent).not.toContain("Mine");
-    // The count next to the heading reflects what is actually rendered below
-    // it, not the tournament-wide total — showing "2 teams" over one visible
-    // card would read as a bug, not as "one of them is yours".
-    expect(container.textContent).toContain("1 team");
+    expect(container.textContent).toContain("2 teams");
   });
 
   it("shows every team for a viewer with no registration of their own", async () => {
@@ -138,6 +127,16 @@ describe("registered teams list own-team dedup", () => {
     expect(container.textContent).toContain("Alpha");
     expect(container.textContent).toContain("Beta");
     expect(getMyRegistration).not.toHaveBeenCalled();
+  });
+
+  it("keeps private rejection history out of the public count and cards", async () => {
+    listPublic.mockResolvedValue({
+      items: [team({ name: "Active" }), team({ id: 3, name: "Private rejection", status: "rejected", rejection_reason: "Private reason" })],
+      unassigned_players: 0,
+    });
+    const container = await mount();
+    expect(container.textContent).toContain("1 team");
+    expect(container.textContent).not.toContain("Private");
   });
 });
 
