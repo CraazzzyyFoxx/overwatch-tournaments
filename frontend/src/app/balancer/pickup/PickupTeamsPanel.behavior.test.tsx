@@ -75,11 +75,11 @@ vi.mock("@dnd-kit/core", () => ({
 // The rasteriser is the export pipeline's, not this panel's: what the panel
 // owes is handing the PNG it produced to the post handler, so the capture is
 // stubbed to a known blob.
-const captureSpies = vi.hoisted(() => ({ rasterize: vi.fn(), capture: vi.fn() }));
+const captureSpies = vi.hoisted(() => ({ rasterize: vi.fn(), capture: vi.fn(), capturing: false }));
 vi.mock("@/hooks/useNodeCapture", () => ({
   useNodeCapture: () => ({
     ref: { current: null },
-    capturing: false,
+    capturing: captureSpies.capturing,
     rasterize: captureSpies.rasterize,
     capture: captureSpies.capture,
   }),
@@ -260,8 +260,13 @@ function click(node: Element | null | undefined) {
   });
 }
 
+/** By accessible name: the visible label for text buttons, `aria-label` for the icon-only tools. */
 function byName(scope: ParentNode, name: string) {
-  return [...scope.querySelectorAll("button")].find((node) => node.textContent?.trim() === name) ?? null;
+  return (
+    [...scope.querySelectorAll("button")].find(
+      (node) => node.textContent?.trim() === name || node.getAttribute("aria-label") === name,
+    ) ?? null
+  );
 }
 
 function inputByLabel(scope: ParentNode, label: string) {
@@ -299,6 +304,7 @@ beforeEach(() => {
   captureSpies.rasterize.mockReset();
   captureSpies.rasterize.mockResolvedValue(LINEUP_PNG);
   captureSpies.capture.mockReset();
+  captureSpies.capturing = false;
   dndSpies.useDraggable.mockClear();
   dndSpies.useDroppable.mockClear();
 });
@@ -315,12 +321,12 @@ describe("PickupTeamsPanel", () => {
     expect(scope.textContent).not.toContain('"uuid"');
   });
 
-  it("shows the option's own verdict and who it left out", async () => {
+  it("shows the option's own verdict but not who it left out -- the lineup already marks them benched", async () => {
     const scope = await mount(game());
 
     expect(scope.textContent).toContain("0.87");
     expect(scope.textContent).toContain("12.3");
-    expect(scope.textContent).toContain("Egor");
+    expect(scope.textContent).not.toContain("Egor");
   });
 
   it("captures the verdict pills with the teams block, not the action buttons beside it", async () => {
@@ -387,7 +393,6 @@ describe("PickupTeamsPanel", () => {
   it("records a result only on a deliberate click, without closing the mix", async () => {
     const scope = await mount(game());
 
-    expect(scope.textContent).toContain("Record who won");
     expect(onRecordOutcome).not.toHaveBeenCalled();
 
     await click(byName(scope, "Draw"));
@@ -464,12 +469,12 @@ describe("PickupTeamsPanel", () => {
     expect(onCloseMix).toHaveBeenCalledTimes(1);
   });
 
-  it("never persists a pressed state -- a completed mix's buttons are plain read-only controls", async () => {
+  it("offers no result controls to a viewer or on a closed mix -- the history is the record", async () => {
     const scope = await mount(game({ status: "completed" }), { canWrite: false });
 
-    expect(byName(scope, "Team 1 win")?.hasAttribute("aria-pressed")).toBe(false);
-    expect(byName(scope, "Draw")?.hasAttribute("disabled")).toBe(true);
-    expect(scope.textContent).not.toContain("Recorded. Log another match");
+    expect(byName(scope, "Team 1 win")).toBeNull();
+    expect(byName(scope, "Draw")).toBeNull();
+    expect(byName(scope, "Close mix")).toBeNull();
   });
 
   it("shows the configured points-per-win on the win buttons, never on Draw", async () => {
@@ -583,6 +588,15 @@ describe("PickupTeamsPanel", () => {
     const scope = await mount(game(), { canWrite: false });
 
     expect(scope.querySelectorAll('button[aria-label="Edit team name"]')).toHaveLength(0);
+  });
+
+  it("withholds the rename pencils while the card is being captured", async () => {
+    captureSpies.capturing = true;
+    const scope = await mount(game());
+
+    expect(scope.querySelectorAll('button[aria-label="Edit team name"]')).toHaveLength(0);
+    // The names themselves stay in the picture.
+    expect(scope.querySelector('[data-testid="teams-capture"]')?.textContent).toContain("Team 1");
   });
 
   it("shows a host's saved team name instead of the computed default", async () => {

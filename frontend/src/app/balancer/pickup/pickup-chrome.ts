@@ -37,11 +37,14 @@ export const TEAM_ACCENTS = [
     bar: "bg-[color:var(--aqt-teal)]",
     crestPanel: "bg-[color:color-mix(in_srgb,var(--aqt-teal)_14%,transparent)]",
     crestBorder: "border-[color:color-mix(in_srgb,var(--aqt-teal)_28%,transparent)]",
+    /** The "this team won" button: filled in the team's colour so it reads as that team's, not as a generic control. */
+    win: "border-[color:color-mix(in_srgb,var(--aqt-teal)_45%,transparent)] bg-[color:color-mix(in_srgb,var(--aqt-teal)_16%,transparent)] text-[color:var(--aqt-teal)] hover:bg-[color:color-mix(in_srgb,var(--aqt-teal)_28%,transparent)] hover:border-[color:var(--aqt-teal)]",
   },
   {
     bar: "bg-[color:var(--aqt-amber)]",
     crestPanel: "bg-[color:color-mix(in_srgb,var(--aqt-amber)_13%,transparent)]",
     crestBorder: "border-[color:color-mix(in_srgb,var(--aqt-amber)_28%,transparent)]",
+    win: "border-[color:color-mix(in_srgb,var(--aqt-amber)_45%,transparent)] bg-[color:color-mix(in_srgb,var(--aqt-amber)_16%,transparent)] text-[color:var(--aqt-amber)] hover:bg-[color:color-mix(in_srgb,var(--aqt-amber)_28%,transparent)] hover:border-[color:var(--aqt-amber)]",
   },
 ] as const;
 

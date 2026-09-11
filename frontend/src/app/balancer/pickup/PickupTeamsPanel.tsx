@@ -13,12 +13,13 @@ import {
   useSensor,
   useSensors,
   type DragEndEvent,
-  type DragStartEvent,
+  type DragStartEvent
 } from "@dnd-kit/core";
 import {
   ChevronLeft,
   ChevronRight,
   AlertCircle,
+  Archive,
   ClipboardCopy,
   Copy,
   Dices,
@@ -26,7 +27,7 @@ import {
   Loader2,
   Send,
   Shuffle,
-  Undo2,
+  Undo2
 } from "lucide-react";
 
 import { PANEL_CLASS } from "@/app/balancer/components/balancer-page-helpers";
@@ -37,7 +38,7 @@ import {
   EYEBROW_CLASS,
   METRIC_NEUTRAL_CLASS,
   METRIC_PILL_CLASS,
-  teamAccent,
+  teamAccent
 } from "@/app/balancer/pickup/pickup-chrome";
 import {
   AlertDialog,
@@ -48,7 +49,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
+  AlertDialogTrigger
 } from "@/components/ui/alert-dialog";
 import DivisionIcon from "@/components/DivisionIcon";
 import { MapCombobox } from "@/components/MapCombobox";
@@ -73,8 +74,11 @@ import {
   type PickupRecordOutcomeInput,
   type PickupSeat,
   type PickupTeam,
-  type PickupVariant,
+  type PickupVariant
 } from "./pickup-lineup";
+
+/** The demoted share/close tools: quiet glyphs that only light up on hover. */
+const TOOL_ICON_CLASS = "size-9 text-[color:var(--aqt-fg-muted)] hover:text-[color:var(--aqt-fg)]";
 
 type PickupTeamsPanelProps = {
   canWrite: boolean;
@@ -108,7 +112,11 @@ type PickupTeamsPanelProps = {
   /** Omitted -- team headers render read-only, matching a `canWrite=false` viewer. */
   onRenameTeam?: (teamIndex: number, name: string) => void | Promise<unknown>;
   /** Omitted -- seats render without drag handles, matching a `canWrite=false` viewer. */
-  onSwapSeats?: (variantIndex: number, firstUuid: string, secondUuid: string) => void | Promise<unknown>;
+  onSwapSeats?: (
+    variantIndex: number,
+    firstUuid: string,
+    secondUuid: string
+  ) => void | Promise<unknown>;
   onCopyBattleTags: () => void;
   postingToDiscord?: boolean;
   /** Omitted -- no Post to Discord button, matching a page that offers no post. */
@@ -152,7 +160,7 @@ export function PickupTeamsPanel({
   onSwapSeats,
   onCopyBattleTags,
   postingToDiscord = false,
-  onPostToDiscord,
+  onPostToDiscord
 }: Readonly<PickupTeamsPanelProps>) {
   const variants = parseVariants(game?.balance_result, teamNamesByIndex(game?.settings));
   // Clamped rather than reset in an effect: a shorter result must not leave the
@@ -226,9 +234,11 @@ export function PickupTeamsPanel({
               <VariantView
                 variant={variant}
                 canWrite={canWrite}
+                capturing={capturing}
                 onRenameTeam={onRenameTeam}
                 onSwapSeats={
-                  onSwapSeats && ((firstUuid, secondUuid) => onSwapSeats(index, firstUuid, secondUuid))
+                  onSwapSeats &&
+                  ((firstUuid, secondUuid) => onSwapSeats(index, firstUuid, secondUuid))
                 }
               />
             )}
@@ -236,16 +246,35 @@ export function PickupTeamsPanel({
         )}
       </div>
 
-      {/* One card, not a bare row over a bordered box below it -- balancing,
-          paging, sharing and recording a result are all controls on the same
-          matchup, and the divider between the two rows says so instead of
-          leaving the top row looking unowned. */}
+      {/* One card under the matchup, in the order a host uses it: the result
+          row first, aligned under the two team columns like their footer (it
+          cannot live inside the captured card without leaving a hole in the
+          screenshot), then the tools -- balance and paging on the left, the
+          rare share/close actions demoted to icons on the right -- and the
+          history the results write into. */}
       <div className={cn(PANEL_CLASS, "flex flex-col gap-3 px-4 py-3")}>
-        <div className="flex flex-wrap items-center gap-2.5">
+        {variant && canWrite ? (
+          <PickupResultControls
+            teamCount={variant.teams.length}
+            teamNames={variant.teams.map((team) => team.name)}
+            saving={recordingOutcome}
+            pointsPerWin={pointsPerWin}
+            onRecord={(recordedOutcome) =>
+              onRecordOutcome({ outcome: recordedOutcome, variantIndex: index })
+            }
+          />
+        ) : null}
+
+        <div
+          className={cn(
+            "flex flex-wrap items-center gap-2",
+            variant && canWrite && "border-t border-[color:var(--aqt-border)] pt-3"
+          )}
+        >
           {canWrite ? (
             <Button
               type="button"
-              className="h-[38px]"
+              className="h-9"
               disabled={balancing || activeCount === 0}
               onClick={onBalance}
               title={
@@ -264,7 +293,7 @@ export function PickupTeamsPanel({
           ) : null}
 
           {variants.length > 1 ? (
-            <div className="flex h-[38px] items-center gap-0.5 rounded-lg border border-[color:var(--aqt-border)] bg-white/[0.015] px-1">
+            <div className="flex h-9 items-center gap-0.5 rounded-lg border border-[color:var(--aqt-border)] bg-white/[0.015] px-1">
               <Button
                 type="button"
                 variant="ghost"
@@ -304,27 +333,46 @@ export function PickupTeamsPanel({
           ) : null}
 
           {variant ? (
-            <div className="ml-auto flex items-center gap-2">
+            // Icon-only: these are recognisable glyphs and each is used once a
+            // night at most, so their labels were spending a third of the row
+            // on words nobody reads twice. The name lives in `aria-label`/`title`.
+            <div className="ml-auto flex items-center gap-1">
               <Button
                 type="button"
                 variant="ghost"
-                className="h-9"
+                size="icon"
+                className={TOOL_ICON_CLASS}
                 disabled={capturing}
+                aria-label="Copy image"
+                title="Copy image"
                 onClick={() => void capture()}
               >
                 {capturing ? (
-                  <Loader2 className="mr-1.5 size-3.5 animate-spin" aria-hidden="true" />
+                  <Loader2 className="size-4 animate-spin" aria-hidden="true" />
                 ) : (
-                  <Copy className="mr-1.5 size-3.5" aria-hidden="true" />
+                  <Copy className="size-4" aria-hidden="true" />
                 )}
-                Copy image
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className={TOOL_ICON_CLASS}
+                aria-label="Copy battletags"
+                title="Copy battletags"
+                onClick={onCopyBattleTags}
+              >
+                <ClipboardCopy className="size-4" aria-hidden="true" />
               </Button>
               {canWrite && onPostToDiscord && game?.settings.discord_channel_id ? (
                 <Button
                   type="button"
                   variant="ghost"
-                  className="h-9"
+                  size="icon"
+                  className={TOOL_ICON_CLASS}
                   disabled={postingToDiscord || capturing}
+                  aria-label="Post to Discord"
+                  title="Post to Discord"
                   onClick={() => {
                     // The same rasterised card "Copy image" produces, sent as
                     // the attachment: the bot has no renderer, and a host who
@@ -337,64 +385,60 @@ export function PickupTeamsPanel({
                   }}
                 >
                   {postingToDiscord ? (
-                    <Loader2 className="mr-1.5 size-3.5 animate-spin" aria-hidden="true" />
+                    <Loader2 className="size-4 animate-spin" aria-hidden="true" />
                   ) : (
-                    <Send className="mr-1.5 size-3.5" aria-hidden="true" />
+                    <Send className="size-4" aria-hidden="true" />
                   )}
-                  Post to Discord
                 </Button>
               ) : null}
-              <Button type="button" variant="ghost" className="h-9" onClick={onCopyBattleTags}>
-                <ClipboardCopy className="mr-1.5 size-3.5" aria-hidden="true" />
-                Copy battletags
-              </Button>
               {canWrite ? (
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button type="button" variant="destructive" className="h-9" disabled={closingMix}>
-                      {closingMix ? (
-                        <Loader2 className="mr-1.5 size-3.5 animate-spin" aria-hidden="true" />
-                      ) : null}
-                      Close mix
-                    </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Close this mix?</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        Stops further balancing, roster edits, and outcome recording. Matches already
-                        recorded stay recorded -- this cannot be undone from here.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Keep it open</AlertDialogCancel>
-                      <AlertDialogAction className={buttonVariants({ variant: "destructive" })} onClick={onCloseMix}>
-                        Yes, close mix
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
+                <>
+                  <span aria-hidden="true" className="mx-1 h-5 w-px bg-[color:var(--aqt-border)]" />
+                  {/* Once a night, irreversible from here: an icon that only
+                      turns red on hover, behind the same confirm as before,
+                      instead of the loudest pill in the row. */}
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className={cn(TOOL_ICON_CLASS, "hover:text-[color:var(--aqt-rose)]")}
+                        disabled={closingMix}
+                        aria-label="Close mix"
+                        title="Close mix"
+                      >
+                        {closingMix ? (
+                          <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+                        ) : (
+                          <Archive className="size-4" aria-hidden="true" />
+                        )}
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Close this mix?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Stops further balancing, roster edits, and outcome recording. Matches
+                          already recorded stay recorded -- this cannot be undone from here.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Keep it open</AlertDialogCancel>
+                        <AlertDialogAction
+                          className={buttonVariants({ variant: "destructive" })}
+                          onClick={onCloseMix}
+                        >
+                          Yes, close mix
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </>
               ) : null}
             </div>
           ) : null}
         </div>
-
-        {variant ? (
-          <div className="flex flex-wrap items-center gap-x-3.5 gap-y-2 border-t border-[color:var(--aqt-border)] pt-3">
-            <span className={cn(EYEBROW_CLASS, "tracking-label")}>Record result</span>
-            <PickupResultControls
-              teamCount={variant.teams.length}
-              teamNames={variant.teams.map((team) => team.name)}
-              canRecord={canWrite}
-              saving={recordingOutcome}
-              pointsPerWin={pointsPerWin}
-              onRecord={(recordedOutcome) => onRecordOutcome({ outcome: recordedOutcome, variantIndex: index })}
-            />
-            <span className="text-caption text-[color:var(--aqt-fg-faint)]">
-              Record who won — the match logs below on the next map above, and the map resets for the next roll.
-            </span>
-          </div>
-        ) : null}
 
         {matches.length > 0 ? (
           <MatchHistoryList
@@ -426,7 +470,7 @@ function NextMapStrip({
   canWrite,
   saving,
   capturing,
-  onNextMapChange,
+  onNextMapChange
 }: Readonly<{
   game: CustomGame;
   maps: MapRead[];
@@ -438,14 +482,15 @@ function NextMapStrip({
 }>) {
   const [modeId, setModeId] = useState<number | null>(null);
   const modes = rollableModes(maps);
-  const nextMap = game.next_map_id == null ? null : (maps.find((map) => map.id === game.next_map_id) ?? null);
+  const nextMap =
+    game.next_map_id == null ? null : (maps.find((map) => map.id === game.next_map_id) ?? null);
 
   if (!canWrite && nextMap == null) return null;
 
   const roll = () => {
     const rolled = rollNextMap(maps, {
       gamemodeId: modeId,
-      playedMapIds: matches.flatMap((match) => (match.map_id == null ? [] : [match.map_id])),
+      playedMapIds: matches.flatMap((match) => (match.map_id == null ? [] : [match.map_id]))
     });
     if (rolled == null) {
       notify.error("No competitive maps to roll from");
@@ -458,14 +503,17 @@ function NextMapStrip({
     <div
       className={cn(
         "flex flex-wrap items-center gap-3 rounded-xl border border-[color:var(--aqt-border-2)] bg-white/[0.012] px-3 py-2.5",
-        capturing && nextMap == null && "hidden",
+        capturing && nextMap == null && "hidden"
       )}
     >
       <div className="relative h-10 w-[72px] shrink-0 overflow-hidden rounded-md border border-[color:var(--aqt-border-2)] bg-[linear-gradient(135deg,var(--aqt-card-2),var(--aqt-bg-2))]">
         {nextMap?.image_path ? (
           <Image src={nextMap.image_path} alt="" fill sizes="72px" className="object-cover" />
         ) : (
-          <Dices className="absolute inset-0 m-auto size-4 text-[color:var(--aqt-fg-faint)]" aria-hidden="true" />
+          <Dices
+            className="absolute inset-0 m-auto size-4 text-[color:var(--aqt-fg-faint)]"
+            aria-hidden="true"
+          />
         )}
       </div>
       <div className="min-w-0 flex-1">
@@ -474,12 +522,14 @@ function NextMapStrip({
           <span
             className={cn(
               "truncate font-display text-base font-bold tracking-[-0.01em]",
-              nextMap ? "text-[color:var(--aqt-fg)]" : "text-[color:var(--aqt-fg-dim)]",
+              nextMap ? "text-[color:var(--aqt-fg)]" : "text-[color:var(--aqt-fg-dim)]"
             )}
           >
             {nextMap?.name ?? "Not rolled yet"}
           </span>
-          {nextMap?.gamemode ? <span className={CAPTION_CLASS}>{nextMap.gamemode.name}</span> : null}
+          {nextMap?.gamemode ? (
+            <span className={CAPTION_CLASS}>{nextMap.gamemode.name}</span>
+          ) : null}
         </div>
       </div>
 
@@ -488,7 +538,11 @@ function NextMapStrip({
           data-export-hide
           className={cn("flex flex-wrap items-center gap-1.5", capturing && "invisible")}
         >
-          <div role="group" aria-label="Roll within mode" className="flex flex-wrap items-center gap-1">
+          <div
+            role="group"
+            aria-label="Roll within mode"
+            className="flex flex-wrap items-center gap-1"
+          >
             <ModeChip label="Any" active={modeId == null} onClick={() => setModeId(null)} />
             {modes.map((mode) => (
               <ModeChip
@@ -521,7 +575,11 @@ function NextMapStrip({
 }
 
 /** One mode the roll can stay inside; the same pressed-pill the add-players filters use. */
-function ModeChip({ label, active, onClick }: Readonly<{ label: string; active: boolean; onClick: () => void }>) {
+function ModeChip({
+  label,
+  active,
+  onClick
+}: Readonly<{ label: string; active: boolean; onClick: () => void }>) {
   return (
     <button
       type="button"
@@ -531,7 +589,7 @@ function ModeChip({ label, active, onClick }: Readonly<{ label: string; active: 
         "inline-flex h-7 shrink-0 items-center rounded-full border px-2.5 text-label transition-colors",
         active
           ? "border-[color:color-mix(in_srgb,var(--aqt-teal)_38%,transparent)] bg-[color:color-mix(in_srgb,var(--aqt-teal)_12%,transparent)] text-[color:var(--aqt-teal)]"
-          : "border-[color:var(--aqt-border)] bg-white/[0.02] text-[color:var(--aqt-fg-muted)] hover:bg-white/[0.05] hover:text-[color:var(--aqt-fg)]",
+          : "border-[color:var(--aqt-border)] bg-white/[0.02] text-[color:var(--aqt-fg-muted)] hover:bg-white/[0.05] hover:text-[color:var(--aqt-fg)]"
       )}
     >
       {label}
@@ -544,7 +602,7 @@ function MatchHistoryList({
   matches,
   canWrite,
   undoingMatchId,
-  onUndoMatch,
+  onUndoMatch
 }: Readonly<{
   matches: CustomGameMatch[];
   canWrite: boolean;
@@ -588,7 +646,7 @@ function MatchHistoryRow({
   match,
   canUndo,
   undoing,
-  onUndoMatch,
+  onUndoMatch
 }: Readonly<{
   match: CustomGameMatch;
   canUndo: boolean;
@@ -618,7 +676,7 @@ function MatchHistoryRow({
           <span
             className={cn(
               "truncate",
-              match.winner === 1 ? "text-[color:var(--aqt-fg)]" : "text-[color:var(--aqt-fg-dim)]",
+              match.winner === 1 ? "text-[color:var(--aqt-fg)]" : "text-[color:var(--aqt-fg-dim)]"
             )}
           >
             {match.home_team_name}
@@ -629,12 +687,15 @@ function MatchHistoryRow({
           <span
             className={cn(
               "truncate",
-              match.winner === 2 ? "text-[color:var(--aqt-fg)]" : "text-[color:var(--aqt-fg-dim)]",
+              match.winner === 2 ? "text-[color:var(--aqt-fg)]" : "text-[color:var(--aqt-fg-dim)]"
             )}
           >
             {match.away_team_name}
           </span>
-          <span aria-hidden="true" className={cn("inline-block h-1.5 w-1.5 shrink-0 rounded-full", awayAccent.bar)} />
+          <span
+            aria-hidden="true"
+            className={cn("inline-block h-1.5 w-1.5 shrink-0 rounded-full", awayAccent.bar)}
+          />
         </div>
         <div className="mt-0.5 flex items-center gap-1.5 truncate text-label text-[color:var(--aqt-fg-dim)]">
           <span className="truncate">{match.map_name ?? "No map"}</span>
@@ -702,7 +763,7 @@ function VariantMetrics({ variant }: Readonly<{ variant: PickupVariant }>) {
           title="Composite solver score across balance and role comfort \u2014 lower is better."
           className={cn(
             METRIC_PILL_CLASS,
-            "border-[color:color-mix(in_srgb,var(--aqt-emerald)_25%,transparent)] bg-[color:color-mix(in_srgb,var(--aqt-emerald)_10%,transparent)] text-[color:var(--aqt-emerald)]",
+            "border-[color:color-mix(in_srgb,var(--aqt-emerald)_25%,transparent)] bg-[color:color-mix(in_srgb,var(--aqt-emerald)_10%,transparent)] text-[color:var(--aqt-emerald)]"
           )}
         >
           {`QUALITY ${stats.compositeScore.toFixed(2)}`}
@@ -713,7 +774,7 @@ function VariantMetrics({ variant }: Readonly<{ variant: PickupVariant }>) {
           title="Standard deviation of team rank \u2014 lower means the teams are closer together."
           className={cn(
             METRIC_PILL_CLASS,
-            "border-[color:color-mix(in_srgb,var(--aqt-blue)_22%,transparent)] bg-[color:color-mix(in_srgb,var(--aqt-blue)_10%,transparent)] text-[color:var(--aqt-blue)]",
+            "border-[color:color-mix(in_srgb,var(--aqt-blue)_22%,transparent)] bg-[color:color-mix(in_srgb,var(--aqt-blue)_10%,transparent)] text-[color:var(--aqt-blue)]"
           )}
         >
           {`STDDEV ${stats.mmrStdDev.toFixed(1)}`}
@@ -733,7 +794,7 @@ function VariantMetrics({ variant }: Readonly<{ variant: PickupVariant }>) {
           METRIC_PILL_CLASS,
           offRole > 0
             ? "border-[color:color-mix(in_srgb,var(--aqt-amber)_28%,transparent)] bg-[color:color-mix(in_srgb,var(--aqt-amber)_10%,transparent)] text-[color:var(--aqt-amber)]"
-            : METRIC_NEUTRAL_CLASS,
+            : METRIC_NEUTRAL_CLASS
         )}
       >
         {`OFF-ROLE ${offRole}`}
@@ -745,11 +806,14 @@ function VariantMetrics({ variant }: Readonly<{ variant: PickupVariant }>) {
 function VariantView({
   variant,
   canWrite,
+  capturing,
   onRenameTeam,
-  onSwapSeats,
+  onSwapSeats
 }: Readonly<{
   variant: PickupVariant;
   canWrite: boolean;
+  /** A screenshot is being taken: the rename pencils drop out so the card exports as a plain matchup. */
+  capturing: boolean;
   onRenameTeam?: (teamIndex: number, name: string) => void | Promise<unknown>;
   /** Omitted -- seats render without drag handles, matching a `canWrite=false` viewer. */
   onSwapSeats?: (firstUuid: string, secondUuid: string) => void | Promise<unknown>;
@@ -776,48 +840,43 @@ function VariantView({
   };
 
   return (
-    <div className="space-y-3">
-      {/* One card with a divider column, not two cards: the matchup is a
-          single object, and a gap between two boxes read as two unrelated
-          rosters. The verdict pills live inside it too, centred over the
-          seam between the teams and above their rosters -- inside the same
-          border, not a strip floating above the card on its own. */}
-      <div className={cn(PANEL_CLASS, "overflow-hidden rounded-2xl")}>
-        <div className="flex flex-wrap items-center justify-center gap-1.5 border-b border-[color:var(--aqt-border)] px-4 py-2.5">
-          <VariantMetrics variant={variant} />
+    // One card with a divider column, not two cards: the matchup is a single
+    // object, and a gap between two boxes read as two unrelated rosters. The
+    // verdict pills live inside it too, centred over the seam between the
+    // teams and above their rosters -- inside the same border, not a strip
+    // floating above the card on its own. Who the option left out is not
+    // repeated here: the lineup column already marks them benched.
+    <div className={cn(PANEL_CLASS, "overflow-hidden rounded-2xl")}>
+      <div className="flex flex-wrap items-center justify-center gap-1.5 border-b border-[color:var(--aqt-border)] px-4 py-2.5">
+        <VariantMetrics variant={variant} />
+      </div>
+      <DndContext
+        sensors={sensors}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+        onDragCancel={() => setActiveDrag(null)}
+      >
+        <div className={cn("flex items-stretch", twoTeams ? "flex-col lg:flex-row" : "flex-col")}>
+          {variant.teams.map((team, teamIndex) => (
+            <TeamColumnAndDivider
+              key={team.id}
+              team={team}
+              teamIndex={teamIndex}
+              showDivider={twoTeams && teamIndex === 0}
+              canWrite={canWrite}
+              // The pencil is a 28px square on the 28px title line, so
+              // withholding it during capture leaves no hole in the image.
+              onRenameTeam={capturing ? undefined : onRenameTeam}
+              canDrag={canDrag}
+              activeDrag={activeDrag}
+            />
+          ))}
         </div>
-        <DndContext
-          sensors={sensors}
-          onDragStart={handleDragStart}
-          onDragEnd={handleDragEnd}
-          onDragCancel={() => setActiveDrag(null)}
-        >
-          <div className={cn("flex items-stretch", twoTeams ? "flex-col lg:flex-row" : "flex-col")}>
-            {variant.teams.map((team, teamIndex) => (
-              <TeamColumnAndDivider
-                key={team.id}
-                team={team}
-                teamIndex={teamIndex}
-                showDivider={twoTeams && teamIndex === 0}
-                canWrite={canWrite}
-                onRenameTeam={onRenameTeam}
-                canDrag={canDrag}
-                activeDrag={activeDrag}
-              />
-            ))}
-          </div>
-          {/* Follows the pointer instead of the seat teleporting under it --
+        {/* Follows the pointer instead of the seat teleporting under it --
               without this dnd-kit still swaps correctly, it just looks broken
               mid-drag (the dragged row snaps back until drop). */}
-          <DragOverlay>{activeDrag ? <SeatDragPreview seat={activeDrag.seat} /> : null}</DragOverlay>
-        </DndContext>
-      </div>
-
-      {variant.benched.length === 0 ? null : (
-        <p className={cn(CAPTION_CLASS, "px-1")}>
-          {`Left out of this option: ${variant.benched.join(", ")}`}
-        </p>
-      )}
+        <DragOverlay>{activeDrag ? <SeatDragPreview seat={activeDrag.seat} /> : null}</DragOverlay>
+      </DndContext>
     </div>
   );
 }
@@ -829,7 +888,7 @@ function TeamColumnAndDivider({
   canWrite,
   onRenameTeam,
   canDrag,
-  activeDrag,
+  activeDrag
 }: Readonly<{
   team: PickupTeam;
   teamIndex: number;
@@ -869,7 +928,7 @@ function TeamColumn({
   canWrite,
   onRenameTeam,
   canDrag,
-  activeDrag,
+  activeDrag
 }: Readonly<{
   team: PickupTeam;
   teamIndex: number;
@@ -894,7 +953,7 @@ function TeamColumn({
         <span
           className={cn(
             "ml-auto shrink-0 text-label uppercase tracking-label",
-            "text-[color:var(--aqt-fg-faint)]",
+            "text-[color:var(--aqt-fg-faint)]"
           )}
         >
           avg
@@ -932,7 +991,7 @@ function SeatRow({
   seat,
   teamIndex,
   canDrag,
-  activeDrag,
+  activeDrag
 }: Readonly<{
   seat: PickupSeat;
   teamIndex: number;
@@ -967,7 +1026,7 @@ function SeatRow({
           ? "opacity-40"
           : isDropReady
             ? "border-[color:var(--aqt-teal)] bg-[color:color-mix(in_srgb,var(--aqt-teal)_10%,transparent)]"
-            : "border-[color:var(--aqt-border)] bg-white/[0.015] hover:bg-white/[0.045]",
+            : "border-[color:var(--aqt-border)] bg-white/[0.015] hover:bg-white/[0.045]"
       )}
     >
       <span
@@ -977,9 +1036,18 @@ function SeatRow({
         <PlayerRoleIcon role={icon} size={24} label={ROLE_LABELS[seat.role]} />
       </span>
       {division == null ? null : (
-        <DivisionIcon division={division} tournamentGrid={grid} width={32} height={32} className="shrink-0" />
+        <DivisionIcon
+          division={division}
+          tournamentGrid={grid}
+          width={32}
+          height={32}
+          className="shrink-0"
+        />
       )}
-      <span className="min-w-0 flex-1 truncate text-base font-semibold text-[color:var(--aqt-fg)]" title={seat.name}>
+      <span
+        className="min-w-0 flex-1 truncate text-base font-semibold text-[color:var(--aqt-fg)]"
+        title={seat.name}
+      >
         {seat.name}
       </span>
       {seat.offRole ? (
@@ -1005,7 +1073,7 @@ function SeatDragPreview({ seat }: Readonly<{ seat: PickupSeat }>) {
     <div
       className={cn(
         PANEL_CLASS,
-        "flex cursor-grabbing items-center gap-3 rounded-lg border-[color:var(--aqt-teal)] px-3.5 py-3 shadow-lg",
+        "flex cursor-grabbing items-center gap-3 rounded-lg border-[color:var(--aqt-teal)] px-3.5 py-3 shadow-lg"
       )}
     >
       <span className="flex size-6 shrink-0 items-center justify-center opacity-90">
