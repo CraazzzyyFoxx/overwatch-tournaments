@@ -19,7 +19,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { CustomGamePlayer } from "@/services/custom-game.service";
+import type { CustomGamePlayer, MixMemberStats } from "@/services/custom-game.service";
 
 import { PickupPlayerSheet } from "./PickupPlayerSheet";
 
@@ -85,13 +85,17 @@ function tick() {
   return promise;
 }
 
-async function mount(value: CustomGamePlayer | null = row()) {
+async function mount(
+  value: CustomGamePlayer | null = row(),
+  mixStats: MixMemberStats | null = null,
+) {
   const container = document.createElement("div");
   document.body.appendChild(container);
   await act(async () => {
     createRoot(container).render(
       <PickupPlayerSheet
         row={value}
+        mixStats={mixStats}
         canEdit
         saving={false}
         onOpenChange={onOpenChange}
@@ -330,5 +334,43 @@ describe("PickupPlayerSheet remove", () => {
 
     expect(onRemove).toHaveBeenCalledTimes(1);
     expect(onSave).not.toHaveBeenCalled();
+  });
+});
+
+describe("PickupPlayerSheet mix record", () => {
+  function stats(overrides: Partial<MixMemberStats> = {}): MixMemberStats {
+    return {
+      workspace_member_id: 7,
+      display_name: null,
+      battle_tag: "Aria#1111",
+      games: 20,
+      wins: 12,
+      losses: 8,
+      draws: 0,
+      win_rate: 0.6,
+      streak: 3,
+      last_played_at: "2026-01-05T20:00:00Z",
+      by_role: { tank: { games: 20, wins: 12, losses: 8, draws: 0 } },
+      ...overrides,
+    };
+  }
+
+  it("captions the header with the player's record across every mix", async () => {
+    const scope = await mount(row(), stats());
+
+    expect(scope.textContent).toContain("Mixes: 12–8 · 60% · W3");
+  });
+
+  it("drops the streak from the caption once the run is broken", async () => {
+    const scope = await mount(row(), stats({ streak: 0 }));
+
+    expect(scope.textContent).toContain("Mixes: 12–8 · 60%");
+    expect(scope.textContent).not.toContain("W3");
+  });
+
+  it("says nothing at all where no record was read", async () => {
+    const scope = await mount();
+
+    expect(scope.textContent).not.toContain("Mixes:");
   });
 });

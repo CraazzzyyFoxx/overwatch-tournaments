@@ -19,6 +19,7 @@ import {
 import { usePickupMix } from "@/app/balancer/pickup/usePickupMix";
 import { usePermissions } from "@/hooks/usePermissions";
 import { notify } from "@/lib/notify";
+import { customGameKeys, customGameService } from "@/services/custom-game.service";
 import mapService from "@/services/map.service";
 import { useAuthProfileStore } from "@/stores/auth-profile.store";
 import { useWorkspaceStore } from "@/stores/workspace.store";
@@ -63,13 +64,21 @@ export default function BalancerPickupMixPage() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isAccessOpen, setIsAccessOpen] = useState(false);
   const [variantIndex, setVariantIndex] = useState(0);
-  // Which map a host is about to name a recorded match for -- the mix flow
-  // has no veto, so this is a plain, optional picker beside the win buttons.
-  const [mapId, setMapId] = useState<number | null>(null);
+  // The OW catalogue with its gamemodes: the roll pool for the next map and
+  // the manual picker. Which map is *chosen* is the mix's own `next_map_id`,
+  // so a co-host in another tab sees the same roll.
   const mapsQuery = useQuery({
-    queryKey: ["maps-lookup"],
-    queryFn: () => mapService.lookup(),
+    queryKey: ["maps", "gamemode"],
+    queryFn: () => mapService.getAll({ entities: ["gamemode"] }).then((page) => page.results),
     staleTime: 5 * 60 * 1000,
+  });
+  // All-time only: the sheet reports a player's standing, and a window would
+  // make that read differently depending on what the list page was last set to.
+  const statsQuery = useQuery({
+    queryKey: customGameKeys.stats(workspaceId ?? 0, null),
+    queryFn: () => customGameService.stats(workspaceId as number, null),
+    enabled: workspaceId != null,
+    staleTime: 60_000,
   });
 
   const {
@@ -83,12 +92,16 @@ export default function BalancerPickupMixPage() {
     applyRotationHints,
     balance,
     recordOutcome,
+    undoMatch,
+    setNextMap,
     closeMix,
     hardDeleteMix,
     setAuthorRanks,
     setTeamNames,
     setRoleMask,
     setPointsPerWin,
+    setDiscordChannel,
+    postToDiscord,
     transferHost,
     addCoHost,
     removeCoHost,
@@ -220,13 +233,13 @@ export default function BalancerPickupMixPage() {
               variantIndex={variantIndex}
               onVariantIndexChange={setVariantIndex}
               recordingOutcome={recordOutcome.isPending}
-              onRecordOutcome={(input) =>
-                recordOutcome.mutate(input, { onSuccess: () => setMapId(null) })
-              }
+              onRecordOutcome={(input) => recordOutcome.mutate(input)}
               maps={mapsQuery.data ?? []}
               matches={matchesQuery.data ?? []}
-              mapId={mapId}
-              onMapIdChange={setMapId}
+              undoingMatchId={undoMatch.isPending ? (undoMatch.variables ?? null) : null}
+              onUndoMatch={(matchId) => undoMatch.mutate(matchId)}
+              settingNextMap={setNextMap.isPending}
+              onNextMapChange={(mapId) => setNextMap.mutate(mapId)}
               closingMix={closeMix.isPending}
               onCloseMix={() => closeMix.mutate()}
               onRenameTeam={(teamIndex, name) => setTeamNames.mutateAsync({ teamIndex, name })}
@@ -234,6 +247,8 @@ export default function BalancerPickupMixPage() {
                 swapSeats.mutateAsync({ variantIndex: idx, firstUuid, secondUuid })
               }
               onCopyBattleTags={copyBattleTags}
+              postingToDiscord={postToDiscord.isPending}
+              onPostToDiscord={(idx) => postToDiscord.mutate(idx)}
             />
           </div>
         </div>
@@ -255,12 +270,16 @@ export default function BalancerPickupMixPage() {
         open={isSettingsOpen}
         onOpenChange={setIsSettingsOpen}
         game={game}
+        workspaceId={workspaceId}
         canWrite={canWrite}
-        saving={setRoleMask.isPending || setPointsPerWin.isPending}
+        saving={setRoleMask.isPending || setPointsPerWin.isPending || setDiscordChannel.isPending}
         onSave={(input) => {
           setRoleMask.mutate(input.roleMask, { onSuccess: () => setIsSettingsOpen(false) });
           if (input.pointsPerWin !== (game?.settings.points_per_win ?? null)) {
             setPointsPerWin.mutate(input.pointsPerWin);
+          }
+          if (input.discordChannelId !== (game?.settings.discord_channel_id ?? null)) {
+            setDiscordChannel.mutate(input.discordChannelId);
           }
         }}
       />
@@ -280,6 +299,11 @@ export default function BalancerPickupMixPage() {
 
       <PickupPlayerSheet
         row={openRow}
+        mixStats={
+          statsQuery.data?.members.find(
+            (member) => member.workspace_member_id === openRow?.workspace_member_id,
+          ) ?? null
+        }
         canEdit={canWrite}
         saving={sheetSaving}
         onOpenChange={(open) => {

@@ -6,6 +6,9 @@
 // unless the workspace-player cache is invalidated too. Pinned here rather
 // than in the dialog's own test because the dialog never calls `setRoster` --
 // that mutation lives in this hook, one level up.
+//
+// The same goes for the match history: it is written by recording an outcome
+// and by undoing one, so every write that returns a game has to drop it.
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
@@ -20,6 +23,8 @@ const listGames = vi.fn();
 const getGame = vi.fn();
 const listMatches = vi.fn();
 const rotation = vi.fn();
+const undoMatch = vi.fn();
+const postToDiscord = vi.fn();
 
 vi.mock("@/services/custom-game.service", () => ({
   customGameKeys: {
@@ -37,6 +42,8 @@ vi.mock("@/services/custom-game.service", () => ({
     listMatches: (...args: unknown[]) => listMatches(...args),
     setParticipation: (...args: unknown[]) => setParticipation(...args),
     rotation: (...args: unknown[]) => rotation(...args),
+    undoMatch: (...args: unknown[]) => undoMatch(...args),
+    postToDiscord: (...args: unknown[]) => postToDiscord(...args),
   },
 }));
 
@@ -71,6 +78,7 @@ const SETTINGS = {
   team_names: {},
   role_mask: null,
   balancer_config: null,
+  discord_channel_id: null,
 };
 
 function game(overrides: Record<string, unknown> = {}) {
@@ -86,6 +94,9 @@ function game(overrides: Record<string, unknown> = {}) {
     balance_result: null,
     created_at: null,
     roster_shape: null,
+    next_map_id: null,
+    matches_count: 0,
+    last_match_at: null,
     ...overrides,
   };
 }
@@ -96,21 +107,32 @@ function tick() {
   return promise;
 }
 
-/** Exposes the hook's `setRoster`/`applyRotationHints` mutations and the shared `QueryClient` to assertions. */
+type HarnessApi = {
+  setRoster: (ids: number[]) => void;
+  applyRotationHints: () => void;
+  undoMatch: (matchId: number) => void;
+  postToDiscord: (variantIndex: number) => void;
+  client: QueryClient;
+};
+
+/** Exposes the mutations these tests drive, plus the shared `QueryClient`, to assertions. */
 function Harness({
   onReady,
 }: {
-  onReady: (api: {
-    setRoster: (ids: number[]) => void;
-    applyRotationHints: () => void;
-    client: QueryClient;
-  }) => void;
+  onReady: (api: HarnessApi) => void;
 }) {
   const client = useQueryClient();
-  const { setRoster, applyRotationHints } = usePickupMix(WORKSPACE_ID, GAME_ID);
+  const {
+    setRoster,
+    applyRotationHints,
+    undoMatch: undo,
+    postToDiscord: post,
+  } = usePickupMix(WORKSPACE_ID, GAME_ID);
   onReady({
     setRoster: (ids) => setRoster.mutate(ids),
     applyRotationHints: () => applyRotationHints.mutate(),
+    undoMatch: (matchId) => undo.mutate(matchId),
+    postToDiscord: (variantIndex) => post.mutate(variantIndex),
     client,
   });
   return null;
@@ -120,14 +142,19 @@ async function mount() {
   const container = document.createElement("div");
   document.body.appendChild(container);
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  let api: { setRoster: (ids: number[]) => void; applyRotationHints: () => void; client: QueryClient } | null =
-    null;
+  let api: HarnessApi | null = null;
   await act(async () => {
     createRoot(container).render(
       <QueryClientProvider client={client}>
         <Harness onReady={(value) => (api = value)} />
       </QueryClientProvider>,
     );
+  });
+  // Two passes: the mix list resolves first, and only then does a selected mix
+  // exist for the detail and rotation queries to start against. Settling once
+  // left them in flight, so a mutation reading them raced the fetch.
+  await act(async () => {
+    await tick();
   });
   await act(async () => {
     await tick();
@@ -145,6 +172,8 @@ beforeEach(() => {
   updateRoster.mockResolvedValue(game({ players: [] }));
   listMatches.mockResolvedValue([]);
   rotation.mockResolvedValue([]);
+  undoMatch.mockResolvedValue(game({ players: [] }));
+  postToDiscord.mockResolvedValue({ status: "queued", channel_id: "123" });
 });
 
 describe("usePickupMix", () => {
@@ -164,6 +193,38 @@ describe("usePickupMix", () => {
 
     expect(updateRoster).toHaveBeenCalledWith(WORKSPACE_ID, GAME_ID, [9]);
     expect(client.getQueryState(playerKey)?.isInvalidated).toBe(true);
+  });
+
+  it("refetches the match history after undoing a match", async () => {
+    const { undoMatch: undo } = await mount();
+    // The panel renders this list; the undo removes a row from it server-side,
+    // so a cache left alone would keep showing a match that no longer exists.
+    const before = listMatches.mock.calls.length;
+
+    await act(async () => {
+      undo(5);
+      await tick();
+      await tick();
+    });
+
+    expect(undoMatch).toHaveBeenCalledWith(WORKSPACE_ID, GAME_ID, 5);
+    expect(listMatches.mock.calls.length).toBeGreaterThan(before);
+  });
+
+  it("posts the matchup to Discord without disturbing the mix cache", async () => {
+    const { postToDiscord: post, client } = await mount();
+    const gameKey = ["custom-games", WORKSPACE_ID, GAME_ID];
+    expect(client.getQueryState(gameKey)?.isInvalidated).toBe(false);
+
+    await act(async () => {
+      post(1);
+      await tick();
+      await tick();
+    });
+
+    expect(postToDiscord).toHaveBeenCalledWith(WORKSPACE_ID, GAME_ID, 1);
+    // Nothing about the mix changed, so a refetch would be pure noise.
+    expect(client.getQueryState(gameKey)?.isInvalidated).toBe(false);
   });
 
   it("subscribes to this workspace's invalidation topic and refetches both caches on pickup_mix", async () => {

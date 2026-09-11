@@ -21,12 +21,18 @@
 //  8. every seat is a drag source and drop target, gated on both write access
 //     and the page actually offering a swap handler -- a read-only viewer or
 //     a page with nothing to call must not present drag affordance for a
-//     write that cannot happen.
+//     write that cannot happen;
+//  9. only the newest recorded match offers an undo, and only to a writer the
+//     page actually handed a handler -- an older one would have to unwind
+//     every match stacked on top of it;
+// 10. Post to Discord appears only for a writer whose mix has a channel
+//     configured, and posts the option the pager is on, not always the first.
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { CustomGame, CustomGameMatch } from "@/services/custom-game.service";
+import type { MapRead } from "@/types/map.types";
 
 import { PickupTeamsPanel } from "./PickupTeamsPanel";
 
@@ -69,11 +75,13 @@ vi.mock("@dnd-kit/core", () => ({
 const onBalance = vi.fn();
 const onVariantIndexChange = vi.fn();
 const onRecordOutcome = vi.fn();
-const onMapIdChange = vi.fn();
+const onNextMapChange = vi.fn();
 const onCloseMix = vi.fn();
 const onCopyBattleTags = vi.fn();
 const onRenameTeam = vi.fn();
 const onSwapSeats = vi.fn();
+const onUndoMatch = vi.fn();
+const onPostToDiscord = vi.fn();
 
 function variant(offset: number) {
   return {
@@ -104,7 +112,27 @@ const SETTINGS = {
   team_names: {},
   role_mask: null,
   balancer_config: null,
+  discord_channel_id: null,
 };
+
+const CONTROL = { id: 1, name: "Control", slug: "control", image_path: "", description: "", aliases: [] };
+const HYBRID = { id: 2, name: "Hybrid", slug: "hybrid", image_path: "", description: "", aliases: [] };
+
+function mapRead(id: number, name: string, gamemode: typeof CONTROL): MapRead {
+  return {
+    id,
+    created_at: new Date(0),
+    updated_at: null,
+    name,
+    image_path: "",
+    gamemode_id: gamemode.id,
+    in_competitive: true,
+    aliases: [],
+    gamemode,
+  };
+}
+
+const CATALOGUE = [mapRead(5, "King's Row", HYBRID), mapRead(6, "Ilios", CONTROL), mapRead(7, "Busan", CONTROL)];
 
 function game(overrides: Partial<CustomGame> = {}): CustomGame {
   return {
@@ -118,8 +146,29 @@ function game(overrides: Partial<CustomGame> = {}): CustomGame {
     settings: SETTINGS,
     balance_result: { variants: [variant(0), variant(100), variant(200)] },
     created_at: null,
+    next_map_id: null,
     roster_shape: null,
     players: [],
+    matches_count: 0,
+    last_match_at: null,
+    ...overrides,
+  };
+}
+
+function match(overrides: Partial<CustomGameMatch> = {}): CustomGameMatch {
+  return {
+    id: 2,
+    home_team_name: "Wolves",
+    away_team_name: "Bears",
+    home_score: 1,
+    away_score: 0,
+    winner: 1,
+    map_id: 5,
+    map_name: "King's Row",
+    map_image_path: null,
+    recorded_by: 9,
+    recorded_at: new Date().toISOString(),
+    points_per_win_applied: null,
     ...overrides,
   };
 }
@@ -138,9 +187,11 @@ async function mount(
     variantIndex?: number;
     hasMix?: boolean;
     omitSwapSeats?: boolean;
-    maps?: { id: number; name: string }[];
-    mapId?: number | null;
+    maps?: MapRead[];
     matches?: CustomGameMatch[];
+    undoingMatchId?: number | null;
+    omitUndoMatch?: boolean;
+    omitPostToDiscord?: boolean;
   } = {},
 ) {
   const container = document.createElement("div");
@@ -163,14 +214,18 @@ async function mount(
         recordingOutcome={false}
         onRecordOutcome={onRecordOutcome}
         matches={props.matches ?? []}
+        undoingMatchId={props.undoingMatchId ?? null}
+        onUndoMatch={props.omitUndoMatch ? undefined : onUndoMatch}
         maps={props.maps ?? []}
-        mapId={props.mapId ?? null}
-        onMapIdChange={onMapIdChange}
+        settingNextMap={false}
+        onNextMapChange={onNextMapChange}
         closingMix={false}
         onCloseMix={onCloseMix}
         onRenameTeam={onRenameTeam}
         onSwapSeats={props.omitSwapSeats ? undefined : onSwapSeats}
         onCopyBattleTags={onCopyBattleTags}
+        postingToDiscord={false}
+        onPostToDiscord={props.omitPostToDiscord ? undefined : onPostToDiscord}
       />,
     );
   });
@@ -218,11 +273,13 @@ beforeEach(() => {
   onBalance.mockReset();
   onVariantIndexChange.mockReset();
   onRecordOutcome.mockReset();
-  onMapIdChange.mockReset();
+  onNextMapChange.mockReset();
   onCloseMix.mockReset();
   onCopyBattleTags.mockReset();
   onRenameTeam.mockReset();
   onSwapSeats.mockReset();
+  onUndoMatch.mockReset();
+  onPostToDiscord.mockReset();
   dndSpies.useDraggable.mockClear();
   dndSpies.useDroppable.mockClear();
 });
@@ -315,42 +372,55 @@ describe("PickupTeamsPanel", () => {
     expect(onRecordOutcome).not.toHaveBeenCalled();
 
     await click(byName(scope, "Draw"));
-    expect(onRecordOutcome).toHaveBeenCalledWith({ outcome: { winner: null }, variantIndex: 0, mapId: null });
+    expect(onRecordOutcome).toHaveBeenCalledWith({ outcome: { winner: null }, variantIndex: 0 });
 
     await click(byName(scope, "Team 2 win"));
-    expect(onRecordOutcome).toHaveBeenLastCalledWith({
-      outcome: { winner: 2 },
-      variantIndex: 0,
-      mapId: null,
-    });
+    expect(onRecordOutcome).toHaveBeenLastCalledWith({ outcome: { winner: 2 }, variantIndex: 0 });
   });
 
   it("reports the page's variant index alongside a recorded result", async () => {
     const scope = await mount(game(), { variantIndex: 1 });
 
     await click(byName(scope, "Team 1 win"));
-    expect(onRecordOutcome).toHaveBeenCalledWith({ outcome: { winner: 1 }, variantIndex: 1, mapId: null });
+    expect(onRecordOutcome).toHaveBeenCalledWith({ outcome: { winner: 1 }, variantIndex: 1 });
   });
 
-  it("carries the page's selected map into a recorded result", async () => {
-    const scope = await mount(game(), {
-      maps: [{ id: 5, name: "King's Row" }],
-      mapId: 5,
-    });
+  it("shows the mix's next map, with its mode, inside the captured block", async () => {
+    const scope = await mount(game({ next_map_id: 5 }), { maps: CATALOGUE });
 
-    expect(scope.textContent).toContain("King's Row");
-
-    await click(byName(scope, "Team 1 win"));
-    expect(onRecordOutcome).toHaveBeenCalledWith({ outcome: { winner: 1 }, variantIndex: 0, mapId: 5 });
+    const captured = scope.querySelector('[data-testid="teams-capture"]');
+    expect(captured?.textContent).toContain("King's Row");
+    expect(captured?.textContent).toContain("Hybrid");
+    expect(captured?.textContent).not.toContain("Not rolled yet");
   });
 
-  it("opens the map combobox and picks a map, notifying the page", async () => {
-    const scope = await mount(game(), {
-      maps: [
-        { id: 5, name: "King's Row" },
-        { id: 6, name: "Ilios" },
-      ],
-    });
+  it("rolls inside the chosen mode and hands the verdict to the page", async () => {
+    const scope = await mount(game(), { maps: CATALOGUE });
+
+    expect(scope.textContent).toContain("Not rolled yet");
+    expect(byName(scope, "Hybrid")?.getAttribute("aria-pressed")).toBe("false");
+
+    await click(byName(scope, "Hybrid"));
+    expect(byName(scope, "Hybrid")?.getAttribute("aria-pressed")).toBe("true");
+
+    await click(byName(scope, "Roll"));
+    // Hybrid has exactly one competitive map, so the roll is deterministic.
+    expect(onNextMapChange).toHaveBeenCalledWith(5);
+  });
+
+  it("hides the roll controls from a read-only viewer, and the whole strip until something is rolled", async () => {
+    const nothingRolled = await mount(game(), { maps: CATALOGUE, canWrite: false });
+    expect(nothingRolled.textContent).not.toContain("Next map");
+
+    document.body.innerHTML = "";
+    const rolled = await mount(game({ next_map_id: 6 }), { maps: CATALOGUE, canWrite: false });
+    expect(rolled.textContent).toContain("Ilios");
+    expect(byName(rolled, "Roll")).toBeNull();
+    expect(byName(rolled, "Hybrid")).toBeNull();
+  });
+
+  it("lets the host pick the next map by hand through the combobox", async () => {
+    const scope = await mount(game(), { maps: CATALOGUE });
 
     await click(byName(scope, "No map"));
     const option = [...document.body.querySelectorAll<HTMLElement>("[cmdk-item]")].find(
@@ -358,7 +428,7 @@ describe("PickupTeamsPanel", () => {
     );
     await click(option);
 
-    expect(onMapIdChange).toHaveBeenCalledWith(6);
+    expect(onNextMapChange).toHaveBeenCalledWith(6);
   });
 
   it("lets the host close the mix independently of recording a result, after confirming", async () => {
@@ -398,28 +468,53 @@ describe("PickupTeamsPanel", () => {
   });
 
   it("renders the recorded match history the page hands it", async () => {
-    const scope = await mount(game(), {
-      matches: [
-        {
-          id: 2,
-          home_team_name: "Wolves",
-          away_team_name: "Bears",
-          home_score: 1,
-          away_score: 0,
-          winner: 1,
-          map_id: 5,
-          map_name: "King's Row",
-          map_image_path: null,
-          recorded_by: 9,
-          recorded_at: new Date().toISOString(),
-        },
-      ],
-    });
+    const scope = await mount(game(), { matches: [match()] });
 
     expect(scope.textContent).toContain("Match history");
     expect(scope.textContent).toContain("Wolves");
     expect(scope.textContent).toContain("Bears");
     expect(scope.textContent).toContain("King's Row");
+  });
+
+  it("offers the undo only on the newest recorded match", async () => {
+    const scope = await mount(game(), {
+      matches: [match({ id: 9 }), match({ id: 8 })],
+    });
+
+    expect(scope.querySelectorAll('button[aria-label="Undo this match"]')).toHaveLength(1);
+  });
+
+  it("withholds the undo from a read-only viewer and from a page offering no handler", async () => {
+    const readOnly = await mount(game(), { matches: [match()], canWrite: false });
+    expect(readOnly.querySelector('button[aria-label="Undo this match"]')).toBeNull();
+
+    const noHandler = await mount(game(), { matches: [match()], omitUndoMatch: true });
+    expect(noHandler.querySelector('button[aria-label="Undo this match"]')).toBeNull();
+  });
+
+  it("names the rank points it will give back, and only undoes after confirming", async () => {
+    const scope = await mount(game(), {
+      matches: [match({ id: 9, points_per_win_applied: 25 })],
+    });
+
+    await click(scope.querySelector('button[aria-label="Undo this match"]'));
+    expect(onUndoMatch).not.toHaveBeenCalled();
+    expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain(
+      "moves every player's rank back by 25 points",
+    );
+
+    await click(byName(document, "Undo match"));
+    expect(onUndoMatch).toHaveBeenCalledWith(9);
+  });
+
+  it("says so plainly when the match moved no rank points", async () => {
+    const scope = await mount(game(), { matches: [match()] });
+
+    await click(scope.querySelector('button[aria-label="Undo this match"]'));
+
+    expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain(
+      "No rank points were applied.",
+    );
   });
 
   it("hides the match history section until something has been recorded", async () => {
@@ -510,5 +605,33 @@ describe("PickupTeamsPanel", () => {
     for (const call of dndSpies.useDraggable.mock.calls) {
       expect(call[0]).toMatchObject({ disabled: true });
     }
+  });
+
+  it("offers no Post to Discord until a channel is configured", async () => {
+    const scope = await mount(game());
+
+    expect(byName(scope, "Post to Discord")).toBeNull();
+  });
+
+  it("posts the option on screen to the mix's configured channel", async () => {
+    const withChannel = game({ settings: { ...SETTINGS, discord_channel_id: "123" } });
+    const scope = await mount(withChannel);
+
+    await click(byName(scope, "Post to Discord"));
+    expect(onPostToDiscord).toHaveBeenCalledWith(0);
+
+    // The pager's option is what a lobby is reading, so that is what goes out.
+    document.body.innerHTML = "";
+    const second = await mount(withChannel, { variantIndex: 1 });
+    await click(byName(second, "Post to Discord"));
+    expect(onPostToDiscord).toHaveBeenLastCalledWith(1);
+  });
+
+  it("hides Post to Discord from a read-only viewer", async () => {
+    const scope = await mount(game({ settings: { ...SETTINGS, discord_channel_id: "123" } }), {
+      canWrite: false,
+    });
+
+    expect(byName(scope, "Post to Discord")).toBeNull();
   });
 });

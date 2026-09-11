@@ -11,7 +11,7 @@ import {
 } from "@/app/balancer/components/RoleRankControls";
 import { SortableGrip, SortableRows, useSortableRow } from "@/app/balancer/components/SortableRows";
 import { splitBattleTag } from "@/app/balancer/components/balancer-page-helpers";
-import { EYEBROW_CLASS } from "@/app/balancer/pickup/pickup-chrome";
+import { CAPTION_CLASS, EYEBROW_CLASS } from "@/app/balancer/pickup/pickup-chrome";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import RankHistory from "@/components/RankHistory";
 import { Button } from "@/components/ui/button";
@@ -33,6 +33,7 @@ import {
   type CustomGamePlayer,
   type CustomGamePlayerPatch,
   type MixParticipation,
+  type MixMemberStats,
 } from "@/services/custom-game.service";
 
 import {
@@ -43,6 +44,7 @@ import {
   resolveRoleOrder,
   toggleRole,
 } from "./pickup-lineup";
+import { formatRecord, formatStreak } from "./pickup-stats";
 
 /** What Save writes into the host's own rank book: `clear` falls the role back to the workspace. */
 export type PickupRankChange = { ranks: Record<string, number>; clear: string[] };
@@ -54,6 +56,8 @@ type PickupPlayerSheetProps = {
   onOpenChange: (open: boolean) => void;
   onSave: (patch: CustomGamePlayerPatch, rankChange: PickupRankChange | null) => void;
   onRemove: () => void;
+  /** This player's all-time mix record, or `null` where the page does not read one. */
+  mixStats?: MixMemberStats | null;
 };
 
 /** Everything the sheet edits before Save, kept apart from the server row. */
@@ -123,9 +127,17 @@ export function PickupPlayerSheet({
   onOpenChange,
   onSave,
   onRemove,
+  mixStats = null,
 }: Readonly<PickupPlayerSheetProps>) {
   const label = row ? playerLabel(row) : "";
   const { name, suffix } = splitBattleTag(label);
+  // The record across every mix, not this one: a caption, because it is
+  // context for the settings below it and nothing here edits it.
+  const mixStreak = mixStats ? formatStreak(mixStats.streak) : null;
+  const mixRecord =
+    mixStats != null && mixStats.games > 0
+      ? `Mixes: ${formatRecord(mixStats)} · ${Math.round(mixStats.win_rate * 100)}%${mixStreak ? ` · ${mixStreak}` : ""}`
+      : null;
   const [draft, setDraft] = useState<RoleDraft>(() => buildDraft(row));
   // Keyed on the member id rather than the whole row: a background refetch of
   // this same player (another host's edit landing mid-session) must not wipe
@@ -196,6 +208,7 @@ export function PickupPlayerSheet({
               <BattleTagCopyButton battleTag={row.battle_tag} className="ml-0.5 shrink-0" />
             ) : null}
           </SheetTitle>
+          {mixRecord ? <span className={cn(CAPTION_CLASS, "pt-1")}>{mixRecord}</span> : null}
           <SheetDescription className="pt-1 text-caption text-[color:var(--aqt-fg-dim)]">
             {canEdit
               ? "Nothing here writes until you press Save."
