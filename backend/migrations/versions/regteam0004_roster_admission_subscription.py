@@ -18,22 +18,87 @@ mean "the old contract" without a backfill:
 ``down_revision`` is the current Alembic head, not ``regteam0003``. This repo
 keeps one chain; pointing at the previous team-registration revision would
 fork the graph.
+
+Every lock this revision needs is taken in one go before the first ALTER (see
+``_take_locks``). Acquiring them column by column deadlocked this migration
+three deploys running: the transaction sat on ``registration_form`` while a
+live request held ``registration`` and reached for the table the migration had
+already locked, and Postgres shot the migration as the victim. Migrations run
+against a serving fleet here on purpose -- the old containers keep answering
+until the new ones are up -- so the fleet is not going to hold still, and the
+migration has to stop giving it a window.
 """
 
 from __future__ import annotations
 
+import time
 from collections.abc import Sequence
 
 import sqlalchemy as sa
 from alembic import op
+from sqlalchemy.exc import OperationalError
 
 revision: str = "regteam0004"
 down_revision: str | Sequence[str] | None = "matchslim01"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
+# SQLSTATE 55P03 (``lock_not_available``): cancelled by ``lock_timeout``.
+# SQLSTATE 40P01 (``deadlock_detected``): chosen as the victim of a lock cycle.
+# Both mean "the fleet was in the way, try again"; anything else -- a bad type,
+# a missing table -- must raise on the first attempt rather than be retried
+# forty times and reported as a lock problem.
+RETRYABLE_SQLSTATES = frozenset({"55P03", "40P01"})
+# Grab the locks quickly or not at all: a queued ACCESS EXCLUSIVE request stalls
+# every reader that arrives behind it, so a long wait would turn a metadata
+# change into a fleet-wide stall (see ``streamvis01_user_stream_visible.py``).
+LOCK_TIMEOUT = "3s"
+# ~4 minutes of wall clock, bounded: a genuinely stuck session fails the deploy
+# instead of hanging it.
+LOCK_ATTEMPTS = 40
+LOCK_BACKOFF_SECONDS = 6.0
+
+#: Every table the ``op`` calls below alter, so one statement takes the lot.
+_EXCLUSIVE = "balancer.registration_form, balancer.registration, balancer.registration_team"
+#: The FK targets. ``SHARE ROW EXCLUSIVE`` is what ``ADD CONSTRAINT ... REFERENCES``
+#: takes on the referenced table, and it conflicts with ordinary writes -- so a
+#: login updating ``auth.user`` is exactly the other half of a cycle.
+_REFERENCED = 'auth."user"'
+
+
+def _take_locks() -> None:
+    """Take every lock this revision needs, before it changes anything.
+
+    Each attempt is its own SAVEPOINT: a cancelled or deadlocked statement
+    aborts the transaction alembic wraps the migration in, and rolling the
+    savepoint back both restores that transaction and releases whatever locks
+    the attempt did get -- which is what stops a retry from holding half the
+    set and re-forming the same cycle. ``SET LOCAL`` is issued outside the
+    savepoint so a rollback does not also roll back the timeout.
+    """
+    bind = op.get_bind()
+    bind.execute(sa.text(f"SET LOCAL lock_timeout = '{LOCK_TIMEOUT}'"))
+
+    for attempt in range(1, LOCK_ATTEMPTS + 1):
+        savepoint = bind.begin_nested()
+        try:
+            bind.execute(sa.text(f"LOCK TABLE {_EXCLUSIVE} IN ACCESS EXCLUSIVE MODE"))
+            bind.execute(sa.text(f"LOCK TABLE {_REFERENCED} IN SHARE ROW EXCLUSIVE MODE"))
+        except OperationalError as exc:
+            savepoint.rollback()
+            if getattr(exc.orig, "sqlstate", None) not in RETRYABLE_SQLSTATES:
+                raise
+            if attempt == LOCK_ATTEMPTS:
+                raise
+            time.sleep(LOCK_BACKOFF_SECONDS)
+        else:
+            savepoint.commit()
+            return
+
 
 def upgrade() -> None:
+    _take_locks()
+
     op.add_column(
         "registration_form",
         sa.Column("subscription_scope", sa.String(length=16), nullable=False, server_default="player"),
@@ -144,6 +209,8 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    _take_locks()
+
     op.drop_constraint(
         "fk_registration_team_subscription_covered_by",
         "registration_team",
