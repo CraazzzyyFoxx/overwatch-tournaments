@@ -4,6 +4,7 @@ import type {
   RegistrationTeam,
   RegistrationTeamAcceptInput,
   RegistrationTeamCreateInput,
+  RegistrationTeamExportResult,
   RegistrationTeamInviteCreated,
   RegistrationTeamInviteHistoryResponse,
   RegistrationTeamInviteInput,
@@ -149,12 +150,7 @@ const registrationTeamService = {
   async exportRegistered(
     tournamentId: number,
     teamIds?: number[],
-  ): Promise<{
-    removed_teams: number;
-    imported_teams: number;
-    created_players: number;
-    skipped: { team_id: number; name: string; code: string }[];
-  }> {
+  ): Promise<RegistrationTeamExportResult> {
     const response = await apiFetch(
       `/api/balancer/tournaments/${tournamentId}/registered-teams/export`,
       { method: "POST", body: teamIds !== undefined ? { team_ids: teamIds } : {} },

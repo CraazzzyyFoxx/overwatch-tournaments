@@ -106,7 +106,7 @@ describe("isTabKey", () => {
 describe("sub-tabs", () => {
   test("registration lands on entries", () => {
     expect(REGISTRATION_SUB_TABS[0]).toBe("entries");
-    expect(REGISTRATION_SUB_TABS).toEqual(["entries", "form", "feed", "rank-autofill"]);
+    expect(REGISTRATION_SUB_TABS).toEqual(["entries", "teams", "form", "feed", "rank-autofill"]);
   });
 
   test("teams offers draft only when the tournament drafts", () => {

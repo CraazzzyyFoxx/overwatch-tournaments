@@ -11,6 +11,7 @@ import { REGISTRATION_SUB_TABS, type RegistrationSubTab } from "../tab-guards";
 
 const SUB_TAB_LABELS: Record<RegistrationSubTab, string> = {
   entries: "Entries",
+  teams: "Teams",
   form: "Form",
   feed: "Sheets feed",
   "rank-autofill": "Rank autofill"
@@ -44,11 +45,22 @@ export default function RegistrationLayout({ children }: Readonly<{ children: Re
   const segment = pathname.startsWith(basePath)
     ? (pathname.slice(basePath.length).split("/").find(Boolean) ?? DEFAULT_SUB_TAB)
     : DEFAULT_SUB_TAB;
-  const known = isRegistrationSubTab(segment);
-  const active: RegistrationSubTab = known ? segment : DEFAULT_SUB_TAB;
 
   const tournamentQuery = useHubTournamentQuery(tournamentId);
   const workspaceId = tournamentQuery.data?.workspace_id ?? null;
+  /**
+   * Registered teams exist only where captains form them: on balancer or draft
+   * formation the section is structurally empty, so it is not offered at all.
+   * `null` while the tournament is still loading — a `false` there would bounce
+   * a legitimate deep link to `teams` before the answer arrived.
+   */
+  const teamsOffered = tournamentQuery.data
+    ? tournamentQuery.data.team_formation === "registration"
+    : null;
+  const isKnownSegment = isRegistrationSubTab(segment);
+  const known = isKnownSegment && (segment !== "teams" || teamsOffered !== false);
+  const active: RegistrationSubTab = known && isKnownSegment ? segment : DEFAULT_SUB_TAB;
+
   // Every section of Registration reads teams and registrations, so they share
   // the tab's own grant rather than each carrying a different one.
   const canTeamRead = canAccessPermission("team.read", workspaceId);
@@ -65,7 +77,8 @@ export default function RegistrationLayout({ children }: Readonly<{ children: Re
   const items: AdminTabItem[] = REGISTRATION_SUB_TABS.map((key) => ({
     key,
     label: SUB_TAB_LABELS[key],
-    href: `${basePath}/${key}`
+    href: `${basePath}/${key}`,
+    hidden: key === "teams" && teamsOffered !== true
   }));
 
   // Held back until permissions resolve, so a legitimate visitor never sees the

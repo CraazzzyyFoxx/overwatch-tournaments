@@ -40,8 +40,15 @@ export function isLegacyTabSegment(value: string): value is LegacyTabSegment {
   return (LEGACY_TAB_SEGMENTS as readonly string[]).includes(value);
 }
 
-/** Sub-tabs of `registration`. `entries` is the landing segment. */
-export const REGISTRATION_SUB_TABS = ["entries", "form", "feed", "rank-autofill"] as const;
+/**
+ * Sub-tabs of `registration`. `entries` is the landing segment.
+ *
+ * `teams` exists only on a tournament that forms its teams by registration —
+ * it used to be a Radix `Tabs` switcher inside `entries`, which is neither the
+ * admin's one tab implementation nor linkable. The layout hides it (and bounces
+ * its URL) for every other formation mode.
+ */
+export const REGISTRATION_SUB_TABS = ["entries", "teams", "form", "feed", "rank-autofill"] as const;
 export type RegistrationSubTab = (typeof REGISTRATION_SUB_TABS)[number];
 
 /** Sub-tabs of `teams`. `draft` exists only when the tournament drafts. */

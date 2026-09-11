@@ -5,8 +5,8 @@ import { describe, expect, it } from "bun:test";
 
 /**
  * The invite ledger renders on two screens — the captain's panel and the
- * organizer's card — and each keeps its own list of the states the server can
- * send. That duplication is deliberate: the two sections are otherwise
+ * organizer's teams browser — and each keeps its own list of the states the
+ * server can send. That duplication is deliberate: the two sections are otherwise
  * uncoupled, and importing one into the other would make either fail to build
  * without the other.
  *
@@ -26,7 +26,7 @@ const SITES = {
     "tournaments",
     "[id]",
     "components",
-    "RegistrationTeamsCard.tsx"
+    "RegistrationTeamsBrowser.tsx"
   )
 } as const;
 

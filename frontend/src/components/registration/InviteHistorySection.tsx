@@ -31,8 +31,8 @@ interface InviteHistorySectionProps {
  * one renders as itself: a sixth state must not turn a row into a raw
  * `registrationTeams.history.state.<x>` key path.
  *
- * `RegistrationTeamsCard.tsx` keeps its own copy on purpose — the two sections are
- * deliberately uncoupled — and a test pins that the two lists agree.
+ * `RegistrationTeamsBrowser.tsx` keeps its own copy on purpose — the two
+ * sections are deliberately uncoupled — and a test pins that the lists agree.
  */
 const HISTORY_STATES = ["pending", "accepted", "declined", "revoked", "expired"] as const;
 
