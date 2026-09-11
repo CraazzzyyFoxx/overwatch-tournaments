@@ -81,6 +81,28 @@ class BalancerRegistrationForm(db.TimeStampIntegerMixin):
         server_default=enums.SubscriptionEnforcementStage.check_in.value,
         default=enums.SubscriptionEnforcementStage.check_in.value,
     )
+    #: WHO the subscription rule is evaluated against. ``player`` (default) is
+    #: the anti-smurf per-entrant gate. ``team`` is "the captain pays": identity
+    #: and profile stay per player, but a coverage stamp on the registered team
+    #: satisfies the subscription requirement for everyone on that roster.
+    subscription_scope: Mapped[str] = mapped_column(
+        String(16), nullable=False, server_default="player", default="player"
+    )
+    #: Starter-only rank floor/ceiling/spread for team-registration tournaments.
+    #: NULL means the rule is off. Substitutes are never included.
+    team_rank_min: Mapped[int | None] = mapped_column(Integer(), nullable=True)
+    team_rank_max: Mapped[int | None] = mapped_column(Integer(), nullable=True)
+    team_max_rank_spread: Mapped[int | None] = mapped_column(Integer(), nullable=True)
+    #: Discord nick / Discord snowflake unique across teams in this tournament.
+    #: Default false so existing events do not grow a new refusal on deploy.
+    team_unique_identity: Mapped[bool] = mapped_column(
+        Boolean(), nullable=False, server_default="false", default=False
+    )
+    #: Live members must have a Discord identity in ``Workspace.discord_guild_id``.
+    #: Fail closed when the workspace has no guild bound.
+    team_require_discord_guild: Mapped[bool] = mapped_column(
+        Boolean(), nullable=False, server_default="false", default=False
+    )
 
     tournament: Mapped[Tournament] = relationship()
     workspace: Mapped[Workspace] = relationship()
@@ -221,6 +243,10 @@ class BalancerRegistration(db.TimeStampIntegerMixin):
     # ``related_player_id`` (nobody has been replaced yet); ``Team.avg_sr`` /
     # ``total_sr`` filter on ``is_substitution`` alone, so that stays correct.
     is_substitute: Mapped[bool] = mapped_column(Boolean(), nullable=False, server_default="false", default=False)
+    #: Extra roster editor besides the unique captain. Managers may invite,
+    #: kick, rename, reassign and cover a team subscription; they may not
+    #: transfer, lock, disband or reject. Default false is "captain only".
+    is_team_manager: Mapped[bool] = mapped_column(Boolean(), nullable=False, server_default="false", default=False)
 
     tournament: Mapped[Tournament] = relationship()
     # Readers needing the domain player must eager-load this relationship
@@ -422,6 +448,25 @@ class BalancerRegistrationTeam(db.TimeStampIntegerMixin):
     invite_cap_reset_by: Mapped[int | None] = mapped_column(
         ForeignKey("auth.user.id", ondelete="SET NULL"), nullable=True
     )
+    #: Organizer axis, independent of occupancy ``status``. Occupancy still
+    #: writes ``forming``/``complete``; this is pending/accepted/waitlisted.
+    #: Reject stays a ``status`` (terminal + ``deleted_at``), not an admission.
+    admission: Mapped[str] = mapped_column(String(16), nullable=False, server_default="pending", default="pending")
+    rejection_reason: Mapped[str | None] = mapped_column(Text(), nullable=True)
+    #: Staff-only notes. Never serialized on the public team read.
+    organizer_notes: Mapped[str | None] = mapped_column(Text(), nullable=True)
+    roster_locked_at: Mapped[db.DateTime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    roster_locked_by: Mapped[int | None] = mapped_column(ForeignKey("auth.user.id", ondelete="SET NULL"), nullable=True)
+    #: Team-scoped subscription stamp. Validity follows ``subscription_expires_at``
+    #: rather than re-reading the redeemer's personal entitlement, so a captaincy
+    #: transfer cannot drop a paid roster.
+    subscription_covered_at: Mapped[db.DateTime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    subscription_covered_by: Mapped[int | None] = mapped_column(
+        ForeignKey("auth.user.id", ondelete="SET NULL"), nullable=True
+    )
+    subscription_provider: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    subscription_tier_rank: Mapped[int | None] = mapped_column(Integer(), nullable=True)
+    subscription_expires_at: Mapped[db.DateTime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     tournament: Mapped[Tournament] = relationship()
     workspace: Mapped[Workspace] = relationship()

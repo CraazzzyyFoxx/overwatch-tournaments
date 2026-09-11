@@ -285,3 +285,37 @@ class NotifyTests(IsolatedAsyncioTestCase):
                 )
 
         self.assertEqual([], session.added)
+
+_TEAM_EVENT = {
+    "team_id": 12,
+    "team_name": "Anak",
+    "tournament_id": 3,
+    "tournament_name": "OWT Season 5",
+}
+
+
+class TeamRosterKindTests(IsolatedAsyncioTestCase):
+    async def test_kicked_and_disbanded_share_the_roster_snapshot(self) -> None:
+        for kind in ("team.kicked", "team.disbanded"):
+            with self.subTest(kind=kind):
+                session = _Session()
+                row = await notify(
+                    session,
+                    kind=kind,
+                    payload=dict(_TEAM_EVENT),
+                    audience="user",
+                    recipient_auth_user_id=7,
+                )
+                self.assertEqual(kind, row.kind)
+                self.assertEqual("Anak", row.payload_json["team_name"])
+
+    async def test_rejected_carries_an_optional_reason(self) -> None:
+        session = _Session()
+        row = await notify(
+            session,
+            kind="team.rejected",
+            payload={**_TEAM_EVENT, "reason": "Duplicate roster"},
+            audience="user",
+            recipient_auth_user_id=7,
+        )
+        self.assertEqual("Duplicate roster", row.payload_json["reason"])

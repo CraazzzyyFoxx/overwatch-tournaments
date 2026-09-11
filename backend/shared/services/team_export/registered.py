@@ -36,8 +36,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.domain.roster import PlayerRoster
 from shared.domain.roster_shape import FLEX_SLOT_CODE, RosterShape
+from shared.domain.team_subscription import SUBSCRIPTION_SCOPE_TEAM, team_subscription_is_current
 from shared.models.registration.registration import (
     BalancerRegistration,
+    BalancerRegistrationForm,
     BalancerRegistrationTeam,
 )
 from shared.models.tenancy.workspace import WorkspaceMember
@@ -150,6 +152,10 @@ async def build_registered_export(
         )
     )
     workspace_id = await session.scalar(sa.select(Tournament.workspace_id).where(Tournament.id == tournament_id))
+    form = await session.scalar(
+        sa.select(BalancerRegistrationForm).where(BalancerRegistrationForm.tournament_id == tournament_id)
+    )
+    team_scope = getattr(form, "subscription_scope", None) or "player"
     rosters = await roster_engine.resolve(
         session, registrations, workspace_id=workspace_id, tournament_id=tournament_id
     )
@@ -172,12 +178,20 @@ async def build_registered_export(
         captain_player_by_registration = dict(rows)
 
     for team in teams:
+        if (getattr(team, "admission", None) or "pending") == "waitlisted":
+            payload.skipped.append(SkippedTeam(team_id=team.id, name=team.name, code="team_waitlisted"))
+            continue
         if team.status != _EXPORTABLE_STATUS:
             payload.skipped.append(SkippedTeam(team_id=team.id, name=team.name, code="team_incomplete"))
             continue
         team_members = members_by_team.get(team.id, [])
         if not team_members:
             payload.skipped.append(SkippedTeam(team_id=team.id, name=team.name, code="team_empty"))
+            continue
+        if team_scope == SUBSCRIPTION_SCOPE_TEAM and not team_subscription_is_current(team):
+            payload.skipped.append(
+                SkippedTeam(team_id=team.id, name=team.name, code="team_subscription_uncovered")
+            )
             continue
 
         members: list[MaterializationMember] = []

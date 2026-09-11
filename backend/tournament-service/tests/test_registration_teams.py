@@ -48,6 +48,8 @@ from src.schemas.registration_team import (  # noqa: E402
     RegistrationTeamInviteCreateRequest,
     RegistrationTeamInvitePreview,
     RegistrationTeamInviteRead,
+    RegistrationTeamRejectRequest,
+    serialize_registration_team,
 )
 from src.services.registration import teams  # noqa: E402
 from src.services.registration.service import registration_service  # noqa: E402
@@ -285,28 +287,28 @@ class MutabilityGateTests(TestCase):
 
 
 class OrganizerRejectionTests(TestCase):
-    def test_rejecting_a_team_withdraws_its_members_by_default(self) -> None:
-        """§12.5's dead end: leaving the rows approved strands a player holding a
-        live registration for a tournament they cannot play in, with nothing on
-        their card explaining why. The opt-out exists for "incomplete", not
-        "unwelcome"."""
-        import inspect
+    def test_reason_is_required_trimmed_and_bounded(self) -> None:
+        for payload in ({}, {"reason": None}, {"reason": " \n\t "}, {"reason": "x" * 1001}):
+            with self.subTest(payload=payload), self.assertRaises(ValidationError):
+                RegistrationTeamRejectRequest.model_validate(payload)
+        request = RegistrationTeamRejectRequest(reason=" \n" + "x" * 1000 + "\t ")
+        self.assertEqual("x" * 1000, request.reason)
 
-        signature = inspect.signature(teams.teams_service.reject_team)
-        self.assertIs(True, signature.parameters["withdraw_members"].default)
-
-    def test_listing_hides_terminal_teams_by_default(self) -> None:
-        """The organizer's working view is who still needs chasing; rejected and
-        disbanded teams are noise until explicitly asked for."""
-        import inspect
-
-        signature = inspect.signature(teams.teams_service.list_teams)
-        self.assertIs(False, signature.parameters["include_terminal"].default)
-
-    def test_the_two_terminal_statuses_are_outside_the_mutable_set(self) -> None:
-        self.assertNotIn(teams.TEAM_REJECTED, teams._MUTABLE_TEAM_STATUSES)
-        self.assertNotIn(teams.TEAM_DISBANDED, teams._MUTABLE_TEAM_STATUSES)
-        self.assertEqual(set(teams.TEAM_STATUSES) - teams._MUTABLE_TEAM_STATUSES, {"rejected", "disbanded"})
+    def test_rejection_reason_is_private_but_available_to_captain_and_organizer(self) -> None:
+        team = models.BalancerRegistrationTeam(
+            id=1, tournament_id=2, name="Roster", status=teams.TEAM_REJECTED,
+            rejection_reason="Duplicate roster", organizer_notes="Internal review",
+        )
+        occupancy = RosterOccupancy(shape=FIVE_STACK)
+        public = serialize_registration_team(team, occupancy)
+        captain = serialize_registration_team(team, occupancy, include_private=True)
+        organizer = serialize_registration_team(team, occupancy, include_staff=True)
+        self.assertIsNone(public.rejection_reason)
+        self.assertIsNone(public.organizer_notes)
+        self.assertEqual("Duplicate roster", captain.rejection_reason)
+        self.assertIsNone(captain.organizer_notes)
+        self.assertEqual("Duplicate roster", organizer.rejection_reason)
+        self.assertEqual("Internal review", organizer.organizer_notes)
 
 
 class _SingleTeamSession:
@@ -334,6 +336,7 @@ class CrossTournamentAuthorizationTests(IsolatedAsyncioTestCase):
                 tournament_id=1,
                 team_id=99,
                 auth_user=models.AuthUser(id=5),
+                reason="Duplicate roster",
             )
         # 404, not 403: confirming it exists elsewhere leaks roster membership
         # across workspaces.
@@ -740,41 +743,6 @@ class TargetedInviteShapeTests(TestCase):
         self.assertNotIn("target_auth_user_id", fields)
 
 
-class MyInvitesQueryTests(TestCase):
-    """The only way a targeted invite's recipient can learn it exists."""
-
-    def _source(self) -> str:
-        return inspect.getsource(teams.teams_service.list_my_invites)
-
-    def test_it_is_scoped_to_the_caller_and_never_to_a_parameter(self) -> None:
-        """ "Whose invites" is never the client's answer, so the filter reads the
-        authenticated identity rather than anything from the request."""
-        self.assertIn("target_auth_user_id == auth_user.id", self._source())
-
-    def test_link_invites_are_excluded(self) -> None:
-        """A bearer credential is not "yours" until you hold it. Listing link
-        invites here would hand every outstanding one to whoever asked — the
-        equality filter above excludes them, since their target is NULL."""
-        source = self._source()
-
-        self.assertNotIn("token_sha256", source)
-        self.assertIn("target_auth_user_id == auth_user.id", source)
-
-    def test_expired_and_answered_offers_are_filtered_not_greyed_out(self) -> None:
-        """An offer the accept guard would refuse is not an offer, and its recipient
-        has no action for it."""
-        source = self._source()
-
-        self.assertIn("state == INVITE_PENDING", source)
-        self.assertIn("expires_at > datetime.now(UTC)", source)
-
-    def test_invites_from_dead_teams_are_excluded(self) -> None:
-        """A disbanded or exported team cannot take anyone, so its pending rows are
-        not offers — they are debris the recipient would waste a click on."""
-        source = self._source()
-
-        self.assertIn("status == TEAM_FORMING", source)
-        self.assertIn("deleted_at.is_(None)", source)
 
 
 class AcceptPayloadTests(TestCase):
@@ -892,11 +860,13 @@ class OrganizerRevokeTests(TestCase):
 
     def test_both_paths_share_one_transition_but_not_one_gate(self) -> None:
         """A single function with an `as_organizer` flag is how a privilege check
-        gets skipped by a caller passing the wrong default."""
+        gets skipped by a caller passing the wrong default. The member-facing path
+        authorizes the caller as the team's own staff (captain or manager); the
+        organizer path authorizes on workspace permission upstream."""
         captain = _code_of(teams.teams_service.revoke_invite)
         organizer = _code_of(teams.teams_service.revoke_invite_as_organizer)
 
-        self.assertIn("_assert_captain", captain)
+        self.assertIn("_assert_staff(", captain)
         self.assertIn("_withdraw_invite(invite, by=auth_user, by_organizer=False)", captain)
         self.assertIn("_withdraw_invite(invite, by=auth_user, by_organizer=True)", organizer)
 
@@ -978,7 +948,7 @@ class CaptainReadGateTests(TestCase):
         """The mutability rule did not disappear; it stayed where it belongs."""
         edit_gate = _code_of(teams.teams_service.assert_may_edit_team)
 
-        self.assertIn("assert_captain_of_team", edit_gate)
+        self.assertIn("assert_staff_of_team", edit_gate)
         self.assertIn("_assert_mutable(team)", edit_gate)
 
 

@@ -33,7 +33,7 @@ from __future__ import annotations
 
 import sys
 import warnings
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -49,6 +49,7 @@ backend_root = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(backend_root))
 sys.path.insert(0, str(backend_root / "tournament-service"))
 
+from shared.core.enums import TournamentStatus  # noqa: E402
 from shared.domain.roster_shape import parse_roster_slots  # noqa: E402
 from shared.models.platform.notification import Notification  # noqa: E402
 from shared.testing import install_postgres_type_shims  # noqa: E402
@@ -70,6 +71,7 @@ TABLE_NAMES = (
     "tournament.encounter",
     "tournament.encounter_map_report",
     "matches.match",
+    "workspace",
     "players.user",
     "workspace_member",
     "balancer.registration",
@@ -663,3 +665,178 @@ class _CommittingSessionShim(_AsyncSessionShim):
     def __init__(self, session: Session) -> None:
         super().__init__(session)
         self.info = session.info
+
+
+MATE_AUTH = 504
+
+
+class TeamRosterOutcomeTests(_ProducerTestCase):
+    """Kick, reject and disband must write inbox rows *before* the roster is
+    withdrawn — `_roster_members` hides withdrawn players, so notifying
+    afterwards is a silent no-op.
+    """
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.team = self.fx.team("Vanguard")
+        captain_member = self.fx.player("Cap", auth_user_id=CAPTAIN_AUTH)
+        captain_registration = self.fx.registration(
+            captain_member, battle_tag="Cap#1111", team_id=self.team.id, slot_code="tank"
+        )
+        self.team.captain_registration_id = captain_registration.id
+        mate_member = self.fx.player("Mate", auth_user_id=MATE_AUTH)
+        self.mate_registration = self.fx.registration(
+            mate_member, battle_tag="Mate#2222", team_id=self.team.id, slot_code="dps"
+        )
+        self.fx.session.flush()
+
+        window = patch.object(
+            teams_module.RegistrationTeamService,
+            "_assert_registration_open",
+            AsyncMock(return_value=self.fx.tournament),
+        )
+        window.start()
+        self.addCleanup(window.stop)
+        shape = patch.object(
+            teams_module.RegistrationTeamService, "_resolve_shape", AsyncMock(return_value=FIVE_STACK)
+        )
+        shape.start()
+        self.addCleanup(shape.stop)
+
+    async def test_kick_notifies_the_removed_player(self) -> None:
+        await teams_module.teams_service.kick_member(
+            self.fx.shim,
+            team_id=self.team.id,
+            registration_id=self.mate_registration.id,
+            auth_user=_auth_user(CAPTAIN_AUTH, "cap"),
+        )
+        rows = self.fx.notifications("team.kicked")
+        self.assertEqual(1, len(rows))
+        self.assertEqual(MATE_AUTH, rows[0].recipient_auth_user_id)
+        self.assertEqual("Vanguard", rows[0].payload_json["team_name"])
+
+    async def test_disband_notifies_every_member(self) -> None:
+        await teams_module.teams_service.disband_team(
+            self.fx.shim,
+            team_id=self.team.id,
+            auth_user=_auth_user(CAPTAIN_AUTH, "cap"),
+        )
+        rows = self.fx.notifications("team.disbanded")
+        self.assertEqual({CAPTAIN_AUTH, MATE_AUTH}, {row.recipient_auth_user_id for row in rows})
+
+    async def test_reject_notifies_every_member_with_the_reason(self) -> None:
+        await teams_module.teams_service.reject_team(
+            self.fx.shim,
+            tournament_id=TOURNAMENT_ID,
+            team_id=self.team.id,
+            auth_user=_auth_user(CAPTAIN_AUTH, "cap"),
+            reason="  Duplicate roster \n",
+        )
+        rows = self.fx.notifications("team.rejected")
+        self.assertEqual({CAPTAIN_AUTH, MATE_AUTH}, {row.recipient_auth_user_id for row in rows})
+        self.assertEqual("Duplicate roster", rows[0].payload_json["reason"])
+        self.fx.session.expire_all()
+        rejected = self.fx.session.get(models.BalancerRegistrationTeam, self.team.id)
+        self.assertEqual("Duplicate roster", rejected.rejection_reason)
+        members = list(self.fx.session.scalars(sa.select(models.BalancerRegistration)))
+        self.assertEqual({"approved"}, {member.status for member in members})
+        self.assertTrue(all(member.registration_team_id is None for member in members))
+        self.assertTrue(all(member.team_slot_code is None and not member.is_substitute for member in members))
+        for account, expected in ((None, []), (MATE_AUTH, []), (CAPTAIN_AUTH, [self.team.id])):
+            visible = await teams_module.teams_service.list_teams(
+                self.fx.shim,
+                tournament_id=TOURNAMENT_ID,
+                include_terminal_for_auth_user_id=account,
+            )
+            self.assertEqual(expected, [team.id for team, _occupancy in visible])
+        self.assertTrue(
+            await teams_module.teams_service.is_team_staff(self.fx.shim, rejected, CAPTAIN_AUTH)
+        )
+
+    async def test_explicit_withdrawal_retains_the_rejected_team_link_and_revokes_offers(self) -> None:
+        invite = self.fx.invite(self.team, slot_code="support", target_auth_user_id=INVITEE_AUTH)
+        await teams_module.teams_service.reject_team(
+            self.fx.shim,
+            tournament_id=TOURNAMENT_ID,
+            team_id=self.team.id,
+            auth_user=_auth_user(CAPTAIN_AUTH, "cap"),
+            reason="Ineligible roster",
+            withdraw_members=True,
+        )
+        self.fx.session.expire_all()
+        members = list(self.fx.session.scalars(sa.select(models.BalancerRegistration)))
+        self.assertEqual({"withdrawn"}, {member.status for member in members})
+        self.assertEqual({self.team.id}, {member.registration_team_id for member in members})
+        self.assertEqual(teams_module.INVITE_REVOKED, invite.state)
+
+
+class TargetedInviteAvailabilityTests(_ProducerTestCase):
+    def setUp(self) -> None:
+        super().setUp()
+        self.window = models.TournamentPhaseSchedule(
+            tournament_id=TOURNAMENT_ID,
+            status=TournamentStatus.REGISTRATION,
+            starts_at=datetime.now(UTC) - timedelta(days=1),
+        )
+        self.fx.session.add(self.window)
+        self.fx.session.add(
+            models.BalancerRegistrationForm(
+                tournament_id=TOURNAMENT_ID, workspace_id=WORKSPACE_ID, max_substitutes=1
+            )
+        )
+        shape = patch.object(
+            teams_module.RegistrationTeamService,
+            "_resolve_shape",
+            AsyncMock(return_value=parse_roster_slots({"tank": 1, "dps": 1})),
+        )
+        shape.start()
+        self.addCleanup(shape.stop)
+        self.team = self.fx.team("Complete")
+        self.team.status = teams_module.TEAM_COMPLETE
+        captain = self.fx.player("Cap", auth_user_id=CAPTAIN_AUTH)
+        self.fx.registration(captain, battle_tag="Cap#1111", team_id=self.team.id, slot_code="tank")
+        self.offer = self.fx.invite(self.team, slot_code="tank", target_auth_user_id=INVITEE_AUTH)
+        self.offer.is_substitute = True
+        self.fx.session.flush()
+
+    async def _offers(self) -> list[int]:
+        self.fx.session.flush()
+        offers = await teams_module.teams_service.list_my_invites(
+            self.fx.shim,
+            tournament_id=TOURNAMENT_ID,
+            auth_user=_auth_user(INVITEE_AUTH, "invitee"),
+        )
+        return [offer.invite_id for offer in offers]
+
+    async def test_complete_team_bench_offer_is_visible_until_unavailable(self) -> None:
+        self.assertEqual([self.offer.id], await self._offers())
+        unavailable = (
+            (self.team, "roster_locked_at", datetime.now(UTC)),
+            (self.team, "exported_team_id", 999),
+            (self.team, "status", teams_module.TEAM_REJECTED),
+            (self.team, "status", teams_module.TEAM_DISBANDED),
+            (self.team, "deleted_at", datetime.now(UTC)),
+            (self.offer, "state", teams_module.INVITE_REVOKED),
+            (self.offer, "expires_at", datetime.now(UTC) - timedelta(days=1)),
+            (self.offer, "target_auth_user_id", OPPONENT_AUTH),
+            (self.offer, "target_auth_user_id", None),
+            (self.offer, "is_substitute", False),
+            (self.window, "ends_at", datetime.now(UTC) - timedelta(hours=1)),
+        )
+        for row, attribute, value in unavailable:
+            original = getattr(row, attribute)
+            with self.subTest(attribute=attribute, value=value):
+                setattr(row, attribute, value)
+                self.assertEqual([], await self._offers())
+            setattr(row, attribute, original)
+        substitute = self.fx.player("Bench", auth_user_id=OPPONENT_AUTH)
+        registration = self.fx.registration(
+            substitute, battle_tag="Bench#3333", team_id=self.team.id, slot_code="tank"
+        )
+        registration.is_substitute = True
+        self.assertEqual([], await self._offers())
+
+    async def test_terminal_recipient_registration_hides_the_offer(self) -> None:
+        invitee = self.fx.player("Invitee", auth_user_id=INVITEE_AUTH)
+        self.fx.registration(invitee, battle_tag="Invitee#2222", status="withdrawn")
+        self.assertEqual([], await self._offers())
