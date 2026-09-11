@@ -90,7 +90,7 @@ export default function BalancerPickupListPage() {
           <p className="text-body text-[color:var(--aqt-fg-muted)]">{t("description")}</p>
         </div>
         {canEdit ? (
-          <Button onClick={() => setCreateOpen(true)} className="min-h-11 gap-2">
+          <Button onClick={() => setCreateOpen(true)}>
             <Plus className="size-4" aria-hidden="true" />
             {t("createAction")}
           </Button>

@@ -102,7 +102,6 @@ export function PickupCreateMixDialog({
               }}
               aria-invalid={nameInvalid || undefined}
               aria-describedby={nameInvalid ? "pickup-name-error" : undefined}
-              className="h-11"
             />
             {nameInvalid ? (
               <p id="pickup-name-error" className="text-caption text-destructive">
@@ -112,7 +111,7 @@ export function PickupCreateMixDialog({
           </div>
           <fieldset className="min-w-0 space-y-2">
             <legend className="mb-2 text-body font-medium">{t("lineup")}</legend>
-            <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-lg border border-border px-3 py-2 text-body has-checked:border-primary has-checked:bg-primary/5">
+            <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-border px-3 py-2 text-body has-checked:border-primary has-checked:bg-primary/5">
               <input
                 type="radio"
                 name="lineup"
@@ -126,7 +125,7 @@ export function PickupCreateMixDialog({
               {t("empty")}
             </label>
             {games.length > 0 ? (
-              <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-lg border border-border px-3 py-2 text-body has-checked:border-primary has-checked:bg-primary/5">
+              <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-border px-3 py-2 text-body has-checked:border-primary has-checked:bg-primary/5">
                 <input
                   type="radio"
                   name="lineup"
@@ -149,7 +148,7 @@ export function PickupCreateMixDialog({
                 disabled={creating}
                 aria-invalid={sourceInvalid || undefined}
                 aria-describedby={sourceInvalid ? "pickup-source-error" : "pickup-lineup-hint"}
-                triggerClassName="h-11 min-w-0"
+                triggerClassName="min-w-0"
                 searchValue={search}
                 onSearchValueChange={setSearch}
                 searchPlaceholder={t("search")}
@@ -201,16 +200,10 @@ export function PickupCreateMixDialog({
           {creating ? t("pending") : ""}
         </p>
         <DialogFooter className="gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            className="min-h-11"
-            disabled={creating}
-            onClick={onClose}
-          >
+          <Button type="button" variant="outline" disabled={creating} onClick={onClose}>
             {t("cancel")}
           </Button>
-          <Button type="submit" className="min-h-11" disabled={creating}>
+          <Button type="submit" disabled={creating}>
             {creating ? <Loader2 className="me-2 size-4 animate-spin" aria-hidden /> : null}
             {t("submit")}
           </Button>

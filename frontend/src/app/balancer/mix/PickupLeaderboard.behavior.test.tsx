@@ -83,7 +83,26 @@ async function click(node: Element | null | undefined) {
 }
 
 function rows(scope: ParentNode) {
-  return [...scope.querySelectorAll("ol li")];
+  return [...scope.querySelectorAll("tbody tr")];
+}
+
+/** Radix Select: the trigger opens on pointerdown, and the listbox is portalled
+ *  out of the container, so options are looked up on the document. */
+async function pickPeriod(container: HTMLElement, label: string) {
+  const trigger = container.querySelector<HTMLElement>('button[role="combobox"]');
+  if (!trigger) throw new Error("no period select rendered");
+  await act(async () => {
+    trigger.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+    trigger.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  });
+  const option = [...document.body.querySelectorAll<HTMLElement>('[role="option"]')].find(
+    (el) => (el.textContent ?? "").trim() === label
+  );
+  if (!option) throw new Error(`no period option matching ${label}`);
+  await act(async () => {
+    option.dispatchEvent(new PointerEvent("pointerup", { bubbles: true }));
+    option.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  });
 }
 
 describe("PickupLeaderboard", () => {
@@ -102,12 +121,12 @@ describe("PickupLeaderboard", () => {
     ]);
 
     const [first, second] = rows(container);
-    expect(first.textContent).toContain("#1");
+    expect(first.textContent).toContain("1");
     expect(first.textContent).toContain("Aria");
     expect(first.textContent).toContain("12");
     expect(first.textContent).toContain("60%");
 
-    expect(second.textContent).toContain("#2");
+    expect(second.textContent).toContain("2");
     expect(second.textContent).toContain("Bex");
     expect(second.textContent).toContain("9");
     expect(second.textContent).toContain("45%");
@@ -125,45 +144,32 @@ describe("PickupLeaderboard", () => {
     expect(idContainer.textContent).toContain("#42");
   });
 
-  it("discloses full details with losses, draws, streak, and role records", async () => {
+  it("reads every number off the row itself, with nothing to expand", async () => {
     const { container } = await mount([
-      member({
-        wins: 10,
-        losses: 5,
-        draws: 1,
-        games: 16,
-        streak: 3,
-        by_role: {
-          tank: { games: 10, wins: 7, losses: 3, draws: 0 }
-        }
-      })
+      member({ wins: 10, losses: 5, draws: 1, games: 16, win_rate: 0.63, streak: 3 })
     ]);
 
-    const details = container.querySelector("details");
-    expect(details).not.toBeNull();
-    expect(details?.textContent).toContain("Show detailed results");
-    expect(details?.textContent).toContain("3 consecutive wins");
-    expect(details?.textContent).toContain("Tank");
+    const [row] = rows(container);
+    expect(container.querySelector("details")).toBeNull();
+    expect(row.textContent).toContain("16");
+    expect(row.textContent).toContain("10");
+    expect(row.textContent).toContain("63%");
+    expect(row.textContent).toContain("W3");
+    expect(row.textContent).toContain("3 consecutive wins");
 
-    const zeroStreak = await mount([member({ streak: 0 })]);
-    expect(zeroStreak.container.querySelector("details")?.textContent).toContain(
-      "No current streak"
-    );
+    const broken = await mount([member({ streak: 0 })]);
+    expect(rows(broken.container)[0].textContent).not.toContain("W");
   });
 
   it("reports period changes through the accessible select", async () => {
     const onPeriodChange = vi.fn();
     const { container } = await mount([member()], { period: "all", onPeriodChange });
 
-    const select = container.querySelector("select");
-    expect(select).not.toBeNull();
-    await act(async () => {
-      if (select) {
-        select.value = "7d";
-        select.dispatchEvent(new Event("change", { bubbles: true }));
-      }
-    });
+    const trigger = container.querySelector('button[role="combobox"]');
+    expect(trigger?.getAttribute("aria-label")).toBe("Results period");
+    expect(trigger?.textContent).toContain("All time");
 
+    await pickPeriod(container, "Last 7 days");
     expect(onPeriodChange).toHaveBeenCalledWith("7d");
   });
 
