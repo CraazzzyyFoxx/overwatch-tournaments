@@ -251,6 +251,10 @@ DOCS: dict[str, dict] = {
         "summary": "Verify and bind a Discord guild",
         "description": "Proves the caller administers the given Discord guild (via identity-service, owner or MANAGE_GUILD) and binds it to the workspace, stamping verified_at/verified_by; requires workspace.update, 404 if workspace missing, 403 if the caller does not administer the guild, 409 if another workspace already claims it, 503 if identity-service is unreachable.",
     },
+    "rpc.app.workspaces.discord_guild_clear": {
+        "summary": "Unbind a Discord guild",
+        "description": "Clears the workspace's Discord guild claim (guild id, verified_at, verified_by). Requires workspace.update, not Discord administration -- so an organiser can leave a server they were kicked from. 404 if workspace missing. Idempotent when nothing is bound.",
+    },
     "rpc.app.workspaces.my_discord_guilds": {
         "summary": "List my administered Discord guilds",
         "description": "Returns the Discord guilds the caller owns or can manage (via identity-service, the `guilds` OAuth scope), for picking one to verify; requires an active authenticated user, 503 if identity-service is unreachable.",
@@ -282,7 +286,7 @@ DOCS: dict[str, dict] = {
     },
     "rpc.app.workspaces.discord_guild": {
         "summary": "Workspace Discord server status",
-        "description": "Returns connection status, server name, icon URL, and member count of the workspace's linked Discord server.",
+        "description": "Returns connection status, server name, icon URL, member count, and Discord owner of the workspace's linked Discord server.",
     },
     # ── workspace icon (binary) ────────────────────────────────────────────────────
     "rpc.app.workspaces.icon_upload": {

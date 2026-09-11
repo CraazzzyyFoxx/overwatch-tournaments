@@ -529,6 +529,23 @@ def register(broker: Any, logger: Any) -> None:
 
         return await c.envelope(logger, "workspaces.discord_guild_verify", op, session_factory=_SF)
 
+    @broker.subscriber("rpc.app.workspaces.discord_guild_clear")
+    async def _discord_guild_clear(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            workspace_id = _path_int(data, "workspace_id")
+            user = c.actor(data)
+            c.require_active(user)
+            ensure_workspace_permission(user, workspace_id, "workspace", "update")
+            workspace = await workspace_service.get_by_id(session, workspace_id)
+            if not workspace:
+                raise HTTPException(status_code=404, detail="Workspace not found")
+            workspace = await workspace_service.clear_discord_guild(
+                session, workspace, actor=user
+            )
+            return schemas.WorkspaceRead.model_validate(workspace, from_attributes=True)
+
+        return await c.envelope(logger, "workspaces.discord_guild_clear", op, session_factory=_SF)
+
     @broker.subscriber("rpc.app.workspaces.my_discord_guilds")
     async def _my_discord_guilds(data: dict, msg: RabbitMessage) -> dict:
         """The caller's own administered guilds — actor-scoped, no workspace.
@@ -702,7 +719,7 @@ def register(broker: Any, logger: Any) -> None:
                 data,
                 label="discord_guild",
                 queue=DISCORD_GUILD_INFO_QUEUE,
-                empty={"connected": False, "name": None, "icon_url": None, "member_count": 0},
+                empty={"connected": False, "name": None, "icon_url": None, "member_count": 0, "owner_id": None, "owner_name": None, "owner_avatar_url": None},
                 # A failed round trip only knows the guild is unreachable; the rest
                 # of the shape would be inventing values the caller must not trust.
                 degraded={"connected": False},
