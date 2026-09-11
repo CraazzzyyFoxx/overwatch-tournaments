@@ -25,8 +25,11 @@ export type PickupMixConfigInput = {
   roleMask: RosterSlotMap | null;
   /** The rank-adjustment-per-win, or `null` to disable it. */
   pointsPerWin: number | null;
-  /** The Discord channel the matchup is posted to, or `null` for none. */
-  discordChannelId: string | null;
+  /**
+   * This mix's channel override, or `null` to follow the workspace channel.
+   * `undefined` when the viewer may not set one -- nothing to write.
+   */
+  discordChannelId: string | null | undefined;
 };
 
 interface PickupMixConfigDialogProps {
@@ -37,6 +40,12 @@ interface PickupMixConfigDialogProps {
   workspaceId: number;
   /** Host + not-terminal, same gate every other mix write uses. */
   canWrite: boolean;
+  /**
+   * Workspace admin. The channel a mix shouts into is the workspace's Discord,
+   * so an ordinary host reads it and posts to it but cannot repoint it --
+   * `custom.set_discord_channel` 403s them (see `_require_workspace_admin`).
+   */
+  canSetChannel: boolean;
   saving: boolean;
   onSave: (input: PickupMixConfigInput) => void;
 }
@@ -58,6 +67,7 @@ export function PickupMixConfigDialog({
   game,
   workspaceId,
   canWrite,
+  canSetChannel,
   saving,
   onSave
 }: Readonly<PickupMixConfigDialogProps>) {
@@ -79,6 +89,8 @@ export function PickupMixConfigDialog({
   }
 
   const error = payloadTotalError(pending);
+  const channelEditable = canWrite && canSetChannel;
+  const workspaceChannel = game?.settings.workspace_discord_channel_id ?? null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -140,19 +152,21 @@ export function PickupMixConfigDialog({
                 workspaceId={workspaceId}
                 value={pendingChannel}
                 onChange={setPendingChannel}
-                disabled={!canWrite}
+                disabled={!channelEditable}
                 ariaLabel="Discord channel"
-                placeholder="No channel"
+                placeholder={workspaceChannel ? "Workspace channel" : "No channel"}
               />
             </div>
-            {pendingChannel !== "" ? (
+            {channelEditable && pendingChannel !== "" ? (
               <Button variant="ghost" size="sm" onClick={() => setPendingChannel("")}>
                 Clear
               </Button>
             ) : null}
           </div>
           <p className="text-xs text-muted-foreground">
-            The bot must be in this workspace&apos;s Discord server and allowed to post in the channel.
+            {canSetChannel
+              ? "Empty posts to the workspace channel; picking one here overrides it for this mix only. The bot must be in this workspace's Discord server and allowed to post in the channel."
+              : "Set by workspace admins. This mix posts to the workspace channel unless an admin points it somewhere else."}
           </p>
         </div>
 
@@ -167,7 +181,13 @@ export function PickupMixConfigDialog({
               onSave({
                 roleMask: pending,
                 pointsPerWin: pendingPoints,
-                discordChannelId: pendingChannel === "" ? null : pendingChannel,
+                // Nothing to write for a non-admin: the field was read-only,
+                // and sending the unchanged value would 403 the whole save.
+                discordChannelId: channelEditable
+                  ? pendingChannel === ""
+                    ? null
+                    : pendingChannel
+                  : undefined,
               })
             }
           >

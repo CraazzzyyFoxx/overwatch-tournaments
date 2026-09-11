@@ -837,6 +837,27 @@ class CustomGameService:
         await session.flush()
         return game
 
+    async def workspace_discord_channel_id(self, session: AsyncSession, workspace_id: int) -> int | None:
+        """The workspace-wide mix channel: where a mix posts unless it names its own.
+
+        Kept in the workspace balancer config blob
+        (``balancer.workspace_config.config_json``) next to the other
+        workspace-scoped mix knobs, as digits in a string -- JSON has one
+        number type and a snowflake does not survive a float64 round-trip.
+        """
+        raw = await session.scalar(
+            sa.select(models.WorkspaceBalancerConfig.config_json).where(
+                models.WorkspaceBalancerConfig.workspace_id == workspace_id
+            )
+        )
+        value = raw.get("mix_discord_channel_id") if isinstance(raw, dict) else None
+        try:
+            return int(value) if value else None
+        except (TypeError, ValueError):
+            # A hand-edited config blob is not worth a 500 on every mix read;
+            # the workspace simply has no default until an admin re-saves it.
+            return None
+
     async def set_discord_channel(
         self,
         session: AsyncSession,
@@ -846,7 +867,11 @@ class CustomGameService:
         channel_id: int | None,
         actor_user_id: int,
     ) -> models.CustomGame:
-        """Name the Discord channel this mix posts its matchup to, ``None`` to clear it.
+        """Override the workspace channel for this one mix, ``None`` to fall back.
+
+        Admin-only at the RPC gate (``_set_discord_channel``): the channel a
+        mix shouts into is the workspace's Discord, not the host's, so an
+        ordinary host posts to whatever the workspace named.
 
         Unlike :meth:`set_next_map` there is nothing to validate the id
         against: a channel lives in Discord, not in any table here. A wrong id
@@ -882,7 +907,10 @@ class CustomGameService:
         game = await self._writable(
             session, workspace_id=workspace_id, custom_game_id=custom_game_id, actor_user_id=actor_user_id
         )
-        if game.discord_channel_id is None:
+        # The mix's own channel when an admin named one, the workspace default
+        # otherwise -- posting is the host's job either way.
+        channel_id = game.discord_channel_id or await self.workspace_discord_channel_id(session, workspace_id)
+        if channel_id is None:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Discord channel not configured")
         result = game.balance_result_json if isinstance(game.balance_result_json, dict) else None
         variants = result.get("variants") if isinstance(result, dict) else None
@@ -915,7 +943,7 @@ class CustomGameService:
             next_map=next_map,
             points_per_win=game.points_per_win,
         )
-        return game.discord_channel_id, embed
+        return channel_id, embed
 
     async def set_balancer_config(
         self,

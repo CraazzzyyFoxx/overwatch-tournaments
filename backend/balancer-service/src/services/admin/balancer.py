@@ -156,12 +156,16 @@ class BalancerAdminService:
         workspace_id: int,
         rank_delta_threshold: int | None,
         rank_delta_hide_from_pool: bool,
+        mix_discord_channel_id: str | None,
         updated_by: int | None,
     ) -> WorkspaceBalancerConfig:
         config = await self.get_workspace_balancer_config(session, workspace_id)
         payload: dict[str, Any] = {
             "rank_delta_threshold": rank_delta_threshold,
             "rank_delta_hide_from_pool": rank_delta_hide_from_pool,
+            # Digits as a string, the shape the wire uses: JSON has one number
+            # type and a snowflake does not survive a float64 round-trip.
+            "mix_discord_channel_id": mix_discord_channel_id,
         }
         if config is None:
             config = await self.workspace_configs.create(

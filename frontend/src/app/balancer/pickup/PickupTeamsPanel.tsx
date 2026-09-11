@@ -364,7 +364,11 @@ export function PickupTeamsPanel({
               >
                 <ClipboardCopy className="size-4" aria-hidden="true" />
               </Button>
-              {canWrite && onPostToDiscord && game?.settings.discord_channel_id ? (
+              {/* The workspace channel is the default every mix posts to, so a
+                  mix with no override of its own still has somewhere to send. */}
+              {canWrite &&
+              onPostToDiscord &&
+              (game?.settings.discord_channel_id ?? game?.settings.workspace_discord_channel_id) ? (
                 <Button
                   type="button"
                   variant="ghost"

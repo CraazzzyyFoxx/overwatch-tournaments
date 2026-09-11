@@ -613,12 +613,15 @@ export interface WorkspaceBalancerConfig {
   workspace_id: number;
   rank_delta_threshold: number | null;
   rank_delta_hide_from_pool: boolean;
+  /** Discord channel every mix in this workspace posts its matchup to, as a snowflake string. */
+  mix_discord_channel_id: string | null;
   updated_by: number | null;
 }
 
 export interface WorkspaceBalancerConfigUpsert {
   rank_delta_threshold: number | null;
   rank_delta_hide_from_pool: boolean;
+  mix_discord_channel_id: string | null;
 }
 
 export interface AdminGoogleSheetMappingSuggestInput {

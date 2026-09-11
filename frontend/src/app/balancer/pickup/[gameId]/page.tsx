@@ -55,9 +55,11 @@ export default function BalancerPickupMixPage() {
   // The mix-hosting grant, not a tournament permission: a workspace member can
   // run a pickup game without holding admin rights over teams.
   const canEdit = workspaceId != null && canAccessPermission("custom_game.create", workspaceId);
-  // Irreversible, so it needs more than the host-or-co-host grant every other
-  // write here checks -- see `_hard_delete` in balancer-service's `rpc/custom.py`.
-  const canDeleteMix = workspaceId != null && (isSuperuser || isWorkspaceAdmin(workspaceId));
+  // Workspace admin, the gate for the two writes host-or-co-host does not
+  // cover: hard-deleting a mix (irreversible -- see `_hard_delete` in
+  // balancer-service's `rpc/custom.py`) and repointing its Discord channel
+  // (the workspace's server, not the host's).
+  const isAdminHere = workspaceId != null && (isSuperuser || isWorkspaceAdmin(workspaceId));
 
   const [openPlayerId, setOpenPlayerId] = useState<number | null>(null);
   const [isPoolOpen, setIsPoolOpen] = useState(false);
@@ -211,7 +213,7 @@ export default function BalancerPickupMixPage() {
               onOpenPool={() => setIsPoolOpen(true)}
               onOpenSettings={() => setIsSettingsOpen(true)}
               onOpenAccess={() => setIsAccessOpen(true)}
-              canDelete={canDeleteMix}
+              canDelete={isAdminHere}
               deleting={hardDeleteMix.isPending}
               onDeleteMix={() =>
                 hardDeleteMix.mutate(undefined, {
@@ -272,13 +274,17 @@ export default function BalancerPickupMixPage() {
         game={game}
         workspaceId={workspaceId}
         canWrite={canWrite}
+        canSetChannel={isAdminHere}
         saving={setRoleMask.isPending || setPointsPerWin.isPending || setDiscordChannel.isPending}
         onSave={(input) => {
           setRoleMask.mutate(input.roleMask, { onSuccess: () => setIsSettingsOpen(false) });
           if (input.pointsPerWin !== (game?.settings.points_per_win ?? null)) {
             setPointsPerWin.mutate(input.pointsPerWin);
           }
-          if (input.discordChannelId !== (game?.settings.discord_channel_id ?? null)) {
+          if (
+            input.discordChannelId !== undefined &&
+            input.discordChannelId !== (game?.settings.discord_channel_id ?? null)
+          ) {
             setDiscordChannel.mutate(input.discordChannelId);
           }
         }}

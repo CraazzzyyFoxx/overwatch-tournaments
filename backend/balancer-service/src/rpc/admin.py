@@ -36,14 +36,17 @@ def _config_to_read(
             workspace_id=workspace_id,
             rank_delta_threshold=None,
             rank_delta_hide_from_pool=False,
+            mix_discord_channel_id=None,
             updated_by=None,
         )
     payload = cfg.config_json or {}
+    channel = payload.get("mix_discord_channel_id")
     return schemas.WorkspaceBalancerConfigRead(
         id=cfg.id,
         workspace_id=cfg.workspace_id,
         rank_delta_threshold=payload.get("rank_delta_threshold"),
         rank_delta_hide_from_pool=bool(payload.get("rank_delta_hide_from_pool", False)),
+        mix_discord_channel_id=str(channel) if channel else None,
         updated_by=cfg.updated_by,
     )
 
@@ -208,6 +211,7 @@ def register(broker: Any, logger: Any) -> None:
                 workspace_id=workspace_id,
                 rank_delta_threshold=body.rank_delta_threshold,
                 rank_delta_hide_from_pool=body.rank_delta_hide_from_pool,
+                mix_discord_channel_id=body.mix_discord_channel_id,
                 updated_by=user.id,
             )
             return _config_to_read(cfg, workspace_id)

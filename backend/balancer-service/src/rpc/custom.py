@@ -6,9 +6,11 @@ post_discord,transfer_host,add_co_host,remove_co_host,swap_seats,record_outcome,
 undo_match,rotation,stats,close,delete,hard_delete}``.
 
 Writes require ``actor`` to be the host or a co-host; the per-mix check lives in
-``CustomGameService._writable``. Reads are open to any workspace member. Every
-request body is validated by a Pydantic model in ``src.schemas.custom_game``
-before it reaches a use case -- nothing here hand-parses a dict.
+``CustomGameService._writable``. Reads are open to any workspace member.
+``set_discord_channel`` and ``hard_delete`` additionally require workspace
+admin (``_require_workspace_admin``). Every request body is validated by a
+Pydantic model in ``src.schemas.custom_game`` before it reaches a use case --
+nothing here hand-parses a dict.
 """
 
 from __future__ import annotations
@@ -109,6 +111,17 @@ def _require_mix(data: dict[str, Any], user: Any, workspace_id: int, action: str
     c.require_workspace_permission(data, user, workspace_id, "custom_game", action)
 
 
+def _require_workspace_admin(user: Any, workspace_id: int) -> None:
+    """Workspace admin (or superuser), on top of the membership ``_require_mix`` settles.
+
+    Two writes need more than the host-or-co-host grant every other mix write
+    checks: ``hard_delete`` (destroys rows) and ``set_discord_channel`` (points
+    the workspace's Discord at a channel of the host's choosing).
+    """
+    if not user.is_workspace_admin(workspace_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Workspace admin required")
+
+
 def _dump_row(
     row: Any,
     member: Any | None,
@@ -154,6 +167,7 @@ def _dump_settings(
     game: Any,
     team_names: dict[int, str],
     role_mask: dict[str, int],
+    workspace_discord_channel_id: int | None,
 ) -> dict[str, Any]:
     """The mix's own settings, each one a stored fact rather than a config blob."""
     return {
@@ -163,7 +177,16 @@ def _dump_settings(
         "balancer_config": game.balancer_config_json,
         # A Discord snowflake as a string: it outgrows a JavaScript safe
         # integer, so the wire never carries it as a number.
+        #
+        # Two fields, not one effective channel: the admin editor needs to know
+        # whether this mix overrides the workspace default, and everything else
+        # (the Post button, the hint under the picker) reads
+        # ``discord_channel_id ?? workspace_discord_channel_id`` -- the same
+        # fallback ``CustomGameService.discord_lineup`` applies server-side.
         "discord_channel_id": str(game.discord_channel_id) if game.discord_channel_id is not None else None,
+        "workspace_discord_channel_id": (
+            str(workspace_discord_channel_id) if workspace_discord_channel_id is not None else None
+        ),
     }
 
 
@@ -221,11 +244,15 @@ def _dump_game(
     return out
 
 
-async def _game_settings(session: Any, game: Any) -> dict[str, Any]:
+async def _game_settings(session: Any, game: Any, workspace_channel_id: int | None) -> dict[str, Any]:
+    """The mix's settings. The workspace channel is passed in, not read here:
+    it is one value for every mix in the list, and looking it up per row would
+    widen this reader's existing per-mix queries by a third."""
     return _dump_settings(
         game,
         await custom_game_service.team_names.mapping_for_game(session, game.id),
         await custom_game_service.role_slots.mapping_for_game(session, game.id),
+        workspace_channel_id,
     )
 
 
@@ -238,7 +265,9 @@ async def _with_roster(session: Any, game: Any) -> dict[str, Any]:
     an Overwatch snapshot, and the sheet could not say which it is about to
     overwrite.
     """
-    settings = await _game_settings(session, game)
+    settings = await _game_settings(
+        session, game, await custom_game_service.workspace_discord_channel_id(session, game.workspace_id)
+    )
     roster_shape = (
         await custom_game_service.roster_shape(session, workspace_id=game.workspace_id, custom_game_id=game.id)
     ).model_dump()
@@ -411,10 +440,11 @@ def register(broker: Any, logger: Any) -> None:
             # One grouped read for the whole list: the activity column would
             # otherwise cost a query per mix.
             activity = await custom_game_service.casual_matches.activity_for_games(session, [row.id for row in rows])
+            workspace_channel_id = await custom_game_service.workspace_discord_channel_id(session, workspace_id)
             return [
                 _dump_game(
                     row,
-                    await _game_settings(session, row),
+                    await _game_settings(session, row, workspace_channel_id),
                     host_display_name=host_names.get(row.host_user_id),
                     activity=activity.get(row.id),
                 )
@@ -603,10 +633,19 @@ def register(broker: Any, logger: Any) -> None:
 
     @broker.subscriber("rpc.balancer.custom.set_discord_channel")
     async def _set_discord_channel(data: dict, msg: RabbitMessage) -> dict:
+        """Overrides the workspace mix channel for this one mix. Workspace admin only.
+
+        Clearing it (``null``) falls back to the workspace-wide channel an admin
+        set in the balancer workspace config; an ordinary host can change
+        neither, so nobody can redirect the workspace's Discord by hosting a
+        mix in it.
+        """
+
         async def op(session: Any) -> Any:
             user = c.active_actor(data)
             workspace_id = _int(data, "workspace_id")
             _require_mix(data, user, workspace_id, "update")
+            _require_workspace_admin(user, workspace_id)
             body = _body(schemas.CustomGameDiscordChannelPatch, data)
             game = await custom_game_service.set_discord_channel(
                 session,
@@ -874,7 +913,9 @@ def register(broker: Any, logger: Any) -> None:
             await session.commit()
             return _dump_game(
                 game,
-                await _game_settings(session, game),
+                await _game_settings(
+                    session, game, await custom_game_service.workspace_discord_channel_id(session, workspace_id)
+                ),
                 activity=(await custom_game_service.casual_matches.activity_for_games(session, [game.id])).get(game.id),
             )
 
@@ -891,8 +932,7 @@ def register(broker: Any, logger: Any) -> None:
             user = c.active_actor(data)
             workspace_id = _int(data, "workspace_id")
             c.require_member(user, workspace_id)
-            if not user.is_workspace_admin(workspace_id):
-                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Workspace admin required")
+            _require_workspace_admin(user, workspace_id)
             custom_game_id = _game_id(data)
             await custom_game_service.hard_delete(session, workspace_id=workspace_id, custom_game_id=custom_game_id)
             await emit_pickup_mix_updated(session, workspace_id, change="hard_delete", actor_user_id=user.id)

@@ -8,7 +8,9 @@
 //     server would have to interpret;
 //  2. a channel id is reported as a string, because a Discord snowflake does
 //     not survive a round trip through a JS number;
-//  3. Clear takes it back to `null`, which is how a host unsets the channel.
+//  3. Clear takes it back to `null`, which is how an admin unsets the override;
+//  4. a host who is not a workspace admin cannot touch it at all and the save
+//     reports `undefined` — the channel is the workspace's, not theirs.
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -70,6 +72,7 @@ const SETTINGS = {
   role_mask: null,
   balancer_config: null,
   discord_channel_id: null,
+  workspace_discord_channel_id: null,
 };
 
 function game(overrides: Partial<CustomGame> = {}): CustomGame {
@@ -101,7 +104,7 @@ function tick() {
 
 const onSave = vi.fn();
 
-async function mount(current: CustomGame | undefined = game()) {
+async function mount(current: CustomGame | undefined = game(), canSetChannel = true) {
   const container = document.createElement("div");
   document.body.appendChild(container);
   await act(async () => {
@@ -112,6 +115,7 @@ async function mount(current: CustomGame | undefined = game()) {
         game={current}
         workspaceId={WORKSPACE_ID}
         canWrite
+        canSetChannel={canSetChannel}
         saving={false}
         onSave={onSave}
       />,
@@ -193,5 +197,18 @@ describe("PickupMixConfigDialog", () => {
 
     await click(byName(scope, "Save"));
     expect(savedInput().discordChannelId).toBeNull();
+  });
+
+  it("leaves the channel alone for a host who is not a workspace admin", async () => {
+    // The channel belongs to the workspace's Discord: a host reads it but
+    // cannot repoint it, and the save must carry no channel write at all --
+    // `custom.set_discord_channel` would 403 the whole dialog.
+    const scope = await mount(game({ settings: { ...SETTINGS, discord_channel_id: "123" } }), false);
+
+    expect(channelField(scope).disabled).toBe(true);
+    expect(byName(scope, "Clear")).toBeNull();
+
+    await click(byName(scope, "Save"));
+    expect(savedInput().discordChannelId).toBeUndefined();
   });
 });

@@ -1472,8 +1472,10 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
 
         self.assertIsNone(game.discord_channel_id)
 
-    async def test_discord_lineup_without_a_channel_409(self) -> None:
+    async def test_discord_lineup_without_any_channel_409(self) -> None:
+        """Neither the mix nor the workspace names one: nothing to post to."""
         self.games.get.return_value = _game(balance_result_json={"variants": [{"teams": []}]})
+        self.session.scalar = AsyncMock(return_value=None)
 
         with self.assertRaises(HTTPException) as ctx:
             await self.service.discord_lineup(
@@ -1481,6 +1483,33 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
             )
         self.assertEqual(ctx.exception.status_code, 409)
         self.assertEqual(ctx.exception.detail, "Discord channel not configured")
+
+    async def test_discord_lineup_falls_back_to_the_workspace_channel(self) -> None:
+        """A mix with no channel of its own posts to the workspace-wide one --
+        that setting is the default every host gets without touching anything."""
+        self.games.get.return_value = _game(balance_result_json={"variants": [{"teams": []}]})
+        self.team_names.mapping_for_game.return_value = {}
+        self.casual_matches.activity_for_games = AsyncMock(return_value={})
+        self.session.scalar = AsyncMock(return_value={"mix_discord_channel_id": "555"})
+
+        channel_id, _embed = await self.service.discord_lineup(
+            self.session, workspace_id=1, custom_game_id=11, variant_index=0, actor_user_id=9
+        )
+
+        self.assertEqual(channel_id, 555)
+
+    async def test_discord_lineup_prefers_the_mixs_own_channel(self) -> None:
+        """The per-mix override is an admin's deliberate redirect: it wins."""
+        self.games.get.return_value = _game(discord_channel_id=777, balance_result_json={"variants": [{"teams": []}]})
+        self.team_names.mapping_for_game.return_value = {}
+        self.casual_matches.activity_for_games = AsyncMock(return_value={})
+        self.session.scalar = AsyncMock(return_value={"mix_discord_channel_id": "555"})
+
+        channel_id, _embed = await self.service.discord_lineup(
+            self.session, workspace_id=1, custom_game_id=11, variant_index=0, actor_user_id=9
+        )
+
+        self.assertEqual(channel_id, 777)
 
     async def test_discord_lineup_unknown_variant_404(self) -> None:
         self.games.get.return_value = _game(discord_channel_id=777, balance_result_json={"variants": [{"teams": []}]})

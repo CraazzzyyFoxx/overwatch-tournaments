@@ -79,6 +79,7 @@ const SETTINGS = {
   role_mask: null,
   balancer_config: null,
   discord_channel_id: null,
+  workspace_discord_channel_id: null,
 };
 
 function game(overrides: Record<string, unknown> = {}) {

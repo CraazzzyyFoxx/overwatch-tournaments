@@ -129,6 +129,7 @@ const SETTINGS = {
   role_mask: null,
   balancer_config: null,
   discord_channel_id: null,
+  workspace_discord_channel_id: null,
 };
 
 const CONTROL = { id: 1, name: "Control", slug: "control", image_path: "", description: "", aliases: [] };
@@ -644,6 +645,17 @@ describe("PickupTeamsPanel", () => {
     const scope = await mount(game());
 
     expect(byName(scope, "Post to Discord")).toBeNull();
+  });
+
+  it("posts on the workspace channel alone, without a per-mix override", async () => {
+    // The workspace-wide channel is the default a host gets; only an admin can
+    // override it per mix, so the button must not wait for one.
+    const scope = await mount(
+      game({ settings: { ...SETTINGS, workspace_discord_channel_id: "999" } }),
+    );
+
+    await click(byName(scope, "Post to Discord"));
+    expect(onPostToDiscord).toHaveBeenCalledWith(0, LINEUP_PNG);
   });
 
   it("posts the option on screen, rasterised, to the mix's configured channel", async () => {

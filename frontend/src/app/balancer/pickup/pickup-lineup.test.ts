@@ -174,6 +174,7 @@ describe("teamNamesByIndex", () => {
         role_mask: null,
         balancer_config: null,
         discord_channel_id: null,
+        workspace_discord_channel_id: null,
       }),
     ).toEqual({ 0: "Wolves", 2: "Bears" });
   });

@@ -81,11 +81,18 @@ export type CustomGameSettings = {
   /** Validated solver overrides; `null` means the solver defaults. */
   balancer_config: Record<string, unknown> | null;
   /**
-   * Where `postToDiscord` sends the matchup, or `null` when no channel is set.
+   * This mix's own channel override, or `null` when it follows the workspace.
+   * Only a workspace admin can set it (`custom.set_discord_channel`).
    * A snowflake as a string: Discord ids exceed JS safe integers, so the wire
    * format is decimal text on the way out and on the way in.
    */
   discord_channel_id: string | null;
+  /**
+   * The workspace-wide mix channel, where `postToDiscord` sends the matchup
+   * unless this mix overrides it. Read `discord_channel_id ?? this` for the
+   * channel a post actually lands in -- the same fallback the server applies.
+   */
+  workspace_discord_channel_id: string | null;
 };
 
 export type CustomGame = {

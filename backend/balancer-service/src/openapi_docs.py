@@ -42,11 +42,17 @@ DOCS: dict[str, dict] = {
     },
     "rpc.balancer.admin.workspace_config_get": {
         "summary": "Get workspace balancer config",
-        "description": "Returns the workspace-level balancer config (rank-delta threshold and pool-hide flag) for members with workspace read permission.",
+        "description": (
+            "Returns the workspace-level balancer config (rank-delta threshold, pool-hide flag and "
+            "the Discord channel every mix posts its matchup to) for members with workspace read permission."
+        ),
     },
     "rpc.balancer.admin.workspace_config_upsert": {
         "summary": "Upsert workspace balancer config",
-        "description": "Creates or updates the workspace-level rank-delta threshold and hide-from-pool settings, requiring workspace update permission.",
+        "description": (
+            "Creates or updates the workspace-level rank-delta threshold, hide-from-pool flag and the "
+            "workspace-wide Discord channel for mix matchups, requiring workspace update permission."
+        ),
     },
     "rpc.balancer.admin.teams_import": {
         "summary": "Import teams file",
@@ -230,18 +236,21 @@ DOCS: dict[str, dict] = {
     "rpc.balancer.custom.set_discord_channel": {
         "summary": "Set custom game Discord channel",
         "description": (
-            "Names the Discord channel the mix posts its matchup to, as a digits-only snowflake "
-            "string, or clears it with null. Host or co-host only; the id is not verified against "
-            "Discord here, an unreachable channel surfaces when the bot tries to deliver."
+            "Overrides the workspace-wide mix channel for this one mix, as a digits-only snowflake "
+            "string, or clears the override with null so the workspace channel applies again. "
+            "Workspace admin only -- an ordinary host cannot redirect the workspace's Discord. The id "
+            "is not verified against Discord here, an unreachable channel surfaces when the bot tries "
+            "to deliver."
         ),
     },
     "rpc.balancer.custom.post_discord": {
         "summary": "Post custom game lineup to Discord",
         "description": (
             "Queues an embed of one balance option's teams, the next map and the points at stake "
-            "to the mix's configured channel and returns immediately -- delivery is the bot's, and "
-            "nothing about the mix changes. Host or co-host only; 409 when no channel is configured "
-            "and 404 when the balance option is missing."
+            "to the mix's own channel, or the workspace-wide mix channel when it has none, and "
+            "returns immediately -- delivery is the bot's, and nothing about the mix changes. Host "
+            "or co-host only; 409 when neither channel is configured and 404 when the balance option "
+            "is missing."
         ),
     },
     "rpc.balancer.custom.set_balancer_config": {
