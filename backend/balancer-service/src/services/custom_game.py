@@ -197,6 +197,18 @@ def _locate_seat(teams: Sequence[Mapping[str, Any]], uuid: str) -> tuple[int, st
     return None
 
 
+# Statistics a solver scored for the seating *it* produced. A hand-edited
+# roster invalidates all of them at once, so they are cleared together.
+_SOLVER_SCORED_STAT_KEYS = (
+    "composite_score",
+    "mix_balancer_fairness",
+    "mix_balancer_uniformity",
+    "mix_balancer_role_fairness",
+    "mix_balancer_role_points",
+    "mix_balancer_quality_total",
+)
+
+
 def _recompute_variant_stats(variant: dict[str, Any]) -> None:
     """Re-derive the read-only verdict from a manually edited roster.
 
@@ -209,7 +221,12 @@ def _recompute_variant_stats(variant: dict[str, Any]) -> None:
     ``composite_score`` is deliberately NOT one of these: it is a knee-score
     normalised against the whole Pareto archive the solver searched for that
     run, meaningless for a single hand-edited arrangement with no archive to
-    normalise against -- so it is cleared rather than faked.
+    normalise against -- so it is cleared rather than faked. The
+    ``mix_balancer_*`` block goes the same way and for the same reason: those
+    four terms and their total describe the seating the engine chose, and a
+    hand-moved player invalidates every one of them (the role-priority term
+    and the per-role balance most of all). Stale is worse than absent -- the
+    frontend hides a metric it does not get.
     """
     teams = variant.get("teams")
     if not isinstance(teams, list):
@@ -238,12 +255,16 @@ def _recompute_variant_stats(variant: dict[str, Any]) -> None:
                         off_role_count += 1
         total = sum(ratings)
         team["average_mmr"] = (total / len(ratings)) if ratings else None
+        # Recomputed for the same reason as the average: the stored value is the
+        # solver's, and ``max_total_rating_gap`` below is derived from this sum.
+        team["total_rating"] = total
         team_totals.append(total)
         if ratings:
             team_means.append(total / len(ratings))
 
     statistics = dict(variant.get("statistics") or {})
-    statistics["composite_score"] = None
+    for stale_key in _SOLVER_SCORED_STAT_KEYS:
+        statistics[stale_key] = None
     if len(team_means) >= 2:
         mean = sum(team_means) / len(team_means)
         variance = sum((value - mean) ** 2 for value in team_means) / (len(team_means) - 1)

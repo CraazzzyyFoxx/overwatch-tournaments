@@ -330,6 +330,52 @@ describe("PickupTeamsPanel", () => {
     expect(scope.textContent).not.toContain("Egor");
   });
 
+  it("shows the mix engine's own verdict, not just the tournament solver's", async () => {
+    // What `mix_balancer` reports for a mix: its four-term total as the quality
+    // score and the per-line rank gap, neither of which the tournament solver
+    // produces. Off-role sits at the pool's structural floor here, so it reads
+    // as unavoidable rather than as something the host should go fix.
+    const scored = variant(0);
+    scored.statistics = {
+      mix_balancer_quality_total: 41.5,
+      mix_balancer_role_fairness: 118.7,
+      mmr_std_dev: 12.34,
+      max_total_rating_gap: 150,
+      off_role_count: 1,
+      off_role_above_minimum: 0,
+      sub_role_collision_count: 2,
+      feasibility: { structural_min_off_role: 1 },
+    } as unknown as typeof scored.statistics;
+    const scope = await mount(game({ balance_result: { variants: [scored] } }));
+
+    expect(scope.textContent).toContain("QUALITY 41.50");
+    expect(scope.textContent).toContain("LINES 119");
+    expect(scope.textContent).toContain("SPREAD 150");
+    expect(scope.textContent).toContain("OFF-ROLE 1 (floor)");
+    expect(scope.textContent).toContain("SUBROLE 2");
+  });
+
+  it("drops the scored pills for an option the host hand-edited", async () => {
+    // `_recompute_variant_stats` nulls every solver-scored key after a seat
+    // swap, because they describe the seating the solver chose. Showing the old
+    // numbers next to a changed roster would be the one thing worse than
+    // showing none.
+    const swapped = variant(0);
+    swapped.statistics = {
+      composite_score: null,
+      mix_balancer_quality_total: null,
+      mix_balancer_role_fairness: null,
+      mmr_std_dev: 12.34,
+      off_role_count: 1,
+    } as unknown as typeof swapped.statistics;
+    const scope = await mount(game({ balance_result: { variants: [swapped] } }));
+
+    expect(scope.textContent).not.toContain("QUALITY");
+    expect(scope.textContent).not.toContain("LINES");
+    expect(scope.textContent).toContain("STDDEV 12.3");
+    expect(scope.textContent).toContain("OFF-ROLE 1");
+  });
+
   it("captures the verdict pills with the teams block, not the action buttons beside it", async () => {
     const scope = await mount(game());
 

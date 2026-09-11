@@ -1,37 +1,16 @@
 "use client";
 
 import Link from "next/link";
+import { useFormatter, useTranslations } from "next-intl";
 import { useState } from "react";
-import { Loader2, Plus } from "lucide-react";
 
 import { PANEL_CLASS } from "@/app/balancer/components/balancer-page-helpers";
-import {
-  CAPTION_CLASS,
-  EYEBROW_CLASS,
-  METRIC_PILL_CLASS,
-  MIX_STATUS_CLASS,
-} from "@/app/balancer/pickup/pickup-chrome";
-import { formatDate, formatRelative } from "@/components/admin/format-time";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { MIX_STATUS_CLASS } from "@/app/balancer/mix/pickup-chrome";
+import { FilterChip, FilterChipGroup } from "@/components/ui/filter-chip";
 import { PageStateCard } from "@/components/ui/page-state-card";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import type { CustomGame, CustomGameStatus } from "@/services/custom-game.service";
-
-/** How far back the "lineup from" picker reaches — a host clones last night's mix, not last season's. */
-const CLONE_SOURCE_LIMIT = 5;
-
-/** The picker's "start from nothing" option; anything else is a source mix id. */
-const EMPTY_SOURCE = "empty";
+import type { CustomGame } from "@/services/custom-game.service";
 
 type PickupMixListProps = {
   canEdit: boolean;
@@ -39,183 +18,98 @@ type PickupMixListProps = {
   loading: boolean;
   error: boolean;
   onRetry: () => void;
-  creating: boolean;
-  onCreateGame: (name: string, cloneFromGameId: number | null) => void;
+  onCreateGame: () => void;
 };
 
-/**
- * Every mix this workspace has run, newest first: who hosted it, when, and
- * its current status — the picker a host used to reach past to get to the one
- * they were already running.
- *
- * Opening a mix, or starting a new one, both happen here now. The mix screen
- * itself (`/balancer/pickup/[gameId]`) only ever reads and edits the one
- * already picked, so this is the one place that names every mix at once.
- */
 export function PickupMixList({
   canEdit,
   games,
   loading,
   error,
   onRetry,
-  creating,
-  onCreateGame,
+  onCreateGame
 }: Readonly<PickupMixListProps>) {
-  const [newName, setNewName] = useState("");
-  const [isCreateOpen, setIsCreateOpen] = useState(false);
-  // `null` means "untouched", so the default can follow the list as it loads.
-  const [pickedSource, setPickedSource] = useState<string | null>(null);
-  // The last name this component filled in itself -- anything else in the
-  // field is the host's own wording and a source change must not overwrite it.
-  const [suggestedName, setSuggestedName] = useState("");
-
-  const sources = games.slice(0, CLONE_SOURCE_LIMIT);
-  // Cloning last night's mix is the common case, so it is what the form offers
-  // first; an empty workspace has nothing to clone and falls back to Empty.
-  const source = pickedSource ?? (sources[0] ? String(sources[0].id) : EMPTY_SOURCE);
-  const cloneFromGameId = source === EMPTY_SOURCE ? null : Number(source);
-
-  const resetForm = () => {
-    setNewName("");
-    setPickedSource(null);
-    setSuggestedName("");
-  };
-
-  const pickSource = (value: string) => {
-    setPickedSource(value);
-    const picked = games.find((item) => String(item.id) === value);
-    if (picked && (newName === "" || newName === suggestedName)) {
-      setNewName(picked.name);
-      setSuggestedName(picked.name);
-    }
-  };
+  const t = useTranslations("mixes");
+  const format = useFormatter();
+  const [view, setView] = useState<"open" | "history">("open");
+  const open: CustomGame[] = [];
+  const history: CustomGame[] = [];
+  for (const game of games) {
+    (game.status === "completed" || game.status === "cancelled" ? history : open).push(game);
+  }
+  const visibleGames = view === "open" ? open : history;
 
   return (
-    <div className="flex flex-1 flex-col gap-5">
-      <div className="flex flex-wrap items-end gap-x-5 gap-y-3 border-b border-[color:var(--aqt-border)] pb-4">
-        <div className="min-w-0">
-          <div className={EYEBROW_CLASS}>Balancer</div>
-          <h1 className="mt-1.5 font-display text-headline/[1.1] font-bold tracking-[-0.01em] text-[color:var(--aqt-fg)]">
-            Mixes
-          </h1>
-        </div>
-
-        {canEdit ? (
-          <div className="ml-auto flex items-center gap-2">
-            <Popover
-              open={isCreateOpen}
-              onOpenChange={(open) => {
-                setIsCreateOpen(open);
-                if (!open) resetForm();
-                // The default source is last night's mix, so its name is the
-                // default name too -- one click recreates it, a keystroke renames.
-                else if (sources[0]) {
-                  setNewName(sources[0].name);
-                  setSuggestedName(sources[0].name);
-                }
-              }}
-            >
-              <PopoverTrigger asChild>
-                <Button type="button" className="h-9">
-                  <Plus className="mr-1.5 size-3.5" aria-hidden="true" />
-                  New mix
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent align="end" className="w-72 p-3">
-                <form
-                  className="space-y-1.5"
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    const name = newName.trim();
-                    if (!name) return;
-                    onCreateGame(name, cloneFromGameId);
-                    resetForm();
-                    setIsCreateOpen(false);
-                  }}
-                >
-                  <label htmlFor="pickup-new-mix" className={cn(EYEBROW_CLASS, "block")}>
-                    New mix
-                  </label>
-                  <div className="flex gap-1.5">
-                    <Input
-                      id="pickup-new-mix"
-                      value={newName}
-                      onChange={(event) => setNewName(event.target.value)}
-                      placeholder="Thursday scrim"
-                      autoComplete="off"
-                      className="h-9 min-w-0 rounded-lg border-[color:var(--aqt-border-2)] bg-black/15 text-sm"
-                    />
-                    <Button
-                      type="submit"
-                      size="sm"
-                      className="h-9 shrink-0 px-3"
-                      disabled={creating || !newName.trim()}
-                    >
-                      {creating ? (
-                        <Loader2 className="mr-1 size-3.5 animate-spin" aria-hidden="true" />
-                      ) : null}
-                      Create
-                    </Button>
-                  </div>
-                  <label htmlFor="pickup-clone-from" className={cn(EYEBROW_CLASS, "block pt-1")}>
-                    Lineup from
-                  </label>
-                  <Select value={source} onValueChange={pickSource}>
-                    <SelectTrigger
-                      id="pickup-clone-from"
-                      className="h-9 rounded-lg border-[color:var(--aqt-border-2)] bg-black/15 text-sm"
-                    >
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value={EMPTY_SOURCE}>Empty</SelectItem>
-                      {sources.map((item) => (
-                        <SelectItem key={item.id} value={String(item.id)}>
-                          {`${item.name} · #${item.id}`}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <p className="text-label text-[color:var(--aqt-fg-dim)]">
-                    {cloneFromGameId == null
-                      ? "Starts empty — fill it from the workspace player pool."
-                      : "Copies the lineup and settings; benched players come back to the pool."}
-                  </p>
-                </form>
-              </PopoverContent>
-            </Popover>
-          </div>
-        ) : null}
-      </div>
+    <div className="flex w-full min-w-0 flex-col gap-4">
+      <FilterChipGroup label={t("list.filters")}>
+        <FilterChip
+          active={view === "open"}
+          count={loading || error ? undefined : format.number(open.length)}
+          onClick={() => setView("open")}
+        >
+          {t("list.open")}
+        </FilterChip>
+        <FilterChip
+          active={view === "history"}
+          count={loading || error ? undefined : format.number(history.length)}
+          onClick={() => setView("history")}
+        >
+          {t("list.history")}
+        </FilterChip>
+      </FilterChipGroup>
 
       {error ? (
         <PageStateCard
           state="error"
-          title="Unable to load mixes"
-          description="Check your connection and try again."
-          actionLabel="Retry"
+          title={t("list.errorTitle")}
+          description={t("list.errorDescription")}
+          actionLabel={t("retry")}
           onAction={onRetry}
-          className={cn(PANEL_CLASS, "px-4 py-16")}
+          className="w-full min-w-0 px-4"
         />
       ) : loading ? (
-        <Skeleton className="h-64 w-full rounded-xl" />
+        <div
+          role="status"
+          className={cn(PANEL_CLASS, "w-full min-w-0 divide-y divide-[color:var(--aqt-border)]")}
+        >
+          <span className="sr-only">{t("loading")}</span>
+          {[0, 1, 2].map((row) => (
+            <div key={row} aria-hidden="true" className="space-y-3 px-4 py-4">
+              <div className="flex items-center gap-3">
+                <Skeleton className="h-5 w-1/2 motion-reduce:animate-none" />
+                <Skeleton className="ms-auto h-6 w-20 motion-reduce:animate-none" />
+              </div>
+              <Skeleton className="h-4 w-3/4 motion-reduce:animate-none" />
+            </div>
+          ))}
+        </div>
       ) : games.length === 0 ? (
         <PageStateCard
           state="empty"
-          title="No mixes yet"
-          description={
-            canEdit
-              ? "Create a mix to start filling its lineup."
-              : "A host has not created a mix in this workspace yet."
-          }
-          className={cn(PANEL_CLASS, "px-4 py-16")}
+          title={t("list.emptyTitle")}
+          description={t(canEdit ? "list.emptyHost" : "list.emptyViewer")}
+          actionLabel={t("createAction")}
+          onAction={canEdit ? onCreateGame : undefined}
+          className="w-full min-w-0 px-4"
+        />
+      ) : visibleGames.length === 0 ? (
+        <PageStateCard
+          state="filtered-empty"
+          title={t(view === "open" ? "list.noOpenTitle" : "list.noHistoryTitle")}
+          description={t(view === "open" ? "list.noOpenDescription" : "list.noHistoryDescription")}
+          actionLabel={t(view === "open" ? "list.showHistory" : "list.showOpen")}
+          onAction={() => setView(view === "open" ? "history" : "open")}
+          className="w-full min-w-0 px-4"
         />
       ) : (
         <ul
-          aria-label="Mixes"
-          className={cn(PANEL_CLASS, "flex flex-col divide-y divide-[color:var(--aqt-border)]")}
+          aria-label={t("list.label")}
+          className={cn(
+            PANEL_CLASS,
+            "flex w-full min-w-0 flex-col divide-y divide-[color:var(--aqt-border)]"
+          )}
         >
-          {games.map((game) => (
+          {visibleGames.map((game) => (
             <PickupMixRow key={game.id} game={game} />
           ))}
         </ul>
@@ -225,46 +119,66 @@ export function PickupMixList({
 }
 
 function PickupMixRow({ game }: Readonly<{ game: CustomGame }>) {
-  const status = game.status as CustomGameStatus;
+  const t = useTranslations("mixes.list");
+  const format = useFormatter();
+
   return (
-    <li>
+    <li className="min-w-0 first:[&>a]:rounded-t-xl last:[&>a]:rounded-b-xl">
       <Link
-        href={`/balancer/pickup/${game.id}`}
-        className="flex items-center gap-3.5 px-4 py-3.5 transition-colors hover:bg-white/[0.025]"
+        href={`/balancer/mix/${game.id}`}
+        className="flex min-w-0 flex-col gap-2 px-4 py-3.5 transition-colors hover:bg-[color:var(--aqt-overlay-1)] focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[color:var(--aqt-teal)]"
       >
-        <span className="flex min-w-0 flex-1 items-baseline gap-1.5">
-          <span className="truncate text-body font-semibold text-[color:var(--aqt-fg)]">
+        <span className="flex min-w-0 flex-wrap items-start gap-x-3 gap-y-2">
+          <span className="min-w-0 flex-1 basis-56 text-ui font-semibold text-[color:var(--aqt-fg)] [overflow-wrap:anywhere]">
             {game.name}
           </span>
-          <span className="shrink-0 text-xs text-[color:var(--aqt-fg-faint)]">
-            {`#${game.id}`}
+          <span
+            className={cn(
+              "max-w-full rounded-full border px-2.5 py-1 text-caption font-medium [overflow-wrap:anywhere]",
+              MIX_STATUS_CLASS[game.status]
+            )}
+          >
+            {t(`status.${game.status}`)}
           </span>
         </span>
-
-        <span className={cn(CAPTION_CLASS, "w-40 shrink-0 truncate text-left")}>
-          {game.host_display_name ?? `#${game.host_user_id}`}
-        </span>
-
-        <span className={cn(CAPTION_CLASS, "w-44 shrink-0 truncate text-left")}>
-          {game.matches_count > 0 ? (
-            `${game.matches_count} map${game.matches_count === 1 ? "" : "s"} · ${formatRelative(game.last_match_at)}`
-          ) : (
-            <span className="text-[color:var(--aqt-fg-faint)]">No matches</span>
-          )}
-        </span>
-
-        <span className={cn(CAPTION_CLASS, "w-36 shrink-0 text-left")}>
-          {formatDate(game.created_at)}
-        </span>
-
-        <span
-          className={cn(
-            METRIC_PILL_CLASS,
-            MIX_STATUS_CLASS[status] ?? MIX_STATUS_CLASS.draft,
-            "w-24 shrink-0 justify-center capitalize",
-          )}
-        >
-          {game.status}
+        <span className="flex min-w-0 flex-wrap gap-x-4 gap-y-1 text-caption text-[color:var(--aqt-fg-muted)] [overflow-wrap:anywhere]">
+          <span className="min-w-0 max-w-full">
+            {t("host", { name: game.host_display_name ?? `#${game.host_user_id}` })}
+          </span>
+          <span className="min-w-0 max-w-full tabular-nums">
+            {game.matches_count > 0 ? t("matches", { count: game.matches_count }) : t("noMatches")}
+          </span>
+          {game.last_match_at ? (
+            <time
+              dateTime={game.last_match_at}
+              title={game.last_match_at}
+              className="min-w-0 max-w-full tabular-nums"
+            >
+              {t("lastMatch", {
+                date: format.dateTime(new Date(game.last_match_at), {
+                  month: "short",
+                  day: "numeric",
+                  hour: "numeric",
+                  minute: "2-digit"
+                })
+              })}
+            </time>
+          ) : null}
+          {game.created_at ? (
+            <time
+              dateTime={game.created_at}
+              title={game.created_at}
+              className="min-w-0 max-w-full tabular-nums text-[color:var(--aqt-fg-dim)]"
+            >
+              {t("created", {
+                date: format.dateTime(new Date(game.created_at), {
+                  year: "numeric",
+                  month: "short",
+                  day: "numeric"
+                })
+              })}
+            </time>
+          ) : null}
         </span>
       </Link>
     </li>

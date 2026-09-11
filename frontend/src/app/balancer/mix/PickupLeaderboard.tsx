@@ -1,37 +1,23 @@
 "use client";
 
+import { useId } from "react";
+import { useFormatter, useTranslations } from "next-intl";
+
 import { PANEL_CLASS } from "@/app/balancer/components/balancer-page-helpers";
-import {
-  CAPTION_CLASS,
-  CARD_TITLE_CLASS,
-  EYEBROW_CLASS,
-  METRIC_PILL_CLASS,
-  ROLE_ICON_COLOR,
-} from "@/app/balancer/pickup/pickup-chrome";
-import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ROLE_LABELS, getRoleIconName } from "@/lib/roles";
 import { cn } from "@/lib/utils";
 import type { MixMemberStats } from "@/services/custom-game.service";
 
 import { LINEUP_ROLES } from "./pickup-lineup";
 import {
+  LEADERBOARD_MIN_GAMES,
   STATS_PERIODS,
-  formatRecord,
-  formatStreak,
   memberLabel,
-  type StatsPeriodKey,
+  type StatsPeriodKey
 } from "./pickup-stats";
 
-/** As deep as the board goes: past twenty names nobody is reading their own row any more. */
 const LEADERBOARD_LIMIT = 20;
-
-/** A run of wins reads in the winning team's teal, a run of losses in the warning amber. */
-const STREAK_WIN_CLASS =
-  "border-[color:color-mix(in_srgb,var(--aqt-teal)_35%,transparent)] bg-[color:color-mix(in_srgb,var(--aqt-teal)_12%,transparent)] text-[color:var(--aqt-teal)]";
-const STREAK_LOSS_CLASS =
-  "border-[color:color-mix(in_srgb,var(--aqt-amber)_30%,transparent)] bg-[color:color-mix(in_srgb,var(--aqt-amber)_10%,transparent)] text-[color:var(--aqt-amber)]";
 
 type PickupLeaderboardProps = {
   /** Already filtered and ranked by the caller — rendered in the order given. */
@@ -43,141 +29,178 @@ type PickupLeaderboardProps = {
   onPeriodChange: (period: StatsPeriodKey) => void;
 };
 
-/**
- * Who is actually winning these mixes, across every mix the workspace has run
- * rather than inside the one on screen. It reads the same permanent match log
- * the rotation hint does, so a record here and a match in a mix's history can
- * never disagree.
- *
- * The window is the reader's own choice and nothing else on the page depends
- * on it, so it stays local chrome: the page owns which window is picked only
- * because the query key does.
- */
 export function PickupLeaderboard({
   members,
   loading,
   error,
   onRetry,
   period,
-  onPeriodChange,
+  onPeriodChange
 }: Readonly<PickupLeaderboardProps>) {
+  const t = useTranslations("mixes.leaderboard");
+  const common = useTranslations("common");
+  const id = useId();
+
   return (
-    <div className={cn(PANEL_CLASS, "flex flex-col")}>
-      <div className="flex flex-wrap items-end gap-x-4 gap-y-2 border-b border-[color:var(--aqt-border)] px-4 py-3">
-        <div className="min-w-0">
-          <div className={EYEBROW_CLASS}>Leaderboard</div>
-          <h2 className={cn(CARD_TITLE_CLASS, "mt-1")}>Mix record</h2>
+    <section aria-labelledby={`${id}-title`} className={cn(PANEL_CLASS, "w-full min-w-0")}>
+      <div className="space-y-4 border-b border-[color:var(--aqt-border)] p-4">
+        <div className="space-y-2">
+          <h2
+            id={`${id}-title`}
+            className="font-display text-heading font-semibold text-[color:var(--aqt-fg)]"
+          >
+            {t("title")}
+          </h2>
+          <p className="text-caption text-[color:var(--aqt-fg-muted)]">
+            {t("rules", { limit: LEADERBOARD_LIMIT, minGames: LEADERBOARD_MIN_GAMES })}
+          </p>
+          <p className="text-caption text-[color:var(--aqt-fg-muted)]">{t("ranking")}</p>
         </div>
-        <div className="ml-auto flex items-center gap-1.5">
-          {STATS_PERIODS.map((item) => (
-            <PeriodChip
-              key={item.key}
-              label={item.label}
-              active={item.key === period}
-              onClick={() => onPeriodChange(item.key)}
-            />
-          ))}
+        <div className="space-y-2">
+          <label
+            htmlFor={`${id}-period`}
+            className="block text-caption font-medium text-[color:var(--aqt-fg)]"
+          >
+            {t("period")}
+          </label>
+          <select
+            id={`${id}-period`}
+            value={period}
+            onChange={(event) => onPeriodChange(event.target.value as StatsPeriodKey)}
+            className="min-h-11 w-full min-w-0 rounded-lg border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-bg-2)] px-3 text-base text-[color:var(--aqt-fg)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--aqt-teal)]"
+          >
+            {STATS_PERIODS.map(({ key }) => (
+              <option key={key} value={key}>
+                {t(`periods.${key}`)}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 
+      <p role="status" className="sr-only">
+        {loading && !error ? t("loading") : ""}
+      </p>
       {error ? (
         <PageStateCard
           state="error"
-          title="Unable to load the leaderboard"
-          description="Check your connection and try again."
-          actionLabel="Retry"
+          title={t("errorTitle")}
+          description={t("errorDescription")}
+          actionLabel={common("retry")}
           onAction={onRetry}
           className="border-0 bg-transparent px-4 py-10"
         />
       ) : loading ? (
-        <Skeleton className="m-4 h-64 rounded-lg" />
+        <div aria-hidden="true" className="divide-y divide-[color:var(--aqt-border)]">
+          {[0, 1, 2, 3, 4].map((row) => (
+            <div key={row} className="space-y-3 p-4">
+              <Skeleton className="h-5 w-3/4 motion-reduce:animate-none" />
+              <Skeleton className="h-9 w-1/2 motion-reduce:animate-none" />
+              <Skeleton className="h-5 w-2/3 motion-reduce:animate-none" />
+            </div>
+          ))}
+        </div>
       ) : members.length === 0 ? (
         <PageStateCard
-          state="empty"
-          title="No mix results yet"
-          description="Players appear after 3 recorded matches."
+          state={period === "all" ? "empty" : "filtered-empty"}
+          title={t("emptyTitle")}
+          description={t("emptyDescription", { minGames: LEADERBOARD_MIN_GAMES })}
+          actionLabel={t("allTime")}
+          onAction={period === "all" ? undefined : () => onPeriodChange("all")}
           className="border-0 bg-transparent px-4 py-10"
         />
       ) : (
-        <ol
-          aria-label="Mix record"
-          className="flex flex-col divide-y divide-[color:var(--aqt-border)]"
-        >
+        <ol aria-labelledby={`${id}-title`} className="divide-y divide-[color:var(--aqt-border)]">
           {members.slice(0, LEADERBOARD_LIMIT).map((member, index) => (
             <LeaderboardRow key={member.workspace_member_id} rank={index + 1} member={member} />
           ))}
         </ol>
       )}
-    </div>
-  );
-}
-
-/** One window the record can be read in; the same pressed-pill the map-mode filters use. */
-function PeriodChip({
-  label,
-  active,
-  onClick,
-}: Readonly<{ label: string; active: boolean; onClick: () => void }>) {
-  return (
-    <button
-      type="button"
-      aria-pressed={active}
-      onClick={onClick}
-      className={cn(
-        "inline-flex h-7 shrink-0 items-center rounded-full border px-2.5 text-label transition-colors",
-        active
-          ? "border-[color:color-mix(in_srgb,var(--aqt-teal)_38%,transparent)] bg-[color:color-mix(in_srgb,var(--aqt-teal)_12%,transparent)] text-[color:var(--aqt-teal)]"
-          : "border-[color:var(--aqt-border)] bg-white/[0.02] text-[color:var(--aqt-fg-muted)] hover:bg-white/[0.05] hover:text-[color:var(--aqt-fg)]",
-      )}
-    >
-      {label}
-    </button>
+    </section>
   );
 }
 
 function LeaderboardRow({ rank, member }: Readonly<{ rank: number; member: MixMemberStats }>) {
-  const streak = formatStreak(member.streak);
+  const t = useTranslations("mixes.leaderboard");
+  const format = useFormatter();
+  const name = memberLabel(member);
+
   return (
-    <li className="flex items-center gap-2.5 px-4 py-2">
-      <span className={cn(CAPTION_CLASS, "w-7 shrink-0 text-right")}>{`#${rank}`}</span>
-      <span className="min-w-0 flex-1 truncate text-sm font-medium text-[color:var(--aqt-fg)]">
-        {memberLabel(member)}
-      </span>
-      <span className="flex shrink-0 items-center gap-1">
-        {LINEUP_ROLES.map((role) => {
-          const tally = member.by_role[role];
-          if (tally == null) return null;
-          return (
-            <span
-              key={role}
-              className="inline-flex"
-              title={`${role} ${tally.wins}–${tally.losses}`}
-            >
-              <PlayerRoleIcon
-                role={getRoleIconName(role)}
-                size={14}
-                color={ROLE_ICON_COLOR[role]}
-                label={`${ROLE_LABELS[role]} ${tally.wins}–${tally.losses}`}
-              />
-            </span>
-          );
-        })}
-      </span>
-      <span className={cn(CAPTION_CLASS, "shrink-0")}>{formatRecord(member)}</span>
-      <span className="w-10 shrink-0 text-right text-sm tabular-nums text-[color:var(--aqt-fg-muted)]">
-        {`${Math.round(member.win_rate * 100)}%`}
-      </span>
-      {streak == null ? null : (
-        <span
-          className={cn(
-            METRIC_PILL_CLASS,
-            "h-6 shrink-0 px-2",
-            member.streak > 0 ? STREAK_WIN_CLASS : STREAK_LOSS_CLASS,
-          )}
-        >
-          {streak}
+    <li className="min-w-0 space-y-3 px-4 py-4 text-body text-[color:var(--aqt-fg)]">
+      <div className="flex items-baseline gap-2">
+        <span className="shrink-0 text-caption tabular-nums text-[color:var(--aqt-fg-muted)]">
+          #{format.number(rank)}
         </span>
-      )}
+        <h3 className="min-w-0 text-ui font-semibold [overflow-wrap:anywhere]">
+          <bdi>{name}</bdi>
+        </h3>
+      </div>
+      <dl className="grid grid-cols-2 gap-3">
+        <div>
+          <dt className="text-caption text-[color:var(--aqt-fg-muted)]">{t("wins")}</dt>
+          <dd className="text-ui font-semibold tabular-nums">{format.number(member.wins)}</dd>
+        </div>
+        <div>
+          <dt className="text-caption text-[color:var(--aqt-fg-muted)]">{t("winRate")}</dt>
+          <dd className="text-ui font-semibold tabular-nums">
+            {format.number(member.win_rate, { style: "percent", maximumFractionDigits: 0 })}
+          </dd>
+        </div>
+      </dl>
+      <details>
+        <summary
+          aria-label={t("details", { name })}
+          className="min-h-11 cursor-pointer content-center rounded-sm py-2 text-caption text-[color:var(--aqt-fg-muted)] hover:text-[color:var(--aqt-fg)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[color:var(--aqt-teal)] [overflow-wrap:anywhere]"
+        >
+          {t("showDetails")}
+        </summary>
+        <div className="space-y-4 pt-3">
+          <dl className="grid grid-cols-2 gap-3">
+            {(["losses", "draws", "games"] as const).map((metric) => (
+              <div key={metric}>
+                <dt className="text-caption text-[color:var(--aqt-fg-muted)]">{t(metric)}</dt>
+                <dd className="tabular-nums">{format.number(member[metric])}</dd>
+              </div>
+            ))}
+            <div className="col-span-2">
+              <dt className="text-caption text-[color:var(--aqt-fg-muted)]">{t("streak")}</dt>
+              <dd className="tabular-nums">
+                {member.streak === 0
+                  ? t("noStreak")
+                  : t(member.streak > 0 ? "winStreak" : "lossStreak", {
+                      count: Math.abs(member.streak)
+                    })}
+              </dd>
+            </div>
+          </dl>
+          {LINEUP_ROLES.some((role) => member.by_role[role] != null) ? (
+            <div className="space-y-3">
+              <h4 className="text-caption font-semibold">{t("roles")}</h4>
+              {LINEUP_ROLES.map((role) => {
+                const tally = member.by_role[role];
+                if (tally == null) return null;
+                return (
+                  <section key={role} aria-label={t(role)} className="space-y-1">
+                    <h5 className="text-caption font-medium">{t(role)}</h5>
+                    <dl className="grid grid-cols-2 gap-x-3 gap-y-2">
+                      {(["wins", "losses", "draws", "games"] as const).map((metric) => (
+                        <div key={metric}>
+                          <dt className="text-caption text-[color:var(--aqt-fg-muted)]">
+                            {t(metric)}
+                          </dt>
+                          <dd className="text-caption tabular-nums">
+                            {format.number(tally[metric])}
+                          </dd>
+                        </div>
+                      ))}
+                    </dl>
+                  </section>
+                );
+              })}
+            </div>
+          ) : null}
+        </div>
+      </details>
     </li>
   );
 }

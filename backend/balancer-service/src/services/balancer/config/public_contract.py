@@ -46,6 +46,10 @@ PUBLIC_CONFIG_KEYS = {
     "time_limit_ms",
     "max_result_variants",
     "rank_comfort_tilt",
+    # mix_balancer only; kept public so a mix's saved overrides survive
+    # ``normalize_persisted_config_payload``, which drops anything not listed here.
+    "mix_comfort_tilt",
+    "mix_role_weights",
 }
 
 LEGACY_PUBLIC_CONFIG_KEYS = {

@@ -69,6 +69,27 @@ export type CustomGameCoHost = {
 };
 
 /**
+ * What the mix engine (`mix_balancer`) actually reads out of a mix's stored
+ * solver overrides. Anything else the server accepts tunes the tournament GA
+ * and changes nothing about a two-team mix, so it stays unnamed but is kept
+ * on round-trip by the index signature.
+ */
+export type MixBalancerConfig = {
+  /**
+   * Trade-off between rank balance and role comfort: `0` splits ranks as
+   * evenly as possible, `1` maximises players seated on a preferred role,
+   * `0.5` (the default) is the engine's own weighting.
+   */
+  mix_comfort_tilt?: number | null;
+  /**
+   * Per-role importance for the role-line balance term, keyed by roster slot
+   * code. A role left out weighs `1`.
+   */
+  mix_role_weights?: Record<string, number> | null;
+  [key: string]: unknown;
+};
+
+/**
  * The mix's own settings. Each one is a stored fact with its own type -- there
  * is no config blob to parse, and no key that can silently mean two things.
  */
@@ -78,8 +99,13 @@ export type CustomGameSettings = {
   team_names: Record<string, string>;
   /** The mix's own roster shape override; `null` inherits the workspace default. */
   role_mask: RosterSlotMap | null;
-  /** Validated solver overrides; `null` means the solver defaults. */
-  balancer_config: Record<string, unknown> | null;
+  /**
+   * Validated solver overrides; `null` means the engine defaults. The blob is
+   * validated against the full `ConfigOverrides` schema server-side, but only
+   * the two `mix_*` keys reach the mix engine -- the rest tune the tournament
+   * GA and are no-ops for a two-team mix.
+   */
+  balancer_config: MixBalancerConfig | null;
   /**
    * This mix's own channel override, or `null` when it follows the workspace.
    * Only a workspace admin can set it (`custom.set_discord_channel`).
@@ -397,6 +423,22 @@ export const customGameService = {
     return apiFetch(`/api/balancer/workspaces/${workspaceId}/custom-games/${gameId}/role-mask`, {
       method: "PUT",
       body: { role_mask: roleMask },
+    }).then((r) => r.json());
+  },
+
+  /**
+   * Replaces the mix's solver overrides, or clears them (`null`) back to the
+   * engine defaults. Validated server-side against `ConfigOverrides`, so an
+   * out-of-range weight 422s here instead of landing in the next balance run.
+   */
+  setBalancerConfig(
+    workspaceId: number,
+    gameId: number,
+    balancerConfig: MixBalancerConfig | null,
+  ): Promise<CustomGame> {
+    return apiFetch(`/api/balancer/workspaces/${workspaceId}/custom-games/${gameId}/balancer-config`, {
+      method: "PUT",
+      body: { balancer_config: balancerConfig },
     }).then((r) => r.json());
   },
 

@@ -308,8 +308,16 @@ def balance_teams(
         raise ValueError(f"{backend.name} backend returned no balance solutions.")
 
     if not normalizer.is_identity:
+        # Both the team stats and the backend's own rating-unit metrics were
+        # produced on the canonical scale; put both back into the caller's
+        # rating units so a reported metric is comparable to a team total.
+        inverse_scale = 1.0 / normalizer.scale
         for solution in solutions:
             normalizer.refresh_team_stats(solution.teams)
+        solutions = [
+            dataclasses.replace(solution, metrics=solution.metrics.rescale_ratings(inverse_scale))
+            for solution in solutions
+        ]
 
     payloads = [
         _build_response_payload(

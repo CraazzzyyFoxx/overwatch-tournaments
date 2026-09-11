@@ -6,7 +6,10 @@ post_discord,transfer_host,add_co_host,remove_co_host,swap_seats,record_outcome,
 undo_match,rotation,stats,close,delete,hard_delete}``.
 
 Writes require ``actor`` to be the host or a co-host; the per-mix check lives in
-``CustomGameService._writable``. Reads are open to any workspace member.
+``CustomGameService._writable``. The reads (``list``, ``get``, ``stats``,
+``match_history``, ``rotation``) are public: the gateway forwards no identity
+for them (``AuthNone``) and none of them inspects the caller -- a mix board is
+read out to a lobby, whose players need no account here.
 ``set_discord_channel`` and ``hard_delete`` additionally require workspace
 admin (``_require_workspace_admin``). Every request body is validated by a
 Pydantic model in ``src.schemas.custom_game`` before it reaches a use case --
@@ -90,14 +93,15 @@ def _body(schema: type[_Body], data: dict[str, Any]) -> _Body:
 
 
 def _require_mix(data: dict[str, Any], user: Any, workspace_id: int, action: str) -> None:
-    """Reading a mix is open to any workspace member; only ``create`` needs a role grant.
+    """A write stops at workspace membership; only ``create`` needs a role grant.
 
-    ``read`` stops at membership -- a workspace member watching a mix without
-    running one needs no ``custom_game`` grant of its own. ``create`` is the
-    only action still checked against the workspace-level permission: it has
-    no existing game to hold a per-game grant, so the ``host``/``admin``/
-    ``owner`` role (``custom_game.create``) is the only gate available for
-    starting a *new* mix.
+    Reads never come through here: a mix board is public (see the module
+    docstring), so there is no membership question to ask on the way in.
+
+    ``create`` is the only action still checked against the workspace-level
+    permission: it has no existing game to hold a per-game grant, so the
+    ``host``/``admin``/``owner`` role (``custom_game.create``) is the only gate
+    available for starting a *new* mix.
 
     ``update``/``delete`` deliberately skip the coarse workspace permission:
     every mutating use case re-loads the game and re-checks host-or-co-host
@@ -432,9 +436,7 @@ def register(broker: Any, logger: Any) -> None:
     @broker.subscriber("rpc.balancer.custom.list")
     async def _list(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
-            user = c.active_actor(data)
             workspace_id = _int(data, "workspace_id")
-            _require_mix(data, user, workspace_id, "read")
             rows = await custom_game_service.list(session, workspace_id=workspace_id)
             host_names = await custom_game_service.hosts(session, workspace_id, [row.host_user_id for row in rows])
             # One grouped read for the whole list: the activity column would
@@ -456,9 +458,7 @@ def register(broker: Any, logger: Any) -> None:
     @broker.subscriber("rpc.balancer.custom.get")
     async def _get(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
-            user = c.active_actor(data)
             workspace_id = _int(data, "workspace_id")
-            _require_mix(data, user, workspace_id, "read")
             game = await custom_game_service.get(session, workspace_id=workspace_id, custom_game_id=_game_id(data))
             return await _with_roster(session, game)
 
@@ -823,9 +823,7 @@ def register(broker: Any, logger: Any) -> None:
     @broker.subscriber("rpc.balancer.custom.match_history")
     async def _match_history(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
-            user = c.active_actor(data)
             workspace_id = _int(data, "workspace_id")
-            _require_mix(data, user, workspace_id, "read")
             matches = await custom_game_service.list_matches(
                 session, workspace_id=workspace_id, custom_game_id=_game_id(data)
             )
@@ -855,9 +853,7 @@ def register(broker: Any, logger: Any) -> None:
     @broker.subscriber("rpc.balancer.custom.rotation")
     async def _rotation(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
-            user = c.active_actor(data)
             workspace_id = _int(data, "workspace_id")
-            _require_mix(data, user, workspace_id, "read")
             recommendations = await custom_game_service.rotation(
                 session, workspace_id=workspace_id, custom_game_id=_game_id(data)
             )
@@ -868,9 +864,7 @@ def register(broker: Any, logger: Any) -> None:
     @broker.subscriber("rpc.balancer.custom.stats")
     async def _stats(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
-            user = c.active_actor(data)
             workspace_id = _int(data, "workspace_id")
-            _require_mix(data, user, workspace_id, "read")
             since = _since(data)
             members = await custom_game_service.mix_stats(session, workspace_id=workspace_id, since=since)
             # The filter is echoed back normalized: the client renders the

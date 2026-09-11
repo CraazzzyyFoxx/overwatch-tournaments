@@ -138,6 +138,29 @@ class AlgorithmConfig(BaseSettings):
         description="Maximum number of solution variants returned by the solver.",
     )
 
+    # mix_balancer only (the brute-force two-team engine behind pickup mixes).
+    # Deliberately absent from ``CONFIG_FIELD_DEFINITIONS``: the tournament
+    # config drawer renders that list, and these two would be dead controls
+    # there -- ``tournament_balancer`` never reads them.
+    mix_comfort_tilt: float = Field(
+        default=0.5,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "Mix trade-off between rank balance and role comfort. 0 weighs only "
+            "how evenly the two teams' ranks split, 1 only how many players got "
+            "a preferred role; 0.5 reproduces the engine's own defaults."
+        ),
+    )
+    mix_role_weights: dict[str, float] | None = Field(
+        default=None,
+        description=(
+            "Mix per-role importance for the role-line balance term, keyed by "
+            "roster slot code. A role left out weighs 1.0, as does every role "
+            "when this is unset."
+        ),
+    )
+
     # Rating normalization
     rating_scale_ceiling: int = Field(
         default=3500,

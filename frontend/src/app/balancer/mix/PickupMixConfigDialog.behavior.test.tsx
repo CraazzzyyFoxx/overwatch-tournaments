@@ -147,6 +147,22 @@ function channelField(scope: ParentNode) {
   return field;
 }
 
+/** A mix fielding one of each role, so the per-line weight fields render. */
+const SHAPE = {
+  slots: { tank: 1, dps: 2, support: 2 },
+  team_size: 5,
+  flex_slots: 0,
+  has_role_slots: true,
+  draft_rounds: 5,
+  source: "default" as const,
+};
+
+function weightField(scope: ParentNode, code: string) {
+  const field = scope.querySelector<HTMLInputElement>(`#mix-role-weight-${code}`);
+  if (!field) throw new Error(`Expected the ${code} weight field`);
+  return field;
+}
+
 // React overrides the input's own `value` setter to track changes; assigning
 // through it makes React think nothing changed, so write via the prototype
 // setter instead (mirrors PickupTeamsPanel.behavior.test.tsx).
@@ -210,5 +226,52 @@ describe("PickupMixConfigDialog", () => {
 
     await click(byName(scope, "Save"));
     expect(savedInput().discordChannelId).toBeUndefined();
+  });
+
+  it("stores nothing for a mix left on the engine defaults", async () => {
+    // `null` is what "never configured" looks like on the wire; writing an
+    // explicit 0.5 would make an untouched mix indistinguishable from one a
+    // host deliberately centred.
+    const scope = await mount(game({ roster_shape: SHAPE }));
+
+    await click(byName(scope, "Save"));
+
+    expect(savedInput().balancerConfig).toBeNull();
+  });
+
+  it("keeps a weight a host typed and drops one put back to normal", async () => {
+    const scope = await mount(game({ roster_shape: SHAPE }));
+
+    await typeInto(weightField(scope, "tank"), "2.5");
+    await click(byName(scope, "Save"));
+    expect(savedInput().balancerConfig).toEqual({ mix_role_weights: { tank: 2.5 } });
+
+    await typeInto(weightField(scope, "tank"), "1");
+    await click(byName(scope, "Save"));
+    expect(savedInput().balancerConfig).toBeNull();
+  });
+
+  it("carries overrides it does not own through a save", async () => {
+    // `custom.set_balancer_config` replaces the whole blob, so a key set
+    // through the API -- here the solver's variant count -- has to survive a
+    // host opening this dialog and saving from it.
+    const scope = await mount(
+      game({
+        roster_shape: SHAPE,
+        settings: {
+          ...SETTINGS,
+          balancer_config: { max_result_variants: 4, mix_comfort_tilt: 0.8 },
+        },
+      }),
+    );
+
+    await typeInto(weightField(scope, "support"), "0");
+    await click(byName(scope, "Save"));
+
+    expect(savedInput().balancerConfig).toEqual({
+      max_result_variants: 4,
+      mix_comfort_tilt: 0.8,
+      mix_role_weights: { support: 0 },
+    });
   });
 });

@@ -271,10 +271,32 @@ export type PickupTeam = {
 };
 
 export type PickupVariantStats = {
-  compositeScore: number | null;
+  /**
+   * How this option scored against its siblings, lower is better. The mix
+   * engine's own total (`mix_balancer_quality_total`), or the tournament GA's
+   * knee score when a mix ran on that fallback -- both rank options of the
+   * same run and neither means anything across runs, so one field carries
+   * whichever the solver reported.
+   */
+  qualityScore: number | null;
   mmrStdDev: number | null;
   ratingGap: number | null;
+  /**
+   * Mean rank gap per role line between the two teams -- the metric a tank
+   * mismatch shows up in and the team totals hide. Rating units: the server
+   * rescales it out of the solver's canonical scale.
+   */
+  lineGap: number | null;
   offRoleCount: number | null;
+  /**
+   * Off-role seats above the pool's structural floor, i.e. the ones the solver
+   * could actually have avoided. `0` with a non-zero count means the roster
+   * simply cannot be seated any more comfortably.
+   */
+  offRoleAboveMinimum: number | null;
+  /** Off-role seats no split of this pool can avoid. */
+  offRoleFloor: number | null;
+  subRoleCollisions: number | null;
   benchedCount: number;
 };
 
@@ -385,10 +407,20 @@ export function parseVariants(resultJson: unknown, teamNames: Record<number, str
           name: teamNames[index] ?? `Team ${index + 1}`,
         })),
       stats: {
-        compositeScore: asNumber(statistics.composite_score),
+        // Whichever engine ran: `mix_balancer` scores a seating with its own
+        // four-term total, the tournament GA (the fallback where the native
+        // engine is unavailable) with a normalised knee score. Both are
+        // cleared server-side once a host hand-swaps a seat, so a missing
+        // value here means "no longer the solver's arrangement", not "zero".
+        qualityScore:
+          asNumber(statistics.mix_balancer_quality_total) ?? asNumber(statistics.composite_score),
         mmrStdDev: asNumber(statistics.mmr_std_dev),
         ratingGap: asNumber(statistics.max_total_rating_gap),
+        lineGap: asNumber(statistics.mix_balancer_role_fairness),
         offRoleCount: asNumber(statistics.off_role_count),
+        offRoleAboveMinimum: asNumber(statistics.off_role_above_minimum),
+        offRoleFloor: asNumber(asRecord(statistics.feasibility)?.structural_min_off_role),
+        subRoleCollisions: asNumber(statistics.sub_role_collision_count),
         benchedCount: benchedRows.length,
       },
       benched: benchedRows.flatMap((entry) => {

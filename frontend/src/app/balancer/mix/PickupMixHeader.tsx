@@ -4,7 +4,7 @@ import Link from "next/link";
 import { ArrowLeft, Settings2, Trash2, UserCog, UserPlus } from "lucide-react";
 
 import { PANEL_CLASS } from "@/app/balancer/components/balancer-page-helpers";
-import { EYEBROW_CLASS } from "@/app/balancer/pickup/pickup-chrome";
+import { EYEBROW_CLASS } from "@/app/balancer/mix/pickup-chrome";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -50,7 +50,7 @@ type PickupMixHeaderProps = {
  *
  * Which mix this is comes from the route, not from state this header owns --
  * switching to another one, or starting a new one, happens on the list at
- * `/balancer/pickup`. This is the only place the mix's name and number sit
+ * `/balancer/mix`. This is the only place the mix's name and number sit
  * together.
  */
 export function PickupMixHeader({
@@ -67,7 +67,7 @@ export function PickupMixHeader({
   return (
     <div className={cn(PANEL_CLASS, "flex flex-wrap items-center gap-3 px-4 py-3")}>
       <Link
-        href="/balancer/pickup"
+        href="/balancer/mix"
         className="flex shrink-0 items-center gap-1.5 text-caption text-[color:var(--aqt-fg-dim)] transition-colors hover:text-[color:var(--aqt-fg-muted)]"
       >
         <ArrowLeft className="size-3.5" aria-hidden="true" />

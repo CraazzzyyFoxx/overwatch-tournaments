@@ -12,7 +12,7 @@ import { createRoot } from "react-dom/client";
 import { describe, it, expect, vi } from "vitest";
 
 vi.mock("next/navigation", () => ({
-  usePathname: () => "/balancer/pickup",
+  usePathname: () => "/balancer/mix",
 }));
 
 vi.mock("@/hooks/usePermissions", () => ({
@@ -48,7 +48,7 @@ declare global {
 }
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
-describe("BalancerLayoutClient on /balancer/pickup", () => {
+describe("BalancerLayoutClient on /balancer/mix", () => {
   it("renders the site Header and Footer around the tool content instead of the admin shell", async () => {
     const container = document.createElement("div");
     document.body.appendChild(container);

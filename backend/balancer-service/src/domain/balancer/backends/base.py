@@ -34,6 +34,33 @@ class BalanceMetrics:
     mix_balancer_role_points: float | None = None
     mix_balancer_quality_total: float | None = None
 
+    #: Fields the engine reports in *rating* units. They are computed after
+    #: ``RatingNormalizer`` has rescaled every rating to the canonical ceiling,
+    #: so they come back on that scale and mean nothing next to a team total
+    #: until they are divided back out (see ``rescale_ratings``).
+    #: ``mix_balancer_role_points`` is a count of lost preference points and
+    #: ``mix_balancer_quality_total`` sums the two kinds, so neither is here:
+    #: the total stays the engine's own ranking key, comparable only between
+    #: solutions of the same run.
+    _RATING_UNIT_FIELDS = (
+        "mix_balancer_fairness",
+        "mix_balancer_uniformity",
+        "mix_balancer_role_fairness",
+    )
+
+    def rescale_ratings(self, factor: float) -> BalanceMetrics:
+        """Same metrics with every rating-unit field multiplied by ``factor``.
+
+        Exact rather than approximate: each of those terms is homogeneous of
+        degree 1 in rating (an absolute difference, or a power mean of them --
+        see ``native/mix_balancer/mix_balancer.cpp``), so scaling the inputs
+        scales the output by the same factor.
+        """
+        updates = {
+            name: value * factor for name in self._RATING_UNIT_FIELDS if (value := getattr(self, name)) is not None
+        }
+        return dataclasses.replace(self, **updates) if updates else self
+
     def to_dict(self) -> dict[str, float]:
         """Non-``None`` fields only, ready to merge into a response payload."""
         return {key: value for key, value in dataclasses.asdict(self).items() if value is not None}

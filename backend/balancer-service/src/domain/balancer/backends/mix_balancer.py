@@ -23,11 +23,18 @@ _MEMBER_NAMESPACE = uuid.UUID("e0f084cf-e0a7-41fe-95ee-0334b635c9c4")
 _MAX_PRIORITY = 3
 
 # The vendored engine's own library default (mix_balancer.models.BalanceSettings.balance_limit).
-# Not yet exposed as a tunable knob: this backend is wired only into the
-# mix/custom-game flow (see services/balancer/solver.run_mix_balance), not the
-# tournament-wide public config surface -- see the "narrow scope" decision in
-# domain/balancer/backends/base.py's module docstring context.
+# It is a pruning threshold, not a requirement: candidates scoring above it are
+# dropped, and a lobby whose *best* split scores above it comes back as a hard
+# error. Kept as the fast path (it prunes most of the search), with
+# ``_UNBOUNDED_BALANCE_LIMIT`` as the retry -- see ``solve``.
 _DEFAULT_BALANCE_LIMIT = 1000.0
+_UNBOUNDED_BALANCE_LIMIT = float(1 << 30)
+
+# The engine's own wording for "every candidate scored above the limit"
+# (native/mix_balancer/mix_balancer.cpp, find_balances). The other failure
+# statuses ("Not enough players ...", "Too many players ...") describe a lobby
+# no retry can fix, so only this one is retried.
+_BALANCE_LIMIT_STATUS = "Can't shuffle players within balance limit"
 
 
 def _load_library():
@@ -92,6 +99,50 @@ def build_metrics(quality) -> BalanceMetrics:
     )
 
 
+def quality_coefficients(tilt: float) -> tuple[float, float, float]:
+    """``mix_comfort_tilt`` -> (fairness, role_fairness, role_priority) weights.
+
+    ``0`` weighs only how evenly the two teams' ranks split, ``1`` only how
+    many players got a preferred role, and ``0.5`` reproduces the engine's own
+    defaults (every coefficient ``1.0``) -- so a mix that never touches the
+    knob balances exactly as it did before the knob existed.
+
+    Uniformity carries no coefficient in the engine at all, so even a full
+    comfort tilt keeps some pressure towards evenly spread teams.
+    """
+    balance = 2.0 * (1.0 - tilt)
+    comfort = 2.0 * tilt
+    return balance, balance, comfort
+
+
+def role_weight_map(weights: dict[str, float] | None, mask: dict[str, int]) -> dict[uuid.UUID, float] | None:
+    """Host-set per-role importance, keyed the way the engine wants it.
+
+    Only roles the roster actually fields survive: a weight for a slot this
+    mix does not use would key a role id the engine never sees. ``None`` (the
+    default) leaves every role weighing ``1.0`` inside ``calc_role_fairness``.
+    """
+    if not weights:
+        return None
+    mapped = {role_uuid(role): float(weight) for role, weight in weights.items() if mask.get(role, 0) > 0}
+    return mapped or None
+
+
+def seating_key(teams: list[Team]) -> frozenset[frozenset[tuple[str, str]]]:
+    """Canonical identity of a seating: the unordered pair of seat sets.
+
+    The engine enumerates every team mask *including each mask's complement*
+    (Gosper's hack over all C(2n, n) subsets), and all four quality terms are
+    symmetric under swapping the two teams -- so its result list carries every
+    seating twice, mirrored, with an identical score. Keying on an unordered
+    set of unordered (player, role) seats collapses exactly that pair: two
+    seatings that differ in even one player's role stay distinct.
+    """
+    return frozenset(
+        frozenset((player.uuid, role) for role, players in team.roster.items() for player in players) for team in teams
+    )
+
+
 class MixBalancerBackend:
     """Adapter over the vendored brute-force two-team engine (originally
     mixtura-dev/mixtura-balancer, see native/mix_balancer) -- pinned only to
@@ -153,16 +204,36 @@ class MixBalancerBackend:
             ]
             cpp_players.append(engine_lib.PlayerInfo(member_id=member_id, roles=roles, is_flex=player.is_flex))
 
-        logger.info("Running mix_balancer brute-force engine for a 2-team split")
-        response = engine_lib.BalanceEngine.quick_find(
-            cpp_players,
-            list(role_by_uuid.keys()),
-            role_constraints,
-            team_size,
-            _DEFAULT_BALANCE_LIMIT,
-            engine_lib.QualitySettings(max_priority=_MAX_PRIORITY),
-            max_results=config.max_result_variants,
+        fairness_coef, role_fairness_coef, role_priority_coef = quality_coefficients(config.mix_comfort_tilt)
+        quality_settings = engine_lib.QualitySettings(
+            fairness_coef=fairness_coef,
+            role_fairness_coef=role_fairness_coef,
+            role_priority_coef=role_priority_coef,
+            max_priority=_MAX_PRIORITY,
+            role_weights=role_weight_map(config.mix_role_weights, mask),
         )
+        wanted = config.max_result_variants
+
+        def search(balance_limit: float):
+            return engine_lib.BalanceEngine.quick_find(
+                cpp_players,
+                list(role_by_uuid.keys()),
+                role_constraints,
+                team_size,
+                balance_limit,
+                quality_settings,
+                # Mirrored duplicates are dropped below, and the engine emits
+                # each seating twice, so ask for twice what the caller wants.
+                max_results=wanted * 2,
+            )
+
+        logger.info("Running mix_balancer brute-force engine for a 2-team split")
+        response = search(_DEFAULT_BALANCE_LIMIT)
+        if not response.ok and _BALANCE_LIMIT_STATUS in response.status:
+            # A lobby nobody can split well still has a best split, and the
+            # host wants it more than a 422 they cannot act on.
+            logger.warning("mix_balancer found nothing under the default balance limit; retrying unbounded")
+            response = search(_UNBOUNDED_BALANCE_LIMIT)
 
         if not response.ok:
             raise ValueError(f"mix_balancer search failed: {response.status}")
@@ -170,6 +241,7 @@ class MixBalancerBackend:
             raise ValueError("mix_balancer search returned no results within the balance limit")
 
         solutions: list[BalanceSolution] = []
+        seen: set[frozenset[frozenset[tuple[str, str]]]] = set()
         for result in response.balances:
             teams: list[Team] = []
             for team_index, cpp_team in enumerate(result.teams, start=1):
@@ -179,8 +251,23 @@ class MixBalancerBackend:
                     role = role_by_uuid[cpp_player.game_role_id]
                     team.add_player(role, player)
                 teams.append(team)
+            key = seating_key(teams)
+            if key in seen:
+                continue
+            seen.add(key)
             solutions.append(BalanceSolution(teams=teams, metrics=build_metrics(result.quality)))
+            if len(solutions) == wanted:
+                break
         return solutions
 
 
-__all__ = ["MixBalancerBackend", "build_metrics", "member_uuid", "priority_for_role", "role_uuid"]
+__all__ = [
+    "MixBalancerBackend",
+    "build_metrics",
+    "member_uuid",
+    "priority_for_role",
+    "quality_coefficients",
+    "role_uuid",
+    "role_weight_map",
+    "seating_key",
+]

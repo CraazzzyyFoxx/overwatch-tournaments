@@ -9,6 +9,7 @@ import {
   customGameService,
   type CustomGame,
   type CustomGamePlayerPatch,
+  type MixBalancerConfig,
 } from "@/services/custom-game.service";
 import type { RosterSlotMap } from "@/lib/roster-shape";
 
@@ -16,7 +17,7 @@ import {
   computeRotationHintPatches,
   participationEntries,
   type PickupRecordOutcomeInput,
-} from "@/app/balancer/pickup/pickup-lineup";
+} from "@/app/balancer/mix/pickup-lineup";
 import {
   workspacePlayerKeys,
   workspacePlayerService,
@@ -200,6 +201,18 @@ export function usePickupMix(workspaceId: number, pickedGameId: number | null) {
     onError: (error) => notify.apiError(error),
   });
 
+  /**
+   * How this mix's engine weighs rank balance against role comfort. Replaces
+   * the whole overrides blob, so callers merge onto `settings.balancer_config`
+   * rather than sending the two keys alone.
+   */
+  const setBalancerConfig = useMutation({
+    mutationFn: (config: MixBalancerConfig | null) =>
+      customGameService.setBalancerConfig(workspaceId, selectedGameId as number, config),
+    onSuccess: applyGame,
+    onError: (error) => notify.apiError(error),
+  });
+
   const setPointsPerWin = useMutation({
     mutationFn: (pointsPerWin: number | null) =>
       customGameService.setPointsPerWin(workspaceId, selectedGameId as number, pointsPerWin),
@@ -379,6 +392,7 @@ export function usePickupMix(workspaceId: number, pickedGameId: number | null) {
     setAuthorRanks,
     setTeamNames,
     setRoleMask,
+    setBalancerConfig,
     setPointsPerWin,
     setDiscordChannel,
     postToDiscord,

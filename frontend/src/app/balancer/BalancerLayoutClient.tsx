@@ -62,7 +62,7 @@ function NoTournamentState() {
             Open a tournament
           </Link>
           <Link
-            href="/balancer/pickup"
+            href="/balancer/mix"
             className="inline-block rounded-md border border-border px-4 py-2 text-sm font-medium transition-colors hover:bg-muted"
           >
             Mixes
@@ -81,15 +81,16 @@ export function BalancerLayoutClient({ children }: Readonly<BalancerLayoutClient
   const pathname = usePathname();
   const { isLoaded, isOrganizer, canAccessAdminRoute } = usePermissions();
   const { status: contextStatus, summary } = useToolContext();
-  const isPickup = pathname.startsWith("/balancer/pickup");
+  const isMix = pathname.startsWith("/balancer/mix");
 
-  if (isPickup) {
+  if (isMix) {
     if (!isLoaded) {
       return <LoadingState />;
     }
-    // Viewing a mix is open to anyone who can reach the tool -- only hosting
-    // one (create/update/delete) needs the `custom_game` grant, gated inside
-    // the mix pages and the balancer-service RPCs themselves.
+    // Viewing a mix is public -- signed out included, so this branch runs
+    // before every permission gate below. Only hosting one
+    // (create/update/delete) needs the `custom_game` grant, gated inside the
+    // mix pages and the balancer-service RPCs themselves.
     //
     // The tool used to replace the site shell entirely (its own top bar, a
     // separate admin palette, a fixed full-viewport frame). Hosting a mix is a

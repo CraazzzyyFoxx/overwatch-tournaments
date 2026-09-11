@@ -174,14 +174,14 @@ DOCS: dict[str, dict] = {
     },
     "rpc.balancer.custom.list": {
         "summary": "List custom games",
-        "description": "Returns every pickup mix in the workspace with its settings and host display name, but without rosters; open to any workspace member.",
+        "description": "Returns every mix in the workspace with its settings and host display name, but without rosters; public, no authentication required.",
     },
     "rpc.balancer.custom.get": {
         "summary": "Get custom game",
         "description": (
-            "Returns one pickup mix with its full lineup: each seat's participation state, role "
-            "order, the ranks the balancer would use and which layer each came from. Open to any "
-            "workspace member; 404 when the mix belongs to another workspace."
+            "Returns one mix with its full lineup: each seat's participation state, role "
+            "order, the ranks the balancer would use and which layer each came from. Public, no "
+            "authentication required; 404 when the mix belongs to another workspace."
         ),
     },
     "rpc.balancer.custom.update_roster": {
@@ -296,7 +296,7 @@ DOCS: dict[str, dict] = {
     },
     "rpc.balancer.custom.match_history": {
         "summary": "List custom game matches",
-        "description": "Returns every match recorded for the mix, newest first, with team names, scores, winner and map. Open to any workspace member.",
+        "description": "Returns every match recorded for the mix, newest first, with team names, scores, winner and map. Public, no authentication required.",
     },
     "rpc.balancer.custom.undo_match": {
         "summary": "Undo custom game match",
@@ -310,7 +310,7 @@ DOCS: dict[str, dict] = {
     },
     "rpc.balancer.custom.rotation": {
         "summary": "Get custom game rotation hints",
-        "description": "Recommends who is owed the next seat and who should sit out, computed from this mix's own match history. Read-only and open to any workspace member.",
+        "description": "Recommends who is owed the next seat and who should sit out, computed from this mix's own match history. Read-only and public, no authentication required.",
     },
     "rpc.balancer.custom.stats": {
         "summary": "Get custom game statistics",
@@ -318,7 +318,7 @@ DOCS: dict[str, dict] = {
             "Per-member wins/losses/draws, win rate, current streak and the per-role split across "
             "every mix this workspace has run, best record first. The optional since query parameter "
             "(ISO 8601) narrows it to matches recorded on or after that moment; without it the whole "
-            "history counts. Read-only and open to any workspace member."
+            "history counts. Read-only and public, no authentication required."
         ),
     },
     "rpc.balancer.custom.close": {

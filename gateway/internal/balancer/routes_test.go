@@ -2,6 +2,7 @@ package balancer
 
 import (
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/edge"
@@ -88,6 +89,41 @@ func TestRosterRoutes(t *testing.T) {
 	}
 	if len(want) != 0 {
 		t.Fatalf("missing roster routes: %#v", want)
+	}
+}
+
+// TestMixReadsArePublic pins the five mix reads as AuthNone and every mix write
+// as AuthRequired. A mix board is read out to a lobby whose players need no
+// account here, so flipping a read back to AuthRequired 401s every signed-out
+// visitor on /balancer/mix; flipping a write to AuthNone would hand the worker
+// no actor to check host-or-co-host against.
+func TestMixReadsArePublic(t *testing.T) {
+	public := map[string]bool{
+		"GET /api/balancer/workspaces/{workspace_id}/custom-games":                    true,
+		"GET /api/balancer/workspaces/{workspace_id}/custom-games/stats":              true,
+		"GET /api/balancer/workspaces/{workspace_id}/custom-games/{game_id}":          true,
+		"GET /api/balancer/workspaces/{workspace_id}/custom-games/{game_id}/matches":  true,
+		"GET /api/balancer/workspaces/{workspace_id}/custom-games/{game_id}/rotation": true,
+	}
+	seen := 0
+	for _, route := range RosterRoutes {
+		if !strings.Contains(route.Pattern, "/custom-games") {
+			continue
+		}
+		key := route.Method + " " + route.Pattern
+		if public[key] {
+			seen++
+			if route.Auth != edge.AuthNone {
+				t.Fatalf("mix read %s must be public: %#v", key, route)
+			}
+			continue
+		}
+		if route.Auth != edge.AuthRequired {
+			t.Fatalf("mix write %s must stay authenticated: %#v", key, route)
+		}
+	}
+	if seen != len(public) {
+		t.Fatalf("expected %d public mix reads, found %d", len(public), seen)
 	}
 }
 

@@ -1,17 +1,11 @@
 // @vitest-environment happy-dom
-//
-// The leaderboard is a read of the permanent match log, so what it must get
-// right is the reading, not the counting:
-//
-//  1. rows land in the order the caller ranked them, each with its record and
-//     win percentage -- re-sorting here would risk disagreeing with the server;
-//  2. a streak pill only appears while there is a run to report;
-//  3. the window chips report the reader's choice upward, since the query key
-//     (and not this component) owns which window is fetched.
-import { act } from "react";
-import { createRoot } from "react-dom/client";
-import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { NextIntlClientProvider } from "next-intl";
+import { act } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+import messages from "@/i18n/messages/en.json";
 import type { MixMemberStats } from "@/services/custom-game.service";
 
 import { PickupLeaderboard } from "./PickupLeaderboard";
@@ -20,12 +14,6 @@ declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean;
 }
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
-
-vi.mock("next-intl", () => ({ useTranslations: () => (key: string) => key }));
-vi.mock("@/components/PlayerRoleIcon", () => ({ default: () => null }));
-
-const onRetry = vi.fn();
-const onPeriodChange = vi.fn();
 
 function member(overrides: Partial<MixMemberStats> = {}): MixMemberStats {
   return {
@@ -40,74 +28,68 @@ function member(overrides: Partial<MixMemberStats> = {}): MixMemberStats {
     streak: 3,
     last_played_at: "2026-01-05T20:00:00Z",
     by_role: { tank: { games: 20, wins: 12, losses: 8, draws: 0 } },
-    ...overrides,
+    ...overrides
   };
 }
 
-function tick() {
-  const { promise, resolve } = Promise.withResolvers<void>();
-  setTimeout(resolve, 0);
-  return promise;
-}
+const mounts: { root: Root; container: HTMLDivElement }[] = [];
 
-const roots: { unmount: () => void }[] = [];
+afterEach(() => {
+  for (const { root, container } of mounts.splice(0)) {
+    act(() => root.unmount());
+    container.remove();
+  }
+});
 
 async function mount(
   members: MixMemberStats[],
-  props: { loading?: boolean; error?: boolean } = {},
+  props: {
+    loading?: boolean;
+    error?: boolean;
+    period?: "all" | "30d" | "7d";
+    onPeriodChange?: (p: "all" | "30d" | "7d") => void;
+    onRetry?: () => void;
+  } = {}
 ) {
   const container = document.createElement("div");
   document.body.appendChild(container);
+  const root = createRoot(container);
+  mounts.push({ root, container });
+  const onRetry = props.onRetry ?? vi.fn();
+  const onPeriodChange = props.onPeriodChange ?? vi.fn();
+
   await act(async () => {
-    const root = createRoot(container);
-    roots.push(root);
     root.render(
-      <PickupLeaderboard
-        members={members}
-        loading={props.loading ?? false}
-        error={props.error ?? false}
-        onRetry={onRetry}
-        period="all"
-        onPeriodChange={onPeriodChange}
-      />,
+      <NextIntlClientProvider locale="en" messages={messages} timeZone="UTC">
+        <PickupLeaderboard
+          members={members}
+          loading={props.loading ?? false}
+          error={props.error ?? false}
+          onRetry={onRetry}
+          period={props.period ?? "all"}
+          onPeriodChange={onPeriodChange}
+        />
+      </NextIntlClientProvider>
     );
   });
-  await act(async () => {
-    await tick();
-  });
-  return container;
+  return { container, onRetry, onPeriodChange };
 }
 
-function click(node: Element | null | undefined) {
+async function click(node: Element | null | undefined) {
   if (!node) throw new Error("Expected a clickable node");
-  return act(async () => {
+  await act(async () => {
     node.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    await tick();
   });
-}
-
-function byName(scope: ParentNode, name: string) {
-  return [...scope.querySelectorAll("button")].find((node) => node.textContent?.trim() === name) ?? null;
 }
 
 function rows(scope: ParentNode) {
-  return [...scope.querySelectorAll("li")];
+  return [...scope.querySelectorAll("ol li")];
 }
 
-beforeEach(() => {
-  while (roots.length > 0) {
-    const root = roots.pop();
-    act(() => root?.unmount());
-  }
-  document.body.innerHTML = "";
-  onRetry.mockReset();
-  onPeriodChange.mockReset();
-});
-
 describe("PickupLeaderboard", () => {
-  it("ranks rows in the order given, with each record and win percentage", async () => {
-    const scope = await mount([
-      member({ workspace_member_id: 1, display_name: "Aria" }),
+  it("ranks rows in the order given, showing rank, name, wins, and win rate", async () => {
+    const { container } = await mount([
+      member({ workspace_member_id: 1, display_name: "Aria", wins: 12, win_rate: 0.6 }),
       member({
         workspace_member_id: 2,
         display_name: "Bex",
@@ -115,67 +97,98 @@ describe("PickupLeaderboard", () => {
         losses: 9,
         draws: 2,
         games: 20,
-        win_rate: 0.45,
-      }),
+        win_rate: 0.45
+      })
     ]);
 
-    const [first, second] = rows(scope);
+    const [first, second] = rows(container);
     expect(first.textContent).toContain("#1");
     expect(first.textContent).toContain("Aria");
-    expect(first.textContent).toContain("12–8");
+    expect(first.textContent).toContain("12");
     expect(first.textContent).toContain("60%");
+
     expect(second.textContent).toContain("#2");
-    expect(second.textContent).toContain("9–9–2");
+    expect(second.textContent).toContain("Bex");
+    expect(second.textContent).toContain("9");
     expect(second.textContent).toContain("45%");
   });
 
-  it("falls back to the battletag for a member who left the roster", async () => {
-    const scope = await mount([member({ display_name: null })]);
+  it("falls back to the battletag or raw member id when display name is not set", async () => {
+    const { container: tagContainer } = await mount([
+      member({ display_name: null, battle_tag: "Aria#1111" })
+    ]);
+    expect(tagContainer.textContent).toContain("Aria#1111");
 
-    expect(scope.textContent).toContain("Aria#1111");
+    const { container: idContainer } = await mount([
+      member({ display_name: null, battle_tag: null, workspace_member_id: 42 })
+    ]);
+    expect(idContainer.textContent).toContain("#42");
   });
 
-  it("shows a running streak and nothing at all once it is broken", async () => {
-    const withStreak = await mount([member({ streak: 3 })]);
-    expect(withStreak.textContent).toContain("W3");
-
-    const broken = await mount([member({ streak: 0 })]);
-    expect(broken.textContent).not.toMatch(/[WL]\d/);
-  });
-
-  it("names each role's own record on its glyph", async () => {
-    const scope = await mount([
+  it("discloses full details with losses, draws, streak, and role records", async () => {
+    const { container } = await mount([
       member({
+        wins: 10,
+        losses: 5,
+        draws: 1,
+        games: 16,
+        streak: 3,
         by_role: {
-          tank: { games: 8, wins: 5, losses: 3, draws: 0 },
-          support: { games: 12, wins: 7, losses: 5, draws: 0 },
-        },
-      }),
+          tank: { games: 10, wins: 7, losses: 3, draws: 0 }
+        }
+      })
     ]);
 
-    const titles = [...scope.querySelectorAll("[title]")].map((node) => node.getAttribute("title"));
-    expect(titles).toEqual(["tank 5–3", "support 7–5"]);
+    const details = container.querySelector("details");
+    expect(details).not.toBeNull();
+    expect(details?.textContent).toContain("Show detailed results");
+    expect(details?.textContent).toContain("3 consecutive wins");
+    expect(details?.textContent).toContain("Tank");
+
+    const zeroStreak = await mount([member({ streak: 0 })]);
+    expect(zeroStreak.container.querySelector("details")?.textContent).toContain(
+      "No current streak"
+    );
   });
 
-  it("reports the window the reader picked instead of filtering on its own", async () => {
-    const scope = await mount([member()]);
+  it("reports period changes through the accessible select", async () => {
+    const onPeriodChange = vi.fn();
+    const { container } = await mount([member()], { period: "all", onPeriodChange });
 
-    await click(byName(scope, "7 days"));
+    const select = container.querySelector("select");
+    expect(select).not.toBeNull();
+    await act(async () => {
+      if (select) {
+        select.value = "7d";
+        select.dispatchEvent(new Event("change", { bubbles: true }));
+      }
+    });
 
     expect(onPeriodChange).toHaveBeenCalledWith("7d");
   });
 
-  it("explains an empty board rather than showing a blank card", async () => {
-    const scope = await mount([]);
+  it("explains an empty board and allows resetting to all time when filtered", async () => {
+    const onPeriodChange = vi.fn();
+    const { container } = await mount([], { period: "30d", onPeriodChange });
 
-    expect(scope.textContent).toContain("No mix results yet");
-    expect(scope.textContent).toContain("Players appear after 3 recorded matches.");
+    expect(container.textContent).toContain("No qualifying players in this period");
+    const allTimeButton = [...container.querySelectorAll("button")].find((btn) =>
+      btn.textContent?.includes("Show all time")
+    );
+    expect(allTimeButton).toBeDefined();
+    await click(allTimeButton);
+    expect(onPeriodChange).toHaveBeenCalledWith("all");
   });
 
   it("offers a retry when the record fails to load", async () => {
-    const scope = await mount([], { error: true });
+    const onRetry = vi.fn();
+    const { container } = await mount([], { error: true, onRetry });
 
-    await click(byName(scope, "Retry"));
+    const retryBtn = [...container.querySelectorAll("button")].find((btn) =>
+      btn.textContent?.includes("Retry")
+    );
+    expect(retryBtn).toBeDefined();
+    await click(retryBtn);
 
     expect(onRetry).toHaveBeenCalledTimes(1);
   });

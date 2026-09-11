@@ -2118,6 +2118,11 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
                     ],
                     "statistics": {
                         "composite_score": 0.87,
+                        "mix_balancer_quality_total": 41.5,
+                        "mix_balancer_fairness": 30.0,
+                        "mix_balancer_uniformity": 4.0,
+                        "mix_balancer_role_fairness": 5.5,
+                        "mix_balancer_role_points": 2.0,
                         "mmr_std_dev": 10.0,
                         "max_total_rating_gap": 50,
                         "off_role_count": 0,
@@ -2155,6 +2160,36 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
         # for that run -- meaningless for a single hand-edited arrangement, so
         # a manual swap clears it rather than leaving a now-fabricated number.
         self.assertIsNone(statistics["composite_score"])
+
+    async def test_swap_seats_clears_every_engine_scored_metric(self) -> None:
+        # The mix engine's four terms and their total describe the seating it
+        # chose; a hand-moved player invalidates all of them, most of all the
+        # role-priority term. Left behind they would read as current.
+        self.games.get.return_value = _game(balance_result_json=self._two_team_result())
+
+        game = await self.service.swap_seats(
+            self.session,
+            workspace_id=1,
+            custom_game_id=11,
+            variant_index=0,
+            first_uuid="p1",
+            second_uuid="p3",
+            actor_user_id=9,
+        )
+
+        statistics = game.balance_result_json["variants"][0]["statistics"]
+        for key in (
+            "mix_balancer_quality_total",
+            "mix_balancer_fairness",
+            "mix_balancer_uniformity",
+            "mix_balancer_role_fairness",
+            "mix_balancer_role_points",
+        ):
+            self.assertIsNone(statistics[key], key)
+        # The teams' own totals stay, recomputed from the seats on screen.
+        teams = game.balance_result_json["variants"][0]["teams"]
+        self.assertEqual(5500.0, teams[0]["total_rating"])
+        self.assertEqual(6200.0, teams[1]["total_rating"])
 
     async def test_swap_seats_counts_off_role_after_the_move(self) -> None:
         result = self._two_team_result()

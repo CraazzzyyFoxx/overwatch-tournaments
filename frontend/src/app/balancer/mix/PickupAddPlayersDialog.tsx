@@ -10,7 +10,7 @@ import {
   CARD_TITLE_CLASS,
   EYEBROW_CLASS,
   ROLE_ICON_COLOR,
-} from "@/app/balancer/pickup/pickup-chrome";
+} from "@/app/balancer/mix/pickup-chrome";
 import DivisionIcon from "@/components/DivisionIcon";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { Button } from "@/components/ui/button";

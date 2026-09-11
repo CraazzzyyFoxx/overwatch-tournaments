@@ -1,6 +1,6 @@
 "use client";
 
-import { teamAccent } from "@/app/balancer/pickup/pickup-chrome";
+import { teamAccent } from "@/app/balancer/mix/pickup-chrome";
 import { cn } from "@/lib/utils";
 import type { CustomGameOutcome } from "@/services/custom-game.service";
 

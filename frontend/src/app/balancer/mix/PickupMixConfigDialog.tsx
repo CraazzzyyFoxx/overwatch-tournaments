@@ -3,6 +3,17 @@
 import { useState } from "react";
 import { Settings2 } from "lucide-react";
 
+import {
+  DEFAULT_COMFORT_TILT,
+  DEFAULT_ROLE_WEIGHT,
+  MAX_ROLE_WEIGHT,
+  SLOT_LABELS,
+  mixConfigPatch,
+  roleWeightsOf,
+  tiltOf,
+  withRoleWeight
+} from "@/app/balancer/mix/mix-balancer-config";
+
 import { Button } from "@/components/ui/button";
 import { DiscordChannelSelect } from "@/components/discord/DiscordChannelSelect";
 import {
@@ -17,10 +28,11 @@ import { Label } from "@/components/ui/label";
 import { NumberInput } from "@/components/ui/number-input";
 import { RosterShapeEditor } from "@/components/roster-shape/RosterShapeEditor";
 import { payloadTotalError } from "@/components/roster-shape/roster-shape-editor.model";
-import type { RosterSlotMap } from "@/lib/roster-shape";
-import type { CustomGame } from "@/services/custom-game.service";
+import { orderSlotCodes, type RosterSlotMap } from "@/lib/roster-shape";
+import { Slider } from "@/components/ui/slider";
+import type { CustomGame, MixBalancerConfig } from "@/services/custom-game.service";
 
-/** What `onSave` writes: the three independent config knobs this dialog owns. */
+/** What `onSave` writes: the four independent config knobs this dialog owns. */
 export type PickupMixConfigInput = {
   roleMask: RosterSlotMap | null;
   /** The rank-adjustment-per-win, or `null` to disable it. */
@@ -30,6 +42,11 @@ export type PickupMixConfigInput = {
    * `undefined` when the viewer may not set one -- nothing to write.
    */
   discordChannelId: string | null | undefined;
+  /**
+   * The whole overrides blob to store, already merged onto what the mix had:
+   * `set_balancer_config` replaces rather than patches.
+   */
+  balancerConfig: MixBalancerConfig | null;
 };
 
 interface PickupMixConfigDialogProps {
@@ -77,6 +94,8 @@ export function PickupMixConfigDialog({
   );
   // The picker speaks in strings and has no null: "" is its no-channel value.
   const [pendingChannel, setPendingChannel] = useState(game?.settings.discord_channel_id ?? "");
+  const [pendingTilt, setPendingTilt] = useState(() => tiltOf(game?.settings.balancer_config));
+  const [pendingWeights, setPendingWeights] = useState(() => roleWeightsOf(game?.settings.balancer_config));
   const [wasOpen, setWasOpen] = useState(open);
 
   if (open !== wasOpen) {
@@ -85,12 +104,17 @@ export function PickupMixConfigDialog({
       setPending(game?.settings.role_mask ?? null);
       setPendingPoints(game?.settings.points_per_win ?? null);
       setPendingChannel(game?.settings.discord_channel_id ?? "");
+      setPendingTilt(tiltOf(game?.settings.balancer_config));
+      setPendingWeights(roleWeightsOf(game?.settings.balancer_config));
     }
   }
 
   const error = payloadTotalError(pending);
   const channelEditable = canWrite && canSetChannel;
   const workspaceChannel = game?.settings.workspace_discord_channel_id ?? null;
+  // Weightable lines follow the shape being edited, not the stored one, so
+  // adding a flex slot above puts its weight row on screen straight away.
+  const weightableCodes = orderSlotCodes(pending ?? game?.roster_shape?.slots ?? {});
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -114,6 +138,74 @@ export function PickupMixConfigDialog({
             disabled={!canWrite}
             onChange={setPending}
           />
+        </div>
+
+        <div className="space-y-3 border-t border-[color:var(--aqt-border)] pt-4">
+          <div className="space-y-1.5">
+            <Label asChild>
+              <span>
+                Balancing
+                <span className="ml-1.5 text-xs text-muted-foreground">
+                  (rank balance vs role comfort)
+                </span>
+              </span>
+            </Label>
+            <Slider
+              aria-label="Rank balance versus role comfort"
+              min={0}
+              max={100}
+              step={5}
+              disabled={!canWrite}
+              value={[Math.round(pendingTilt * 100)]}
+              onValueChange={([next]) => setPendingTilt((next ?? 50) / 100)}
+            />
+            <div className="flex justify-between text-xs text-muted-foreground">
+              <span>Even ranks</span>
+              <span className="tabular-nums">
+                {pendingTilt === DEFAULT_COMFORT_TILT ? "Balanced" : `${Math.round(pendingTilt * 100)}% comfort`}
+              </span>
+              <span>Preferred roles</span>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Pulled left, the engine only cares how evenly the two teams&apos; ranks split. Pulled
+              right, it will accept a wider rank gap to seat more players on the role they asked
+              for. The middle is its own default weighting.
+            </p>
+          </div>
+
+          {weightableCodes.length > 0 ? (
+            <div className="space-y-1.5">
+              <Label>
+                Line importance
+                <span className="ml-1.5 text-xs text-muted-foreground">(1 = normal)</span>
+              </Label>
+              <div className="flex flex-wrap gap-2">
+                {weightableCodes.map((code) => (
+                  <div key={code} className="flex items-center gap-2">
+                    <Label htmlFor={`mix-role-weight-${code}`} className="text-xs text-muted-foreground">
+                      {SLOT_LABELS[code]}
+                    </Label>
+                    <NumberInput
+                      id={`mix-role-weight-${code}`}
+                      min={0}
+                      max={MAX_ROLE_WEIGHT}
+                      disabled={!canWrite}
+                      placeholder="1"
+                      value={pendingWeights[code] ?? DEFAULT_ROLE_WEIGHT}
+                      onValueChange={(next) =>
+                        setPendingWeights((current) => withRoleWeight(current, code, next))
+                      }
+                      className="h-8 w-16 bg-background/50 px-2 text-center tabular-nums"
+                    />
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                How hard the engine works to match that line across the two teams. Raise Tank and a
+                tank mismatch costs more than a support one.
+              </p>
+            </div>
+          ) : null}
         </div>
 
         <div className="space-y-1.5 border-t border-[color:var(--aqt-border)] pt-4">
@@ -188,6 +280,11 @@ export function PickupMixConfigDialog({
                     ? null
                     : pendingChannel
                   : undefined,
+                balancerConfig: mixConfigPatch(
+                  game?.settings.balancer_config,
+                  pendingTilt,
+                  pendingWeights,
+                ),
               })
             }
           >
