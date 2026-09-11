@@ -213,6 +213,7 @@ export type WorkspaceListScope = "public" | "admin" | "all";
 export interface ManageableDiscordGuild {
   guild_id: string;
   name: string;
+  icon_url?: string | null;
   owner: boolean;
   can_manage: boolean;
 }

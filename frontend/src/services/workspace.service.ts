@@ -239,6 +239,13 @@ export default class workspaceService {
     }).then((r) => r.json());
   }
 
+  /** Drop the Discord guild claim. Workspace.update is enough — Discord is not re-asked. */
+  static async clearDiscordGuild(workspaceId: number): Promise<Workspace> {
+    return apiFetch(`/api/v1/workspaces/${workspaceId}/discord-guild`, {
+      method: "DELETE"
+    }).then((r) => r.json());
+  }
+
   /** Superuser-only trust tier change (`unverified` | `verified` | `trusted`). */
   static async setVerificationStatus(
     workspaceId: number,

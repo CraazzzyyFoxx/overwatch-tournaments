@@ -168,6 +168,43 @@ class VerifyDiscordGuildTests(IsolatedAsyncioTestCase):
         session.flush.assert_not_awaited()
 
 
+
+class ClearDiscordGuildTests(IsolatedAsyncioTestCase):
+    async def test_clears_the_claim_and_records_the_before_and_after(self) -> None:
+        session = SimpleNamespace(flush=AsyncMock(), commit=AsyncMock())
+        workspace = _make_workspace()
+        workspace.discord_guild_id = _GUILD_ID
+        workspace.discord_guild_verified_at = datetime.now(UTC)
+        workspace.discord_guild_verified_by_auth_user_id = 42
+        actor = _actor()
+
+        with patch.object(workspace_service, "record_audit", AsyncMock()) as audit:
+            result = await workspaces.clear_discord_guild(session, workspace, actor=actor)
+
+        self.assertIs(result, workspace)
+        self.assertIsNone(workspace.discord_guild_id)
+        self.assertIsNone(workspace.discord_guild_verified_at)
+        self.assertIsNone(workspace.discord_guild_verified_by_auth_user_id)
+        session.flush.assert_awaited_once()
+        session.commit.assert_awaited_once()
+        audit.assert_awaited_once()
+        self.assertEqual("workspace.discord_guild_cleared", audit.await_args.kwargs["action"])
+        self.assertEqual(_GUILD_ID, audit.await_args.kwargs["before"]["discord_guild_id"])
+        self.assertEqual({"discord_guild_id": None, "discord_guild_verified_at": None}, audit.await_args.kwargs["after"])
+
+    async def test_an_already_unbound_workspace_is_a_silent_no_op(self) -> None:
+        session = SimpleNamespace(flush=AsyncMock(), commit=AsyncMock())
+        workspace = _make_workspace()
+        actor = _actor()
+
+        with patch.object(workspace_service, "record_audit", AsyncMock()) as audit:
+            await workspaces.clear_discord_guild(session, workspace, actor=actor)
+
+        session.flush.assert_not_awaited()
+        session.commit.assert_not_awaited()
+        audit.assert_not_awaited()
+
+
 class ListActorDiscordGuildsTests(IsolatedAsyncioTestCase):
     """The picker that feeds the verify call above: same subject, same timeout,
     same fail-closed 503. An empty list would read as "you administer nothing",
@@ -323,6 +360,81 @@ class DiscordGuildVerifyRPCTests(IsolatedAsyncioTestCase):
         self.assertEqual(_GUILD_ID, result["data"]["discord_guild_id"])
         verify.assert_awaited_once()
         self.assertEqual(_GUILD_ID, verify.await_args.args[2])
+
+
+
+class DiscordGuildClearRPCTests(IsolatedAsyncioTestCase):
+    async def _call(self, data, *, ws=_UNSET, clear_result=None):
+        handler = _register(MagicMock())["rpc.app.workspaces.discord_guild_clear"]
+        fake_ws = MagicMock(id=1) if ws is _UNSET else ws
+        clear = AsyncMock(return_value=clear_result or fake_ws)
+        with (
+            patch("src.rpc.workspaces.workspace_service.get_by_id", AsyncMock(return_value=fake_ws)),
+            patch("src.rpc.workspaces.workspace_service.clear_discord_guild", clear),
+        ):
+            result = await handler(data, MagicMock())
+        return result, clear
+
+    async def test_requires_workspace_update_permission(self) -> None:
+        from shared.core.errors import BaseAPIException
+
+        denied = MagicMock(side_effect=BaseAPIException(status_code=403, detail="Forbidden"))
+        with patch("src.rpc.workspaces.ensure_workspace_permission", denied):
+            result, clear = await self._call({"workspace_id": 1, "identity": _IDENTITY})
+
+        self.assertNotIn("data", result)
+        clear.assert_not_awaited()
+
+    async def test_404s_a_missing_workspace(self) -> None:
+        with patch("src.rpc.workspaces.ensure_workspace_permission", MagicMock()):
+            result, clear = await self._call({"workspace_id": 1, "identity": _IDENTITY}, ws=None)
+
+        self.assertNotIn("data", result)
+        clear.assert_not_awaited()
+
+    async def test_delegates_to_the_service(self) -> None:
+        workspace = SimpleNamespace(
+            id=1,
+            slug="owt",
+            name="OWT",
+            description=None,
+            icon_url=None,
+            is_active=True,
+            is_hidden=False,
+            timezone="Europe/Moscow",
+            branding_enabled=False,
+            brand_primary=None,
+            brand_secondary=None,
+            brand_background=None,
+            brand_surface=None,
+            brand_accent=None,
+            brand_foreground=None,
+            brand_muted=None,
+            brand_border=None,
+            brand_ring=None,
+            brand_destructive=None,
+            subdomain=None,
+            seo_title=None,
+            seo_description=None,
+            custom_domain=None,
+            custom_domain_verified_at=None,
+            custom_domain_verification_token=None,
+            discord_guild_id=None,
+            discord_guild_verified_at=None,
+            default_division_grid_version_id=None,
+            default_division_grid_version=None,
+            default_roster_slots_json=None,
+            newcomer_scope="global",
+        )
+        with patch("src.rpc.workspaces.ensure_workspace_permission", MagicMock()):
+            result, clear = await self._call(
+                {"workspace_id": 1, "identity": _IDENTITY},
+                ws=workspace,
+                clear_result=workspace,
+            )
+
+        self.assertIsNone(result["data"]["discord_guild_id"])
+        clear.assert_awaited_once()
 
 
 class MyDiscordGuildsRPCTests(IsolatedAsyncioTestCase):
