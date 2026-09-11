@@ -1,4 +1,5 @@
 import { apiFetch } from "@/lib/api-fetch";
+import { blobToBase64 } from "@/lib/image-capture";
 import type { RosterShape, RosterSlotMap } from "@/lib/roster-shape";
 
 /** Where an effective rank came from, strongest first. */
@@ -485,15 +486,24 @@ export const customGameService = {
    * channel. Fire-and-forget: the response only says the message was queued for
    * the bot, so a delivery that fails afterwards surfaces in the bot's logs,
    * not here. `variantIndex` is whichever balance option is on screen.
+   *
+   * `image` is that matchup rasterised in the browser; it is what the bot
+   * attaches. Passing `null` (a capture that failed, or a caller with no node
+   * to capture) posts the server's text embed instead.
    */
-  postToDiscord(
+  async postToDiscord(
     workspaceId: number,
     gameId: number,
     variantIndex: number,
+    image: Blob | null = null,
   ): Promise<{ status: "queued"; channel_id: string }> {
-    return apiFetch(`/api/balancer/workspaces/${workspaceId}/custom-games/${gameId}/discord/post`, {
-      method: "POST",
-      body: { variant_index: variantIndex },
-    }).then((r) => r.json());
+    const response = await apiFetch(
+      `/api/balancer/workspaces/${workspaceId}/custom-games/${gameId}/discord/post`,
+      {
+        method: "POST",
+        body: { variant_index: variantIndex, image_b64: image ? await blobToBase64(image) : null },
+      },
+    );
+    return response.json();
   },
 };

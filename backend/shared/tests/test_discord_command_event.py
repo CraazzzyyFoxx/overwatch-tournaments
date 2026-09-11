@@ -46,10 +46,18 @@ class DiscordCommandEventTests(TestCase):
         self.assertEqual(event.content, "hello")
         self.assertIsNone(event.embed)
 
-    def test_post_message_requires_content_or_embed(self) -> None:
+    def test_post_message_accepts_an_image_as_the_only_payload(self) -> None:
+        """The mix posts a screenshot of its matchup and no text at all."""
+        event = DiscordCommandEvent(action="post_message", channel_id=123, image_b64="iVBORw0KGgo=")
+
+        self.assertEqual(event.image_b64, "iVBORw0KGgo=")
+        self.assertEqual(event.image_filename, "lineup.png")
+        self.assertIsNone(event.embed)
+
+    def test_post_message_requires_content_embed_or_image(self) -> None:
         with self.assertRaises(ValidationError) as ctx:
             DiscordCommandEvent(action="post_message", channel_id=123)
-        self.assertIn("content or embed is required for action='post_message'", str(ctx.exception))
+        self.assertIn("content, embed or image_b64 is required for action='post_message'", str(ctx.exception))
 
     def test_post_message_requires_channel(self) -> None:
         with self.assertRaises(ValidationError) as ctx:

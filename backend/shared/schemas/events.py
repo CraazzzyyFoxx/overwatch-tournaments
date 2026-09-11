@@ -31,7 +31,7 @@ class DiscordCommandEvent(BaseEvent):
     Actions:
     - ``process_all``: re-scan every registered channel of a tournament.
     - ``process_message``: re-process one known message.
-    - ``post_message``: send a message (content and/or embed) to a channel.
+    - ``post_message``: send a message (content, embed and/or PNG attachment) to a channel.
     """
 
     event_type: str = Field(default="discord_command", frozen=True)
@@ -45,6 +45,10 @@ class DiscordCommandEvent(BaseEvent):
     embed: dict[str, Any] | None = Field(
         default=None, description="Discord embed object, as accepted by discord.Embed.from_dict (for 'post_message')"
     )
+    image_b64: str | None = Field(
+        default=None, description="Base64 PNG sent as an attachment (for 'post_message')"
+    )
+    image_filename: str = Field(default="lineup.png", description="Filename for ``image_b64``")
 
     def model_post_init(self, __context) -> None:
         """Validate that required fields are present for specific actions."""
@@ -57,8 +61,8 @@ class DiscordCommandEvent(BaseEvent):
         elif self.action == "post_message":
             if self.channel_id is None:
                 raise ValueError("channel_id is required for action='post_message'")
-            if self.content is None and self.embed is None:
-                raise ValueError("content or embed is required for action='post_message'")
+            if self.content is None and self.embed is None and self.image_b64 is None:
+                raise ValueError("content, embed or image_b64 is required for action='post_message'")
 
 
 class ProcessMatchLogEvent(BaseEvent):

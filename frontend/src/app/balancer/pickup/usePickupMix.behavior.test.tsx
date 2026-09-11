@@ -111,7 +111,7 @@ type HarnessApi = {
   setRoster: (ids: number[]) => void;
   applyRotationHints: () => void;
   undoMatch: (matchId: number) => void;
-  postToDiscord: (variantIndex: number) => void;
+  postToDiscord: (variantIndex: number, image: Blob | null) => void;
   client: QueryClient;
 };
 
@@ -132,7 +132,7 @@ function Harness({
     setRoster: (ids) => setRoster.mutate(ids),
     applyRotationHints: () => applyRotationHints.mutate(),
     undoMatch: (matchId) => undo.mutate(matchId),
-    postToDiscord: (variantIndex) => post.mutate(variantIndex),
+    postToDiscord: (variantIndex, image) => post.mutate({ variantIndex, image }),
     client,
   });
   return null;
@@ -211,18 +211,19 @@ describe("usePickupMix", () => {
     expect(listMatches.mock.calls.length).toBeGreaterThan(before);
   });
 
-  it("posts the matchup to Discord without disturbing the mix cache", async () => {
+  it("posts the matchup, and its screenshot, to Discord without disturbing the mix cache", async () => {
     const { postToDiscord: post, client } = await mount();
     const gameKey = ["custom-games", WORKSPACE_ID, GAME_ID];
+    const image = new Blob(["png"], { type: "image/png" });
     expect(client.getQueryState(gameKey)?.isInvalidated).toBe(false);
 
     await act(async () => {
-      post(1);
+      post(1, image);
       await tick();
       await tick();
     });
 
-    expect(postToDiscord).toHaveBeenCalledWith(WORKSPACE_ID, GAME_ID, 1);
+    expect(postToDiscord).toHaveBeenCalledWith(WORKSPACE_ID, GAME_ID, 1, image);
     // Nothing about the mix changed, so a refetch would be pure noise.
     expect(client.getQueryState(gameKey)?.isInvalidated).toBe(false);
   });

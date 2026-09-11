@@ -1,4 +1,9 @@
-"""The Discord message a host posts for a pickup mix's current matchup.
+"""The text fallback for the Discord message a host posts for a pickup mix.
+
+A host normally posts the matchup card itself: the mix page rasterises what is
+on screen and the bot attaches that PNG (see ``rpc/custom.py``'s
+``post_discord``). This embed is what goes out when there is no image -- a
+capture that failed, or a caller with nothing to capture.
 
 Pure domain: no I/O, no ORM, no async. It builds the plain ``dict`` shape
 Discord itself takes (``discord.Embed.from_dict`` on the bot side) rather than a

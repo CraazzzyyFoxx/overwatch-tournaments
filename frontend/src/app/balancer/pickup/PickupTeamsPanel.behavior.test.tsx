@@ -26,7 +26,8 @@
 //     page actually handed a handler -- an older one would have to unwind
 //     every match stacked on top of it;
 // 10. Post to Discord appears only for a writer whose mix has a channel
-//     configured, and posts the option the pager is on, not always the first.
+//     configured, and posts the option the pager is on, not always the first,
+//     together with the rasterised matchup card the bot attaches.
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -71,6 +72,21 @@ vi.mock("@dnd-kit/core", () => ({
   useDraggable: dndSpies.useDraggable,
   useDroppable: dndSpies.useDroppable,
 }));
+// The rasteriser is the export pipeline's, not this panel's: what the panel
+// owes is handing the PNG it produced to the post handler, so the capture is
+// stubbed to a known blob.
+const captureSpies = vi.hoisted(() => ({ rasterize: vi.fn(), capture: vi.fn() }));
+vi.mock("@/hooks/useNodeCapture", () => ({
+  useNodeCapture: () => ({
+    ref: { current: null },
+    capturing: false,
+    rasterize: captureSpies.rasterize,
+    capture: captureSpies.capture,
+  }),
+}));
+
+/** Stands in for the rasterised matchup card. */
+const LINEUP_PNG = new Blob(["png"], { type: "image/png" });
 
 const onBalance = vi.fn();
 const onVariantIndexChange = vi.fn();
@@ -280,6 +296,9 @@ beforeEach(() => {
   onSwapSeats.mockReset();
   onUndoMatch.mockReset();
   onPostToDiscord.mockReset();
+  captureSpies.rasterize.mockReset();
+  captureSpies.rasterize.mockResolvedValue(LINEUP_PNG);
+  captureSpies.capture.mockReset();
   dndSpies.useDraggable.mockClear();
   dndSpies.useDroppable.mockClear();
 });
@@ -613,18 +632,29 @@ describe("PickupTeamsPanel", () => {
     expect(byName(scope, "Post to Discord")).toBeNull();
   });
 
-  it("posts the option on screen to the mix's configured channel", async () => {
+  it("posts the option on screen, rasterised, to the mix's configured channel", async () => {
     const withChannel = game({ settings: { ...SETTINGS, discord_channel_id: "123" } });
     const scope = await mount(withChannel);
 
     await click(byName(scope, "Post to Discord"));
-    expect(onPostToDiscord).toHaveBeenCalledWith(0);
+    expect(onPostToDiscord).toHaveBeenCalledWith(0, LINEUP_PNG);
 
     // The pager's option is what a lobby is reading, so that is what goes out.
     document.body.innerHTML = "";
     const second = await mount(withChannel, { variantIndex: 1 });
     await click(byName(second, "Post to Discord"));
-    expect(onPostToDiscord).toHaveBeenLastCalledWith(1);
+    expect(onPostToDiscord).toHaveBeenLastCalledWith(1, LINEUP_PNG);
+  });
+
+  it("posts without an image when the capture fails", async () => {
+    captureSpies.rasterize.mockRejectedValue(new Error("tainted canvas"));
+    const scope = await mount(game({ settings: { ...SETTINGS, discord_channel_id: "123" } }));
+
+    await click(byName(scope, "Post to Discord"));
+
+    // The server still has a text embed to fall back on -- losing the
+    // screenshot must not lose the matchup.
+    expect(onPostToDiscord).toHaveBeenCalledWith(0, null);
   });
 
   it("hides Post to Discord from a read-only viewer", async () => {

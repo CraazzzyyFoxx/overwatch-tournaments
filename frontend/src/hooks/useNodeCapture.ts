@@ -15,11 +15,18 @@ export interface NodeCapture {
   ref: React.RefObject<HTMLDivElement | null>;
   /** A capture is in flight. Drives the spinner and the re-entry guard. */
   capturing: boolean;
+  /**
+   * The node as a PNG, for a destination other than the clipboard. `null` when
+   * there is nothing to rasterise or a capture is already running; throws when
+   * the rasteriser itself fails, so a caller can tell "nothing happened" from
+   * "it went wrong".
+   */
+  rasterize: () => Promise<Blob | null>;
   capture: () => Promise<void>;
 }
 
 /**
- * Rasterise a live DOM node to a PNG on the clipboard.
+ * Rasterise a live DOM node to a PNG, for the clipboard or for a caller.
  *
  * For a surface that already looks like what a host wants to share — a matchup
  * card, the lobby board — this beats the off-screen export frame the tournament
@@ -28,24 +35,25 @@ export interface NodeCapture {
  * image with `data-export-hide` and hide it while `capturing` is set; use
  * `invisible` rather than `hidden` so the capture measures the same box.
  *
- * The clipboard is the only destination. A saved file was the wrong shape for
- * the only thing anyone did with it — paste the teams into the Discord channel
- * the lobby is sitting in — and cost a trip through the download tray to get
- * there. Every other image export in the balancer already copies, so there is
- * no longer a second answer to "where did my screenshot go".
+ * The clipboard is not the only destination: `rasterize` hands the same PNG to
+ * a caller that ships it somewhere else (the mix posts it to Discord), so the
+ * bytes a host sends are provably the bytes they saw. What stays shared is the
+ * one `capturing` flag, so `data-export-hide` controls disappear from every
+ * capture, and the one re-entry guard.
  *
- * Failure is reported and swallowed: a blocked clipboard or a tainted canvas
- * should cost the screenshot, not the screen.
+ * `capture` reports failure and swallows it: a blocked clipboard or a tainted
+ * canvas should cost the screenshot, not the screen. `rasterize` throws
+ * instead, leaving its caller to decide what a missing image costs.
  */
 export function useNodeCapture(): NodeCapture {
   const ref = useRef<HTMLDivElement | null>(null);
   const [capturing, setCapturing] = useState(false);
 
-  const capture = useCallback(async () => {
+  const rasterize = useCallback(async () => {
     const node = ref.current;
     // The guard reads state, so it is re-entrancy protection for a double
     // click, not for a concurrent call from elsewhere.
-    if (node == null || capturing) return;
+    if (node == null || capturing) return null;
 
     setCapturing(true);
     try {
@@ -53,15 +61,22 @@ export function useNodeCapture(): NodeCapture {
       await waitForLayout();
       await waitForImages(node);
 
-      const blob = await capturePngBlob(node);
-      await copyImageBlob(blob);
-      notify.success("Copied to the clipboard");
-    } catch {
-      notify.error("Clipboard image copy unavailable");
+      return await capturePngBlob(node);
     } finally {
       setCapturing(false);
     }
   }, [capturing]);
 
-  return { ref, capturing, capture };
+  const capture = useCallback(async () => {
+    try {
+      const blob = await rasterize();
+      if (blob == null) return;
+      await copyImageBlob(blob);
+      notify.success("Copied to the clipboard");
+    } catch {
+      notify.error("Clipboard image copy unavailable");
+    }
+  }, [rasterize]);
+
+  return { ref, capturing, rasterize, capture };
 }

@@ -639,7 +639,18 @@ def register(broker: Any, logger: Any) -> None:
             )
             # Fire and forget: the bot owns delivery, and nothing about the mix
             # changed, so there is no realtime signal and nothing to commit.
-            event = DiscordCommandEvent(action="post_message", channel_id=channel_id, embed=embed)
+            #
+            # The host's screenshot wins when there is one: it is the matchup
+            # card they were looking at, crests and all, which no embed can be.
+            # ``discord_lineup`` still runs for it -- that is what resolves the
+            # channel and rejects an unknown variant -- and its embed is the
+            # fallback for a client whose capture failed.
+            event = DiscordCommandEvent(
+                action="post_message",
+                channel_id=channel_id,
+                embed=None if body.image_b64 else embed,
+                image_b64=body.image_b64,
+            )
             await publish_message(broker, event.model_dump(), DISCORD_COMMANDS_QUEUE, logger=logger)
             return {"status": "queued", "channel_id": str(channel_id)}
 

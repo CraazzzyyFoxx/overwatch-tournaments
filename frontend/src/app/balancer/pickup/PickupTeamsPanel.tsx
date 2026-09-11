@@ -112,7 +112,7 @@ type PickupTeamsPanelProps = {
   onCopyBattleTags: () => void;
   postingToDiscord?: boolean;
   /** Omitted -- no Post to Discord button, matching a page that offers no post. */
-  onPostToDiscord?: (variantIndex: number) => void;
+  onPostToDiscord?: (variantIndex: number, image: Blob | null) => void;
 };
 
 /**
@@ -162,7 +162,7 @@ export function PickupTeamsPanel({
   const pointsPerWin = game?.settings.points_per_win ?? null;
   // The matchup card is a self-contained graphic, so "share the teams" here needs
   // no detour through the fullscreen board.
-  const { ref: captureRef, capturing, capture } = useNodeCapture();
+  const { ref: captureRef, capturing, capture, rasterize } = useNodeCapture();
 
   return (
     // Width-capped by the caller now, alongside the mix header that sits
@@ -324,8 +324,17 @@ export function PickupTeamsPanel({
                   type="button"
                   variant="ghost"
                   className="h-9"
-                  disabled={postingToDiscord}
-                  onClick={() => onPostToDiscord(index)}
+                  disabled={postingToDiscord || capturing}
+                  onClick={() => {
+                    // The same rasterised card "Copy image" produces, sent as
+                    // the attachment: the bot has no renderer, and a host who
+                    // shares the matchup means the card, not a transcript of
+                    // it. A failed capture posts without one -- the server
+                    // falls back to the text embed rather than to nothing.
+                    void rasterize()
+                      .catch(() => null)
+                      .then((image) => onPostToDiscord(index, image));
+                  }}
                 >
                   {postingToDiscord ? (
                     <Loader2 className="mr-1.5 size-3.5 animate-spin" aria-hidden="true" />

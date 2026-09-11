@@ -248,7 +248,7 @@ export default function BalancerPickupMixPage() {
               }
               onCopyBattleTags={copyBattleTags}
               postingToDiscord={postToDiscord.isPending}
-              onPostToDiscord={(idx) => postToDiscord.mutate(idx)}
+              onPostToDiscord={(idx, image) => postToDiscord.mutate({ variantIndex: idx, image })}
             />
           </div>
         </div>

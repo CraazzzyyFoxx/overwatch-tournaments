@@ -5,6 +5,9 @@ other services.
 
 from __future__ import annotations
 
+import base64
+import binascii
+import io
 from typing import Any
 
 import discord
@@ -44,6 +47,21 @@ def _directory_reply(outcome: DirectoryOutcome) -> dict[str, Any]:
     code = _DIRECTORY_CODES.get(outcome.status, "internal")
     message = str(outcome.payload.get("error") or outcome.status)
     return rpc_error(code, message)
+
+
+def _attachment(event: DiscordCommandEvent) -> discord.File | None:
+    """The event's PNG as an upload, ``None`` when it carries no image.
+
+    Raises ``ValueError`` on base64 the publisher mangled -- a malformed
+    payload is not worth a requeue, so the caller rejects it.
+    """
+    if event.image_b64 is None:
+        return None
+    try:
+        raw = base64.b64decode(event.image_b64, validate=True)
+    except (binascii.Error, ValueError) as exc:
+        raise ValueError("image_b64 is not valid base64") from exc
+    return discord.File(io.BytesIO(raw), filename=event.image_filename)
 
 
 class DiscordRabbitGateway:
@@ -140,9 +158,18 @@ class DiscordRabbitGateway:
 
                         logger.info(f"📩 RabbitMQ command: post_message channel={event.channel_id}")
                         try:
+                            attachment = _attachment(event)
+                        except ValueError as exc:
+                            observation.set_status("invalid")
+                            logger.error(f"❌ Undecodable image for channel {event.channel_id}: {exc}")
+                            await msg.reject()
+                            return
+
+                        try:
                             await channel.send(
                                 content=event.content,
                                 embed=discord.Embed.from_dict(event.embed) if event.embed else None,
+                                file=attachment,
                             )
                         except discord.Forbidden:
                             observation.set_status("forbidden")

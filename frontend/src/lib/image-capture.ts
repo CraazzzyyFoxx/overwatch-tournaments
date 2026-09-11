@@ -82,6 +82,25 @@ export async function copyImageBlob(blob: Blob): Promise<void> {
   ]);
 }
 
+/**
+ * A blob as bare base64, no data-URL prefix — how an image travels in a JSON
+ * request body.
+ *
+ * `FileReader` rather than `btoa` over the bytes: a screenshot is hundreds of
+ * kilobytes, and the usual `String.fromCharCode(...bytes)` spread to feed
+ * `btoa` blows the argument limit at that size.
+ */
+export async function blobToBase64(blob: Blob): Promise<string> {
+  const dataUrl = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(reader.error ?? new Error("Could not read blob"));
+    reader.readAsDataURL(blob);
+  });
+
+  return dataUrl.slice(dataUrl.indexOf(",") + 1);
+}
+
 /** Two frames: one to flush the mutation, one to let layout settle on it. */
 export async function waitForLayout(): Promise<void> {
   await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));

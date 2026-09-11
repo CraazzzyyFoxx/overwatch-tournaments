@@ -3,9 +3,12 @@
 balancer-service publishes the current pickup-mix matchup as a fire-and-forget
 command; the bot only has to resolve the channel and send. The three outcomes
 that matter are the ack/reject decisions, because a wrong one either drops the
-message silently or requeues it forever.
+message silently or requeues it forever. The matchup normally arrives as a PNG
+the host's browser rasterised -- the bot has no renderer -- so decoding that
+attachment is part of the same branch.
 """
 
+import base64
 import sys
 from pathlib import Path
 from unittest import IsolatedAsyncioTestCase
@@ -84,6 +87,36 @@ class PostMessageCommandTests(IsolatedAsyncioTestCase):
         self.assertEqual(kwargs["embed"].to_dict()["title"], "Evening mix — Match 3")
         msg.ack.assert_awaited_once()
         msg.reject.assert_not_awaited()
+
+    async def test_image_is_sent_as_an_attachment(self) -> None:
+        """The mix's matchup travels as the browser-rendered PNG, not as text."""
+        channel = MagicMock(send=AsyncMock())
+        processor = MagicMock(get_text_channel=AsyncMock(return_value=channel))
+        msg = _message()
+        png = b"\x89PNG\r\n\x1a\nlineup-bytes"
+
+        await _command_handler(processor)(
+            _body(embed=None, image_b64=base64.b64encode(png).decode("ascii")), msg
+        )
+
+        kwargs = channel.send.await_args.kwargs
+        self.assertIsNone(kwargs["embed"])
+        self.assertIsInstance(kwargs["file"], discord.File)
+        self.assertEqual(kwargs["file"].filename, "lineup.png")
+        self.assertEqual(kwargs["file"].fp.read(), png)
+        msg.ack.assert_awaited_once()
+
+    async def test_undecodable_image_is_rejected_not_requeued(self) -> None:
+        """Malformed base64 will be malformed on every retry."""
+        channel = MagicMock(send=AsyncMock())
+        processor = MagicMock(get_text_channel=AsyncMock(return_value=channel))
+        msg = _message()
+
+        await _command_handler(processor)(_body(embed=None, image_b64="not base64 at all"), msg)
+
+        channel.send.assert_not_awaited()
+        msg.reject.assert_awaited_once()
+        msg.nack.assert_not_awaited()
 
     async def test_content_only_sends_without_embed(self) -> None:
         channel = MagicMock(send=AsyncMock())

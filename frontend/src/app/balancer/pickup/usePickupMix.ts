@@ -216,13 +216,13 @@ export function usePickupMix(workspaceId: number, pickedGameId: number | null) {
   });
 
   /**
-   * Hands the matchup to the bot for the mix's Discord channel. Nothing about
-   * the mix changes, so no cache is touched -- the only feedback is that the
-   * message was queued.
+   * Hands the matchup to the bot for the mix's Discord channel, as the PNG the
+   * caller rasterised from the matchup card. Nothing about the mix changes, so
+   * no cache is touched -- the only feedback is that the message was queued.
    */
   const postToDiscord = useMutation({
-    mutationFn: (variantIndex: number) =>
-      customGameService.postToDiscord(workspaceId, selectedGameId as number, variantIndex),
+    mutationFn: ({ variantIndex, image }: { variantIndex: number; image: Blob | null }) =>
+      customGameService.postToDiscord(workspaceId, selectedGameId as number, variantIndex, image),
     onSuccess: () => notify.success("Sent to Discord"),
     onError: (error) => notify.apiError(error),
   });
