@@ -296,8 +296,12 @@ class OrganizerRejectionTests(TestCase):
 
     def test_rejection_reason_is_private_but_available_to_captain_and_organizer(self) -> None:
         team = models.BalancerRegistrationTeam(
-            id=1, tournament_id=2, name="Roster", status=teams.TEAM_REJECTED,
-            rejection_reason="Duplicate roster", organizer_notes="Internal review",
+            id=1,
+            tournament_id=2,
+            name="Roster",
+            status=teams.TEAM_REJECTED,
+            rejection_reason="Duplicate roster",
+            organizer_notes="Internal review",
         )
         occupancy = RosterOccupancy(shape=FIVE_STACK)
         public = serialize_registration_team(team, occupancy)
@@ -741,8 +745,6 @@ class TargetedInviteShapeTests(TestCase):
 
         self.assertIn("target_registration_id", fields)
         self.assertNotIn("target_auth_user_id", fields)
-
-
 
 
 class AcceptPayloadTests(TestCase):

@@ -614,9 +614,7 @@ def install_team_actions(cls: type) -> None:
         if team_subscription_is_current(team):
             return
         store = build_store(session)
-        entitlements = await store.load_entitlements(
-            team.workspace_id, [auth_user.id], ["boosty", "discord", "twitch"]
-        )
+        entitlements = await store.load_entitlements(team.workspace_id, [auth_user.id], ["boosty", "discord", "twitch"])
         now = datetime.now(UTC)
         for (_uid, provider), stored in entitlements.items():
             verdict = stored.to_verdict()

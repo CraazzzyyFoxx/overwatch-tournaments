@@ -697,9 +697,7 @@ class TeamRosterOutcomeTests(_ProducerTestCase):
         )
         window.start()
         self.addCleanup(window.stop)
-        shape = patch.object(
-            teams_module.RegistrationTeamService, "_resolve_shape", AsyncMock(return_value=FIVE_STACK)
-        )
+        shape = patch.object(teams_module.RegistrationTeamService, "_resolve_shape", AsyncMock(return_value=FIVE_STACK))
         shape.start()
         self.addCleanup(shape.stop)
 
@@ -749,9 +747,7 @@ class TeamRosterOutcomeTests(_ProducerTestCase):
                 include_terminal_for_auth_user_id=account,
             )
             self.assertEqual(expected, [team.id for team, _occupancy in visible])
-        self.assertTrue(
-            await teams_module.teams_service.is_team_staff(self.fx.shim, rejected, CAPTAIN_AUTH)
-        )
+        self.assertTrue(await teams_module.teams_service.is_team_staff(self.fx.shim, rejected, CAPTAIN_AUTH))
 
     async def test_explicit_withdrawal_retains_the_rejected_team_link_and_revokes_offers(self) -> None:
         invite = self.fx.invite(self.team, slot_code="support", target_auth_user_id=INVITEE_AUTH)
@@ -780,9 +776,7 @@ class TargetedInviteAvailabilityTests(_ProducerTestCase):
         )
         self.fx.session.add(self.window)
         self.fx.session.add(
-            models.BalancerRegistrationForm(
-                tournament_id=TOURNAMENT_ID, workspace_id=WORKSPACE_ID, max_substitutes=1
-            )
+            models.BalancerRegistrationForm(tournament_id=TOURNAMENT_ID, workspace_id=WORKSPACE_ID, max_substitutes=1)
         )
         shape = patch.object(
             teams_module.RegistrationTeamService,
@@ -830,9 +824,7 @@ class TargetedInviteAvailabilityTests(_ProducerTestCase):
                 self.assertEqual([], await self._offers())
             setattr(row, attribute, original)
         substitute = self.fx.player("Bench", auth_user_id=OPPONENT_AUTH)
-        registration = self.fx.registration(
-            substitute, battle_tag="Bench#3333", team_id=self.team.id, slot_code="tank"
-        )
+        registration = self.fx.registration(substitute, battle_tag="Bench#3333", team_id=self.team.id, slot_code="tank")
         registration.is_substitute = True
         self.assertEqual([], await self._offers())
 

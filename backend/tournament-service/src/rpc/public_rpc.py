@@ -959,7 +959,6 @@ def register(broker: Any, logger: Any) -> None:
 
         return await _run(logger, op)
 
-
     async def _own_team_dump(session: Any, team: Any) -> Any:
         return _dump(await team_service.teams_service.describe_team(session, team, include_invites=True))
 

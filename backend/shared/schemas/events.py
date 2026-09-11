@@ -45,9 +45,7 @@ class DiscordCommandEvent(BaseEvent):
     embed: dict[str, Any] | None = Field(
         default=None, description="Discord embed object, as accepted by discord.Embed.from_dict (for 'post_message')"
     )
-    image_b64: str | None = Field(
-        default=None, description="Base64 PNG sent as an attachment (for 'post_message')"
-    )
+    image_b64: str | None = Field(default=None, description="Base64 PNG sent as an attachment (for 'post_message')")
     image_filename: str = Field(default="lineup.png", description="Filename for ``image_b64``")
 
     def model_post_init(self, __context) -> None:

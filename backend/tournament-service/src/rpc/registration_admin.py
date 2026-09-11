@@ -315,9 +315,7 @@ def register(broker: Any, logger: Any) -> None:
                 include_terminal=include_terminal,
             )
             items = [
-                await team_service.teams_service.describe_team(
-                    session, team, include_invites=True, include_staff=True
-                )
+                await team_service.teams_service.describe_team(session, team, include_invites=True, include_staff=True)
                 for team, _occupancy in pairs
             ]
             # The number the organizer must see before pressing export: these
@@ -366,9 +364,7 @@ def register(broker: Any, logger: Any) -> None:
                 reason=body.reason,
             )
             return _dump(
-                await team_service.teams_service.describe_team(
-                    session, team, include_invites=True, include_staff=True
-                )
+                await team_service.teams_service.describe_team(session, team, include_invites=True, include_staff=True)
             )
 
         return await _run(logger, op)
@@ -460,12 +456,9 @@ def register(broker: Any, logger: Any) -> None:
 
         return await _run(logger, op)
 
-
     async def _staff_team_dump(session: Any, team: Any) -> Any:
         return _dump(
-            await team_service.teams_service.describe_team(
-                session, team, include_invites=True, include_staff=True
-            )
+            await team_service.teams_service.describe_team(session, team, include_invites=True, include_staff=True)
         )
 
     @broker.subscriber("rpc.tournament.regteam_rename_admin")

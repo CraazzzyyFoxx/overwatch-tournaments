@@ -95,9 +95,7 @@ class PostMessageCommandTests(IsolatedAsyncioTestCase):
         msg = _message()
         png = b"\x89PNG\r\n\x1a\nlineup-bytes"
 
-        await _command_handler(processor)(
-            _body(embed=None, image_b64=base64.b64encode(png).decode("ascii")), msg
-        )
+        await _command_handler(processor)(_body(embed=None, image_b64=base64.b64encode(png).decode("ascii")), msg)
 
         kwargs = channel.send.await_args.kwargs
         self.assertIsNone(kwargs["embed"])

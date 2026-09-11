@@ -539,9 +539,7 @@ def register(broker: Any, logger: Any) -> None:
             workspace = await workspace_service.get_by_id(session, workspace_id)
             if not workspace:
                 raise HTTPException(status_code=404, detail="Workspace not found")
-            workspace = await workspace_service.clear_discord_guild(
-                session, workspace, actor=user
-            )
+            workspace = await workspace_service.clear_discord_guild(session, workspace, actor=user)
             return schemas.WorkspaceRead.model_validate(workspace, from_attributes=True)
 
         return await c.envelope(logger, "workspaces.discord_guild_clear", op, session_factory=_SF)
@@ -719,7 +717,15 @@ def register(broker: Any, logger: Any) -> None:
                 data,
                 label="discord_guild",
                 queue=DISCORD_GUILD_INFO_QUEUE,
-                empty={"connected": False, "name": None, "icon_url": None, "member_count": 0, "owner_id": None, "owner_name": None, "owner_avatar_url": None},
+                empty={
+                    "connected": False,
+                    "name": None,
+                    "icon_url": None,
+                    "member_count": 0,
+                    "owner_id": None,
+                    "owner_name": None,
+                    "owner_avatar_url": None,
+                },
                 # A failed round trip only knows the guild is unreachable; the rest
                 # of the shape would be inventing values the caller must not trust.
                 degraded={"connected": False},

@@ -215,9 +215,7 @@ class TeamRouteShapeTests(TestCase):
         so asserting this over every team route would be asserting something false.
         """
         writes = [
-            line
-            for line in self._team_route_lines()
-            if '"POST"' in line or '"DELETE"' in line or '"PATCH"' in line
+            line for line in self._team_route_lines() if '"POST"' in line or '"DELETE"' in line or '"PATCH"' in line
         ]
         preview = [line for line in writes if "regteam_invite_preview" in line]
         mutating = [line for line in writes if "regteam_invite_preview" not in line]

@@ -286,6 +286,7 @@ class NotifyTests(IsolatedAsyncioTestCase):
 
         self.assertEqual([], session.added)
 
+
 _TEAM_EVENT = {
     "team_id": 12,
     "team_name": "Anak",

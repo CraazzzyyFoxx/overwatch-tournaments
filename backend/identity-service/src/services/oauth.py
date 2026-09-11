@@ -60,6 +60,7 @@ from src.services.oauth_providers import OAuthProviderRegistry, has_manage_guild
 from src.services.oauth_state import OAuthStateCodec, StatePayload, oauth_state
 from src.services.tickets import LINK_TICKETS, SSO_TICKETS, TicketStore, guard_digest
 
+
 def _discord_guild_icon_url(guild_id: object, icon: object) -> str | None:
     """CDN URL for a guild icon hash from ``GET /users/@me/guilds``.
 

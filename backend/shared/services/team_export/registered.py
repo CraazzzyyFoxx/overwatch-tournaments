@@ -189,9 +189,7 @@ async def build_registered_export(
             payload.skipped.append(SkippedTeam(team_id=team.id, name=team.name, code="team_empty"))
             continue
         if team_scope == SUBSCRIPTION_SCOPE_TEAM and not team_subscription_is_current(team):
-            payload.skipped.append(
-                SkippedTeam(team_id=team.id, name=team.name, code="team_subscription_uncovered")
-            )
+            payload.skipped.append(SkippedTeam(team_id=team.id, name=team.name, code="team_subscription_uncovered"))
             continue
 
         members: list[MaterializationMember] = []

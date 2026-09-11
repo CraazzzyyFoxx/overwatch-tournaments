@@ -418,12 +418,13 @@ class RegistrationTeamService:
         )
         team.captain_registration_id = read.id
         _apply_occupancy_status(
-            team, await self._occupancy(
+            team,
+            await self._occupancy(
                 session,
                 team,
                 shape,
                 max_substitutes=max_substitutes,
-            )
+            ),
         )
         await self._raise_if_ineligible(session, team, await self._roster_members(session, team.id), shape)
         await self._maybe_cover_from_personal(session, team, auth_user)
@@ -1092,7 +1093,8 @@ class RegistrationTeamService:
         # Projected, not re-read: the new member's row is already flushed, but
         # computing the post-write status here keeps it inside the lock.
         _apply_occupancy_status(
-            team, await self._occupancy(session, team, shape, max_substitutes=max_substitutes),
+            team,
+            await self._occupancy(session, team, shape, max_substitutes=max_substitutes),
         )
         await self._raise_if_ineligible(session, team, await self._roster_members(session, team.id), shape)
         await emit(
@@ -1186,8 +1188,7 @@ class RegistrationTeamService:
         registration.team_slot_code = None
         registration.is_substitute = False
         await session.flush()
-        _apply_occupancy_status(
-            team, await self._occupancy(session, team, shape, max_substitutes=max_substitutes))
+        _apply_occupancy_status(team, await self._occupancy(session, team, shape, max_substitutes=max_substitutes))
         await emit(
             session,
             scope=Scope.tournament(team.tournament_id),

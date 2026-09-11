@@ -168,7 +168,6 @@ class VerifyDiscordGuildTests(IsolatedAsyncioTestCase):
         session.flush.assert_not_awaited()
 
 
-
 class ClearDiscordGuildTests(IsolatedAsyncioTestCase):
     async def test_clears_the_claim_and_records_the_before_and_after(self) -> None:
         session = SimpleNamespace(flush=AsyncMock(), commit=AsyncMock())
@@ -190,7 +189,9 @@ class ClearDiscordGuildTests(IsolatedAsyncioTestCase):
         audit.assert_awaited_once()
         self.assertEqual("workspace.discord_guild_cleared", audit.await_args.kwargs["action"])
         self.assertEqual(_GUILD_ID, audit.await_args.kwargs["before"]["discord_guild_id"])
-        self.assertEqual({"discord_guild_id": None, "discord_guild_verified_at": None}, audit.await_args.kwargs["after"])
+        self.assertEqual(
+            {"discord_guild_id": None, "discord_guild_verified_at": None}, audit.await_args.kwargs["after"]
+        )
 
     async def test_an_already_unbound_workspace_is_a_silent_no_op(self) -> None:
         session = SimpleNamespace(flush=AsyncMock(), commit=AsyncMock())
@@ -360,7 +361,6 @@ class DiscordGuildVerifyRPCTests(IsolatedAsyncioTestCase):
         self.assertEqual(_GUILD_ID, result["data"]["discord_guild_id"])
         verify.assert_awaited_once()
         self.assertEqual(_GUILD_ID, verify.await_args.args[2])
-
 
 
 class DiscordGuildClearRPCTests(IsolatedAsyncioTestCase):

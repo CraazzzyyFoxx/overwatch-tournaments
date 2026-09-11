@@ -132,9 +132,7 @@ async def _team_stamp_is_current(session: AsyncSession, registration: Any) -> bo
             if callable(scalar):
                 try:
                     team = await scalar(
-                        sa.select(models.BalancerRegistrationTeam).where(
-                            models.BalancerRegistrationTeam.id == team_id
-                        )
+                        sa.select(models.BalancerRegistrationTeam).where(models.BalancerRegistrationTeam.id == team_id)
                     )
                 except TypeError:
                     team = None

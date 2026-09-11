@@ -3428,8 +3428,16 @@
       "summary": "List workspace Discord channels"
     },
     "rpc.app.workspaces.discord_guild": {
-      "description": "Returns connection status, server name, icon URL, and member count of the workspace's linked Discord server.",
+      "description": "Returns connection status, server name, icon URL, member count, and Discord owner of the workspace's linked Discord server.",
       "summary": "Workspace Discord server status"
+    },
+    "rpc.app.workspaces.discord_guild_clear": {
+      "description": "Clears the workspace's Discord guild claim (guild id, verified_at, verified_by). Requires workspace.update, not Discord administration -- so an organiser can leave a server they were kicked from. 404 if workspace missing. Idempotent when nothing is bound.",
+      "response": {
+        "array": false,
+        "ref": "app.WorkspaceRead"
+      },
+      "summary": "Unbind a Discord guild"
     },
     "rpc.app.workspaces.discord_guild_verify": {
       "description": "Proves the caller administers the given Discord guild (via identity-service, owner or MANAGE_GUILD) and binds it to the workspace, stamping verified_at/verified_by; requires workspace.update, 404 if workspace missing, 403 if the caller does not administer the guild, 409 if another workspace already claims it, 503 if identity-service is unreachable.",
@@ -18275,6 +18283,18 @@
           "title": "Guild Id",
           "type": "string"
         },
+        "icon_url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Icon Url"
+        },
         "name": {
           "title": "Name",
           "type": "string"
@@ -18294,7 +18314,7 @@
       "type": "object"
     },
     "app.WorkspaceDiscordGuildVerify": {
-      "description": "Body for ``discord_guild_verify``. The snowflake pattern gates shape\nonly -- the actual proof of administration happens server-side via\n``rpc.identity.oauth_discord_guilds``, not here. No blank-clears-it\nnormalization like ``WorkspaceUpdate`` used to carry: there is no \"clear\"\nverb for a verified claim, only bind (this) and whatever future admin\noverride unbinds it.",
+      "description": "Body for ``discord_guild_verify``. The snowflake pattern gates shape\nonly -- the actual proof of administration happens server-side via\n``rpc.identity.oauth_discord_guilds``, not here. Clearing a verified claim\nis a separate verb (``discord_guild_clear``), not a blank ``guild_id``.",
       "properties": {
         "guild_id": {
           "pattern": "^\\d{17,19}$",
@@ -20476,8 +20496,21 @@
     },
     "balancer.CustomGamePostDiscord": {
       "additionalProperties": false,
-      "description": "Which balance option's lineup to post.",
+      "description": "Which balance option's lineup to post, and the PNG of it to attach.\n\nThe image is the matchup card the host is looking at, rasterised in their\nbrowser (see ``frontend/src/hooks/useNodeCapture.ts``) -- the bot has no\nrenderer, and a screenshot of the real card is the one thing guaranteed to\nmatch what the mix page shows. Omitted when the capture fails, and the\ntext embed is then posted instead.",
       "properties": {
+        "image_b64": {
+          "anyOf": [
+            {
+              "maxLength": 8388608,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Image B64"
+        },
         "variant_index": {
           "minimum": 0,
           "title": "Variant Index",

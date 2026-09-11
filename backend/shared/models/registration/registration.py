@@ -95,9 +95,7 @@ class BalancerRegistrationForm(db.TimeStampIntegerMixin):
     team_max_rank_spread: Mapped[int | None] = mapped_column(Integer(), nullable=True)
     #: Discord nick / Discord snowflake unique across teams in this tournament.
     #: Default false so existing events do not grow a new refusal on deploy.
-    team_unique_identity: Mapped[bool] = mapped_column(
-        Boolean(), nullable=False, server_default="false", default=False
-    )
+    team_unique_identity: Mapped[bool] = mapped_column(Boolean(), nullable=False, server_default="false", default=False)
     #: Live members must have a Discord identity in ``Workspace.discord_guild_id``.
     #: Fail closed when the workspace has no guild bound.
     team_require_discord_guild: Mapped[bool] = mapped_column(
