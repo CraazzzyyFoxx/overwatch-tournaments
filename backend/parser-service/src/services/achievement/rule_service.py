@@ -15,12 +15,14 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.core.errors import BaseAPIException as HTTPException
+from shared.core.pagination import paginated_dict
 from shared.models.achievements.achievement import (
     AchievementOverride,
     AchievementRule,
     EvaluationRunTrigger,
 )
 from shared.repository.support import AchievementOverrideRepository, AchievementRuleRepository
+from src import schemas
 
 from .engine.runner import AchievementEvaluationRunnerService, achievement_evaluation_runner_service
 
@@ -36,6 +38,37 @@ class AchievementRuleService:
         self.rule_repo = rule_repo
         self.override_repo = override_repo
         self.runner = runner
+
+    async def list_rules(
+        self,
+        session: AsyncSession,
+        *,
+        workspace_id: int,
+        params: schemas.AchievementRuleListParams,
+    ) -> dict[str, Any]:
+        query = sa.select(AchievementRule).where(AchievementRule.workspace_id == workspace_id)
+        count_query = (
+            sa.select(sa.func.count()).select_from(AchievementRule).where(AchievementRule.workspace_id == workspace_id)
+        )
+        if params.search:
+            term = f"%{params.search}%"
+            match = sa.or_(AchievementRule.name.ilike(term), AchievementRule.slug.ilike(term))
+            query = query.where(match)
+            count_query = count_query.where(match)
+        if params.category:
+            query = query.where(AchievementRule.category == params.category)
+            count_query = count_query.where(AchievementRule.category == params.category)
+        if params.enabled is not None:
+            query = query.where(AchievementRule.enabled.is_(params.enabled))
+            count_query = count_query.where(AchievementRule.enabled.is_(params.enabled))
+        query = params.apply_pagination_sort(query, AchievementRule)
+        rules = (await session.execute(query)).scalars().all()
+        total = (await session.execute(count_query)).scalar_one()
+        return paginated_dict(
+            [schemas.AchievementRuleRead.model_validate(rule, from_attributes=True) for rule in rules],
+            int(total or 0),
+            params,
+        )
 
     async def create_rule(
         self,

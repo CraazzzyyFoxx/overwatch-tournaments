@@ -161,6 +161,11 @@ class TeamService:
             query = query.where(models.Tournament.workspace_id == workspace_id)
             total_query = total_query.where(models.Tournament.workspace_id == workspace_id)
 
+        if params.search:
+            name_match = models.Team.name.ilike(f"%{params.search}%")
+            query = query.where(name_match)
+            total_query = total_query.where(name_match)
+
         if params.sort == "group":
             query = (
                 query.join(models.Team.standings)

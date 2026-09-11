@@ -44,6 +44,7 @@
   ],
   "exclude": [
     "node_modules",
+    ".next/types/validator.ts",
     "**/*.test.ts",
     "**/*.test.tsx",
     "**/*.spec.ts",

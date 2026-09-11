@@ -75,11 +75,11 @@ vi.mock("@dnd-kit/core", () => ({
 // The rasteriser is the export pipeline's, not this panel's: what the panel
 // owes is handing the PNG it produced to the post handler, so the capture is
 // stubbed to a known blob.
-const captureSpies = vi.hoisted(() => ({ rasterize: vi.fn(), capture: vi.fn() }));
+const captureSpies = vi.hoisted(() => ({ rasterize: vi.fn(), capture: vi.fn(), capturing: false }));
 vi.mock("@/hooks/useNodeCapture", () => ({
   useNodeCapture: () => ({
     ref: { current: null },
-    capturing: false,
+    capturing: captureSpies.capturing,
     rasterize: captureSpies.rasterize,
     capture: captureSpies.capture,
   }),
@@ -129,6 +129,7 @@ const SETTINGS = {
   role_mask: null,
   balancer_config: null,
   discord_channel_id: null,
+  workspace_discord_channel_id: null,
 };
 
 const CONTROL = { id: 1, name: "Control", slug: "control", image_path: "", description: "", aliases: [] };
@@ -260,8 +261,13 @@ function click(node: Element | null | undefined) {
   });
 }
 
+/** By accessible name: the visible label for text buttons, `aria-label` for the icon-only tools. */
 function byName(scope: ParentNode, name: string) {
-  return [...scope.querySelectorAll("button")].find((node) => node.textContent?.trim() === name) ?? null;
+  return (
+    [...scope.querySelectorAll("button")].find(
+      (node) => node.textContent?.trim() === name || node.getAttribute("aria-label") === name,
+    ) ?? null
+  );
 }
 
 function inputByLabel(scope: ParentNode, label: string) {
@@ -299,6 +305,7 @@ beforeEach(() => {
   captureSpies.rasterize.mockReset();
   captureSpies.rasterize.mockResolvedValue(LINEUP_PNG);
   captureSpies.capture.mockReset();
+  captureSpies.capturing = false;
   dndSpies.useDraggable.mockClear();
   dndSpies.useDroppable.mockClear();
 });
@@ -315,12 +322,58 @@ describe("PickupTeamsPanel", () => {
     expect(scope.textContent).not.toContain('"uuid"');
   });
 
-  it("shows the option's own verdict and who it left out", async () => {
+  it("shows the option's own verdict but not who it left out -- the lineup already marks them benched", async () => {
     const scope = await mount(game());
 
     expect(scope.textContent).toContain("0.87");
     expect(scope.textContent).toContain("12.3");
-    expect(scope.textContent).toContain("Egor");
+    expect(scope.textContent).not.toContain("Egor");
+  });
+
+  it("shows the mix engine's own verdict, not just the tournament solver's", async () => {
+    // What `mix_balancer` reports for a mix: its four-term total as the quality
+    // score and the per-line rank gap, neither of which the tournament solver
+    // produces. Off-role sits at the pool's structural floor here, so it reads
+    // as unavoidable rather than as something the host should go fix.
+    const scored = variant(0);
+    scored.statistics = {
+      mix_balancer_quality_total: 41.5,
+      mix_balancer_role_fairness: 118.7,
+      mmr_std_dev: 12.34,
+      max_total_rating_gap: 150,
+      off_role_count: 1,
+      off_role_above_minimum: 0,
+      sub_role_collision_count: 2,
+      feasibility: { structural_min_off_role: 1 },
+    } as unknown as typeof scored.statistics;
+    const scope = await mount(game({ balance_result: { variants: [scored] } }));
+
+    expect(scope.textContent).toContain("QUALITY 41.50");
+    expect(scope.textContent).toContain("LINES 119");
+    expect(scope.textContent).toContain("SPREAD 150");
+    expect(scope.textContent).toContain("OFF-ROLE 1 (floor)");
+    expect(scope.textContent).toContain("SUBROLE 2");
+  });
+
+  it("drops the scored pills for an option the host hand-edited", async () => {
+    // `_recompute_variant_stats` nulls every solver-scored key after a seat
+    // swap, because they describe the seating the solver chose. Showing the old
+    // numbers next to a changed roster would be the one thing worse than
+    // showing none.
+    const swapped = variant(0);
+    swapped.statistics = {
+      composite_score: null,
+      mix_balancer_quality_total: null,
+      mix_balancer_role_fairness: null,
+      mmr_std_dev: 12.34,
+      off_role_count: 1,
+    } as unknown as typeof swapped.statistics;
+    const scope = await mount(game({ balance_result: { variants: [swapped] } }));
+
+    expect(scope.textContent).not.toContain("QUALITY");
+    expect(scope.textContent).not.toContain("LINES");
+    expect(scope.textContent).toContain("STDDEV 12.3");
+    expect(scope.textContent).toContain("OFF-ROLE 1");
   });
 
   it("captures the verdict pills with the teams block, not the action buttons beside it", async () => {
@@ -387,7 +440,6 @@ describe("PickupTeamsPanel", () => {
   it("records a result only on a deliberate click, without closing the mix", async () => {
     const scope = await mount(game());
 
-    expect(scope.textContent).toContain("Record who won");
     expect(onRecordOutcome).not.toHaveBeenCalled();
 
     await click(byName(scope, "Draw"));
@@ -464,12 +516,12 @@ describe("PickupTeamsPanel", () => {
     expect(onCloseMix).toHaveBeenCalledTimes(1);
   });
 
-  it("never persists a pressed state -- a completed mix's buttons are plain read-only controls", async () => {
+  it("offers no result controls to a viewer or on a closed mix -- the history is the record", async () => {
     const scope = await mount(game({ status: "completed" }), { canWrite: false });
 
-    expect(byName(scope, "Team 1 win")?.hasAttribute("aria-pressed")).toBe(false);
-    expect(byName(scope, "Draw")?.hasAttribute("disabled")).toBe(true);
-    expect(scope.textContent).not.toContain("Recorded. Log another match");
+    expect(byName(scope, "Team 1 win")).toBeNull();
+    expect(byName(scope, "Draw")).toBeNull();
+    expect(byName(scope, "Close mix")).toBeNull();
   });
 
   it("shows the configured points-per-win on the win buttons, never on Draw", async () => {
@@ -585,6 +637,15 @@ describe("PickupTeamsPanel", () => {
     expect(scope.querySelectorAll('button[aria-label="Edit team name"]')).toHaveLength(0);
   });
 
+  it("withholds the rename pencils while the card is being captured", async () => {
+    captureSpies.capturing = true;
+    const scope = await mount(game());
+
+    expect(scope.querySelectorAll('button[aria-label="Edit team name"]')).toHaveLength(0);
+    // The names themselves stay in the picture.
+    expect(scope.querySelector('[data-testid="teams-capture"]')?.textContent).toContain("Team 1");
+  });
+
   it("shows a host's saved team name instead of the computed default", async () => {
     const scope = await mount(game({ settings: { ...SETTINGS, team_names: { "0": "Wolves" } } }));
 
@@ -630,6 +691,17 @@ describe("PickupTeamsPanel", () => {
     const scope = await mount(game());
 
     expect(byName(scope, "Post to Discord")).toBeNull();
+  });
+
+  it("posts on the workspace channel alone, without a per-mix override", async () => {
+    // The workspace-wide channel is the default a host gets; only an admin can
+    // override it per mix, so the button must not wait for one.
+    const scope = await mount(
+      game({ settings: { ...SETTINGS, workspace_discord_channel_id: "999" } }),
+    );
+
+    await click(byName(scope, "Post to Discord"));
+    expect(onPostToDiscord).toHaveBeenCalledWith(0, LINEUP_PNG);
   });
 
   it("posts the option on screen, rasterised, to the mix's configured channel", async () => {

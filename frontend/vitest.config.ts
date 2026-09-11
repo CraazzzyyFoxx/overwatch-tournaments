@@ -81,11 +81,14 @@ export default defineConfig({
       "src/app/balancer/tool-context.test.ts",
       "src/app/balancer/redirect-map.test.ts",
       "src/app/balancer/BalancerLayoutClient.behavior.test.tsx",
-      // Both extensions: the pickup lineup rules are `.ts` and the panel's
+      // Both extensions: the mix lineup rules are `.ts` and the panel's
       // render contract is `.tsx`, and a single `.test.ts` entry would silently
       // skip the second one.
-      "src/app/balancer/pickup/**/*.test.ts",
-      "src/app/balancer/pickup/**/*.test.tsx",
+      "src/app/balancer/mix/**/*.test.ts",
+      "src/app/balancer/mix/**/*.test.tsx",
+      // Which route prefixes bounce a signed-out visitor to the sign-in modal:
+      // mix boards are public and must not.
+      "src/config/auth.test.ts",
       "src/app/**/users/compare/**/*.test.ts",
       "src/app/(site)/tournaments/[slug]/_views/_components/participantsColumns.test.tsx",
       // Same allow-list trap: this folder also holds `bun:test` files, so the

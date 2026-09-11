@@ -25,7 +25,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useQueryParams } from "@/hooks/useQueryParams";
 import { notify } from "@/lib/notify";
-import { paginateResults, sortArray } from "@/lib/paginate-results";
 import { cn } from "@/lib/utils";
 import adminService from "@/services/admin.service";
 import teamService from "@/services/team.service";
@@ -346,19 +345,14 @@ export default function TeamsPage() {
               sortDir
             ]}
             queryFn={async (page, search, pageSize, sortField, sortDir) => {
-              const data = await teamService.getAll({ tournamentId: selectedTournamentId });
-              const matching = search
-                ? data.results.filter((team) =>
-                    team.name.toLowerCase().includes(search.toLowerCase())
-                  )
-                : data.results;
-              const result = paginateResults(
-                sortArray(matching, sortField, sortDir),
+              const result = await teamService.getAll({
+                tournamentId: selectedTournamentId,
                 page,
-                pageSize
-              );
-              // The inspector pages through the rows currently on screen, and
-              // the table owns the fetch, so this is where that page is seen.
+                perPage: pageSize,
+                search: search || undefined,
+                sort: sortField ?? "avg_sr",
+                order: sortField ? sortDir : "asc"
+              });
               setPageRows(result.results);
               return result;
             }}

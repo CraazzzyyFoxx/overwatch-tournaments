@@ -528,14 +528,11 @@
       }
     },
     "admin": {
-      "title": "Registered teams",
-      "includeTerminal": "Show rejected and disbanded",
       "reject": "Reject team",
       "rejectConfirm": "Reject {team}?",
       "rejectWithdraw": "Also withdraw the members' registrations",
       "rejectWithdrawHint": "Leave this on unless the team is only being rejected for being incomplete — members should return to the solo pool rather than hold a registration they cannot use.",
       "rejectSuccess": "Team rejected.",
-      "export": "Add teams to the tournament",
       "exportSuccess": "{count, plural, =1 {# team} other {# teams}} added.",
       "exportSkipped": "Skipped: {names}",
       "exportNothing": "No complete teams to add.",
@@ -556,7 +553,6 @@
       "admission": "Admission",
       "admissionSuccess": "Admission updated.",
       "place": "Place player",
-      "placeRegistrationId": "Registration id",
       "placeSuccess": "Player placed.",
       "rejectReason": "Reason for rejection",
       "rejectReasonRequired": "Give a reason: the team captain will read it.",
@@ -569,19 +565,11 @@
       "search": "Search by name or captain",
       "filterStatus": "State",
       "filters": {
-        "all": "All",
         "forming": "Forming",
         "complete": "Roster complete",
         "exported": "In tournament",
         "terminal": "Rejected and disbanded"
       },
-      "noResults": "No teams found",
-      "clearFilters": "Clear filters",
-      "selectTeam": "Select team {team}",
-      "selectedCount": "Teams selected: {count}",
-      "inspect": "Open",
-      "inspectTeam": "Open team {team}",
-      "captainSummary": "Captain: {name}",
       "rosterSummary": "Starters: {starters} of {required} · substitutes: {bench} of {maxBench}",
       "problemCount": "Admission problems: {count}",
       "exportSelected": "Add selected teams",
@@ -598,9 +586,16 @@
       "loadFailed": "Unable to load the teams.",
       "actionFailed": "Unable to complete the action. Try again.",
       "retry": "Retry",
-      "entryView": "What to show",
-      "teamsView": "Teams",
-      "playersView": "Players"
+      "columns": {
+        "team": "Team",
+        "state": "State",
+        "admission": "Admission",
+        "captain": "Captain",
+        "roster": "Roster",
+        "shortfall": "Still needed"
+      },
+      "placePlayerPick": "Pick a player",
+      "placeHint": "Only a player registered for this tournament and on no team can be placed."
     },
     "errors": {
       "request_failed": "Unable to complete the action. Try again.",
@@ -5735,6 +5730,86 @@
         "title": "Retire these notifications?",
         "description": "They stop appearing in recipients' inboxes and stop counting toward their badge. The records and the read marks stay, so who saw them remains answerable — but this cannot be undone from here."
       }
+    }
+  },
+  "mixes": {
+    "title": "Mixes",
+    "description": "Open lineups and follow your community's results.",
+    "createAction": "Create mix",
+    "chooseWorkspace": "Choose a community",
+    "workspaceHint": "Select a community to see its mixes.",
+    "browseCommunities": "Browse communities",
+    "loading": "Loading mixes...",
+    "retry": "Retry",
+    "list": {
+      "filters": "Mix status",
+      "open": "Open",
+      "history": "History",
+      "label": "Mixes",
+      "host": "Hosted by {name}",
+      "matches": "{count, plural, one {# match} other {# matches}}",
+      "lastMatch": "Last match: {date}",
+      "created": "Created {date}",
+      "noMatches": "No matches yet",
+      "status": {
+        "draft": "Preparing",
+        "balanced": "Teams ready",
+        "completed": "Completed",
+        "cancelled": "Cancelled"
+      },
+      "errorTitle": "Unable to load mixes",
+      "errorDescription": "Check your connection and try again.",
+      "emptyTitle": "No mixes yet",
+      "emptyHost": "Create a mix, then add players from the community pool.",
+      "emptyViewer": "A host has not created a mix in this community yet.",
+      "noOpenTitle": "No open mixes",
+      "noOpenDescription": "All previous mixes have ended. Open the history to see their results.",
+      "showHistory": "Show history",
+      "noHistoryTitle": "No past mixes yet",
+      "noHistoryDescription": "Completed and cancelled mixes will appear here.",
+      "showOpen": "Show open mixes"
+    },
+    "create": {
+      "title": "Create mix",
+      "description": "Start with an empty lineup or copy a previous mix.",
+      "name": "Name",
+      "namePlaceholder": "Evening mix",
+      "nameRequired": "Enter a name for the mix.",
+      "lineup": "Starting lineup",
+      "empty": "No players",
+      "previous": "From a previous mix",
+      "source": "Previous mix",
+      "search": "Search mixes...",
+      "noResults": "No mixes match your search.",
+      "emptyHint": "Add players from the community pool after creating the mix.",
+      "copyHint": "Copies the lineup and settings. All players return to the pool; match history is not copied.",
+      "cancel": "Cancel",
+      "submit": "Create mix",
+      "pending": "Creating mix...",
+      "error": "Unable to create the mix. Your entries have been kept. Review the details and try again.",
+      "sourceRequired": "Choose a previous mix."
+    },
+    "leaderboard": {
+      "title": "Leaders by wins",
+      "period": "Results period",
+      "periods": {
+        "all": "All time",
+        "30d": "Last 30 days",
+        "7d": "Last 7 days"
+      },
+      "rules": "Top {limit} · at least {minGames} matches in this period",
+      "ranking": "Ranked by wins, then win rate, then matches played.",
+      "player": "Player",
+      "wins": "Wins",
+      "winRate": "Win rate",
+      "winStreak": "{count, plural, one {# consecutive win} other {# consecutive wins}}",
+      "lossStreak": "{count, plural, one {# consecutive loss} other {# consecutive losses}}",
+      "errorTitle": "Unable to load the leaderboard",
+      "errorDescription": "Check your connection and try again.",
+      "emptyTitle": "No qualifying players in this period",
+      "emptyDescription": "Players appear after {minGames} recorded matches in the selected period.",
+      "allTime": "Show all time",
+      "loading": "Loading player results..."
     }
   }
 }

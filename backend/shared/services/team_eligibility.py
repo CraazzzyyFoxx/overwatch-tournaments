@@ -1,10 +1,10 @@
 """I/O for team eligibility — ranks, identity keys, Discord membership.
 
 The pure rules live in ``shared.domain.team_eligibility``. This module gathers
-the facts those rules need. Discord membership reuses the same
-``GET /guilds/{guild}/members/{user}`` hop the subscription Discord resolver
-already makes; there is no second API. No token means fail-closed
-(``unreachable``), matching the flag's "must be in the guild" reading.
+the facts those rules need. Discord membership goes through ``DiscordClient``
+(discord-service first, REST fallback), the same door the subscription resolver
+uses. No bot and no token means fail-closed (``unreachable``), matching the
+flag's "must be in the guild" reading.
 """
 
 from __future__ import annotations
@@ -12,7 +12,6 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Any
 
-import httpx
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -27,18 +26,13 @@ from shared.domain.team_eligibility import (
     evaluate_rank_rules,
     evaluate_unique_identity,
 )
+from shared.services.discord_client import DiscordClient
 from shared.services.roster import registration_load_options, roster_engine
-from shared.services.subscriptions.providers.discord_role import (
-    DiscordForbidden,
-    DiscordNotConfigured,
-    DiscordUnavailable,
-    MemberNotFound,
-)
+from shared.services.subscriptions.providers.discord_role import DiscordError, MemberNotFound
 
 __all__ = ("evaluate_team_eligibility",)
 
 _SLOT_RELEASING = frozenset({"withdrawn", "rejected"})
-_DISCORD_API = "https://discord.com/api/v10"
 
 
 def _slot_role(slot_code: str | None, shape: Any) -> str | None:
@@ -139,27 +133,14 @@ async def _discord_signals(
     discord_ids: dict[int, list[str]],
     *,
     guild_id: str | None,
-    bot_token: str | None,
+    discord: DiscordClient,
 ) -> dict[int, str | None]:
-    if not (guild_id or "").strip():
+    guild_id = (guild_id or "").strip()
+    if not guild_id:
         return {r.id: None for r in members}
 
-    async def probe(snowflake: str) -> str:
-        if not bot_token:
-            raise DiscordNotConfigured("discord bot token is not configured")
-        headers = {"Authorization": f"Bot {bot_token}"}
-        try:
-            async with httpx.AsyncClient(timeout=5.0, headers=headers) as client:
-                response = await client.get(f"{_DISCORD_API}/guilds/{guild_id}/members/{snowflake}")
-        except httpx.HTTPError as exc:
-            raise DiscordUnavailable(str(exc)) from exc
-        if response.status_code == 404:
-            raise MemberNotFound("member not found")
-        if response.status_code in (401, 403):
-            raise DiscordForbidden(f"status {response.status_code}")
-        if response.status_code != 200:
-            raise DiscordUnavailable(f"status {response.status_code}")
-        return "member"
+    # One batch to discord-service; the per-member reads below hit its memo.
+    await discord.prefetch(guild_id, [snowflake for ids in discord_ids.values() for snowflake in ids])
 
     signals: dict[int, str | None] = {}
     for registration in members:
@@ -167,27 +148,18 @@ async def _discord_signals(
         if not ids:
             signals[registration.id] = "not_linked"
             continue
-        if not bot_token:
-            signals[registration.id] = "unreachable"
-            continue
-        found = False
-        unreachable = False
+        signal = "not_member"
         for snowflake in ids:
             try:
-                await probe(snowflake)
-                found = True
-                break
+                await discord.member_roles(guild_id, snowflake)
             except MemberNotFound:
                 continue
-            except (DiscordNotConfigured, DiscordForbidden, DiscordUnavailable):
-                unreachable = True
+            except DiscordError:
+                signal = "unreachable"
                 break
-        if found:
-            signals[registration.id] = "member"
-        elif unreachable:
-            signals[registration.id] = "unreachable"
-        else:
-            signals[registration.id] = "not_member"
+            signal = "member"
+            break
+        signals[registration.id] = signal
     return signals
 
 
@@ -199,7 +171,7 @@ async def evaluate_team_eligibility(
     form: models.BalancerRegistrationForm | None,
     shape: Any,
     workspace: models.Workspace | None,
-    bot_token: str | None,
+    discord: DiscordClient,
 ) -> list[EligibilityIssue]:
     """All configured team rules for this roster. Empty when every rule is off."""
     if form is None:
@@ -235,7 +207,7 @@ async def evaluate_team_eligibility(
 
     if form.team_require_discord_guild:
         guild_id = getattr(workspace, "discord_guild_id", None) if workspace is not None else None
-        signals = await _discord_signals(list(members), discord_ids, guild_id=guild_id, bot_token=bot_token)
+        signals = await _discord_signals(list(members), discord_ids, guild_id=guild_id, discord=discord)
         issues.extend(evaluate_discord_guild(signals, guild_id=guild_id, require=True))
 
     return issues

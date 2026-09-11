@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from src.schemas.base import BaseRead
 
@@ -44,12 +44,36 @@ class WorkspaceBalancerConfigUpsert(BaseModel):
         description="Absolute rank-point delta above which a player is flagged. Null disables the feature.",
     )
     rank_delta_hide_from_pool: bool = False
+    mix_discord_channel_id: str | None = Field(
+        default=None,
+        description=(
+            "Workspace-wide Discord channel every mix posts its matchup to. "
+            "A mix may name its own channel instead, but only a workspace admin can."
+        ),
+    )
+
+    @field_validator("mix_discord_channel_id")
+    @classmethod
+    def _snowflake(cls, value: str | None) -> str | None:
+        """Digits or ``None``: a snowflake outgrows a JavaScript safe integer,
+        so it travels as a string -- same contract as the per-mix
+        ``CustomGameDiscordChannelPatch.channel_id``. Empty means "no channel".
+        """
+        if value is None:
+            return None
+        trimmed = value.strip()
+        if trimmed == "":
+            return None
+        if not trimmed.isdigit() or len(trimmed) > 20:
+            raise ValueError("mix_discord_channel_id must be a Discord id (1-20 digits)")
+        return trimmed
 
 
 class WorkspaceBalancerConfigRead(BaseRead):
     workspace_id: int
     rank_delta_threshold: int | None
     rank_delta_hide_from_pool: bool
+    mix_discord_channel_id: str | None = None
     updated_by: int | None = None
 
 

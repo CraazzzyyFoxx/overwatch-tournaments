@@ -4,9 +4,9 @@
 // What is pinned here:
 //  1. the `user.read` gate — the page refuses instead of rendering an empty
 //     table, and it never asks the API for identities it may not see;
-//  2. chips live in the URL and actually narrow the list: `has-account` is a
-//     fact the identity endpoint does not carry (it comes from RBAC), which is
-//     why this table is client-mode at all;
+//  2. chips live in the URL and are forwarded as query params on the paged
+//     list (`has_account` / `unlinked` / `tournament_id`) — the table is
+//     server-mode, so narrowing is the server's job;
 //  3. `?id=` opens the inspector, is written by a row click, and survives a
 //     reload as a deep link;
 //  4. one action end to end: create identity → POST.
@@ -29,7 +29,6 @@ const createUser = vi.fn();
 const deleteUser = vi.fn();
 const listUsersAll = vi.fn();
 const getTournaments = vi.fn();
-const getTeams = vi.fn();
 
 let permitted = true;
 
@@ -70,9 +69,6 @@ vi.mock("@/services/rbac.service", () => ({
 }));
 vi.mock("@/services/tournament.service", () => ({
   default: { getAll: (...args: unknown[]) => getTournaments(...args) }
-}));
-vi.mock("@/services/team.service", () => ({
-  default: { getAll: (...args: unknown[]) => getTeams(...args) }
 }));
 vi.mock("@/lib/notify", () => ({
   notify: { success: vi.fn(), error: vi.fn(), apiError: vi.fn() }
@@ -228,11 +224,16 @@ function bodyRows(container: HTMLElement) {
 beforeEach(() => {
   permitted = true;
   replace.mockClear();
-  getUsers.mockReset().mockResolvedValue({
-    results: PEOPLE,
-    total: PEOPLE.length,
-    page: 1,
-    per_page: -1
+  getUsers.mockReset().mockImplementation((params: Record<string, unknown> = {}) => {
+    let results = PEOPLE;
+    if (params.has_account) results = PEOPLE.filter((person) => person.id === 11);
+    if (params.unlinked) results = PEOPLE.filter((person) => person.social_accounts.length === 0);
+    return Promise.resolve({
+      results,
+      total: results.length,
+      page: (params.page as number) ?? 1,
+      per_page: (params.per_page as number) ?? 20
+    });
   });
   createUser.mockReset().mockResolvedValue({ id: 13, name: "New#1", social_accounts: [] });
   deleteUser.mockReset().mockResolvedValue(undefined);
@@ -240,7 +241,6 @@ beforeEach(() => {
   getTournaments
     .mockReset()
     .mockResolvedValue({ results: [{ id: 7, name: "MoonRise Mix Vol.4" }], total: 1, page: 1, per_page: -1 });
-  getTeams.mockReset().mockResolvedValue({ results: [], total: 0, page: 1, per_page: -1 });
   window.history.replaceState(null, "", "/admin/people");
 });
 
@@ -270,6 +270,10 @@ describe("People", () => {
     expect(bodyRows(container)).toHaveLength(2);
     expect(container.textContent).toContain("No identities linked");
     expect(container.textContent).toContain("Not linked");
+    expect(getUsers).toHaveBeenCalledWith(
+      expect.objectContaining({ page: 1, per_page: 20 })
+    );
+    expect(getUsers.mock.calls.some((call) => call[0]?.per_page === -1)).toBe(false);
   });
 
   it("writes the has-account chip to the URL and narrows the list by it", async () => {
@@ -283,6 +287,7 @@ describe("People", () => {
     await waitFor(() => bodyRows(container).length === 1, "the narrowed list");
     expect(container.textContent).toContain("nnniik#2515");
     expect(container.textContent).not.toContain("Karnage#22778");
+    expect(getUsers).toHaveBeenCalledWith(expect.objectContaining({ has_account: true }));
   });
 
   it("restores a chip from the URL on load", async () => {
@@ -293,6 +298,7 @@ describe("People", () => {
     // social account survives it.
     await waitFor(() => bodyRows(container).length === 1, "the narrowed list");
     expect(container.textContent).toContain("Karnage#22778");
+    expect(getUsers).toHaveBeenCalledWith(expect.objectContaining({ unlinked: true }));
   });
 
   it("opens the inspector for the clicked row and writes ?id=", async () => {

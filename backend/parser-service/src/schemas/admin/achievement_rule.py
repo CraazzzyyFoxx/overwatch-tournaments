@@ -175,11 +175,12 @@ class AchievementLibraryImportRequest(BaseModel):
     slugs: list[str] = Field(default_factory=list, min_length=1)
 
 
-class AchievementRuleListQueryParams(
-    pagination.PaginationSortQueryParams[typing.Literal["id", "name", "slug", "category", "created_at"]]
-):
+_RULE_SORT = typing.Literal["id", "name", "slug", "category", "enabled", "scope", "grain", "rule_version", "created_at"]
+
+
+class AchievementRuleListQueryParams(pagination.PaginationSortQueryParams[_RULE_SORT]):
     per_page: int = Field(default=50, ge=-1, le=500)
-    sort: typing.Literal["id", "name", "slug", "category", "created_at"] = "id"
+    sort: _RULE_SORT = "category"
     search: str | None = None
     category: str | None = None
     enabled: bool | None = None

@@ -3704,7 +3704,7 @@
       "summary": "Get tournament summary"
     },
     "rpc.balancer.admin.workspace_config_get": {
-      "description": "Returns the workspace-level balancer config (rank-delta threshold and pool-hide flag) for members with workspace read permission.",
+      "description": "Returns the workspace-level balancer config (rank-delta threshold, pool-hide flag and the Discord channel every mix posts its matchup to) for members with workspace read permission.",
       "response": {
         "array": false,
         "ref": "balancer.WorkspaceBalancerConfigRead"
@@ -3712,7 +3712,7 @@
       "summary": "Get workspace balancer config"
     },
     "rpc.balancer.admin.workspace_config_upsert": {
-      "description": "Creates or updates the workspace-level rank-delta threshold and hide-from-pool settings, requiring workspace update permission.",
+      "description": "Creates or updates the workspace-level rank-delta threshold, hide-from-pool flag and the workspace-wide Discord channel for mix matchups, requiring workspace update permission.",
       "request": {
         "array": false,
         "ref": "balancer.WorkspaceBalancerConfigUpsert"
@@ -3756,7 +3756,7 @@
       "summary": "Create custom game"
     },
     "rpc.balancer.custom.get": {
-      "description": "Returns one pickup mix with its full lineup: each seat's participation state, role order, the ranks the balancer would use and which layer each came from. Open to any workspace member; 404 when the mix belongs to another workspace.",
+      "description": "Returns one mix with its full lineup: each seat's participation state, role order, the ranks the balancer would use and which layer each came from. Public, no authentication required; 404 when the mix belongs to another workspace.",
       "summary": "Get custom game"
     },
     "rpc.balancer.custom.hard_delete": {
@@ -3764,15 +3764,15 @@
       "summary": "Delete custom game"
     },
     "rpc.balancer.custom.list": {
-      "description": "Returns every pickup mix in the workspace with its settings and host display name, but without rosters; open to any workspace member.",
+      "description": "Returns every mix in the workspace with its settings and host display name, but without rosters; public, no authentication required.",
       "summary": "List custom games"
     },
     "rpc.balancer.custom.match_history": {
-      "description": "Returns every match recorded for the mix, newest first, with team names, scores, winner and map. Open to any workspace member.",
+      "description": "Returns every match recorded for the mix, newest first, with team names, scores, winner and map. Public, no authentication required.",
       "summary": "List custom game matches"
     },
     "rpc.balancer.custom.post_discord": {
-      "description": "Queues an embed of one balance option's teams, the next map and the points at stake to the mix's configured channel and returns immediately -- delivery is the bot's, and nothing about the mix changes. Host or co-host only; 409 when no channel is configured and 404 when the balance option is missing.",
+      "description": "Queues an embed of one balance option's teams, the next map and the points at stake to the mix's own channel, or the workspace-wide mix channel when it has none, and returns immediately -- delivery is the bot's, and nothing about the mix changes. Host or co-host only; 409 when neither channel is configured and 404 when the balance option is missing.",
       "request": {
         "array": false,
         "ref": "balancer.CustomGamePostDiscord"
@@ -3792,7 +3792,7 @@
       "summary": "Remove custom game co-host"
     },
     "rpc.balancer.custom.rotation": {
-      "description": "Recommends who is owed the next seat and who should sit out, computed from this mix's own match history. Read-only and open to any workspace member.",
+      "description": "Recommends who is owed the next seat and who should sit out, computed from this mix's own match history. Read-only and public, no authentication required.",
       "summary": "Get custom game rotation hints"
     },
     "rpc.balancer.custom.set_balancer_config": {
@@ -3804,7 +3804,7 @@
       "summary": "Set custom game balancer config"
     },
     "rpc.balancer.custom.set_discord_channel": {
-      "description": "Names the Discord channel the mix posts its matchup to, as a digits-only snowflake string, or clears it with null. Host or co-host only; the id is not verified against Discord here, an unreachable channel surfaces when the bot tries to deliver.",
+      "description": "Overrides the workspace-wide mix channel for this one mix, as a digits-only snowflake string, or clears the override with null so the workspace channel applies again. Workspace admin only -- an ordinary host cannot redirect the workspace's Discord. The id is not verified against Discord here, an unreachable channel surfaces when the bot tries to deliver.",
       "request": {
         "array": false,
         "ref": "balancer.CustomGameDiscordChannelPatch"
@@ -3852,7 +3852,7 @@
       "summary": "Set custom game team names"
     },
     "rpc.balancer.custom.stats": {
-      "description": "Per-member wins/losses/draws, win rate, current streak and the per-role split across every mix this workspace has run, best record first. The optional since query parameter (ISO 8601) narrows it to matches recorded on or after that moment; without it the whole history counts. Read-only and open to any workspace member.",
+      "description": "Per-member wins/losses/draws, win rate, current streak and the per-role split across every mix this workspace has run, best record first. The optional since query parameter (ISO 8601) narrows it to matches recorded on or after that moment; without it the whole history counts. Read-only and public, no authentication required.",
       "summary": "Get custom game statistics"
     },
     "rpc.balancer.custom.swap_seats": {
@@ -5396,26 +5396,129 @@
       "summary": "List library workspaces"
     },
     "rpc.parser.ach.list": {
-      "description": "Lists a workspace's achievement rules filtered by category and enabled flag; requires workspace achievement.read.",
+      "description": "Pages a workspace's achievement rules with search, category, and enabled filters; requires workspace achievement.read.",
       "query_params": [
+        {
+          "name": "page",
+          "required": false,
+          "schema": {
+            "default": 1,
+            "minimum": 1,
+            "title": "Page",
+            "type": "integer"
+          }
+        },
+        {
+          "name": "per_page",
+          "required": false,
+          "schema": {
+            "default": 50,
+            "maximum": 500,
+            "minimum": -1,
+            "title": "Per Page",
+            "type": "integer"
+          }
+        },
+        {
+          "name": "entities",
+          "required": false,
+          "schema": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Entities",
+            "type": "array"
+          }
+        },
+        {
+          "name": "only_count",
+          "required": false,
+          "schema": {
+            "default": false,
+            "title": "Only Count",
+            "type": "boolean"
+          }
+        },
+        {
+          "name": "sort",
+          "required": false,
+          "schema": {
+            "default": "category",
+            "enum": [
+              "id",
+              "name",
+              "slug",
+              "category",
+              "enabled",
+              "scope",
+              "grain",
+              "rule_version",
+              "created_at"
+            ],
+            "title": "Sort",
+            "type": "string"
+          }
+        },
+        {
+          "name": "order",
+          "required": false,
+          "schema": {
+            "$ref": "#/components/schemas/parser.SortOrder",
+            "default": "asc"
+          }
+        },
+        {
+          "name": "search",
+          "required": false,
+          "schema": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Search"
+          }
+        },
         {
           "name": "category",
           "required": false,
           "schema": {
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Category"
           }
         },
         {
           "name": "enabled",
           "required": false,
           "schema": {
-            "type": "boolean"
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Enabled"
           }
         }
       ],
       "response": {
-        "array": true,
-        "ref": "parser.AchievementRuleRead"
+        "array": false,
+        "ref": "parser.Paginated_AchievementRuleRead_"
       },
       "summary": "List achievement rules"
     },
@@ -8037,6 +8140,22 @@
             ],
             "default": null,
             "title": "Tournament Id"
+          }
+        },
+        {
+          "name": "search",
+          "required": false,
+          "schema": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Search"
           }
         }
       ],
@@ -19890,6 +20009,39 @@
           "description": "Penalty weight for the rating gap between strongest and weakest team",
           "title": "Max Team Gap Weight"
         },
+        "mix_comfort_tilt": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Mix-only trade-off between rank balance (0) and role comfort (1); 0.5 is the mix engine's own default weighting.",
+          "title": "Mix Comfort Tilt"
+        },
+        "mix_role_weights": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "maximum": 100.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Mix-only per-role importance for role-line balance, keyed by roster slot code. Omitted roles weigh 1.0.",
+          "title": "Mix Role Weights"
+        },
         "mutation_rate": {
           "anyOf": [
             {
@@ -22712,6 +22864,18 @@
           "title": "Id",
           "type": "integer"
         },
+        "mix_discord_channel_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Mix Discord Channel Id"
+        },
         "rank_delta_hide_from_pool": {
           "title": "Rank Delta Hide From Pool",
           "type": "boolean"
@@ -22755,6 +22919,19 @@
     },
     "balancer.WorkspaceBalancerConfigUpsert": {
       "properties": {
+        "mix_discord_channel_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Workspace-wide Discord channel every mix posts its matchup to. A mix may name its own channel instead, but only a workspace admin can.",
+          "title": "Mix Discord Channel Id"
+        },
         "rank_delta_hide_from_pool": {
           "default": false,
           "title": "Rank Delta Hide From Pool",
@@ -25759,6 +25936,93 @@
       "title": "AchievementRuleCreate",
       "type": "object"
     },
+    "parser.AchievementRuleListQueryParams": {
+      "properties": {
+        "category": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Category"
+        },
+        "enabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Enabled"
+        },
+        "entities": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Entities",
+          "type": "array"
+        },
+        "only_count": {
+          "default": false,
+          "title": "Only Count",
+          "type": "boolean"
+        },
+        "order": {
+          "$ref": "#/components/schemas/parser.SortOrder",
+          "default": "asc"
+        },
+        "page": {
+          "default": 1,
+          "minimum": 1,
+          "title": "Page",
+          "type": "integer"
+        },
+        "per_page": {
+          "default": 50,
+          "maximum": 500,
+          "minimum": -1,
+          "title": "Per Page",
+          "type": "integer"
+        },
+        "search": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Search"
+        },
+        "sort": {
+          "default": "category",
+          "enum": [
+            "id",
+            "name",
+            "slug",
+            "category",
+            "enabled",
+            "scope",
+            "grain",
+            "rule_version",
+            "created_at"
+          ],
+          "title": "Sort",
+          "type": "string"
+        }
+      },
+      "title": "AchievementRuleListQueryParams",
+      "type": "object"
+    },
     "parser.AchievementRuleRead": {
       "properties": {
         "category": {
@@ -27088,6 +27352,37 @@
       "title": "OverrideRead",
       "type": "object"
     },
+    "parser.Paginated_AchievementRuleRead_": {
+      "properties": {
+        "page": {
+          "title": "Page",
+          "type": "integer"
+        },
+        "per_page": {
+          "title": "Per Page",
+          "type": "integer"
+        },
+        "results": {
+          "items": {
+            "$ref": "#/components/schemas/parser.AchievementRuleRead"
+          },
+          "title": "Results",
+          "type": "array"
+        },
+        "total": {
+          "title": "Total",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "page",
+        "per_page",
+        "total",
+        "results"
+      ],
+      "title": "Paginated[AchievementRuleRead]",
+      "type": "object"
+    },
     "parser.QueueDepth": {
       "properties": {
         "consumers": {
@@ -27552,6 +27847,14 @@
       ],
       "title": "SettingUpsert",
       "type": "object"
+    },
+    "parser.SortOrder": {
+      "enum": [
+        "asc",
+        "desc"
+      ],
+      "title": "SortOrder",
+      "type": "string"
     },
     "parser.SubscriptionCheckLogRead": {
       "properties": {
@@ -42428,6 +42731,18 @@
           "minimum": -1,
           "title": "Per Page",
           "type": "integer"
+        },
+        "search": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Search"
         },
         "sort": {
           "default": "id",

@@ -482,15 +482,14 @@
 }
 
 /* filter chips */
+/* A layout row, not a surface: callers that want a card draw their own border,
+   padding and background (see MapsFilters / MatchesFilterBar). A background
+   here painted a stray full-width band behind every bare chip row. */
 .aqt-filters {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   align-items: center;
-  background: var(--aqt-card);
-  /* border: 1px solid var(--aqt-border); */
-  /* border-radius: 12px; */
-  /* padding: 10px; */
 }
 .aqt-filter-chip:focus-visible {
   outline: 2px solid var(--aqt-teal);

@@ -197,6 +197,18 @@ def _locate_seat(teams: Sequence[Mapping[str, Any]], uuid: str) -> tuple[int, st
     return None
 
 
+# Statistics a solver scored for the seating *it* produced. A hand-edited
+# roster invalidates all of them at once, so they are cleared together.
+_SOLVER_SCORED_STAT_KEYS = (
+    "composite_score",
+    "mix_balancer_fairness",
+    "mix_balancer_uniformity",
+    "mix_balancer_role_fairness",
+    "mix_balancer_role_points",
+    "mix_balancer_quality_total",
+)
+
+
 def _recompute_variant_stats(variant: dict[str, Any]) -> None:
     """Re-derive the read-only verdict from a manually edited roster.
 
@@ -209,7 +221,12 @@ def _recompute_variant_stats(variant: dict[str, Any]) -> None:
     ``composite_score`` is deliberately NOT one of these: it is a knee-score
     normalised against the whole Pareto archive the solver searched for that
     run, meaningless for a single hand-edited arrangement with no archive to
-    normalise against -- so it is cleared rather than faked.
+    normalise against -- so it is cleared rather than faked. The
+    ``mix_balancer_*`` block goes the same way and for the same reason: those
+    four terms and their total describe the seating the engine chose, and a
+    hand-moved player invalidates every one of them (the role-priority term
+    and the per-role balance most of all). Stale is worse than absent -- the
+    frontend hides a metric it does not get.
     """
     teams = variant.get("teams")
     if not isinstance(teams, list):
@@ -238,12 +255,16 @@ def _recompute_variant_stats(variant: dict[str, Any]) -> None:
                         off_role_count += 1
         total = sum(ratings)
         team["average_mmr"] = (total / len(ratings)) if ratings else None
+        # Recomputed for the same reason as the average: the stored value is the
+        # solver's, and ``max_total_rating_gap`` below is derived from this sum.
+        team["total_rating"] = total
         team_totals.append(total)
         if ratings:
             team_means.append(total / len(ratings))
 
     statistics = dict(variant.get("statistics") or {})
-    statistics["composite_score"] = None
+    for stale_key in _SOLVER_SCORED_STAT_KEYS:
+        statistics[stale_key] = None
     if len(team_means) >= 2:
         mean = sum(team_means) / len(team_means)
         variance = sum((value - mean) ** 2 for value in team_means) / (len(team_means) - 1)
@@ -837,6 +858,27 @@ class CustomGameService:
         await session.flush()
         return game
 
+    async def workspace_discord_channel_id(self, session: AsyncSession, workspace_id: int) -> int | None:
+        """The workspace-wide mix channel: where a mix posts unless it names its own.
+
+        Kept in the workspace balancer config blob
+        (``balancer.workspace_config.config_json``) next to the other
+        workspace-scoped mix knobs, as digits in a string -- JSON has one
+        number type and a snowflake does not survive a float64 round-trip.
+        """
+        raw = await session.scalar(
+            sa.select(models.WorkspaceBalancerConfig.config_json).where(
+                models.WorkspaceBalancerConfig.workspace_id == workspace_id
+            )
+        )
+        value = raw.get("mix_discord_channel_id") if isinstance(raw, dict) else None
+        try:
+            return int(value) if value else None
+        except (TypeError, ValueError):
+            # A hand-edited config blob is not worth a 500 on every mix read;
+            # the workspace simply has no default until an admin re-saves it.
+            return None
+
     async def set_discord_channel(
         self,
         session: AsyncSession,
@@ -846,7 +888,11 @@ class CustomGameService:
         channel_id: int | None,
         actor_user_id: int,
     ) -> models.CustomGame:
-        """Name the Discord channel this mix posts its matchup to, ``None`` to clear it.
+        """Override the workspace channel for this one mix, ``None`` to fall back.
+
+        Admin-only at the RPC gate (``_set_discord_channel``): the channel a
+        mix shouts into is the workspace's Discord, not the host's, so an
+        ordinary host posts to whatever the workspace named.
 
         Unlike :meth:`set_next_map` there is nothing to validate the id
         against: a channel lives in Discord, not in any table here. A wrong id
@@ -882,7 +928,10 @@ class CustomGameService:
         game = await self._writable(
             session, workspace_id=workspace_id, custom_game_id=custom_game_id, actor_user_id=actor_user_id
         )
-        if game.discord_channel_id is None:
+        # The mix's own channel when an admin named one, the workspace default
+        # otherwise -- posting is the host's job either way.
+        channel_id = game.discord_channel_id or await self.workspace_discord_channel_id(session, workspace_id)
+        if channel_id is None:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Discord channel not configured")
         result = game.balance_result_json if isinstance(game.balance_result_json, dict) else None
         variants = result.get("variants") if isinstance(result, dict) else None
@@ -915,7 +964,7 @@ class CustomGameService:
             next_map=next_map,
             points_per_win=game.points_per_win,
         )
-        return game.discord_channel_id, embed
+        return channel_id, embed
 
     async def set_balancer_config(
         self,

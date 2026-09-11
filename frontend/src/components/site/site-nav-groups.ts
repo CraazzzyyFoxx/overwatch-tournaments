@@ -50,11 +50,11 @@ export const NAV_GROUPS: readonly NavGroup[] = [
       // encounters/matches rather than under tournaments: a scrim belongs to no
       // tournament, and this is where a captain already looks for "a series".
       { key: "scrims", href: "/scrims" },
-      // Pickup lobbies balanced from a workspace roster. Viewing one is open to
-      // anyone -- only hosting (create/update/delete) needs the `custom_game`
-      // grant, gated inside the mix pages/RPCs themselves, so the entry carries
-      // no access flag here.
-      { key: "mixes", href: "/balancer/pickup" }
+      // Mix lobbies balanced from a workspace roster. Viewing one is public
+      // (signed out included) -- only hosting (create/update/delete) needs the
+      // `custom_game` grant, gated inside the mix pages/RPCs themselves, so
+      // the entry carries no access flag here.
+      { key: "mixes", href: "/balancer/mix" }
     ]
   },
   {

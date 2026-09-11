@@ -1036,7 +1036,7 @@ asserting an unlinked substitute (`is_substitution: true`,
    revoke, kick, transfer, disband, leave), `MyTeamSection` (the entry point, self-
    contained so the tab hosts it in one line), the public Teams tab on its own
    section id `registration-teams`, the participants team column, the §12.5 line on
-   the registration card, and the admin `RegistrationTeamsCard`.
+   the registration card, and the admin `RegistrationTeamsBrowser`.
 
    **Four real problems surfaced by building it:**
 

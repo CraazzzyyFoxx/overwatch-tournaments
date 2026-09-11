@@ -174,6 +174,7 @@ describe("teamNamesByIndex", () => {
         role_mask: null,
         balancer_config: null,
         discord_channel_id: null,
+        workspace_discord_channel_id: null,
       }),
     ).toEqual({ 0: "Wolves", 2: "Bears" });
   });
@@ -316,10 +317,15 @@ describe("parseVariants", () => {
           },
         ],
         statistics: {
+          mix_balancer_quality_total: 41.5,
+          mix_balancer_role_fairness: 120.4,
           composite_score: 0.87,
           mmr_std_dev: 12.34,
           max_total_rating_gap: 150,
           off_role_count: 1,
+          off_role_above_minimum: 0,
+          sub_role_collision_count: 2,
+          feasibility: { structural_min_off_role: 1 },
         },
         benched_players: [{ uuid: "10", name: "Egor" }],
       },
@@ -365,13 +371,45 @@ describe("parseVariants", () => {
   it("carries the stats and the benched names the pager shows", () => {
     const [first] = parseVariants(payload);
     expect(first.stats).toEqual({
-      compositeScore: 0.87,
+      qualityScore: 41.5,
       mmrStdDev: 12.34,
       ratingGap: 150,
+      lineGap: 120.4,
       offRoleCount: 1,
+      offRoleAboveMinimum: 0,
+      offRoleFloor: 1,
+      subRoleCollisions: 2,
       benchedCount: 1,
     });
     expect(first.benched).toEqual(["Egor"]);
+  });
+
+  it("falls back to the tournament solver's score when the mix engine did not run", () => {
+    // The Linux-only mix engine is missing in some images, and `run_mix_balance`
+    // then falls back to `tournament_balancer`, which scores with
+    // `composite_score` instead. One pill, whichever engine ran.
+    const [variant] = parseVariants({
+      teams: [{ roster: { tank: [{ uuid: "7", name: "karin" }] } }],
+      statistics: { composite_score: 0.87 },
+    });
+    expect(variant.stats.qualityScore).toBe(0.87);
+  });
+
+  it("reports no score for a hand-edited option the solver no longer owns", () => {
+    // `_recompute_variant_stats` nulls every solver-scored key after a seat
+    // swap; a null must read as absent, never as a genuine 0.
+    const [variant] = parseVariants({
+      teams: [{ roster: { tank: [{ uuid: "7", name: "karin" }] } }],
+      statistics: {
+        composite_score: null,
+        mix_balancer_quality_total: null,
+        mix_balancer_role_fairness: null,
+        off_role_count: 2,
+      },
+    });
+    expect(variant.stats.qualityScore).toBeNull();
+    expect(variant.stats.lineGap).toBeNull();
+    expect(variant.stats.offRoleCount).toBe(2);
   });
 
   it("reads a payload stored without a variants wrapper", () => {

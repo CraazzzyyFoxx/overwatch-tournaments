@@ -222,17 +222,18 @@ export default function AchievementsPage() {
     queryFn: () => tournamentService.getAll(null),
   });
 
-  const { data: allRules } = useQuery({
-    queryKey: cacheKey,
-    queryFn: () => adminService.getAchievementRules(workspaceId!),
-    enabled: !!workspaceId,
-  });
-
   const { data: overrides, refetch: refetchOverrides } = useQuery({
     queryKey: ["admin", "overrides", workspaceId],
     queryFn: () => adminService.getAchievementOverrides(workspaceId!),
     enabled: !!workspaceId,
   });
+
+  const { data: allRulesPage } = useQuery({
+    queryKey: [...cacheKey, "catalog"],
+    queryFn: () => adminService.getAchievementRules(workspaceId!, { per_page: -1 }),
+    enabled: !!workspaceId && (evaluateDialogOpen || overrideDialogOpen || Boolean(overrides?.length)),
+  });
+  const allRules = allRulesPage?.results;
 
   const { data: libraryWorkspaces } = useQuery({
     queryKey: ["admin", "achievement-library-workspaces", workspaceId],
@@ -538,6 +539,7 @@ export default function AchievementsPage() {
       id: "conditions_count",
       header: "Conditions",
       size: 90,
+      enableSorting: false,
       accessorFn: (row) => countLeafConditions(row.condition_tree),
       cell: ({ getValue }) => <span className="tabular-nums">{getValue<number>()}</span>,
     },
@@ -811,37 +813,15 @@ export default function AchievementsPage() {
       {/* Achievements table */}
       <AdminDataTable
         queryKey={(page, search, pageSize, sf, sd) => [...cacheKey, page, search, pageSize, sf, sd]}
-        queryFn={async (page, search, pageSize, sortField, sortDir) => {
-          const rules = await adminService.getAchievementRules(workspaceId!);
-          const filtered = search
-            ? rules.filter(
-                (r) =>
-                  r.slug.toLowerCase().includes(search.toLowerCase()) ||
-                  r.name.toLowerCase().includes(search.toLowerCase()),
-              )
-            : rules;
-          const sorted = sortField
-            ? [...filtered].sort((a, b) => {
-                const va = sortField === "conditions_count"
-                  ? countLeafConditions(a.condition_tree)
-                  : (a as unknown as Record<string, unknown>)[sortField];
-                const vb = sortField === "conditions_count"
-                  ? countLeafConditions(b.condition_tree)
-                  : (b as unknown as Record<string, unknown>)[sortField];
-                const cmp = typeof va === "number" && typeof vb === "number"
-                  ? va - vb
-                  : String(va ?? "").localeCompare(String(vb ?? ""));
-                return sortDir === "desc" ? -cmp : cmp;
-              })
-            : filtered;
-          const start = (page - 1) * pageSize;
-          return {
+        queryFn={async (page, search, pageSize, sortField, sortDir) =>
+          adminService.getAchievementRules(workspaceId!, {
             page,
             per_page: pageSize,
-            total: sorted.length,
-            results: sorted.slice(start, start + pageSize),
-          };
-        }}
+            search: search || undefined,
+            sort: sortField ?? undefined,
+            order: sortDir,
+          })
+        }
         columns={columns}
         searchPlaceholder="Search achievements…"
         emptyMessage="No achievements found. Use “Seed defaults” to create the standard set, or “Create achievement” to start from scratch."

@@ -11,11 +11,13 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { EYEBROW_CLASS } from "@/components/admin/tone";
+import { DiscordChannelSelect } from "@/components/discord/DiscordChannelSelect";
 import { useDiscordGuildInfo } from "@/hooks/useDiscordEntities";
 import { ApiError, getApiErrorMessage } from "@/lib/api-error";
 import { notify } from "@/lib/notify";
 import { cn } from "@/lib/utils";
 import workspaceService from "@/services/workspace.service";
+import balancerAdminService from "@/services/balancer-admin.service";
 import type { DiscordGuildInfo } from "@/types/discord.types";
 import type { ManageableDiscordGuild, Workspace } from "@/types/workspace.types";
 import { WorkspaceSettingsFrame } from "./WorkspaceSettingsFrame";
@@ -105,6 +107,77 @@ function boundIcon(
 ): string | null | undefined {
   if (info?.icon_url) return info.icon_url;
   return picker.find((guild) => guild.guild_id === workspace.discord_guild_id)?.icon_url;
+}
+
+/**
+ * Where every mix in this workspace announces its matchup.
+ *
+ * The value lives with the rest of the workspace's balancer knobs
+ * (`balancer.workspace_config.config_json`), and the upsert rewrites that whole
+ * blob -- so the rank-delta knobs are read back and posted along untouched.
+ * Same query key as the balancer page's dialog, so both views agree after a save.
+ */
+function MixChannelCard({ workspaceId }: Readonly<{ workspaceId: number }>) {
+  const queryClient = useQueryClient();
+  const configQuery = useQuery({
+    queryKey: ["workspace-balancer-config", workspaceId],
+    queryFn: () => balancerAdminService.getWorkspaceBalancerConfig(workspaceId)
+  });
+  const config = configQuery.data;
+  // The picker speaks in strings and has no null: "" is its no-channel value.
+  const channel = config?.mix_discord_channel_id ?? "";
+
+  const save = useMutation({
+    mutationFn: (next: string) =>
+      balancerAdminService.upsertWorkspaceBalancerConfig(workspaceId, {
+        rank_delta_threshold: config?.rank_delta_threshold ?? null,
+        rank_delta_hide_from_pool: config?.rank_delta_hide_from_pool ?? false,
+        mix_discord_channel_id: next === "" ? null : next
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["workspace-balancer-config", workspaceId] });
+      notify.success("Mix channel saved");
+    },
+    onError: (cause) => notify.apiError(cause, { title: "Could not save the mix channel" })
+  });
+
+  return (
+    <Card>
+      <CardContent className="flex flex-col gap-4 pt-6">
+        <h2 className={EYEBROW_CLASS}>Mix announcements</h2>
+
+        <div className="flex items-center gap-2">
+          <div className="min-w-0 flex-1">
+            <DiscordChannelSelect
+              workspaceId={workspaceId}
+              value={channel}
+              onChange={(next) => save.mutate(next)}
+              disabled={configQuery.isLoading || save.isPending}
+              ariaLabel="Mix Discord channel"
+              placeholder="No channel"
+            />
+          </div>
+          {channel ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={save.isPending}
+              onClick={() => save.mutate("")}
+            >
+              Clear
+            </Button>
+          ) : null}
+        </div>
+
+        <p className="max-w-prose text-xs text-muted-foreground text-pretty">
+          Every mix in this workspace posts its matchup here. A single mix can be pointed
+          elsewhere from its own settings, but only by a workspace admin -- hosts read the channel,
+          they cannot repoint it.
+        </p>
+      </CardContent>
+    </Card>
+  );
 }
 
 /**
@@ -250,6 +323,10 @@ export function DiscordSection({ workspaceId }: Readonly<{ workspaceId: number |
                 </p>
               </CardContent>
             </Card>
+
+            {/* Channels come from the linked guild, so there is nothing to pick
+                until one is bound. */}
+            {boundId ? <MixChannelCard workspaceId={workspace.id} /> : null}
 
             <Card>
               <CardContent className="flex flex-col gap-4 pt-6">

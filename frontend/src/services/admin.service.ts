@@ -703,10 +703,19 @@ class AdminService {
       search?: string;
       sort?: string;
       order?: string;
+      tournament_id?: number;
+      has_account?: boolean;
+      unlinked?: boolean;
     } = {}
   ): Promise<PaginatedResponse<User>> {
+    const { tournament_id, has_account, unlinked, ...list } = params;
     const response = await apiFetch("/api/v1/admin/users", {
-      query: buildAdminListQuery(params)
+      query: {
+        ...buildAdminListQuery(list),
+        ...(tournament_id != null && { tournament_id }),
+        ...(has_account ? { has_account: true } : {}),
+        ...(unlinked ? { unlinked: true } : {})
+      }
     });
     return response.json();
   }
@@ -1077,10 +1086,23 @@ class AdminService {
 
   async getAchievementRules(
     workspaceId: number,
-    params: { category?: string; enabled?: boolean } = {}
-  ): Promise<AchievementRule[]> {
+    params: {
+      page?: number;
+      per_page?: number;
+      search?: string;
+      sort?: string;
+      order?: string;
+      category?: string;
+      enabled?: boolean;
+    } = {}
+  ): Promise<PaginatedResponse<AchievementRule>> {
+    const { category, enabled, ...list } = params;
     const response = await apiFetch(`/api/v1/admin/ws/${workspaceId}/achievements/rules`, {
-      query: params
+      query: {
+        ...buildAdminListQuery(list),
+        ...(category != null && { category }),
+        ...(enabled != null && { enabled })
+      }
     });
     return response.json();
   }

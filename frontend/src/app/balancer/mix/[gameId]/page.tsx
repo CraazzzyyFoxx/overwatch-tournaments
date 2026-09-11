@@ -4,19 +4,19 @@ import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
-import { PickupAddPlayersDialog } from "@/app/balancer/pickup/PickupAddPlayersDialog";
-import { PickupLobbyPanel } from "@/app/balancer/pickup/PickupLobbyPanel";
-import { PickupMixConfigDialog } from "@/app/balancer/pickup/PickupMixConfigDialog";
-import { PickupAccessDialog } from "@/app/balancer/pickup/PickupAccessDialog";
-import { PickupMixHeader } from "@/app/balancer/pickup/PickupMixHeader";
-import { PickupPlayerSheet } from "@/app/balancer/pickup/PickupPlayerSheet";
-import { PickupTeamsPanel } from "@/app/balancer/pickup/PickupTeamsPanel";
+import { PickupAddPlayersDialog } from "@/app/balancer/mix/PickupAddPlayersDialog";
+import { PickupLobbyPanel } from "@/app/balancer/mix/PickupLobbyPanel";
+import { PickupMixConfigDialog } from "@/app/balancer/mix/PickupMixConfigDialog";
+import { PickupAccessDialog } from "@/app/balancer/mix/PickupAccessDialog";
+import { PickupMixHeader } from "@/app/balancer/mix/PickupMixHeader";
+import { PickupPlayerSheet } from "@/app/balancer/mix/PickupPlayerSheet";
+import { PickupTeamsPanel } from "@/app/balancer/mix/PickupTeamsPanel";
 import {
   PICKUP_TERMINAL_STATUSES,
   playerLabel,
   summarizeLineup,
-} from "@/app/balancer/pickup/pickup-lineup";
-import { usePickupMix } from "@/app/balancer/pickup/usePickupMix";
+} from "@/app/balancer/mix/pickup-lineup";
+import { usePickupMix } from "@/app/balancer/mix/usePickupMix";
 import { usePermissions } from "@/hooks/usePermissions";
 import { notify } from "@/lib/notify";
 import { customGameKeys, customGameService } from "@/services/custom-game.service";
@@ -36,7 +36,7 @@ import { useWorkspaceStore } from "@/stores/workspace.store";
  *
  * Which mix this is comes from the route, not from state this screen owns —
  * switching to another one, or starting a new one, happens on the list at
- * `/balancer/pickup`. This screen only ever reads and edits the one the host
+ * `/balancer/mix`. This screen only ever reads and edits the one the host
  * already picked.
  *
  * The open balance option is page state, not panel state: the fullscreen board
@@ -55,9 +55,11 @@ export default function BalancerPickupMixPage() {
   // The mix-hosting grant, not a tournament permission: a workspace member can
   // run a pickup game without holding admin rights over teams.
   const canEdit = workspaceId != null && canAccessPermission("custom_game.create", workspaceId);
-  // Irreversible, so it needs more than the host-or-co-host grant every other
-  // write here checks -- see `_hard_delete` in balancer-service's `rpc/custom.py`.
-  const canDeleteMix = workspaceId != null && (isSuperuser || isWorkspaceAdmin(workspaceId));
+  // Workspace admin, the gate for the two writes host-or-co-host does not
+  // cover: hard-deleting a mix (irreversible -- see `_hard_delete` in
+  // balancer-service's `rpc/custom.py`) and repointing its Discord channel
+  // (the workspace's server, not the host's).
+  const isAdminHere = workspaceId != null && (isSuperuser || isWorkspaceAdmin(workspaceId));
 
   const [openPlayerId, setOpenPlayerId] = useState<number | null>(null);
   const [isPoolOpen, setIsPoolOpen] = useState(false);
@@ -99,6 +101,7 @@ export default function BalancerPickupMixPage() {
     setAuthorRanks,
     setTeamNames,
     setRoleMask,
+    setBalancerConfig,
     setPointsPerWin,
     setDiscordChannel,
     postToDiscord,
@@ -211,11 +214,11 @@ export default function BalancerPickupMixPage() {
               onOpenPool={() => setIsPoolOpen(true)}
               onOpenSettings={() => setIsSettingsOpen(true)}
               onOpenAccess={() => setIsAccessOpen(true)}
-              canDelete={canDeleteMix}
+              canDelete={isAdminHere}
               deleting={hardDeleteMix.isPending}
               onDeleteMix={() =>
                 hardDeleteMix.mutate(undefined, {
-                  onSuccess: () => router.push("/balancer/pickup"),
+                  onSuccess: () => router.push("/balancer/mix"),
                 })
               }
             />
@@ -272,14 +275,32 @@ export default function BalancerPickupMixPage() {
         game={game}
         workspaceId={workspaceId}
         canWrite={canWrite}
-        saving={setRoleMask.isPending || setPointsPerWin.isPending || setDiscordChannel.isPending}
+        canSetChannel={isAdminHere}
+        saving={
+          setRoleMask.isPending ||
+          setPointsPerWin.isPending ||
+          setDiscordChannel.isPending ||
+          setBalancerConfig.isPending
+        }
         onSave={(input) => {
           setRoleMask.mutate(input.roleMask, { onSuccess: () => setIsSettingsOpen(false) });
           if (input.pointsPerWin !== (game?.settings.points_per_win ?? null)) {
             setPointsPerWin.mutate(input.pointsPerWin);
           }
-          if (input.discordChannelId !== (game?.settings.discord_channel_id ?? null)) {
+          if (
+            input.discordChannelId !== undefined &&
+            input.discordChannelId !== (game?.settings.discord_channel_id ?? null)
+          ) {
             setDiscordChannel.mutate(input.discordChannelId);
+          }
+          // Compared as stored: the dialog merges onto the mix's own blob, so
+          // an untouched slider serialises to exactly what is already saved and
+          // costs no request.
+          if (
+            JSON.stringify(input.balancerConfig) !==
+            JSON.stringify(game?.settings.balancer_config ?? null)
+          ) {
+            setBalancerConfig.mutate(input.balancerConfig);
           }
         }}
       />

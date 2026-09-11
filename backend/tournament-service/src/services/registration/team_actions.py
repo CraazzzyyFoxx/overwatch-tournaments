@@ -17,8 +17,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from shared import models
 from shared.domain.team_roster import RosterMember
 from shared.domain.team_subscription import SUBSCRIPTION_SCOPE_TEAM, team_subscription_is_current
+from shared.services.discord_client import DiscordClient
 from shared.services.notifications import notify
 from shared.services.realtime import Resource, Scope, emit
+from src.core.broker import optional_broker
 from src.core.config import settings
 from src.services.registration.subscription_codes import redeem_challenge_code
 from src.services.registration.team_eligibility import evaluate_team_eligibility
@@ -128,7 +130,7 @@ def install_team_actions(cls: type) -> None:
             form=form,
             shape=shape,
             workspace=workspace,
-            bot_token=settings.discord_token,
+            discord=DiscordClient(broker=optional_broker(), bot_token=settings.discord_token, proxy=settings.proxy_url),
         )
         blocking = [issue for issue in issues if issue.blocking]
         if not blocking:

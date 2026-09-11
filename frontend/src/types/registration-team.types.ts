@@ -88,6 +88,16 @@ export interface RegistrationTeamListResponse {
   unassigned_players: number;
 }
 
+/** What the organizer's export reports back: teams materialized into
+ *  `tournament.team`, the rows it replaced, the players it created, and every
+ *  roster it refused with the code saying why. */
+export interface RegistrationTeamExportResult {
+  removed_teams: number;
+  imported_teams: number;
+  created_players: number;
+  skipped: { team_id: number; name: string; code: string }[];
+}
+
 /** The raw invite token rides back exactly once, alongside the created invite. */
 export interface RegistrationTeamInviteCreated extends RegistrationTeamInvite {
   token: string | null;

@@ -12,12 +12,13 @@ for candidate in (str(REPO_BACKEND_ROOT), str(BALANCER_SERVICE_ROOT)):
         sys.path.insert(0, candidate)
 
 from shared.core.errors import BaseAPIException as HTTPException  # noqa: E402
-from src.rpc.custom import _require_mix  # noqa: E402
+from src.rpc.custom import _require_mix, _require_workspace_admin  # noqa: E402
 
 
-def _user(is_member: bool = True) -> MagicMock:
+def _user(is_member: bool = True, is_admin: bool = False) -> MagicMock:
     user = MagicMock()
     user.is_workspace_member.return_value = is_member
+    user.is_workspace_admin.return_value = is_admin
     return user
 
 
@@ -66,3 +67,18 @@ class RequireMixTests(TestCase):
         with self.assertRaises(HTTPException) as ctx:
             _require_mix({}, _user(False), 1, "update")
         self.assertEqual(ctx.exception.status_code, 403)
+
+
+class RequireWorkspaceAdminTests(TestCase):
+    """``set_discord_channel`` and ``hard_delete`` need more than host-or-co-host:
+    one destroys rows, the other points the workspace's Discord somewhere else.
+    """
+
+    def test_admin_passes(self) -> None:
+        _require_workspace_admin(_user(is_admin=True), 1)
+
+    def test_plain_host_is_rejected(self) -> None:
+        with self.assertRaises(HTTPException) as ctx:
+            _require_workspace_admin(_user(is_admin=False), 1)
+        self.assertEqual(ctx.exception.status_code, 403)
+        self.assertEqual(ctx.exception.detail, "Workspace admin required")

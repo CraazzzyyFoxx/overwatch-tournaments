@@ -54,4 +54,20 @@ describe("teamService.getAll", () => {
       },
     ]);
   });
+
+  it("forwards a page and search to the API", async () => {
+    await teamService.getAll({
+      tournamentId: 72,
+      page: 2,
+      perPage: 15,
+      search: "wombat",
+    });
+
+    expect(calls[0]?.options?.query).toMatchObject({
+      page: 2,
+      per_page: 15,
+      search: "wombat",
+      tournament_id: 72,
+    });
+  });
 });

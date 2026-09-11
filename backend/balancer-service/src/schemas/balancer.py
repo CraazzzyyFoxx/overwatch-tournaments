@@ -1,4 +1,4 @@
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -178,6 +178,21 @@ class ConfigOverrides(BaseModel):
         ge=1,
         le=200,
         description="Maximum number of result variants to return for the selected solver",
+    )
+    mix_comfort_tilt: float | None = Field(
+        None,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "Mix-only trade-off between rank balance (0) and role comfort (1); "
+            "0.5 is the mix engine's own default weighting."
+        ),
+    )
+    mix_role_weights: dict[str, Annotated[float, Field(ge=0.0, le=100.0)]] | None = Field(
+        None,
+        description=(
+            "Mix-only per-role importance for role-line balance, keyed by roster slot code. Omitted roles weigh 1.0."
+        ),
     )
 
 

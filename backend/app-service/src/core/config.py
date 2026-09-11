@@ -17,6 +17,9 @@ class Settings(BaseServiceSettings):
     # defaulted to `guest:guest`, which silently shipped insecure credentials
     # if the env var was missing in any environment.
     rabbitmq_url: str
+    # Same bot token discord-service runs on: the Discord pickers ask that
+    # service first and only reach Discord's REST API themselves when it is down.
+    discord_token: str | None = None
 
     # Cache TTLs
     # ``users_cache_ttl`` covers the *tournament-derived* /users/* read caches

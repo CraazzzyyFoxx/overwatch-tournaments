@@ -8,7 +8,7 @@
 //  2. a viewer who cannot host gets no Add players;
 //  3. Add players is inert until a mix has actually loaded.
 //
-// Switching mixes and creating one moved to the list at `/balancer/pickup` --
+// Switching mixes and creating one moved to the list at `/balancer/mix` --
 // those contracts live in `PickupMixList.behavior.test.tsx` now.
 import { act } from "react";
 import { createRoot } from "react-dom/client";

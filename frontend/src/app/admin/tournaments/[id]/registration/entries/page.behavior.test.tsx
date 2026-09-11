@@ -1,14 +1,17 @@
 // @vitest-environment happy-dom
 //
 // Registration › Entries (F4). What is pinned here:
-//  1. the four sections are one sub-tab bar, and the active one carries
+//  1. the sections are one sub-tab bar, and the active one carries
 //     `aria-current="page"` — they used to be reachable only from a dropdown
 //     buried in the table's toolbar;
-//  2. the tab's `team.read` gate hides the body, not just the link;
-//  3. a chip writes the URL and a reload restores it — filter state that lives
+//  2. `teams` is offered only on a tournament that forms its teams by
+//     registration — it used to be a Radix `Tabs` switcher inside this page,
+//     which is neither the admin's one tab implementation nor linkable;
+//  3. the tab's `team.read` gate hides the body, not just the link;
+//  4. a chip writes the URL and a reload restores it — filter state that lives
 //     in component state cannot be linked, which is why chips replaced the
 //     header funnels;
-//  4. clicking a row opens the inspector through `?id=`, not a dialog.
+//  5. clicking a row opens the inspector through `?id=`, not a dialog.
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { NextIntlClientProvider } from "next-intl";
 import { act, forwardRef, useEffect, useState, type ReactNode } from "react";
@@ -29,6 +32,7 @@ let currentSearch = "";
 let currentPath = "/admin/tournaments/80/registration/entries";
 let rerender: (() => void) | null = null;
 let canTeamRead = true;
+let teamFormation = "balancer";
 
 const replace = vi.fn((url: string) => {
   const parsed = new URL(url, "http://localhost");
@@ -70,12 +74,12 @@ const listRegistrations = vi.fn();
 
 vi.mock("@/services/admin.service", () => ({
   default: {
-    getTournament: vi.fn().mockResolvedValue({
+    getTournament: vi.fn(async () => ({
       id: 80,
       workspace_id: 1,
       name: "Anak Cup",
-      team_formation: "balancer"
-    })
+      team_formation: teamFormation
+    }))
   }
 }));
 vi.mock("@/services/balancer-admin.service", () => ({
@@ -249,6 +253,7 @@ function commandItem(label: string) {
 
 beforeEach(() => {
   canTeamRead = true;
+  teamFormation = "balancer";
   rerender = null;
   replace.mockClear();
   listRegistrations.mockReset().mockResolvedValue(POOL);
@@ -274,11 +279,12 @@ afterEach(async () => {
 });
 
 describe("Registration entries", () => {
-  it("gives the four sections one sub-tab bar and marks the active one", async () => {
+  it("gives the sections one sub-tab bar and marks the active one", async () => {
     const scope = await mount();
     const nav = scope.querySelector("nav[aria-label='Registration sections']");
     const links = [...(nav?.querySelectorAll("a") ?? [])];
 
+    // No `teams`: this tournament balances, so registered teams do not exist.
     expect(links.map((link) => link.getAttribute("href"))).toEqual([
       "/admin/tournaments/80/registration/entries",
       "/admin/tournaments/80/registration/form",
@@ -288,6 +294,29 @@ describe("Registration entries", () => {
     expect(
       links.filter((link) => link.getAttribute("aria-current") === "page").map((l) => l.textContent)
     ).toEqual(["Entries"]);
+  });
+
+  it("offers the teams section only when captains form the teams", async () => {
+    teamFormation = "registration";
+
+    const scope = await mount();
+    const links = [
+      ...(scope.querySelector("nav[aria-label='Registration sections']")?.querySelectorAll("a") ??
+        [])
+    ];
+
+    // A linkable section beside its siblings, not a Radix `Tabs` pair inside
+    // the entries table whose state no URL could carry.
+    expect(links.map((link) => link.getAttribute("href"))).toContain(
+      "/admin/tournaments/80/registration/teams"
+    );
+    expect(links.map((link) => link.textContent)).toEqual([
+      "Entries",
+      "Teams",
+      "Form",
+      "Sheets feed",
+      "Rank autofill"
+    ]);
   });
 
   it("hides the section body without team.read", async () => {

@@ -1,14 +1,26 @@
 // @vitest-environment happy-dom
+//
+// Registered teams (organizer side). What is pinned here:
+//  1. the shortfall is rendered from `open_slots` through the shared role
+//     labels, never from the server's English `shortfall` string;
+//  2. it is a T2 browser: rows in a table, chips that write the URL, one kebab
+//     per row, and the detail in the inspector at `?id=`;
+//  3. only a roster the server would materialize can be selected for export,
+//     and the teams are named back before it runs;
+//  4. a rejection cannot be sent without a reason its captain can read, and the
+//     consequence is opt-in;
+//  5. "Place player" takes a PLAYER (a free agent of this tournament) and sends
+//     their registration id — the field used to ask for that id directly.
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { NextIntlClientProvider } from "next-intl";
-import { act } from "react";
+import { act, useEffect, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import en from "@/i18n/messages/en.json";
 import { ApiError } from "@/lib/api-error";
 import type { RegistrationTeam } from "@/types/registration-team.types";
-import { RegistrationTeamsCard } from "./RegistrationTeamsCard";
+import { RegistrationTeamsBrowser } from "./RegistrationTeamsBrowser";
 
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean;
@@ -16,12 +28,34 @@ declare global {
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
+const TOURNAMENT_ID = 80;
+const WORKSPACE_ID = 3;
+const PATH = `/admin/tournaments/${TOURNAMENT_ID}/registration/teams`;
+
+let currentSearch = "";
+let rerender: (() => void) | null = null;
+
+const replace = vi.fn((url: string) => {
+  const query = url.includes("?") ? url.slice(url.indexOf("?")) : "";
+  currentSearch = query;
+  window.history.replaceState(null, "", `${PATH}${query}`);
+  rerender?.();
+});
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ replace, push: vi.fn(), prefetch: vi.fn() }),
+  usePathname: () => PATH,
+  useSearchParams: () => new URLSearchParams(currentSearch)
+}));
+
 const listAdmin = vi.fn();
 const reject = vi.fn();
 const exportRegistered = vi.fn();
 const revokeInviteAdmin = vi.fn();
 const resetInviteCap = vi.fn();
 const listInviteHistoryAdmin = vi.fn();
+const listFreeAgents = vi.fn();
+const placeMemberAdmin = vi.fn();
 const notifySuccess = vi.fn();
 const notifyInfo = vi.fn();
 const notifyError = vi.fn();
@@ -33,7 +67,13 @@ vi.mock("@/services/registration-team.service", () => ({
     exportRegistered: (...args: unknown[]) => exportRegistered(...args),
     revokeInviteAdmin: (...args: unknown[]) => revokeInviteAdmin(...args),
     resetInviteCap: (...args: unknown[]) => resetInviteCap(...args),
-    listInviteHistoryAdmin: (...args: unknown[]) => listInviteHistoryAdmin(...args)
+    listInviteHistoryAdmin: (...args: unknown[]) => listInviteHistoryAdmin(...args),
+    listFreeAgents: (...args: unknown[]) => listFreeAgents(...args),
+    placeMemberAdmin: (...args: unknown[]) => placeMemberAdmin(...args),
+    unlockRoster: vi.fn(),
+    renameAdmin: vi.fn(),
+    setAdmission: vi.fn(),
+    setNotes: vi.fn()
   }
 }));
 vi.mock("@/hooks/usePermissions", () => ({
@@ -46,9 +86,6 @@ vi.mock("@/lib/notify", () => ({
     error: (...args: unknown[]) => notifyError(...args)
   }
 }));
-
-const TOURNAMENT_ID = 80;
-const WORKSPACE_ID = 3;
 
 function team(overrides: Partial<RegistrationTeam> = {}): RegistrationTeam {
   return {
@@ -105,17 +142,33 @@ const COMPLETE_TEAM = team({
 // behavior suite: React 19 otherwise dereferences `window` after teardown).
 const mounted: { root: Root; container: HTMLElement }[] = [];
 
-async function settle() {
+function tick(ms = 0) {
+  return new Promise<void>((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+async function settle(ms = 0) {
   for (let turn = 0; turn < 5; turn += 1) {
     await act(async () => {
-      const { promise, resolve } = Promise.withResolvers<void>();
-      setTimeout(resolve, 0);
-      await promise;
+      await tick(ms);
     });
   }
 }
 
-async function mount() {
+function Harness() {
+  const [, force] = useState(0);
+  // Published from an effect, not during render: writing a module-scope binding
+  // while rendering is a side effect the react-compiler rules reject.
+  useEffect(() => {
+    rerender = () => force((value) => value + 1);
+  }, []);
+  return <RegistrationTeamsBrowser tournamentId={TOURNAMENT_ID} workspaceId={WORKSPACE_ID} />;
+}
+
+async function mount(search = "") {
+  currentSearch = search;
+  window.history.replaceState(null, "", `${PATH}${search}`);
   const container = document.createElement("div");
   document.body.appendChild(container);
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
@@ -125,7 +178,7 @@ async function mount() {
     root.render(
       <QueryClientProvider client={client}>
         <NextIntlClientProvider locale="en" messages={en} timeZone="UTC">
-          <RegistrationTeamsCard tournamentId={TOURNAMENT_ID} workspaceId={WORKSPACE_ID} />
+          <Harness />
         </NextIntlClientProvider>
       </QueryClientProvider>
     );
@@ -144,9 +197,15 @@ async function click(node: Element | null | undefined) {
   await settle();
 }
 
-/** The inspector's `⋯` menu, opened. Its items are portaled outside the card. */
-async function rowMenu(team: string): Promise<HTMLElement[]> {
-  await click(document.body.querySelector(`button[aria-label='Actions for ${team}']`));
+function row(scope: ParentNode, name: string): HTMLElement | undefined {
+  return [...scope.querySelectorAll<HTMLElement>("tbody tr")].find((node) =>
+    node.textContent?.includes(name)
+  );
+}
+
+/** The row's `⋯` menu, opened. Its items are portaled outside the table. */
+async function rowMenu(scope: ParentNode, name: string): Promise<HTMLElement[]> {
+  await click(scope.querySelector(`button[aria-label='Actions for ${name}']`));
   return [...document.body.querySelectorAll<HTMLElement>("[role='menuitem']")];
 }
 
@@ -159,10 +218,10 @@ function buttonWithText(scope: ParentNode, text: string): HTMLButtonElement | un
     HTMLButtonElement | undefined;
 }
 
-/** Row detail is a panel of its own now: every per-team action lives there, so
- *  a test that wants one opens the team first. */
-async function openTeam(scope: ParentNode, team: string) {
-  await click(scope.querySelector(`button[aria-label='Open team ${team}']`));
+function commandItem(label: string): Element | undefined {
+  return [...document.querySelectorAll('[cmdk-item=""]')].find((item) =>
+    item.textContent?.trim().startsWith(label)
+  );
 }
 
 /** Types into a controlled field the way React hears it. */
@@ -182,7 +241,23 @@ function confirmDialog(): HTMLElement | null {
   return document.body.querySelector("[role='alertdialog']");
 }
 
+function formDialog(): HTMLElement | null {
+  return document.body.querySelector("[role='dialog']");
+}
+
+async function submit(dialog: HTMLElement) {
+  const form = dialog.querySelector("form");
+  expect(form).toBeTruthy();
+  await act(async () => {
+    form?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+  });
+  await settle();
+}
+
 beforeEach(() => {
+  currentSearch = "";
+  rerender = null;
+  replace.mockClear();
   listAdmin.mockReset().mockResolvedValue({ items: [team(), COMPLETE_TEAM], total: 2 });
   reject.mockReset().mockResolvedValue(team({ status: "rejected" }));
   exportRegistered.mockReset().mockResolvedValue({
@@ -193,6 +268,15 @@ beforeEach(() => {
   });
   revokeInviteAdmin.mockReset().mockResolvedValue(undefined);
   resetInviteCap.mockReset().mockResolvedValue(undefined);
+  placeMemberAdmin.mockReset().mockResolvedValue(team());
+  // Only read once the place dialog opens.
+  listFreeAgents.mockReset().mockResolvedValue({
+    items: [
+      { registration_id: 41, battle_tag: "Ana#1111", roles: ["support"] },
+      { registration_id: 42, battle_tag: "Rein#2222", roles: ["tank"] }
+    ],
+    total: 2
+  });
   // The ledger is collapsed at mount, so this resolves only once a block is opened.
   listInviteHistoryAdmin
     .mockReset()
@@ -200,6 +284,17 @@ beforeEach(() => {
   notifySuccess.mockReset();
   notifyInfo.mockReset();
   notifyError.mockReset();
+  // The inspector is a side panel above `lg` and a sheet below it.
+  window.matchMedia = ((query: string) => ({
+    matches: true,
+    media: query,
+    onchange: null,
+    addEventListener: () => undefined,
+    removeEventListener: () => undefined,
+    addListener: () => undefined,
+    removeListener: () => undefined,
+    dispatchEvent: () => false
+  })) as unknown as typeof window.matchMedia;
 });
 
 afterEach(async () => {
@@ -209,51 +304,61 @@ afterEach(async () => {
       container.remove();
     }
   });
+  document.body.innerHTML = "";
+  document.body.style.pointerEvents = "";
 });
 
-describe("RegistrationTeamsCard", () => {
+describe("RegistrationTeamsBrowser", () => {
   it("summarizes every team the organizer has to judge", async () => {
     const scope = await mount();
 
-    // The reason the card exists: which roster is still short, and by what.
+    // The reason the screen exists: which roster is still short, and by what.
     // Rendered from `open_slots` through the shared role labels, NOT from the
     // server's English `shortfall` string.
     expect(scope.textContent).toContain("Still needed: 1× Damage, 2× Support");
     expect(scope.textContent).not.toContain("1x dps");
     expect(scope.textContent).toContain("Roster complete");
-    expect(scope.textContent).toContain("Captain: Nyx");
-    expect(scope.textContent).toContain("Starters: 1 of 4");
+    expect(row(scope, "Team Alpha")?.textContent).toContain("Nyx");
+    expect(row(scope, "Team Alpha")?.textContent).toContain("Starters: 1 of 4");
     // One read serves every filter below, so terminal teams are already here.
     expect(listAdmin).toHaveBeenCalledTimes(1);
     expect(listAdmin).toHaveBeenCalledWith(TOURNAMENT_ID, { includeTerminal: true });
   });
 
-  it("narrows the list by state and by name without a second request", async () => {
+  it("narrows the list from a chip that lives in the URL", async () => {
+    const rejected = team({ id: 3, name: "Team Gamma", status: "rejected" });
+    listAdmin.mockReset().mockResolvedValue({
+      items: [team(), COMPLETE_TEAM, rejected],
+      total: 3
+    });
+    const scope = await mount();
+
+    await click(scope.querySelector("button[aria-label='Add filter']"));
+    await click(commandItem("State"));
+    await click(commandItem("Rejected and disbanded"));
+
+    // A filter that lives in component state cannot be linked; this one is the URL.
+    expect(new URL(replace.mock.calls.at(-1)![0], "http://x").searchParams.get("state")).toBe(
+      "terminal"
+    );
+    expect(row(scope, "Team Gamma")).toBeTruthy();
+    expect(row(scope, "Team Alpha")).toBeUndefined();
+    expect(listAdmin).toHaveBeenCalledTimes(1);
+  });
+
+  it("narrows by name without a second request", async () => {
     listAdmin.mockReset().mockResolvedValue({
       items: [team(), COMPLETE_TEAM, team({ id: 3, name: "Team Gamma", status: "rejected" })],
       total: 3
     });
     const scope = await mount();
 
-    const filter = scope.querySelector("select") as HTMLSelectElement;
-    await act(async () => {
-      filter.value = "terminal";
-      filter.dispatchEvent(new Event("change", { bubbles: true }));
-    });
-    await settle();
+    await type(scope.querySelector("input[name='admin-table-search']") as HTMLInputElement, "beta");
+    // The table's search is debounced.
+    await settle(120);
 
-    expect(scope.textContent).toContain("Team Gamma");
-    expect(scope.textContent).not.toContain("Team Alpha");
-
-    await act(async () => {
-      filter.value = "all";
-      filter.dispatchEvent(new Event("change", { bubbles: true }));
-    });
-    await settle();
-    await type(scope.querySelector("input[type='search']") as HTMLInputElement, "beta");
-
-    expect(scope.textContent).toContain("Team Beta");
-    expect(scope.textContent).not.toContain("Team Gamma");
+    expect(row(scope, "Team Beta")).toBeTruthy();
+    expect(row(scope, "Team Gamma")).toBeUndefined();
     expect(listAdmin).toHaveBeenCalledTimes(1);
   });
 
@@ -288,9 +393,7 @@ describe("RegistrationTeamsCard", () => {
     // irreversible for teams the organizer had not looked at yet.
     const scope = await mount();
 
-    expect(buttonWithText(scope, "Add selected teams")?.disabled).toBe(true);
-
-    await click(scope.querySelector("[aria-label='Select team Team Beta']"));
+    await click(scope.querySelector(`[aria-label='Select row ${COMPLETE_TEAM.id}']`));
     await click(buttonWithText(scope, "Add selected teams"));
 
     const dialog = confirmDialog();
@@ -307,12 +410,10 @@ describe("RegistrationTeamsCard", () => {
     listAdmin.mockReset().mockResolvedValue({ items: [team()], total: 1 });
 
     const scope = await mount();
-    const checkbox = scope.querySelector("[aria-label='Select team Team Alpha']");
 
-    expect(checkbox?.getAttribute("data-disabled")).not.toBeNull();
-    await click(checkbox);
-
-    expect(buttonWithText(scope, "Add selected teams")?.disabled).toBe(true);
+    // No checkbox at all rather than a disabled one: the row is not a candidate.
+    expect(scope.querySelector("[aria-label='Select row 1']")).toBeNull();
+    expect(buttonWithText(scope, "Add selected teams")).toBeUndefined();
   });
 
   it("keeps the export result and every skipped team on screen after the toast", async () => {
@@ -324,7 +425,7 @@ describe("RegistrationTeamsCard", () => {
     });
 
     const scope = await mount();
-    await click(scope.querySelector("[aria-label='Select team Team Beta']"));
+    await click(scope.querySelector(`[aria-label='Select row ${COMPLETE_TEAM.id}']`));
     await click(buttonWithText(scope, "Add selected teams"));
     await click(buttonWithText(confirmDialog()!, "Add selected teams"));
 
@@ -336,9 +437,8 @@ describe("RegistrationTeamsCard", () => {
 
   it("refuses to reject a team without a reason its captain can read", async () => {
     const scope = await mount();
-    await openTeam(scope, "Team Alpha");
 
-    await click(menuItem(await rowMenu("Team Alpha"), "Reject team"));
+    await click(menuItem(await rowMenu(scope, "Team Alpha"), "Reject team"));
     const dialog = confirmDialog()!;
     await click(buttonWithText(dialog, "Reject, keep registrations"));
 
@@ -359,12 +459,11 @@ describe("RegistrationTeamsCard", () => {
 
   it("withdraws the players only when that consequence is chosen", async () => {
     const scope = await mount();
-    await openTeam(scope, "Team Alpha");
 
-    await click(menuItem(await rowMenu("Team Alpha"), "Reject team"));
+    await click(menuItem(await rowMenu(scope, "Team Alpha"), "Reject team"));
     const dialog = confirmDialog()!;
     await type(dialog.querySelector("textarea") as HTMLTextAreaElement, "Roster never filled");
-    await click(dialog.querySelectorAll("input[type='radio']")[1]);
+    await click(dialog.querySelectorAll("[role='radio']")[1]);
     await click(buttonWithText(dialog, "Reject and withdraw registrations"));
 
     expect(reject).toHaveBeenCalledWith(TOURNAMENT_ID, 1, {
@@ -381,8 +480,7 @@ describe("RegistrationTeamsCard", () => {
     );
 
     const scope = await mount();
-    await openTeam(scope, "Team Alpha");
-    await click(menuItem(await rowMenu("Team Alpha"), "Reject team"));
+    await click(menuItem(await rowMenu(scope, "Team Alpha"), "Reject team"));
     const dialog = confirmDialog()!;
     await type(dialog.querySelector("textarea") as HTMLTextAreaElement, "Duplicate roster");
     await click(buttonWithText(dialog, "Reject, keep registrations"));
@@ -395,10 +493,14 @@ describe("RegistrationTeamsCard", () => {
 
   it("shows the organizer the invites the public roster hides", async () => {
     const scope = await mount();
-    await openTeam(scope, "Team Alpha");
+    await click(row(scope, "Team Alpha"));
 
-    expect(document.body.textContent).toContain("Pending");
-    expect(document.body.textContent).toContain("Shareable link");
+    // Row detail is the inspector, and it is addressable.
+    expect(new URL(replace.mock.calls.at(-1)![0], "http://x").searchParams.get("id")).toBe("1");
+
+    const inspector = document.body.querySelector("aside[aria-label='Row inspector']");
+    expect(inspector?.textContent).toContain("Pending");
+    expect(inspector?.textContent).toContain("Shareable link");
 
     // The id in the path is the TOURNAMENT, not just the invite: an invite id is
     // global while the organizer's permission is not.
@@ -412,9 +514,8 @@ describe("RegistrationTeamsCard", () => {
     // stuck; until this existed the refusal named an intervention no endpoint
     // provided. It is still someone else's roster, hence the confirm.
     const scope = await mount();
-    await openTeam(scope, "Team Alpha");
 
-    await click(menuItem(await rowMenu("Team Alpha"), "Reset invite count"));
+    await click(menuItem(await rowMenu(scope, "Team Alpha"), "Reset invite count"));
     expect(resetInviteCap).not.toHaveBeenCalled();
 
     await click(buttonWithText(confirmDialog()!, "Reset invite count"));
@@ -425,13 +526,31 @@ describe("RegistrationTeamsCard", () => {
   it("does not read a team's ledger until it is opened", async () => {
     // One request per team on every render would tax the organizer for a history
     // they rarely open.
-    const scope = await mount();
-    await openTeam(scope, "Team Alpha");
+    await mount("?id=1");
 
     expect(listInviteHistoryAdmin).not.toHaveBeenCalled();
 
     await click(buttonWithText(document.body, "Invite history"));
 
     expect(listInviteHistoryAdmin).toHaveBeenCalledWith(TOURNAMENT_ID, 1);
+  });
+
+  it("places a player picked by name, not a registration id typed from memory", async () => {
+    const scope = await mount();
+
+    await click(menuItem(await rowMenu(scope, "Team Alpha"), "Place player"));
+    const dialog = formDialog()!;
+    // The candidates are this tournament's free agents — a player already on a
+    // team is not offered, so the call cannot be refused for that.
+    expect(listFreeAgents).toHaveBeenCalledWith(TOURNAMENT_ID);
+
+    await click(dialog.querySelector("button[role='combobox']"));
+    await click(commandItem("Rein#2222"));
+    await submit(dialog);
+
+    expect(placeMemberAdmin).toHaveBeenCalledWith(TOURNAMENT_ID, 1, 42, {
+      slot_code: "tank",
+      is_substitute: false
+    });
   });
 });

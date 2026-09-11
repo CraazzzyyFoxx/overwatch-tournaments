@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { DiscordChannelSelect } from "@/components/discord/DiscordChannelSelect";
 import {
   Dialog,
   DialogContent,
@@ -39,6 +40,8 @@ export function WorkspaceBalancerConfigDialog({
   const [hideFromPool, setHideFromPool] = useState(
     config?.rank_delta_hide_from_pool ?? false
   );
+  // The picker speaks in strings and has no null: "" is its no-channel value.
+  const [mixChannel, setMixChannel] = useState(config?.mix_discord_channel_id ?? "");
   const [wasOpen, setWasOpen] = useState(open);
 
   if (open !== wasOpen) {
@@ -46,6 +49,7 @@ export function WorkspaceBalancerConfigDialog({
     if (open) {
       setThreshold(config?.rank_delta_threshold ?? null);
       setHideFromPool(config?.rank_delta_hide_from_pool ?? false);
+      setMixChannel(config?.mix_discord_channel_id ?? "");
     }
   }
 
@@ -53,11 +57,12 @@ export function WorkspaceBalancerConfigDialog({
     mutationFn: () =>
       balancerAdminService.upsertWorkspaceBalancerConfig(workspaceId, {
         rank_delta_threshold: threshold,
-        rank_delta_hide_from_pool: hideFromPool
+        rank_delta_hide_from_pool: hideFromPool,
+        mix_discord_channel_id: mixChannel === "" ? null : mixChannel
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["workspace-balancer-config", workspaceId] });
-      notify.success("Pool settings saved.");
+      notify.success("Workspace settings saved.");
       onOpenChange(false);
     }
   });
@@ -68,11 +73,11 @@ export function WorkspaceBalancerConfigDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Settings2 className="h-4 w-4" />
-            Pool rank-delta settings
+            Workspace balancer settings
           </DialogTitle>
           <DialogDescription>
-            Controls how players with a large difference between their system rank and OW rank are
-            displayed in the pool.
+            How players with a large gap between their system rank and OW rank appear in the pool,
+            and where every mix in this workspace posts its matchup.
           </DialogDescription>
         </DialogHeader>
 
@@ -104,6 +109,36 @@ export function WorkspaceBalancerConfigDialog({
               </p>
             </div>
             <Switch checked={hideFromPool} onCheckedChange={setHideFromPool} />
+          </div>
+
+          <div className="space-y-1.5 border-t border-[color:var(--aqt-border)] pt-4">
+            <Label htmlFor="mix-discord-channel">
+              Mix Discord channel
+              <span className="ml-1.5 text-xs text-muted-foreground">
+                (where every mix posts its matchup)
+              </span>
+            </Label>
+            <div className="flex items-center gap-2">
+              <div className="min-w-0 flex-1">
+                <DiscordChannelSelect
+                  id="mix-discord-channel"
+                  workspaceId={workspaceId}
+                  value={mixChannel}
+                  onChange={setMixChannel}
+                  ariaLabel="Mix Discord channel"
+                  placeholder="No channel"
+                />
+              </div>
+              {mixChannel !== "" ? (
+                <Button variant="ghost" size="sm" onClick={() => setMixChannel("")}>
+                  Clear
+                </Button>
+              ) : null}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Hosts post here by default. A single mix can be pointed elsewhere from its own
+              settings, but only by a workspace admin.
+            </p>
           </div>
 
           <div className="flex justify-end gap-2 pt-1">
