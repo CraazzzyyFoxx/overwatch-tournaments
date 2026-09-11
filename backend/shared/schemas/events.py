@@ -6,7 +6,7 @@ replacing untyped dict objects with validated Pydantic models.
 
 import time
 import uuid
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -25,21 +25,40 @@ class BaseEvent(BaseModel):
 class DiscordCommandEvent(BaseEvent):
     """Event for triggering Discord bot commands.
 
-    Published by: parser-service
+    Published by: parser-service (``process_all``), balancer-service (``post_message``)
     Consumed by: discord-service
+
+    Actions:
+    - ``process_all``: re-scan every registered channel of a tournament.
+    - ``process_message``: re-process one known message.
+    - ``post_message``: send a message (content and/or embed) to a channel.
     """
 
     event_type: str = Field(default="discord_command", frozen=True)
-    action: str = Field(..., description="Action to perform: 'process_all' or 'process_message'")
-    tournament_id: int = Field(..., description="Tournament ID to process")
-    channel_id: int | None = Field(default=None, description="Discord channel ID (required for 'process_message')")
+    action: str = Field(..., description="Action to perform: 'process_all', 'process_message' or 'post_message'")
+    tournament_id: int | None = Field(default=None, description="Tournament ID to process (for 'process_all')")
+    channel_id: int | None = Field(
+        default=None, description="Discord channel ID (required for 'process_message' and 'post_message')"
+    )
     message_id: int | None = Field(default=None, description="Discord message ID (required for 'process_message')")
+    content: str | None = Field(default=None, description="Plain message text (for 'post_message')")
+    embed: dict[str, Any] | None = Field(
+        default=None, description="Discord embed object, as accepted by discord.Embed.from_dict (for 'post_message')"
+    )
 
     def model_post_init(self, __context) -> None:
         """Validate that required fields are present for specific actions."""
-        if self.action == "process_message":
+        if self.action == "process_all":
+            if self.tournament_id is None:
+                raise ValueError("tournament_id is required for action='process_all'")
+        elif self.action == "process_message":
             if self.channel_id is None or self.message_id is None:
                 raise ValueError("channel_id and message_id are required for action='process_message'")
+        elif self.action == "post_message":
+            if self.channel_id is None:
+                raise ValueError("channel_id is required for action='post_message'")
+            if self.content is None and self.embed is None:
+                raise ValueError("content or embed is required for action='post_message'")
 
 
 class ProcessMatchLogEvent(BaseEvent):

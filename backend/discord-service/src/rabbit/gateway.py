@@ -130,6 +130,29 @@ class DiscordRabbitGateway:
                         await msg.ack()
                         return
 
+                    if event.action == "post_message":
+                        channel = await self._processor.get_text_channel(event.channel_id)
+                        if channel is None:
+                            observation.set_status("not_found")
+                            logger.error(f"❌ Channel {event.channel_id} not found for post_message")
+                            await msg.reject()
+                            return
+
+                        logger.info(f"📩 RabbitMQ command: post_message channel={event.channel_id}")
+                        try:
+                            await channel.send(
+                                content=event.content,
+                                embed=discord.Embed.from_dict(event.embed) if event.embed else None,
+                            )
+                        except discord.Forbidden:
+                            observation.set_status("forbidden")
+                            logger.error(f"❌ No permission to post in channel {event.channel_id}")
+                            await msg.reject()
+                            return
+
+                        await msg.ack()
+                        return
+
                     if event.channel_id is None or event.message_id is None:
                         observation.set_status("invalid")
                         logger.error("❌ channel_id and message_id required for process_message action")
