@@ -30,6 +30,8 @@ const myDiscordGuilds = vi.fn();
 const verifyDiscordGuild = vi.fn();
 const clearDiscordGuild = vi.fn();
 const getDiscordGuildInfo = vi.fn();
+const getWorkspaceBalancerConfig = vi.fn();
+const upsertWorkspaceBalancerConfig = vi.fn();
 
 vi.mock("@/services/workspace.service", () => ({
   default: {
@@ -66,6 +68,23 @@ vi.mock("@/stores/workspace.store", () => ({
 }));
 
 vi.mock("next-intl", () => ({ useTranslations: () => (key: string) => key }));
+vi.mock("@/services/balancer-admin.service", () => ({
+  default: {
+    getWorkspaceBalancerConfig: (...args: unknown[]) => getWorkspaceBalancerConfig(...args),
+    upsertWorkspaceBalancerConfig: (...args: unknown[]) => upsertWorkspaceBalancerConfig(...args)
+  }
+}));
+
+// The real picker is a popover over a Discord channel fetch; the mix card only
+// needs a control that emits a channel id.
+vi.mock("@/components/discord/DiscordChannelSelect", () => ({
+  DiscordChannelSelect: ({ onChange }: { onChange: (id: string) => void }) => (
+    <button type="button" onClick={() => onChange("555555555555555555")}>
+      Pick channel
+    </button>
+  )
+}));
+
 
 const WORKSPACE: Workspace = {
   id: 7,
@@ -182,6 +201,15 @@ beforeEach(() => {
     owner_name: null,
     owner_avatar_url: null
   });
+  getWorkspaceBalancerConfig.mockReset().mockResolvedValue({
+    id: 3,
+    workspace_id: 7,
+    rank_delta_threshold: 500,
+    rank_delta_hide_from_pool: true,
+    mix_discord_channel_id: null,
+    updated_by: null
+  });
+  upsertWorkspaceBalancerConfig.mockReset().mockResolvedValue({});
 });
 
 afterEach(async () => {
@@ -286,5 +314,20 @@ describe("Workspace settings › Discord", () => {
 
     await click(buttonIn(dialog!, "Unlink server"));
     expect(clearDiscordGuild).toHaveBeenCalledWith(7);
+  });
+
+  // 6. the mix announcement channel is a workspace setting, editable here --
+  //    and saving it must not wipe the rank-delta knobs sharing the blob.
+  it("saves the mix channel without dropping the rank-delta config", async () => {
+    getById.mockResolvedValue(BOUND);
+    await render();
+
+    await click(buttonIn(container, "Pick channel"));
+
+    expect(upsertWorkspaceBalancerConfig).toHaveBeenCalledWith(7, {
+      rank_delta_threshold: 500,
+      rank_delta_hide_from_pool: true,
+      mix_discord_channel_id: "555555555555555555"
+    });
   });
 });
