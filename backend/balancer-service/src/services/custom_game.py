@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import copy
 from collections.abc import Mapping, Sequence
+from datetime import datetime
 from typing import Any
 
+import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from shared import models
 from shared.core import http_status as status
@@ -39,7 +42,9 @@ from shared.services.workspace_roster import (
     list_roster,
     workspace_member_user_ids,
 )
+from src.domain.mix_discord import build_lineup_embed
 from src.domain.mix_rotation import PlayerHistory, RotationRecommendation, recommend_rotation, rotation_priority
+from src.domain.mix_stats import SeatOutcome, aggregate_mix_stats, outcome_for
 from src.services.balancer.config.public_contract import normalize_config_overrides
 from src.services.balancer.role_naming import role_slot_code
 from src.services.balancer.solver import run_mix_balance as _run_balance
@@ -399,13 +404,43 @@ class CustomGameService:
         actor_user_id: int,
         member_ids: Sequence[int] = (),
         balancer_config: Mapping[str, Any] | None = None,
+        clone_from_game_id: int | None = None,
     ) -> models.CustomGame:
+        """Open a mix, optionally starting from a previous one's setup.
+
+        A clone copies the parts a host would otherwise re-enter every session --
+        the pool and its per-seat role setup, the role shape, the points knob,
+        the team names, the solver overrides and the co-host grants -- but never
+        anything that describes a *played* session: no balance result, no rolled
+        map, no match history, and every seat back in the pool rather than
+        carrying last week's pins and benchings. Roster members who have since
+        left the workspace are dropped rather than failing the clone.
+        """
         _require_host(actor_user_id, host_user_id)
         trimmed = name.strip() if isinstance(name, str) else ""
         if not trimmed:
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="name is required")
         ids = _uniq(member_ids)
-        members = await self.members(session, workspace_id, ids)
+        members = dict(await self.members(session, workspace_id, ids))
+
+        source: models.CustomGame | None = None
+        source_rows: list[models.CustomGamePlayer] = []
+        if clone_from_game_id is not None:
+            source = await self.games.get(session, clone_from_game_id)
+            if source is None or source.workspace_id != workspace_id:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Mix not found")
+            candidates = list(await self.roster.list_for_game(session, source.id))
+            # Lenient on purpose, unlike ``members`` above: a departed member is
+            # dropped from the copy, not a 404 that makes the old mix
+            # un-clonable forever.
+            surviving = await self.load_roster(
+                session,
+                workspace_id=workspace_id,
+                member_ids=_uniq([row.workspace_member_id for row in candidates]),
+            )
+            source_rows = [row for row in candidates if row.workspace_member_id in surviving]
+            members.update(surviving)
+
         game = models.CustomGame(
             workspace_id=workspace_id,
             host_user_id=host_user_id,
@@ -413,11 +448,52 @@ class CustomGameService:
             status=MixStatus.DRAFT,
             balancer_config_json=(normalize_config_overrides(balancer_config) if balancer_config else None),
         )
+        if source is not None:
+            game.points_per_win = source.points_per_win
+            game.discord_channel_id = source.discord_channel_id
+            if game.balancer_config_json is None:
+                # Already normalized when it was stored on the source.
+                game.balancer_config_json = copy.deepcopy(source.balancer_config_json)
         await self.games.create(session, game)
-        rows = [_new_roster_row(game.id, item, index) for index, item in enumerate(ids)]
+
+        cloned: list[tuple[models.CustomGamePlayer, models.CustomGamePlayer]] = []
+        rows: list[models.CustomGamePlayer] = []
+        for source_row in source_rows:
+            row = _new_roster_row(game.id, source_row.workspace_member_id, source_row.sort_order)
+            row.role_selection_mode = source_row.role_selection_mode
+            row.is_flex = source_row.is_flex
+            rows.append(row)
+            cloned.append((source_row, row))
+        taken = {row.workspace_member_id for row in rows}
+        next_order = max((row.sort_order for row in rows), default=-1) + 1
+        for member_id in ids:
+            if member_id in taken:
+                continue
+            rows.append(_new_roster_row(game.id, member_id, next_order))
+            next_order += 1
         if rows:
             await self.roster.create_many(session, rows)
-        await self._seed_host_ranks(session, game, members)
+
+        if source is not None:
+            roles_by_source_row = await self.player_roles.roles_for_players(
+                session, [source_row.id for source_row, _row in cloned]
+            )
+            for source_row, row in cloned:
+                roles = roles_by_source_row.get(source_row.id)
+                if roles:
+                    await self.player_roles.replace_for_player(session, row.id, roles)
+            role_mask = await self.role_slots.mapping_for_game(session, source.id)
+            if role_mask:
+                await self.role_slots.replace(session, game.id, role_mask)
+            for index, team_name in (await self.team_names.mapping_for_game(session, source.id)).items():
+                await self.team_names.set(session, game.id, index, team_name)
+            for user_id in await self.co_hosts.user_ids_for_game(session, source.id):
+                if user_id != host_user_id:
+                    await self.co_hosts.add(session, game.id, user_id)
+
+        await self._seed_host_ranks(
+            session, game, {row.workspace_member_id: members[row.workspace_member_id] for row in rows}
+        )
         return game
 
     async def update_roster(
@@ -735,6 +811,112 @@ class CustomGameService:
         await session.flush()
         return game
 
+    async def set_next_map(
+        self,
+        session: AsyncSession,
+        *,
+        workspace_id: int,
+        custom_game_id: int,
+        map_id: int | None,
+        actor_user_id: int,
+    ) -> models.CustomGame:
+        """Name the map the next match is played on, or ``None`` to clear it.
+
+        Rolled or hand-picked ahead of the lobby loading in; every viewer sees
+        it through the same realtime refetch as any other mix write, and
+        :meth:`record_outcome` stamps it on the recorded match and clears it.
+        The roll itself lives client-side (the catalogue and this mix's match
+        history are already there) -- this only stores the verdict.
+        """
+        game = await self._writable(
+            session, workspace_id=workspace_id, custom_game_id=custom_game_id, actor_user_id=actor_user_id
+        )
+        if map_id is not None and await session.get(models.Map, map_id) is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Map not found")
+        game.next_map_id = map_id
+        await session.flush()
+        return game
+
+    async def set_discord_channel(
+        self,
+        session: AsyncSession,
+        *,
+        workspace_id: int,
+        custom_game_id: int,
+        channel_id: int | None,
+        actor_user_id: int,
+    ) -> models.CustomGame:
+        """Name the Discord channel this mix posts its matchup to, ``None`` to clear it.
+
+        Unlike :meth:`set_next_map` there is nothing to validate the id
+        against: a channel lives in Discord, not in any table here. A wrong id
+        surfaces when the bot cannot deliver to it, which is the only place
+        that can tell the difference.
+        """
+        game = await self._writable(
+            session, workspace_id=workspace_id, custom_game_id=custom_game_id, actor_user_id=actor_user_id
+        )
+        game.discord_channel_id = channel_id
+        await session.flush()
+        return game
+
+    async def discord_lineup(
+        self,
+        session: AsyncSession,
+        *,
+        workspace_id: int,
+        custom_game_id: int,
+        variant_index: int,
+        actor_user_id: int,
+    ) -> tuple[int, dict[str, Any]]:
+        """The channel to post to plus the embed describing one balance option.
+
+        The message is built here rather than by the bot: team names, seat names
+        and balance-time ratings all live in this service's tables and the bot
+        has no database of its own. Publishing is the RPC layer's job -- that is
+        where the broker is -- so this returns the payload instead of sending it.
+
+        Whichever option is on screen (``variant_index``), same as
+        :meth:`swap_seats`: a host who paged to option 2 is posting that one.
+        """
+        game = await self._writable(
+            session, workspace_id=workspace_id, custom_game_id=custom_game_id, actor_user_id=actor_user_id
+        )
+        if game.discord_channel_id is None:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Discord channel not configured")
+        result = game.balance_result_json if isinstance(game.balance_result_json, dict) else None
+        variants = result.get("variants") if isinstance(result, dict) else None
+        if not isinstance(variants, list) or not (0 <= variant_index < len(variants)):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Balance option not found")
+        variant = variants[variant_index]
+        if not isinstance(variant, Mapping):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Balance option not found")
+
+        team_names = await self.team_names.mapping_for_game(session, game.id)
+        activity = await self.casual_matches.activity_for_games(session, [game.id])
+        matches_count = activity.get(game.id, (0, None))[0]
+        next_map: tuple[str, str | None] | None = None
+        if game.next_map_id is not None:
+            # The gamemode is eager-loaded: an async session raises on an
+            # unawaited lazy load, and the embed names the mode next to the map.
+            row = await session.scalar(
+                sa.select(models.Map)
+                .options(selectinload(models.Map.gamemode))
+                .where(models.Map.id == game.next_map_id)
+            )
+            if row is not None:
+                next_map = (row.name, row.gamemode.name if row.gamemode is not None else None)
+
+        embed = build_lineup_embed(
+            mix_name=game.name,
+            match_number=matches_count + 1,
+            variant=variant,
+            team_names=team_names,
+            next_map=next_map,
+            points_per_win=game.points_per_win,
+        )
+        return game.discord_channel_id, embed
+
     async def set_balancer_config(
         self,
         session: AsyncSession,
@@ -947,13 +1129,19 @@ class CustomGameService:
         teams' host-authored ranks, and every seat that actually played redeems
         its ``MUST_PLAY`` pin back to ``POOL`` -- the pin promises one
         guaranteed seat, not every seat forever.
+
+        ``map_id`` names the map explicitly; omitted, the match takes the mix's
+        ``next_map_id`` (see :meth:`set_next_map`), which is cleared either way
+        so the following match starts with a fresh roll.
         """
         game = await self._writable(
             session, workspace_id=workspace_id, custom_game_id=custom_game_id, actor_user_id=actor_user_id
         )
         if winner not in (1, 2, None):
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="winner must be 1, 2 or null")
-        if map_id is not None and await session.get(models.Map, map_id) is None:
+        if map_id is None:
+            map_id = game.next_map_id
+        elif await session.get(models.Map, map_id) is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Map not found")
 
         result = game.balance_result_json if isinstance(game.balance_result_json, dict) else {}
@@ -970,7 +1158,15 @@ class CustomGameService:
 
         names = await self.team_names.mapping_for_game(session, game.id)
         scores = (1, 0) if winner == 1 else (0, 1) if winner == 2 else (0, 0)
-        match = models.CasualMatch(custom_game_id=game.id, map_id=map_id, recorded_by=actor_user_id)
+        points_per_win = game.points_per_win or 0
+        match = models.CasualMatch(
+            custom_game_id=game.id,
+            map_id=map_id,
+            recorded_by=actor_user_id,
+            # Frozen on the match so :meth:`undo_last_match` rolls back what was
+            # actually applied, not what the knob says by then.
+            points_per_win_applied=(points_per_win if (points_per_win and winner in (1, 2)) else None),
+        )
         await self.casual_matches.create(session, match)
         casual_teams = [
             models.CasualTeam(
@@ -1022,7 +1218,6 @@ class CustomGameService:
                 if row.participation == MixParticipation.MUST_PLAY and row.workspace_member_id in participant_ids:
                     row.participation = MixParticipation.POOL
 
-        points_per_win = game.points_per_win or 0
         if points_per_win and winner in (1, 2) and game.host_user_id is not None:
             winning_index = 0 if winner == 1 else 1
             await self._apply_points_delta(
@@ -1040,6 +1235,76 @@ class CustomGameService:
                 delta=-points_per_win,
             )
 
+        game.next_map_id = None
+
+        await session.flush()
+        return game
+
+    async def undo_last_match(
+        self,
+        session: AsyncSession,
+        *,
+        workspace_id: int,
+        custom_game_id: int,
+        match_id: int,
+        actor_user_id: int,
+    ) -> models.CustomGame:
+        """Delete the mix's most recent match and give back the ranks it moved.
+
+        Newest-only on purpose: the rank book compounds match on match (see
+        :meth:`_apply_points_delta`), so undoing an older result would give back
+        a delta that later matches have already built on and leave every number
+        after it wrong. Recording the correct result again is the way to fix an
+        older mistake.
+
+        The rollback uses ``points_per_win_applied`` frozen on the match, never
+        the mix's current ``points_per_win``: the host may have changed the knob
+        (or turned it off) since, and the point is to return the book to exactly
+        where it stood.
+
+        What is *not* reverted: the ``MUST_PLAY`` pins that recording redeemed
+        back to ``POOL``. A pin promises one seat, that seat was played, and
+        re-pinning everybody would silently re-queue players the host has since
+        moved on from -- rotation is the host's call, not an undo side effect.
+        """
+        game = await self._writable(
+            session, workspace_id=workspace_id, custom_game_id=custom_game_id, actor_user_id=actor_user_id
+        )
+        match = await self.casual_matches.get_for_game(session, game.id, match_id)
+        if match is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Match not found")
+        if await self.casual_matches.newest_id_for_game(session, game.id) != match.id:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Only the most recent match can be undone")
+
+        applied = match.points_per_win_applied or 0
+        if applied and game.host_user_id is not None:
+            sides = {team.side: team for team in match.teams}
+            home = sides.get(CasualTeamSide.HOME)
+            away = sides.get(CasualTeamSide.AWAY)
+            home_score = home.score if home is not None else 0
+            away_score = away.score if away is not None else 0
+            # The frozen seats carry the canonical role (``HeroClass``); the rank
+            # book is keyed by its wire spelling, the same ``slot_code``
+            # ``record_outcome`` mapped forward from.
+            winner_team, loser_team = (home, away) if home_score > away_score else (away, home)
+            for team, delta in ((winner_team, -applied), (loser_team, applied)):
+                if team is None:
+                    continue
+                await self._apply_points_delta(
+                    session,
+                    workspace_id=workspace_id,
+                    host_user_id=game.host_user_id,
+                    team_players=[
+                        (seat.workspace_member_id, seat.role.slot_code, seat.rank)
+                        for seat in team.players
+                        if seat.workspace_member_id is not None and seat.role is not None
+                    ],
+                    delta=delta,
+                )
+
+        # Teams and seats go with it: both hang off the match by ``ON DELETE
+        # CASCADE``, so there is nothing left to clean up by hand.
+        await session.delete(match)
         await session.flush()
         return game
 
@@ -1052,6 +1317,56 @@ class CustomGameService:
         """
         game = await self.get(session, workspace_id=workspace_id, custom_game_id=custom_game_id)
         return list(await self.casual_matches.list_for_custom_game(session, game.id))
+
+    async def mix_stats(
+        self, session: AsyncSession, *, workspace_id: int, since: datetime | None
+    ) -> list[dict[str, Any]]:
+        """Per-member win/loss record across every mix this workspace ever ran.
+
+        Workspace-wide on purpose: the scoreboard answers "how does this person
+        do in our mixes", which no single game can say. Names come from the
+        *current* roster, so a member who has since left keeps their record and
+        loses only their label -- the seats still carry their member id.
+        """
+        rows = await self.casual_matches.seats_for_workspace(session, workspace_id, since)
+        seats = [
+            SeatOutcome(
+                member_id=row.workspace_member_id,
+                # The frozen seat carries the canonical role (``HeroClass``);
+                # the wire spells it the way ``record_outcome`` mapped it in.
+                role=row.role.slot_code if row.role is not None else None,
+                match_id=row.match_id,
+                played_at=row.created_at,
+                outcome=outcome_for(row.own_score, row.other_score),
+            )
+            for row in rows
+        ]
+        stats = aggregate_mix_stats(seats)
+        if not stats:
+            return []
+
+        members = await self.load_roster(
+            session, workspace_id=workspace_id, member_ids=[entry.member_id for entry in stats]
+        )
+        return [
+            {
+                "workspace_member_id": entry.member_id,
+                "display_name": member.display_name if member is not None else None,
+                "battle_tag": member.battle_tag if member is not None else None,
+                "games": entry.games,
+                "wins": entry.wins,
+                "losses": entry.losses,
+                "draws": entry.draws,
+                "win_rate": entry.win_rate,
+                "streak": entry.streak,
+                "last_played_at": entry.last_played_at.isoformat() if entry.last_played_at is not None else None,
+                "by_role": {
+                    role: {"games": tally.games, "wins": tally.wins, "losses": tally.losses, "draws": tally.draws}
+                    for role, tally in entry.by_role.items()
+                },
+            }
+            for entry, member in ((entry, members.get(entry.member_id)) for entry in stats)
+        ]
 
     async def _rotation_histories(
         self, session: AsyncSession, game: models.CustomGame, roster: Sequence[models.CustomGamePlayer]

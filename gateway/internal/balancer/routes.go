@@ -63,6 +63,10 @@ var RosterRoutes = []edge.RouteSpec{
 	{Method: "GET", Pattern: "/api/balancer/workspaces/{workspace_id}/players/authors", Queue: "rpc.balancer.players.authors", Path: []string{"workspace_id"}, Auth: edge.AuthRequired, Timeout: fastReadTimeout},
 	{Method: "GET", Pattern: "/api/balancer/workspaces/{workspace_id}/custom-games", Queue: "rpc.balancer.custom.list", Path: []string{"workspace_id"}, Auth: edge.AuthRequired, Timeout: fastReadTimeout},
 	{Method: "POST", Pattern: "/api/balancer/workspaces/{workspace_id}/custom-games", Queue: "rpc.balancer.custom.create", Path: []string{"workspace_id"}, Body: true, Auth: edge.AuthRequired},
+	// Workspace-wide mix scoreboard, not a per-game read. ServeMux precedence
+	// already gives this literal segment the win over {game_id} whatever the
+	// order; it is listed above that row so the table reads the same way.
+	{Method: "GET", Pattern: "/api/balancer/workspaces/{workspace_id}/custom-games/stats", Queue: "rpc.balancer.custom.stats", Path: []string{"workspace_id"}, AllQuery: true, Auth: edge.AuthRequired, Timeout: fastReadTimeout},
 	{Method: "GET", Pattern: "/api/balancer/workspaces/{workspace_id}/custom-games/{game_id}", Queue: "rpc.balancer.custom.get", IDParam: "game_id", Path: []string{"workspace_id"}, Auth: edge.AuthRequired, Timeout: fastReadTimeout},
 	{Method: "POST", Pattern: "/api/balancer/workspaces/{workspace_id}/custom-games/{game_id}/roster", Queue: "rpc.balancer.custom.update_roster", IDParam: "game_id", Path: []string{"workspace_id"}, Body: true, Auth: edge.AuthRequired},
 	{Method: "PUT", Pattern: "/api/balancer/workspaces/{workspace_id}/custom-games/{game_id}/players/{workspace_member_id}", Queue: "rpc.balancer.custom.update_player", IDParam: "game_id", Path: []string{"workspace_id", "workspace_member_id"}, Body: true, Auth: edge.AuthRequired},
@@ -72,6 +76,9 @@ var RosterRoutes = []edge.RouteSpec{
 	{Method: "PUT", Pattern: "/api/balancer/workspaces/{workspace_id}/custom-games/{game_id}/team-names", Queue: "rpc.balancer.custom.set_team_names", IDParam: "game_id", Path: []string{"workspace_id"}, Body: true, Auth: edge.AuthRequired},
 	{Method: "PUT", Pattern: "/api/balancer/workspaces/{workspace_id}/custom-games/{game_id}/role-mask", Queue: "rpc.balancer.custom.set_role_mask", IDParam: "game_id", Path: []string{"workspace_id"}, Body: true, Auth: edge.AuthRequired},
 	{Method: "PUT", Pattern: "/api/balancer/workspaces/{workspace_id}/custom-games/{game_id}/points-per-win", Queue: "rpc.balancer.custom.set_points_per_win", IDParam: "game_id", Path: []string{"workspace_id"}, Body: true, Auth: edge.AuthRequired},
+	{Method: "PUT", Pattern: "/api/balancer/workspaces/{workspace_id}/custom-games/{game_id}/next-map", Queue: "rpc.balancer.custom.set_next_map", IDParam: "game_id", Path: []string{"workspace_id"}, Body: true, Auth: edge.AuthRequired},
+	{Method: "PUT", Pattern: "/api/balancer/workspaces/{workspace_id}/custom-games/{game_id}/discord-channel", Queue: "rpc.balancer.custom.set_discord_channel", IDParam: "game_id", Path: []string{"workspace_id"}, Body: true, Auth: edge.AuthRequired},
+	{Method: "POST", Pattern: "/api/balancer/workspaces/{workspace_id}/custom-games/{game_id}/discord/post", Queue: "rpc.balancer.custom.post_discord", IDParam: "game_id", Path: []string{"workspace_id"}, Body: true, Auth: edge.AuthRequired},
 	{Method: "PUT", Pattern: "/api/balancer/workspaces/{workspace_id}/custom-games/{game_id}/balancer-config", Queue: "rpc.balancer.custom.set_balancer_config", IDParam: "game_id", Path: []string{"workspace_id"}, Body: true, Auth: edge.AuthRequired},
 	{Method: "PUT", Pattern: "/api/balancer/workspaces/{workspace_id}/custom-games/{game_id}/host", Queue: "rpc.balancer.custom.transfer_host", IDParam: "game_id", Path: []string{"workspace_id"}, Body: true, Auth: edge.AuthRequired},
 	{Method: "POST", Pattern: "/api/balancer/workspaces/{workspace_id}/custom-games/{game_id}/co-hosts", Queue: "rpc.balancer.custom.add_co_host", IDParam: "game_id", Path: []string{"workspace_id"}, Body: true, Auth: edge.AuthRequired},
@@ -80,6 +87,7 @@ var RosterRoutes = []edge.RouteSpec{
 	{Method: "POST", Pattern: "/api/balancer/workspaces/{workspace_id}/custom-games/{game_id}/outcome", Queue: "rpc.balancer.custom.record_outcome", IDParam: "game_id", Path: []string{"workspace_id"}, Body: true, Auth: edge.AuthRequired},
 	{Method: "POST", Pattern: "/api/balancer/workspaces/{workspace_id}/custom-games/{game_id}/teams/swap", Queue: "rpc.balancer.custom.swap_seats", IDParam: "game_id", Path: []string{"workspace_id"}, Body: true, Auth: edge.AuthRequired},
 	{Method: "GET", Pattern: "/api/balancer/workspaces/{workspace_id}/custom-games/{game_id}/matches", Queue: "rpc.balancer.custom.match_history", IDParam: "game_id", Path: []string{"workspace_id"}, Auth: edge.AuthRequired, Timeout: fastReadTimeout},
+	{Method: "DELETE", Pattern: "/api/balancer/workspaces/{workspace_id}/custom-games/{game_id}/matches/{match_id}", Queue: "rpc.balancer.custom.undo_match", IDParam: "game_id", Path: []string{"workspace_id", "match_id"}, Auth: edge.AuthRequired},
 	{Method: "GET", Pattern: "/api/balancer/workspaces/{workspace_id}/custom-games/{game_id}/rotation", Queue: "rpc.balancer.custom.rotation", IDParam: "game_id", Path: []string{"workspace_id"}, Auth: edge.AuthRequired, Timeout: fastReadTimeout},
 	{Method: "POST", Pattern: "/api/balancer/workspaces/{workspace_id}/custom-games/{game_id}/close", Queue: "rpc.balancer.custom.close", IDParam: "game_id", Path: []string{"workspace_id"}, Auth: edge.AuthRequired},
 	{Method: "DELETE", Pattern: "/api/balancer/workspaces/{workspace_id}/custom-games/{game_id}", Queue: "rpc.balancer.custom.hard_delete", IDParam: "game_id", Path: []string{"workspace_id"}, Auth: edge.AuthRequired},

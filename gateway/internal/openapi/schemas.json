@@ -3740,7 +3740,7 @@
       "summary": "Close custom game"
     },
     "rpc.balancer.custom.create": {
-      "description": "Opens a pickup mix in the workspace and returns it with its roster; the caller becomes its host. Requires the workspace custom_game create permission, and member_ids may be empty to start from an empty lineup.",
+      "description": "Opens a pickup mix in the workspace and returns it with its roster; the caller becomes its host. Requires the workspace custom_game create permission, and member_ids may be empty to start from an empty lineup. With clone_from_game_id the new mix starts from a previous mix of the same workspace -- its pool (everyone back in the pool), per-seat role setup, role shape, points per win, team names, solver overrides and co-hosts -- but never its balance result, rolled map, match history or status.",
       "request": {
         "array": false,
         "ref": "balancer.CustomGameCreate"
@@ -3762,6 +3762,14 @@
     "rpc.balancer.custom.match_history": {
       "description": "Returns every match recorded for the mix, newest first, with team names, scores, winner and map. Open to any workspace member.",
       "summary": "List custom game matches"
+    },
+    "rpc.balancer.custom.post_discord": {
+      "description": "Queues an embed of one balance option's teams, the next map and the points at stake to the mix's configured channel and returns immediately -- delivery is the bot's, and nothing about the mix changes. Host or co-host only; 409 when no channel is configured and 404 when the balance option is missing.",
+      "request": {
+        "array": false,
+        "ref": "balancer.CustomGamePostDiscord"
+      },
+      "summary": "Post custom game lineup to Discord"
     },
     "rpc.balancer.custom.record_outcome": {
       "description": "Freezes one played match of a balance option into the mix's history, moving both teams' ranks in the host's book by points_per_win when a winner is given and redeeming every seat's must_play pin back to the pool. Host or co-host only, and repeatable until the mix is closed.",
@@ -3786,6 +3794,22 @@
         "ref": "balancer.CustomGameBalancerConfigPatch"
       },
       "summary": "Set custom game balancer config"
+    },
+    "rpc.balancer.custom.set_discord_channel": {
+      "description": "Names the Discord channel the mix posts its matchup to, as a digits-only snowflake string, or clears it with null. Host or co-host only; the id is not verified against Discord here, an unreachable channel surfaces when the bot tries to deliver.",
+      "request": {
+        "array": false,
+        "ref": "balancer.CustomGameDiscordChannelPatch"
+      },
+      "summary": "Set custom game Discord channel"
+    },
+    "rpc.balancer.custom.set_next_map": {
+      "description": "Names the map the mix's next match is played on -- rolled or picked by a host ahead of the lobby -- or clears it with null. The next recorded match takes this map unless the outcome names one explicitly, and clears it either way. Host or co-host only; 404 when the map is not in the catalogue.",
+      "request": {
+        "array": false,
+        "ref": "balancer.CustomGameNextMapPatch"
+      },
+      "summary": "Set custom game next map"
     },
     "rpc.balancer.custom.set_participation": {
       "description": "Moves several seats between must_play, pool and benched in one transaction -- the whole rotation verdict at once -- and returns the refreshed mix. Host or co-host only; 404 if any member is not on the roster.",
@@ -3819,6 +3843,10 @@
       },
       "summary": "Set custom game team names"
     },
+    "rpc.balancer.custom.stats": {
+      "description": "Per-member wins/losses/draws, win rate, current streak and the per-role split across every mix this workspace has run, best record first. The optional since query parameter (ISO 8601) narrows it to matches recorded on or after that moment; without it the whole history counts. Read-only and open to any workspace member.",
+      "summary": "Get custom game statistics"
+    },
     "rpc.balancer.custom.swap_seats": {
       "description": "Swaps two seated players between teams inside one balance option, same role only, and returns the refreshed mix. Host or co-host only; 404 when the option or either seat is missing, 422 when the seats hold different roles or sit on the same team.",
       "request": {
@@ -3834,6 +3862,10 @@
         "ref": "balancer.CustomGameHostTransfer"
       },
       "summary": "Transfer custom game host"
+    },
+    "rpc.balancer.custom.undo_match": {
+      "description": "Deletes the mix's most recent match and gives back exactly the rank points it applied, read from the match itself rather than the mix's current points_per_win. Host or co-host only; 404 when the match belongs to another mix and 409 when a newer match exists, since the rank book compounds. must_play pins the recording redeemed are not restored.",
+      "summary": "Undo custom game match"
     },
     "rpc.balancer.custom.update_player": {
       "description": "Patches one seat's participation state, role order or flex flag and returns the refreshed mix. Host or co-host only; 404 when the member is not on this mix's roster.",
@@ -20223,6 +20255,18 @@
           "default": null,
           "title": "Balancer Config"
         },
+        "clone_from_game_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Clone From Game Id"
+        },
         "member_ids": {
           "items": {
             "type": "integer"
@@ -20244,6 +20288,28 @@
       "title": "CustomGameCreate",
       "type": "object"
     },
+    "balancer.CustomGameDiscordChannelPatch": {
+      "additionalProperties": false,
+      "description": "The channel the mix posts its matchup to; ``null`` clears it.\n\nA string, not an integer: a Discord snowflake is a 64-bit id that a\nJavaScript client cannot hold losslessly as a number. Digits only, so the\nserver can turn it back into the ``BIGINT`` column without guessing.",
+      "properties": {
+        "channel_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Channel Id"
+        }
+      },
+      "required": [
+        "channel_id"
+      ],
+      "title": "CustomGameDiscordChannelPatch",
+      "type": "object"
+    },
     "balancer.CustomGameHostTransfer": {
       "additionalProperties": false,
       "properties": {
@@ -20256,6 +20322,28 @@
         "new_host_user_id"
       ],
       "title": "CustomGameHostTransfer",
+      "type": "object"
+    },
+    "balancer.CustomGameNextMapPatch": {
+      "additionalProperties": false,
+      "description": "``null`` clears the pick; the next match then records with no map.",
+      "properties": {
+        "map_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Map Id"
+        }
+      },
+      "required": [
+        "map_id"
+      ],
+      "title": "CustomGameNextMapPatch",
       "type": "object"
     },
     "balancer.CustomGameOutcome": {
@@ -20384,6 +20472,22 @@
         "points_per_win"
       ],
       "title": "CustomGamePointsPerWinPatch",
+      "type": "object"
+    },
+    "balancer.CustomGamePostDiscord": {
+      "additionalProperties": false,
+      "description": "Which balance option's lineup to post.",
+      "properties": {
+        "variant_index": {
+          "minimum": 0,
+          "title": "Variant Index",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "variant_index"
+      ],
+      "title": "CustomGamePostDiscord",
       "type": "object"
     },
     "balancer.CustomGameRecordOutcome": {

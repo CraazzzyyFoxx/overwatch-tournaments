@@ -19,6 +19,11 @@ class CasualMatch(db.TimeStampIntegerMixin):
         ForeignKey("overwatch.map.id", ondelete="SET NULL"), nullable=True, index=True
     )
     recorded_by: Mapped[int | None] = mapped_column(ForeignKey("auth.user.id", ondelete="SET NULL"), nullable=True)
+    # How far this match actually moved both teams' ranks when it was recorded.
+    # Undo rolls back this stored amount, never the mix's current
+    # ``points_per_win``: the knob may have changed since. NULL for a draw or a
+    # match recorded with points off.
+    points_per_win_applied: Mapped[int | None] = mapped_column(Integer(), nullable=True)
 
     teams: Mapped[list[CasualTeam]] = relationship(
         back_populates="match",
