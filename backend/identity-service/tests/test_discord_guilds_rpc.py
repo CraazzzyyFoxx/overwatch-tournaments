@@ -81,8 +81,8 @@ def test_discord_guilds_maps_owner_and_manage_guild_flags(monkeypatch: pytest.Mo
     monkeypatch.setattr(oauth.connections, "list_by_user_providers", AsyncMock(return_value=[fresh]))
 
     raw_guilds = [
-        {"id": 111, "name": "Owned Guild", "owner": True, "permissions": "0"},
-        {"id": 222, "name": "Manage Guild", "owner": False, "permissions": "32"},
+        {"id": 111, "name": "Owned Guild", "icon": "abc123", "owner": True, "permissions": "0"},
+        {"id": 222, "name": "Manage Guild", "icon": None, "owner": False, "permissions": "32"},
         {"id": 333, "name": "No Rights", "owner": False, "permissions": "1024"},
     ]
     fake_provider = _FakeProvider(raw_guilds)
@@ -91,9 +91,15 @@ def test_discord_guilds_maps_owner_and_manage_guild_flags(monkeypatch: pytest.Mo
     guilds = asyncio.run(oauth.discord_guilds(None, auth_user_id=7))
 
     assert guilds == [
-        {"guild_id": "111", "name": "Owned Guild", "owner": True, "can_manage": True},
-        {"guild_id": "222", "name": "Manage Guild", "owner": False, "can_manage": True},
-        {"guild_id": "333", "name": "No Rights", "owner": False, "can_manage": False},
+        {
+            "guild_id": "111",
+            "name": "Owned Guild",
+            "icon_url": "https://cdn.discordapp.com/icons/111/abc123.png",
+            "owner": True,
+            "can_manage": True,
+        },
+        {"guild_id": "222", "name": "Manage Guild", "icon_url": None, "owner": False, "can_manage": True},
+        {"guild_id": "333", "name": "No Rights", "icon_url": None, "owner": False, "can_manage": False},
     ]
     fake_provider.get_user_guilds.assert_awaited_once_with("live-token")
 
