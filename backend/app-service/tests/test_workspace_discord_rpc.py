@@ -6,6 +6,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from shared.schemas.rpc import rpc_ok
+from shared.services.discord_client import DiscordClient
+from shared.services.subscriptions.providers.discord_role import DiscordUnavailable
 from src.rpc.workspaces import register
 
 _IDENTITY = {"user_id": 1, "is_superuser": True, "is_active": True}
@@ -76,14 +78,21 @@ class WorkspaceDiscordRPCTests(IsolatedAsyncioTestCase):
         self.assertTrue(result["data"]["connected"])
         self.assertEqual(result["data"]["name"], "Server")
 
-    async def test_non_object_reply_degrades_to_empty_roles(self) -> None:
-        """A peer answering with something other than an object is not a crash."""
-        result = await self._call("rpc.app.workspaces.discord_roles", reply=_rpc_reply("nope"))
-        self.assertEqual(result["data"]["roles"], [])
+    async def test_non_object_reply_falls_back_to_discord_rest(self) -> None:
+        """A peer answering with something other than an object is not a verdict:
+        the picker asks Discord's REST API itself and still renders."""
+        roles = [{"id": "1", "name": "Admin", "color": 0xFF0000, "position": 2, "managed": False}]
+        with patch.object(DiscordClient, "_http_get", AsyncMock(return_value=roles)) as rest:
+            result = await self._call("rpc.app.workspaces.discord_roles", reply=_rpc_reply("nope"))
+        rest.assert_awaited_once()
+        self.assertEqual(result["data"]["roles"], [
+            {"id": "1", "name": "Admin", "color": "#ff0000", "position": 2, "managed": False}
+        ])
         self.assertEqual(result["data"]["guild_id"], "999")
 
-    async def test_rpc_timeout_is_reported_not_raised(self) -> None:
-        result = await self._call("rpc.app.workspaces.discord_channels", error=TimeoutError("no reply"))
+    async def test_both_transports_down_is_reported_not_raised(self) -> None:
+        with patch.object(DiscordClient, "_http_get", AsyncMock(side_effect=DiscordUnavailable("down"))):
+            result = await self._call("rpc.app.workspaces.discord_channels", error=TimeoutError("no reply"))
         self.assertEqual(result["data"]["channels"], [])
         self.assertIn("error", result["data"])
 

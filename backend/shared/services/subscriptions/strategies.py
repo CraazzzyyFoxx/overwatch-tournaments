@@ -22,18 +22,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared import models
 from shared.core.social import SocialProvider
-from shared.messaging.config import DISCORD_MEMBER_ROLES_QUEUE
-from shared.messaging.rpc import request_rpc
+from shared.services.discord_client import DISCORD_API_BASE, DiscordClient
 from shared.services.subscriptions import SubscriptionState, SubscriptionVerdict
-from shared.services.subscriptions.providers.discord_role import (
-    DiscordForbidden,
-    DiscordNotConfigured,
-    DiscordRoleResolver,
-    DiscordUnavailable,
-    GuildRolesFetcher,
-    MemberNotFound,
-    MemberRolesFetcher,
-)
+from shared.services.subscriptions.providers.discord_role import DiscordRoleResolver
 from shared.services.subscriptions.providers.twitch_helix import (
     HelixForbidden,
     HelixMissingScope,
@@ -44,14 +35,12 @@ from shared.services.subscriptions.providers.twitch_helix import (
 )
 
 __all__ = (
-    "DISCORD_API_BASE",
     "TWITCH_HELIX_BASE",
     "BoostyDiscordStrategy",
     "TwitchSubscriptionStrategy",
     "load_provider_user_ids",
 )
 
-DISCORD_API_BASE: Final = "https://discord.com/api/v10"
 TWITCH_HELIX_BASE: Final = "https://api.twitch.tv/helix"
 
 _TIMEOUT: Final = httpx.Timeout(10.0, connect=5.0)
@@ -169,8 +158,9 @@ async def load_provider_user_ids(
 class BoostyDiscordStrategy:
     """Boosty tiers via the Discord roles Boosty's own bot assigns.
 
-    Prefers FastStream RPC to ``discord-service`` for cached discord.py roles;
-    falls back to direct HTTP REST calls to Discord API if RPC is unavailable.
+    Every Discord read goes through ``DiscordClient``: discord-service first
+    (one batch RPC answered from discord.py's guild cache), Discord's REST API
+    only when that round trip fails.
     """
 
     def __init__(
@@ -195,96 +185,32 @@ class BoostyDiscordStrategy:
             self._session, auth_user_ids=auth_user_ids, oauth_provider=SocialProvider.DISCORD
         )
 
+        # One client per batch: its member/role memo must not outlive this call.
+        discord = DiscordClient(
+            broker=self._broker, bot_token=self._bot_token, proxy=self._proxy, api_base=self._api_base
+        )
         guild_id = str(config.get("guild_id") or "").strip() if config else ""
-
-        # First attempt: RPC to discord-service, which answers from discord.py's
-        # in-memory guild cache -- one round trip for the whole batch instead of
-        # two REST calls per user against Discord's per-guild rate limit bucket.
-        if self._broker is not None and guild_id:
-            try:
-                reply = await request_rpc(
-                    self._broker,
-                    {
-                        "guild_id": guild_id,
-                        "user_ids": sorted({uid for ids in discord_ids.values() for uid in ids}),
-                    },
-                    DISCORD_MEMBER_ROLES_QUEUE,
-                    timeout=5.0,
-                )
-                if reply is not None and reply.ok and isinstance(reply.data, dict) and "members" in reply.data:
-                    return await self._resolve_from_rpc(
-                        config=config,
-                        auth_user_ids=auth_user_ids,
-                        discord_ids=discord_ids,
-                        rpc_res=reply.data,
-                    )
-            except Exception as exc:
-                logger.warning(f"RPC call to discord_member_roles failed, falling back to HTTP: {exc}")
-
-        # Fallback: direct HTTP REST requests
-        async with httpx.AsyncClient(
-            proxy=self._proxy,
-            timeout=_TIMEOUT,
-            headers={"Authorization": f"Bot {self._bot_token}"} if self._bot_token else {},
-        ) as client:
-            resolver = DiscordRoleResolver(
-                fetch_member_roles=self._member_roles_fetcher(client),
-                fetch_guild_role_ids=self._guild_roles_fetcher(client),
-            )
-            semaphore = asyncio.Semaphore(15)
-
-            async def _resolve_one(auth_user_id: int) -> tuple[int, SubscriptionVerdict]:
-                async with semaphore:
-                    verdict = await self._resolve_accounts(
-                        resolver, config=config, account_ids=discord_ids.get(auth_user_id) or []
-                    )
-                    return auth_user_id, verdict
-
-            return await _gather_verdicts(
-                [_resolve_one(uid) for uid in auth_user_ids],
-                auth_user_ids=auth_user_ids,
-                source=DiscordRoleResolver.source,
-            )
-
-    async def _resolve_from_rpc(
-        self,
-        *,
-        config: dict[str, Any],
-        auth_user_ids: Sequence[int],
-        discord_ids: dict[int, list[str]],
-        rpc_res: dict[str, Any],
-    ) -> dict[int, SubscriptionVerdict]:
-        """Replay the normal decision table over an already-fetched role snapshot.
-
-        The same ``DiscordRoleResolver`` runs, so the RPC path and the HTTP
-        fallback cannot drift apart: only the two fetchers change, and here they
-        read the batch reply instead of the network. No user is resolved
-        concurrently because neither fetcher awaits anything.
-        """
-        guild_role_ids = {str(r) for r in (rpc_res.get("guild_role_ids") or [])}
-        members = rpc_res.get("members") or {}
-
-        async def fetch_guild_roles(_guild_id: str) -> set[str]:
-            return guild_role_ids
-
-        async def fetch_member_roles(_guild_id: str, user_id: str) -> list[str]:
-            info = members.get(user_id)
-            # Absent or explicitly not-found both mean "not in the guild", which
-            # the resolver turns into inactive/not_a_member -- never `unknown`.
-            if not isinstance(info, dict) or not info.get("found"):
-                raise MemberNotFound("member not found")
-            return [str(role_id) for role_id in (info.get("roles") or [])]
+        if guild_id:
+            await discord.prefetch(guild_id, [uid for ids in discord_ids.values() for uid in ids])
 
         resolver = DiscordRoleResolver(
-            fetch_member_roles=fetch_member_roles,
-            fetch_guild_role_ids=fetch_guild_roles,
+            fetch_member_roles=discord.member_roles,
+            fetch_guild_role_ids=discord.guild_role_ids,
         )
-        return {
-            auth_user_id: await self._resolve_accounts(
-                resolver, config=config, account_ids=discord_ids.get(auth_user_id) or []
-            )
-            for auth_user_id in auth_user_ids
-        }
+        semaphore = asyncio.Semaphore(15)
+
+        async def _resolve_one(auth_user_id: int) -> tuple[int, SubscriptionVerdict]:
+            async with semaphore:
+                verdict = await self._resolve_accounts(
+                    resolver, config=config, account_ids=discord_ids.get(auth_user_id) or []
+                )
+                return auth_user_id, verdict
+
+        return await _gather_verdicts(
+            [_resolve_one(uid) for uid in auth_user_ids],
+            auth_user_ids=auth_user_ids,
+            source=DiscordRoleResolver.source,
+        )
 
     @staticmethod
     async def _resolve_accounts(
@@ -300,44 +226,6 @@ class BoostyDiscordStrategy:
                 for account_id in candidates
             ]
         )
-
-    def _member_roles_fetcher(self, client: httpx.AsyncClient) -> MemberRolesFetcher:
-        async def fetch(guild_id: str, user_id: str) -> list[str]:
-            if not self._bot_token:
-                raise DiscordNotConfigured("discord bot token is not configured")
-            try:
-                response = await client.get(f"{self._api_base}/guilds/{guild_id}/members/{user_id}")
-            except httpx.HTTPError as exc:
-                raise DiscordUnavailable(str(exc)) from exc
-            # 404 = not a member (a real "not subscribed"); it does NOT count
-            # toward Discord's invalid-request ban budget, unlike 401/403/429.
-            if response.status_code == 404:
-                raise MemberNotFound("member not found")
-            if response.status_code in (401, 403):
-                raise DiscordForbidden(f"status {response.status_code}")
-            if response.status_code >= 500 or response.status_code == 429:
-                raise DiscordUnavailable(f"status {response.status_code}")
-            if response.status_code != 200:
-                raise DiscordUnavailable(f"unexpected status {response.status_code}")
-            return [str(role_id) for role_id in (response.json().get("roles") or [])]
-
-        return fetch
-
-    def _guild_roles_fetcher(self, client: httpx.AsyncClient) -> GuildRolesFetcher:
-        async def fetch(guild_id: str) -> set[str]:
-            if not self._bot_token:
-                raise DiscordNotConfigured("discord bot token is not configured")
-            try:
-                response = await client.get(f"{self._api_base}/guilds/{guild_id}/roles")
-            except httpx.HTTPError as exc:
-                raise DiscordUnavailable(str(exc)) from exc
-            if response.status_code in (401, 403):
-                raise DiscordForbidden(f"status {response.status_code}")
-            if response.status_code != 200:
-                raise DiscordUnavailable(f"status {response.status_code}")
-            return {str(role.get("id")) for role in response.json() or []}
-
-        return fetch
 
 
 class TwitchSubscriptionStrategy:

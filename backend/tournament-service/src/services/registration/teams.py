@@ -1591,6 +1591,8 @@ class RegistrationTeamService:
             workspace = await session.scalar(
                 sa.select(models.Workspace).where(models.Workspace.id == team.workspace_id)
             )
+            from shared.services.discord_client import DiscordClient
+            from src.core.broker import optional_broker
             from src.core.config import settings
             from src.schemas.registration_team import TeamEligibilityIssueRead
             from src.services.registration.team_eligibility import evaluate_team_eligibility
@@ -1602,7 +1604,9 @@ class RegistrationTeamService:
                 form=form,
                 shape=shape,
                 workspace=workspace,
-                bot_token=settings.discord_token,
+                discord=DiscordClient(
+                    broker=optional_broker(), bot_token=settings.discord_token, proxy=settings.proxy_url
+                ),
             )
             eligibility_issues = [
                 TeamEligibilityIssueRead(

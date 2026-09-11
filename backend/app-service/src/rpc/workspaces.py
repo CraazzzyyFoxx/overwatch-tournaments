@@ -23,6 +23,7 @@ never depends on route internals. Role resolution lives on ``WorkspaceService``.
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 from faststream.rabbit import RabbitMessage
@@ -31,16 +32,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.core.pagination import Paginated
-from shared.messaging.config import (
-    DISCORD_GUILD_CHANNELS_QUEUE,
-    DISCORD_GUILD_INFO_QUEUE,
-    DISCORD_GUILD_ROLES_QUEUE,
-)
-from shared.messaging.rpc import request_rpc
 from shared.rbac import RBAC_USER_KEY_PREFIX
 from shared.repository import AuthUserRepository
 from shared.rpc.identity import ensure_workspace_permission, rehydrate_user_optional
 from shared.services.audit import record_admin_audit
+from shared.services.discord_client import DiscordClient
+from shared.services.subscriptions.providers.discord_role import DiscordError
 from shared.tenancy.hostnames import normalize_custom_domain, subdomain_from_host
 from src import models, schemas
 from src.core import config, db
@@ -149,18 +146,20 @@ async def _discord_lookup(
     data: dict[str, Any],
     *,
     label: str,
-    queue: str,
+    read: Callable[[DiscordClient, str], Awaitable[Any]],
+    key: str | None,
     empty: dict[str, Any],
     degraded: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """One gated read of an organizer's Discord guild, shared by the three
     ``discord_*`` subscribers.
 
-    ``empty`` is the body returned when no guild is linked and when the peer
-    answers with something unusable; ``degraded`` (defaulting to ``empty``) is
-    the body carrying the ``error`` when the round trip fails outright. A
-    settings picker with no options is the right answer for an unreachable bot —
-    a 500 would take the whole settings page down with it.
+    ``read`` is the ``DiscordClient`` method to call (discord-service first,
+    Discord REST when it is down); ``key`` wraps a list result under that name.
+    ``empty`` is the body returned when no guild is linked; ``degraded``
+    (defaulting to ``empty``) is the body carrying the ``error`` when both
+    transports fail. A settings picker with no options is the right answer for
+    an unreachable bot — a 500 would take the whole settings page down with it.
     """
     workspace_id = _path_int(data, "workspace_id")
     user = c.actor(data)
@@ -173,16 +172,17 @@ async def _discord_lookup(
     if not guild_id:
         return {"guild_id": None, **empty}
 
+    discord = DiscordClient(
+        broker=broker, bot_token=config.settings.discord_token, proxy=config.settings.proxy_url
+    )
     try:
-        reply = await request_rpc(broker, {"guild_id": guild_id}, queue, timeout=5.0)
-    except Exception as exc:  # noqa: BLE001 -- the pickers degrade, they never 500
-        logger.warning(f"{label} RPC failed for workspace {workspace_id}: {exc}")
+        result = await read(discord, guild_id)
+    except DiscordError as exc:  # the pickers degrade, they never 500
+        logger.warning(f"{label} lookup failed for workspace {workspace_id}: {exc}")
         return {"guild_id": guild_id, **(degraded if degraded is not None else empty), "error": str(exc)}
-    if reply is None or not reply.ok or not isinstance(reply.data, dict):
-        return {"guild_id": guild_id, **empty}
-    data = dict(reply.data)
-    data.setdefault("guild_id", guild_id)
-    return data
+    body = {key: result} if key is not None else dict(result)
+    body.setdefault("guild_id", guild_id)
+    return body
 
 
 def register(broker: Any, logger: Any) -> None:
@@ -686,7 +686,8 @@ def register(broker: Any, logger: Any) -> None:
                 session,
                 data,
                 label="discord_roles",
-                queue=DISCORD_GUILD_ROLES_QUEUE,
+                read=DiscordClient.guild_roles,
+                key="roles",
                 empty={"roles": []},
             )
 
@@ -701,7 +702,8 @@ def register(broker: Any, logger: Any) -> None:
                 session,
                 data,
                 label="discord_channels",
-                queue=DISCORD_GUILD_CHANNELS_QUEUE,
+                read=DiscordClient.guild_channels,
+                key="channels",
                 empty={"channels": []},
             )
 
@@ -716,7 +718,8 @@ def register(broker: Any, logger: Any) -> None:
                 session,
                 data,
                 label="discord_guild",
-                queue=DISCORD_GUILD_INFO_QUEUE,
+                read=DiscordClient.guild_info,
+                key=None,
                 empty={
                     "connected": False,
                     "name": None,
