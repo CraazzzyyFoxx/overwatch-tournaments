@@ -26,7 +26,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { PageStateCard } from "@/components/ui/page-state-card";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useQueryParams } from "@/hooks/useQueryParams";
 import { hasUnsavedChanges } from "@/lib/form-change";
@@ -34,7 +33,6 @@ import { notify } from "@/lib/notify";
 import { cn } from "@/lib/utils";
 import adminService from "@/services/admin.service";
 import { rbacService } from "@/services/rbac.service";
-import teamService from "@/services/team.service";
 import tournamentService from "@/services/tournament.service";
 import { useWorkspaceStore } from "@/stores/workspace.store";
 import type { AuthAdminUser } from "@/types/rbac.types";
@@ -76,11 +74,9 @@ function InspectorField({
  * Replaces `/admin/users` (the identity list) and `/admin/players` (the
  * cross-tournament roster table, now the Participations tab of one person).
  *
- * Client-mode table on purpose: two of the three chips are facts the identity
- * endpoint does not carry — the linked auth account comes from RBAC, and
- * tournament participation from the rosters — so a server page could not be
- * filtered by them honestly. `per_page: -1` is the same "give me the set"
- * convention `rbacService.listUsersAll` uses.
+ * Server-paged. Chip filters ride on GET /admin/users: `unlinked` is no
+ * social_account row, `has-account` is `auth_user_id IS NOT NULL`, tournament
+ * is a roster EXISTS. Auth labels still come from RBAC (`listUsersAll`).
  */
 export default function PeoplePage() {
   const queryClient = useQueryClient();
@@ -102,6 +98,7 @@ export default function PeoplePage() {
   const [profileUser, setProfileUser] = useState<User | null>(null);
   const [mergeUser, setMergeUser] = useState<User | null>(null);
   const [pendingDelete, setPendingDelete] = useState<User | null>(null);
+  const [pageRows, setPageRows] = useState<User[]>([]);
 
   // A player identity is platform-wide: creating, renaming or deleting one
   // reaches every workspace that plays with it, so those stay on the GLOBAL
@@ -119,12 +116,6 @@ export default function PeoplePage() {
   // can be toggled by anyone with read access.
   const canManageIdentity = isSuperuser;
   const canSetVisibility = canRead;
-
-  const peopleQuery = useQuery({
-    queryKey: ["admin", "users", "all"],
-    queryFn: () => adminService.getUsers({ per_page: -1 }),
-    enabled: canRead
-  });
 
   // The auth side of the "Account" column. Global grant only — without it the
   // column says so rather than pretending every identity is unlinked.
@@ -162,14 +153,6 @@ export default function PeoplePage() {
   const hasAccountFilter = filters.values["has-account"] === true;
   const unlinkedFilter = filters.values.unlinked === true;
 
-  // Only fetched while the tournament chip is on: the rosters are the only
-  // place a "played in tournament N" fact exists.
-  const rostersQuery = useQuery({
-    queryKey: ["teams", Number(tournamentFilter) || null],
-    queryFn: () => teamService.getAll({ tournamentId: Number(tournamentFilter) }),
-    enabled: canRead && tournamentFilter !== ""
-  });
-
   const authByPlayerId = useMemo(() => {
     const map = new Map<number, AuthAdminUser>();
     for (const account of authQuery.data ?? []) {
@@ -178,27 +161,8 @@ export default function PeoplePage() {
     return map;
   }, [authQuery.data]);
 
-  const participantIds = useMemo(() => {
-    if (tournamentFilter === "") return null;
-    const ids = new Set<number>();
-    for (const team of rostersQuery.data?.results ?? []) {
-      for (const player of team.players ?? []) ids.add(player.user_id);
-    }
-    return ids;
-  }, [tournamentFilter, rostersQuery.data]);
-
-  const rows = useMemo(() => {
-    const all = peopleQuery.data?.results ?? [];
-    return all.filter((person) => {
-      if (hasAccountFilter && !authByPlayerId.has(person.id)) return false;
-      if (unlinkedFilter && (person.social_accounts?.length ?? 0) > 0) return false;
-      if (participantIds && !participantIds.has(person.id)) return false;
-      return true;
-    });
-  }, [peopleQuery.data, hasAccountFilter, unlinkedFilter, authByPlayerId, participantIds]);
-
-  const openRow = rows.find((person) => String(person.id) === openId) ?? null;
-  const openIndex = openRow ? rows.indexOf(openRow) : -1;
+  const openRow = pageRows.find((person) => String(person.id) === openId) ?? null;
+  const openIndex = openRow ? pageRows.indexOf(openRow) : -1;
   const openAccount = openRow ? authByPlayerId.get(openRow.id) : undefined;
 
   const resetCreateForm = () => {
@@ -365,17 +329,6 @@ export default function PeoplePage() {
     );
   }
 
-  if (peopleQuery.isError) {
-    return (
-      <PageStateCard
-        state="error"
-        title="Could not load player identities"
-        onAction={() => void peopleQuery.refetch()}
-        actionLabel="Try again"
-      />
-    );
-  }
-
   const isCreateDirty =
     createOpen &&
     hasUnsavedChanges(
@@ -395,8 +348,32 @@ export default function PeoplePage() {
       >
         <div className="min-w-0">
           <AdminDataTable<User>
-            rows={rows}
-            isLoading={peopleQuery.isLoading}
+            queryKey={(page, search, pageSize, sortField, sortDir) => [
+              "admin",
+              "users",
+              page,
+              search,
+              pageSize,
+              sortField,
+              sortDir,
+              tournamentFilter,
+              hasAccountFilter,
+              unlinkedFilter
+            ]}
+            queryFn={async (page, search, pageSize, sortField, sortDir) => {
+              const result = await adminService.getUsers({
+                page,
+                per_page: pageSize,
+                search: search || undefined,
+                sort: sortField ?? undefined,
+                order: sortDir,
+                tournament_id: tournamentFilter ? Number(tournamentFilter) : undefined,
+                has_account: hasAccountFilter || undefined,
+                unlinked: unlinkedFilter || undefined
+              });
+              setPageRows(result.results);
+              return result;
+            }}
             columns={columns}
             initialPageSize={PAGE_SIZE}
             filterKey={filters.filterKey}
@@ -440,11 +417,11 @@ export default function PeoplePage() {
           subtitle={openRow ? `Identity #${openRow.id}` : undefined}
           openHref={openRow ? `/admin/people/${openRow.id}` : undefined}
           onPrev={
-            openIndex > 0 ? () => setParams({ id: String(rows[openIndex - 1].id) }) : undefined
+            openIndex > 0 ? () => setParams({ id: String(pageRows[openIndex - 1].id) }) : undefined
           }
           onNext={
-            openIndex >= 0 && openIndex < rows.length - 1
-              ? () => setParams({ id: String(rows[openIndex + 1].id) })
+            openIndex >= 0 && openIndex < pageRows.length - 1
+              ? () => setParams({ id: String(pageRows[openIndex + 1].id) })
               : undefined
           }
           actions={

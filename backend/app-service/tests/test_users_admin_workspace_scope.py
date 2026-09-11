@@ -223,6 +223,36 @@ class ListScopingTests(IsolatedAsyncioTestCase):
         self.assertNotIn(self.MEMBER_HOP, sql)
 
 
+class ListFilterTests(IsolatedAsyncioTestCase):
+    """Chip filters reach the SQL, not a client-side pass over `per_page=-1`."""
+
+    async def _sql(self, **overrides: Any) -> str:
+        session = _FakeSession()
+        params = schemas.UserListParams.from_query_params(schemas.UserListQueryParams(**overrides))
+        await admin_users.get_users(session, params, workspace_id=None)
+        self.assertEqual(len(session.statements), 2)
+        return " ".join(str(statement) for statement in session.statements)
+
+    async def test_has_account_adds_an_auth_user_predicate(self) -> None:
+        base = await self._sql()
+        sql = await self._sql(has_account=True)
+        self.assertNotEqual(sql, base)
+        self.assertIn("IS NOT NULL", sql)
+
+    async def test_unlinked_adds_a_social_account_anti_join(self) -> None:
+        base = await self._sql()
+        sql = await self._sql(unlinked=True)
+        self.assertNotEqual(sql, base)
+        self.assertIn("EXISTS", sql)
+
+    async def test_tournament_adds_a_roster_exists_predicate(self) -> None:
+        base = await self._sql()
+        sql = await self._sql(tournament_id=7)
+        self.assertNotEqual(sql, base)
+        self.assertIn("EXISTS", sql)
+        self.assertIn("tournament_id", sql)
+
+
 class DashboardIssueScopingTests(IsolatedAsyncioTestCase):
     """The "Unlinked player identities" card links into the scoped list.
 

@@ -35,12 +35,18 @@ class UserListQueryParams(
     per_page: int = Field(default=50, ge=-1, le=500)
     sort: typing.Literal["id", "name", "created_at", "updated_at"] = "id"
     search: str | None = None
+    tournament_id: int | None = None
+    has_account: bool = False
+    unlinked: bool = False
 
 
 @dataclass
 class UserListParams(pagination.PaginationSortParams):
     per_page: int = 50
     search: str | None = None
+    tournament_id: int | None = None
+    has_account: bool = False
+    unlinked: bool = False
 
 
 # ─── Social account (unified identity) ───────────────────────────────────────

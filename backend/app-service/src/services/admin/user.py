@@ -94,6 +94,32 @@ class UserAdminService:
             query = query.where(models.User.name.ilike(search_term))
             count_query = count_query.where(models.User.name.ilike(search_term))
 
+        if params.has_account:
+            linked = models.User.auth_user_id.is_not(None)
+            query = query.where(linked)
+            count_query = count_query.where(linked)
+
+        if params.unlinked:
+            no_identities = ~sa.exists().where(models.SocialAccount.user_id == models.User.id)
+            query = query.where(no_identities)
+            count_query = count_query.where(no_identities)
+
+        if params.tournament_id is not None:
+            played = sa.exists(
+                sa.select(1)
+                .select_from(models.Player)
+                .join(
+                    models.WorkspaceMember,
+                    models.WorkspaceMember.id == models.Player.workspace_member_id,
+                )
+                .where(
+                    models.WorkspaceMember.player_id == models.User.id,
+                    models.Player.tournament_id == params.tournament_id,
+                )
+            )
+            query = query.where(played)
+            count_query = count_query.where(played)
+
         query = params.apply_pagination_sort(query, models.User)
 
         result = await session.execute(query)
