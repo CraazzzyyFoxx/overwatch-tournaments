@@ -172,9 +172,7 @@ async def _discord_lookup(
     if not guild_id:
         return {"guild_id": None, **empty}
 
-    discord = DiscordClient(
-        broker=broker, bot_token=config.settings.discord_token, proxy=config.settings.proxy_url
-    )
+    discord = DiscordClient(broker=broker, bot_token=config.settings.discord_token, proxy=config.settings.proxy_url)
     try:
         result = await read(discord, guild_id)
     except DiscordError as exc:  # the pickers degrade, they never 500

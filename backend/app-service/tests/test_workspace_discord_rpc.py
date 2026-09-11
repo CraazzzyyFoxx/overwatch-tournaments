@@ -85,9 +85,9 @@ class WorkspaceDiscordRPCTests(IsolatedAsyncioTestCase):
         with patch.object(DiscordClient, "_http_get", AsyncMock(return_value=roles)) as rest:
             result = await self._call("rpc.app.workspaces.discord_roles", reply=_rpc_reply("nope"))
         rest.assert_awaited_once()
-        self.assertEqual(result["data"]["roles"], [
-            {"id": "1", "name": "Admin", "color": "#ff0000", "position": 2, "managed": False}
-        ])
+        self.assertEqual(
+            result["data"]["roles"], [{"id": "1", "name": "Admin", "color": "#ff0000", "position": 2, "managed": False}]
+        )
         self.assertEqual(result["data"]["guild_id"], "999")
 
     async def test_both_transports_down_is_reported_not_raised(self) -> None:

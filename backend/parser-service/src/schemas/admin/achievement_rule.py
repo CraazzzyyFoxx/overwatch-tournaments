@@ -175,9 +175,7 @@ class AchievementLibraryImportRequest(BaseModel):
     slugs: list[str] = Field(default_factory=list, min_length=1)
 
 
-_RULE_SORT = typing.Literal[
-    "id", "name", "slug", "category", "enabled", "scope", "grain", "rule_version", "created_at"
-]
+_RULE_SORT = typing.Literal["id", "name", "slug", "category", "enabled", "scope", "grain", "rule_version", "created_at"]
 
 
 class AchievementRuleListQueryParams(pagination.PaginationSortQueryParams[_RULE_SORT]):

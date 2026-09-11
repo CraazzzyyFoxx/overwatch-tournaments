@@ -47,8 +47,8 @@ class AchievementRuleService:
         params: schemas.AchievementRuleListParams,
     ) -> dict[str, Any]:
         query = sa.select(AchievementRule).where(AchievementRule.workspace_id == workspace_id)
-        count_query = sa.select(sa.func.count()).select_from(AchievementRule).where(
-            AchievementRule.workspace_id == workspace_id
+        count_query = (
+            sa.select(sa.func.count()).select_from(AchievementRule).where(AchievementRule.workspace_id == workspace_id)
         )
         if params.search:
             term = f"%{params.search}%"
