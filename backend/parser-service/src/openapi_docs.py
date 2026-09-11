@@ -105,7 +105,7 @@ DOCS: dict[str, dict] = {
     },
     "rpc.parser.ach.list": {
         "summary": "List achievement rules",
-        "description": "Lists a workspace's achievement rules filtered by category and enabled flag; requires workspace achievement.read.",
+        "description": "Pages a workspace's achievement rules with search, category, and enabled filters; requires workspace achievement.read.",
     },
     "rpc.parser.ach.get": {
         "summary": "Get achievement rule",

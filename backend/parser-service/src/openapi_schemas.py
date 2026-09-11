@@ -7,6 +7,7 @@ Models mirror the handlers' direct model construction / flow return annotations
 
 from __future__ import annotations
 
+from shared.core.pagination import Paginated
 from shared.rpc.openapi import Op, QueryParam
 from src import schemas
 
@@ -95,9 +96,8 @@ OPERATIONS: dict[str, Op] = {
         request=schemas.ConditionTreeValidateRequest, response=schemas.ConditionTreeValidateResponse
     ),
     "rpc.parser.ach.list": Op(
-        response=schemas.AchievementRuleRead,
-        response_array=True,
-        query_params=(QueryParam("category"), QueryParam("enabled", "boolean")),
+        response=Paginated[schemas.AchievementRuleRead],
+        query=schemas.AchievementRuleListQueryParams,
     ),
     "rpc.parser.ach.get": Op(response=schemas.AchievementRuleRead),
     "rpc.parser.ach.create": Op(request=schemas.AchievementRuleCreate, response=schemas.AchievementRuleRead),

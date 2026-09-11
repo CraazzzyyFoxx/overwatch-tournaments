@@ -25,7 +25,7 @@ import sqlalchemy as sa
 from faststream.rabbit import RabbitMessage
 
 from shared.core.errors import BaseAPIException as HTTPException
-from shared.core.pagination import PaginationParams, paginated_dict
+from shared.core.pagination import PaginationParams, paginated_dict, paginated_dump
 from shared.models.achievements.achievement import (
     AchievementOverride,
     AchievementOverrideAction,
@@ -41,6 +41,7 @@ from shared.repository import (
 )
 from shared.repository.workspace import get_or_create_workspace_member
 from shared.rpc.identity import ensure_workspace_permission
+from shared.rpc.query import build_query_model
 from shared.services.achievement_effective import build_effective_achievement_rows_subquery
 from src import models, schemas
 from src.core import clients as _clients
@@ -222,16 +223,14 @@ def register(broker: Any, logger: Any) -> None:  # noqa: C901 - one subscriber p
     async def _list(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
             _user, workspace_id = _require_ws(data, "read")
-            query = sa.select(AchievementRule).where(AchievementRule.workspace_id == workspace_id)
-            category = c.q1(data, "category")
-            if category:
-                query = query.where(AchievementRule.category == category)
-            enabled = c.q1(data, "enabled")
-            if enabled is not None:
-                query = query.where(AchievementRule.enabled.is_(c.qbool(enabled)))
-            query = query.order_by(AchievementRule.category, AchievementRule.slug)
-            result = await session.execute(query)
-            return [schemas.AchievementRuleRead.model_validate(r, from_attributes=True) for r in result.scalars()]
+            qp = build_query_model(schemas.AchievementRuleListQueryParams, data.get("query"))
+            return paginated_dump(
+                await achievement_rule_service.list_rules(
+                    session,
+                    workspace_id=workspace_id,
+                    params=schemas.AchievementRuleListParams.from_query_params(qp),
+                )
+            )
 
         return await c.envelope(logger, "ach.list", op, session_factory=_SF)
 

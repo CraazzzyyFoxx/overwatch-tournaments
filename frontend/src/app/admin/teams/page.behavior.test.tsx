@@ -243,6 +243,9 @@ describe("/admin/teams", () => {
     const container = await mount();
     await waitFor(() => container.textContent?.includes("Wombat Warriors"), "the team row");
     expect(lastTournamentId()).toBeNull();
+    expect(getTeams).toHaveBeenCalledWith(
+      expect.objectContaining({ page: 1, perPage: 15, tournamentId: null })
+    );
 
     await click(container.querySelector('button[aria-label="Add filter"]'));
     await click(await waitFor(() => commandItem("Tournament"), "the Tournament filter"));

@@ -83,11 +83,13 @@ class TeamRead(BaseRead):
 
 class TeamFilterQueryParams(pagination.PaginationSortQueryParams):
     tournament_id: int | None = None
+    search: str | None = None
 
 
 @dataclass
 class TeamFilterParams(pagination.PaginationSortParams):
     tournament_id: int | None = None
+    search: str | None = None
 
 
 class PlayerFilterQueryParams(pagination.PaginationSortQueryParams):

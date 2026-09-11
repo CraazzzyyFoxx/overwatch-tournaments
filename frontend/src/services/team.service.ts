@@ -8,6 +8,9 @@ export type GetTeamsOptions = {
   workspaceId?: number | null;
   sort?: string;
   order?: "asc" | "desc";
+  page?: number;
+  perPage?: number;
+  search?: string;
 };
 
 export default class teamService {
@@ -15,18 +18,22 @@ export default class teamService {
     tournamentId = null,
     workspaceId,
     sort = "avg_sr",
-    order = "asc"
+    order = "asc",
+    page = 1,
+    perPage = -1,
+    search
   }: GetTeamsOptions = {}): Promise<PaginatedResponse<Team>> {
     return apiFetch(`/api/v1/teams`, {
       ...(workspaceId == null ? {} : { skipWorkspace: true }),
       query: {
-        page: 1,
-        per_page: -1,
+        page,
+        per_page: perPage,
         sort,
         order,
         entities: ["players", "players.user", "placement", "group", "tournament"],
         tournament_id: tournamentId,
-        workspace_id: workspaceId
+        workspace_id: workspaceId,
+        ...(search ? { search } : {})
       }
     })
       .then((response) => response.json())
