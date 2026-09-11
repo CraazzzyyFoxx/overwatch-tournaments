@@ -127,6 +127,10 @@ export default class workspaceService {
     }).then((r) => r.json());
   }
 
+  static async delete(id: number): Promise<void> {
+    await apiFetch(`/api/v1/workspaces/${id}`, { method: "DELETE" });
+  }
+
   static async getMembers(
     workspaceId: number,
     params?: {
