@@ -16,6 +16,9 @@ export function notificationHref(item: NotificationItem): string | null {
     case "team_invite.received":
     case "registration.approved":
     case "registration.rejected":
+    case "team.kicked":
+    case "team.rejected":
+    case "team.disbanded":
       return isId(payload.tournament_id)
         ? tournamentHref(payload.tournament_id, "/participants")
         : null;

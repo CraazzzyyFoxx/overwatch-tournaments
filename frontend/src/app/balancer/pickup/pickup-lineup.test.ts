@@ -173,6 +173,7 @@ describe("teamNamesByIndex", () => {
         team_names: { "0": "Wolves", "1": "   ", "2": "Bears" },
         role_mask: null,
         balancer_config: null,
+        discord_channel_id: null,
       }),
     ).toEqual({ 0: "Wolves", 2: "Bears" });
   });

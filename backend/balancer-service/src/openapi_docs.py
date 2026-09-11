@@ -160,7 +160,10 @@ DOCS: dict[str, dict] = {
         "description": (
             "Opens a pickup mix in the workspace and returns it with its roster; the caller becomes "
             "its host. Requires the workspace custom_game create permission, and member_ids may be "
-            "empty to start from an empty lineup."
+            "empty to start from an empty lineup. With clone_from_game_id the new mix starts from a "
+            "previous mix of the same workspace -- its pool (everyone back in the pool), per-seat "
+            "role setup, role shape, points per win, team names, solver overrides and co-hosts -- "
+            "but never its balance result, rolled map, match history or status."
         ),
     },
     "rpc.balancer.custom.list": {
@@ -215,6 +218,32 @@ DOCS: dict[str, dict] = {
         "summary": "Set custom game points per win",
         "description": "Sets how far a decided match moves both teams' ranks in the host's own book, or null to record matches without touching ranks. Host or co-host only.",
     },
+    "rpc.balancer.custom.set_next_map": {
+        "summary": "Set custom game next map",
+        "description": (
+            "Names the map the mix's next match is played on -- rolled or picked by a host ahead of "
+            "the lobby -- or clears it with null. The next recorded match takes this map unless the "
+            "outcome names one explicitly, and clears it either way. Host or co-host only; 404 when "
+            "the map is not in the catalogue."
+        ),
+    },
+    "rpc.balancer.custom.set_discord_channel": {
+        "summary": "Set custom game Discord channel",
+        "description": (
+            "Names the Discord channel the mix posts its matchup to, as a digits-only snowflake "
+            "string, or clears it with null. Host or co-host only; the id is not verified against "
+            "Discord here, an unreachable channel surfaces when the bot tries to deliver."
+        ),
+    },
+    "rpc.balancer.custom.post_discord": {
+        "summary": "Post custom game lineup to Discord",
+        "description": (
+            "Queues an embed of one balance option's teams, the next map and the points at stake "
+            "to the mix's configured channel and returns immediately -- delivery is the bot's, and "
+            "nothing about the mix changes. Host or co-host only; 409 when no channel is configured "
+            "and 404 when the balance option is missing."
+        ),
+    },
     "rpc.balancer.custom.set_balancer_config": {
         "summary": "Set custom game balancer config",
         "description": "Replaces the mix's solver overrides with a validated config, or clears them with null, and returns the refreshed mix. Host or co-host only.",
@@ -260,9 +289,28 @@ DOCS: dict[str, dict] = {
         "summary": "List custom game matches",
         "description": "Returns every match recorded for the mix, newest first, with team names, scores, winner and map. Open to any workspace member.",
     },
+    "rpc.balancer.custom.undo_match": {
+        "summary": "Undo custom game match",
+        "description": (
+            "Deletes the mix's most recent match and gives back exactly the rank points it applied, "
+            "read from the match itself rather than the mix's current points_per_win. Host or "
+            "co-host only; 404 when the match belongs to another mix and 409 when a newer match "
+            "exists, since the rank book compounds. must_play pins the recording redeemed are not "
+            "restored."
+        ),
+    },
     "rpc.balancer.custom.rotation": {
         "summary": "Get custom game rotation hints",
         "description": "Recommends who is owed the next seat and who should sit out, computed from this mix's own match history. Read-only and open to any workspace member.",
+    },
+    "rpc.balancer.custom.stats": {
+        "summary": "Get custom game statistics",
+        "description": (
+            "Per-member wins/losses/draws, win rate, current streak and the per-role split across "
+            "every mix this workspace has run, best record first. The optional since query parameter "
+            "(ISO 8601) narrows it to matches recorded on or after that moment; without it the whole "
+            "history counts. Read-only and open to any workspace member."
+        ),
     },
     "rpc.balancer.custom.close": {
         "summary": "Close custom game",

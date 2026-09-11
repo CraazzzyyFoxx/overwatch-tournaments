@@ -6,9 +6,11 @@
 //  1. creating a mix trims the name and refuses an all-whitespace one, because
 //     the server would accept it and leave an unnameable row in the list;
 //  2. a viewer who cannot host gets no create form;
-//  3. every row names its mix, its host and when it was created, and links to
-//     the mix screen for that id.
-import { act } from "react";
+//  3. every row names its mix, its host, how active it has been and when it
+//     was created, and links to the mix screen for that id;
+//  4. a new mix defaults to cloning the newest one, and Empty opts out --
+//     the popover is the only place that choice is made.
+import { act, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -27,6 +29,33 @@ globalThis.ResizeObserver ??= class {
 } as unknown as typeof ResizeObserver;
 
 vi.mock("next-intl", () => ({ useTranslations: () => (key: string) => key }));
+// Radix's Select needs real pointer capture to open, which happy-dom does not
+// provide; rendered here as a native <select> so the choice stays testable.
+vi.mock("@/components/ui/select", () => ({
+  Select: ({
+    value,
+    onValueChange,
+    children,
+  }: {
+    value: string;
+    onValueChange: (value: string) => void;
+    children: ReactNode;
+  }) => (
+    <select
+      aria-label="Lineup from"
+      value={value}
+      onChange={(event) => onValueChange(event.target.value)}
+    >
+      {children}
+    </select>
+  ),
+  SelectTrigger: () => null,
+  SelectValue: () => null,
+  SelectContent: ({ children }: { children: ReactNode }) => <>{children}</>,
+  SelectItem: ({ value, children }: { value: string; children: ReactNode }) => (
+    <option value={value}>{children}</option>
+  ),
+}));
 
 const onRetry = vi.fn();
 const onCreateGame = vi.fn();
@@ -42,6 +71,9 @@ function game(overrides: Partial<CustomGame> = {}): CustomGame {
     status: "balanced",
     balance_result: null,
     created_at: "2026-01-02T00:00:00Z",
+    next_map_id: null,
+    matches_count: 0,
+    last_match_at: null,
     ...overrides,
   };
 }
@@ -116,6 +148,17 @@ async function submit(form: Element | null) {
   });
 }
 
+/** The "Lineup from" picker, rendered as a native <select> by the mock above. */
+async function pickSource(value: string) {
+  const field = document.querySelector<HTMLSelectElement>('select[aria-label="Lineup from"]');
+  if (!field) throw new Error("Expected the lineup source picker");
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set?.call(field, value);
+    field.dispatchEvent(new Event("change", { bubbles: true }));
+    await tick();
+  });
+}
+
 beforeEach(() => {
   while (roots.length > 0) {
     const root = roots.pop();
@@ -154,7 +197,50 @@ describe("PickupMixList", () => {
     await type(input as HTMLInputElement, "  Sunday scrim  ");
     await submit(input?.closest("form") ?? null);
 
-    expect(onCreateGame).toHaveBeenCalledWith("Sunday scrim");
+    // The newest mix is the default lineup source, so a plain create clones it.
+    expect(onCreateGame).toHaveBeenCalledWith("Sunday scrim", 12);
+  });
+
+  it("starts a mix from nothing once the host picks Empty", async () => {
+    const scope = await mount([game()]);
+
+    await click(byName(scope, "New mix"));
+    await pickSource("empty");
+    const input = document.querySelector<HTMLInputElement>("#pickup-new-mix");
+    await type(input as HTMLInputElement, "Fresh night");
+    await submit(input?.closest("form") ?? null);
+
+    expect(onCreateGame).toHaveBeenCalledWith("Fresh night", null);
+  });
+
+  it("names the source mix in the empty name field, but never overwrites the host's own", async () => {
+    const scope = await mount([game({ id: 12, name: "Newest" }), game({ id: 4, name: "Older" })]);
+
+    await click(byName(scope, "New mix"));
+    await pickSource("4");
+    const input = document.querySelector<HTMLInputElement>("#pickup-new-mix");
+    expect(input?.value).toBe("Older");
+
+    await type(input as HTMLInputElement, "My own name");
+    await pickSource("12");
+    expect(input?.value).toBe("My own name");
+
+    await submit(input?.closest("form") ?? null);
+    expect(onCreateGame).toHaveBeenCalledWith("My own name", 12);
+  });
+
+  it("reports how active a mix has been next to when it was created", async () => {
+    const scope = await mount([
+      game({ matches_count: 3, last_match_at: "2026-01-03T00:00:00Z" }),
+    ]);
+
+    expect(scope.textContent).toContain("3 maps");
+  });
+
+  it("reads as inactive while a mix has recorded nothing", async () => {
+    const scope = await mount([game()]);
+
+    expect(scope.textContent).toContain("No matches");
   });
 
   it("refuses a whitespace-only mix name", async () => {

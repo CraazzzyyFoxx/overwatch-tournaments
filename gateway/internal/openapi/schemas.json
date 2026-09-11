@@ -3428,8 +3428,16 @@
       "summary": "List workspace Discord channels"
     },
     "rpc.app.workspaces.discord_guild": {
-      "description": "Returns connection status, server name, icon URL, and member count of the workspace's linked Discord server.",
+      "description": "Returns connection status, server name, icon URL, member count, and Discord owner of the workspace's linked Discord server.",
       "summary": "Workspace Discord server status"
+    },
+    "rpc.app.workspaces.discord_guild_clear": {
+      "description": "Clears the workspace's Discord guild claim (guild id, verified_at, verified_by). Requires workspace.update, not Discord administration -- so an organiser can leave a server they were kicked from. 404 if workspace missing. Idempotent when nothing is bound.",
+      "response": {
+        "array": false,
+        "ref": "app.WorkspaceRead"
+      },
+      "summary": "Unbind a Discord guild"
     },
     "rpc.app.workspaces.discord_guild_verify": {
       "description": "Proves the caller administers the given Discord guild (via identity-service, owner or MANAGE_GUILD) and binds it to the workspace, stamping verified_at/verified_by; requires workspace.update, 404 if workspace missing, 403 if the caller does not administer the guild, 409 if another workspace already claims it, 503 if identity-service is unreachable.",
@@ -3740,7 +3748,7 @@
       "summary": "Close custom game"
     },
     "rpc.balancer.custom.create": {
-      "description": "Opens a pickup mix in the workspace and returns it with its roster; the caller becomes its host. Requires the workspace custom_game create permission, and member_ids may be empty to start from an empty lineup.",
+      "description": "Opens a pickup mix in the workspace and returns it with its roster; the caller becomes its host. Requires the workspace custom_game create permission, and member_ids may be empty to start from an empty lineup. With clone_from_game_id the new mix starts from a previous mix of the same workspace -- its pool (everyone back in the pool), per-seat role setup, role shape, points per win, team names, solver overrides and co-hosts -- but never its balance result, rolled map, match history or status.",
       "request": {
         "array": false,
         "ref": "balancer.CustomGameCreate"
@@ -3762,6 +3770,14 @@
     "rpc.balancer.custom.match_history": {
       "description": "Returns every match recorded for the mix, newest first, with team names, scores, winner and map. Open to any workspace member.",
       "summary": "List custom game matches"
+    },
+    "rpc.balancer.custom.post_discord": {
+      "description": "Queues an embed of one balance option's teams, the next map and the points at stake to the mix's configured channel and returns immediately -- delivery is the bot's, and nothing about the mix changes. Host or co-host only; 409 when no channel is configured and 404 when the balance option is missing.",
+      "request": {
+        "array": false,
+        "ref": "balancer.CustomGamePostDiscord"
+      },
+      "summary": "Post custom game lineup to Discord"
     },
     "rpc.balancer.custom.record_outcome": {
       "description": "Freezes one played match of a balance option into the mix's history, moving both teams' ranks in the host's book by points_per_win when a winner is given and redeeming every seat's must_play pin back to the pool. Host or co-host only, and repeatable until the mix is closed.",
@@ -3786,6 +3802,22 @@
         "ref": "balancer.CustomGameBalancerConfigPatch"
       },
       "summary": "Set custom game balancer config"
+    },
+    "rpc.balancer.custom.set_discord_channel": {
+      "description": "Names the Discord channel the mix posts its matchup to, as a digits-only snowflake string, or clears it with null. Host or co-host only; the id is not verified against Discord here, an unreachable channel surfaces when the bot tries to deliver.",
+      "request": {
+        "array": false,
+        "ref": "balancer.CustomGameDiscordChannelPatch"
+      },
+      "summary": "Set custom game Discord channel"
+    },
+    "rpc.balancer.custom.set_next_map": {
+      "description": "Names the map the mix's next match is played on -- rolled or picked by a host ahead of the lobby -- or clears it with null. The next recorded match takes this map unless the outcome names one explicitly, and clears it either way. Host or co-host only; 404 when the map is not in the catalogue.",
+      "request": {
+        "array": false,
+        "ref": "balancer.CustomGameNextMapPatch"
+      },
+      "summary": "Set custom game next map"
     },
     "rpc.balancer.custom.set_participation": {
       "description": "Moves several seats between must_play, pool and benched in one transaction -- the whole rotation verdict at once -- and returns the refreshed mix. Host or co-host only; 404 if any member is not on the roster.",
@@ -3819,6 +3851,10 @@
       },
       "summary": "Set custom game team names"
     },
+    "rpc.balancer.custom.stats": {
+      "description": "Per-member wins/losses/draws, win rate, current streak and the per-role split across every mix this workspace has run, best record first. The optional since query parameter (ISO 8601) narrows it to matches recorded on or after that moment; without it the whole history counts. Read-only and open to any workspace member.",
+      "summary": "Get custom game statistics"
+    },
     "rpc.balancer.custom.swap_seats": {
       "description": "Swaps two seated players between teams inside one balance option, same role only, and returns the refreshed mix. Host or co-host only; 404 when the option or either seat is missing, 422 when the seats hold different roles or sit on the same team.",
       "request": {
@@ -3834,6 +3870,10 @@
         "ref": "balancer.CustomGameHostTransfer"
       },
       "summary": "Transfer custom game host"
+    },
+    "rpc.balancer.custom.undo_match": {
+      "description": "Deletes the mix's most recent match and gives back exactly the rank points it applied, read from the match itself rather than the mix's current points_per_win. Host or co-host only; 404 when the match belongs to another mix and 409 when a newer match exists, since the rank book compounds. must_play pins the recording redeemed are not restored.",
+      "summary": "Undo custom game match"
     },
     "rpc.balancer.custom.update_player": {
       "description": "Patches one seat's participation state, role order or flex flag and returns the refreshed mix. Host or co-host only; 404 when the member is not on this mix's roster.",
@@ -8558,6 +8598,42 @@
       },
       "summary": "Accept an invite"
     },
+    "rpc.tournament.regteam_admission": {
+      "description": "Sets the orthogonal admission axis (pending, accepted, waitlisted) without changing occupancy status. Waitlisted complete teams are skipped at export. Requires team-update permission.",
+      "request": {
+        "array": false,
+        "ref": "tournament.RegistrationTeamAdmissionRequest"
+      },
+      "response": {
+        "array": false,
+        "ref": "tournament.RegistrationTeamRead"
+      },
+      "summary": "Set registration-team admission"
+    },
+    "rpc.tournament.regteam_check_in": {
+      "description": "Captain or manager checks in every approved member except those listed in exclude_registration_ids. Gated by the tournament check-in window.",
+      "request": {
+        "array": false,
+        "ref": "tournament.RegistrationTeamCheckInRequest"
+      },
+      "response": {
+        "array": false,
+        "ref": "tournament.RegistrationTeamRead"
+      },
+      "summary": "Check in a team's roster"
+    },
+    "rpc.tournament.regteam_cover_subscription": {
+      "description": "Stamps the registered team with the captain or manager's active entitlement, or a redeemed challenge code. Only when the form's subscription_scope is team.",
+      "request": {
+        "array": false,
+        "ref": "tournament.RegistrationTeamRedeemSubscriptionRequest"
+      },
+      "response": {
+        "array": false,
+        "ref": "tournament.RegistrationTeamRead"
+      },
+      "summary": "Cover a team subscription"
+    },
     "rpc.tournament.regteam_create": {
       "description": "Founds a team for a tournament and registers the caller as its captain in one transaction, occupying the requested roster slot. The captain passes the same registration form and the same admission gate as a solo entrant. Returns the new team including its own invites. 400 on an empty name or one containing '#', 409 when the name is taken or the caller is already registered; requires authentication.",
       "request": {
@@ -8577,6 +8653,14 @@
     "rpc.tournament.regteam_disband": {
       "description": "The captain dissolves their own team (204 no body): members' registrations become withdrawn but keep their team link, so each player's card can say the team was disbanded rather than leaving an unexplained withdrawal, and every pending invite is revoked. Captain-only (403), team must still be forming and registration still open. An organizer's equivalent is regteam_reject.",
       "summary": "Disband a team"
+    },
+    "rpc.tournament.regteam_extend_invite": {
+      "description": "Refreshes a pending invite's TTL. rotate_token is only valid for a link invite and returns a new raw token exactly once. Captain or manager.",
+      "request": {
+        "array": false,
+        "ref": "tournament.RegistrationTeamExtendInviteRequest"
+      },
+      "summary": "Extend or rotate an invite"
     },
     "rpc.tournament.regteam_free_agents": {
       "description": "Returns this tournament's live registrants who are on no team, with the roles they signed up for (primary first) -- the picker a captain fills a slot from. Authenticated but not captain-gated: everything here is already on the public participants list. Carries registration ids, never account ids.",
@@ -8679,6 +8763,14 @@
       },
       "summary": "List registration teams"
     },
+    "rpc.tournament.regteam_lock": {
+      "description": "Captain-only. A complete roster can be frozen so further edits refuse with roster_locked until an organizer unlocks it.",
+      "response": {
+        "array": false,
+        "ref": "tournament.RegistrationTeamRead"
+      },
+      "summary": "Lock a complete roster"
+    },
     "rpc.tournament.regteam_my_invites": {
       "description": "Returns the targeted invites offered to the calling user in this tournament -- the only way their recipient can learn one exists, since a targeted invite carries no token to paste. Scoped to the caller from their own token; there is no id to pass. Link invites are excluded (a bearer credential has no addressee), as are expired offers and offers from teams no longer forming. Requires authentication.",
       "response": {
@@ -8687,17 +8779,101 @@
       },
       "summary": "List invites addressed to me"
     },
+    "rpc.tournament.regteam_notes": {
+      "description": "Staff-only notes on a registered team; never returned on the public roster. Requires team-update permission on the tournament.",
+      "request": {
+        "array": false,
+        "ref": "tournament.RegistrationTeamNotesRequest"
+      },
+      "response": {
+        "array": false,
+        "ref": "tournament.RegistrationTeamRead"
+      },
+      "summary": "Set organizer notes on a registration team"
+    },
+    "rpc.tournament.regteam_place_admin": {
+      "description": "Moves a live registration onto a slot of a team in this tournament, even from another team. The captain of a source team cannot be moved until captaincy is transferred. Requires team-update permission.",
+      "request": {
+        "array": false,
+        "ref": "tournament.RegistrationTeamPlaceMemberRequest"
+      },
+      "response": {
+        "array": false,
+        "ref": "tournament.RegistrationTeamRead"
+      },
+      "summary": "Place a player on a registration team (organizer)"
+    },
+    "rpc.tournament.regteam_place_member": {
+      "description": "Moves a member to another slot, onto or off the bench, or swaps two members when swap_with_registration_id is set. Captain or manager. A captain cannot become a substitute.",
+      "request": {
+        "array": false,
+        "ref": "tournament.RegistrationTeamPlaceMemberRequest"
+      },
+      "response": {
+        "array": false,
+        "ref": "tournament.RegistrationTeamRead"
+      },
+      "summary": "Reassign a roster slot"
+    },
     "rpc.tournament.regteam_reject": {
-      "description": "An ORGANIZER refuses an entire team -- the counterpart of rejecting a solo registration, and distinct from regteam_decline, which is one invitee refusing one offer. Revokes the team's pending invites and, by default, withdraws its members; `withdraw_members: false` instead returns them to the solo pool, which is the right call when the team is rejected for being incomplete rather than unwelcome. Returns the rejected team. 404 when the team belongs to another tournament, 409 once it is already exported, rejected or disbanded. Requires team-update permission on the tournament.",
+      "description": "An ORGANIZER refuses an entire team -- the counterpart of rejecting a solo registration, and distinct from regteam_decline, which is one invitee refusing one offer. Revokes the team's pending invites and returns its members to the solo pool without changing their registration status by default; `withdraw_members: true` explicitly withdraws them instead. Requires a reason of 1\u20131000 characters after trimming whitespace. The stored reason is visible to the organizer and the entitled captain, including after roster detachment, but not to the public. Returns the rejected team. 404 when the team belongs to another tournament, 409 once it is already exported, rejected or disbanded. Requires team-update permission on the tournament.",
+      "request": {
+        "array": false,
+        "ref": "tournament.RegistrationTeamRejectRequest"
+      },
       "response": {
         "array": false,
         "ref": "tournament.RegistrationTeamRead"
       },
       "summary": "Reject a registration team"
     },
+    "rpc.tournament.regteam_rename": {
+      "description": "Captain or manager renames their team. The roster must still be mutable and unlocked. '#' in a name is refused. Requires authentication.",
+      "request": {
+        "array": false,
+        "ref": "tournament.RegistrationTeamRenameRequest"
+      },
+      "response": {
+        "array": false,
+        "ref": "tournament.RegistrationTeamRead"
+      },
+      "summary": "Rename a registration team"
+    },
+    "rpc.tournament.regteam_rename_admin": {
+      "description": "An organizer renames a registered team they do not captain. 404 when the team belongs to another tournament (deliberately not 403). Requires team-update permission.",
+      "request": {
+        "array": false,
+        "ref": "tournament.RegistrationTeamRenameRequest"
+      },
+      "response": {
+        "array": false,
+        "ref": "tournament.RegistrationTeamRead"
+      },
+      "summary": "Rename a registration team (organizer)"
+    },
+    "rpc.tournament.regteam_set_manager": {
+      "description": "Captain-only: flags another accepted member as a manager so they can invite, kick, rename and check the roster in. The captain themselves is not a manager.",
+      "request": {
+        "array": false,
+        "ref": "tournament.RegistrationTeamSetManagerRequest"
+      },
+      "response": {
+        "array": false,
+        "ref": "tournament.RegistrationTeamRead"
+      },
+      "summary": "Grant or revoke team-manager"
+    },
     "rpc.tournament.regteam_transfer_captain": {
       "description": "Hands captaincy to another accepted member (204 no body); the roster itself is unchanged. Captain-only (403), team must still be forming and registration still open. 404 when the successor is not on the team, 409 when they are a substitute -- a bench player holds no starter slot and cannot captain the roster.",
       "summary": "Transfer captaincy"
+    },
+    "rpc.tournament.regteam_unlock": {
+      "description": "Clears a captain's roster lock so the team can edit again. Organizer-only; captains lock, they do not unlock. Requires team-update permission on the tournament.",
+      "response": {
+        "array": false,
+        "ref": "tournament.RegistrationTeamRead"
+      },
+      "summary": "Unlock a registration team roster"
     },
     "rpc.tournament.report_form_get": {
       "description": "Returns the tournament's captain match-report form config: which built-in fields (closeness, map codes, comment) are enabled and required, plus any organizer-defined text fields. Always a complete config \u2014 a tournament that has never been configured answers the defaults rather than null. Requires match-read permission on the tournament's workspace.",
@@ -18107,6 +18283,18 @@
           "title": "Guild Id",
           "type": "string"
         },
+        "icon_url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Icon Url"
+        },
         "name": {
           "title": "Name",
           "type": "string"
@@ -18126,7 +18314,7 @@
       "type": "object"
     },
     "app.WorkspaceDiscordGuildVerify": {
-      "description": "Body for ``discord_guild_verify``. The snowflake pattern gates shape\nonly -- the actual proof of administration happens server-side via\n``rpc.identity.oauth_discord_guilds``, not here. No blank-clears-it\nnormalization like ``WorkspaceUpdate`` used to carry: there is no \"clear\"\nverb for a verified claim, only bind (this) and whatever future admin\noverride unbinds it.",
+      "description": "Body for ``discord_guild_verify``. The snowflake pattern gates shape\nonly -- the actual proof of administration happens server-side via\n``rpc.identity.oauth_discord_guilds``, not here. Clearing a verified claim\nis a separate verb (``discord_guild_clear``), not a blank ``guild_id``.",
       "properties": {
         "guild_id": {
           "pattern": "^\\d{17,19}$",
@@ -20087,6 +20275,18 @@
           "default": null,
           "title": "Balancer Config"
         },
+        "clone_from_game_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Clone From Game Id"
+        },
         "member_ids": {
           "items": {
             "type": "integer"
@@ -20108,6 +20308,28 @@
       "title": "CustomGameCreate",
       "type": "object"
     },
+    "balancer.CustomGameDiscordChannelPatch": {
+      "additionalProperties": false,
+      "description": "The channel the mix posts its matchup to; ``null`` clears it.\n\nA string, not an integer: a Discord snowflake is a 64-bit id that a\nJavaScript client cannot hold losslessly as a number. Digits only, so the\nserver can turn it back into the ``BIGINT`` column without guessing.",
+      "properties": {
+        "channel_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Channel Id"
+        }
+      },
+      "required": [
+        "channel_id"
+      ],
+      "title": "CustomGameDiscordChannelPatch",
+      "type": "object"
+    },
     "balancer.CustomGameHostTransfer": {
       "additionalProperties": false,
       "properties": {
@@ -20120,6 +20342,28 @@
         "new_host_user_id"
       ],
       "title": "CustomGameHostTransfer",
+      "type": "object"
+    },
+    "balancer.CustomGameNextMapPatch": {
+      "additionalProperties": false,
+      "description": "``null`` clears the pick; the next match then records with no map.",
+      "properties": {
+        "map_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Map Id"
+        }
+      },
+      "required": [
+        "map_id"
+      ],
+      "title": "CustomGameNextMapPatch",
       "type": "object"
     },
     "balancer.CustomGameOutcome": {
@@ -20248,6 +20492,35 @@
         "points_per_win"
       ],
       "title": "CustomGamePointsPerWinPatch",
+      "type": "object"
+    },
+    "balancer.CustomGamePostDiscord": {
+      "additionalProperties": false,
+      "description": "Which balance option's lineup to post, and the PNG of it to attach.\n\nThe image is the matchup card the host is looking at, rasterised in their\nbrowser (see ``frontend/src/hooks/useNodeCapture.ts``) -- the bot has no\nrenderer, and a screenshot of the real card is the one thing guaranteed to\nmatch what the mix page shows. Omitted when the capture fails, and the\ntext embed is then posted instead.",
+      "properties": {
+        "image_b64": {
+          "anyOf": [
+            {
+              "maxLength": 8388608,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Image B64"
+        },
+        "variant_index": {
+          "minimum": 0,
+          "title": "Variant Index",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "variant_index"
+      ],
+      "title": "CustomGamePostDiscord",
       "type": "object"
     },
     "balancer.CustomGameRecordOutcome": {
@@ -38011,9 +38284,67 @@
           "title": "Subscription Requirement Json",
           "type": "object"
         },
+        "subscription_scope": {
+          "default": "player",
+          "enum": [
+            "player",
+            "team"
+          ],
+          "title": "Subscription Scope",
+          "type": "string"
+        },
         "subscription_stage": {
           "$ref": "#/components/schemas/tournament.SubscriptionEnforcementStage",
           "default": "check_in"
+        },
+        "team_max_rank_spread": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Team Max Rank Spread"
+        },
+        "team_rank_max": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Team Rank Max"
+        },
+        "team_rank_min": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Team Rank Min"
+        },
+        "team_require_discord_guild": {
+          "default": false,
+          "title": "Team Require Discord Guild",
+          "type": "boolean"
+        },
+        "team_unique_identity": {
+          "default": false,
+          "title": "Team Unique Identity",
+          "type": "boolean"
         },
         "tournament_id": {
           "title": "Tournament Id",
@@ -38080,9 +38411,67 @@
           "title": "Show Ranks",
           "type": "boolean"
         },
+        "subscription_scope": {
+          "default": "player",
+          "enum": [
+            "player",
+            "team"
+          ],
+          "title": "Subscription Scope",
+          "type": "string"
+        },
         "subscription_stage": {
           "$ref": "#/components/schemas/tournament.SubscriptionEnforcementStage",
           "default": "check_in"
+        },
+        "team_max_rank_spread": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Team Max Rank Spread"
+        },
+        "team_rank_max": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Team Rank Max"
+        },
+        "team_rank_min": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Team Rank Min"
+        },
+        "team_require_discord_guild": {
+          "default": false,
+          "title": "Team Require Discord Guild",
+          "type": "boolean"
+        },
+        "team_unique_identity": {
+          "default": false,
+          "title": "Team Unique Identity",
+          "type": "boolean"
         }
       },
       "title": "RegistrationFormUpsert",
@@ -38491,6 +38880,24 @@
       "title": "RegistrationTeamAcceptRequest",
       "type": "object"
     },
+    "tournament.RegistrationTeamAdmissionRequest": {
+      "properties": {
+        "admission": {
+          "enum": [
+            "pending",
+            "accepted",
+            "waitlisted"
+          ],
+          "title": "Admission",
+          "type": "string"
+        }
+      },
+      "required": [
+        "admission"
+      ],
+      "title": "RegistrationTeamAdmissionRequest",
+      "type": "object"
+    },
     "tournament.RegistrationTeamBrief": {
       "description": "The registered team a roster read carries inline.\n\nDeliberately not the full ``RegistrationTeamRead``: this rides in every row of\nthe public participants list, so it holds only what a team column and the\n\u00a712.5 status line need. In particular it carries **no invites** \u2014 a public\nroster must not leak who has been asked and declined.",
       "properties": {
@@ -38537,6 +38944,19 @@
       "title": "RegistrationTeamBrief",
       "type": "object"
     },
+    "tournament.RegistrationTeamCheckInRequest": {
+      "properties": {
+        "exclude_registration_ids": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "Exclude Registration Ids",
+          "type": "array"
+        }
+      },
+      "title": "RegistrationTeamCheckInRequest",
+      "type": "object"
+    },
     "tournament.RegistrationTeamCreateRequest": {
       "description": "Create a team and register the caller as its captain, in one call.\n\nThe captain is a member like any other (decision 5), so their own registration\npayload rides along and goes through the identical validation a solo entrant\ngets. Splitting this into \"create team\" then \"register captain\" would allow a\ncaptainless team to exist between the two calls.",
       "properties": {
@@ -38566,6 +38986,31 @@
         "registration"
       ],
       "title": "RegistrationTeamCreateRequest",
+      "type": "object"
+    },
+    "tournament.RegistrationTeamExtendInviteRequest": {
+      "properties": {
+        "rotate_token": {
+          "default": false,
+          "title": "Rotate Token",
+          "type": "boolean"
+        },
+        "ttl_days": {
+          "anyOf": [
+            {
+              "maximum": 90,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ttl Days"
+        }
+      },
+      "title": "RegistrationTeamExtendInviteRequest",
       "type": "object"
     },
     "tournament.RegistrationTeamInviteCreateRequest": {
@@ -38981,6 +39426,11 @@
           "default": null,
           "title": "Battle Tag"
         },
+        "checked_in": {
+          "default": false,
+          "title": "Checked In",
+          "type": "boolean"
+        },
         "display_name": {
           "anyOf": [
             {
@@ -38996,6 +39446,11 @@
         "is_captain": {
           "default": false,
           "title": "Is Captain",
+          "type": "boolean"
+        },
+        "is_manager": {
+          "default": false,
+          "title": "Is Manager",
           "type": "boolean"
         },
         "is_substitute": {
@@ -39031,8 +39486,67 @@
       "title": "RegistrationTeamMemberRead",
       "type": "object"
     },
+    "tournament.RegistrationTeamNotesRequest": {
+      "properties": {
+        "notes": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Notes"
+        }
+      },
+      "title": "RegistrationTeamNotesRequest",
+      "type": "object"
+    },
+    "tournament.RegistrationTeamPlaceMemberRequest": {
+      "properties": {
+        "is_substitute": {
+          "default": false,
+          "title": "Is Substitute",
+          "type": "boolean"
+        },
+        "slot_code": {
+          "enum": [
+            "tank",
+            "dps",
+            "support",
+            "flex"
+          ],
+          "title": "Slot Code",
+          "type": "string"
+        },
+        "swap_with_registration_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Swap With Registration Id"
+        }
+      },
+      "required": [
+        "slot_code"
+      ],
+      "title": "RegistrationTeamPlaceMemberRequest",
+      "type": "object"
+    },
     "tournament.RegistrationTeamRead": {
       "properties": {
+        "admission": {
+          "default": "pending",
+          "title": "Admission",
+          "type": "string"
+        },
         "captain_registration_id": {
           "anyOf": [
             {
@@ -39044,6 +39558,23 @@
           ],
           "default": null,
           "title": "Captain Registration Id"
+        },
+        "check_in_total": {
+          "default": 0,
+          "title": "Check In Total",
+          "type": "integer"
+        },
+        "checked_in_count": {
+          "default": 0,
+          "title": "Checked In Count",
+          "type": "integer"
+        },
+        "eligibility_issues": {
+          "items": {
+            "$ref": "#/components/schemas/tournament.TeamEligibilityIssueRead"
+          },
+          "title": "Eligibility Issues",
+          "type": "array"
         },
         "exported_team_id": {
           "anyOf": [
@@ -39108,6 +39639,43 @@
           "title": "Open Slots",
           "type": "object"
         },
+        "organizer_notes": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Organizer Notes"
+        },
+        "rejection_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rejection Reason"
+        },
+        "roster_locked_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Roster Locked At"
+        },
         "shortfall": {
           "default": "roster complete",
           "title": "Shortfall",
@@ -39116,6 +39684,24 @@
         "status": {
           "title": "Status",
           "type": "string"
+        },
+        "subscription_covered": {
+          "default": false,
+          "title": "Subscription Covered",
+          "type": "boolean"
+        },
+        "subscription_expires_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Subscription Expires At"
         },
         "substitutes_used": {
           "default": 0,
@@ -39134,6 +39720,77 @@
         "status"
       ],
       "title": "RegistrationTeamRead",
+      "type": "object"
+    },
+    "tournament.RegistrationTeamRedeemSubscriptionRequest": {
+      "properties": {
+        "code": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Code"
+        },
+        "provider": {
+          "default": "boosty",
+          "title": "Provider",
+          "type": "string"
+        }
+      },
+      "title": "RegistrationTeamRedeemSubscriptionRequest",
+      "type": "object"
+    },
+    "tournament.RegistrationTeamRejectRequest": {
+      "properties": {
+        "reason": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string"
+        },
+        "withdraw_members": {
+          "default": false,
+          "title": "Withdraw Members",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "reason"
+      ],
+      "title": "RegistrationTeamRejectRequest",
+      "type": "object"
+    },
+    "tournament.RegistrationTeamRenameRequest": {
+      "properties": {
+        "name": {
+          "maxLength": 255,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "RegistrationTeamRenameRequest",
+      "type": "object"
+    },
+    "tournament.RegistrationTeamSetManagerRequest": {
+      "properties": {
+        "is_manager": {
+          "title": "Is Manager",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "is_manager"
+      ],
+      "title": "RegistrationTeamSetManagerRequest",
       "type": "object"
     },
     "tournament.RegistrationUpdate": {
@@ -41709,6 +42366,36 @@
         "captain_id"
       ],
       "title": "TeamCreate",
+      "type": "object"
+    },
+    "tournament.TeamEligibilityIssueRead": {
+      "properties": {
+        "blocking": {
+          "default": true,
+          "title": "Blocking",
+          "type": "boolean"
+        },
+        "code": {
+          "title": "Code",
+          "type": "string"
+        },
+        "registration_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Registration Id"
+        }
+      },
+      "required": [
+        "code"
+      ],
+      "title": "TeamEligibilityIssueRead",
       "type": "object"
     },
     "tournament.TeamFilterQueryParams": {

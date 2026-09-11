@@ -37,6 +37,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared import models
 from shared.core.enums import SubscriptionCollectionSource
+from shared.domain.team_subscription import team_subscription_is_current
 from shared.services.admission.config import AdmissionConfig
 from shared.services.admission.evaluate import evaluate, stage_reached
 from shared.services.admission.registry import REQUIREMENTS
@@ -100,6 +101,42 @@ async def load_auth_user_ids(session: AsyncSession, registrations: Sequence[Any]
     # `Iterable[tuple[...]]` and `dict()` does not type-check.
     mapped = dict(rows.tuples().all())
     return {reg_id: mapped.get(reg_id) for reg_id in reg_ids}
+
+
+def _coverage_signal() -> SubscriptionSignal:
+    return SubscriptionSignal(outcome="satisfied")
+
+
+async def _team_stamp_is_current(session: AsyncSession, registration: Any) -> bool:
+    """True when this registration sits on a currently covered team.
+
+    Relationship first so a caller that already loaded the team pays nothing.
+    Extra lookups use optional session methods so the unit stubs in
+    test_admission_resolve (execute-only) skip the overlay instead of exploding.
+    """
+    if registration is None:
+        return False
+    team = getattr(registration, "registration_team", None)
+    if team is None:
+        team_id = getattr(registration, "registration_team_id", None)
+        if not team_id:
+            return False
+        getter = getattr(session, "get", None)
+        if callable(getter):
+            try:
+                team = await getter(models.BalancerRegistrationTeam, team_id)
+            except TypeError:
+                team = None
+        if team is None:
+            scalar = getattr(session, "scalar", None)
+            if callable(scalar):
+                try:
+                    team = await scalar(
+                        sa.select(models.BalancerRegistrationTeam).where(models.BalancerRegistrationTeam.id == team_id)
+                    )
+                except TypeError:
+                    team = None
+    return bool(team) and team_subscription_is_current(team)
 
 
 async def _profiles(
@@ -186,6 +223,11 @@ async def _subscriptions(
             continue
         outcome, verdicts = resolved
         signals[reg_id] = build_subscription_signal(outcome, verdicts)
+    if config.subscription_scope == "team":
+        for registration in registrations:
+            team = getattr(registration, "registration_team", None)
+            if team is not None and team_subscription_is_current(team):
+                signals[registration.id] = _coverage_signal()
     return signals
 
 
@@ -335,6 +377,13 @@ async def resolve_admission_for_gate(
 
     subscriptions: dict[int, SubscriptionSignal] = {}
     target = _subscription_target(config, stage)
+    if (
+        config.subscription_scope == "team"
+        and registration is not None
+        and await _team_stamp_is_current(session, registration)
+    ):
+        subscriptions = {subject_id: _coverage_signal()}
+        target = None
     if resolver is not None and target is not None:
         workspace_id, rule = target
         if auth_user_id is None:

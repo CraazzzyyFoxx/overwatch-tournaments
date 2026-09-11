@@ -28,7 +28,10 @@ type KindMessageKey = `notifications.kinds.${
   | "registration.approved"
   | "registration.rejected"
   | "encounter.report_disputed"
-  | "announcement.published"}`;
+  | "announcement.published"
+  | "team.kicked"
+  | "team.rejected"
+  | "team.disbanded"}`;
 
 interface NotificationListProps {
   headingId: string;
@@ -83,6 +86,9 @@ function getKindConfig(kind: string) {
         className: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
       };
     case "registration.rejected":
+    case "team.kicked":
+    case "team.rejected":
+    case "team.disbanded":
       return {
         icon: XCircle,
         className: "bg-rose-500/10 text-rose-400 border-rose-500/20"
@@ -172,7 +178,7 @@ const NotificationList = ({
 
   return (
     <div className="flex min-h-0 max-h-[min(70dvh,var(--radix-popover-content-available-height))] flex-col">
-      <div className="flex shrink-0 items-center justify-between gap-2 px-4 pb-2.5 pt-3.5">
+      <div className="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-1 px-4 pb-2.5 pt-3.5">
         <div className="flex items-center gap-2">
           <h2 id={headingId} className="text-sm font-semibold tracking-tight text-foreground">
             {t("notifications.title")}
@@ -183,12 +189,12 @@ const NotificationList = ({
             </span>
           )}
         </div>
-        <div className="flex items-center gap-0.5">
+        <div className="ml-auto flex min-w-0 items-center gap-0.5">
           <Button
             static={false}
             variant="ghost"
             size="sm"
-            className="h-auto min-h-8 gap-1.5 px-2 text-xs text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground aria-disabled:pointer-events-none aria-disabled:opacity-50"
+            className="h-auto min-h-8 min-w-0 gap-1.5 px-2 text-xs text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground aria-disabled:pointer-events-none aria-disabled:opacity-50"
             onClick={() => {
               if (!markAllUnavailable) markAllRead();
             }}
@@ -197,7 +203,7 @@ const NotificationList = ({
             aria-busy={isMarkingRead && markingId == null}
           >
             <CheckCheck className="size-3.5 shrink-0" aria-hidden />
-            <span>
+            <span className="truncate">
               {t(
                 isMarkingRead && markingId == null
                   ? "notifications.markingAllRead"
@@ -209,7 +215,7 @@ const NotificationList = ({
             static={false}
             variant="ghost"
             size="sm"
-            className="h-auto min-h-8 gap-1.5 px-2 text-xs text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive aria-disabled:pointer-events-none aria-disabled:opacity-50"
+            className="h-auto min-h-8 min-w-0 gap-1.5 px-2 text-xs text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive aria-disabled:pointer-events-none aria-disabled:opacity-50"
             onClick={() => {
               if (!clearReadUnavailable) clearRead();
             }}
@@ -218,7 +224,7 @@ const NotificationList = ({
             aria-busy={isDeleting && deletingId == null}
           >
             <Trash2 className="size-3.5 shrink-0" aria-hidden />
-            <span>
+            <span className="truncate">
               {t(
                 isDeleting && deletingId == null
                   ? "notifications.clearingRead"

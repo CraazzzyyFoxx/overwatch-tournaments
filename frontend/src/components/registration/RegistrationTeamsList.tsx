@@ -8,9 +8,10 @@ import { useId } from "react";
 import RosterSlotGlyph from "@/components/registration/RosterSlotGlyph";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
-import { REGISTRATION_TEAM_STATUS_TONE } from "@/lib/registration-team-tone";
+import { getRegistrationTeamStatus, REGISTRATION_TEAM_STATUS_TONE } from "@/lib/registration-team-tone";
 import { ROSTER_SLOT_CODES, type RosterSlotCode } from "@/lib/roster-shape";
 import { tournamentQueryKeys } from "@/lib/tournament-query-keys";
 import { cn } from "@/lib/utils";
@@ -82,6 +83,7 @@ function OpenSlotRow({ code }: Readonly<{ code: RosterSlotCode }>) {
 function RegistrationTeamCard({ team }: Readonly<{ team: RegistrationTeam }>) {
   const t = useTranslations();
   const headingId = useId();
+  const status = getRegistrationTeamStatus(team);
   // Starters before substitutes, canonical slot order inside each, captain first
   // within a slot — the order a roster is read in, and the same shape in every
   // card so two rosters can be compared by looking at them.
@@ -101,7 +103,7 @@ function RegistrationTeamCard({ team }: Readonly<{ team: RegistrationTeam }>) {
       aria-labelledby={headingId}
       className="relative flex flex-col gap-3 overflow-hidden rounded-xl border border-[color:var(--aqt-border)] bg-[color:var(--aqt-overlay-1)] p-4 shadow-md backdrop-blur-md sm:p-5"
     >
-      <header className="flex items-center justify-between gap-2">
+      <header className="flex flex-wrap items-center justify-between gap-2">
         <Avatar className="size-7 shrink-0 rounded-md border border-[color:var(--aqt-border)]">
           {team.image_url ? <AvatarImage src={team.image_url} alt="" /> : null}
           <AvatarFallback className="rounded-md bg-[color:var(--aqt-overlay-2)] text-label font-semibold">
@@ -117,9 +119,9 @@ function RegistrationTeamCard({ team }: Readonly<{ team: RegistrationTeam }>) {
         </h3>
         <Badge
           variant="outline"
-          className={cn("shrink-0", REGISTRATION_TEAM_STATUS_TONE[team.status])}
+          className={cn("shrink-0", REGISTRATION_TEAM_STATUS_TONE[status])}
         >
-          {t(`registrationTeams.status.${team.status}`)}
+          {t(`registrationTeams.status.${status}`)}
         </Badge>
       </header>
 
@@ -169,10 +171,7 @@ function RegistrationTeamCard({ team }: Readonly<{ team: RegistrationTeam }>) {
  * organizer exported: both then listed the same teams. Participants is where you
  * already go to see who entered, so the team view belongs above that list.
  *
- * Renders nothing at all when there are no registered teams, so a solo tournament
- * — and a team tournament before anyone registers — pays no vertical space. The
- * page's own empty/error states cover the participant list; a second empty card
- * here would just be noise.
+ * The count includes the viewer's team, whose management panel appears above.
  */
 export default function RegistrationTeamsList({
   tournament
@@ -196,7 +195,11 @@ export default function RegistrationTeamsList({
   });
   const myTeamId = myRegQuery.data?.team?.id ?? null;
 
-  const teams = (teamsQuery.data?.items ?? []).filter((team) => team.id !== myTeamId);
+  const activeTeams = (teamsQuery.data?.items ?? []).filter(
+    (team) => team.status === "forming" || team.status === "complete",
+  );
+  const teams = activeTeams.filter((team) => team.id !== myTeamId);
+  const totalTeams = activeTeams.length;
   const freeAgents = teamsQuery.data?.unassigned_players ?? 0;
 
   if (teamsQuery.isLoading || (isAuthenticated && myRegQuery.isLoading)) {
@@ -212,9 +215,16 @@ export default function RegistrationTeamsList({
     );
   }
 
-  // Nothing registered at all: stay silent. A free-agent count alone is still
-  // worth showing, because it is what tells a captain there are people to recruit.
-  if (teams.length === 0 && freeAgents === 0) return null;
+  if (teamsQuery.isError && !teamsQuery.data) {
+    return (
+      <section role="alert" className="grid gap-2 rounded-xl border border-[color:var(--aqt-border)] p-4">
+        <h2 className="font-semibold">{t("registrationTeams.list.loadError")}</h2>
+        <Button variant="outline" className="justify-self-start" onClick={() => void teamsQuery.refetch()}>
+          {t("common.retry")}
+        </Button>
+      </section>
+    );
+  }
 
   return (
     <section className="flex flex-col gap-3">
@@ -223,7 +233,7 @@ export default function RegistrationTeamsList({
           {t("registrationTeams.list.title")}
         </h2>
         <span className="text-body text-[color:var(--aqt-fg-muted)]">
-          {t("registrationTeams.list.count", { count: teams.length })}
+          {t("registrationTeams.list.count", { count: totalTeams })}
         </span>
         {/* Muted, not amber: on this card amber means "roster still short", and
             free agents are an opportunity, not a warning. */}
@@ -233,6 +243,21 @@ export default function RegistrationTeamsList({
           </span>
         ) : null}
       </div>
+      <p className="text-sm text-[color:var(--aqt-fg-muted)]">
+        {t("registrationTeams.list.stateHint")}
+      </p>
+      {myTeamId !== null && (
+        <p className="text-sm text-[color:var(--aqt-fg-muted)]">{t("registrationTeams.list.ownTeamAbove")}</p>
+      )}
+      {totalTeams === 0 && (
+        <p className="text-sm text-[color:var(--aqt-fg-muted)]">{t("registrationTeams.list.empty")}</p>
+      )}
+      {teamsQuery.isError && (
+        <div role="alert" className="flex flex-wrap items-center gap-2">
+          <span>{t("registrationTeams.list.loadError")}</span>
+          <Button variant="outline" onClick={() => void teamsQuery.refetch()}>{t("common.retry")}</Button>
+        </div>
+      )}
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {teams.map((team) => (

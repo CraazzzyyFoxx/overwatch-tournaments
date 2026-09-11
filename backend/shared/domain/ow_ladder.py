@@ -54,8 +54,12 @@ TIERS_PER_DIVISION = 5
 #: SR span of a single sub-tier; a division therefore spans ``5 * 100 = 500``.
 TIER_SPAN = 100
 
-#: Public bucket holding one PNG per tier slug (``bronze-5.png`` … ``champion-1.png``).
-DIVISION_ICON_BASE = "https://static.nl.craazzzyyfoxx.me/aqt/assets/divisions"
+#: Site-relative path of the default OW2 rank icons (``bronze-5.png`` … ``champion-1.png``).
+#: Served from ``frontend/public/divisions``. A full CDN URL used to live here
+#: (``static.nl.craazzzyyfoxx.me``); that host is gone, and baking an S3 public
+#: URL into the ladder made every deployment depend on one bucket. Workspace
+#: grids still store their own absolute ``icon_url``s.
+DIVISION_ICON_BASE = "/divisions"
 
 
 @dataclass(frozen=True)

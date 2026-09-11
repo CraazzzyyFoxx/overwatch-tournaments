@@ -58,3 +58,21 @@ def test_verify_body_accepts_every_length_a_bigint_could_hold(ok):
 def test_verify_body_requires_guild_id():
     with pytest.raises(ValidationError):
         schemas.WorkspaceDiscordGuildVerify()
+
+
+def test_guild_option_carries_an_optional_icon():
+    model = schemas.WorkspaceDiscordGuildOption(
+        guild_id="123456789012345678",
+        name="G",
+        owner=True,
+        can_manage=True,
+    )
+    assert model.icon_url is None
+    pictured = schemas.WorkspaceDiscordGuildOption(
+        guild_id="123456789012345678",
+        name="G",
+        icon_url="https://cdn.discordapp.com/icons/1/abc.png",
+        owner=True,
+        can_manage=True,
+    )
+    assert pictured.icon_url.endswith("abc.png")

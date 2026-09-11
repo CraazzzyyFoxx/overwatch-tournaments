@@ -47,6 +47,12 @@ export type PickupSwapSeatsInput = {
   secondUuid: string;
 };
 
+export type PickupCreateGameInput = {
+  name: string;
+  /** Copy a previous mix's lineup and settings, or `null` to start empty. */
+  cloneFromGameId: number | null;
+};
+
 /**
  * Every read and write for one workspace's mixes, in one place.
  *
@@ -109,12 +115,16 @@ export function usePickupMix(workspaceId: number, pickedGameId: number | null) {
     void queryClient.invalidateQueries({ queryKey: customGameKeys.list(workspaceId) });
     // Roster, participation and match history all feed the rotation verdict --
     // any write here can flip it, so it is invalidated alongside the game
-    // itself rather than only on the writes that look rotation-specific.
+    // itself rather than only on the writes that look rotation-specific. The
+    // history is refetched for the same reason: recording and undoing both
+    // rewrite it, and until now that only landed through the realtime echo.
     void queryClient.invalidateQueries({ queryKey: customGameKeys.rotation(workspaceId, game.id) });
+    void queryClient.invalidateQueries({ queryKey: customGameKeys.matches(workspaceId, game.id) });
   };
 
   const createGame = useMutation({
-    mutationFn: (name: string) => customGameService.create(workspaceId, name),
+    mutationFn: (input: PickupCreateGameInput) =>
+      customGameService.create(workspaceId, input.name, input.cloneFromGameId),
     onSuccess: applyGame,
     onError: (error) => notify.apiError(error),
   });
@@ -197,6 +207,26 @@ export function usePickupMix(workspaceId: number, pickedGameId: number | null) {
     onError: (error) => notify.apiError(error),
   });
 
+  /** Where `postToDiscord` sends the matchup; `null` clears it. */
+  const setDiscordChannel = useMutation({
+    mutationFn: (channelId: string | null) =>
+      customGameService.setDiscordChannel(workspaceId, selectedGameId as number, channelId),
+    onSuccess: applyGame,
+    onError: (error) => notify.apiError(error),
+  });
+
+  /**
+   * Hands the matchup to the bot for the mix's Discord channel, as the PNG the
+   * caller rasterised from the matchup card. Nothing about the mix changes, so
+   * no cache is touched -- the only feedback is that the message was queued.
+   */
+  const postToDiscord = useMutation({
+    mutationFn: ({ variantIndex, image }: { variantIndex: number; image: Blob | null }) =>
+      customGameService.postToDiscord(workspaceId, selectedGameId as number, variantIndex, image),
+    onSuccess: () => notify.success("Sent to Discord"),
+    onError: (error) => notify.apiError(error),
+  });
+
   const transferHost = useMutation({
     mutationFn: (newHostUserId: number) =>
       customGameService.transferHost(workspaceId, selectedGameId as number, newHostUserId),
@@ -256,12 +286,34 @@ export function usePickupMix(workspaceId: number, pickedGameId: number | null) {
         selectedGameId as number,
         input.outcome,
         input.variantIndex,
-        input.mapId,
       ),
     onSuccess: (game) => {
       applyGame(game);
       notify.success("Result recorded");
     },
+    onError: (error) => notify.apiError(error),
+  });
+
+  /**
+   * Takes the newest recorded match back out -- the correction for a
+   * mis-clicked scoreline. Rank points move back by what that match applied,
+   * and only the newest one can go.
+   */
+  const undoMatch = useMutation({
+    mutationFn: (matchId: number) =>
+      customGameService.undoMatch(workspaceId, selectedGameId as number, matchId),
+    onSuccess: (game) => {
+      applyGame(game);
+      notify.success("Match undone");
+    },
+    onError: (error) => notify.apiError(error),
+  });
+
+  /** The map the next match is on -- rolled or picked; `null` clears it. */
+  const setNextMap = useMutation({
+    mutationFn: (mapId: number | null) =>
+      customGameService.setNextMap(workspaceId, selectedGameId as number, mapId),
+    onSuccess: applyGame,
     onError: (error) => notify.apiError(error),
   });
 
@@ -320,12 +372,16 @@ export function usePickupMix(workspaceId: number, pickedGameId: number | null) {
     applyRotationHints,
     balance,
     recordOutcome,
+    undoMatch,
+    setNextMap,
     closeMix,
     hardDeleteMix,
     setAuthorRanks,
     setTeamNames,
     setRoleMask,
     setPointsPerWin,
+    setDiscordChannel,
+    postToDiscord,
     transferHost,
     addCoHost,
     removeCoHost,

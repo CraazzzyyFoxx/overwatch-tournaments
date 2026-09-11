@@ -39,6 +39,7 @@ dependencies = [
     "tenacity>=9.0.0",
     "uvloop; platform_system == 'Linux'",
     "shared",
+    "apscheduler>=3.10.4",
 ]
 
 

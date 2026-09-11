@@ -51,8 +51,9 @@ _GUILD_CONFLICT_MESSAGE = "This Discord guild is already claimed by another work
 # because @broker.subscriber("rpc.identity.oauth_discord_guilds") declares a
 # same-named queue on the default exchange.
 _DISCORD_GUILDS_SUBJECT = "rpc.identity.oauth_discord_guilds"
-# Both Discord-guild calls (list, verify) fail closed on an unreachable
-# identity-service and say so identically -- one is the picker for the other.
+# Discord-guild list/verify fail closed on an unreachable identity-service
+# and say so identically -- one is the picker for the other. Clear does not
+# talk to Discord at all.
 _GUILD_UNREACHABLE_MESSAGE = "Could not reach Discord for guild verification"
 
 MEMBERS_SORT_FIELDS = ("username", "role")
@@ -859,6 +860,54 @@ class WorkspaceService:
                 "discord_guild_id": workspace.discord_guild_id,
                 "discord_guild_verified_at": _iso(workspace.discord_guild_verified_at),
             },
+        )
+        await session.commit()
+        return workspace
+
+    async def clear_discord_guild(
+        self,
+        session: AsyncSession,
+        workspace: models.Workspace,
+        *,
+        actor: typing.Any,
+    ) -> models.Workspace:
+        """Unbind the Discord guild from ``workspace``.
+
+        Workspace.update is enough: this is the admin override that lets an
+        organiser leave a server they can no longer prove they administer, or
+        free the unique guild-id so another workspace can claim it. Discord is
+        not re-asked -- the bind already proved ownership, and requiring it
+        again would strand a workspace whose bot was kicked.
+
+        Idempotent: clearing an already-unbound workspace is a no-op with no
+        extra audit row.
+        """
+        guild_id_before = workspace.discord_guild_id
+        verified_at_before = workspace.discord_guild_verified_at
+        if guild_id_before is None and verified_at_before is None:
+            return workspace
+
+        await self.workspace_repo.update_fields(
+            session,
+            workspace,
+            {
+                "discord_guild_id": None,
+                "discord_guild_verified_at": None,
+                "discord_guild_verified_by_auth_user_id": None,
+            },
+        )
+        await record_audit(
+            session,
+            action="workspace.discord_guild_cleared",
+            source="admin",
+            actor=actor,
+            actor_label=actor.username,
+            workspace_id=workspace.id,
+            entity_type="workspace",
+            entity_id=workspace.id,
+            entity_label=workspace.slug,
+            before={"discord_guild_id": guild_id_before, "discord_guild_verified_at": _iso(verified_at_before)},
+            after={"discord_guild_id": None, "discord_guild_verified_at": None},
         )
         await session.commit()
         return workspace

@@ -12,7 +12,7 @@ schema name — `ranks/` writes to `overwatch_rank`, `ingestion/` to `log_proces
 > `--check` and fails on drift, so the diagrams cannot fall behind the models again.
 
 <!-- ERD:auto _alembic_head -->
-Alembic head: **`ranktrim01`** (54 revisions in `backend/migrations/versions/`).
+Alembic head: **`mixops01`** (59 revisions in `backend/migrations/versions/`).
 <!-- /ERD:auto -->
 
 **Reading the diagrams**
@@ -727,7 +727,6 @@ erDiagram
         varchar(255) player_id_slug
         timestamptz last_checked_at "nullable"
         timestamptz last_success_at "nullable"
-        bigint last_snapshot_id FK "nullable"
         varchar(32) status
         int consecutive_failures
         timestamptz next_eligible_at "nullable"
@@ -762,7 +761,6 @@ erDiagram
         varchar(32) source
     }
 
-    OVERWATCH_RANK_RANK_SNAPSHOT |o--o{ OVERWATCH_RANK_BATTLE_TAG_STATE : "last_snapshot_id"
     PLAYERS_SOCIAL_ACCOUNT |o--o{ OVERWATCH_RANK_FETCH_LOG : "social_account_id"
     PLAYERS_SOCIAL_ACCOUNT ||--o{ OVERWATCH_RANK_RANK_SNAPSHOT : "social_account_id"
     PLAYERS_SOCIAL_ACCOUNT ||--o| OVERWATCH_RANK_BATTLE_TAG_STATE : "social_account_id"
@@ -1402,6 +1400,7 @@ erDiagram
         bigint registration_team_id FK "nullable"
         varchar(16) team_slot_code "nullable"
         boolean is_substitute
+        boolean is_team_manager
     }
     BALANCER_REGISTRATION_FORM {
         bigint id PK
@@ -1419,6 +1418,12 @@ erDiagram
         int max_substitutes
         boolean require_subscription
         varchar(16) subscription_stage
+        varchar(16) subscription_scope
+        int team_rank_min "nullable"
+        int team_rank_max "nullable"
+        int team_max_rank_spread "nullable"
+        boolean team_unique_identity
+        boolean team_require_discord_guild
     }
     BALANCER_REGISTRATION_GOOGLE_SHEET_BINDING {
         bigint id PK
@@ -1504,6 +1509,16 @@ erDiagram
         bigint deleted_by FK "nullable"
         timestamptz invite_cap_reset_at "nullable"
         bigint invite_cap_reset_by FK "nullable"
+        varchar(16) admission
+        text rejection_reason "nullable"
+        text organizer_notes "nullable"
+        timestamptz roster_locked_at "nullable"
+        bigint roster_locked_by FK "nullable"
+        timestamptz subscription_covered_at "nullable"
+        bigint subscription_covered_by FK "nullable"
+        varchar(32) subscription_provider "nullable"
+        int subscription_tier_rank "nullable"
+        timestamptz subscription_expires_at "nullable"
     }
     BALANCER_REGISTRATION_TEAM_INVITE {
         bigint id PK
@@ -1530,6 +1545,8 @@ erDiagram
     AUTH_USER |o--o{ BALANCER_REGISTRATION : "reviewed_by"
     AUTH_USER |o--o{ BALANCER_REGISTRATION_TEAM : "deleted_by"
     AUTH_USER |o--o{ BALANCER_REGISTRATION_TEAM : "invite_cap_reset_by"
+    AUTH_USER |o--o{ BALANCER_REGISTRATION_TEAM : "roster_locked_by"
+    AUTH_USER |o--o{ BALANCER_REGISTRATION_TEAM : "subscription_covered_by"
     AUTH_USER |o--o{ BALANCER_REGISTRATION_TEAM_INVITE : "invited_by"
     AUTH_USER |o--o{ BALANCER_REGISTRATION_TEAM_INVITE : "revoked_by"
     AUTH_USER |o--o{ BALANCER_REGISTRATION_TEAM_INVITE : "target_auth_user_id"
@@ -1808,6 +1825,8 @@ erDiagram
         varchar(255) name
         varchar(16) status
         int points_per_win "nullable"
+        bigint next_map_id FK "nullable"
+        bigint discord_channel_id "nullable"
         jsonb balancer_config_json "nullable"
         int balancer_config_version
         jsonb balance_result_json "nullable"
@@ -1851,6 +1870,7 @@ erDiagram
     BALANCER_CUSTOM_GAME ||--o| BALANCER_CUSTOM_GAME_ROLE_SLOT : "custom_game_id"
     BALANCER_CUSTOM_GAME ||--o| BALANCER_CUSTOM_GAME_TEAM_NAME : "custom_game_id"
     BALANCER_CUSTOM_GAME_PLAYER ||--o| BALANCER_CUSTOM_GAME_PLAYER_ROLE : "custom_game_player_id"
+    OVERWATCH_MAP |o--o{ BALANCER_CUSTOM_GAME : "next_map_id"
     PUBLIC_WORKSPACE ||--o{ BALANCER_CUSTOM_GAME : "workspace_id"
     PUBLIC_WORKSPACE_MEMBER ||--o{ BALANCER_CUSTOM_GAME_PLAYER : "workspace_member_id"
 ```
@@ -1880,6 +1900,7 @@ erDiagram
         bigint custom_game_id FK
         bigint map_id FK "nullable"
         bigint recorded_by FK "nullable"
+        int points_per_win_applied "nullable"
     }
     CASUAL_PLAYER {
         bigint id PK
@@ -1940,8 +1961,6 @@ not a model, so it is not on the diagram.
 erDiagram
     MATCHES_EVENT {
         bigint id PK
-        timestamptz created_at
-        timestamptz updated_at "nullable"
         bigint match_id FK
         float time
         int round
@@ -1955,8 +1974,6 @@ erDiagram
     }
     MATCHES_KILL_FEED {
         bigint id PK
-        timestamptz created_at
-        timestamptz updated_at "nullable"
         bigint match_id FK
         float time
         int round

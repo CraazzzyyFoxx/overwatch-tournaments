@@ -48,6 +48,8 @@ __all__ = (
     "RegistrationDecisionPayload",
     "TeamInviteAnsweredPayload",
     "TeamInviteReceivedPayload",
+    "TeamRejectedPayload",
+    "TeamRosterEventPayload",
     "notify",
     "validate_notification_payload",
 )
@@ -109,6 +111,20 @@ class EncounterReportDisputedPayload(_Payload):
     tournament_id: int
     map_id: int
     map_index: int
+
+
+class TeamRosterEventPayload(_Payload):
+    """Shared by ``team.kicked`` and ``team.disbanded`` — the kind is the verb."""
+
+    team_id: int
+    team_name: str
+    tournament_id: int
+    tournament_name: str
+
+
+class TeamRejectedPayload(TeamRosterEventPayload):
+    #: Empty when the organizer gave no written reason. The inbox still renders.
+    reason: str = ""
 
 
 class AnnouncementText(_Payload):
@@ -178,6 +194,9 @@ NOTIFICATION_KINDS: dict[str, type[BaseModel]] = {
     "registration.rejected": RegistrationDecisionPayload,
     "encounter.report_disputed": EncounterReportDisputedPayload,
     "announcement.published": AnnouncementPayload,
+    "team.kicked": TeamRosterEventPayload,
+    "team.disbanded": TeamRosterEventPayload,
+    "team.rejected": TeamRejectedPayload,
 }
 
 

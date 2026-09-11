@@ -7,7 +7,10 @@
 //  2. 403, 409 and 503 are three different problems with three different
 //     fixes, so they must not collapse into one "could not link" message;
 //  3. no administered server is not an error: it almost always means the
-//     Discord account is not linked, and the fix is one screen away.
+//     Discord account is not linked, and the fix is one screen away;
+//  4. a linked server can be unlinked, but only after a confirmation — it
+//     takes Boosty roles and match-log channels offline;
+//  5. the bound card shows who owns the Discord server, with their avatar.
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -25,13 +28,17 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 const getById = vi.fn();
 const myDiscordGuilds = vi.fn();
 const verifyDiscordGuild = vi.fn();
+const clearDiscordGuild = vi.fn();
+const getDiscordGuildInfo = vi.fn();
 
 vi.mock("@/services/workspace.service", () => ({
   default: {
     getById: (...args: unknown[]) => getById(...args),
     update: vi.fn(),
     myDiscordGuilds: (...args: unknown[]) => myDiscordGuilds(...args),
-    verifyDiscordGuild: (...args: unknown[]) => verifyDiscordGuild(...args)
+    verifyDiscordGuild: (...args: unknown[]) => verifyDiscordGuild(...args),
+    clearDiscordGuild: (...args: unknown[]) => clearDiscordGuild(...args),
+    getDiscordGuildInfo: (...args: unknown[]) => getDiscordGuildInfo(...args)
   }
 }));
 
@@ -95,10 +102,28 @@ const WORKSPACE: Workspace = {
 };
 
 const GUILDS: ManageableDiscordGuild[] = [
-  { guild_id: "111111111111111111", name: "Owned Server", owner: true, can_manage: true },
-  { guild_id: "222222222222222222", name: "Managed Server", owner: false, can_manage: true },
+  {
+    guild_id: "111111111111111111",
+    name: "Owned Server",
+    icon_url: "https://cdn.discordapp.com/icons/111/aaa.png",
+    owner: true,
+    can_manage: true
+  },
+  {
+    guild_id: "222222222222222222",
+    name: "Managed Server",
+    icon_url: null,
+    owner: false,
+    can_manage: true
+  },
   { guild_id: "333333333333333333", name: "Just A Member", owner: false, can_manage: false }
 ];
+
+const BOUND: Workspace = {
+  ...WORKSPACE,
+  discord_guild_id: "222222222222222222",
+  discord_guild_verified_at: "2026-09-01T12:00:00Z"
+};
 
 let container: HTMLDivElement;
 let root: Root;
@@ -145,9 +170,18 @@ beforeEach(() => {
   fetchWorkspaces.mockReset();
   getById.mockReset().mockResolvedValue(WORKSPACE);
   myDiscordGuilds.mockReset().mockResolvedValue(GUILDS);
-  verifyDiscordGuild
-    .mockReset()
-    .mockResolvedValue({ ...WORKSPACE, discord_guild_id: "222222222222222222" });
+  verifyDiscordGuild.mockReset().mockResolvedValue(BOUND);
+  clearDiscordGuild.mockReset().mockResolvedValue(WORKSPACE);
+  getDiscordGuildInfo.mockReset().mockResolvedValue({
+    guild_id: null,
+    connected: false,
+    name: null,
+    icon_url: null,
+    member_count: 0,
+    owner_id: null,
+    owner_name: null,
+    owner_avatar_url: null
+  });
 });
 
 afterEach(async () => {
@@ -224,5 +258,33 @@ describe("Workspace settings › Discord", () => {
       node.textContent?.includes("Open account settings")
     );
     expect(link?.getAttribute("href")).toBe("/?settings=profile");
+  });
+
+  it("will not unlink a live server without a confirmation", async () => {
+    getById.mockResolvedValue(BOUND);
+    getDiscordGuildInfo.mockResolvedValue({
+      guild_id: "222222222222222222",
+      connected: true,
+      name: "Managed Server",
+      icon_url: "https://cdn.discordapp.com/icons/222/bbb.png",
+      member_count: 48,
+      owner_id: "99",
+      owner_name: "Ada",
+      owner_avatar_url: "https://cdn.discordapp.com/avatars/99/ada.png"
+    });
+    await render();
+
+    expect(container.textContent).toContain("Owner · Ada");
+    expect(buttonIn(container, "Unlink server")).toBeTruthy();
+
+    await click(buttonIn(container, "Unlink server"));
+
+    const dialog = document.querySelector('[role="alertdialog"]');
+    expect(dialog?.textContent).toContain("Unlink Discord server");
+    expect(dialog?.textContent).toContain("Overwatch Tournaments");
+    expect(clearDiscordGuild).not.toHaveBeenCalled();
+
+    await click(buttonIn(dialog!, "Unlink server"));
+    expect(clearDiscordGuild).toHaveBeenCalledWith(7);
   });
 });

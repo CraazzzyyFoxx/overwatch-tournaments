@@ -498,13 +498,14 @@ function ExportDivisionIcon({ divisionGrid, rank }: Readonly<{ divisionGrid: Div
 
   return (
     <div className="flex justify-center">
-      <Image
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
         src={src}
         alt={label ?? `Division ${division}`}
         width={26}
         height={26}
         loading="eager"
-        unoptimized
+        decoding="async"
       />
     </div>
   );

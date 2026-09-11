@@ -61,6 +61,19 @@ from src.services.oauth_state import OAuthStateCodec, StatePayload, oauth_state
 from src.services.tickets import LINK_TICKETS, SSO_TICKETS, TicketStore, guard_digest
 
 
+def _discord_guild_icon_url(guild_id: object, icon: object) -> str | None:
+    """CDN URL for a guild icon hash from ``GET /users/@me/guilds``.
+
+    Discord stores the hash without a host; animated icons use the ``a_`` prefix
+    and must be requested as ``.gif``. Missing/empty hashes mean no icon.
+    """
+    if not icon or not guild_id:
+        return None
+    digest = str(icon)
+    ext = "gif" if digest.startswith("a_") else "png"
+    return f"https://cdn.discordapp.com/icons/{guild_id}/{digest}.{ext}"
+
+
 class OAuthFlowService:
     """The RPC-facing OAuth flows; owns every policy decision in the module docstring."""
 
@@ -356,6 +369,7 @@ class OAuthFlowService:
             {
                 "guild_id": str(g["id"]),
                 "name": g.get("name"),
+                "icon_url": _discord_guild_icon_url(g["id"], g.get("icon")),
                 "owner": bool(g.get("owner", False)),
                 "can_manage": bool(g.get("owner", False)) or has_manage_guild(str(g.get("permissions", "0"))),
             }

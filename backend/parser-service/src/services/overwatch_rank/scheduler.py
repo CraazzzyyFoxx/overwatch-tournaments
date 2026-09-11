@@ -11,6 +11,7 @@ restart.
 from __future__ import annotations
 
 import math
+from datetime import timedelta
 from typing import Any
 
 from loguru import logger
@@ -33,7 +34,15 @@ SCHEDULER_TICK_SECONDS = 60
 LEADER_LOCK_KEY = "ow_rank:scheduler:leader"
 LEADER_LOCK_TTL_SECONDS = SCHEDULER_TICK_SECONDS * 2
 
+# ``fetch_log`` is a task feed, not an archive: the admin page reads the newest
+# rows and the health dashboard the last 24 hours. A week keeps a weekend
+# incident inspectable on Monday; beyond that the rows only cost disk (a
+# million of them, 180 MB, on a production restore).
+FETCH_LOG_RETENTION = timedelta(days=7)
+FETCH_LOG_PURGE_TICK_SECONDS = 24 * 60 * 60
+
 _scheduler = IntervalScheduler(job_id="ow_rank_collection", label="OverFast rank")
+_purge_scheduler = IntervalScheduler(job_id="ow_rank_fetch_log_purge", label="OverFast fetch-log purge")
 
 
 async def run_collection_tick(
@@ -150,9 +159,30 @@ async def run_collection_tick(
             await release_distributed_lock(redis_client, token)
 
 
+async def run_fetch_log_purge(*, session_factory: Any = db.async_session_maker) -> int:
+    """Drop ``fetch_log`` rows older than ``FETCH_LOG_RETENTION``; returns the count.
+
+    No leader lock: the delete is idempotent, and two replicas racing for the
+    same rows just split them.
+    """
+    async with observe_scheduled_job("ow_rank_fetch_log_purge"):
+        try:
+            async with session_factory() as session:
+                deleted = await service.purge_fetch_log(session, retention=FETCH_LOG_RETENTION)
+                await session.commit()
+            if deleted:
+                logger.info("OverFast fetch_log purge: dropped {} rows older than {}", deleted, FETCH_LOG_RETENTION)
+            return deleted
+        except Exception:
+            logger.exception("OverFast fetch_log purge failed")
+            return 0
+
+
 def start_scheduler() -> None:
     _scheduler.start(run_collection_tick, seconds=SCHEDULER_TICK_SECONDS)
+    _purge_scheduler.start(run_fetch_log_purge, seconds=FETCH_LOG_PURGE_TICK_SECONDS)
 
 
 def shutdown_scheduler() -> None:
     _scheduler.shutdown()
+    _purge_scheduler.shutdown()

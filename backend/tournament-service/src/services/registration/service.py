@@ -1049,6 +1049,12 @@ class RegistrationService:
                     show_ranks=body.show_ranks,
                     require_subscription=body.require_subscription,
                     subscription_stage=body.subscription_stage.value,
+                    subscription_scope=body.subscription_scope,
+                    team_rank_min=body.team_rank_min,
+                    team_rank_max=body.team_rank_max,
+                    team_max_rank_spread=body.team_max_rank_spread,
+                    team_unique_identity=body.team_unique_identity,
+                    team_require_discord_guild=body.team_require_discord_guild,
                     max_substitutes=body.max_substitutes,
                     built_in_fields_json=built_in_fields_json,
                     custom_fields_json=custom_fields_json,
@@ -1061,6 +1067,12 @@ class RegistrationService:
             form.show_ranks = body.show_ranks
             form.require_subscription = body.require_subscription
             form.subscription_stage = body.subscription_stage.value
+            form.subscription_scope = body.subscription_scope
+            form.team_rank_min = body.team_rank_min
+            form.team_rank_max = body.team_rank_max
+            form.team_max_rank_spread = body.team_max_rank_spread
+            form.team_unique_identity = body.team_unique_identity
+            form.team_require_discord_guild = body.team_require_discord_guild
             form.max_substitutes = body.max_substitutes
             form.built_in_fields_json = built_in_fields_json
             form.custom_fields_json = custom_fields_json

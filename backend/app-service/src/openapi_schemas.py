@@ -163,6 +163,7 @@ OPERATIONS: dict[str, Op] = {
     "rpc.app.workspaces.discord_guild_verify": Op(
         request=schemas.WorkspaceDiscordGuildVerify, response=schemas.WorkspaceRead
     ),
+    "rpc.app.workspaces.discord_guild_clear": Op(response=schemas.WorkspaceRead),
     "rpc.app.workspaces.my_discord_guilds": Op(response=schemas.WorkspaceDiscordGuildsRead),
     "rpc.app.workspaces.verification_set": Op(request=schemas.WorkspaceVerificationSet, response=schemas.WorkspaceRead),
     "rpc.app.workspaces.owner_get": Op(response=schemas.WorkspaceOwnerRead),

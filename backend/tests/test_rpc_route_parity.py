@@ -195,10 +195,10 @@ class TeamRouteShapeTests(TestCase):
         return lines
 
     def test_all_team_routes_are_present(self) -> None:
-        """Twenty: fourteen flows and six reads — the public roster, the admin
-        roster, the free-agent picker, a player's own invites, and the invite
-        history from each side."""
-        self.assertEqual(20, len(self._team_route_lines()))
+        """Thirty-two: the original twenty plus rename/place/manager/extend/lock/
+        check-in/cover on the public side and rename/unlock/admission/notes/place
+        on the organizer side."""
+        self.assertEqual(32, len(self._team_route_lines()))
 
     def test_no_team_WRITE_route_is_anonymous(self) -> None:
         """Even redeeming a link invite writes a registration bound to an account:
@@ -214,14 +214,16 @@ class TeamRouteShapeTests(TestCase):
         design — anyone may see the field, and the server omits invites from it —
         so asserting this over every team route would be asserting something false.
         """
-        writes = [line for line in self._team_route_lines() if '"POST"' in line or '"DELETE"' in line]
+        writes = [
+            line for line in self._team_route_lines() if '"POST"' in line or '"DELETE"' in line or '"PATCH"' in line
+        ]
         preview = [line for line in writes if "regteam_invite_preview" in line]
         mutating = [line for line in writes if "regteam_invite_preview" not in line]
 
         self.assertEqual(1, len(preview))
         self.assertIn("edge.AuthOptional", preview[0])
-        # Thirteen mutating writes; the rest of the team routes are reads.
-        self.assertEqual(13, len(mutating))
+        # Twenty-five mutating writes; the rest of the team routes are reads.
+        self.assertEqual(25, len(mutating))
         for line in mutating:
             with self.subTest(route=line.strip()[:80]):
                 self.assertIn("edge.AuthRequired", line)
@@ -237,10 +239,21 @@ class TeamRouteShapeTests(TestCase):
         organizer_writes = [
             line
             for line in self._team_route_lines()
-            if "regteam_invite_revoke_admin" in line or "regteam_invite_cap_reset" in line
+            if any(
+                name in line
+                for name in (
+                    "regteam_invite_revoke_admin",
+                    "regteam_invite_cap_reset",
+                    "regteam_rename_admin",
+                    "regteam_unlock",
+                    "regteam_admission",
+                    "regteam_notes",
+                    "regteam_place_admin",
+                )
+            )
         ]
 
-        self.assertEqual(2, len(organizer_writes))
+        self.assertEqual(7, len(organizer_writes))
         for line in organizer_writes:
             with self.subTest(route=line.strip()[:80]):
                 self.assertIn('IDParam: "tournament_id"', line)
@@ -274,10 +287,9 @@ class TeamRouteShapeTests(TestCase):
         )
         handler = source[source.index("_regteam_list_public") :]
         handler = handler[: handler.index("# ── public team registration")]
-        self.assertIn(
-            "include_invites=user is not None and await team_service.teams_service.is_team_captain(",
-            handler,
-        )
+        self.assertIn("include_invites=user is not None", handler)
+        self.assertIn("is_team_staff(", handler)
+        self.assertNotIn("is_team_captain(", handler)
         self.assertNotIn("include_invites=True", handler)
 
     def test_the_invite_token_never_travels_in_a_url(self) -> None:

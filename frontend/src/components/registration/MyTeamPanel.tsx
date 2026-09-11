@@ -1,9 +1,9 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Copy, Crown, LogOut, Trash2, UserMinus, UserPlus } from "lucide-react";
+import { Copy, Crown, Lock, LogOut, Trash2, UserCheck, UserMinus, UserPlus } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import {
   AlertDialog,
@@ -30,7 +30,7 @@ import {
   translateRegistrationTeamError,
 } from "@/lib/registration-team-errors";
 import { formatShortfall } from "@/lib/registration-team-shortfall";
-import { REGISTRATION_TEAM_STATUS_TONE } from "@/lib/registration-team-tone";
+import { getRegistrationTeamStatus, REGISTRATION_TEAM_STATUS_TONE } from "@/lib/registration-team-tone";
 import { ROSTER_SLOT_CODES, type RosterSlotCode } from "@/lib/roster-shape";
 import { tournamentQueryKeys } from "@/lib/tournament-query-keys";
 import { cn } from "@/lib/utils";
@@ -41,10 +41,13 @@ interface MyTeamPanelProps {
   workspaceId: number;
   tournamentId: number;
   team: RegistrationTeam;
-  /** True when the viewer is this team's captain — the only actor allowed to
-   *  invite, kick, transfer or disband. Mirrors the server's `not_captain` gate;
-   *  hiding the controls is UX, the gate is the backend's. */
+  /** True when the viewer is this team's captain. Transfer, disband, lock and
+   *  the manager flag stay captain-only; invite/kick/place/extend are staff. */
   isCaptain: boolean;
+  viewerRegistrationId?: number;
+  subscriptionScope?: "player" | "team";
+  registrationOpen: boolean;
+  checkInAvailable: boolean;
 }
 
 /**
@@ -60,6 +63,10 @@ export default function MyTeamPanel({
   tournamentId,
   team,
   isCaptain,
+  viewerRegistrationId,
+  subscriptionScope = "player",
+  registrationOpen,
+  checkInAvailable,
 }: Readonly<MyTeamPanelProps>) {
   const t = useTranslations("registrationTeams");
   const tCommon = useTranslations("common");
@@ -70,12 +77,15 @@ export default function MyTeamPanel({
   const queryClient = useQueryClient();
 
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [inviteMode, setInviteMode] = useState<"link" | "targeted">("link");
   const [inviteSlot, setInviteSlot] = useState<RosterSlotCode | null>(null);
   const [inviteSubstitute, setInviteSubstitute] = useState(false);
   const [pickerSearch, setPickerSearch] = useState("");
-  /** A REGISTRATION id, not an account id — the server resolves the account behind
-   *  it. `null` means the submit mints a shareable link instead. */
+  /** A registration id, not an account id. Targeted mode requires a selection. */
   const [targetRegistrationId, setTargetRegistrationId] = useState<number | null>(null);
+  /** Named rather than enforced by a dead submit: an unmade choice must say so. */
+  const [inviteValidation, setInviteValidation] = useState<string | null>(null);
+  const pickerSearchRef = useRef<HTMLInputElement>(null);
   /** Shown once, never refetchable: only the hash is stored server-side. */
   const [issuedToken, setIssuedToken] = useState<string | null>(null);
   /** Owned here, not by the drawer, because a refusal at the invite cap has to
@@ -89,13 +99,29 @@ export default function MyTeamPanel({
   const [kickTarget, setKickTarget] = useState<RegistrationTeamMember | null>(null);
   const [disbandOpen, setDisbandOpen] = useState(false);
   const [leaveOpen, setLeaveOpen] = useState(false);
+  const [draftName, setDraftName] = useState(team.name);
+  /** The name this draft was seeded from. A rename that lands from anywhere
+   *  (this captain, a co-manager, an organizer) reseeds the field during
+   *  render — an effect would render the stale name for one frame first. */
+  const [seededName, setSeededName] = useState(team.name);
+  const [checkInOpen, setCheckInOpen] = useState(false);
+  const [coverOpen, setCoverOpen] = useState(false);
+  const [lockOpen, setLockOpen] = useState(false);
+  const [coverCode, setCoverCode] = useState("");
+  const [excludeIds, setExcludeIds] = useState<number[]>([]);
+
+  if (seededName !== team.name) {
+    setSeededName(team.name);
+    setDraftName(team.name);
+  }
+
 
   /** Fetched only while the dialog is open: nobody else needs this list, and it
    *  goes stale the moment another captain recruits one of them. */
   const freeAgentsQuery = useQuery({
     queryKey: tournamentQueryKeys.registrationFreeAgents(workspaceId, tournamentId),
     queryFn: () => registrationTeamService.listFreeAgents(tournamentId),
-    enabled: inviteOpen,
+    enabled: inviteOpen && inviteMode === "targeted",
   });
 
   /** Both keys: issuing or revoking an invite moves `cap_used`, and a history
@@ -108,6 +134,15 @@ export default function MyTeamPanel({
       queryClient.invalidateQueries({
         queryKey: tournamentQueryKeys.registrationInviteHistory(workspaceId, team.id),
       }),
+      queryClient.invalidateQueries({
+        queryKey: tournamentQueryKeys.registration(workspaceId, tournamentId),
+      }),
+      queryClient.invalidateQueries({
+        queryKey: tournamentQueryKeys.registrationsList(workspaceId, tournamentId),
+      }),
+      queryClient.invalidateQueries({
+        queryKey: tournamentQueryKeys.registrationFreeAgents(workspaceId, tournamentId),
+      }),
     ]);
 
   /** Every mutation here reports failure through the code→i18n map: the server's
@@ -116,13 +151,18 @@ export default function MyTeamPanel({
 
   const inviteMutation = useMutation({
     mutationFn: () => {
-      if (!inviteSlot) throw new Error("no slot");
+      if (!canEditRoster || !inviteSlot || !selectableSlots.includes(inviteSlot)) {
+        throw new Error("Invitation slot is unavailable");
+      }
+      if (inviteMode === "targeted" && (!targetAgent || freeAgentsQuery.isError)) {
+        throw new Error("Select a registered player");
+      }
       return registrationTeamService.invite(team.id, {
         slot_code: inviteSlot,
         is_substitute: inviteSubstitute,
         // Omitted rather than nulled for a link invite: the key's presence is what
         // selects the addressed mode server-side.
-        ...(targetRegistrationId != null
+        ...(inviteMode === "targeted" && targetRegistrationId != null
           ? { target_registration_id: targetRegistrationId }
           : {}),
       });
@@ -209,24 +249,118 @@ export default function MyTeamPanel({
     onError: failure,
   });
 
+  const renameMutation = useMutation({
+    mutationFn: () => registrationTeamService.rename(team.id, draftName),
+    onSuccess: async () => {
+      notify.success(t("rename.success"));
+      await invalidate();
+    },
+    onError: failure,
+  });
+
+  const placeMutation = useMutation({
+    mutationFn: (input: {
+      registrationId: number;
+      slot_code: string;
+      is_substitute?: boolean;
+      swap_with_registration_id?: number | null;
+    }) =>
+      registrationTeamService.placeMember(team.id, input.registrationId, {
+        slot_code: input.slot_code,
+        is_substitute: input.is_substitute,
+        swap_with_registration_id: input.swap_with_registration_id,
+      }),
+    onSuccess: async () => {
+      await invalidate();
+    },
+    onError: failure,
+  });
+
+  const managerMutation = useMutation({
+    mutationFn: (input: { registrationId: number; isManager: boolean }) =>
+      registrationTeamService.setManager(team.id, input.registrationId, input.isManager),
+    onSuccess: async () => {
+      await invalidate();
+    },
+    onError: failure,
+  });
+
+  const extendMutation = useMutation({
+    mutationFn: (input: { inviteId: number; rotate: boolean }) =>
+      registrationTeamService.extendInvite(team.id, input.inviteId, {
+        rotate_token: input.rotate,
+      }),
+    onSuccess: async (invite) => {
+      notify.success(t("invite.extendSuccess"));
+      setIssuedToken(invite.token ?? null);
+      if (invite.token) setInviteOpen(true);
+      await invalidate();
+    },
+    onError: failure,
+  });
+
+  const lockMutation = useMutation({
+    mutationFn: () => registrationTeamService.lockRoster(team.id),
+    onSuccess: async () => {
+      notify.success(t("lock.success"));
+      setLockOpen(false);
+      await invalidate();
+    },
+    onError: failure,
+  });
+
+  const checkInMutation = useMutation({
+    mutationFn: () => registrationTeamService.checkInRoster(team.id, excludeIds),
+    onSuccess: async () => {
+      notify.success(t("checkIn.success"));
+      setCheckInOpen(false);
+      setExcludeIds([]);
+      await invalidate();
+    },
+    onError: failure,
+  });
+
+  const coverMutation = useMutation({
+    mutationFn: () =>
+      registrationTeamService.coverSubscription(team.id, {
+        code: coverCode.trim() || null,
+      }),
+    onSuccess: async () => {
+      notify.success(t("cover.success"));
+      setCoverOpen(false);
+      setCoverCode("");
+      await invalidate();
+    },
+    onError: failure,
+  });
+
   const busy =
-    inviteMutation.isPending ||
-    revokeMutation.isPending ||
-    kickMutation.isPending ||
-    transferMutation.isPending ||
-    leaveMutation.isPending ||
-    disbandMutation.isPending;
+    inviteMutation.isPending || revokeMutation.isPending || kickMutation.isPending ||
+    transferMutation.isPending || leaveMutation.isPending || disbandMutation.isPending ||
+    renameMutation.isPending || placeMutation.isPending || managerMutation.isPending ||
+    extendMutation.isPending || lockMutation.isPending || checkInMutation.isPending ||
+    coverMutation.isPending || uploadImageMutation.isPending || deleteImageMutation.isPending;
 
   const slotLabel = (code: string) => {
     const known = ROSTER_SLOT_CODES.find((candidate) => candidate === code);
     return known ? tSlot(known) : code;
   };
 
-  /** Slots still worth offering. Derived from `open_slots` (which the server
-   *  already strips of zero counts) so a full slot is not offerable — the server
-   *  would answer `slot_taken`. */
-  const offerableSlots = ROSTER_SLOT_CODES.filter((code) => (team.open_slots[code] ?? 0) > 0);
+  // Pending is pending: the server reserves a slot for an offer whose clock has
+  // run out too (it stays `pending` until someone consumes or revokes it), so
+  // discounting expired rows here would advertise a slot the invite call then
+  // refuses with `slot_already_offered`.
   const pendingInvites = team.invites.filter((invite) => invite.state === "pending");
+  // Open slots count accepted members only; live offers reserve, but do not fill, them.
+  const freeSlots = ROSTER_SLOT_CODES.flatMap((code) =>
+    Array.from({
+      length: Math.max(0, (team.open_slots[code] ?? 0) -
+        pendingInvites.filter((invite) => !invite.is_substitute && invite.slot_code === code).length),
+    }, () => code),
+  );
+  const offerableSlots = ROSTER_SLOT_CODES.filter((code) => freeSlots.includes(code));
+  const starters = team.members.filter((member) => !member.is_substitute);
+  const starterCapacity = starters.length + Object.values(team.open_slots).reduce((sum, count) => sum + count, 0);
   /** Every slot code this roster actually uses, reconstructed from the rows that
    *  hold one. A substitute covers a slot that is by definition FULL, so
    *  `open_slots` — the starter shortfall — can never name it: on a complete
@@ -240,11 +374,9 @@ export default function MyTeamPanel({
   /** Pending substitute offers reserve a bench place — the same arithmetic
    *  `can_offer` does server-side, so the checkbox never promises a seat the
    *  server answers `bench_full` for. */
-  const benchOpen =
-    team.max_substitutes -
-      team.substitutes_used -
-      pendingInvites.filter((invite) => invite.is_substitute).length >
-    0;
+  const freeBenchCount = Math.max(0, team.max_substitutes - team.substitutes_used -
+    pendingInvites.filter((invite) => invite.is_substitute).length);
+  const benchOpen = freeBenchCount > 0;
   const selectableSlots = inviteSubstitute ? benchSlots : offerableSlots;
   /** Filtered in memory: this is tens of rows at most, and a round-trip per
    *  keystroke would out-cost the whole list. */
@@ -258,10 +390,31 @@ export default function MyTeamPanel({
   /** The crest is only writable while the roster still is: the server refuses a
    *  terminal or already-exported team with `team_not_forming` /
    *  `team_already_exported`, so offering the control would be a dead end. */
-  const logoEditable =
-    isCaptain &&
-    team.exported_team_id == null &&
-    (team.status === "forming" || team.status === "complete");
+  const viewerMember = team.members.find(
+    (member) => member.registration_id === viewerRegistrationId,
+  );
+  const isStaff = isCaptain || viewerMember?.is_manager === true;
+  const locked = team.roster_locked_at != null;
+  const status = getRegistrationTeamStatus(team);
+  const active = status === "forming" || status === "complete";
+  const rosterAvailable = active && !locked && registrationOpen;
+  const canEditRoster = isStaff && rosterAvailable;
+  const canCheckIn = isStaff && active && checkInAvailable;
+  const canCover = isStaff && active && (registrationOpen || checkInAvailable);
+  const logoEditable = canEditRoster && !busy;
+  const blockingReason = !active ? t(`myCard.blocked.${status}`)
+    : locked ? t("myCard.blocked.locked")
+    : !registrationOpen ? t("myCard.blocked.closed") : null;
+  const openInvite = (code: RosterSlotCode | null, substitute = false) => {
+    setInviteSubstitute(substitute);
+    setInviteSlot(code);
+    setInviteMode("link");
+    setIssuedToken(null);
+    setPickerSearch("");
+    setTargetRegistrationId(null);
+    setInviteValidation(null);
+    setInviteOpen(true);
+  };
 
   return (
     <section className="relative grid gap-3 overflow-hidden rounded-xl border border-[color:var(--aqt-border)] bg-[color:var(--aqt-overlay-1)] p-4 shadow-md backdrop-blur-md sm:p-5">
@@ -291,23 +444,109 @@ export default function MyTeamPanel({
             }}
           />
           <div className="grid min-w-0 gap-0.5">
-            <h3 className="truncate text-base font-semibold">{team.name}</h3>
+            {canEditRoster ? (
+              <form
+                className="flex min-w-0 items-center gap-2"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  if (draftName.trim() && draftName.trim() !== team.name) {
+                    renameMutation.mutate();
+                  }
+                }}
+              >
+                <Input
+                  value={draftName}
+                  onChange={(event) => setDraftName(event.target.value)}
+                  aria-label={t("rename.save")}
+                  className="h-8 min-w-0"
+                />
+                <Button
+                  type="submit"
+                  size="sm"
+                  disabled={busy || draftName.trim() === team.name || !draftName.trim()}
+                >
+                  {t("rename.save")}
+                </Button>
+              </form>
+            ) : (
+              <h3 className="truncate text-base font-semibold">{team.name}</h3>
+            )}
+            <p className="text-xs text-[color:var(--aqt-fg-muted)]">
+              {t("myCard.rosterCount", { filled: starters.length, total: starterCapacity })}
+            </p>
             <p className="text-xs text-[color:var(--aqt-fg-muted)]">
               {team.is_complete
                 ? t("list.complete")
                 : t("list.shortfall", { slots: formatShortfall(team.open_slots, tSlot) })}
             </p>
+            {typeof team.checked_in_count === "number" && (team.check_in_total ?? 0) > 0 && (
+              <p className="text-xs text-[color:var(--aqt-fg-muted)]">
+                {t("checkIn.counts", {
+                  done: team.checked_in_count,
+                  total: team.check_in_total ?? 0,
+                })}
+              </p>
+            )}
           </div>
         </div>
-        <span
-          className={cn(
-            "shrink-0 rounded-full border px-2.5 py-0.5 text-xs font-medium",
-            REGISTRATION_TEAM_STATUS_TONE[team.status]
+        <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+          {locked && (
+            <span className="rounded-full border border-[color:var(--aqt-border)] px-2.5 py-0.5 text-xs">
+              {t("lock.locked")}
+            </span>
           )}
-        >
-          {t(`status.${team.status}`)}
-        </span>
+          {team.subscription_covered && (
+            <span className="rounded-full border border-[color:var(--aqt-teal)]/40 px-2.5 py-0.5 text-xs text-[color:var(--aqt-teal)]">
+              {t("cover.covered")}
+            </span>
+          )}
+          {team.admission && team.admission !== "pending" && (
+            <span className="rounded-full border border-[color:var(--aqt-border)] px-2.5 py-0.5 text-xs">
+              {t(`admission.${team.admission}`)}
+            </span>
+          )}
+          <span
+            className={cn(
+              "rounded-full border px-2.5 py-0.5 text-xs font-medium",
+              REGISTRATION_TEAM_STATUS_TONE[status]
+            )}
+          >
+            {t(`status.${status}`)}
+          </span>
+        </div>
       </header>
+
+      {/* Why an action is missing, said once at the top instead of as a dead
+          button per row: the roster stops being editable for four different
+          reasons and none of them are visible from the buttons alone. */}
+      {blockingReason && (
+        <p
+          role="status"
+          className="rounded-lg border border-[color:var(--aqt-border)] bg-muted/20 px-3 py-2 text-xs text-[color:var(--aqt-fg-muted)]"
+        >
+          {blockingReason}
+        </p>
+      )}
+      {team.rejection_reason && (
+        <p className="rounded-lg border border-[color:var(--aqt-rose)]/40 bg-[color:var(--aqt-rose)]/10 px-3 py-2 text-xs text-[color:var(--aqt-rose)]">
+          {t("myCard.rejectionReason", { reason: team.rejection_reason })}
+        </p>
+      )}
+
+      {(team.eligibility_issues?.length ?? 0) > 0 && (
+        <div className="rounded-lg border border-[color:var(--aqt-amber)]/40 bg-[color:var(--aqt-amber)]/10 px-3 py-2 text-xs">
+          <p className="font-medium">{t("eligibility.title")}</p>
+          <ul className="mt-1 grid gap-0.5">
+            {team.eligibility_issues!.map((issue, index) => (
+              <li key={`${issue.code}-${issue.registration_id ?? "team"}-${index}`}>
+                {tErrors.has?.(issue.code as never)
+                  ? tErrors(issue.code as never)
+                  : issue.code}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <ul className="divide-y divide-[color:var(--aqt-border)]">
         {team.members.map((member) => (
@@ -323,14 +562,73 @@ export default function MyTeamPanel({
                 {t("member.captain")}
               </span>
             )}
+            {member.is_manager && !member.is_captain && (
+              <span className="text-xs text-[color:var(--aqt-fg-muted)]">
+                {t("member.manager")}
+              </span>
+            )}
             {member.is_substitute && (
               <span className="text-xs text-[color:var(--aqt-fg-muted)]">
                 {t("member.substitute")}
               </span>
             )}
-            {isCaptain && !member.is_captain && (
-              <span className="ml-auto flex gap-1">
-                {!member.is_substitute && (
+            {canEditRoster && !member.is_captain && (
+              <span className="ml-auto flex flex-wrap gap-1">
+                {canEditRoster && member.slot_code && (
+                  <select
+                    className="h-8 rounded-md border border-[color:var(--aqt-border)] bg-transparent px-2 text-xs"
+                    aria-label={t("invite.slotLabel")}
+                    value={member.slot_code}
+                    disabled={busy}
+                    onChange={(event) =>
+                      placeMutation.mutate({
+                        registrationId: member.registration_id,
+                        slot_code: event.target.value,
+                        is_substitute: member.is_substitute,
+                      })
+                    }
+                  >
+                    {ROSTER_SLOT_CODES.map((code) => (
+                      <option key={code} value={code}>
+                        {slotLabel(code)}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                {canEditRoster && member.slot_code && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    disabled={busy}
+                    onClick={() =>
+                      placeMutation.mutate({
+                        registrationId: member.registration_id,
+                        slot_code: member.slot_code as string,
+                        is_substitute: !member.is_substitute,
+                      })
+                    }
+                  >
+                    {member.is_substitute ? t("member.toStart") : t("member.toBench")}
+                  </Button>
+                )}
+                {isCaptain && canEditRoster && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    disabled={busy}
+                    onClick={() =>
+                      managerMutation.mutate({
+                        registrationId: member.registration_id,
+                        isManager: !member.is_manager,
+                      })
+                    }
+                  >
+                    {member.is_manager ? t("member.removeManager") : t("member.makeManager")}
+                  </Button>
+                )}
+                {isCaptain && canEditRoster && !member.is_substitute && (
                   <Button
                     type="button"
                     variant="ghost"
@@ -342,23 +640,71 @@ export default function MyTeamPanel({
                     {t("member.makeCaptain")}
                   </Button>
                 )}
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  disabled={busy}
-                  onClick={() => setKickTarget(member)}
-                >
-                  <UserMinus className="size-3.5" aria-hidden />
-                  {t("member.kick")}
-                </Button>
+                {canEditRoster && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    disabled={busy}
+                    onClick={() => setKickTarget(member)}
+                  >
+                    <UserMinus className="size-3.5" aria-hidden />
+                    {t("member.kick")}
+                  </Button>
+                )}
               </span>
             )}
           </li>
         ))}
+        {/* A slot nobody holds and nobody was offered: the roster's own gap, with
+            the action that fills it on the row rather than behind one generic
+            "invite" button that then asks which slot. */}
+        {freeSlots.map((code, index) => (
+          <li
+            key={`free-${code}-${index}`}
+            className="flex flex-wrap items-center gap-2 py-2.5 text-sm first:pt-0 last:pb-0"
+          >
+            <RosterSlotGlyph code={code} />
+            <span className="text-[color:var(--aqt-fg-muted)]">{t("list.openSlot")}</span>
+            <span className="text-xs text-[color:var(--aqt-fg-muted)]">{slotLabel(code)}</span>
+            {canEditRoster && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="ml-auto"
+                disabled={busy}
+                onClick={() => openInvite(code)}
+              >
+                <UserPlus className="size-3.5" aria-hidden />
+                {t("invite.actionSlot", { slot: slotLabel(code) })}
+              </Button>
+            )}
+          </li>
+        ))}
+        {benchOpen && (
+          <li className="flex flex-wrap items-center gap-2 py-2.5 text-sm first:pt-0 last:pb-0">
+            <span className="text-[color:var(--aqt-fg-muted)]">
+              {t("list.substitutes", { used: team.substitutes_used, max: team.max_substitutes })}
+            </span>
+            {canEditRoster && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="ml-auto"
+                disabled={busy}
+                onClick={() => openInvite(benchSlots[0] ?? null, true)}
+              >
+                <UserPlus className="size-3.5" aria-hidden />
+                {t("invite.actionBench")}
+              </Button>
+            )}
+          </li>
+        )}
       </ul>
 
-      {isCaptain && (
+      {isStaff && (
         <div className="grid gap-2">
           <span className="text-label font-medium uppercase tracking-label text-[color:var(--aqt-fg-muted)]">
             {t("invite.title")}
@@ -393,16 +739,45 @@ export default function MyTeamPanel({
                       })}
                     </span>
                   )}
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="ml-auto"
-                    disabled={busy}
-                    onClick={() => revokeMutation.mutate(invite.id)}
-                  >
-                    {t("invite.revoke")}
-                  </Button>
+                  <span className="ml-auto flex flex-wrap gap-1">
+                    {canEditRoster && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        disabled={busy}
+                        onClick={() => {
+                          extendMutation.mutate({ inviteId: invite.id, rotate: false });
+                        }}
+                      >
+                        {t("invite.extend")}
+                      </Button>
+                    )}
+                    {canEditRoster && invite.is_link && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        disabled={busy}
+                        onClick={() => {
+                          extendMutation.mutate({ inviteId: invite.id, rotate: true });
+                        }}
+                      >
+                        {t("invite.rotate")}
+                      </Button>
+                    )}
+                    {canEditRoster && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        disabled={busy}
+                        onClick={() => revokeMutation.mutate(invite.id)}
+                      >
+                        {t("invite.revoke")}
+                      </Button>
+                    )}
+                  </span>
                 </li>
               ))}
             </ul>
@@ -414,49 +789,91 @@ export default function MyTeamPanel({
           row above it: it opens a drawer now, so it is an action like the two
           beside it, and the card is one orphan row shorter for it. */}
       <footer className="flex flex-wrap gap-2">
-        {isCaptain && (offerableSlots.length > 0 || benchOpen) && (
+        {canEditRoster && (offerableSlots.length > 0 || benchOpen) && (
           <Button
             type="button"
             size="sm"
             disabled={busy}
             onClick={() => {
               const substituteOnly = offerableSlots.length === 0;
-              setInviteSubstitute(substituteOnly);
-              setInviteSlot((substituteOnly ? benchSlots : offerableSlots)[0] ?? null);
-              setIssuedToken(null);
-              setPickerSearch("");
-              setTargetRegistrationId(null);
-              setInviteOpen(true);
+              openInvite(
+                (substituteOnly ? benchSlots : offerableSlots)[0] ?? null,
+                substituteOnly
+              );
             }}
           >
             <UserPlus className="size-4" aria-hidden />
             {t("invite.action")}
           </Button>
         )}
-        {isCaptain ? (
+        {isCaptain && canEditRoster && team.is_complete && (
           <Button
             type="button"
             variant="ghost"
             size="sm"
             disabled={busy}
-            onClick={() => setDisbandOpen(true)}
+            onClick={() => setLockOpen(true)}
           >
-            <Trash2 className="size-4" aria-hidden />
-            {t("disband.action")}
-          </Button>
-        ) : (
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            disabled={busy}
-            onClick={() => setLeaveOpen(true)}
-          >
-            <LogOut className="size-4" aria-hidden />
-            {t("member.leave")}
+            <Lock className="size-4" aria-hidden />
+            {t("lock.action")}
           </Button>
         )}
-        {isCaptain && (
+        {canCheckIn && team.members.some((member) => !member.checked_in) && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            disabled={busy}
+            onClick={() => {
+              setExcludeIds([]);
+              setCheckInOpen(true);
+            }}
+          >
+            <UserCheck className="size-4" aria-hidden />
+            {t("checkIn.action")}
+          </Button>
+        )}
+        {canCover && subscriptionScope === "team" && !team.subscription_covered && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            disabled={busy}
+            onClick={() => setCoverOpen(true)}
+          >
+            {t("cover.action")}
+          </Button>
+        )}
+        {/* Ending the team and leaving it are both roster writes: the server
+            refuses either once the team is terminal, exported, locked or the
+            window is closed, so the blocked explanation above stands in for
+            them rather than a button that can only fail. */}
+        {canEditRoster || (!isCaptain && rosterAvailable) ? (
+          isCaptain ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              disabled={busy}
+              onClick={() => setDisbandOpen(true)}
+            >
+              <Trash2 className="size-4" aria-hidden />
+              {t("disband.action")}
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              disabled={busy}
+              onClick={() => setLeaveOpen(true)}
+            >
+              <LogOut className="size-4" aria-hidden />
+              {t("member.leave")}
+            </Button>
+          )
+        ) : null}
+        {isStaff && (
           <InviteHistorySection
             workspaceId={workspaceId}
             teamId={team.id}
@@ -466,7 +883,10 @@ export default function MyTeamPanel({
         )}
       </footer>
 
-      <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
+      {/* Derived, not synced: a roster that freezes while the dialog is open
+          (exported, rejected, locked, window closed) closes it, because every
+          write it can still submit is one the server now refuses. */}
+      <Dialog open={inviteOpen && canEditRoster} onOpenChange={setInviteOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogTitle>{t("invite.title")}</DialogTitle>
 
@@ -493,6 +913,48 @@ export default function MyTeamPanel({
             </div>
           ) : (
             <div className="grid gap-3">
+              {/* Two named modes, not one dialog that silently becomes a link
+                  when nobody is selected: the two invites differ in who can use
+                  them, and that choice must be made on purpose. */}
+              <fieldset className="grid gap-1.5">
+                <legend className="text-sm font-medium">{t("invite.modeLabel")}</legend>
+                <div className="flex flex-wrap gap-2">
+                  {(["link", "targeted"] as const).map((mode) => (
+                    <label
+                      key={mode}
+                      className="block cursor-pointer active:scale-[0.96] transition-transform duration-150 ease-out"
+                    >
+                      <input
+                        type="radio"
+                        name="invite-mode"
+                        value={mode}
+                        checked={inviteMode === mode}
+                        onChange={() => {
+                          setInviteMode(mode);
+                          setTargetRegistrationId(null);
+                          setInviteValidation(null);
+                        }}
+                        className="peer sr-only"
+                      />
+                      <span
+                        className={cn(
+                          "block rounded-lg border px-3 py-1.5 text-sm transition-colors",
+                          "peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-[color:var(--aqt-teal)]",
+                          inviteMode === mode
+                            ? "border-[color:var(--aqt-accent)] bg-[color:color-mix(in_srgb,var(--aqt-accent)_12%,transparent)]"
+                            : "border-[color:var(--aqt-border)] hover:bg-muted/40",
+                        )}
+                      >
+                        {mode === "link" ? t("invite.modeLink") : t("invite.modeAccount")}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+                <p className="text-xs text-[color:var(--aqt-fg-muted)]">
+                  {inviteMode === "link" ? t("invite.modeLinkHint") : t("invite.modeAccountHint")}
+                </p>
+              </fieldset>
+
               <fieldset className="grid gap-1.5">
                 <legend className="text-sm font-medium">{t("invite.slotLabel")}</legend>
                 <div className="flex flex-wrap gap-2">
@@ -547,9 +1009,11 @@ export default function MyTeamPanel({
                 </Label>
               )}
 
+              {inviteMode === "targeted" && (
               <div className="grid gap-1.5">
                 <span className="text-sm font-medium">{t("picker.label")}</span>
                 <Input
+                  ref={pickerSearchRef}
                   value={pickerSearch}
                   onChange={(event) => setPickerSearch(event.target.value)}
                   placeholder={t("picker.search")}
@@ -571,7 +1035,22 @@ export default function MyTeamPanel({
                 {/* An empty roster of free agents and an empty search result are
                     different dead ends: one waits for registrations, the other
                     only needs a different query. */}
-                {!freeAgentsQuery.isLoading && freeAgents.length === 0 && (
+                {freeAgentsQuery.isError ? (
+                  /* A failed read is not an empty pool: one says "nobody to
+                     recruit", the other only needs the request again. */
+                  <p role="alert" className="flex flex-wrap items-center gap-2 text-xs text-[color:var(--aqt-rose)]">
+                    {t("picker.loadError")}
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => void freeAgentsQuery.refetch()}
+                    >
+                      {tCommon("retry")}
+                    </Button>
+                  </p>
+                ) : null}
+                {!freeAgentsQuery.isLoading && !freeAgentsQuery.isError && freeAgents.length === 0 && (
                   <p className="text-xs text-[color:var(--aqt-fg-muted)]">{t("picker.empty")}</p>
                 )}
                 {freeAgents.length > 0 && matchingAgents.length === 0 && (
@@ -622,17 +1101,28 @@ export default function MyTeamPanel({
                     </ul>
                   </fieldset>
                 )}
-                {targetRegistrationId == null && (
-                  <p className="text-xs text-[color:var(--aqt-fg-muted)]">
-                    {t("picker.linkInstead")}
-                  </p>
-                )}
               </div>
+              )}
 
+              {inviteValidation && (
+                <p role="alert" className="text-xs text-[color:var(--aqt-rose)]">
+                  {inviteValidation}
+                </p>
+              )}
               <Button
                 type="button"
-                disabled={busy || (!inviteSlot && !inviteSubstitute)}
-                onClick={() => inviteMutation.mutate()}
+                /* Enabled until the request starts: a disabled submit hides what
+                   is missing, so the unmade choice is named instead. */
+                disabled={busy || !inviteSlot}
+                onClick={() => {
+                  if (inviteMode === "targeted" && targetRegistrationId == null) {
+                    setInviteValidation(t("picker.required"));
+                    pickerSearchRef.current?.focus();
+                    return;
+                  }
+                  setInviteValidation(null);
+                  inviteMutation.mutate();
+                }}
               >
                 {t("invite.submit")}
               </Button>
@@ -723,6 +1213,75 @@ export default function MyTeamPanel({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <AlertDialog open={lockOpen} onOpenChange={setLockOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("lock.action")}</AlertDialogTitle>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={lockMutation.isPending}>{tCommon("cancel")}</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={lockMutation.isPending}
+              onClick={(event) => {
+                event.preventDefault();
+                lockMutation.mutate();
+              }}
+            >
+              {t("lock.action")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <Dialog open={checkInOpen} onOpenChange={setCheckInOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogTitle>{t("checkIn.action")}</DialogTitle>
+          <ul className="grid gap-2">
+            {team.members
+              .filter((member) => !member.checked_in)
+              .map((member) => {
+                const excluded = excludeIds.includes(member.registration_id);
+                return (
+                  <li key={member.registration_id}>
+                    <Label className="flex items-center gap-2 text-sm">
+                      <Checkbox
+                        checked={excluded}
+                        onCheckedChange={(checked) => {
+                          const on = checked === true;
+                          setExcludeIds((current) =>
+                            on
+                              ? [...current, member.registration_id]
+                              : current.filter((id) => id !== member.registration_id),
+                          );
+                        }}
+                      />
+                      {t("checkIn.exclude", {
+                        name: member.display_name ?? member.battle_tag ?? "",
+                      })}
+                    </Label>
+                  </li>
+                );
+              })}
+          </ul>
+          <Button type="button" disabled={busy} onClick={() => checkInMutation.mutate()}>
+            {t("checkIn.action")}
+          </Button>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={coverOpen} onOpenChange={setCoverOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogTitle>{t("cover.action")}</DialogTitle>
+          <Label className="grid gap-1.5 text-sm">
+            {t("cover.code")}
+            <Input value={coverCode} onChange={(event) => setCoverCode(event.target.value)} />
+          </Label>
+          <Button type="button" disabled={busy} onClick={() => coverMutation.mutate()}>
+            {t("cover.submit")}
+          </Button>
+        </DialogContent>
+      </Dialog>
 
       <AlertDialog open={leaveOpen} onOpenChange={setLeaveOpen}>
         <AlertDialogContent>

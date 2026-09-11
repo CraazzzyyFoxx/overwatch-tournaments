@@ -189,6 +189,8 @@ const ACTION_PHRASES: Record<string, string> = {
   "user.avatar_set": "User avatar changed",
   "user.merge": "Accounts merged",
   "workspace.branding_update": "Workspace branding changed",
+  "workspace.discord_guild_cleared": "Discord server unlinked",
+  "workspace.discord_guild_verified": "Discord server linked",
   "workspace.domain_clear": "Custom domain removed",
   "workspace.domain_set": "Custom domain set",
   "workspace.domain_verified": "Custom domain verified",

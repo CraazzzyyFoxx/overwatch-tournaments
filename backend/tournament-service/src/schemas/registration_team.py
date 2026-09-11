@@ -11,6 +11,7 @@ people in an incomplete team learn they are stuck but not what is missing.
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -108,7 +109,73 @@ class RegistrationTeamAcceptRequest(BaseModel):
         return self
 
 
+class RegistrationTeamRenameRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=255)
+
+    @field_validator("name")
+    @classmethod
+    def _strip(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("A team needs a name")
+        return cleaned
+
+
+class RegistrationTeamPlaceMemberRequest(BaseModel):
+    slot_code: RosterSlotCode
+    is_substitute: bool = False
+    swap_with_registration_id: int | None = None
+
+
+class RegistrationTeamSetManagerRequest(BaseModel):
+    is_manager: bool
+
+
+class RegistrationTeamExtendInviteRequest(BaseModel):
+    ttl_days: int | None = Field(default=None, ge=1, le=90)
+    rotate_token: bool = False
+
+
+class RegistrationTeamCheckInRequest(BaseModel):
+    exclude_registration_ids: list[int] = Field(default_factory=list)
+
+
+class RegistrationTeamRedeemSubscriptionRequest(BaseModel):
+    code: str | None = None
+    provider: str = "boosty"
+
+
+class RegistrationTeamAdmissionRequest(BaseModel):
+    admission: Literal["pending", "accepted", "waitlisted"]
+
+
+class RegistrationTeamNotesRequest(BaseModel):
+    notes: str | None = None
+
+
+class RegistrationTeamPlaceAdminRequest(BaseModel):
+    registration_id: int
+    slot_code: RosterSlotCode
+    is_substitute: bool = False
+
+
+class RegistrationTeamRejectRequest(BaseModel):
+    withdraw_members: bool = False
+    reason: str = Field(min_length=1, max_length=1000)
+
+    @field_validator("reason", mode="before")
+    @classmethod
+    def _strip_reason(cls, value: object) -> object:
+        return value.strip() if isinstance(value, str) else value
+
+
 # ── reads ────────────────────────────────────────────────────────────────────
+
+
+class TeamEligibilityIssueRead(BaseModel):
+    code: str
+    registration_id: int | None = None
+    blocking: bool = True
 
 
 class RegistrationTeamMemberRead(BaseModel):
@@ -118,6 +185,8 @@ class RegistrationTeamMemberRead(BaseModel):
     slot_code: str | None = None
     is_substitute: bool = False
     is_captain: bool = False
+    is_manager: bool = False
+    checked_in: bool = False
     status: str
 
 
@@ -158,6 +227,15 @@ class RegistrationTeamRead(BaseModel):
     is_complete: bool = False
     substitutes_used: int = 0
     max_substitutes: int = 0
+    admission: str = "pending"
+    rejection_reason: str | None = None
+    organizer_notes: str | None = None
+    roster_locked_at: datetime | None = None
+    subscription_covered: bool = False
+    subscription_expires_at: datetime | None = None
+    checked_in_count: int = 0
+    check_in_total: int = 0
+    eligibility_issues: list[TeamEligibilityIssueRead] = Field(default_factory=list)
 
     @field_validator("open_slots")
     @classmethod
@@ -295,12 +373,18 @@ def serialize_registration_team(
     *,
     members: list[RegistrationTeamMemberRead] | None = None,
     invites: list[RegistrationTeamInviteRead] | None = None,
+    include_staff: bool = False,
+    include_private: bool = False,
+    eligibility_issues: list[TeamEligibilityIssueRead] | None = None,
+    subscription_covered: bool = False,
 ) -> RegistrationTeamRead:
     """Map a team plus its computed occupancy into the read model.
 
-    Only slots the roster still needs are emitted — a zero entry would render as
-    "0x tank" in every consumer that iterates the map.
+    Only slots the roster still needs are emitted. Organizer notes never leave
+    this function unless include_staff is set.
     """
+    roster = members or []
+    checked_in_count = sum(1 for member in roster if member.checked_in)
     return RegistrationTeamRead(
         id=team.id,
         tournament_id=team.tournament_id,
@@ -309,13 +393,22 @@ def serialize_registration_team(
         status=team.status,
         captain_registration_id=team.captain_registration_id,
         exported_team_id=team.exported_team_id,
-        members=members or [],
+        members=roster,
         invites=invites or [],
         open_slots={code: count for code, count in occupancy.open_slots.items() if count > 0},
         shortfall=occupancy.describe_shortfall(),
         is_complete=occupancy.is_complete,
         substitutes_used=occupancy.accepted_substitutes,
         max_substitutes=occupancy.max_substitutes,
+        admission=getattr(team, "admission", None) or "pending",
+        rejection_reason=team.rejection_reason if include_private or include_staff else None,
+        organizer_notes=team.organizer_notes if include_staff else None,
+        roster_locked_at=getattr(team, "roster_locked_at", None),
+        subscription_covered=subscription_covered,
+        subscription_expires_at=getattr(team, "subscription_expires_at", None),
+        checked_in_count=checked_in_count,
+        check_in_total=len(roster),
+        eligibility_issues=eligibility_issues or [],
     )
 
 

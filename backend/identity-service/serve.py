@@ -13,22 +13,32 @@ from __future__ import annotations
 
 import asyncio
 import sys
+from datetime import timedelta
 
 from faststream import FastStream
 
 from shared.observability import (
     make_rabbit_broker,
+    observe_scheduled_job,
     setup_logging,
     setup_sentry,
     setup_tracing,
     start_worker_metrics_server,
 )
+from shared.services.scheduler import IntervalScheduler
 from src.core import db
 from src.core.config import settings
 from src.core.redis import close_redis, init_redis
 from src.core.s3 import s3_client
 from src.rpc import api_keys, auth, avatars, oauth, players, rbac, tokens
 from src.services.oauth_providers import close_http_client
+from src.services.sessions import refresh_tokens
+
+# Rotation writes a refresh-token row per refresh and revocation only flags it,
+# so the table grows for as long as nobody deletes. Nothing authenticates
+# against an expired row; a month past expiry keeps the session-history lists
+# meaningful and lets the row go.
+REFRESH_TOKEN_RETENTION = timedelta(days=30)
 
 
 def _install_uvloop() -> None:
@@ -54,6 +64,16 @@ app = FastStream(broker)
 
 for _module in (tokens, auth, oauth, api_keys, rbac, players, avatars):
     _module.register(broker, logger)
+
+_purge_scheduler = IntervalScheduler(job_id="refresh_token_purge", label="Refresh-token purge", logger=logger)
+
+
+async def purge_expired_refresh_tokens() -> None:
+    async with observe_scheduled_job("refresh_token_purge"), db.async_session_maker() as session:
+        deleted = await refresh_tokens.purge_expired(session, retention=REFRESH_TOKEN_RETENTION)
+        await session.commit()
+    if deleted:
+        logger.info("Refresh-token purge: dropped {} rows expired before {}", deleted, REFRESH_TOKEN_RETENTION)
 
 
 @app.on_startup
@@ -85,11 +105,13 @@ async def setup_worker() -> None:
         start_worker_metrics_server(settings.worker_metrics_port)
     await init_redis()
     await s3_client.start()
+    _purge_scheduler.start(purge_expired_refresh_tokens, seconds=24 * 60 * 60)
     logger.info("identity-svc started")
 
 
 @app.on_shutdown
 async def teardown_worker() -> None:
+    _purge_scheduler.shutdown()
     await s3_client.close()
     await close_http_client()
     await close_redis()

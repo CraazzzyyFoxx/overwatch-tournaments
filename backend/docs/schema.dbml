@@ -983,12 +983,12 @@ Table balancer.registration {
   team_slot_code VARCHAR(16)
   is_substitute boolean [not null, default: false]
   indexes {
+    (workspace_member_id) [name: "ix_balancer_registration_workspace_member_id"]
+    (registration_team_id) [name: "ix_balancer_registration_registration_team_id"]
     (tournament_id, workspace_member_id) [unique, name: "uq_balancer_registration_user"]
     (tournament_id, status, balancer_status) [name: "ix_balancer_registration_tournament_balancer_status"]
     (tournament_id) [name: "ix_balancer_registration_tournament_id"]
     (tournament_id, battle_tag_normalized) [unique, name: "uq_balancer_registration_tournament_tag_active"]
-    (workspace_member_id) [name: "ix_balancer_registration_workspace_member_id"]
-    (registration_team_id) [name: "ix_balancer_registration_registration_team_id"]
   }
 }
 
@@ -1026,8 +1026,8 @@ Table balancer.registration_google_sheet_binding {
   row_hash VARCHAR(128)
   last_seen_at timestamptz
   indexes {
-    (feed_id, source_record_key) [unique, name: "uq_balancer_registration_google_sheet_binding_key"]
     (registration_id) [unique, name: "uq_balancer_registration_google_sheet_binding_registration"]
+    (feed_id, source_record_key) [unique, name: "uq_balancer_registration_google_sheet_binding_key"]
     (feed_id) [name: "ix_balancer_registration_google_sheet_binding_feed_id"]
   }
 }
@@ -1079,8 +1079,8 @@ Table balancer.registration_role_hero {
   hero_id bigint [not null]
   priority int [not null]
   indexes {
-    (role_id, hero_id) [unique, name: "uq_reg_role_hero_role_hero"]
     (role_id, priority) [unique, name: "uq_reg_role_hero_role_priority"]
+    (role_id, hero_id) [unique, name: "uq_reg_role_hero_role_hero"]
     (role_id) [name: "ix_balancer_registration_role_hero_role_id"]
   }
 }
@@ -1101,8 +1101,8 @@ Table balancer.registration_status {
   excludes_from_ready boolean [not null, default: false]
   indexes {
     (workspace_id, scope, slug, kind) [unique, name: "uq_balancer_registration_status_workspace_scope_slug"]
-    (workspace_id, scope) [name: "ix_balancer_registration_status_workspace_scope"]
     (workspace_id) [name: "ix_balancer_registration_status_workspace_id"]
+    (workspace_id, scope) [name: "ix_balancer_registration_status_workspace_scope"]
   }
 }
 
@@ -1126,12 +1126,12 @@ Table balancer.registration_team {
   invite_cap_reset_at timestamptz
   invite_cap_reset_by bigint
   indexes {
+    (tournament_id, name_normalized) [unique, name: "uq_balancer_registration_team_name_active"]
+    (tournament_id) [name: "ix_balancer_registration_team_tournament_id"]
     (tournament_id, status) [name: "ix_balancer_registration_team_tournament_status"]
     (captain_registration_id) [name: "ix_balancer_registration_team_captain_registration_id"]
     (exported_team_id) [name: "ix_balancer_registration_team_exported_team_id"]
     (workspace_id) [name: "ix_balancer_registration_team_workspace_id"]
-    (tournament_id, name_normalized) [unique, name: "uq_balancer_registration_team_name_active"]
-    (tournament_id) [name: "ix_balancer_registration_team_tournament_id"]
   }
 }
 
@@ -1154,10 +1154,10 @@ Table balancer.registration_team_invite {
   accepted_at timestamptz
   accepted_registration_id bigint
   indexes {
-    (token_sha256) [unique, name: "uq_balancer_registration_team_invite_token"]
-    (target_auth_user_id) [name: "ix_balancer_registration_team_invite_target_auth_user_id"]
     (team_id) [name: "ix_balancer_registration_team_invite_team_id"]
+    (token_sha256) [unique, name: "uq_balancer_registration_team_invite_token"]
     (team_id, state) [name: "ix_balancer_registration_team_invite_team_state"]
+    (target_auth_user_id) [name: "ix_balancer_registration_team_invite_target_auth_user_id"]
   }
 }
 
@@ -1352,8 +1352,6 @@ TableGroup log_processing {
 
 Table matches.event {
   id bigint [pk, increment]
-  created_at timestamptz [not null, default: `now()`]
-  updated_at timestamptz
   match_id bigint [not null]
   time float [not null]
   round int [not null]
@@ -1377,8 +1375,6 @@ Table matches.event {
 
 Table matches.kill_feed {
   id bigint [pk, increment]
-  created_at timestamptz [not null, default: `now()`]
-  updated_at timestamptz
   match_id bigint [not null]
   time float [not null]
   round int [not null]
@@ -1395,12 +1391,12 @@ Table matches.kill_feed {
   is_environmental boolean [not null]
   indexes {
     (victim_hero_id) [name: "ix_matches_kill_feed_victim_hero_id"]
-    (match_id) [name: "ix_matches_kill_feed_match_id"]
+    (victim_id) [name: "ix_matches_kill_feed_victim_id"]
     (killer_hero_id) [name: "ix_matches_kill_feed_killer_hero_id"]
     (victim_team_id) [name: "ix_matches_kill_feed_victim_team_id"]
-    (victim_id) [name: "ix_matches_kill_feed_victim_id"]
-    (killer_team_id) [name: "ix_matches_kill_feed_killer_team_id"]
     (killer_id) [name: "ix_matches_kill_feed_killer_id"]
+    (killer_team_id) [name: "ix_matches_kill_feed_killer_team_id"]
+    (match_id) [name: "ix_matches_kill_feed_match_id"]
   }
 }
 
@@ -1545,7 +1541,6 @@ Table overwatch_rank.battle_tag_state {
   player_id_slug VARCHAR(255) [not null]
   last_checked_at timestamptz
   last_success_at timestamptz
-  last_snapshot_id bigint
   status VARCHAR(32) [not null, default: `pending`]
   consecutive_failures int [not null, default: 0]
   next_eligible_at timestamptz
@@ -1589,10 +1584,10 @@ Table overwatch_rank.rank_snapshot {
   captured_at timestamptz [not null, default: `now()`]
   source VARCHAR(32) [not null, default: `scheduled`]
   indexes {
-    (social_account_id, role) [name: "ix_rank_snapshot_latest_ranked"]
-    (captured_at) [name: "ix_overwatch_rank_rank_snapshot_captured_at"]
     (user_id, captured_at) [name: "ix_rank_snapshot_user_captured"]
+    (captured_at) [name: "ix_overwatch_rank_rank_snapshot_captured_at"]
     (social_account_id, role, platform, captured_at) [name: "ix_rank_snapshot_series_captured"]
+    (social_account_id, role) [name: "ix_rank_snapshot_latest_ranked"]
   }
 }
 
@@ -1716,9 +1711,9 @@ Table audit_log {
   user_agent VARCHAR(255)
   correlation_id VARCHAR(64)
   indexes {
+    (actor_auth_user_id, created_at) [name: "ix_audit_log_actor_created"]
     (workspace_id, created_at) [name: "ix_audit_log_workspace_created"]
     (entity_type, entity_id, created_at) [name: "ix_audit_log_entity_created"]
-    (actor_auth_user_id, created_at) [name: "ix_audit_log_actor_created"]
   }
 }
 
@@ -1869,9 +1864,9 @@ Table notification {
   expires_at timestamptz
   created_at timestamptz [not null, default: `now()`]
   indexes {
-    (recipient_auth_user_id) [name: "ix_notification_recipient_published"]
     (audience) [name: "ix_notification_audience_published"]
     (source_workspace_id) [name: "ix_notification_source_workspace_published"]
+    (recipient_auth_user_id) [name: "ix_notification_recipient_published"]
   }
 }
 
@@ -1984,11 +1979,11 @@ Table realtime.workspace_event {
   payload jsonb [not null]
   occurred_at timestamptz [not null, default: `now()`]
   indexes {
+    (tournament_id) [name: "ix_realtime_workspace_event_tournament_id"]
+    (actor_user_id) [name: "ix_realtime_workspace_event_actor_user_id"]
     (topic, id) [name: "ix_realtime_workspace_event_topic_id"]
     (workspace_id) [name: "ix_realtime_workspace_event_workspace_id"]
     (occurred_at) [name: "ix_realtime_workspace_event_occurred_at"]
-    (tournament_id) [name: "ix_realtime_workspace_event_tournament_id"]
-    (actor_user_id) [name: "ix_realtime_workspace_event_actor_user_id"]
   }
 }
 
@@ -2013,10 +2008,10 @@ Table subscriptions.check_log {
   reason VARCHAR(64)
   error text
   indexes {
+    (state, created_at) [name: "ix_subscription_check_log_state_created"]
     (auth_user_id, created_at) [name: "ix_subscription_check_log_user_created"]
     (created_at) [name: "ix_subscription_check_log_created_at"]
     (workspace_id) [name: "ix_subscriptions_check_log_workspace_id"]
-    (state, created_at) [name: "ix_subscription_check_log_state_created"]
   }
 }
 
@@ -2036,9 +2031,9 @@ Table subscriptions.entitlement {
   evidence_json json
   indexes {
     (workspace_id, auth_user_id, provider) [unique, name: "uq_subscription_entitlement_scope"]
+    (auth_user_id) [name: "ix_subscriptions_entitlement_auth_user_id"]
     (workspace_id) [name: "ix_subscriptions_entitlement_workspace_id"]
     (workspace_id, provider) [name: "ix_subscription_entitlement_workspace_provider"]
-    (auth_user_id) [name: "ix_subscriptions_entitlement_auth_user_id"]
   }
 }
 
@@ -2353,9 +2348,9 @@ Table tournament.encounter_saved_view {
   sort_order int [not null, default: 0]
   indexes {
     (workspace_id, auth_user_id, name) [unique, name: "uq_encounter_saved_view_workspace_user_name"]
-    (auth_user_id) [name: "ix_tournament_encounter_saved_view_auth_user_id"]
     (workspace_id) [name: "ix_tournament_encounter_saved_view_workspace_id"]
     (workspace_id, auth_user_id) [name: "ix_encounter_saved_view_workspace_user"]
+    (auth_user_id) [name: "ix_tournament_encounter_saved_view_auth_user_id"]
   }
 }
 
@@ -2927,7 +2922,6 @@ Ref: matches.statistics.hero_id > overwatch.hero.id [delete: cascade]
 Ref: overwatch.catalog_alias_miss.last_log_record_id > log_processing.record.id [delete: set null]
 Ref: overwatch.map.gamemode_id > overwatch.gamemode.id
 Ref: overwatch_rank.battle_tag_state.social_account_id > players.social_account.id [delete: cascade]
-Ref: overwatch_rank.battle_tag_state.last_snapshot_id > overwatch_rank.rank_snapshot.id [delete: set null]
 Ref: overwatch_rank.fetch_log.social_account_id > players.social_account.id [delete: set null]
 Ref: overwatch_rank.rank_snapshot.user_id > players.user.id [delete: cascade]
 Ref: overwatch_rank.rank_snapshot.social_account_id > players.social_account.id [delete: cascade]

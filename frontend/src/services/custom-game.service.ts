@@ -1,4 +1,5 @@
 import { apiFetch } from "@/lib/api-fetch";
+import { blobToBase64 } from "@/lib/image-capture";
 import type { RosterShape, RosterSlotMap } from "@/lib/roster-shape";
 
 /** Where an effective rank came from, strongest first. */
@@ -79,6 +80,12 @@ export type CustomGameSettings = {
   role_mask: RosterSlotMap | null;
   /** Validated solver overrides; `null` means the solver defaults. */
   balancer_config: Record<string, unknown> | null;
+  /**
+   * Where `postToDiscord` sends the matchup, or `null` when no channel is set.
+   * A snowflake as a string: Discord ids exceed JS safe integers, so the wire
+   * format is decimal text on the way out and on the way in.
+   */
+  discord_channel_id: string | null;
 };
 
 export type CustomGame = {
@@ -95,10 +102,20 @@ export type CustomGame = {
   balance_result: unknown;
   created_at: string | null;
   /**
+   * The map the next match is played on -- rolled or picked by a host, seen by
+   * every viewer, stamped on the next recorded match and cleared by it. Only
+   * the id: name, mode and thumbnail resolve against the loaded catalogue.
+   */
+  next_map_id: number | null;
+  /**
    * The mix's resolved team composition -- own `settings.role_mask` override,
    * else the workspace default, else the built-in Overwatch 5v5 shape.
    */
   roster_shape: RosterShape | null;
+  /** How many matches this mix has recorded -- the list's activity read, without loading the history. */
+  matches_count: number;
+  /** When the newest match was recorded, or `null` while none has been. */
+  last_match_at: string | null;
   players?: CustomGamePlayer[];
 };
 
@@ -120,6 +137,12 @@ export type CustomGameMatch = {
   map_image_path: string | null;
   recorded_by: number | null;
   recorded_at: string | null;
+  /**
+   * The rank points this match moved each player by when it was recorded --
+   * `null` for a draw, or when the mix had no rank adjustment configured. An
+   * undo rolls back by this, never by the mix's current `points_per_win`.
+   */
+  points_per_win_applied: number | null;
 };
 
 /** Patch semantics: an omitted key is left untouched on the server. */
@@ -152,13 +175,53 @@ export type RotationRecommendation = {
   games_played: number;
 };
 
+/** One role's slice of a member's mix record. Absent from `by_role` when that role never played. */
+export type MixRoleTally = {
+  games: number;
+  wins: number;
+  losses: number;
+  draws: number;
+};
+
+/**
+ * One workspace member's record across every mix this workspace has run,
+ * counted from the permanent casual-match log -- one recorded seat is one
+ * game, its outcome the scoreline of the team it sat in. A member who has
+ * since left the roster keeps their rows: the id stays, `display_name` falls
+ * to null.
+ */
+export type MixMemberStats = {
+  workspace_member_id: number;
+  display_name: string | null;
+  battle_tag: string | null;
+  games: number;
+  wins: number;
+  losses: number;
+  draws: number;
+  /** `wins / games` as a share, not a percentage; 0 when nothing was played. */
+  win_rate: number;
+  /** The run from the newest match: `+n` consecutive wins, `-n` losses, 0 after a draw. */
+  streak: number;
+  last_played_at: string | null;
+  /** Only roles with games played -- a seat with no role counts in the totals and in no bucket. */
+  by_role: Partial<Record<"tank" | "dps" | "support", MixRoleTally>>;
+};
+
+/** `since` echoes back the window the server parsed, so a reader can tell it from all time. */
+export type MixStatsResponse = {
+  since: string | null;
+  members: MixMemberStats[];
+};
+
 export const customGameKeys = {
-  /** Every mix query for a workspace — `list` is a prefix of `one`/`matches`/`rotation`, so this covers all four. */
+  /** Every mix query for a workspace — `list` is a prefix of the rest, so this covers them all. */
   all: (workspaceId: number) => ["custom-games", workspaceId] as const,
   list: (workspaceId: number) => ["custom-games", workspaceId] as const,
   one: (workspaceId: number, gameId: number) => ["custom-games", workspaceId, gameId] as const,
   matches: (workspaceId: number, gameId: number) => ["custom-games", workspaceId, gameId, "matches"] as const,
   rotation: (workspaceId: number, gameId: number) => ["custom-games", workspaceId, gameId, "rotation"] as const,
+  stats: (workspaceId: number, since: string | null) =>
+    ["custom-games", workspaceId, "stats", since ?? "all"] as const,
 };
 
 export const customGameService = {
@@ -166,11 +229,19 @@ export const customGameService = {
     return apiFetch(`/api/balancer/workspaces/${workspaceId}/custom-games`).then((r) => r.json());
   },
 
-  /** Always starts empty: the lineup is built explicitly from the workspace roster. */
-  create(workspaceId: number, name: string): Promise<CustomGame> {
+  /**
+   * Starts empty: the lineup is built explicitly from the workspace roster.
+   * `cloneFromGameId` instead copies a previous mix's lineup and settings --
+   * everyone lands in the pool, and no match history comes with it.
+   */
+  create(workspaceId: number, name: string, cloneFromGameId: number | null = null): Promise<CustomGame> {
     return apiFetch(`/api/balancer/workspaces/${workspaceId}/custom-games`, {
       method: "POST",
-      body: { name, member_ids: [] },
+      body: {
+        name,
+        member_ids: [],
+        ...(cloneFromGameId != null ? { clone_from_game_id: cloneFromGameId } : {}),
+      },
     }).then((r) => r.json());
   },
 
@@ -223,24 +294,38 @@ export const customGameService = {
    * Snapshots one played match into the permanent casual-match log — team
    * rosters and who won. Repeatable: a mix can record many before its host
    * calls `close`. `variantIndex` is whichever balance option is on screen;
-   * `mapId` is optional -- the mix flow offers no map veto.
+   * the map is the mix's `next_map_id`, consumed server-side.
    */
   recordOutcome(
     workspaceId: number,
     gameId: number,
     outcome: CustomGameOutcome,
     variantIndex: number,
-    mapId: number | null,
   ): Promise<CustomGame> {
     return apiFetch(`/api/balancer/workspaces/${workspaceId}/custom-games/${gameId}/outcome`, {
       method: "POST",
-      body: { outcome, variant_index: variantIndex, map_id: mapId },
+      body: { outcome, variant_index: variantIndex },
     }).then((r) => r.json());
   },
 
   /** Every match this mix has recorded, newest first. */
   listMatches(workspaceId: number, gameId: number): Promise<CustomGameMatch[]> {
     return apiFetch(`/api/balancer/workspaces/${workspaceId}/custom-games/${gameId}/matches`).then((r) => r.json());
+  },
+
+  /**
+   * Takes the newest match back out of the log -- only the newest, so the
+   * rollback never has to reason about what a later match did on top of it.
+   * Ranks move back by the points that match itself applied
+   * (`points_per_win_applied`), not by the mix's current setting. Players it
+   * released from must-play stay in the pool: the seat they were owed was
+   * spent, undoing the scoreline does not un-spend it.
+   */
+  undoMatch(workspaceId: number, gameId: number, matchId: number): Promise<CustomGame> {
+    return apiFetch(
+      `/api/balancer/workspaces/${workspaceId}/custom-games/${gameId}/matches/${matchId}`,
+      { method: "DELETE" },
+    ).then((r) => r.json());
   },
 
   /**
@@ -253,6 +338,18 @@ export const customGameService = {
     return apiFetch(`/api/balancer/workspaces/${workspaceId}/custom-games/${gameId}/rotation`).then((r) =>
       r.json(),
     );
+  },
+
+  /**
+   * Every member's win/loss record across this workspace's mixes, read from
+   * the permanent match log rather than from any one mix. `since` (ISO) counts
+   * only matches recorded from then on; `null` counts all time.
+   */
+  stats(workspaceId: number, since: string | null = null): Promise<MixStatsResponse> {
+    return apiFetch(`/api/balancer/workspaces/${workspaceId}/custom-games/stats`, {
+      // `apiFetch` drops a null query value, so all time sends no `since` at all.
+      query: { since },
+    }).then((r) => r.json());
   },
 
   /** Ends the mix. Matches already recorded stay recorded; this only stops further writes. */
@@ -309,6 +406,18 @@ export const customGameService = {
   },
 
   /**
+   * Names the map the next match is played on, or clears it (`null`). The roll
+   * itself happens client-side (`rollNextMap`); this stores the verdict so
+   * co-hosts and viewers see the same map and `recordOutcome` stamps it.
+   */
+  setNextMap(workspaceId: number, gameId: number, mapId: number | null): Promise<CustomGame> {
+    return apiFetch(`/api/balancer/workspaces/${workspaceId}/custom-games/${gameId}/next-map`, {
+      method: "PUT",
+      body: { map_id: mapId },
+    }).then((r) => r.json());
+  },
+
+  /**
    * Hands primary ownership to another workspace member. Any current writer
    * -- the host or a co-host -- may call this; it 403s the caller's very
    * next write here unless they are also a co-host, and opens every write
@@ -358,5 +467,43 @@ export const customGameService = {
       method: "POST",
       body: { variant_index: variantIndex, first_uuid: firstUuid, second_uuid: secondUuid },
     }).then((r) => r.json());
+  },
+
+  /**
+   * Names the channel `postToDiscord` posts the matchup to, or clears it
+   * (`null`). The id travels as a string: a Discord snowflake does not survive
+   * a round trip through a JS number.
+   */
+  setDiscordChannel(workspaceId: number, gameId: number, channelId: string | null): Promise<CustomGame> {
+    return apiFetch(`/api/balancer/workspaces/${workspaceId}/custom-games/${gameId}/discord-channel`, {
+      method: "PUT",
+      body: { channel_id: channelId },
+    }).then((r) => r.json());
+  },
+
+  /**
+   * Posts the current matchup -- teams and the next map -- to the mix's Discord
+   * channel. Fire-and-forget: the response only says the message was queued for
+   * the bot, so a delivery that fails afterwards surfaces in the bot's logs,
+   * not here. `variantIndex` is whichever balance option is on screen.
+   *
+   * `image` is that matchup rasterised in the browser; it is what the bot
+   * attaches. Passing `null` (a capture that failed, or a caller with no node
+   * to capture) posts the server's text embed instead.
+   */
+  async postToDiscord(
+    workspaceId: number,
+    gameId: number,
+    variantIndex: number,
+    image: Blob | null = null,
+  ): Promise<{ status: "queued"; channel_id: string }> {
+    const response = await apiFetch(
+      `/api/balancer/workspaces/${workspaceId}/custom-games/${gameId}/discord/post`,
+      {
+        method: "POST",
+        body: { variant_index: variantIndex, image_b64: image ? await blobToBase64(image) : null },
+      },
+    );
+    return response.json();
   },
 };

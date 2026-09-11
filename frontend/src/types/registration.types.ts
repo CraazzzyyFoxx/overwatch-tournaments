@@ -261,6 +261,7 @@ export interface RegistrationForm {
   open_profile_scope?: "main" | "all";
   show_ranks?: boolean;
   require_subscription?: boolean;
+  subscription_scope?: "player" | "team";
   subscription_stage?: "registration" | "check_in";
   /** Server-resolved from the workspace requirement and read-only — the rule no
    *  longer lives on the form. The check-in dialog renders it, so it stays on

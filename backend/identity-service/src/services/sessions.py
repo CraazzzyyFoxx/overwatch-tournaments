@@ -235,6 +235,15 @@ class RefreshTokenService:
         else:
             await self.revoke_all(session, reused.user_id)
 
+    async def purge_expired(self, session: AsyncSession, *, retention: timedelta) -> int:
+        """Delete tokens that expired more than ``retention`` ago; returns the count.
+
+        Well past the rotation grace and the token lifetime, so no live or
+        replayed token can match a deleted row. The session lists keep their
+        history for ``retention`` after a session's last token expired.
+        """
+        return await self._tokens.delete_expired_before(session, datetime.now(UTC) - retention)
+
 
 class SessionService:
     """Aggregates refresh tokens into the logical sessions the UI shows."""

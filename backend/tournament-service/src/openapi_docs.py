@@ -771,11 +771,12 @@ DOCS: dict[str, dict] = {
         "description": (
             "An ORGANIZER refuses an entire team -- the counterpart of rejecting a solo registration, and "
             "distinct from regteam_decline, which is one invitee refusing one offer. Revokes the team's "
-            "pending invites and, by default, withdraws its members; `withdraw_members: false` instead "
-            "returns them to the solo pool, which is the right call when the team is rejected for being "
-            "incomplete rather than unwelcome. Returns the rejected team. 404 when the team belongs to "
-            "another tournament, 409 once it is already exported, rejected or disbanded. Requires "
-            "team-update permission on the tournament."
+            "pending invites and returns its members to the solo pool without changing their registration "
+            "status by default; `withdraw_members: true` explicitly withdraws them instead. Requires a "
+            "reason of 1–1000 characters after trimming whitespace. The stored reason is visible to the "
+            "organizer and the entitled captain, including after roster detachment, but not to the public. "
+            "Returns the rejected team. 404 when the team belongs to another tournament, 409 once it is "
+            "already exported, rejected or disbanded. Requires team-update permission on the tournament."
         ),
     },
     "rpc.tournament.regteam_invite_revoke_admin": {
@@ -795,6 +796,42 @@ DOCS: dict[str, dict] = {
             "cap's own 409 names (204 no body). A watermark, not a counter reset: the earlier invites stay "
             "readable in the history and only the count's floor moves. 404 when the team belongs to another "
             "tournament. Requires team-update permission on the tournament."
+        ),
+    },
+    "rpc.tournament.regteam_rename_admin": {
+        "summary": "Rename a registration team (organizer)",
+        "description": (
+            "An organizer renames a registered team they do not captain. 404 when the team belongs to "
+            "another tournament (deliberately not 403). Requires team-update permission."
+        ),
+    },
+    "rpc.tournament.regteam_unlock": {
+        "summary": "Unlock a registration team roster",
+        "description": (
+            "Clears a captain's roster lock so the team can edit again. Organizer-only; captains lock, "
+            "they do not unlock. Requires team-update permission on the tournament."
+        ),
+    },
+    "rpc.tournament.regteam_admission": {
+        "summary": "Set registration-team admission",
+        "description": (
+            "Sets the orthogonal admission axis (pending, accepted, waitlisted) without changing occupancy "
+            "status. Waitlisted complete teams are skipped at export. Requires team-update permission."
+        ),
+    },
+    "rpc.tournament.regteam_notes": {
+        "summary": "Set organizer notes on a registration team",
+        "description": (
+            "Staff-only notes on a registered team; never returned on the public roster. Requires "
+            "team-update permission on the tournament."
+        ),
+    },
+    "rpc.tournament.regteam_place_admin": {
+        "summary": "Place a player on a registration team (organizer)",
+        "description": (
+            "Moves a live registration onto a slot of a team in this tournament, even from another team. "
+            "The captain of a source team cannot be moved until captaincy is transferred. Requires "
+            "team-update permission."
         ),
     },
     "rpc.tournament.regteam_invite_history": {
@@ -1129,6 +1166,55 @@ DOCS: dict[str, dict] = {
             "keep their team link, so each player's card can say the team was disbanded rather than leaving "
             "an unexplained withdrawal, and every pending invite is revoked. Captain-only (403), team must "
             "still be forming and registration still open. An organizer's equivalent is regteam_reject."
+        ),
+    },
+    "rpc.tournament.regteam_rename": {
+        "summary": "Rename a registration team",
+        "description": (
+            "Captain or manager renames their team. The roster must still be mutable and unlocked. '#' in "
+            "a name is refused. Requires authentication."
+        ),
+    },
+    "rpc.tournament.regteam_place_member": {
+        "summary": "Reassign a roster slot",
+        "description": (
+            "Moves a member to another slot, onto or off the bench, or swaps two members when "
+            "swap_with_registration_id is set. Captain or manager. A captain cannot become a substitute."
+        ),
+    },
+    "rpc.tournament.regteam_set_manager": {
+        "summary": "Grant or revoke team-manager",
+        "description": (
+            "Captain-only: flags another accepted member as a manager so they can invite, kick, rename "
+            "and check the roster in. The captain themselves is not a manager."
+        ),
+    },
+    "rpc.tournament.regteam_extend_invite": {
+        "summary": "Extend or rotate an invite",
+        "description": (
+            "Refreshes a pending invite's TTL. rotate_token is only valid for a link invite and returns a "
+            "new raw token exactly once. Captain or manager."
+        ),
+    },
+    "rpc.tournament.regteam_lock": {
+        "summary": "Lock a complete roster",
+        "description": (
+            "Captain-only. A complete roster can be frozen so further edits refuse with roster_locked until "
+            "an organizer unlocks it."
+        ),
+    },
+    "rpc.tournament.regteam_check_in": {
+        "summary": "Check in a team's roster",
+        "description": (
+            "Captain or manager checks in every approved member except those listed in "
+            "exclude_registration_ids. Gated by the tournament check-in window."
+        ),
+    },
+    "rpc.tournament.regteam_cover_subscription": {
+        "summary": "Cover a team subscription",
+        "description": (
+            "Stamps the registered team with the captain or manager's active entitlement, or a redeemed "
+            "challenge code. Only when the form's subscription_scope is team."
         ),
     },
     # ── encounter saved-view writes ────────────────────────────────────────

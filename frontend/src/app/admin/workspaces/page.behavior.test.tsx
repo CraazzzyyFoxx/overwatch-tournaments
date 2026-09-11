@@ -25,7 +25,7 @@ declare global {
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 const getAll = vi.fn();
-const fetchMock = vi.fn();
+const deleteWorkspace = vi.fn();
 
 let superuser = true;
 let managesAny = true;
@@ -58,6 +58,7 @@ vi.mock("@/services/workspace.service", () => ({
       avatar_url: null
     })),
     create: vi.fn(),
+    delete: (...args: unknown[]) => deleteWorkspace(...args),
     uploadIcon: vi.fn()
   }
 }));
@@ -225,8 +226,7 @@ beforeEach(() => {
   replace.mockClear();
   setViewportWidth(1280);
   getAll.mockReset().mockResolvedValue([workspace()]);
-  fetchMock.mockReset().mockResolvedValue({ ok: true });
-  vi.stubGlobal("fetch", fetchMock);
+  deleteWorkspace.mockReset().mockResolvedValue(undefined);
   document.body.innerHTML = "";
 });
 
@@ -313,7 +313,7 @@ describe("/admin/workspaces", () => {
     await type(dialog.querySelector("input") as HTMLInputElement, "Rivals Cup");
     await click(confirm);
 
-    expect(fetchMock).toHaveBeenCalledWith("/api/v1/workspaces/8", { method: "DELETE" });
+    expect(deleteWorkspace).toHaveBeenCalledWith(8);
   });
 
   it("renders rows as cards below md, where six columns do not fit", async () => {

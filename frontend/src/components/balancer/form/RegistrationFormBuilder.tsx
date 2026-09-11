@@ -106,6 +106,12 @@ export default function RegistrationFormBuilder({
   const [openProfileScope, setOpenProfileScope] = useState<"main" | "all">("main");
   const [showRanks, setShowRanks] = useState(false);
   const [maxSubstitutes, setMaxSubstitutes] = useState(0);
+  const [subscriptionScope, setSubscriptionScope] = useState<"player" | "team">("player");
+  const [teamRankMin, setTeamRankMin] = useState<number | null>(null);
+  const [teamRankMax, setTeamRankMax] = useState<number | null>(null);
+  const [teamRankSpread, setTeamRankSpread] = useState<number | null>(null);
+  const [teamUniqueIdentity, setTeamUniqueIdentity] = useState(false);
+  const [teamRequireDiscordGuild, setTeamRequireDiscordGuild] = useState(false);
   const [requireSubscription, setRequireSubscription] = useState(false);
   const [subscriptionStage, setSubscriptionStage] = useState<"registration" | "check_in">(
     "check_in"
@@ -151,6 +157,12 @@ export default function RegistrationFormBuilder({
       setOpenProfileScope((data?.open_profile_scope as "main" | "all") ?? "main");
       setShowRanks(data?.show_ranks ?? false);
       setMaxSubstitutes(data?.max_substitutes ?? 0);
+      setSubscriptionScope(data?.subscription_scope === "team" ? "team" : "player");
+      setTeamRankMin(data?.team_rank_min ?? null);
+      setTeamRankMax(data?.team_rank_max ?? null);
+      setTeamRankSpread(data?.team_max_rank_spread ?? null);
+      setTeamUniqueIdentity(data?.team_unique_identity ?? false);
+      setTeamRequireDiscordGuild(data?.team_require_discord_guild ?? false);
       setBuiltInFields(getBuiltInConfig(data?.built_in_fields ?? {}));
       setCustomFields((data?.custom_fields ?? []).map(hydrateCustomField));
       setHasChanges(false);
@@ -208,6 +220,12 @@ export default function RegistrationFormBuilder({
         open_profile_scope: openProfileScope,
         show_ranks: showRanks,
         max_substitutes: maxSubstitutes,
+        subscription_scope: subscriptionScope,
+        team_rank_min: teamRankMin,
+        team_rank_max: teamRankMax,
+        team_max_rank_spread: teamRankSpread,
+        team_unique_identity: teamUniqueIdentity,
+        team_require_discord_guild: teamRequireDiscordGuild,
         require_subscription: requireSubscription,
         subscription_stage: subscriptionStage,
         built_in_fields: Object.fromEntries(
@@ -489,6 +507,82 @@ export default function RegistrationFormBuilder({
                   </SelectItem>
                 </SelectContent>
               </Select>
+            </SettingRow>
+          </SettingGroup>
+
+          <SettingGroup title={t("team.title")} description={t("team.description")}>
+            <SettingRow
+              htmlFor={`${ids}-max-subs`}
+              label={t("team.maxSubstitutes")}
+              hint={t("team.maxSubstitutesHint")}
+            >
+              <NumberInput
+                id={`${ids}-max-subs`}
+                integer
+                min={0}
+                value={maxSubstitutes}
+                onValueChange={mark((value: number | null) => setMaxSubstitutes(value ?? 0))}
+                aria-label={t("team.maxSubstitutesAria")}
+                className="h-8 w-24"
+              />
+            </SettingRow>
+            <SettingRow htmlFor={`${ids}-sub-scope`} label={t("team.scope")} hint={t("team.scopeHint")}>
+              <Select
+                value={subscriptionScope}
+                onValueChange={mark((value: string) => setSubscriptionScope(value as "player" | "team"))}
+              >
+                <SelectTrigger id={`${ids}-sub-scope`} className="h-8 w-fit min-w-[230px] max-w-full text-sm" aria-label={t("team.scopeAria")}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="player">{t("team.scopePlayer")}</SelectItem>
+                  <SelectItem value="team">{t("team.scopeTeam")}</SelectItem>
+                </SelectContent>
+              </Select>
+            </SettingRow>
+            <SettingRow htmlFor={`${ids}-rank-min`} label={t("team.rankMin")} hint={t("team.rankHint")}>
+              <NumberInput
+                id={`${ids}-rank-min`}
+                integer
+                min={0}
+                value={teamRankMin}
+                onValueChange={mark(setTeamRankMin)}
+                className="h-8 w-24"
+              />
+            </SettingRow>
+            <SettingRow htmlFor={`${ids}-rank-max`} label={t("team.rankMax")}>
+              <NumberInput
+                id={`${ids}-rank-max`}
+                integer
+                min={0}
+                value={teamRankMax}
+                onValueChange={mark(setTeamRankMax)}
+                className="h-8 w-24"
+              />
+            </SettingRow>
+            <SettingRow htmlFor={`${ids}-rank-spread`} label={t("team.rankSpread")}>
+              <NumberInput
+                id={`${ids}-rank-spread`}
+                integer
+                min={0}
+                value={teamRankSpread}
+                onValueChange={mark(setTeamRankSpread)}
+                className="h-8 w-24"
+              />
+            </SettingRow>
+            <SettingRow htmlFor={`${ids}-unique-id`} label={t("team.uniqueIdentity")} hint={t("team.uniqueIdentityHint")}>
+              <Switch
+                id={`${ids}-unique-id`}
+                checked={teamUniqueIdentity}
+                onCheckedChange={mark(setTeamUniqueIdentity)}
+              />
+            </SettingRow>
+            <SettingRow htmlFor={`${ids}-discord-guild`} label={t("team.requireDiscordGuild")} hint={t("team.requireDiscordGuildHint")}>
+              <Switch
+                id={`${ids}-discord-guild`}
+                checked={teamRequireDiscordGuild}
+                onCheckedChange={mark(setTeamRequireDiscordGuild)}
+              />
             </SettingRow>
           </SettingGroup>
 

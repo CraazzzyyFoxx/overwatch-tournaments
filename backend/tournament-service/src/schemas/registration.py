@@ -99,6 +99,14 @@ class RegistrationFormRead(BaseModel):
     #: Bench size for team registration. Zero disables substitutes. Not a starter
     #: slot — see ``BalancerRegistrationForm.max_substitutes``.
     max_substitutes: int = Field(default=0, ge=0)
+    #: ``player`` (default) keeps the per-entrant subscription gate. ``team`` is
+    #: "the captain pays": a stamp on the registered team covers the roster.
+    subscription_scope: Literal["player", "team"] = "player"
+    team_rank_min: int | None = Field(default=None, ge=0)
+    team_rank_max: int | None = Field(default=None, ge=0)
+    team_max_rank_spread: int | None = Field(default=None, ge=0)
+    team_unique_identity: bool = False
+    team_require_discord_guild: bool = False
     # Workspace sub-role catalog keyed by registration role code (tank/dps/support).
     # The single source of truth for available sub-roles; per-tournament
     # built_in_fields[*].subroles selects which of these are offered.
@@ -125,6 +133,14 @@ class RegistrationFormUpsert(BaseModel):
     #: Omitted by an older client becomes 0, same as every other field on this
     #: full-replace upsert. The builder always sends it.
     max_substitutes: int = Field(default=0, ge=0)
+    #: Omitted by an older client becomes ``player``, same full-replace trap as
+    #: ``max_substitutes``. The builder always sends it.
+    subscription_scope: Literal["player", "team"] = "player"
+    team_rank_min: int | None = Field(default=None, ge=0)
+    team_rank_max: int | None = Field(default=None, ge=0)
+    team_max_rank_spread: int | None = Field(default=None, ge=0)
+    team_unique_identity: bool = False
+    team_require_discord_guild: bool = False
     custom_fields: list[CustomFieldDefinition] = Field(default_factory=list)
 
 

@@ -27,7 +27,7 @@ from shared.repository.ranks import (
 from shared.repository.ranks import jittered_interval as _jittered_interval
 from shared.schemas.settings import RankCollectionConfig
 from src import models
-from src.domain.overwatch_rank import RankFetchResult, battle_tag_to_slug
+from src.domain.overwatch_rank import RankFetchResult, RankSeriesState, battle_tag_to_slug, changed_ranks
 
 from . import mapping
 from .client import INVALID_BATTLE_TAG_ERROR
@@ -324,15 +324,13 @@ class RankStateService:
         """Aggregate collection health (DB layer only; caller adds config).
 
         Mirrors the manual incident-diagnostic queries: state status/tier mix,
-        whole population size, distinct-account snapshot coverage over
-        24h/7d, the global last successful capture, and the last-24h
-        ``fetch_log`` outcome mix.
+        whole population size, accounts successfully polled over 24h/7d, the
+        global last successful capture, and the last-24h ``fetch_log`` outcome mix.
 
         ``workspace_id`` narrows every aggregate to the battle tags of that
         workspace's players (the caller's authorization scope — see ``rpc/rank.py``).
         """
         state = models.BattleTagRankState
-        snap = models.UserRankSnapshot
         log = models.RankFetchLog
         now = _now()
         accounts = workspace_account_ids(workspace_id) if workspace_id is not None else None
@@ -374,11 +372,13 @@ class RankStateService:
         )
 
         async def _coverage(delta: timedelta) -> int:
+            # The state row, not ``rank_snapshot``: snapshots record CHANGES, so a
+            # steady account writes none for weeks and would read as uncollected.
             return int(
                 await session.scalar(
-                    _scoped(
-                        sa.select(sa.func.count(sa.distinct(snap.social_account_id))), snap.social_account_id
-                    ).where(snap.captured_at > now - delta)
+                    _scoped(sa.select(sa.func.count()).select_from(state), state.social_account_id).where(
+                        state.last_success_at > now - delta
+                    )
                 )
                 or 0
             )
@@ -449,6 +449,26 @@ class RankStateService:
             sa.select(models.SocialAccount.user_id).where(models.SocialAccount.id == social_account_id)
         )
 
+    async def _latest_series_states(
+        self, session: AsyncSession, social_account_id: int
+    ) -> dict[tuple[str, str], RankSeriesState]:
+        """The last stored observation per ``(platform, role)`` of one account.
+
+        One ``DISTINCT ON`` over ``ix_rank_snapshot_series_captured``; the series
+        are short (changes only), so this is a handful of index descents.
+        """
+        snap = models.UserRankSnapshot
+        rows = await session.execute(
+            sa.select(snap.platform, snap.role, snap.division, snap.tier, snap.is_ranked, snap.rank_value)
+            .where(snap.social_account_id == social_account_id)
+            .distinct(snap.platform, snap.role)
+            .order_by(snap.platform, snap.role, snap.captured_at.desc(), snap.id.desc())
+        )
+        return {
+            (platform, role): RankSeriesState(division=division, tier=tier, is_ranked=is_ranked, rank_value=rank_value)
+            for platform, role, division, tier, is_ranked, rank_value in rows
+        }
+
     async def record_result(
         self,
         session: AsyncSession,
@@ -462,9 +482,11 @@ class RankStateService:
         config: RankCollectionConfig,
         now: datetime | None = None,
     ) -> int:
-        """Persist a fetch outcome: snapshot rows (on success) + state update.
+        """Persist a fetch outcome: changed snapshot rows (on success) + state update.
 
-        Returns the number of snapshot rows written.
+        Returns the number of snapshot rows written -- zero on the common poll
+        that finds every role where it was (see ``changed_ranks``). Success is
+        recorded on the state row regardless, which is what coverage reads.
         """
         now = now or _now()
         state = await self.ensure_state(session, social_account_id, battle_tag)
@@ -476,8 +498,12 @@ class RankStateService:
 
         if status == enums.RankCollectionStatus.ok:
             user_id = await self._user_id_for_tag(session, social_account_id)
-            last_snapshot: models.UserRankSnapshot | None = None
             if user_id is not None:
+                latest = await self._latest_series_states(session, social_account_id)
+                observed = [
+                    (parsed, mapping.map_division_tier_to_rank_value(parsed.division, parsed.tier, lookup))
+                    for parsed in result.ranks
+                ]
                 snapshots = [
                     models.UserRankSnapshot(
                         user_id=user_id,
@@ -488,22 +514,20 @@ class RankStateService:
                         division=parsed.division,
                         tier=parsed.tier,
                         season=parsed.season,
-                        rank_value=mapping.map_division_tier_to_rank_value(parsed.division, parsed.tier, lookup),
+                        rank_value=rank_value,
                         mapping_version=mapping_version,
                         is_ranked=parsed.is_ranked,
                         captured_at=now,
                         source=source,
                     )
-                    for parsed in result.ranks
+                    for parsed, rank_value in changed_ranks(observed, latest)
                 ]
-                await self.snapshot_repo.create_many(session, snapshots)
+                if snapshots:
+                    await self.snapshot_repo.create_many(session, snapshots)
                 written = len(snapshots)
-                last_snapshot = snapshots[-1] if snapshots else None
             state.status = enums.RankCollectionStatus.ok.value
             state.last_success_at = now
             state.consecutive_failures = 0
-            if last_snapshot is not None:
-                state.last_snapshot_id = last_snapshot.id
             state.next_eligible_at = now + timedelta(
                 seconds=_jittered_interval(config.interval_seconds, config.jitter_fraction)
             )
@@ -621,6 +645,10 @@ class RankStateService:
         now = now or _now()
         await self.repo.defer(session, social_account_id=social_account_id, delay_seconds=delay_seconds, now=now)
 
+    async def purge_fetch_log(self, session: AsyncSession, *, retention: timedelta) -> int:
+        """Drop ``fetch_log`` rows older than ``retention``; returns how many went."""
+        return await self.log_repo.delete_older_than(session, _now() - retention)
+
 
 rank_state_service = RankStateService()
 
@@ -646,3 +674,4 @@ record_result = rank_state_service.record_result
 record_failure = rank_state_service.record_failure
 reenable_disabled = rank_state_service.reenable_disabled
 defer_tag = rank_state_service.defer_tag
+purge_fetch_log = rank_state_service.purge_fetch_log

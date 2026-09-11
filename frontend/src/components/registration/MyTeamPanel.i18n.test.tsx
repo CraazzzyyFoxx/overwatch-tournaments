@@ -109,7 +109,14 @@ async function renderPanel(locale: "en" | "ru", isCaptain: boolean) {
     root.render(
       <NextIntlClientProvider locale={locale} messages={MESSAGES[locale]}>
         <QueryClientProvider client={client}>
-          <MyTeamPanel workspaceId={1} tournamentId={1} team={TEAM} isCaptain={isCaptain} />
+          <MyTeamPanel
+            workspaceId={1}
+            tournamentId={1}
+            team={TEAM}
+            isCaptain={isCaptain}
+            registrationOpen
+            checkInAvailable={false}
+          />
         </QueryClientProvider>
       </NextIntlClientProvider>,
     );

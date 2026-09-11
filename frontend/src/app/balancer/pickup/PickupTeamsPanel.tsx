@@ -21,12 +21,16 @@ import {
   AlertCircle,
   ClipboardCopy,
   Copy,
+  Dices,
   History,
   Loader2,
+  Send,
   Shuffle,
+  Undo2,
 } from "lucide-react";
 
 import { PANEL_CLASS } from "@/app/balancer/components/balancer-page-helpers";
+import { rollNextMap, rollableModes } from "@/app/balancer/pickup/pickup-map-roll";
 import { PickupResultControls } from "@/app/balancer/pickup/PickupResultControls";
 import {
   CAPTION_CLASS,
@@ -56,10 +60,11 @@ import { PageStateCard } from "@/components/ui/page-state-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useNodeCapture } from "@/hooks/useNodeCapture";
 import { OW_REFERENCE_GRID, resolveDivisionFromRank } from "@/lib/division-grid";
+import { notify } from "@/lib/notify";
 import { ROLES, ROLE_LABELS } from "@/lib/roles";
 import { cn } from "@/lib/utils";
 import type { CustomGame, CustomGameMatch } from "@/services/custom-game.service";
-import type { LookupItem } from "@/types/pagination.types";
+import type { MapRead } from "@/types/map.types";
 
 import {
   LOBBY_SIZE,
@@ -89,10 +94,15 @@ type PickupTeamsPanelProps = {
   onRecordOutcome: (input: PickupRecordOutcomeInput) => void;
   /** The permanent record of every match this mix has played, newest first. */
   matches: CustomGameMatch[];
-  /** The OW map catalogue for the optional result-recording picker. */
-  maps: LookupItem[];
-  mapId: number | null;
-  onMapIdChange: (mapId: number | null) => void;
+  /** The match whose undo is in flight, so only that row spins. */
+  undoingMatchId?: number | null;
+  /** Omitted -- the history renders read-only, matching a page that offers no undo. */
+  onUndoMatch?: (matchId: number) => void;
+  /** The OW map catalogue with its gamemodes -- the roll pool and the manual picker. */
+  maps: MapRead[];
+  settingNextMap: boolean;
+  /** Rolled or hand-picked; `null` clears. Persisted server-side so every viewer sees the same map. */
+  onNextMapChange: (mapId: number | null) => void;
   closingMix: boolean;
   onCloseMix: () => void;
   /** Omitted -- team headers render read-only, matching a `canWrite=false` viewer. */
@@ -100,6 +110,9 @@ type PickupTeamsPanelProps = {
   /** Omitted -- seats render without drag handles, matching a `canWrite=false` viewer. */
   onSwapSeats?: (variantIndex: number, firstUuid: string, secondUuid: string) => void | Promise<unknown>;
   onCopyBattleTags: () => void;
+  postingToDiscord?: boolean;
+  /** Omitted -- no Post to Discord button, matching a page that offers no post. */
+  onPostToDiscord?: (variantIndex: number, image: Blob | null) => void;
 };
 
 /**
@@ -128,14 +141,18 @@ export function PickupTeamsPanel({
   recordingOutcome,
   onRecordOutcome,
   matches,
+  undoingMatchId = null,
+  onUndoMatch,
   maps,
-  mapId,
-  onMapIdChange,
+  settingNextMap,
+  onNextMapChange,
   closingMix,
   onCloseMix,
   onRenameTeam,
   onSwapSeats,
   onCopyBattleTags,
+  postingToDiscord = false,
+  onPostToDiscord,
 }: Readonly<PickupTeamsPanelProps>) {
   const variants = parseVariants(game?.balance_result, teamNamesByIndex(game?.settings));
   // Clamped rather than reset in an effect: a shorter result must not leave the
@@ -145,7 +162,7 @@ export function PickupTeamsPanel({
   const pointsPerWin = game?.settings.points_per_win ?? null;
   // The matchup card is a self-contained graphic, so "share the teams" here needs
   // no detour through the fullscreen board.
-  const { ref: captureRef, capturing, capture } = useNodeCapture();
+  const { ref: captureRef, capturing, capture, rasterize } = useNodeCapture();
 
   return (
     // Width-capped by the caller now, alongside the mix header that sits
@@ -178,27 +195,43 @@ export function PickupTeamsPanel({
             }
             className={cn(PANEL_CLASS, "px-4 py-16")}
           />
-        ) : variant == null ? (
-          <PageStateCard
-            state="empty"
-            title="No teams yet"
-            description={
-              canWrite
-                ? "Fill the lineup, then press Balance teams to see the matchup."
-                : "This mix has not been balanced yet."
-            }
-            className={cn(PANEL_CLASS, "px-4 py-16")}
-          />
         ) : (
-          <div ref={captureRef} data-testid="teams-capture">
-            <VariantView
-              variant={variant}
-              canWrite={canWrite}
-              onRenameTeam={onRenameTeam}
-              onSwapSeats={
-                onSwapSeats && ((firstUuid, secondUuid) => onSwapSeats(index, firstUuid, secondUuid))
-              }
-            />
+          // The next map sits inside the captured block on purpose: the shared
+          // screenshot answers "who is on my team" and "what are we playing"
+          // together, which is exactly what a lobby asks in one breath.
+          <div ref={captureRef} data-testid="teams-capture" className="flex flex-col gap-3.5">
+            {game ? (
+              <NextMapStrip
+                game={game}
+                maps={maps}
+                matches={matches}
+                canWrite={canWrite}
+                saving={settingNextMap}
+                capturing={capturing}
+                onNextMapChange={onNextMapChange}
+              />
+            ) : null}
+            {variant == null ? (
+              <PageStateCard
+                state="empty"
+                title="No teams yet"
+                description={
+                  canWrite
+                    ? "Fill the lineup, then press Balance teams to see the matchup."
+                    : "This mix has not been balanced yet."
+                }
+                className={cn(PANEL_CLASS, "px-4 py-16")}
+              />
+            ) : (
+              <VariantView
+                variant={variant}
+                canWrite={canWrite}
+                onRenameTeam={onRenameTeam}
+                onSwapSeats={
+                  onSwapSeats && ((firstUuid, secondUuid) => onSwapSeats(index, firstUuid, secondUuid))
+                }
+              />
+            )}
           </div>
         )}
       </div>
@@ -286,6 +319,31 @@ export function PickupTeamsPanel({
                 )}
                 Copy image
               </Button>
+              {canWrite && onPostToDiscord && game?.settings.discord_channel_id ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="h-9"
+                  disabled={postingToDiscord || capturing}
+                  onClick={() => {
+                    // The same rasterised card "Copy image" produces, sent as
+                    // the attachment: the bot has no renderer, and a host who
+                    // shares the matchup means the card, not a transcript of
+                    // it. A failed capture posts without one -- the server
+                    // falls back to the text embed rather than to nothing.
+                    void rasterize()
+                      .catch(() => null)
+                      .then((image) => onPostToDiscord(index, image));
+                  }}
+                >
+                  {postingToDiscord ? (
+                    <Loader2 className="mr-1.5 size-3.5 animate-spin" aria-hidden="true" />
+                  ) : (
+                    <Send className="mr-1.5 size-3.5" aria-hidden="true" />
+                  )}
+                  Post to Discord
+                </Button>
+              ) : null}
               <Button type="button" variant="ghost" className="h-9" onClick={onCopyBattleTags}>
                 <ClipboardCopy className="mr-1.5 size-3.5" aria-hidden="true" />
                 Copy battletags
@@ -324,33 +382,175 @@ export function PickupTeamsPanel({
         {variant ? (
           <div className="flex flex-wrap items-center gap-x-3.5 gap-y-2 border-t border-[color:var(--aqt-border)] pt-3">
             <span className={cn(EYEBROW_CLASS, "tracking-label")}>Record result</span>
-            {canWrite ? (
-              <MapCombobox maps={maps} mapId={mapId} onMapIdChange={onMapIdChange} />
-            ) : null}
             <PickupResultControls
               teamCount={variant.teams.length}
               teamNames={variant.teams.map((team) => team.name)}
               canRecord={canWrite}
               saving={recordingOutcome}
               pointsPerWin={pointsPerWin}
-              onRecord={(recordedOutcome) =>
-                onRecordOutcome({ outcome: recordedOutcome, variantIndex: index, mapId })
-              }
+              onRecord={(recordedOutcome) => onRecordOutcome({ outcome: recordedOutcome, variantIndex: index })}
             />
             <span className="text-caption text-[color:var(--aqt-fg-faint)]">
-              Record who won — every match logs below and the map picker resets for the next one.
+              Record who won — the match logs below on the next map above, and the map resets for the next roll.
             </span>
           </div>
         ) : null}
 
-        {matches.length > 0 ? <MatchHistoryList matches={matches} /> : null}
+        {matches.length > 0 ? (
+          <MatchHistoryList
+            matches={matches}
+            canWrite={canWrite}
+            undoingMatchId={undoingMatchId}
+            onUndoMatch={onUndoMatch}
+          />
+        ) : null}
       </div>
     </div>
   );
 }
 
+/**
+ * The map the next match is on, and how a host gets one: roll it (inside one
+ * mode, or mode-first across all of them -- see `rollNextMap`), or pick it by
+ * hand. The verdict is the mix's `next_map_id`, so every viewer reads the same
+ * map and the next recorded result carries it. Only the mode filter is local:
+ * it is a preference of whoever is rolling, not a fact about the mix.
+ *
+ * Hidden from the screenshot when nothing is rolled: "Not rolled yet" beside
+ * two teams is noise in the channel the image is pasted into.
+ */
+function NextMapStrip({
+  game,
+  maps,
+  matches,
+  canWrite,
+  saving,
+  capturing,
+  onNextMapChange,
+}: Readonly<{
+  game: CustomGame;
+  maps: MapRead[];
+  matches: CustomGameMatch[];
+  canWrite: boolean;
+  saving: boolean;
+  capturing: boolean;
+  onNextMapChange: (mapId: number | null) => void;
+}>) {
+  const [modeId, setModeId] = useState<number | null>(null);
+  const modes = rollableModes(maps);
+  const nextMap = game.next_map_id == null ? null : (maps.find((map) => map.id === game.next_map_id) ?? null);
+
+  if (!canWrite && nextMap == null) return null;
+
+  const roll = () => {
+    const rolled = rollNextMap(maps, {
+      gamemodeId: modeId,
+      playedMapIds: matches.flatMap((match) => (match.map_id == null ? [] : [match.map_id])),
+    });
+    if (rolled == null) {
+      notify.error("No competitive maps to roll from");
+      return;
+    }
+    onNextMapChange(rolled.id);
+  };
+
+  return (
+    <div
+      className={cn(
+        "flex flex-wrap items-center gap-3 rounded-xl border border-[color:var(--aqt-border-2)] bg-white/[0.012] px-3 py-2.5",
+        capturing && nextMap == null && "hidden",
+      )}
+    >
+      <div className="relative h-10 w-[72px] shrink-0 overflow-hidden rounded-md border border-[color:var(--aqt-border-2)] bg-[linear-gradient(135deg,var(--aqt-card-2),var(--aqt-bg-2))]">
+        {nextMap?.image_path ? (
+          <Image src={nextMap.image_path} alt="" fill sizes="72px" className="object-cover" />
+        ) : (
+          <Dices className="absolute inset-0 m-auto size-4 text-[color:var(--aqt-fg-faint)]" aria-hidden="true" />
+        )}
+      </div>
+      <div className="min-w-0 flex-1">
+        <span className={EYEBROW_CLASS}>Next map</span>
+        <div className="flex flex-wrap items-baseline gap-x-2">
+          <span
+            className={cn(
+              "truncate font-display text-base font-bold tracking-[-0.01em]",
+              nextMap ? "text-[color:var(--aqt-fg)]" : "text-[color:var(--aqt-fg-dim)]",
+            )}
+          >
+            {nextMap?.name ?? "Not rolled yet"}
+          </span>
+          {nextMap?.gamemode ? <span className={CAPTION_CLASS}>{nextMap.gamemode.name}</span> : null}
+        </div>
+      </div>
+
+      {canWrite ? (
+        <div
+          data-export-hide
+          className={cn("flex flex-wrap items-center gap-1.5", capturing && "invisible")}
+        >
+          <div role="group" aria-label="Roll within mode" className="flex flex-wrap items-center gap-1">
+            <ModeChip label="Any" active={modeId == null} onClick={() => setModeId(null)} />
+            {modes.map((mode) => (
+              <ModeChip
+                key={mode.id}
+                label={mode.name}
+                active={modeId === mode.id}
+                onClick={() => setModeId(mode.id)}
+              />
+            ))}
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            className="h-8"
+            disabled={saving || maps.length === 0}
+            onClick={roll}
+          >
+            {saving ? (
+              <Loader2 className="mr-1.5 size-3.5 animate-spin" aria-hidden="true" />
+            ) : (
+              <Dices className="mr-1.5 size-3.5" aria-hidden="true" />
+            )}
+            Roll
+          </Button>
+          <MapCombobox maps={maps} mapId={game.next_map_id} onMapIdChange={onNextMapChange} />
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/** One mode the roll can stay inside; the same pressed-pill the add-players filters use. */
+function ModeChip({ label, active, onClick }: Readonly<{ label: string; active: boolean; onClick: () => void }>) {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={onClick}
+      className={cn(
+        "inline-flex h-7 shrink-0 items-center rounded-full border px-2.5 text-label transition-colors",
+        active
+          ? "border-[color:color-mix(in_srgb,var(--aqt-teal)_38%,transparent)] bg-[color:color-mix(in_srgb,var(--aqt-teal)_12%,transparent)] text-[color:var(--aqt-teal)]"
+          : "border-[color:var(--aqt-border)] bg-white/[0.02] text-[color:var(--aqt-fg-muted)] hover:bg-white/[0.05] hover:text-[color:var(--aqt-fg)]",
+      )}
+    >
+      {label}
+    </button>
+  );
+}
+
 /** Every match this mix has recorded, newest first — the permanent record `Record result` writes into. */
-function MatchHistoryList({ matches }: Readonly<{ matches: CustomGameMatch[] }>) {
+function MatchHistoryList({
+  matches,
+  canWrite,
+  undoingMatchId,
+  onUndoMatch,
+}: Readonly<{
+  matches: CustomGameMatch[];
+  canWrite: boolean;
+  undoingMatchId: number | null;
+  onUndoMatch?: (matchId: number) => void;
+}>) {
   return (
     <div className="flex flex-col gap-2 border-t border-[color:var(--aqt-border)] pt-3">
       <span className={cn(EYEBROW_CLASS, "flex items-center gap-1.5 tracking-label")}>
@@ -358,8 +558,16 @@ function MatchHistoryList({ matches }: Readonly<{ matches: CustomGameMatch[] }>)
         Match history
       </span>
       <ul className="flex flex-col gap-1.5">
-        {matches.map((match) => (
-          <MatchHistoryRow key={match.id} match={match} />
+        {matches.map((match, position) => (
+          <MatchHistoryRow
+            key={match.id}
+            match={match}
+            // Newest first, and only the newest can be rolled back -- an older
+            // undo would have to reason about every match stacked on top of it.
+            canUndo={position === 0 && canWrite && onUndoMatch != null}
+            undoing={undoingMatchId === match.id}
+            onUndoMatch={onUndoMatch}
+          />
         ))}
       </ul>
     </div>
@@ -376,7 +584,17 @@ function mapInitials(name: string): string {
     .toUpperCase();
 }
 
-function MatchHistoryRow({ match }: Readonly<{ match: CustomGameMatch }>) {
+function MatchHistoryRow({
+  match,
+  canUndo,
+  undoing,
+  onUndoMatch,
+}: Readonly<{
+  match: CustomGameMatch;
+  canUndo: boolean;
+  undoing: boolean;
+  onUndoMatch?: (matchId: number) => void;
+}>) {
   const homeAccent = teamAccent(0);
   const awayAccent = teamAccent(1);
 
@@ -424,6 +642,44 @@ function MatchHistoryRow({ match }: Readonly<{ match: CustomGameMatch }>) {
           <span className="shrink-0">{formatRelative(match.recorded_at)}</span>
         </div>
       </div>
+      {canUndo ? (
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              aria-label="Undo this match"
+              disabled={undoing}
+            >
+              {undoing ? (
+                <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+              ) : (
+                <Undo2 className="size-4" aria-hidden="true" />
+              )}
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Undo this match?</AlertDialogTitle>
+              <AlertDialogDescription>
+                {match.points_per_win_applied != null
+                  ? `Removes it from the history and moves every player's rank back by ${match.points_per_win_applied} points. Players pinned as must-play before it were already released to the pool and stay there.`
+                  : "Removes it from the history. No rank points were applied."}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Keep it</AlertDialogCancel>
+              <AlertDialogAction
+                className={buttonVariants({ variant: "destructive" })}
+                onClick={() => onUndoMatch?.(match.id)}
+              >
+                Undo match
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      ) : null}
     </li>
   );
 }

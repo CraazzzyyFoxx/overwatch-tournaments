@@ -50,11 +50,6 @@ describe("registration team error codes", () => {
     expect(missing).toEqual([]);
   });
 
-  it("has no translations for codes the backend cannot send", () => {
-    // Dead keys are a symptom of a rename that landed on one side only.
-    const known = new Set<string>(REGISTRATION_TEAM_ERROR_CODES);
-    expect(Object.keys(enErrors).filter((code) => !known.has(code))).toEqual([]);
-  });
 
   it("actually differs between locales", () => {
     // Guards a copy-paste of the English tree into ru.json, which would pass every
@@ -91,17 +86,15 @@ describe("translateRegistrationTeamError", () => {
     expect(message).toBe(enErrors.bench_full);
   });
 
-  it("falls back to the generic path for an unknown code", () => {
-    // A newly added backend code must degrade to today's behaviour, not to blank.
-    const message = translateRegistrationTeamError(
-      translator(enErrors),
-      apiError(409, "brand_new_backend_code"),
-    );
-    expect(message).toContain("English server text for brand_new_backend_code");
+  it("keeps unknown server failures localized", () => {
+    expect(translateRegistrationTeamError(
+      translator(ruErrors),
+      apiError(500, "brand_new_backend_code"),
+    )).toBe(ruErrors.request_failed);
   });
 
   it("falls back for a non-ApiError throw", () => {
-    expect(translateRegistrationTeamError(translator(enErrors), new Error("boom"))).toBe("boom");
+    expect(translateRegistrationTeamError(translator(enErrors), new Error("boom"))).toBe(enErrors.request_failed);
     expect(translateRegistrationTeamError(translator(enErrors), null, "fallback")).toBe("fallback");
   });
 

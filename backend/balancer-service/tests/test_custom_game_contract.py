@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import sys
 from pathlib import Path
 
@@ -70,3 +71,22 @@ def test_record_outcome_takes_the_outcome_the_client_sends() -> None:
 def test_record_outcome_rejects_an_impossible_winner() -> None:
     with pytest.raises(ValidationError):
         _schemas().CustomGameRecordOutcome.model_validate({"outcome": {"winner": 3}, "variant_index": 0})
+
+
+def test_post_discord_accepts_a_png_screenshot_and_posts_without_one() -> None:
+    """The lineup image is optional: no capture means the text embed instead."""
+    png = base64.b64encode(b"\x89PNG\r\n\x1a\nmatchup").decode("ascii")
+    with_image = _schemas().CustomGamePostDiscord.model_validate({"variant_index": 0, "image_b64": png})
+    without = _schemas().CustomGamePostDiscord.model_validate({"variant_index": 0})
+    assert with_image.image_b64 == png
+    assert without.image_b64 is None
+
+
+def test_post_discord_rejects_a_payload_that_is_not_a_png() -> None:
+    """The blob is forwarded to Discord unread, so this is the only checkpoint."""
+    with pytest.raises(ValidationError):
+        _schemas().CustomGamePostDiscord.model_validate(
+            {"variant_index": 0, "image_b64": base64.b64encode(b"GIF89a").decode("ascii")}
+        )
+    with pytest.raises(ValidationError):
+        _schemas().CustomGamePostDiscord.model_validate({"variant_index": 0, "image_b64": "not base64"})

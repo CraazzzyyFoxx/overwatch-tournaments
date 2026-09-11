@@ -91,6 +91,13 @@ var PublicWriteRoutes = []edge.RouteSpec{
 	{Method: "DELETE", Pattern: "/api/v1/registration-teams/{team_id}/members/{registration_id}", Queue: "rpc.tournament.regteam_kick", Path: []string{"team_id", "registration_id"}, Auth: edge.AuthRequired, Success: 204},
 	{Method: "DELETE", Pattern: "/api/v1/registration-teams/{team_id}/members/me", Queue: "rpc.tournament.regteam_leave", Path: []string{"team_id"}, Auth: edge.AuthRequired, Success: 204},
 	{Method: "POST", Pattern: "/api/v1/registration-teams/{team_id}/captain/{registration_id}", Queue: "rpc.tournament.regteam_transfer_captain", Path: []string{"team_id", "registration_id"}, Auth: edge.AuthRequired, Success: 204},
+	{Method: "PATCH", Pattern: "/api/v1/registration-teams/{team_id}", Queue: "rpc.tournament.regteam_rename", Path: []string{"team_id"}, Body: true, Auth: edge.AuthRequired},
+	{Method: "POST", Pattern: "/api/v1/registration-teams/{team_id}/members/{registration_id}/place", Queue: "rpc.tournament.regteam_place_member", Path: []string{"team_id", "registration_id"}, Body: true, Auth: edge.AuthRequired},
+	{Method: "POST", Pattern: "/api/v1/registration-teams/{team_id}/members/{registration_id}/manager", Queue: "rpc.tournament.regteam_set_manager", Path: []string{"team_id", "registration_id"}, Body: true, Auth: edge.AuthRequired},
+	{Method: "POST", Pattern: "/api/v1/registration-teams/{team_id}/invites/{invite_id}/extend", Queue: "rpc.tournament.regteam_extend_invite", Path: []string{"team_id", "invite_id"}, Body: true, Auth: edge.AuthRequired},
+	{Method: "POST", Pattern: "/api/v1/registration-teams/{team_id}/lock", Queue: "rpc.tournament.regteam_lock", Path: []string{"team_id"}, Auth: edge.AuthRequired},
+	{Method: "POST", Pattern: "/api/v1/registration-teams/{team_id}/check-in", Queue: "rpc.tournament.regteam_check_in", Path: []string{"team_id"}, Body: true, Auth: edge.AuthRequired},
+	{Method: "POST", Pattern: "/api/v1/registration-teams/{team_id}/subscription/cover", Queue: "rpc.tournament.regteam_cover_subscription", Path: []string{"team_id"}, Body: true, Auth: edge.AuthRequired},
 	// NOTE: DELETE /registration-teams/{team_id}/image is NOT here — it is
 	// ambiguous with /registration-teams/invites/{invite_id} under the stdlib
 	// ServeMux (both match "/registration-teams/invites/image", neither is more

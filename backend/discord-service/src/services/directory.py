@@ -181,6 +181,9 @@ class DiscordDirectoryService:
                         "name": None,
                         "icon_url": None,
                         "member_count": 0,
+                        "owner_id": None,
+                        "owner_name": None,
+                        "owner_avatar_url": None,
                     },
                 )
 
@@ -189,6 +192,12 @@ class DiscordDirectoryService:
             # guild we had to fetch carries ``approximate_member_count``
             # instead, and an empty member cache would otherwise report 0.
             member_count = (guild.member_count if cached else guild.approximate_member_count) or 0
+            owner = getattr(guild, "owner", None)
+            owner_id = getattr(guild, "owner_id", None)
+            owner_avatar = None
+            if owner is not None:
+                display_avatar = getattr(owner, "display_avatar", None)
+                owner_avatar = str(display_avatar.url) if display_avatar else None
 
             return DirectoryOutcome(
                 "success",
@@ -198,6 +207,9 @@ class DiscordDirectoryService:
                     "name": guild.name,
                     "icon_url": icon_url,
                     "member_count": member_count,
+                    "owner_id": str(owner_id) if owner_id is not None else None,
+                    "owner_name": (owner.display_name if owner is not None else None),
+                    "owner_avatar_url": owner_avatar,
                 },
             )
         except Exception as e:

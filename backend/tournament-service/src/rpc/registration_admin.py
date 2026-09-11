@@ -68,7 +68,14 @@ from src.schemas.registration import (
     WorkspaceSubscriptionRequirementUpsert,
 )
 from src.schemas.registration_build import AdmissionChips
-from src.schemas.registration_team import RegistrationTeamListResponse
+from src.schemas.registration_team import (
+    RegistrationTeamAdmissionRequest,
+    RegistrationTeamListResponse,
+    RegistrationTeamNotesRequest,
+    RegistrationTeamPlaceMemberRequest,
+    RegistrationTeamRejectRequest,
+    RegistrationTeamRenameRequest,
+)
 from src.services.registration import _common as reg_common
 from src.services.registration import audit as reg_audit
 from src.services.registration import export as reg_export
@@ -308,7 +315,7 @@ def register(broker: Any, logger: Any) -> None:
                 include_terminal=include_terminal,
             )
             items = [
-                await team_service.teams_service.describe_team(session, team, include_invites=True)
+                await team_service.teams_service.describe_team(session, team, include_invites=True, include_staff=True)
                 for team, _occupancy in pairs
             ]
             # The number the organizer must see before pressing export: these
@@ -329,11 +336,7 @@ def register(broker: Any, logger: Any) -> None:
     async def _regteam_reject(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
             ctx = await _tournament_ctx(session, data, "update")
-            payload = _payload(data) or {}
-            # Defaults to True: leaving members approved is the §12.5 dead end.
-            # False is for "rejected because incomplete", which should return the
-            # players to the solo pool rather than strand them.
-            withdraw_members = bool(payload.get("withdraw_members", True))
+            body = RegistrationTeamRejectRequest.model_validate(_payload(data) or {})
             team_id = _path_int(data, "team_id")
             # Staged before the service, as everywhere else here: reject_team owns
             # its commit, so a row added after it would ride a second transaction.
@@ -348,7 +351,8 @@ def register(broker: Any, logger: Any) -> None:
                 after={
                     "status": "rejected",
                     "tournament_id": ctx.id,
-                    "withdraw_members": withdraw_members,
+                    "withdraw_members": body.withdraw_members,
+                    "reason": body.reason,
                 },
             )
             team = await team_service.teams_service.reject_team(
@@ -356,9 +360,12 @@ def register(broker: Any, logger: Any) -> None:
                 tournament_id=ctx.id,
                 team_id=team_id,
                 auth_user=ctx.user,
-                withdraw_members=withdraw_members,
+                withdraw_members=body.withdraw_members,
+                reason=body.reason,
             )
-            return _dump(await team_service.teams_service.describe_team(session, team, include_invites=True))
+            return _dump(
+                await team_service.teams_service.describe_team(session, team, include_invites=True, include_staff=True)
+            )
 
         return await _run(logger, op)
 
@@ -446,6 +453,151 @@ def register(broker: Any, logger: Any) -> None:
             return _dump(
                 await team_service.teams_service.list_invite_history(session, team_id=_path_int(data, "team_id"))
             )
+
+        return await _run(logger, op)
+
+    async def _staff_team_dump(session: Any, team: Any) -> Any:
+        return _dump(
+            await team_service.teams_service.describe_team(session, team, include_invites=True, include_staff=True)
+        )
+
+    @broker.subscriber("rpc.tournament.regteam_rename_admin")
+    async def _regteam_rename_admin(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            ctx = await _tournament_ctx(session, data, "update")
+            body = RegistrationTeamRenameRequest.model_validate(_payload(data))
+            team_id = _path_int(data, "team_id")
+            await reg_audit.audit_service.stage(
+                session,
+                action="registration_team.rename",
+                actor=ctx.user,
+                workspace_id=ctx.ws_id,
+                data=data,
+                entity_id=team_id,
+                entity_type="registration_team",
+                after={"tournament_id": ctx.id, "name": body.name},
+            )
+            team = await team_service.teams_service.rename_team(
+                session,
+                team_id=team_id,
+                auth_user=ctx.user,
+                name=body.name,
+                as_organizer=True,
+                tournament_id=ctx.id,
+            )
+            return await _staff_team_dump(session, team)
+
+        return await _run(logger, op)
+
+    @broker.subscriber("rpc.tournament.regteam_unlock")
+    async def _regteam_unlock(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            ctx = await _tournament_ctx(session, data, "update")
+            team_id = _path_int(data, "team_id")
+            await reg_audit.audit_service.stage(
+                session,
+                action="registration_team.unlock",
+                actor=ctx.user,
+                workspace_id=ctx.ws_id,
+                data=data,
+                entity_id=team_id,
+                entity_type="registration_team",
+                after={"tournament_id": ctx.id},
+            )
+            team = await team_service.teams_service.unlock_roster(
+                session,
+                tournament_id=ctx.id,
+                team_id=team_id,
+                auth_user=ctx.user,
+            )
+            return await _staff_team_dump(session, team)
+
+        return await _run(logger, op)
+
+    @broker.subscriber("rpc.tournament.regteam_admission")
+    async def _regteam_admission(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            ctx = await _tournament_ctx(session, data, "update")
+            body = RegistrationTeamAdmissionRequest.model_validate(_payload(data))
+            team_id = _path_int(data, "team_id")
+            await reg_audit.audit_service.stage(
+                session,
+                action="registration_team.admission",
+                actor=ctx.user,
+                workspace_id=ctx.ws_id,
+                data=data,
+                entity_id=team_id,
+                entity_type="registration_team",
+                after={"tournament_id": ctx.id, "admission": body.admission},
+            )
+            team = await team_service.teams_service.set_admission(
+                session,
+                tournament_id=ctx.id,
+                team_id=team_id,
+                admission=body.admission,
+                auth_user=ctx.user,
+            )
+            return await _staff_team_dump(session, team)
+
+        return await _run(logger, op)
+
+    @broker.subscriber("rpc.tournament.regteam_notes")
+    async def _regteam_notes(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            ctx = await _tournament_ctx(session, data, "update")
+            body = RegistrationTeamNotesRequest.model_validate(_payload(data) or {})
+            team_id = _path_int(data, "team_id")
+            await reg_audit.audit_service.stage(
+                session,
+                action="registration_team.notes",
+                actor=ctx.user,
+                workspace_id=ctx.ws_id,
+                data=data,
+                entity_id=team_id,
+                entity_type="registration_team",
+                after={"tournament_id": ctx.id},
+            )
+            team = await team_service.teams_service.set_organizer_notes(
+                session,
+                tournament_id=ctx.id,
+                team_id=team_id,
+                notes=body.notes,
+            )
+            return await _staff_team_dump(session, team)
+
+        return await _run(logger, op)
+
+    @broker.subscriber("rpc.tournament.regteam_place_admin")
+    async def _regteam_place_admin(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            ctx = await _tournament_ctx(session, data, "update")
+            body = RegistrationTeamPlaceMemberRequest.model_validate(_payload(data) or {})
+            team_id = _path_int(data, "team_id")
+            registration_id = _path_int(data, "registration_id")
+            await reg_audit.audit_service.stage(
+                session,
+                action="registration_team.place",
+                actor=ctx.user,
+                workspace_id=ctx.ws_id,
+                data=data,
+                entity_id=team_id,
+                entity_type="registration_team",
+                after={
+                    "tournament_id": ctx.id,
+                    "registration_id": registration_id,
+                    "slot_code": body.slot_code,
+                    "is_substitute": body.is_substitute,
+                },
+            )
+            team = await team_service.teams_service.place_member_as_organizer(
+                session,
+                tournament_id=ctx.id,
+                team_id=team_id,
+                registration_id=registration_id,
+                slot_code=body.slot_code,
+                is_substitute=body.is_substitute,
+            )
+            return await _staff_team_dump(session, team)
 
         return await _run(logger, op)
 

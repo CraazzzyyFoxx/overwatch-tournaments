@@ -186,10 +186,8 @@ class WorkspaceCustomDomainSet(BaseModel):
 class WorkspaceDiscordGuildVerify(BaseModel):
     """Body for ``discord_guild_verify``. The snowflake pattern gates shape
     only -- the actual proof of administration happens server-side via
-    ``rpc.identity.oauth_discord_guilds``, not here. No blank-clears-it
-    normalization like ``WorkspaceUpdate`` used to carry: there is no "clear"
-    verb for a verified claim, only bind (this) and whatever future admin
-    override unbinds it."""
+    ``rpc.identity.oauth_discord_guilds``, not here. Clearing a verified claim
+    is a separate verb (``discord_guild_clear``), not a blank ``guild_id``."""
 
     guild_id: str = Field(..., pattern=_DISCORD_SNOWFLAKE)
 
@@ -202,6 +200,7 @@ class WorkspaceDiscordGuildOption(BaseModel):
 
     guild_id: str
     name: str
+    icon_url: str | None = None
     owner: bool
     can_manage: bool
 

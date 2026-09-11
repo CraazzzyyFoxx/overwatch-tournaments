@@ -90,9 +90,10 @@ export default function InviteLandingPage() {
   if (previewQuery.isError || !preview) {
     return (
       <Shell title={t("landing.title")}>
-        <p className="text-sm text-destructive">
+        <p role="alert" className="text-sm text-destructive">
           {translateRegistrationTeamError(tErrors, previewQuery.error)}
         </p>
+        <Button variant="outline" onClick={() => void previewQuery.refetch()}>{t("landing.retry")}</Button>
       </Shell>
     );
   }
@@ -148,6 +149,16 @@ export default function InviteLandingPage() {
       <Shell title={t("landing.title")}>
         {offer}
         <Loader2 className="size-5 animate-spin text-[color:var(--aqt-fg-muted)]" aria-hidden />
+      </Shell>
+    );
+  }
+
+  if (formQuery.isError) {
+    return (
+      <Shell title={t("landing.title")}>
+        {offer}
+        <p role="alert" className="text-sm text-destructive">{t("landing.formLoadError")}</p>
+        <Button variant="outline" onClick={() => void formQuery.refetch()}>{t("landing.retry")}</Button>
       </Shell>
     );
   }

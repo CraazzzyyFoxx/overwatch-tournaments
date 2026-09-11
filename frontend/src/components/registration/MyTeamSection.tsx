@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
-import { isRegistrationOpen } from "@/lib/tournament-status";
+import { isPhaseWindowActive, isRegistrationOpen } from "@/lib/tournament-status";
 import { tournamentQueryKeys } from "@/lib/tournament-query-keys";
 import registrationService from "@/services/registration.service";
 import registrationTeamService from "@/services/registration-team.service";
@@ -43,6 +43,11 @@ export default function MyTeamSection({ tournament }: Readonly<{ tournament: Tou
     queryFn: () => registrationTeamService.listPublic(tournament.id),
     enabled: isAuthenticated,
   });
+  const formQuery = useQuery({
+    queryKey: tournamentQueryKeys.registrationForm(tournament.workspace_id, tournament.id),
+    queryFn: () => registrationService.getForm(tournament.id),
+    enabled: Boolean(isAuthenticated && myRegQuery.data?.team),
+  });
 
   if (!isAuthenticated) return null;
 
@@ -68,6 +73,10 @@ export default function MyTeamSection({ tournament }: Readonly<{ tournament: Tou
         tournamentId={tournament.id}
         team={myTeam}
         isCaptain={brief?.is_captain ?? false}
+        viewerRegistrationId={myRegistration?.id}
+        subscriptionScope={formQuery.data?.subscription_scope === "team" ? "team" : "player"}
+        registrationOpen={open}
+        checkInAvailable={isPhaseWindowActive(tournament, "check_in")}
       />
     );
   }

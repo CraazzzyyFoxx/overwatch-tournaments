@@ -84,10 +84,16 @@ from src.schemas.registration_build import (
 from src.schemas.registration_team import (
     RegistrationFreeAgentListResponse,
     RegistrationTeamAcceptRequest,
+    RegistrationTeamCheckInRequest,
     RegistrationTeamCreateRequest,
+    RegistrationTeamExtendInviteRequest,
     RegistrationTeamInviteCreateRequest,
     RegistrationTeamInviteOfferListResponse,
     RegistrationTeamListResponse,
+    RegistrationTeamPlaceMemberRequest,
+    RegistrationTeamRedeemSubscriptionRequest,
+    RegistrationTeamRenameRequest,
+    RegistrationTeamSetManagerRequest,
     serialize_invite,
 )
 from src.services import visibility_resolvers
@@ -684,11 +690,11 @@ def register(broker: Any, logger: Any) -> None:
         """The public "Teams" roster for a tournament.
 
         Distinct from the admin ``regteam_list``: invites are omitted for every
-        team except one the caller themselves captains — a public roster must not
-        leak who else has been asked and declined, but a captain reading their own
-        outstanding offers is exactly the person `MyTeamPanel` needs this list to
-        answer for. Terminal teams are omitted too — a rejected team is not part
-        of the field.
+        team except one the caller themselves captains or manages — a public roster
+        must not leak who else has been asked and declined, but staff reading their
+        own outstanding offers is exactly the person `MyTeamPanel` needs this list
+        to answer for. Only the caller's own rejected teams remain visible after
+        rejection, so their captain can read the reason even after roster detachment.
         """
 
         async def op(session: Any) -> Any:
@@ -696,14 +702,17 @@ def register(broker: Any, logger: Any) -> None:
             user = _optional_identity(data)
             await assert_tournament_viewable(session, user, tournament_id)
             pairs = await team_service.teams_service.list_teams(
-                session, tournament_id=tournament_id, include_terminal=False
+                session,
+                tournament_id=tournament_id,
+                include_terminal=False,
+                include_terminal_for_auth_user_id=user.id if user is not None else None,
             )
             items = [
                 await team_service.teams_service.describe_team(
                     session,
                     team,
                     include_invites=user is not None
-                    and await team_service.teams_service.is_team_captain(session, team, user.id),
+                    and await team_service.teams_service.is_team_staff(session, team, user.id),
                 )
                 for team, _occupancy in pairs
             ]
@@ -853,13 +862,13 @@ def register(broker: Any, logger: Any) -> None:
 
     @broker.subscriber("rpc.tournament.regteam_invite_history_public")
     async def _regteam_invite_history_public(data: dict, msg: RabbitMessage) -> dict:
-        """A captain reads their own team's full invite history.
+        """Staff reads their own team's full invite history.
 
-        Authorized by captaincy, not by workspace permission — the organizer reads
-        the same data through the admin handler. Nothing here is new to a captain:
-        they issued every row in it.
+        Authorized by captaincy or the manager flag, not by workspace permission —
+        the organizer reads the same data through the admin handler. Nothing here
+        is new to staff: they issued every row in it, or the captain did.
 
-        Gated by :func:`assert_captain_of_team`, which deliberately does NOT require
+        Gated by :meth:`assert_staff_of_team`, which deliberately does NOT require
         the team to still be mutable: a rejected or exported team's history is
         exactly what someone opens this to understand.
         """
@@ -867,7 +876,7 @@ def register(broker: Any, logger: Any) -> None:
         async def op(session: Any) -> Any:
             user = _identity(data)
             team_id = _path_int(data, "team_id")
-            await team_service.teams_service.assert_captain_of_team(session, team_id=team_id, auth_user=user)
+            await team_service.teams_service.assert_staff_of_team(session, team_id=team_id, auth_user=user)
             return _dump(await team_service.teams_service.list_invite_history(session, team_id=team_id))
 
         return await _run(logger, op)
@@ -947,6 +956,118 @@ def register(broker: Any, logger: Any) -> None:
             user = _identity(data)
             await team_service.teams_service.disband_team(session, team_id=_path_int(data, "team_id"), auth_user=user)
             return None
+
+        return await _run(logger, op)
+
+    async def _own_team_dump(session: Any, team: Any) -> Any:
+        return _dump(await team_service.teams_service.describe_team(session, team, include_invites=True))
+
+    @broker.subscriber("rpc.tournament.regteam_rename")
+    async def _regteam_rename(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            user = _identity(data)
+            body = RegistrationTeamRenameRequest.model_validate(_payload(data))
+            team = await team_service.teams_service.rename_team(
+                session,
+                team_id=_path_int(data, "team_id"),
+                auth_user=user,
+                name=body.name,
+            )
+            return await _own_team_dump(session, team)
+
+        return await _run(logger, op)
+
+    @broker.subscriber("rpc.tournament.regteam_place_member")
+    async def _regteam_place_member(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            user = _identity(data)
+            body = RegistrationTeamPlaceMemberRequest.model_validate(_payload(data) or {})
+            team = await team_service.teams_service.place_member(
+                session,
+                team_id=_path_int(data, "team_id"),
+                registration_id=_path_int(data, "registration_id"),
+                auth_user=user,
+                slot_code=body.slot_code,
+                is_substitute=body.is_substitute,
+                swap_with_registration_id=body.swap_with_registration_id,
+            )
+            return await _own_team_dump(session, team)
+
+        return await _run(logger, op)
+
+    @broker.subscriber("rpc.tournament.regteam_set_manager")
+    async def _regteam_set_manager(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            user = _identity(data)
+            body = RegistrationTeamSetManagerRequest.model_validate(_payload(data) or {})
+            team = await team_service.teams_service.set_member_manager(
+                session,
+                team_id=_path_int(data, "team_id"),
+                registration_id=_path_int(data, "registration_id"),
+                auth_user=user,
+                is_manager=body.is_manager,
+            )
+            return await _own_team_dump(session, team)
+
+        return await _run(logger, op)
+
+    @broker.subscriber("rpc.tournament.regteam_extend_invite")
+    async def _regteam_extend_invite(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            user = _identity(data)
+            body = RegistrationTeamExtendInviteRequest.model_validate(_payload(data) or {})
+            ttl = timedelta(days=body.ttl_days) if body.ttl_days is not None else None
+            invite, raw_token = await team_service.teams_service.extend_invite(
+                session,
+                team_id=_path_int(data, "team_id"),
+                invite_id=_path_int(data, "invite_id"),
+                auth_user=user,
+                ttl=ttl,
+                rotate_token=body.rotate_token,
+            )
+            return _dump(serialize_invite(invite)) | {"token": raw_token}
+
+        return await _run(logger, op)
+
+    @broker.subscriber("rpc.tournament.regteam_lock")
+    async def _regteam_lock(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            user = _identity(data)
+            team = await team_service.teams_service.lock_roster(
+                session, team_id=_path_int(data, "team_id"), auth_user=user
+            )
+            return await _own_team_dump(session, team)
+
+        return await _run(logger, op)
+
+    @broker.subscriber("rpc.tournament.regteam_check_in")
+    async def _regteam_check_in(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            user = _identity(data)
+            body = RegistrationTeamCheckInRequest.model_validate(_payload(data) or {})
+            team = await team_service.teams_service.check_in_roster(
+                session,
+                team_id=_path_int(data, "team_id"),
+                auth_user=user,
+                exclude_registration_ids=body.exclude_registration_ids,
+            )
+            return await _own_team_dump(session, team)
+
+        return await _run(logger, op)
+
+    @broker.subscriber("rpc.tournament.regteam_cover_subscription")
+    async def _regteam_cover_subscription(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            user = _identity(data)
+            body = RegistrationTeamRedeemSubscriptionRequest.model_validate(_payload(data) or {})
+            team = await team_service.teams_service.cover_team_subscription(
+                session,
+                team_id=_path_int(data, "team_id"),
+                auth_user=user,
+                code=body.code,
+                provider=body.provider,
+            )
+            return await _own_team_dump(session, team)
 
         return await _run(logger, op)
 

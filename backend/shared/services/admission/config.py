@@ -58,6 +58,10 @@ class AdmissionConfig:
     open_profile_scope: Literal["main", "all"] = "main"
     require_subscription: bool = False
     subscription_stage: AdmissionStage = AdmissionStage.check_in
+    #: ``player`` evaluates the workspace rule per account. ``team`` still
+    #: runs that rule, but a current coverage stamp on the registrant's team
+    #: satisfies it as well — see ``shared.domain.team_subscription``.
+    subscription_scope: Literal["player", "team"] = "player"
     #: The workspace rule. ``None`` means there is nothing to enforce even when
     #: ``require_subscription`` is on -- an armed toggle over an empty rule
     #: disarms itself rather than refusing everyone.
@@ -86,6 +90,9 @@ class AdmissionConfig:
             require_subscription=bool(getattr(form, "require_subscription", False)),
             workspace_id=getattr(form, "workspace_id", None),
             subscription_stage=_stage(getattr(form, "subscription_stage", None)),
+            subscription_scope=(
+                "team" if str(getattr(form, "subscription_scope", "player") or "player") == "team" else "player"
+            ),
             subscription_rule=subscription_rule,
         )
 

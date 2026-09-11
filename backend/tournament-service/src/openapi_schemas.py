@@ -321,8 +321,50 @@ OPERATIONS: dict[str, Op] = {
         response=reg_team_schemas.RegistrationTeamListResponse,
         query_params=(QueryParam("include_terminal", "boolean"),),
     ),
-    "rpc.tournament.regteam_reject": Op(response=reg_team_schemas.RegistrationTeamRead),
+    "rpc.tournament.regteam_reject": Op(
+        request=reg_team_schemas.RegistrationTeamRejectRequest,
+        response=reg_team_schemas.RegistrationTeamRead,
+    ),
     "rpc.tournament.regteam_invite_history": Op(response=reg_team_schemas.RegistrationTeamInviteHistoryResponse),
+    "rpc.tournament.regteam_rename": Op(
+        request=reg_team_schemas.RegistrationTeamRenameRequest,
+        response=reg_team_schemas.RegistrationTeamRead,
+    ),
+    "rpc.tournament.regteam_place_member": Op(
+        request=reg_team_schemas.RegistrationTeamPlaceMemberRequest,
+        response=reg_team_schemas.RegistrationTeamRead,
+    ),
+    "rpc.tournament.regteam_set_manager": Op(
+        request=reg_team_schemas.RegistrationTeamSetManagerRequest,
+        response=reg_team_schemas.RegistrationTeamRead,
+    ),
+    "rpc.tournament.regteam_extend_invite": Op(request=reg_team_schemas.RegistrationTeamExtendInviteRequest),
+    "rpc.tournament.regteam_lock": Op(response=reg_team_schemas.RegistrationTeamRead),
+    "rpc.tournament.regteam_check_in": Op(
+        request=reg_team_schemas.RegistrationTeamCheckInRequest,
+        response=reg_team_schemas.RegistrationTeamRead,
+    ),
+    "rpc.tournament.regteam_cover_subscription": Op(
+        request=reg_team_schemas.RegistrationTeamRedeemSubscriptionRequest,
+        response=reg_team_schemas.RegistrationTeamRead,
+    ),
+    "rpc.tournament.regteam_rename_admin": Op(
+        request=reg_team_schemas.RegistrationTeamRenameRequest,
+        response=reg_team_schemas.RegistrationTeamRead,
+    ),
+    "rpc.tournament.regteam_unlock": Op(response=reg_team_schemas.RegistrationTeamRead),
+    "rpc.tournament.regteam_admission": Op(
+        request=reg_team_schemas.RegistrationTeamAdmissionRequest,
+        response=reg_team_schemas.RegistrationTeamRead,
+    ),
+    "rpc.tournament.regteam_notes": Op(
+        request=reg_team_schemas.RegistrationTeamNotesRequest,
+        response=reg_team_schemas.RegistrationTeamRead,
+    ),
+    "rpc.tournament.regteam_place_admin": Op(
+        request=reg_team_schemas.RegistrationTeamPlaceMemberRequest,
+        response=reg_team_schemas.RegistrationTeamRead,
+    ),
     # ── encounter saved-view write ─────────────────────────────────────────
     "rpc.tournament.saved_view_create": Op(
         request=schemas.EncounterSavedViewCreate, response=schemas.EncounterSavedViewRead

@@ -78,7 +78,7 @@ function team(overrides: Partial<RegistrationTeam> = {}): RegistrationTeam {
         state: "pending",
         target_battle_tag: null,
         is_link: true,
-        expires_at: "2026-09-01T12:00:00Z",
+        expires_at: "2027-09-01T12:00:00Z",
         invited_at: "2026-08-20T12:00:00Z"
       }
     ],
@@ -144,9 +144,9 @@ async function click(node: Element | null | undefined) {
   await settle();
 }
 
-/** The row's `⋯` menu, opened. Its items are portaled outside the container. */
-async function rowMenu(scope: ParentNode, team: string): Promise<HTMLElement[]> {
-  await click(scope.querySelector(`button[aria-label='Actions for ${team}']`));
+/** The inspector's `⋯` menu, opened. Its items are portaled outside the card. */
+async function rowMenu(team: string): Promise<HTMLElement[]> {
+  await click(document.body.querySelector(`button[aria-label='Actions for ${team}']`));
   return [...document.body.querySelectorAll<HTMLElement>("[role='menuitem']")];
 }
 
@@ -157,6 +157,24 @@ function menuItem(items: HTMLElement[], text: string): HTMLElement | undefined {
 function buttonWithText(scope: ParentNode, text: string): HTMLButtonElement | undefined {
   return [...scope.querySelectorAll("button")].find((node) => node.textContent?.includes(text)) as
     HTMLButtonElement | undefined;
+}
+
+/** Row detail is a panel of its own now: every per-team action lives there, so
+ *  a test that wants one opens the team first. */
+async function openTeam(scope: ParentNode, team: string) {
+  await click(scope.querySelector(`button[aria-label='Open team ${team}']`));
+}
+
+/** Types into a controlled field the way React hears it. */
+async function type(field: HTMLInputElement | HTMLTextAreaElement, value: string) {
+  const proto =
+    field instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+  const setter = Object.getOwnPropertyDescriptor(proto, "value")?.set;
+  await act(async () => {
+    setter?.call(field, value);
+    field.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await settle();
 }
 
 /** Radix portals the confirmation outside the render container. */
@@ -194,7 +212,7 @@ afterEach(async () => {
 });
 
 describe("RegistrationTeamsCard", () => {
-  it("puts the shortfall of every incomplete team on screen", async () => {
+  it("summarizes every team the organizer has to judge", async () => {
     const scope = await mount();
 
     // The reason the card exists: which roster is still short, and by what.
@@ -203,24 +221,40 @@ describe("RegistrationTeamsCard", () => {
     expect(scope.textContent).toContain("Still needed: 1× Damage, 2× Support");
     expect(scope.textContent).not.toContain("1x dps");
     expect(scope.textContent).toContain("Roster complete");
-    expect(scope.textContent).toContain("2 teams");
-    expect(scope.textContent).toContain("Nyx");
-    expect(scope.textContent).toContain("Captain");
-    // A bench nobody is on is a constant, not news: "0 of 1 substitutes" under
-    // every team was one wasted line per row on the screen whose job is fitting
-    // every team at once.
-    expect(scope.textContent).not.toContain("0 of 1 substitutes");
-    expect(listAdmin).toHaveBeenCalledWith(TOURNAMENT_ID, { includeTerminal: false });
+    expect(scope.textContent).toContain("Captain: Nyx");
+    expect(scope.textContent).toContain("Starters: 1 of 4");
+    // One read serves every filter below, so terminal teams are already here.
+    expect(listAdmin).toHaveBeenCalledTimes(1);
+    expect(listAdmin).toHaveBeenCalledWith(TOURNAMENT_ID, { includeTerminal: true });
   });
 
-  it("names the bench once someone is on it", async () => {
-    listAdmin
-      .mockReset()
-      .mockResolvedValue({ items: [team({ substitutes_used: 1 })], total: 1 });
-
+  it("narrows the list by state and by name without a second request", async () => {
+    listAdmin.mockReset().mockResolvedValue({
+      items: [team(), COMPLETE_TEAM, team({ id: 3, name: "Team Gamma", status: "rejected" })],
+      total: 3
+    });
     const scope = await mount();
 
-    expect(scope.textContent).toContain("1 of 1 substitutes");
+    const filter = scope.querySelector("select") as HTMLSelectElement;
+    await act(async () => {
+      filter.value = "terminal";
+      filter.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await settle();
+
+    expect(scope.textContent).toContain("Team Gamma");
+    expect(scope.textContent).not.toContain("Team Alpha");
+
+    await act(async () => {
+      filter.value = "all";
+      filter.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await settle();
+    await type(scope.querySelector("input[type='search']") as HTMLInputElement, "beta");
+
+    expect(scope.textContent).toContain("Team Beta");
+    expect(scope.textContent).not.toContain("Team Gamma");
+    expect(listAdmin).toHaveBeenCalledTimes(1);
   });
 
   it("warns the organizer about players the export cannot place", async () => {
@@ -249,54 +283,126 @@ describe("RegistrationTeamsCard", () => {
     expect(scope.textContent).not.toContain("on no team");
   });
 
-  it("names who each pending invite was sent to", async () => {
-    // Without this the two addressing modes are indistinguishable on screen, and an
-    // organizer looking at two pending chips cannot revoke one on purpose. The field
-    // it reads replaced an account id no client could render.
-    listAdmin.mockReset().mockResolvedValue({
-      items: [
-        team({
-          invites: [
-            {
-              id: 5,
-              slot_code: "dps",
-              is_substitute: false,
-              state: "pending",
-              target_battle_tag: null,
-              is_link: true,
-              expires_at: null,
-              invited_at: "2026-08-20T12:00:00Z"
-            },
-            {
-              id: 6,
-              slot_code: "support",
-              is_substitute: false,
-              state: "pending",
-              target_battle_tag: "Ana#2100",
-              is_link: false,
-              expires_at: null,
-              invited_at: "2026-08-20T12:05:00Z"
-            }
-          ]
-        })
-      ],
-      total: 1
+  it("exports only the teams the organizer picked, named back before it runs", async () => {
+    // The old button materialized every complete team at once, which is
+    // irreversible for teams the organizer had not looked at yet.
+    const scope = await mount();
+
+    expect(buttonWithText(scope, "Add selected teams")?.disabled).toBe(true);
+
+    await click(scope.querySelector("[aria-label='Select team Team Beta']"));
+    await click(buttonWithText(scope, "Add selected teams"));
+
+    const dialog = confirmDialog();
+    expect(dialog?.textContent).toContain("Team Beta");
+    expect(dialog?.textContent).not.toContain("Team Alpha");
+    expect(exportRegistered).not.toHaveBeenCalled();
+
+    await click(buttonWithText(dialog!, "Add selected teams"));
+
+    expect(exportRegistered).toHaveBeenCalledWith(TOURNAMENT_ID, [COMPLETE_TEAM.id]);
+  });
+
+  it("cannot select a roster the server would skip", async () => {
+    listAdmin.mockReset().mockResolvedValue({ items: [team()], total: 1 });
+
+    const scope = await mount();
+    const checkbox = scope.querySelector("[aria-label='Select team Team Alpha']");
+
+    expect(checkbox?.getAttribute("data-disabled")).not.toBeNull();
+    await click(checkbox);
+
+    expect(buttonWithText(scope, "Add selected teams")?.disabled).toBe(true);
+  });
+
+  it("keeps the export result and every skipped team on screen after the toast", async () => {
+    exportRegistered.mockResolvedValue({
+      removed_teams: 0,
+      imported_teams: 1,
+      created_players: 5,
+      skipped: [{ team_id: 9, name: "Team Gamma", code: "team_incomplete" }]
     });
 
     const scope = await mount();
+    await click(scope.querySelector("[aria-label='Select team Team Beta']"));
+    await click(buttonWithText(scope, "Add selected teams"));
+    await click(buttonWithText(confirmDialog()!, "Add selected teams"));
 
-    expect(scope.textContent).toContain("Ana#2100");
-    expect(scope.textContent).toContain("Shareable link");
+    // A toast expires; an organizer must still be able to see which team did not
+    // go, and why.
+    expect(scope.textContent).toContain("Teams added: 1");
+    expect(scope.textContent).toContain("Team Gamma: roster incomplete");
   });
 
-  it("withdraws an invite against the tournament it was authorized for", async () => {
-    // The id in the path is the TOURNAMENT, not just the invite: an invite id is
-    // global while the organizer's permission is not, so passing the wrong one is
-    // a permission bug, not a typo.
+  it("refuses to reject a team without a reason its captain can read", async () => {
     const scope = await mount();
+    await openTeam(scope, "Team Alpha");
 
-    // Icon-only, so the accessible name is the only name it has.
-    await click(scope.querySelector("button[aria-label='Withdraw invite']"));
+    await click(menuItem(await rowMenu("Team Alpha"), "Reject team"));
+    const dialog = confirmDialog()!;
+    await click(buttonWithText(dialog, "Reject, keep registrations"));
+
+    expect(reject).not.toHaveBeenCalled();
+    expect(dialog.textContent).toContain("Give a reason");
+
+    await type(dialog.querySelector("textarea") as HTMLTextAreaElement, "  Duplicate roster  ");
+    await click(buttonWithText(dialog, "Reject, keep registrations"));
+
+    // Non-destructive by default: the players keep the registration they can
+    // still use on another team.
+    expect(reject).toHaveBeenCalledWith(TOURNAMENT_ID, 1, {
+      withdrawMembers: false,
+      reason: "Duplicate roster"
+    });
+    expect(notifySuccess).toHaveBeenCalledWith("Team rejected.");
+  });
+
+  it("withdraws the players only when that consequence is chosen", async () => {
+    const scope = await mount();
+    await openTeam(scope, "Team Alpha");
+
+    await click(menuItem(await rowMenu("Team Alpha"), "Reject team"));
+    const dialog = confirmDialog()!;
+    await type(dialog.querySelector("textarea") as HTMLTextAreaElement, "Roster never filled");
+    await click(dialog.querySelectorAll("input[type='radio']")[1]);
+    await click(buttonWithText(dialog, "Reject and withdraw registrations"));
+
+    expect(reject).toHaveBeenCalledWith(TOURNAMENT_ID, 1, {
+      withdrawMembers: true,
+      reason: "Roster never filled"
+    });
+  });
+
+  it("keeps a refused action on screen, in the organizer's language", async () => {
+    // A toast expires before an organizer has read it, and the server's English
+    // `msg` must never reach them.
+    reject.mockRejectedValue(
+      new ApiError(409, [{ msg: "Team was already exported", code: "team_already_exported" }])
+    );
+
+    const scope = await mount();
+    await openTeam(scope, "Team Alpha");
+    await click(menuItem(await rowMenu("Team Alpha"), "Reject team"));
+    const dialog = confirmDialog()!;
+    await type(dialog.querySelector("textarea") as HTMLTextAreaElement, "Duplicate roster");
+    await click(buttonWithText(dialog, "Reject, keep registrations"));
+
+    expect(document.body.textContent).toContain(
+      "This team has already been added to the tournament and can no longer be changed."
+    );
+    expect(document.body.textContent).not.toContain("Team was already exported");
+  });
+
+  it("shows the organizer the invites the public roster hides", async () => {
+    const scope = await mount();
+    await openTeam(scope, "Team Alpha");
+
+    expect(document.body.textContent).toContain("Pending");
+    expect(document.body.textContent).toContain("Shareable link");
+
+    // The id in the path is the TOURNAMENT, not just the invite: an invite id is
+    // global while the organizer's permission is not.
+    await click(document.body.querySelector("button[aria-label='Withdraw invite']"));
 
     expect(revokeInviteAdmin).toHaveBeenCalledWith(TOURNAMENT_ID, 5);
   });
@@ -306,118 +412,26 @@ describe("RegistrationTeamsCard", () => {
     // stuck; until this existed the refusal named an intervention no endpoint
     // provided. It is still someone else's roster, hence the confirm.
     const scope = await mount();
+    await openTeam(scope, "Team Alpha");
 
-    await click(menuItem(await rowMenu(scope, "Team Alpha"), "Reset invite count"));
+    await click(menuItem(await rowMenu("Team Alpha"), "Reset invite count"));
     expect(resetInviteCap).not.toHaveBeenCalled();
 
-    await click(
-      [...document.querySelectorAll("button")].findLast((button) =>
-        (button.textContent ?? "").includes("Reset invite count")
-      )
-    );
+    await click(buttonWithText(confirmDialog()!, "Reset invite count"));
 
     expect(resetInviteCap).toHaveBeenCalledWith(TOURNAMENT_ID, 1);
   });
 
   it("does not read a team's ledger until it is opened", async () => {
-    // One request per team on every card render would tax the organizer for a
-    // history they rarely open.
-    await mount();
+    // One request per team on every render would tax the organizer for a history
+    // they rarely open.
+    const scope = await mount();
+    await openTeam(scope, "Team Alpha");
 
     expect(listInviteHistoryAdmin).not.toHaveBeenCalled();
-  });
 
-  it("shows the organizer the invites the public roster hides", async () => {
-    const scope = await mount();
+    await click(buttonWithText(document.body, "Invite history"));
 
-    expect(scope.textContent).toContain("Pending");
-    expect(scope.textContent).toContain("Expires");
-    // The complete team has none — and stays silent about it: a line reading
-    // "No open invites." on every settled team is the noise this card drowned in.
-    expect(scope.textContent).not.toContain("No open invites.");
-  });
-
-  it("refetches with terminal teams when the toggle flips", async () => {
-    const scope = await mount();
-
-    await click(scope.querySelector("[role='switch']"));
-
-    expect(listAdmin).toHaveBeenCalledWith(TOURNAMENT_ID, { includeTerminal: true });
-  });
-
-  it("withdraws the members by default when a team is rejected", async () => {
-    const scope = await mount();
-
-    await click(menuItem(await rowMenu(scope, "Team Alpha"), "Reject team"));
-    const dialog = confirmDialog();
-    expect(dialog?.textContent).toContain("Reject Team Alpha?");
-    expect(dialog?.querySelector("[role='checkbox']")?.getAttribute("data-state")).toBe("checked");
-
-    await click(buttonWithText(dialog!, "Reject team"));
-
-    expect(reject).toHaveBeenCalledWith(TOURNAMENT_ID, 1, { withdrawMembers: true });
-    expect(notifySuccess).toHaveBeenCalledWith("Team rejected.");
-  });
-
-  it("honours an unchecked withdraw box", async () => {
-    const scope = await mount();
-
-    await click(menuItem(await rowMenu(scope, "Team Alpha"), "Reject team"));
-    const dialog = confirmDialog();
-    await click(dialog?.querySelector("[role='checkbox']"));
-    await click(buttonWithText(dialog!, "Reject team"));
-
-    expect(reject).toHaveBeenCalledWith(TOURNAMENT_ID, 1, { withdrawMembers: false });
-  });
-
-  it("keeps the skipped teams on screen after the export toast is gone", async () => {
-    exportRegistered.mockResolvedValue({
-      removed_teams: 0,
-      imported_teams: 1,
-      created_players: 5,
-      skipped: [{ team_id: 9, name: "Team Gamma", code: "standings_exist" }]
-    });
-
-    const scope = await mount();
-    await click(buttonWithText(scope, "Add teams to the tournament"));
-
-    expect(exportRegistered).toHaveBeenCalledWith(TOURNAMENT_ID);
-    expect(notifySuccess).toHaveBeenCalledWith("1 team added.", {
-      description: "Skipped: Team Gamma"
-    });
-    // A toast expires; an organizer must still be able to see which team did not go.
-    expect(scope.textContent).toContain("Skipped: Team Gamma");
-  });
-
-  it("says nothing was added when no roster was complete", async () => {
-    exportRegistered.mockResolvedValue({
-      removed_teams: 0,
-      imported_teams: 0,
-      created_players: 0,
-      skipped: []
-    });
-
-    const scope = await mount();
-    await click(buttonWithText(scope, "Add teams to the tournament"));
-
-    expect(notifyInfo).toHaveBeenCalledWith("No complete teams to add.", {
-      description: undefined
-    });
-    expect(notifySuccess).not.toHaveBeenCalled();
-  });
-
-  it("translates a rejection code instead of rendering the server's English", async () => {
-    reject.mockRejectedValue(
-      new ApiError(409, [{ msg: "Team was already exported", code: "team_already_exported" }])
-    );
-
-    const scope = await mount();
-    await click(menuItem(await rowMenu(scope, "Team Alpha"), "Reject team"));
-    await click(buttonWithText(confirmDialog()!, "Reject team"));
-
-    // The server's English `msg` must never reach the organizer.
-    expect(notifyError).toHaveBeenCalledWith(
-      "This team has already been added to the tournament and can no longer be changed."
-    );
+    expect(listInviteHistoryAdmin).toHaveBeenCalledWith(TOURNAMENT_ID, 1);
   });
 });

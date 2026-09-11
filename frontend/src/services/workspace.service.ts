@@ -127,6 +127,10 @@ export default class workspaceService {
     }).then((r) => r.json());
   }
 
+  static async delete(id: number): Promise<void> {
+    await apiFetch(`/api/v1/workspaces/${id}`, { method: "DELETE" });
+  }
+
   static async getMembers(
     workspaceId: number,
     params?: {
@@ -232,6 +236,13 @@ export default class workspaceService {
     return apiFetch(`/api/v1/workspaces/${workspaceId}/discord-guild`, {
       method: "POST",
       body: { guild_id: guildId }
+    }).then((r) => r.json());
+  }
+
+  /** Drop the Discord guild claim. Workspace.update is enough — Discord is not re-asked. */
+  static async clearDiscordGuild(workspaceId: number): Promise<Workspace> {
+    return apiFetch(`/api/v1/workspaces/${workspaceId}/discord-guild`, {
+      method: "DELETE"
     }).then((r) => r.json());
   }
 

@@ -19,6 +19,9 @@ export interface DiscordGuildInfo {
   name?: string | null;
   icon_url?: string | null;
   member_count?: number;
+  owner_id?: string | null;
+  owner_name?: string | null;
+  owner_avatar_url?: string | null;
   error?: string;
 }
 

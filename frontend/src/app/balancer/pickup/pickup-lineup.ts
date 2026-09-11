@@ -13,7 +13,6 @@ import type {
 export type PickupRecordOutcomeInput = {
   outcome: CustomGameOutcome;
   variantIndex: number;
-  mapId: number | null;
 };
 
 /**

@@ -176,7 +176,14 @@ class DirectoryServiceTests(IsolatedAsyncioTestCase):
         self.assertEqual([c["name"] for c in outcome.payload["channels"]], ["match-logs"])
 
     async def test_get_guild_info_success(self) -> None:
-        fake_guild = MagicMock(id=999, member_count=42, icon=MagicMock(url="http://icon.png"))
+        owner = MagicMock(display_name="Ada", display_avatar=MagicMock(url="http://owner.png"))
+        fake_guild = MagicMock(
+            id=999,
+            member_count=42,
+            icon=MagicMock(url="http://icon.png"),
+            owner_id=42,
+            owner=owner,
+        )
         fake_guild.name = "Test Server"
         mock_client = MagicMock(get_guild=MagicMock(return_value=fake_guild))
         directory = DiscordDirectoryService(mock_client)
@@ -187,6 +194,9 @@ class DirectoryServiceTests(IsolatedAsyncioTestCase):
         self.assertTrue(outcome.payload["connected"])
         self.assertEqual(outcome.payload["name"], "Test Server")
         self.assertEqual(outcome.payload["member_count"], 42)
+        self.assertEqual(outcome.payload["owner_id"], "42")
+        self.assertEqual(outcome.payload["owner_name"], "Ada")
+        self.assertEqual(outcome.payload["owner_avatar_url"], "http://owner.png")
 
     async def test_get_guild_info_uses_approximate_count_when_uncached(self) -> None:
         """``member_count`` is gateway-only; a fetched guild would report 0."""

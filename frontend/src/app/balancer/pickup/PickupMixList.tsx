@@ -11,14 +11,27 @@ import {
   METRIC_PILL_CLASS,
   MIX_STATUS_CLASS,
 } from "@/app/balancer/pickup/pickup-chrome";
-import { formatDate } from "@/components/admin/format-time";
+import { formatDate, formatRelative } from "@/components/admin/format-time";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import type { CustomGame, CustomGameStatus } from "@/services/custom-game.service";
+
+/** How far back the "lineup from" picker reaches — a host clones last night's mix, not last season's. */
+const CLONE_SOURCE_LIMIT = 5;
+
+/** The picker's "start from nothing" option; anything else is a source mix id. */
+const EMPTY_SOURCE = "empty";
 
 type PickupMixListProps = {
   canEdit: boolean;
@@ -27,7 +40,7 @@ type PickupMixListProps = {
   error: boolean;
   onRetry: () => void;
   creating: boolean;
-  onCreateGame: (name: string) => void;
+  onCreateGame: (name: string, cloneFromGameId: number | null) => void;
 };
 
 /**
@@ -50,6 +63,32 @@ export function PickupMixList({
 }: Readonly<PickupMixListProps>) {
   const [newName, setNewName] = useState("");
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  // `null` means "untouched", so the default can follow the list as it loads.
+  const [pickedSource, setPickedSource] = useState<string | null>(null);
+  // The last name this component filled in itself -- anything else in the
+  // field is the host's own wording and a source change must not overwrite it.
+  const [suggestedName, setSuggestedName] = useState("");
+
+  const sources = games.slice(0, CLONE_SOURCE_LIMIT);
+  // Cloning last night's mix is the common case, so it is what the form offers
+  // first; an empty workspace has nothing to clone and falls back to Empty.
+  const source = pickedSource ?? (sources[0] ? String(sources[0].id) : EMPTY_SOURCE);
+  const cloneFromGameId = source === EMPTY_SOURCE ? null : Number(source);
+
+  const resetForm = () => {
+    setNewName("");
+    setPickedSource(null);
+    setSuggestedName("");
+  };
+
+  const pickSource = (value: string) => {
+    setPickedSource(value);
+    const picked = games.find((item) => String(item.id) === value);
+    if (picked && (newName === "" || newName === suggestedName)) {
+      setNewName(picked.name);
+      setSuggestedName(picked.name);
+    }
+  };
 
   return (
     <div className="flex flex-1 flex-col gap-5">
@@ -67,7 +106,13 @@ export function PickupMixList({
               open={isCreateOpen}
               onOpenChange={(open) => {
                 setIsCreateOpen(open);
-                if (!open) setNewName("");
+                if (!open) resetForm();
+                // The default source is last night's mix, so its name is the
+                // default name too -- one click recreates it, a keystroke renames.
+                else if (sources[0]) {
+                  setNewName(sources[0].name);
+                  setSuggestedName(sources[0].name);
+                }
               }}
             >
               <PopoverTrigger asChild>
@@ -83,8 +128,8 @@ export function PickupMixList({
                     event.preventDefault();
                     const name = newName.trim();
                     if (!name) return;
-                    onCreateGame(name);
-                    setNewName("");
+                    onCreateGame(name, cloneFromGameId);
+                    resetForm();
                     setIsCreateOpen(false);
                   }}
                 >
@@ -112,8 +157,29 @@ export function PickupMixList({
                       Create
                     </Button>
                   </div>
+                  <label htmlFor="pickup-clone-from" className={cn(EYEBROW_CLASS, "block pt-1")}>
+                    Lineup from
+                  </label>
+                  <Select value={source} onValueChange={pickSource}>
+                    <SelectTrigger
+                      id="pickup-clone-from"
+                      className="h-9 rounded-lg border-[color:var(--aqt-border-2)] bg-black/15 text-sm"
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={EMPTY_SOURCE}>Empty</SelectItem>
+                      {sources.map((item) => (
+                        <SelectItem key={item.id} value={String(item.id)}>
+                          {`${item.name} · #${item.id}`}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   <p className="text-label text-[color:var(--aqt-fg-dim)]">
-                    Starts empty — fill it from the workspace player pool.
+                    {cloneFromGameId == null
+                      ? "Starts empty — fill it from the workspace player pool."
+                      : "Copies the lineup and settings; benched players come back to the pool."}
                   </p>
                 </form>
               </PopoverContent>
@@ -177,6 +243,14 @@ function PickupMixRow({ game }: Readonly<{ game: CustomGame }>) {
 
         <span className={cn(CAPTION_CLASS, "w-40 shrink-0 truncate text-left")}>
           {game.host_display_name ?? `#${game.host_user_id}`}
+        </span>
+
+        <span className={cn(CAPTION_CLASS, "w-44 shrink-0 truncate text-left")}>
+          {game.matches_count > 0 ? (
+            `${game.matches_count} map${game.matches_count === 1 ? "" : "s"} · ${formatRelative(game.last_match_at)}`
+          ) : (
+            <span className="text-[color:var(--aqt-fg-faint)]">No matches</span>
+          )}
         </span>
 
         <span className={cn(CAPTION_CLASS, "w-36 shrink-0 text-left")}>
