@@ -42,11 +42,23 @@ if(NOT MSVC)
     target_link_libraries(_core PRIVATE stdc++)
 endif()
 
+# The ISA this module is allowed to use. NOT ``native``: the release images are
+# built on a GitHub runner and run on whatever the production host is, and those
+# are different machines. ``-march=native`` on an AVX-512 Ice Lake runner emitted
+# EVEX ``vmovdqu64 %zmm0`` into ``_core.so``; importing it on the production AMD
+# EPYC-Rome (Zen 2, no AVX-512) raised SIGILL, which killed the whole worker the
+# first time a mix was balanced and took every balancer RPC down with it.
+#
+# ``x86-64-v2`` (SSE4.2 + POPCNT, everything since 2009) is the floor that still
+# gives the search's hot loop a hardware popcount for its bit iteration. Override
+# for a machine-specific build: ``-DMIX_BALANCER_ARCH=native``.
+set(MIX_BALANCER_ARCH "x86-64-v2" CACHE STRING "-march= value for the search kernel")
+
 # Set compile flags for optimization
 if(MSVC)
     target_compile_options(_core PRIVATE /O2 /Oi /Ot /GL)
 else()
-    target_compile_options(_core PRIVATE -O3 -march=native)
+    target_compile_options(_core PRIVATE -O3 -march=${MIX_BALANCER_ARCH})
 endif()
 
 # NOTE: LTO deliberately NOT enabled. Upstream had it on twice over (a
