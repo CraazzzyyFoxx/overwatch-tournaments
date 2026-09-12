@@ -236,7 +236,6 @@ def _simulate_bracket(skeleton: BracketSkeleton, decide) -> list[SimpleNamespace
     return encounters
 
 
-
 def _stage(stage_type, settings_json: dict | None) -> object:
     stage = models.Stage(
         tournament_id=72,
@@ -463,7 +462,6 @@ class DoubleEliminationPlayoffTournament72Tests(TestCase):
                 (row.ranking, row.wins, row.loses, row.matches),
                 f"team {team_id}",
             )
-
 
 
 # ---------------------------------------------------------------------------

@@ -572,16 +572,10 @@ class AdminStageItemInputDeleteTests(IsolatedAsyncioTestCase):
         session = SimpleNamespace(commit=AsyncMock())
 
         with (
-            patch.object(
-                stage_service.stage_service.stage_item_input_repo, "get", AsyncMock(return_value=inp)
-            ),
-            patch.object(
-                stage_service.stage_service.stage_item_input_repo, "delete", AsyncMock()
-            ) as delete,
+            patch.object(stage_service.stage_service.stage_item_input_repo, "get", AsyncMock(return_value=inp)),
+            patch.object(stage_service.stage_service.stage_item_input_repo, "delete", AsyncMock()) as delete,
             patch.object(stage_service, "enqueue_tournament_recalculation", AsyncMock()) as enqueue,
-            patch.object(
-                stage_service.stage_service, "_publish_structure_changed", AsyncMock()
-            ) as publish,
+            patch.object(stage_service.stage_service, "_publish_structure_changed", AsyncMock()) as publish,
         ):
             await stage_service.stage_service.delete_stage_item_input(session, 7)
 
@@ -589,4 +583,3 @@ class AdminStageItemInputDeleteTests(IsolatedAsyncioTestCase):
         enqueue.assert_awaited_once_with(session, 99)
         publish.assert_awaited_once_with(session, 99)
         session.commit.assert_awaited_once()
-

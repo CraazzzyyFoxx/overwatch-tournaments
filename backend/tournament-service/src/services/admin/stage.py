@@ -855,7 +855,6 @@ class AdminStageService:
         await self._publish_structure_changed(session, tournament_id)
         await session.commit()
 
-
     async def activate_stage(
         self,
         session: AsyncSession,

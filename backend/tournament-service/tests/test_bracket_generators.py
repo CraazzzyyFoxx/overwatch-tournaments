@@ -161,7 +161,6 @@ class DoubleEliminationInvariants(TestCase):
         self.assertEqual(2, len(gf_incoming))
         self.assertEqual({"home", "away"}, {e.target_slot for e in gf_incoming})
 
-
     def test_dropout_does_not_rematch_the_same_upper_match(self) -> None:
         for n in (5, 6, 8):
             s = double_elimination.generate(list(range(1, n + 1)))
@@ -179,9 +178,7 @@ class DoubleEliminationInvariants(TestCase):
                 next_ub = w_edges[0].target_local_id
                 drop_lb = l_edges[0].target_local_id
                 next_loser_targets = [
-                    e.target_local_id
-                    for e in s.advancement_edges
-                    if e.source_local_id == next_ub and e.role == "loser"
+                    e.target_local_id for e in s.advancement_edges if e.source_local_id == next_ub and e.role == "loser"
                 ]
                 self.assertNotIn(
                     drop_lb,
