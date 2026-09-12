@@ -234,6 +234,15 @@ DOCS: dict[str, dict] = {
             "the map is not in the catalogue."
         ),
     },
+    "rpc.balancer.custom.set_variant_index": {
+        "summary": "Set custom game shown balance option",
+        "description": (
+            "Pages the mix to one of the balance options its last run produced, for every viewer at "
+            "once -- the option on screen is a fact about the mix, not about one browser. Host or "
+            "co-host only; 404 when the index points past the stored options. Re-balancing resets it "
+            "to the first option."
+        ),
+    },
     "rpc.balancer.custom.set_discord_channel": {
         "summary": "Set custom game Discord channel",
         "description": (
@@ -253,10 +262,6 @@ DOCS: dict[str, dict] = {
             "or co-host only; 409 when neither channel is configured and 404 when the balance option "
             "is missing."
         ),
-    },
-    "rpc.balancer.custom.set_balancer_config": {
-        "summary": "Set custom game balancer config",
-        "description": "Replaces the mix's solver overrides with a validated config, or clears them with null, and returns the refreshed mix. Host or co-host only.",
     },
     "rpc.balancer.custom.transfer_host": {
         "summary": "Transfer custom game host",
@@ -377,6 +382,23 @@ DOCS: dict[str, dict] = {
             "narrowed to given team ids, and returns removed/imported/created counts plus every team "
             "skipped and why. Requires admin panel access and workspace team-create permission, and "
             "emits a teams-changed realtime event when anything was imported."
+        ),
+    },
+    "rpc.balancer.prefs.get": {
+        "summary": "Get my mix balancer preferences",
+        "description": (
+            "Returns the signed-in account's own mix solver knobs -- the rank-balance/role-comfort "
+            "tilt, the per-role weights and how many balance options to keep. A null value means the "
+            "knob was never set and the mix engine's own default applies. Authentication is the only "
+            "gate: these are the caller's own preferences."
+        ),
+    },
+    "rpc.balancer.prefs.upsert": {
+        "summary": "Set my mix balancer preferences",
+        "description": (
+            "Replaces all three of the caller's mix solver knobs at once and returns the stored "
+            "result; a null clears one back to the engine default. They apply to every mix this "
+            "account hosts -- a mix balances on its host's preferences whoever presses the button."
         ),
     },
 }

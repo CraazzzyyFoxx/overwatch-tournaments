@@ -172,7 +172,6 @@ describe("teamNamesByIndex", () => {
         points_per_win: null,
         team_names: { "0": "Wolves", "1": "   ", "2": "Bears" },
         role_mask: null,
-        balancer_config: null,
         discord_channel_id: null,
         workspace_discord_channel_id: null,
       }),

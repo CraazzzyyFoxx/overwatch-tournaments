@@ -760,8 +760,31 @@
     },
     "preferences": {
       "title": "Preferences",
-      "desc": "Customize your tournament experience.",
-      "comingSoon": "App preferences coming soon"
+      "desc": "Customize your tournament experience."
+    },
+    "mixBalancer": {
+      "title": "Mix balancer",
+      "desc": "How the pickup-mix engine splits a lobby for you. Every mix you host balances with these, so they are set once here instead of on every game.",
+      "save": "Save",
+      "saving": "Saving…",
+      "saved": "Mix balancer preferences saved",
+      "loadError": "Could not load your mix balancer preferences.",
+      "tilt": {
+        "label": "Balancing (rank balance vs role comfort)",
+        "evenRanks": "Even ranks",
+        "preferredRoles": "Preferred roles",
+        "balanced": "Balanced",
+        "comfort": "{percent}% comfort",
+        "hint": "Pulled left, the engine only cares how evenly the two teams' ranks split. Pulled right, it will accept a wider rank gap to seat more players on the role they asked for. The middle is its own default weighting."
+      },
+      "weights": {
+        "label": "Line importance (1 = normal)",
+        "hint": "How hard the engine works to match that line across the two teams. Raise Tank and a tank mismatch costs more than a support one. Flex only counts on a flex-shaped roster."
+      },
+      "variants": {
+        "label": "Balance options per run",
+        "hint": "How many alternative splits one balance hands back for the pager to walk, up to {max}. The first option is always the best one; the rest are there to pick from."
+      }
     },
     "favorites": {
       "title": "Favorites",

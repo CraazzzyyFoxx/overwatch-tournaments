@@ -1,7 +1,7 @@
 """Pickup mixes over typed RPC.
 
 ``rpc.balancer.custom.{create,list,get,update_roster,update_player,set_participation,
-balance,set_team_names,set_role_mask,set_points_per_win,set_balancer_config,set_discord_channel,
+balance,set_team_names,set_role_mask,set_points_per_win,set_discord_channel,
 post_discord,transfer_host,add_co_host,remove_co_host,swap_seats,record_outcome,match_history,
 undo_match,rotation,stats,close,delete,hard_delete}``.
 
@@ -178,7 +178,6 @@ def _dump_settings(
         "points_per_win": game.points_per_win,
         "team_names": {str(index): name for index, name in sorted(team_names.items())},
         "role_mask": role_mask or None,
-        "balancer_config": game.balancer_config_json,
         # A Discord snowflake as a string: it outgrows a JavaScript safe
         # integer, so the wire never carries it as a number.
         #
@@ -221,6 +220,9 @@ def _dump_game(
         "status": game.status,
         "settings": settings,
         "balance_result": game.balance_result_json,
+        # Which of those options the mix is *showing*: the host's pager, read by
+        # every client, so a viewer never studies a matchup nobody is calling.
+        "selected_variant_index": game.selected_variant_index,
         # The map the next match is played on, rolled or picked by a host; the
         # client resolves name/mode/thumbnail against the catalogue it already
         # holds, so only the id travels.
@@ -424,7 +426,6 @@ def register(broker: Any, logger: Any) -> None:
                 # An empty list opens an empty mix; the host fills it from the
                 # roster sheet afterwards. There is no pool to default to.
                 member_ids=body.member_ids,
-                balancer_config=body.balancer_config,
                 clone_from_game_id=body.clone_from_game_id,
             )
             await emit_pickup_mix_updated(session, workspace_id, change="create", actor_user_id=user.id)
@@ -631,6 +632,29 @@ def register(broker: Any, logger: Any) -> None:
 
         return await c.envelope(logger, "custom.set_next_map", op, session_factory=_SF)
 
+    @broker.subscriber("rpc.balancer.custom.set_variant_index")
+    async def _set_variant_index(data: dict, msg: RabbitMessage) -> dict:
+        """Which balance option the mix shows. The pager is the host's, the
+        view is everyone's -- see ``CustomGameService.set_variant_index``."""
+
+        async def op(session: Any) -> Any:
+            user = c.active_actor(data)
+            workspace_id = _int(data, "workspace_id")
+            _require_mix(data, user, workspace_id, "update")
+            body = _body(schemas.CustomGameVariantIndexPatch, data)
+            game = await custom_game_service.set_variant_index(
+                session,
+                workspace_id=workspace_id,
+                custom_game_id=_game_id(data),
+                variant_index=body.variant_index,
+                actor_user_id=user.id,
+            )
+            await emit_pickup_mix_updated(session, workspace_id, change="variant_index", actor_user_id=user.id)
+            await session.commit()
+            return await _with_roster(session, game)
+
+        return await c.envelope(logger, "custom.set_variant_index", op, session_factory=_SF)
+
     @broker.subscriber("rpc.balancer.custom.set_discord_channel")
     async def _set_discord_channel(data: dict, msg: RabbitMessage) -> dict:
         """Overrides the workspace mix channel for this one mix. Workspace admin only.
@@ -694,26 +718,6 @@ def register(broker: Any, logger: Any) -> None:
             return {"status": "queued", "channel_id": str(channel_id)}
 
         return await c.envelope(logger, "custom.post_discord", op, session_factory=_SF)
-
-    @broker.subscriber("rpc.balancer.custom.set_balancer_config")
-    async def _set_balancer_config(data: dict, msg: RabbitMessage) -> dict:
-        async def op(session: Any) -> Any:
-            user = c.active_actor(data)
-            workspace_id = _int(data, "workspace_id")
-            _require_mix(data, user, workspace_id, "update")
-            body = _body(schemas.CustomGameBalancerConfigPatch, data)
-            game = await custom_game_service.set_balancer_config(
-                session,
-                workspace_id=workspace_id,
-                custom_game_id=_game_id(data),
-                balancer_config=body.balancer_config,
-                actor_user_id=user.id,
-            )
-            await emit_pickup_mix_updated(session, workspace_id, change="balancer_config", actor_user_id=user.id)
-            await session.commit()
-            return await _with_roster(session, game)
-
-        return await c.envelope(logger, "custom.set_balancer_config", op, session_factory=_SF)
 
     @broker.subscriber("rpc.balancer.custom.transfer_host")
     async def _transfer_host(data: dict, msg: RabbitMessage) -> dict:

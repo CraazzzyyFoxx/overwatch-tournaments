@@ -83,9 +83,10 @@ var RosterRoutes = []edge.RouteSpec{
 	{Method: "PUT", Pattern: "/api/balancer/workspaces/{workspace_id}/custom-games/{game_id}/role-mask", Queue: "rpc.balancer.custom.set_role_mask", IDParam: "game_id", Path: []string{"workspace_id"}, Body: true, Auth: edge.AuthRequired},
 	{Method: "PUT", Pattern: "/api/balancer/workspaces/{workspace_id}/custom-games/{game_id}/points-per-win", Queue: "rpc.balancer.custom.set_points_per_win", IDParam: "game_id", Path: []string{"workspace_id"}, Body: true, Auth: edge.AuthRequired},
 	{Method: "PUT", Pattern: "/api/balancer/workspaces/{workspace_id}/custom-games/{game_id}/next-map", Queue: "rpc.balancer.custom.set_next_map", IDParam: "game_id", Path: []string{"workspace_id"}, Body: true, Auth: edge.AuthRequired},
+	// The pager itself: which balance option the mix shows every viewer.
+	{Method: "PUT", Pattern: "/api/balancer/workspaces/{workspace_id}/custom-games/{game_id}/variant", Queue: "rpc.balancer.custom.set_variant_index", IDParam: "game_id", Path: []string{"workspace_id"}, Body: true, Auth: edge.AuthRequired},
 	{Method: "PUT", Pattern: "/api/balancer/workspaces/{workspace_id}/custom-games/{game_id}/discord-channel", Queue: "rpc.balancer.custom.set_discord_channel", IDParam: "game_id", Path: []string{"workspace_id"}, Body: true, Auth: edge.AuthRequired},
 	{Method: "POST", Pattern: "/api/balancer/workspaces/{workspace_id}/custom-games/{game_id}/discord/post", Queue: "rpc.balancer.custom.post_discord", IDParam: "game_id", Path: []string{"workspace_id"}, Body: true, Auth: edge.AuthRequired},
-	{Method: "PUT", Pattern: "/api/balancer/workspaces/{workspace_id}/custom-games/{game_id}/balancer-config", Queue: "rpc.balancer.custom.set_balancer_config", IDParam: "game_id", Path: []string{"workspace_id"}, Body: true, Auth: edge.AuthRequired},
 	{Method: "PUT", Pattern: "/api/balancer/workspaces/{workspace_id}/custom-games/{game_id}/host", Queue: "rpc.balancer.custom.transfer_host", IDParam: "game_id", Path: []string{"workspace_id"}, Body: true, Auth: edge.AuthRequired},
 	{Method: "POST", Pattern: "/api/balancer/workspaces/{workspace_id}/custom-games/{game_id}/co-hosts", Queue: "rpc.balancer.custom.add_co_host", IDParam: "game_id", Path: []string{"workspace_id"}, Body: true, Auth: edge.AuthRequired},
 	{Method: "DELETE", Pattern: "/api/balancer/workspaces/{workspace_id}/custom-games/{game_id}/co-hosts/{co_host_user_id}", Queue: "rpc.balancer.custom.remove_co_host", IDParam: "game_id", Path: []string{"workspace_id", "co_host_user_id"}, Auth: edge.AuthRequired},
@@ -97,6 +98,11 @@ var RosterRoutes = []edge.RouteSpec{
 	{Method: "GET", Pattern: "/api/balancer/workspaces/{workspace_id}/custom-games/{game_id}/rotation", Queue: "rpc.balancer.custom.rotation", IDParam: "game_id", Path: []string{"workspace_id"}, Auth: edge.AuthNone, Timeout: fastReadTimeout},
 	{Method: "POST", Pattern: "/api/balancer/workspaces/{workspace_id}/custom-games/{game_id}/close", Queue: "rpc.balancer.custom.close", IDParam: "game_id", Path: []string{"workspace_id"}, Auth: edge.AuthRequired},
 	{Method: "DELETE", Pattern: "/api/balancer/workspaces/{workspace_id}/custom-games/{game_id}", Queue: "rpc.balancer.custom.hard_delete", IDParam: "game_id", Path: []string{"workspace_id"}, Auth: edge.AuthRequired},
+	// The mix solver knobs are the host's, not the mix's, so they carry no
+	// workspace segment: one account, one set of preferences, every mix it
+	// hosts. {workspace_id} would imply a per-workspace copy that does not exist.
+	{Method: "GET", Pattern: "/api/balancer/me/mix-preferences", Queue: "rpc.balancer.prefs.get", Auth: edge.AuthRequired, Timeout: fastReadTimeout},
+	{Method: "PUT", Pattern: "/api/balancer/me/mix-preferences", Queue: "rpc.balancer.prefs.upsert", Body: true, Auth: edge.AuthRequired},
 }
 
 // JobRoutes are the authenticated public job API reads (status poll + result)

@@ -176,7 +176,7 @@ class ConfigOverrides(BaseModel):
     max_result_variants: int | None = Field(
         None,
         ge=1,
-        le=200,
+        le=500,
         description="Maximum number of result variants to return for the selected solver",
     )
     mix_comfort_tilt: float | None = Field(

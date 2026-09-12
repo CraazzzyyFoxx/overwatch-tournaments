@@ -31,6 +31,7 @@ from src.rpc import custom as rpc_custom
 from src.rpc import draft as rpc_draft
 from src.rpc import jobs as rpc_jobs
 from src.rpc import players as rpc_players
+from src.rpc import prefs as rpc_prefs
 from src.services.balancer.jobs import execute_balance_job
 from src.services.draft.clock import draft_clock_service
 
@@ -66,6 +67,8 @@ rpc_draft.register(broker, logger)
 rpc_jobs.register(broker, logger)
 rpc_custom.register(broker, logger)
 rpc_players.register(broker, logger)
+# The host's own solver knobs, which every mix they host balances with.
+rpc_prefs.register(broker, logger)
 
 
 # Balance jobs run for minutes (MOO solver); isolate them from the RPC channel.

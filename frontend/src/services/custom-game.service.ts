@@ -69,27 +69,6 @@ export type CustomGameCoHost = {
 };
 
 /**
- * What the mix engine (`mix_balancer`) actually reads out of a mix's stored
- * solver overrides. Anything else the server accepts tunes the tournament GA
- * and changes nothing about a two-team mix, so it stays unnamed but is kept
- * on round-trip by the index signature.
- */
-export type MixBalancerConfig = {
-  /**
-   * Trade-off between rank balance and role comfort: `0` splits ranks as
-   * evenly as possible, `1` maximises players seated on a preferred role,
-   * `0.5` (the default) is the engine's own weighting.
-   */
-  mix_comfort_tilt?: number | null;
-  /**
-   * Per-role importance for the role-line balance term, keyed by roster slot
-   * code. A role left out weighs `1`.
-   */
-  mix_role_weights?: Record<string, number> | null;
-  [key: string]: unknown;
-};
-
-/**
  * The mix's own settings. Each one is a stored fact with its own type -- there
  * is no config blob to parse, and no key that can silently mean two things.
  */
@@ -99,13 +78,6 @@ export type CustomGameSettings = {
   team_names: Record<string, string>;
   /** The mix's own roster shape override; `null` inherits the workspace default. */
   role_mask: RosterSlotMap | null;
-  /**
-   * Validated solver overrides; `null` means the engine defaults. The blob is
-   * validated against the full `ConfigOverrides` schema server-side, but only
-   * the two `mix_*` keys reach the mix engine -- the rest tune the tournament
-   * GA and are no-ops for a two-team mix.
-   */
-  balancer_config: MixBalancerConfig | null;
   /**
    * This mix's own channel override, or `null` when it follows the workspace.
    * Only a workspace admin can set it (`custom.set_discord_channel`).
@@ -133,6 +105,12 @@ export type CustomGame = {
   settings: CustomGameSettings;
   /** The solver's own document for the last balance, or `null` before one. */
   balance_result: unknown;
+  /**
+   * Which option of `balance_result` the mix is showing. Server-held because
+   * the host's pager is the lobby's pager: every viewer renders this index,
+   * and only a host or co-host may move it (`setVariantIndex`).
+   */
+  selected_variant_index: number;
   created_at: string | null;
   /**
    * The map the next match is played on -- rolled or picked by a host, seen by
@@ -427,22 +405,6 @@ export const customGameService = {
   },
 
   /**
-   * Replaces the mix's solver overrides, or clears them (`null`) back to the
-   * engine defaults. Validated server-side against `ConfigOverrides`, so an
-   * out-of-range weight 422s here instead of landing in the next balance run.
-   */
-  setBalancerConfig(
-    workspaceId: number,
-    gameId: number,
-    balancerConfig: MixBalancerConfig | null,
-  ): Promise<CustomGame> {
-    return apiFetch(`/api/balancer/workspaces/${workspaceId}/custom-games/${gameId}/balancer-config`, {
-      method: "PUT",
-      body: { balancer_config: balancerConfig },
-    }).then((r) => r.json());
-  },
-
-  /**
    * The host's rank-adjustment-per-win knob: recording a win/loss then bumps
    * the winning team's author-book rank by this many points and the losing
    * team's down by the same, per player and role. `null`/`0` disables it.
@@ -463,6 +425,18 @@ export const customGameService = {
     return apiFetch(`/api/balancer/workspaces/${workspaceId}/custom-games/${gameId}/next-map`, {
       method: "PUT",
       body: { map_id: mapId },
+    }).then((r) => r.json());
+  },
+
+  /**
+   * Pages the mix to one of the options its last balance produced. Not a local
+   * view toggle: the index is stored on the mix, so co-hosts and viewers move
+   * with the host. 404s an index past the stored options.
+   */
+  setVariantIndex(workspaceId: number, gameId: number, variantIndex: number): Promise<CustomGame> {
+    return apiFetch(`/api/balancer/workspaces/${workspaceId}/custom-games/${gameId}/variant`, {
+      method: "PUT",
+      body: { variant_index: variantIndex },
     }).then((r) => r.json());
   },
 

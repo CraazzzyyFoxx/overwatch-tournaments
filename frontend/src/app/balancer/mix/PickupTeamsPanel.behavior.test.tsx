@@ -127,7 +127,6 @@ const SETTINGS = {
   points_per_win: null,
   team_names: {},
   role_mask: null,
-  balancer_config: null,
   discord_channel_id: null,
   workspace_discord_channel_id: null,
 };
@@ -164,6 +163,7 @@ function game(overrides: Partial<CustomGame> = {}): CustomGame {
     balance_result: { variants: [variant(0), variant(100), variant(200)] },
     created_at: null,
     next_map_id: null,
+    selected_variant_index: 0,
     roster_shape: null,
     players: [],
     matches_count: 0,
@@ -601,12 +601,17 @@ describe("PickupTeamsPanel", () => {
     expect(onCopyBattleTags).toHaveBeenCalledTimes(1);
   });
 
-  it("hides write controls for a read-only viewer but still shows the teams", async () => {
-    const scope = await mount(game(), { canWrite: false });
+  it("gives a read-only viewer the teams but no controls -- not even the pager", async () => {
+    // The option on screen is the host's to choose (the mix's own
+    // `selected_variant_index`): a viewer paging their own copy would be
+    // reading out a matchup nobody is playing.
+    const scope = await mount(game(), { canWrite: false, variantIndex: 1 });
 
     expect(byName(scope, "Balance teams")).toBeNull();
     expect(scope.textContent).toContain("karin");
-    expect(pagerLabel(scope)).toBe("1 / 3");
+    expect(byName(scope, "Next balance option")).toBeNull();
+    expect(byName(scope, "Previous balance option")).toBeNull();
+    expect(pagerLabel(scope)).toBeUndefined();
   });
 
   it("separates no mix at all from a mix with no teams", async () => {

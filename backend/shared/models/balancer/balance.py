@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from shared.core import db
@@ -18,6 +19,7 @@ __all__ = (
     "BalancerTeam",
     "BalancerTeamSlot",
     "BalancerTournamentConfig",
+    "UserBalancerConfig",
     "WorkspaceBalancerConfig",
 )
 
@@ -49,6 +51,29 @@ class WorkspaceBalancerConfig(db.TimeStampIntegerMixin):
     workspace_id: Mapped[int] = mapped_column(ForeignKey("workspace.id", ondelete="CASCADE"), index=True)
     config_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, server_default="{}", default=dict)
     updated_by: Mapped[int | None] = mapped_column(ForeignKey("auth.user.id", ondelete="SET NULL"), nullable=True)
+
+
+class UserBalancerConfig(db.TimeStampIntegerMixin):
+    """One account's own mix-solver knobs, applied to every mix it hosts.
+
+    These used to sit on the mix (``custom_game.balancer_config_json``), which
+    made a host re-enter the same three preferences every pickup session --
+    they describe how this person likes their mixes balanced, not what happened
+    in one lobby, so they belong to the account. ``config_json`` is exactly the
+    solver-override blob the mix engine reads (``mix_comfort_tilt``,
+    ``mix_role_weights``, ``max_result_variants``), so it reaches the solver
+    untouched; a knob the user never set is an absent key, never an explicit
+    null, and an untouched account stores ``{}``.
+    """
+
+    __tablename__ = "user_config"
+    __table_args__ = (
+        UniqueConstraint("user_id", name="uq_balancer_user_config_user"),
+        {"schema": "balancer"},
+    )
+
+    user_id: Mapped[int] = mapped_column(ForeignKey("auth.user.id", ondelete="CASCADE"), index=True)
+    config_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default="{}", default=dict)
 
 
 class BalancerBalance(db.TimeStampIntegerMixin):

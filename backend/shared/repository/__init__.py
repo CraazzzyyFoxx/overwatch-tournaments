@@ -4,6 +4,7 @@ from .balance import (
     BalancerTeamRepository,
     BalancerTeamSlotRepository,
     BalancerTournamentConfigRepository,
+    UserBalancerConfigRepository,
     WorkspaceBalancerConfigRepository,
 )
 from .base import BaseRepository
@@ -255,6 +256,7 @@ __all__ = (
     "TournamentPreviewAccessRepository",
     "TournamentRecalculationStateRepository",
     "TournamentRepository",
+    "UserBalancerConfigRepository",
     "UserMergeAuditRepository",
     "UserPermissionDenyRepository",
     "UserRepository",

@@ -41,6 +41,7 @@ function game(overrides: Partial<CustomGame> = {}): CustomGame {
     balance_result: null,
     created_at: "2026-01-01T00:00:00Z",
     next_map_id: null,
+    selected_variant_index: 0,
     matches_count: 0,
     last_match_at: null,
     ...overrides,

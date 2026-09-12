@@ -118,9 +118,8 @@ def _game(**overrides) -> SimpleNamespace:
         "points_per_win": None,
         "next_map_id": None,
         "discord_channel_id": None,
-        "balancer_config_json": None,
-        "balancer_config_version": 1,
         "balance_result_json": None,
+        "selected_variant_index": 0,
         "balance_result_version": 1,
     }
     fields.update(overrides)
@@ -190,6 +189,10 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
         self.role_slots = MagicMock()
         self.role_slots.mapping_for_game = AsyncMock(return_value={})
         self.role_slots.replace = AsyncMock()
+        # The host's own solver knobs. Nobody has saved any unless a test says
+        # otherwise -- the mix then balances on the engine defaults.
+        self.host_prefs = MagicMock()
+        self.host_prefs.get_by_user = AsyncMock(return_value=None)
         self.roster.list_for_game = AsyncMock(return_value=[])
         self.roster.delete_for_game = AsyncMock()
         self.roster.get_by = AsyncMock(return_value=None)
@@ -233,6 +236,7 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
             casual_matches=self.casual_matches,
             casual_teams=self.casual_teams,
             casual_players=self.casual_players,
+            host_prefs=self.host_prefs,
             ranks=self.ranks,
             load_roster=self.load_roster,
             load_hosts=self.load_hosts,
@@ -315,7 +319,6 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
             points_per_win=25,
             next_map_id=42,
             discord_channel_id=777,
-            balancer_config_json={"MMR_DIFF_WEIGHT": 5},
             balance_result_json={"variants": []},
         )
         self.games.get.return_value = source
@@ -358,7 +361,6 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
         self.co_hosts.add.assert_awaited_once_with(self.session, game.id, 4)
         self.assertEqual(game.points_per_win, 25)
         self.assertEqual(game.discord_channel_id, 777)
-        self.assertEqual(game.balancer_config_json, {"MMR_DIFF_WEIGHT": 5})
         # Nothing that describes a played session travels.
         self.assertEqual(game.status, "draft")
         self.assertIsNone(game.balance_result_json)
@@ -1398,14 +1400,14 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
         self.assertEqual(game.points_per_win, 25)
 
     async def test_set_points_per_win_touches_no_other_setting(self) -> None:
-        self.games.get.return_value = _game(balancer_config_json={"population_size": 200})
+        self.games.get.return_value = _game(next_map_id=42)
 
         game = await self.service.set_points_per_win(
             self.session, workspace_id=1, custom_game_id=11, points_per_win=10, actor_user_id=9
         )
 
         self.assertEqual(game.points_per_win, 10)
-        self.assertEqual(game.balancer_config_json, {"population_size": 200})
+        self.assertEqual(game.next_map_id, 42)
         self.team_names.set.assert_not_awaited()
 
     async def test_set_points_per_win_null_clears_it(self) -> None:
@@ -1451,6 +1453,26 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
         with self.assertRaises(HTTPException) as ctx:
             await self.service.set_next_map(
                 self.session, workspace_id=1, custom_game_id=11, map_id=999, actor_user_id=9
+            )
+        self.assertEqual(ctx.exception.status_code, 404)
+
+    async def test_set_variant_index_pages_the_mix_for_every_viewer(self) -> None:
+        result = {"variants": [{"teams": []}, {"teams": []}, {"teams": []}]}
+        self.games.get.return_value = _game(status="balanced", balance_result_json=result)
+
+        game = await self.service.set_variant_index(
+            self.session, workspace_id=1, custom_game_id=11, variant_index=2, actor_user_id=9
+        )
+
+        self.assertEqual(game.selected_variant_index, 2)
+
+    async def test_set_variant_index_past_the_stored_options_404(self) -> None:
+        result = {"variants": [{"teams": []}]}
+        self.games.get.return_value = _game(status="balanced", balance_result_json=result)
+
+        with self.assertRaises(HTTPException) as ctx:
+            await self.service.set_variant_index(
+                self.session, workspace_id=1, custom_game_id=11, variant_index=1, actor_user_id=9
             )
         self.assertEqual(ctx.exception.status_code, 404)
 
@@ -1553,80 +1575,33 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
         self.assertEqual(embed["fields"][0]["value"], "Tank · Ana · 3000")
         self.assertEqual(embed["footer"], {"text": "Points per win: 25"})
 
-    async def test_set_balancer_config_stores_validated_overrides(self) -> None:
-        self.games.get.return_value = _game()
+    async def test_balance_feeds_the_hosts_stored_preferences_to_the_solver(self) -> None:
+        """The solver knobs are the HOST's, not the presser's.
 
-        game = await self.service.set_balancer_config(
-            self.session,
-            workspace_id=1,
-            custom_game_id=11,
-            balancer_config={"population_size": 200, "generation_count": 300},
-            actor_user_id=9,
-        )
-
-        self.assertEqual(game.balancer_config_json, {"population_size": 200, "generation_count": 300})
-
-    async def test_set_balancer_config_drops_unknown_keys(self) -> None:
-        """Same schema a saved tournament config is validated against: an
-        unrecognised key must not reach the solver as a silent override."""
-        self.games.get.return_value = _game()
-
-        game = await self.service.set_balancer_config(
-            self.session,
-            workspace_id=1,
-            custom_game_id=11,
-            balancer_config={"population_size": 200, "not_a_real_knob": 1},
-            actor_user_id=9,
-        )
-
-        self.assertEqual(game.balancer_config_json, {"population_size": 200})
-
-    async def test_set_balancer_config_cannot_reach_the_mixs_own_settings(self) -> None:
-        """Solver overrides live in their own column now.
-
-        ``points_per_win``, the team names and the role mask are stored facts of
-        the mix, so replacing the solver knobs wholesale can no longer disturb
-        them -- they are not in the same document any more.
+        A mix already resolves its ranks against the host's own book, so a
+        co-host clicking Balance must get the same matchup the host would.
         """
-        game = _game(points_per_win=10)
-        self.games.get.return_value = game
+        self.games.get.return_value = _game()
+        self.co_hosts.user_ids_for_game.return_value = [21]
+        self.roster.list_for_game.return_value = [_roster_row(1, 7, 0)]
+        self.ranks.resolve.return_value = _ranks(7)
+        self.host_prefs.get_by_user.return_value = _row(config_json={"mix_comfort_tilt": 0.75})
 
-        await self.service.set_balancer_config(
-            self.session,
-            workspace_id=1,
-            custom_game_id=11,
-            balancer_config={"population_size": 200},
-            actor_user_id=9,
-        )
+        await self.service.balance(self.session, workspace_id=1, custom_game_id=11, actor_user_id=21)
 
-        self.assertEqual(game.balancer_config_json, {"population_size": 200})
-        self.assertEqual(game.points_per_win, 10)
-        self.team_names.set.assert_not_awaited()
-        self.role_slots.replace.assert_not_awaited()
+        self.host_prefs.get_by_user.assert_awaited_once_with(self.session, 9)
+        _player_data, config_overrides, _progress, _role_mask = self.run_balance.await_args.args
+        self.assertEqual(config_overrides, {"mix_comfort_tilt": 0.75})
 
-    async def test_set_balancer_config_null_clears_only_the_solver_knobs(self) -> None:
-        game = _game(points_per_win=10, balancer_config_json={"population_size": 200})
-        self.games.get.return_value = game
-
-        await self.service.set_balancer_config(
-            self.session, workspace_id=1, custom_game_id=11, balancer_config=None, actor_user_id=9
-        )
-
-        self.assertIsNone(game.balancer_config_json)
-        self.assertEqual(game.points_per_win, 10)
-
-    async def test_balance_forwards_the_stored_balancer_config_to_the_solver(self) -> None:
-        """End-to-end wiring: what ``set_balancer_config`` persisted is exactly
-        what ``balance`` forwards to the solver -- no filtering step in between,
-        because the mix's own settings never shared that column."""
-        self.games.get.return_value = _game(points_per_win=10, balancer_config_json={"population_size": 200})
+    async def test_balance_without_stored_preferences_leaves_the_engine_defaults(self) -> None:
+        self.games.get.return_value = _game()
         self.roster.list_for_game.return_value = [_roster_row(1, 7, 0)]
         self.ranks.resolve.return_value = _ranks(7)
 
         await self.service.balance(self.session, workspace_id=1, custom_game_id=11, actor_user_id=9)
 
         _player_data, config_overrides, _progress, _role_mask = self.run_balance.await_args.args
-        self.assertEqual(config_overrides, {"population_size": 200})
+        self.assertIsNone(config_overrides)
 
     async def test_transfer_host_moves_ownership_to_a_workspace_member(self) -> None:
         self.games.get.return_value = _game()
@@ -2065,21 +2040,6 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
 
         role_mask = self.run_balance.await_args.args[3]
         self.assertEqual(role_mask, {"tank": 1, "flex": 4})
-
-    async def test_balance_forwards_only_the_solver_document(self) -> None:
-        """The mix's own settings were never solver overrides; now they cannot
-        even be mistaken for them -- ``balancer_config_json`` is forwarded as-is."""
-        game = _game(balancer_config_json={"MMR_DIFF_WEIGHT": 5})
-        self.games.get.return_value = game
-        self.team_names.mapping_for_game.return_value = {0: "Wolves"}
-        self.roster.list_for_game.return_value = [_roster_row(1, 7, 0)]
-        self.ranks.resolve.return_value = _ranks(7)
-        self.run_balance.return_value = {"teams": []}
-
-        await self.service.balance(self.session, workspace_id=1, custom_game_id=11, actor_user_id=9)
-
-        config_overrides = self.run_balance.await_args.args[1]
-        self.assertEqual(config_overrides, {"MMR_DIFF_WEIGHT": 5})
 
     def _seat(self, uuid: str, name: str, rating: float, role: str, **overrides: object) -> dict[str, object]:
         seat = {

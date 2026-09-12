@@ -3795,14 +3795,6 @@
       "description": "Recommends who is owed the next seat and who should sit out, computed from this mix's own match history. Read-only and public, no authentication required.",
       "summary": "Get custom game rotation hints"
     },
-    "rpc.balancer.custom.set_balancer_config": {
-      "description": "Replaces the mix's solver overrides with a validated config, or clears them with null, and returns the refreshed mix. Host or co-host only.",
-      "request": {
-        "array": false,
-        "ref": "balancer.CustomGameBalancerConfigPatch"
-      },
-      "summary": "Set custom game balancer config"
-    },
     "rpc.balancer.custom.set_discord_channel": {
       "description": "Overrides the workspace-wide mix channel for this one mix, as a digits-only snowflake string, or clears the override with null so the workspace channel applies again. Workspace admin only -- an ordinary host cannot redirect the workspace's Discord. The id is not verified against Discord here, an unreachable channel surfaces when the bot tries to deliver.",
       "request": {
@@ -3850,6 +3842,14 @@
         "ref": "balancer.CustomGameTeamNamesPatch"
       },
       "summary": "Set custom game team names"
+    },
+    "rpc.balancer.custom.set_variant_index": {
+      "description": "Pages the mix to one of the balance options its last run produced, for every viewer at once -- the option on screen is a fact about the mix, not about one browser. Host or co-host only; 404 when the index points past the stored options. Re-balancing resets it to the first option.",
+      "request": {
+        "array": false,
+        "ref": "balancer.CustomGameVariantIndexPatch"
+      },
+      "summary": "Set custom game shown balance option"
     },
     "rpc.balancer.custom.stats": {
       "description": "Per-member wins/losses/draws, win rate, current streak and the per-role split across every mix this workspace has run, best record first. The optional since query parameter (ISO 8601) narrows it to matches recorded on or after that moment; without it the whole history counts. Read-only and public, no authentication required.",
@@ -4196,6 +4196,26 @@
     "rpc.balancer.players.upsert": {
       "description": "Creates or reuses a workspace member for a BattleTag and returns it shaped exactly like a roster row. Open to any workspace member; 422 when battle_tag is missing or blank.",
       "summary": "Upsert workspace player"
+    },
+    "rpc.balancer.prefs.get": {
+      "description": "Returns the signed-in account's own mix solver knobs -- the rank-balance/role-comfort tilt, the per-role weights and how many balance options to keep. A null value means the knob was never set and the mix engine's own default applies. Authentication is the only gate: these are the caller's own preferences.",
+      "response": {
+        "array": false,
+        "ref": "balancer.UserMixPreferencesRead"
+      },
+      "summary": "Get my mix balancer preferences"
+    },
+    "rpc.balancer.prefs.upsert": {
+      "description": "Replaces all three of the caller's mix solver knobs at once and returns the stored result; a null clears one back to the engine default. They apply to every mix this account hosts -- a mix balances on its host's preferences whoever presses the button.",
+      "request": {
+        "array": false,
+        "ref": "balancer.UserMixPreferencesUpsert"
+      },
+      "response": {
+        "array": false,
+        "ref": "balancer.UserMixPreferencesRead"
+      },
+      "summary": "Set my mix balancer preferences"
     },
     "rpc.balancer.teams.export_registered": {
       "description": "Materializes the tournament's complete registered teams into balancer teams, optionally narrowed to given team ids, and returns removed/imported/created counts plus every team skipped and why. Requires admin panel access and workspace team-create permission, and emits a teams-changed realtime event when anything was imported.",
@@ -19985,7 +20005,7 @@
         "max_result_variants": {
           "anyOf": [
             {
-              "maximum": 200,
+              "maximum": 500,
               "minimum": 1,
               "type": "integer"
             },
@@ -20391,28 +20411,6 @@
       "title": "CreateJobResponse",
       "type": "object"
     },
-    "balancer.CustomGameBalancerConfigPatch": {
-      "additionalProperties": false,
-      "properties": {
-        "balancer_config": {
-          "anyOf": [
-            {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "title": "Balancer Config"
-        }
-      },
-      "required": [
-        "balancer_config"
-      ],
-      "title": "CustomGameBalancerConfigPatch",
-      "type": "object"
-    },
     "balancer.CustomGameCoHostPatch": {
       "additionalProperties": false,
       "properties": {
@@ -20430,19 +20428,6 @@
     "balancer.CustomGameCreate": {
       "additionalProperties": false,
       "properties": {
-        "balancer_config": {
-          "anyOf": [
-            {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Balancer Config"
-        },
         "clone_from_game_id": {
           "anyOf": [
             {
@@ -20806,6 +20791,22 @@
         "team_names"
       ],
       "title": "CustomGameTeamNamesPatch",
+      "type": "object"
+    },
+    "balancer.CustomGameVariantIndexPatch": {
+      "additionalProperties": false,
+      "description": "Which stored balance option the mix shows, for every viewer at once.",
+      "properties": {
+        "variant_index": {
+          "minimum": 0,
+          "title": "Variant Index",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "variant_index"
+      ],
+      "title": "CustomGameVariantIndexPatch",
       "type": "object"
     },
     "balancer.DraftAutopickStrategy": {
@@ -22872,6 +22873,135 @@
         }
       },
       "title": "TournamentBalanceRequest",
+      "type": "object"
+    },
+    "balancer.UserMixPreferencesRead": {
+      "description": "What is stored. All three are null for an account that never saved any.",
+      "properties": {
+        "max_result_variants": {
+          "anyOf": [
+            {
+              "maximum": 500,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "How many balance options the solver keeps for the host to page through; null leaves the mix default.",
+          "title": "Max Result Variants"
+        },
+        "mix_comfort_tilt": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Trade-off between rank balance (0) and role comfort (1); null leaves the mix engine's own 0.5 weighting in place.",
+          "title": "Mix Comfort Tilt"
+        },
+        "mix_role_weights": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "maximum": 100.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              "propertyNames": {
+                "enum": [
+                  "tank",
+                  "dps",
+                  "support",
+                  "flex"
+                ]
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Per-role importance for role-line balance, keyed by roster slot code. An omitted role weighs 1.0; null means no per-role opinion at all.",
+          "title": "Mix Role Weights"
+        }
+      },
+      "title": "UserMixPreferencesRead",
+      "type": "object"
+    },
+    "balancer.UserMixPreferencesUpsert": {
+      "additionalProperties": false,
+      "description": "A full replacement: all three keys required, each nullable to unset one.",
+      "properties": {
+        "max_result_variants": {
+          "anyOf": [
+            {
+              "maximum": 500,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "How many balance options the solver keeps for the host to page through; null leaves the mix default.",
+          "title": "Max Result Variants"
+        },
+        "mix_comfort_tilt": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Trade-off between rank balance (0) and role comfort (1); null leaves the mix engine's own 0.5 weighting in place.",
+          "title": "Mix Comfort Tilt"
+        },
+        "mix_role_weights": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "maximum": 100.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              "propertyNames": {
+                "enum": [
+                  "tank",
+                  "dps",
+                  "support",
+                  "flex"
+                ]
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Per-role importance for role-line balance, keyed by roster slot code. An omitted role weighs 1.0; null means no per-role opinion at all.",
+          "title": "Mix Role Weights"
+        }
+      },
+      "required": [
+        "mix_comfort_tilt",
+        "mix_role_weights",
+        "max_result_variants"
+      ],
+      "title": "UserMixPreferencesUpsert",
       "type": "object"
     },
     "balancer.WorkspaceBalancerConfigRead": {
@@ -38554,6 +38684,11 @@
           "title": "Custom Fields",
           "type": "array"
         },
+        "hide_registrations": {
+          "default": false,
+          "title": "Hide Registrations",
+          "type": "boolean"
+        },
         "id": {
           "title": "Id",
           "type": "integer"
@@ -38561,6 +38696,19 @@
         "is_open": {
           "title": "Is Open",
           "type": "boolean"
+        },
+        "max_participants": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max Participants"
         },
         "max_substitutes": {
           "default": 0,
@@ -38703,6 +38851,24 @@
           },
           "title": "Custom Fields",
           "type": "array"
+        },
+        "hide_registrations": {
+          "default": false,
+          "title": "Hide Registrations",
+          "type": "boolean"
+        },
+        "max_participants": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Max Participants"
         },
         "max_substitutes": {
           "default": 0,
@@ -38944,6 +39110,30 @@
           ],
           "default": null,
           "title": "Profiles Open"
+        },
+        "queue_position": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Queue Position"
+        },
+        "queue_total": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Queue Total"
         },
         "reviewed_at": {
           "anyOf": [

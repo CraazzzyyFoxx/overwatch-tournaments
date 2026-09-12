@@ -52,6 +52,7 @@ from .draft import (
     DraftSuggestionsResponse,
     DraftTeamRead,
 )
+from .user_prefs import UserMixPreferencesRead, UserMixPreferencesUpsert
 
 __all__ = [
     "BalanceJobResult",
@@ -104,4 +105,6 @@ __all__ = [
     "DraftSuggestionsResponse",
     "DraftTeamRead",
     "RosterShapeRead",
+    "UserMixPreferencesRead",
+    "UserMixPreferencesUpsert",
 ]

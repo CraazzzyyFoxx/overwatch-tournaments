@@ -21,8 +21,10 @@ __all__ = (
 class CustomGame(db.TimeStampIntegerMixin):
     """Workspace pickup mix and its scalar settings.
 
-    Repeating facts live in child tables. The two JSON columns are versioned
-    solver documents, not bags of application state.
+    Repeating facts live in child tables. The remaining JSON column is a versioned
+    solver document, not a bag of application state. The solver *inputs* are not
+    here at all: they are the host's, one row in ``balancer.user_config``, so the
+    same person's mixes all balance the same way.
     """
 
     __tablename__ = "custom_game"
@@ -49,11 +51,16 @@ class CustomGame(db.TimeStampIntegerMixin):
     # the lobby, consumed and cleared by ``record_outcome``. A deleted catalogue
     # map nulls this rather than blocking the delete.
     next_map_id: Mapped[int | None] = mapped_column(ForeignKey("overwatch.map.id", ondelete="SET NULL"), nullable=True)
+    # Which stored balance option the mix is showing. Host-driven: the pager is
+    # the host's, and everyone else -- a co-host in another tab, a player
+    # reading the public board -- renders whatever this points at, so a lobby
+    # never studies a different matchup than the one being called out. Clamped
+    # into range by readers; ``balance`` resets it, a fresh search renumbers
+    # every option.
+    selected_variant_index: Mapped[int] = mapped_column(Integer(), nullable=False, default=0, server_default="0")
     # The Discord channel this mix announces itself in. Stored only -- nothing
     # reads it yet; the announcement side lands separately.
     discord_channel_id: Mapped[int | None] = mapped_column(BigInteger(), nullable=True)
-    balancer_config_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
-    balancer_config_version: Mapped[int] = mapped_column(Integer(), nullable=False, default=1, server_default="1")
     balance_result_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     balance_result_version: Mapped[int] = mapped_column(Integer(), nullable=False, default=1, server_default="1")
 

@@ -18,7 +18,6 @@ class TestCustomGameModel:
     def test_known_settings_are_not_stored_in_one_config_bag(self):
         columns = models.CustomGame.__table__.columns
         assert "points_per_win" in columns
-        assert "balancer_config_json" in columns
         assert "balance_result_json" in columns
         assert "config_json" not in columns
         assert "result_json" not in columns

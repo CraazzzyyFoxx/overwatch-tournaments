@@ -31,6 +31,7 @@ from shared.repository import (
     CustomGameRepository,
     CustomGameRoleSlotRepository,
     CustomGameTeamNameRepository,
+    UserBalancerConfigRepository,
 )
 from shared.schemas.roster_slots import RosterShapeRead, normalize_roster_slots
 from shared.services.division_grid.access import get_effective_division_grid
@@ -45,7 +46,6 @@ from shared.services.workspace_roster import (
 from src.domain.mix_discord import build_lineup_embed
 from src.domain.mix_rotation import PlayerHistory, RotationRecommendation, recommend_rotation, rotation_priority
 from src.domain.mix_stats import SeatOutcome, aggregate_mix_stats, outcome_for
-from src.services.balancer.config.public_contract import normalize_config_overrides
 from src.services.balancer.role_naming import role_slot_code
 from src.services.balancer.solver import run_mix_balance as _run_balance
 
@@ -289,6 +289,7 @@ class CustomGameService:
         casual_matches: CasualMatchRepository = CasualMatchRepository(),
         casual_teams: CasualTeamRepository = CasualTeamRepository(),
         casual_players: CasualPlayerRepository = CasualPlayerRepository(),
+        host_prefs: UserBalancerConfigRepository = UserBalancerConfigRepository(),
         ranks: MemberRankService | None = None,
         load_roster=list_roster,
         load_hosts=hosts_by_user_id,
@@ -304,6 +305,7 @@ class CustomGameService:
         self.casual_matches = casual_matches
         self.casual_teams = casual_teams
         self.casual_players = casual_players
+        self.host_prefs = host_prefs
         self.ranks = ranks if ranks is not None else member_rank_service
         self.load_roster = load_roster
         self.load_hosts = load_hosts
@@ -424,18 +426,17 @@ class CustomGameService:
         name: str,
         actor_user_id: int,
         member_ids: Sequence[int] = (),
-        balancer_config: Mapping[str, Any] | None = None,
         clone_from_game_id: int | None = None,
     ) -> models.CustomGame:
         """Open a mix, optionally starting from a previous one's setup.
 
         A clone copies the parts a host would otherwise re-enter every session --
-        the pool and its per-seat role setup, the role shape, the points knob,
-        the team names, the solver overrides and the co-host grants -- but never
-        anything that describes a *played* session: no balance result, no rolled
-        map, no match history, and every seat back in the pool rather than
-        carrying last week's pins and benchings. Roster members who have since
-        left the workspace are dropped rather than failing the clone.
+        the pool and its per-seat role setup, the role shape, the points knob, the
+        team names and the co-host grants -- but never anything that describes a
+        *played* session: no balance result, no rolled map, no match history, and
+        every seat back in the pool rather than carrying last week's pins and
+        benchings. Roster members who have since left the workspace are dropped
+        rather than failing the clone.
         """
         _require_host(actor_user_id, host_user_id)
         trimmed = name.strip() if isinstance(name, str) else ""
@@ -467,14 +468,10 @@ class CustomGameService:
             host_user_id=host_user_id,
             name=trimmed,
             status=MixStatus.DRAFT,
-            balancer_config_json=(normalize_config_overrides(balancer_config) if balancer_config else None),
         )
         if source is not None:
             game.points_per_win = source.points_per_win
             game.discord_channel_id = source.discord_channel_id
-            if game.balancer_config_json is None:
-                # Already normalized when it was stored on the source.
-                game.balancer_config_json = copy.deepcopy(source.balancer_config_json)
         await self.games.create(session, game)
 
         cloned: list[tuple[models.CustomGamePlayer, models.CustomGamePlayer]] = []
@@ -722,10 +719,19 @@ class CustomGameService:
                 custom_game_id=game.id,
             )
         ).slots
+        # The HOST's knobs, not the acting co-host's: the ranks above are already
+        # resolved against the host's own book (``MIX_ORDER`` +
+        # ``author_user_id=game.host_user_id``), so reading the presser's
+        # preferences instead would make the same mix balance differently
+        # depending on who clicked. A host with no saved row hands the solver
+        # ``None`` -- the engine defaults.
+        host_prefs = (
+            await self.host_prefs.get_by_user(session, game.host_user_id) if game.host_user_id is not None else None
+        )
         try:
             result = await self.run_balance(
                 {"players": player_nodes},
-                game.balancer_config_json,
+                host_prefs.config_json if host_prefs is not None else None,
                 _noop_progress,
                 role_mask,
             )
@@ -737,6 +743,9 @@ class CustomGameService:
             # actual, actionable reason from the host.
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
         game.balance_result_json = result
+        # A fresh search renumbers every option, so whatever the host had paged
+        # to describes nothing now -- back to the best one.
+        game.selected_variant_index = 0
         _apply_balance_result(roster, result)
         game.status = MixStatus.BALANCED
         await session.flush()
@@ -858,6 +867,35 @@ class CustomGameService:
         await session.flush()
         return game
 
+    async def set_variant_index(
+        self,
+        session: AsyncSession,
+        *,
+        workspace_id: int,
+        custom_game_id: int,
+        variant_index: int,
+        actor_user_id: int,
+    ) -> models.CustomGame:
+        """Page the mix to one of its stored balance options -- for everybody.
+
+        The option on screen is what the lobby is having read out to it, so it
+        is a fact about the mix, not about the browser that happens to be
+        looking: a host clicking through the options moves every viewer with
+        them (same realtime signal as any other mix write), and a viewer who
+        opens the page mid-session lands on the one being played, not on the
+        first. Host-or-co-host only, like every other write here.
+        """
+        game = await self._writable(
+            session, workspace_id=workspace_id, custom_game_id=custom_game_id, actor_user_id=actor_user_id
+        )
+        result = game.balance_result_json if isinstance(game.balance_result_json, dict) else None
+        variants = result.get("variants") if isinstance(result, dict) else None
+        if not isinstance(variants, list) or not (0 <= variant_index < len(variants)):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Balance option not found")
+        game.selected_variant_index = variant_index
+        await session.flush()
+        return game
+
     async def workspace_discord_channel_id(self, session: AsyncSession, workspace_id: int) -> int | None:
         """The workspace-wide mix channel: where a mix posts unless it names its own.
 
@@ -965,24 +1003,6 @@ class CustomGameService:
             points_per_win=game.points_per_win,
         )
         return channel_id, embed
-
-    async def set_balancer_config(
-        self,
-        session: AsyncSession,
-        *,
-        workspace_id: int,
-        custom_game_id: int,
-        balancer_config: Mapping[str, Any] | None,
-        actor_user_id: int,
-    ) -> models.CustomGame:
-        """Replace the mix's validated solver overrides."""
-        game = await self._writable(
-            session, workspace_id=workspace_id, custom_game_id=custom_game_id, actor_user_id=actor_user_id
-        )
-        normalized = normalize_config_overrides(balancer_config) if balancer_config else {}
-        game.balancer_config_json = normalized or None
-        await session.flush()
-        return game
 
     async def transfer_host(
         self,

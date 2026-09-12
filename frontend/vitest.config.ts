@@ -212,6 +212,7 @@ export default defineConfig({
       // these are its only vitest files so far.
       "src/components/account-settings/MyAccountSection.behavior.test.tsx",
       "src/components/account-settings/FavoritesSection.behavior.test.tsx",
+      "src/components/account-settings/MixBalancerSection.behavior.test.tsx",
       // Same file-level rule: `src/components/match` is otherwise untested, and
       // this pins that the log download is offered only to a signed-in viewer.
       "src/components/match/MatchLogIndicator.behavior.test.tsx",

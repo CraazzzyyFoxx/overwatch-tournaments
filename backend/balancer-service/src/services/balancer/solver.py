@@ -8,6 +8,13 @@ from loguru import logger
 from shared.core.errors import BaseAPIException as HTTPException
 from src.domain.balancer.runtime import balance_teams, balance_teams_tournament
 
+#: How many balance options one mix run hands back. The brute-force mix engine
+#: has already enumerated every legal split by the time it trims, so a deep
+#: pager costs the host nothing but the payload -- unlike ``run_balance``,
+#: whose GA pays per archived variant (``AlgorithmConfig.max_result_variants``
+#: still defaults to 10 there).
+MIX_RESULT_VARIANTS = 500
+
 
 async def run_balance(
     input_data: dict[str, Any],
@@ -40,11 +47,17 @@ async def run_mix_balance(
     so this is the one call site allowed to request it; tournament balancing
     (``run_balance`` above) stays on ``tournament_balancer``.
     """
+    # The mix engine enumerates every split exhaustively, so the extra options
+    # cost only the trim at the end -- a host paging the matchup wants the deep
+    # list, not the solver's top ten. A mix that stored its own override still
+    # wins; the fallback below keeps the solver-wide default, because the GA
+    # would have to actually *evolve* 500 distinct archive entries.
+    mix_overrides = {"max_result_variants": MIX_RESULT_VARIANTS, **(config_overrides or {})}
     try:
         variants = await asyncio.to_thread(
             balance_teams,
             input_data,
-            config_overrides,
+            mix_overrides,
             progress_callback,
             role_mask,
             algorithm="mix_balancer",

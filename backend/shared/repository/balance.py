@@ -34,6 +34,18 @@ class WorkspaceBalancerConfigRepository(BaseRepository[models.WorkspaceBalancerC
         return await self.get_by(session, workspace_id=workspace_id)
 
 
+class UserBalancerConfigRepository(BaseRepository[models.UserBalancerConfig]):
+    def __init__(self) -> None:
+        super().__init__(models.UserBalancerConfig)
+
+    async def get_by_user(
+        self,
+        session: AsyncSession,
+        user_id: int,
+    ) -> models.UserBalancerConfig | None:
+        return await self.get_by(session, user_id=user_id)
+
+
 class BalancerBalanceRepository(BaseRepository[models.BalancerBalance]):
     def __init__(self) -> None:
         super().__init__(models.BalancerBalance)

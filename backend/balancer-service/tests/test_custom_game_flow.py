@@ -246,6 +246,9 @@ class MixFlowTests(IsolatedAsyncioTestCase):
             ),
             casual_teams=SimpleNamespace(create_many=self.casual.create_many),
             casual_players=SimpleNamespace(create=self.casual.create_player),
+            # This host never saved any solver knobs, so the mix balances on the
+            # engine defaults.
+            host_prefs=SimpleNamespace(get_by_user=AsyncMock(return_value=None)),
             ranks=self.ranks,
             load_roster=AsyncMock(
                 side_effect=lambda _s, *, workspace_id, member_ids: {

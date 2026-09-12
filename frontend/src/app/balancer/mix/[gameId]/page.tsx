@@ -39,9 +39,9 @@ import { useWorkspaceStore } from "@/stores/workspace.store";
  * `/balancer/mix`. This screen only ever reads and edits the one the host
  * already picked.
  *
- * The open balance option is page state, not panel state: the fullscreen board
- * and the inline matchup must never disagree about which option is being read
- * out to a lobby.
+ * Which balance option is on screen is the mix's own `selected_variant_index`,
+ * not page state: the host's pager is the lobby's pager, and a viewer reads
+ * the matchup being called out rather than one their browser chose.
  */
 export default function BalancerPickupMixPage() {
   const params = useParams<{ gameId: string }>();
@@ -65,7 +65,6 @@ export default function BalancerPickupMixPage() {
   const [isPoolOpen, setIsPoolOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isAccessOpen, setIsAccessOpen] = useState(false);
-  const [variantIndex, setVariantIndex] = useState(0);
   // The OW catalogue with its gamemodes: the roll pool for the next map and
   // the manual picker. Which map is *chosen* is the mix's own `next_map_id`,
   // so a co-host in another tab sees the same roll.
@@ -96,12 +95,12 @@ export default function BalancerPickupMixPage() {
     recordOutcome,
     undoMatch,
     setNextMap,
+    setVariantIndex,
     closeMix,
     hardDeleteMix,
     setAuthorRanks,
     setTeamNames,
     setRoleMask,
-    setBalancerConfig,
     setPointsPerWin,
     setDiscordChannel,
     postToDiscord,
@@ -233,8 +232,8 @@ export default function BalancerPickupMixPage() {
               balancing={balance.isPending}
               activeCount={summarizeLineup(rows).active}
               onBalance={() => balance.mutate()}
-              variantIndex={variantIndex}
-              onVariantIndexChange={setVariantIndex}
+              variantIndex={game?.selected_variant_index ?? 0}
+              onVariantIndexChange={(index) => setVariantIndex.mutate(index)}
               recordingOutcome={recordOutcome.isPending}
               onRecordOutcome={(input) => recordOutcome.mutate(input)}
               maps={mapsQuery.data ?? []}
@@ -277,10 +276,7 @@ export default function BalancerPickupMixPage() {
         canWrite={canWrite}
         canSetChannel={isAdminHere}
         saving={
-          setRoleMask.isPending ||
-          setPointsPerWin.isPending ||
-          setDiscordChannel.isPending ||
-          setBalancerConfig.isPending
+          setRoleMask.isPending || setPointsPerWin.isPending || setDiscordChannel.isPending
         }
         onSave={(input) => {
           setRoleMask.mutate(input.roleMask, { onSuccess: () => setIsSettingsOpen(false) });
@@ -292,15 +288,6 @@ export default function BalancerPickupMixPage() {
             input.discordChannelId !== (game?.settings.discord_channel_id ?? null)
           ) {
             setDiscordChannel.mutate(input.discordChannelId);
-          }
-          // Compared as stored: the dialog merges onto the mix's own blob, so
-          // an untouched slider serialises to exactly what is already saved and
-          // costs no request.
-          if (
-            JSON.stringify(input.balancerConfig) !==
-            JSON.stringify(game?.settings.balancer_config ?? null)
-          ) {
-            setBalancerConfig.mutate(input.balancerConfig);
           }
         }}
       />

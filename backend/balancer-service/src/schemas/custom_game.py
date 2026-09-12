@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import base64
 import binascii
-from typing import Any, Literal
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, field_validator, model_validator
 
@@ -12,7 +12,6 @@ from shared.core.enums import MixParticipation
 from shared.domain.player_sub_roles import REGISTRATION_ROLE_CODES
 
 __all__ = (
-    "CustomGameBalancerConfigPatch",
     "CustomGameCoHostPatch",
     "CustomGameCreate",
     "CustomGameDiscordChannelPatch",
@@ -29,6 +28,7 @@ __all__ = (
     "CustomGameRosterUpdate",
     "CustomGameSeatSwap",
     "CustomGameTeamNamesPatch",
+    "CustomGameVariantIndexPatch",
 )
 
 
@@ -39,10 +39,8 @@ class _Request(BaseModel):
 class CustomGameCreate(_Request):
     name: str = Field(min_length=1, max_length=255)
     member_ids: list[int] = Field(default_factory=list, max_length=100)
-    balancer_config: dict[str, Any] | None = None
     #: Start from a previous mix of this workspace: its pool, role setup, role
-    #: shape, points knob, team names, solver overrides and co-hosts, but none
-    #: of its played state.
+    #: shape, points knob, team names and co-hosts, but none of its played state.
     clone_from_game_id: int | None = None
 
     @field_validator("name")
@@ -114,6 +112,12 @@ class CustomGameNextMapPatch(_Request):
     map_id: int | None
 
 
+class CustomGameVariantIndexPatch(_Request):
+    """Which stored balance option the mix shows, for every viewer at once."""
+
+    variant_index: int = Field(ge=0)
+
+
 class CustomGameDiscordChannelPatch(_Request):
     """The channel the mix posts its matchup to; ``null`` clears it.
 
@@ -172,10 +176,6 @@ class CustomGamePostDiscord(_Request):
         if not raw.startswith(_PNG_MAGIC):
             raise ValueError("image_b64 must be a PNG")
         return value
-
-
-class CustomGameBalancerConfigPatch(_Request):
-    balancer_config: dict[str, Any] | None
 
 
 class CustomGameHostTransfer(_Request):

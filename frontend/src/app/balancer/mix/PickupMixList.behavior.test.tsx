@@ -28,13 +28,13 @@ function game(id: number, status: CustomGame["status"]): CustomGame {
       points_per_win: null,
       team_names: {},
       role_mask: null,
-      balancer_config: null,
       discord_channel_id: null,
       workspace_discord_channel_id: null
     },
     balance_result: null,
     created_at: "2026-01-02T00:00:00Z",
     next_map_id: null,
+    selected_variant_index: 0,
     roster_shape: null,
     matches_count: 0,
     last_match_at: null
