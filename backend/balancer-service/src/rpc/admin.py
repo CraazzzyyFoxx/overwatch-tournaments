@@ -26,6 +26,12 @@ from src.services.balancer.realtime import EXPORT_RESOURCES, emit_balancer_data
 _SF = db.async_session_maker
 
 
+def _stored_mix_channel(cfg: models.WorkspaceBalancerConfig | None) -> str | None:
+    """The saved mix channel the way the wire spells it: digits as a string, or ``None``."""
+    channel = (cfg.config_json or {}).get("mix_discord_channel_id") if cfg is not None else None
+    return str(channel) if channel else None
+
+
 def _config_to_read(
     cfg: models.WorkspaceBalancerConfig | None,
     workspace_id: int,
@@ -40,13 +46,13 @@ def _config_to_read(
             updated_by=None,
         )
     payload = cfg.config_json or {}
-    channel = payload.get("mix_discord_channel_id")
+    channel = _stored_mix_channel(cfg)
     return schemas.WorkspaceBalancerConfigRead(
         id=cfg.id,
         workspace_id=cfg.workspace_id,
         rank_delta_threshold=payload.get("rank_delta_threshold"),
         rank_delta_hide_from_pool=bool(payload.get("rank_delta_hide_from_pool", False)),
-        mix_discord_channel_id=str(channel) if channel else None,
+        mix_discord_channel_id=channel,
         updated_by=cfg.updated_by,
     )
 
@@ -200,12 +206,24 @@ def register(broker: Any, logger: Any) -> None:
 
     @broker.subscriber("rpc.balancer.admin.workspace_config_upsert")
     async def _workspace_config_upsert(data: dict, msg: RabbitMessage) -> dict:
+        """Pool knobs need ``team.update``; moving the mix channel needs ``workspace.update``.
+
+        Both live in one config blob, so gating the whole write on
+        ``workspace.update`` made every save admin-only: an organizer who may
+        build teams could not touch the rank-delta threshold because the payload
+        also carried the channel -- the one they were not changing. The channel
+        keeps the admin gate, and only when it actually moves.
+        """
+
         async def op(session: Any) -> Any:
             user = c.active_actor(data)
             c.require_admin_panel(user)
             workspace_id = c.require_id(data)
-            c.require_workspace_permission(data, user, workspace_id, "workspace", "update")
+            c.require_workspace_permission(data, user, workspace_id, "team", "update")
             body = schemas.WorkspaceBalancerConfigUpsert.model_validate(c.payload(data))
+            stored = await balancer_admin_service.get_workspace_balancer_config(session, workspace_id)
+            if body.mix_discord_channel_id != _stored_mix_channel(stored):
+                c.require_workspace_permission(data, user, workspace_id, "workspace", "update")
             cfg = await balancer_admin_service.upsert_workspace_balancer_config(
                 session,
                 workspace_id=workspace_id,

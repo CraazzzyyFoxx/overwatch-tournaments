@@ -78,6 +78,7 @@ export default defineConfig({
       "src/app/balancer/components/forced-flex-parity.test.ts",
       "src/app/balancer/components/BalancingPoolSidebar.behavior.test.tsx",
       "src/app/balancer/components/WorkspacePlayersSidebar.behavior.test.tsx",
+      "src/app/balancer/components/WorkspaceBalancerConfigDialog.behavior.test.tsx",
       "src/app/balancer/tool-context.test.ts",
       "src/app/balancer/redirect-map.test.ts",
       "src/app/balancer/BalancerLayoutClient.behavior.test.tsx",
@@ -190,6 +191,7 @@ export default defineConfig({
       // Was in the same unrun state when the register-button gate got its first
       // real test: the stream-visibility cases in it had never executed either.
       "src/lib/tournament-status.test.ts",
+      "src/lib/tournament-stages.test.ts",
       "src/lib/division-grid.test.ts",
       "src/components/Header.mobile-layout.test.ts",
       "src/components/WorkspaceBootstrap.helpers.test.ts",

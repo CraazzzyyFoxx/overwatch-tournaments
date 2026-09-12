@@ -51,7 +51,8 @@ DOCS: dict[str, dict] = {
         "summary": "Upsert workspace balancer config",
         "description": (
             "Creates or updates the workspace-level rank-delta threshold, hide-from-pool flag and the "
-            "workspace-wide Discord channel for mix matchups, requiring workspace update permission."
+            "workspace-wide Discord channel for mix matchups, requiring team update permission; changing "
+            "the Discord channel additionally requires workspace update permission."
         ),
     },
     "rpc.balancer.admin.teams_import": {

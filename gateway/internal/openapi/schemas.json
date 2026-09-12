@@ -3712,7 +3712,7 @@
       "summary": "Get workspace balancer config"
     },
     "rpc.balancer.admin.workspace_config_upsert": {
-      "description": "Creates or updates the workspace-level rank-delta threshold, hide-from-pool flag and the workspace-wide Discord channel for mix matchups, requiring workspace update permission.",
+      "description": "Creates or updates the workspace-level rank-delta threshold, hide-from-pool flag and the workspace-wide Discord channel for mix matchups, requiring team update permission; changing the Discord channel additionally requires workspace update permission.",
       "request": {
         "array": false,
         "ref": "balancer.WorkspaceBalancerConfigUpsert"
@@ -9223,7 +9223,7 @@
       "summary": "Apply best-of to existing matches"
     },
     "rpc.tournament.stage_auto_wire": {
-      "description": "Wires the stage's TENTATIVE inputs from the preceding round-robin/Swiss stage's \"Teams advancing to playoff\" count \u2014 the same auto-wire Activate & generate runs automatically, exposed standalone for preview/debugging; requires stage-update permission on its workspace.",
+      "description": "Wires the stage's TENTATIVE inputs from a round-robin/Swiss stage's \"Teams advancing to playoff\" count \u2014 the same auto-wire Activate & generate runs automatically, exposed standalone for preview/debugging. The source is the one group stage of the latest earlier phase; pass source_stage_id to name it when that phase runs several divisions in parallel. Requires stage-update permission on its workspace.",
       "response": {
         "array": false,
         "ref": "tournament.StageRead"
