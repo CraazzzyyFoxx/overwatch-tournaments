@@ -15,6 +15,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared import models
+from shared.domain.player_sub_roles import REGISTRATION_ROLE_CODES
 from shared.domain.team_roster import RosterMember
 from shared.domain.team_subscription import SUBSCRIPTION_SCOPE_TEAM, team_subscription_is_current
 from shared.services.discord_client import DiscordClient
@@ -22,6 +23,8 @@ from shared.services.notifications import notify
 from shared.services.realtime import Resource, Scope, emit
 from src.core.broker import optional_broker
 from src.core.config import settings
+from src.domain.registration.utils import normalize_battle_tag, normalize_battle_tag_key
+from src.services.registration._common import replace_registration_roles
 from src.services.registration.subscription_codes import redeem_challenge_code
 from src.services.registration.team_eligibility import evaluate_team_eligibility
 from src.services.registration.windows import is_check_in_window_active
@@ -538,21 +541,17 @@ def install_team_actions(cls: type) -> None:
         await session.commit()
         return team
 
-    async def place_member_as_organizer(
+    async def _place_onto(
         self,
         session: AsyncSession,
         *,
         tournament_id: int,
         team_id: int,
-        registration_id: int,
+        registration: models.BalancerRegistration,
         slot_code: str,
         is_substitute: bool = False,
     ) -> models.BalancerRegistrationTeam:
-        dest_probe = await self.team_repo.get_by(session, id=team_id, deleted_at=None)
-        if dest_probe is None or dest_probe.tournament_id != tournament_id:
-            raise _fail(404, "team_not_found", "Team not found")
-        registration = await self.registration_repo.get(session, registration_id)
-        if registration is None or registration.tournament_id != tournament_id:
+        if registration.tournament_id != tournament_id:
             raise _fail(404, "registration_not_found", "That registration is not in this tournament")
         if registration.status in ("withdrawn", "rejected"):
             raise _fail(409, "registration_terminal", "This registration is no longer active")
@@ -561,6 +560,8 @@ def install_team_actions(cls: type) -> None:
         lock_ids = [team_id] + ([source_id] if source_id and source_id != team_id else [])
         locked = await _lock_teams(self, session, lock_ids)
         dest = locked[team_id]
+        if dest.tournament_id != tournament_id:
+            raise _fail(404, "team_not_found", "Team not found")
         _assert_mutable(dest)
         tournament = await self.tournament_repo.get(session, tournament_id)
         if tournament is None:
@@ -589,6 +590,35 @@ def install_team_actions(cls: type) -> None:
         if source_id and source_id != dest.id:
             source_occ = await self._occupancy(session, locked[source_id], shape, max_substitutes=max_substitutes)
             _apply_occupancy_status(locked[source_id], source_occ)
+        return dest
+
+    async def place_member_as_organizer(
+        self,
+        session: AsyncSession,
+        *,
+        tournament_id: int,
+        team_id: int,
+        registration_id: int,
+        slot_code: str,
+        is_substitute: bool = False,
+    ) -> models.BalancerRegistrationTeam:
+        dest_probe = await self.team_repo.get_by(session, id=team_id, deleted_at=None)
+        if dest_probe is None or dest_probe.tournament_id != tournament_id:
+            raise _fail(404, "team_not_found", "Team not found")
+        registration = await self.registration_repo.get(session, registration_id)
+        if registration is None:
+            raise _fail(404, "registration_not_found", "That registration is not in this tournament")
+        dest = await _place_onto(
+            self,
+            session,
+            tournament_id=tournament_id,
+            team_id=team_id,
+            registration=registration,
+            slot_code=slot_code,
+            is_substitute=is_substitute,
+        )
+        tournament = await self.tournament_repo.get(session, tournament_id)
+        shape = await self._resolve_shape(session, tournament)
         members = await self._roster_members(session, dest.id)
         await _raise_if_ineligible(self, session, dest, members, shape)
         await emit(
@@ -597,6 +627,72 @@ def install_team_actions(cls: type) -> None:
             invalidates=[Resource.TOURNAMENT_REGISTRATIONS],
         )
         await session.commit()
+        return dest
+
+    async def attach_member_as_organizer(
+        self,
+        session: AsyncSession,
+        *,
+        tournament_id: int,
+        team_id: int,
+        battle_tag: str,
+        slot_code: str,
+        is_substitute: bool = False,
+    ) -> models.BalancerRegistrationTeam:
+        """Place by BattleTag, creating a shadow registration when none exists.
+
+        Organizer override: eligibility is shown on the team card and still
+        blocks export, but it must not refuse the write — a player with no
+        Discord/account is exactly who this path exists to add.
+        """
+        tag = normalize_battle_tag(battle_tag)
+        if not tag:
+            raise _fail(400, "battle_tag_required", "A battle tag is required")
+        dest_probe = await self.team_repo.get_by(session, id=team_id, deleted_at=None)
+        if dest_probe is None or dest_probe.tournament_id != tournament_id:
+            raise _fail(404, "team_not_found", "Team not found")
+        key = normalize_battle_tag_key(tag)
+        registration = await session.scalar(
+            self.registration_repo.select().where(
+                models.BalancerRegistration.tournament_id == tournament_id,
+                models.BalancerRegistration.battle_tag_normalized == key,
+                models.BalancerRegistration.deleted_at.is_(None),
+            )
+        )
+        if registration is None:
+            role = slot_code if slot_code in REGISTRATION_ROLE_CODES else REGISTRATION_ROLE_CODES[0]
+            registration = models.BalancerRegistration(
+                tournament_id=tournament_id,
+                display_name=tag,
+                battle_tag=tag,
+                battle_tag_normalized=key,
+                status="approved",
+                balancer_status="not_in_balancer",
+            )
+            replace_registration_roles(registration, [{"role": role, "is_primary": True}])
+            await self.registration_repo.create(session, registration)
+            await session.flush()
+            await self.registrations.ensure_player_identity(
+                session, registration, auth_user_id=None, workspace_id=dest_probe.workspace_id
+            )
+        dest = await _place_onto(
+            self,
+            session,
+            tournament_id=tournament_id,
+            team_id=team_id,
+            registration=registration,
+            slot_code=slot_code,
+            is_substitute=is_substitute,
+        )
+        await emit(
+            session,
+            scope=Scope.tournament(tournament_id),
+            invalidates=[Resource.TOURNAMENT_REGISTRATIONS],
+        )
+        try:
+            await session.commit()
+        except IntegrityError as exc:
+            raise _fail(409, "already_registered", "A player with this BattleTag is already registered") from exc
         return dest
 
     async def _maybe_cover_from_personal(
@@ -642,6 +738,7 @@ def install_team_actions(cls: type) -> None:
     cls.set_admission = set_admission
     cls.set_organizer_notes = set_organizer_notes
     cls.place_member_as_organizer = place_member_as_organizer
+    cls.attach_member_as_organizer = attach_member_as_organizer
     cls._assert_staff = _assert_staff
     cls._assert_staff_editable = _assert_staff_editable
     cls._apply_occupancy_status = staticmethod(_apply_occupancy_status)

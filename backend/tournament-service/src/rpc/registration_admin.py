@@ -70,6 +70,7 @@ from src.schemas.registration import (
 from src.schemas.registration_build import AdmissionChips
 from src.schemas.registration_team import (
     RegistrationTeamAdmissionRequest,
+    RegistrationTeamAttachAdminRequest,
     RegistrationTeamListResponse,
     RegistrationTeamNotesRequest,
     RegistrationTeamPlaceMemberRequest,
@@ -594,6 +595,39 @@ def register(broker: Any, logger: Any) -> None:
                 tournament_id=ctx.id,
                 team_id=team_id,
                 registration_id=registration_id,
+                slot_code=body.slot_code,
+                is_substitute=body.is_substitute,
+            )
+            return await _staff_team_dump(session, team)
+
+        return await _run(logger, op)
+
+    @broker.subscriber("rpc.tournament.regteam_attach_admin")
+    async def _regteam_attach_admin(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            ctx = await _tournament_ctx(session, data, "update")
+            body = RegistrationTeamAttachAdminRequest.model_validate(_payload(data) or {})
+            team_id = _path_int(data, "team_id")
+            await reg_audit.audit_service.stage(
+                session,
+                action="registration_team.attach",
+                actor=ctx.user,
+                workspace_id=ctx.ws_id,
+                data=data,
+                entity_id=team_id,
+                entity_type="registration_team",
+                after={
+                    "tournament_id": ctx.id,
+                    "battle_tag": body.battle_tag,
+                    "slot_code": body.slot_code,
+                    "is_substitute": body.is_substitute,
+                },
+            )
+            team = await team_service.teams_service.attach_member_as_organizer(
+                session,
+                tournament_id=ctx.id,
+                team_id=team_id,
+                battle_tag=body.battle_tag,
                 slot_code=body.slot_code,
                 is_substitute=body.is_substitute,
             )

@@ -838,6 +838,14 @@ DOCS: dict[str, dict] = {
             "team-update permission."
         ),
     },
+    "rpc.tournament.regteam_attach_admin": {
+        "summary": "Attach a player by BattleTag (organizer)",
+        "description": (
+            "Places a live registration onto a slot, or creates a shadow registration for a BattleTag "
+            "that has not signed up and places that. Eligibility warnings stay on the team card but do "
+            "not refuse the write. Requires team-update permission."
+        ),
+    },
     "rpc.tournament.regteam_invite_history": {
         "summary": "Get invite history (admin)",
         "description": (

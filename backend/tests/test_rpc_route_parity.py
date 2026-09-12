@@ -195,10 +195,10 @@ class TeamRouteShapeTests(TestCase):
         return lines
 
     def test_all_team_routes_are_present(self) -> None:
-        """Thirty-two: the original twenty plus rename/place/manager/extend/lock/
-        check-in/cover on the public side and rename/unlock/admission/notes/place
+        """Thirty-three: the original twenty plus rename/place/manager/extend/lock/
+        check-in/cover on the public side and rename/unlock/admission/notes/place/attach
         on the organizer side."""
-        self.assertEqual(32, len(self._team_route_lines()))
+        self.assertEqual(33, len(self._team_route_lines()))
 
     def test_no_team_WRITE_route_is_anonymous(self) -> None:
         """Even redeeming a link invite writes a registration bound to an account:
@@ -222,8 +222,8 @@ class TeamRouteShapeTests(TestCase):
 
         self.assertEqual(1, len(preview))
         self.assertIn("edge.AuthOptional", preview[0])
-        # Twenty-five mutating writes; the rest of the team routes are reads.
-        self.assertEqual(25, len(mutating))
+        # Twenty-six mutating writes; the rest of the team routes are reads.
+        self.assertEqual(26, len(mutating))
         for line in mutating:
             with self.subTest(route=line.strip()[:80]):
                 self.assertIn("edge.AuthRequired", line)
@@ -249,11 +249,12 @@ class TeamRouteShapeTests(TestCase):
                     "regteam_admission",
                     "regteam_notes",
                     "regteam_place_admin",
+                    "regteam_attach_admin",
                 )
             )
         ]
 
-        self.assertEqual(7, len(organizer_writes))
+        self.assertEqual(8, len(organizer_writes))
         for line in organizer_writes:
             with self.subTest(route=line.strip()[:80]):
                 self.assertIn('IDParam: "tournament_id"', line)

@@ -159,6 +159,20 @@ class RegistrationTeamPlaceAdminRequest(BaseModel):
     is_substitute: bool = False
 
 
+class RegistrationTeamAttachAdminRequest(BaseModel):
+    battle_tag: str = Field(min_length=1, max_length=255)
+    slot_code: RosterSlotCode
+    is_substitute: bool = False
+
+    @field_validator("battle_tag")
+    @classmethod
+    def _strip_tag(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("A battle tag is required")
+        return cleaned
+
+
 class RegistrationTeamRejectRequest(BaseModel):
     withdraw_members: bool = False
     reason: str = Field(min_length=1, max_length=1000)

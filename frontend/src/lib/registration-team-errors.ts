@@ -30,6 +30,7 @@ export const REGISTRATION_TEAM_ERROR_CODES = [
   "team_name_required",
   "team_name_invalid",
   "team_name_taken",
+  "battle_tag_required",
   "already_registered",
   "registration_terminal",
   "registration_closed",
