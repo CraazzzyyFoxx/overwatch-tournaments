@@ -262,6 +262,29 @@ function addSequentialEdges(
   }
 }
 
+function addWinnerSourceEdges(
+  nodes: LayoutNode[],
+  nodesById: Map<string, LayoutNode>,
+  edges: LayoutEdge[]
+) {
+  const seen = new Set<string>();
+  for (const node of nodes) {
+    for (const source of node.encounter.sources ?? []) {
+      if (source.role !== "winner") continue;
+      const edgeId = `edge-${source.encounter_id}-${node.encounter.id}`;
+      if (seen.has(edgeId)) continue;
+      const sourceNode = nodesById.get(`match-${source.encounter_id}`);
+      if (!sourceNode) continue;
+      seen.add(edgeId);
+      edges.push({
+        id: edgeId,
+        path: buildPath(sourceNode, node),
+        isCompleted: COMPLETED_STATUSES.has(sourceNode.encounter.status)
+      });
+    }
+  }
+}
+
 // Shared by the upper, lower, and grand-final columns: each pushes one round
 // header then lays out that round's matches at a fixed `CARD_HEIGHT +
 // MATCH_GAP_Y` pitch from a caller-computed `startY`. Only the header
@@ -448,26 +471,30 @@ function buildLayout(
 
   const nodesById = new Map(nodes.map((node) => [node.id, node]));
 
-  if (hasBracketConnections) {
-    // UB sequential edges (excludes GF since finalRounds is separate).
-    addSequentialEdges(upperRounds, nodesById, edges, (matchIndex, targetCount) => {
-      const targetIndex = Math.floor(matchIndex / 2);
-      return targetIndex < targetCount ? targetIndex : -1;
-    });
+  const recordedSources = nodes.some((node) => (node.encounter.sources?.length ?? 0) > 0);
 
-    addSequentialEdges(lowerRounds, nodesById, edges, (matchIndex, targetCount) => {
-      if (targetCount === 0) return -1;
-      return Math.min(matchIndex, targetCount - 1);
-    });
+  if (hasBracketConnections) {
+    if (recordedSources) {
+      addWinnerSourceEdges(nodes, nodesById, edges);
+    } else {
+      addSequentialEdges(upperRounds, nodesById, edges, (matchIndex, targetCount) => {
+        const targetIndex = Math.floor(matchIndex / 2);
+        return targetIndex < targetCount ? targetIndex : -1;
+      });
+
+      addSequentialEdges(lowerRounds, nodesById, edges, (matchIndex, targetCount) => {
+        if (targetCount === 0) return -1;
+        return Math.min(matchIndex, targetCount - 1);
+      });
+    }
   }
 
-  // For DE: draw UB Final → GF and LB Final → GF edges explicitly.
   if (isDE && finalRounds.length > 0) {
     const gfGroup = finalRounds[0];
     const gfMatch = gfGroup?.matches[0];
     const gfNode = gfMatch ? nodesById.get(`match-${gfMatch.id}`) : undefined;
 
-    if (gfNode) {
+    if (gfNode && !recordedSources) {
       const ubFinalGroup = upperRounds[upperRounds.length - 1];
       const ubFinalMatch = ubFinalGroup?.matches[0];
       const ubFinalNode = ubFinalMatch ? nodesById.get(`match-${ubFinalMatch.id}`) : undefined;

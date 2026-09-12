@@ -221,6 +221,10 @@ DOCS: dict[str, dict] = {
         "summary": "Update stage item input",
         "description": "Updates a stage item input by id; requires stage-update permission on its workspace.",
     },
+    "rpc.tournament.admin.delete#stage_item_input": {
+        "summary": "Delete stage item input",
+        "description": "Deletes a stage item input (team slot) by id (204 no body); requires stage-delete permission on its workspace.",
+    },
     # ── generic CRUD engine: encounter ─────────────────────────────────────
     "rpc.tournament.admin.create#encounter": {
         "summary": "Create encounter",
@@ -832,6 +836,14 @@ DOCS: dict[str, dict] = {
             "Moves a live registration onto a slot of a team in this tournament, even from another team. "
             "The captain of a source team cannot be moved until captaincy is transferred. Requires "
             "team-update permission."
+        ),
+    },
+    "rpc.tournament.regteam_attach_admin": {
+        "summary": "Attach a player by BattleTag (organizer)",
+        "description": (
+            "Places a live registration onto a slot, or creates a shadow registration for a BattleTag "
+            "that has not signed up and places that. Eligibility warnings stay on the team card but do "
+            "not refuse the write. Requires team-update permission."
         ),
     },
     "rpc.tournament.regteam_invite_history": {

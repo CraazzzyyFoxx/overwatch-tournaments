@@ -376,6 +376,7 @@ export function RegistrationTeamsBrowser({
   const [rejectReason, setRejectReason] = useState("");
   const [placeTarget, setPlaceTarget] = useState<RegistrationTeam | null>(null);
   const [placeRegistrationId, setPlaceRegistrationId] = useState<number | null>(null);
+  const [placeBattleTag, setPlaceBattleTag] = useState("");
   const [placeSearch, setPlaceSearch] = useState("");
   const [placeOpen, setPlaceOpen] = useState(false);
   const [placeSlot, setPlaceSlot] = useState<string>(ROSTER_SLOT_CODES[0]);
@@ -383,6 +384,7 @@ export function RegistrationTeamsBrowser({
   const [renameTarget, setRenameTarget] = useState<RegistrationTeam | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [notesDraft, setNotesDraft] = useState<Record<number, string>>({});
+  const [nameDraft, setNameDraft] = useState<Record<number, string>>({});
   const [exportResult, setExportResult] = useState<RegistrationTeamExportResult | null>(null);
 
   const canManageTeams = canAccessPermission("team.update", workspaceId);
@@ -557,10 +559,33 @@ export function RegistrationTeamsBrowser({
   const renameAdminMutation = useMutation({
     mutationFn: (input: { teamId: number; name: string }) =>
       registrationTeamService.renameAdmin(tournamentId, input.teamId, input.name),
-    onSuccess: () => {
+    onSuccess: (_result, input) => {
       invalidateTeams();
       setRenameTarget(null);
+      setNameDraft((current) => {
+        const next = { ...current };
+        delete next[input.teamId];
+        return next;
+      });
       notify.success(t("rename.success"));
+    },
+    onError: reportError
+  });
+
+  const attachAdminMutation = useMutation({
+    mutationFn: (input: { teamId: number; battle_tag: string; slot_code: string; is_substitute: boolean }) =>
+      registrationTeamService.attachMemberAdmin(tournamentId, input.teamId, {
+        battle_tag: input.battle_tag,
+        slot_code: input.slot_code,
+        is_substitute: input.is_substitute
+      }),
+    onSuccess: () => {
+      invalidateTeams();
+      void queryClient.invalidateQueries({
+        queryKey: tournamentQueryKeys.registrationFreeAgents(workspaceId, tournamentId)
+      });
+      setPlaceTarget(null);
+      notify.success(t("admin.placeSuccess"));
     },
     onError: reportError
   });
@@ -627,7 +652,8 @@ export function RegistrationTeamsBrowser({
 
   const busy = rejectMutation.isPending || exportMutation.isPending || revokeInviteMutation.isPending ||
     resetCapMutation.isPending || unlockMutation.isPending || admissionMutation.isPending ||
-    notesMutation.isPending || placeAdminMutation.isPending || renameAdminMutation.isPending;
+    notesMutation.isPending || placeAdminMutation.isPending || renameAdminMutation.isPending ||
+    attachAdminMutation.isPending;
   const inlineError = actionError ? (
     <Alert variant="destructive" role="alert"><AlertDescription>{actionError}</AlertDescription></Alert>
   ) : null;
@@ -657,6 +683,7 @@ export function RegistrationTeamsBrowser({
             setPlaceSearch("");
             setPlaceSlot(ROSTER_SLOT_CODES[0]);
             setPlaceSubstitute(false);
+            setPlaceBattleTag("");
             setPlaceTarget(team);
           }
         },
@@ -1210,6 +1237,47 @@ export function RegistrationTeamsBrowser({
                   </Select>
                 </div>
               )}
+              {canManageTeams && selectedTeam.exported_team_id == null && (selectedTeam.status === "forming" || selectedTeam.status === "complete") && (
+                <div className="grid gap-1">
+                  <Label
+                    htmlFor={`name-${selectedTeam.id}`}
+                    className="text-caption text-muted-foreground"
+                  >
+                    {t("create.nameLabel")}
+                  </Label>
+                  <Input
+                    id={`name-${selectedTeam.id}`}
+                    value={nameDraft[selectedTeam.id] ?? selectedTeam.name}
+                    disabled={busy || teamsQuery.isFetching}
+                    onChange={(event) =>
+                      setNameDraft((current) => ({
+                        ...current,
+                        [selectedTeam.id]: event.target.value
+                      }))
+                    }
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="w-fit"
+                    disabled={
+                      busy ||
+                      teamsQuery.isFetching ||
+                      !(nameDraft[selectedTeam.id] ?? selectedTeam.name).trim() ||
+                      (nameDraft[selectedTeam.id] ?? selectedTeam.name).trim() === selectedTeam.name
+                    }
+                    onClick={() =>
+                      renameAdminMutation.mutate({
+                        teamId: selectedTeam.id,
+                        name: (nameDraft[selectedTeam.id] ?? selectedTeam.name).trim()
+                      })
+                    }
+                  >
+                    {t("rename.save")}
+                  </Button>
+                </div>
+              )}
               {canManageTeams && (
                 <div className="grid gap-1">
                   <Label
@@ -1368,14 +1436,25 @@ export function RegistrationTeamsBrowser({
         title={`${t("admin.place")} — ${placeTarget?.name ?? ""}`}
         description={t("admin.placeHint")}
         submitLabel={t("admin.place")}
-        isSubmitting={placeAdminMutation.isPending}
+        isSubmitting={placeAdminMutation.isPending || attachAdminMutation.isPending}
         errorMessage={actionError ?? undefined}
         guardNavigation={false}
         onSubmit={() => {
-          if (!placeTarget || placeRegistrationId == null) return;
-          placeAdminMutation.mutate({
+          if (!placeTarget) return;
+          if (placeRegistrationId != null) {
+            placeAdminMutation.mutate({
+              teamId: placeTarget.id,
+              registrationId: placeRegistrationId,
+              slot_code: placeSlot,
+              is_substitute: placeSubstitute
+            });
+            return;
+          }
+          const tag = placeBattleTag.trim();
+          if (!tag) return;
+          attachAdminMutation.mutate({
             teamId: placeTarget.id,
-            registrationId: placeRegistrationId,
+            battle_tag: tag,
             slot_code: placeSlot,
             is_substitute: placeSubstitute
           });
@@ -1388,7 +1467,7 @@ export function RegistrationTeamsBrowser({
             open={placeOpen}
             onOpenChange={setPlaceOpen}
             label={selectedAgent?.battle_tag ?? t("admin.placePlayerPick")}
-            disabled={placeAdminMutation.isPending}
+            disabled={placeAdminMutation.isPending || attachAdminMutation.isPending}
             searchValue={placeSearch}
             onSearchValueChange={setPlaceSearch}
             searchPlaceholder={t("picker.search")}
@@ -1429,6 +1508,15 @@ export function RegistrationTeamsBrowser({
               ))}
             </CommandGroup>
           </AdminCombobox>
+        </div>
+        <div className="grid gap-1.5">
+          <Label htmlFor={`${placeFieldId}-tag`}>{t("admin.placeBattleTag")}</Label>
+          <Input
+            id={`${placeFieldId}-tag`}
+            value={placeBattleTag}
+            disabled={placeAdminMutation.isPending || attachAdminMutation.isPending || placeRegistrationId != null}
+            onChange={(event) => setPlaceBattleTag(event.target.value)}
+          />
         </div>
         <div className="grid gap-1.5">
           <Label htmlFor={`${placeFieldId}-slot`}>{t("invite.slotLabel")}</Label>

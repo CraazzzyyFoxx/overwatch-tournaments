@@ -365,6 +365,10 @@ OPERATIONS: dict[str, Op] = {
         request=reg_team_schemas.RegistrationTeamPlaceMemberRequest,
         response=reg_team_schemas.RegistrationTeamRead,
     ),
+    "rpc.tournament.regteam_attach_admin": Op(
+        request=reg_team_schemas.RegistrationTeamAttachAdminRequest,
+        response=reg_team_schemas.RegistrationTeamRead,
+    ),
     # ── encounter saved-view write ─────────────────────────────────────────
     "rpc.tournament.saved_view_create": Op(
         request=schemas.EncounterSavedViewCreate, response=schemas.EncounterSavedViewRead

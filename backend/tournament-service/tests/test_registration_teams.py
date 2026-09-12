@@ -987,3 +987,24 @@ class IsTeamCaptainTests(IsolatedAsyncioTestCase):
         team = models.BalancerRegistrationTeam(captain_registration_id=42)
 
         self.assertFalse(await teams.teams_service.is_team_captain(_CaptaincyScalarSession(None), team, auth_user_id=1))
+
+
+class OrganizerAttachTests(TestCase):
+    """Admin place-by-tag must create a shadow row and must not 409 on eligibility."""
+
+    def test_attach_does_not_block_on_eligibility(self) -> None:
+        source = _code_of(teams.teams_service.attach_member_as_organizer)
+
+        self.assertNotIn("_raise_if_ineligible", source)
+
+    def test_attach_creates_when_the_tag_is_new(self) -> None:
+        source = _code_of(teams.teams_service.attach_member_as_organizer)
+
+        self.assertIn("battle_tag_normalized", source)
+        self.assertIn("BalancerRegistration(", source)
+        self.assertIn("ensure_player_identity", source)
+
+    def test_place_still_enforces_eligibility(self) -> None:
+        source = _code_of(teams.teams_service.place_member_as_organizer)
+
+        self.assertIn("_raise_if_ineligible", source)

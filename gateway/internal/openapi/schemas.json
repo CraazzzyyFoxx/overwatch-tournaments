@@ -6144,6 +6144,10 @@
       "description": "Deletes a stage item (group/bracket lane) by id, along with its own encounters and standings (204 no body); requires stage-delete permission on its workspace.",
       "summary": "Delete stage item"
     },
+    "rpc.tournament.admin.delete#stage_item_input": {
+      "description": "Deletes a stage item input (team slot) by id (204 no body); requires stage-delete permission on its workspace.",
+      "summary": "Delete stage item input"
+    },
     "rpc.tournament.admin.delete#standing": {
       "description": "Deletes a standing by id (204 no body); requires standing-delete permission on its workspace.",
       "summary": "Delete standing"
@@ -8728,6 +8732,18 @@
         "ref": "tournament.RegistrationTeamRead"
       },
       "summary": "Set registration-team admission"
+    },
+    "rpc.tournament.regteam_attach_admin": {
+      "description": "Places a live registration onto a slot, or creates a shadow registration for a BattleTag that has not signed up and places that. Eligibility warnings stay on the team card but do not refuse the write. Requires team-update permission.",
+      "request": {
+        "array": false,
+        "ref": "tournament.RegistrationTeamAttachAdminRequest"
+      },
+      "response": {
+        "array": false,
+        "ref": "tournament.RegistrationTeamRead"
+      },
+      "summary": "Attach a player by BattleTag (organizer)"
     },
     "rpc.tournament.regteam_check_in": {
       "description": "Captain or manager checks in every approved member except those listed in exclude_registration_ids. Gated by the tournament check-in window.",
@@ -39199,6 +39215,37 @@
         "admission"
       ],
       "title": "RegistrationTeamAdmissionRequest",
+      "type": "object"
+    },
+    "tournament.RegistrationTeamAttachAdminRequest": {
+      "properties": {
+        "battle_tag": {
+          "maxLength": 255,
+          "minLength": 1,
+          "title": "Battle Tag",
+          "type": "string"
+        },
+        "is_substitute": {
+          "default": false,
+          "title": "Is Substitute",
+          "type": "boolean"
+        },
+        "slot_code": {
+          "enum": [
+            "tank",
+            "dps",
+            "support",
+            "flex"
+          ],
+          "title": "Slot Code",
+          "type": "string"
+        }
+      },
+      "required": [
+        "battle_tag",
+        "slot_code"
+      ],
+      "title": "RegistrationTeamAttachAdminRequest",
       "type": "object"
     },
     "tournament.RegistrationTeamBrief": {

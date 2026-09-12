@@ -56,6 +56,8 @@ const resetInviteCap = vi.fn();
 const listInviteHistoryAdmin = vi.fn();
 const listFreeAgents = vi.fn();
 const placeMemberAdmin = vi.fn();
+const attachMemberAdmin = vi.fn();
+const renameAdmin = vi.fn();
 const notifySuccess = vi.fn();
 const notifyInfo = vi.fn();
 const notifyError = vi.fn();
@@ -70,8 +72,9 @@ vi.mock("@/services/registration-team.service", () => ({
     listInviteHistoryAdmin: (...args: unknown[]) => listInviteHistoryAdmin(...args),
     listFreeAgents: (...args: unknown[]) => listFreeAgents(...args),
     placeMemberAdmin: (...args: unknown[]) => placeMemberAdmin(...args),
+    attachMemberAdmin: (...args: unknown[]) => attachMemberAdmin(...args),
     unlockRoster: vi.fn(),
-    renameAdmin: vi.fn(),
+    renameAdmin: (...args: unknown[]) => renameAdmin(...args),
     setAdmission: vi.fn(),
     setNotes: vi.fn()
   }
@@ -269,6 +272,8 @@ beforeEach(() => {
   revokeInviteAdmin.mockReset().mockResolvedValue(undefined);
   resetInviteCap.mockReset().mockResolvedValue(undefined);
   placeMemberAdmin.mockReset().mockResolvedValue(team());
+  attachMemberAdmin.mockReset().mockResolvedValue(team());
+  renameAdmin.mockReset().mockResolvedValue(team());
   // Only read once the place dialog opens.
   listFreeAgents.mockReset().mockResolvedValue({
     items: [
@@ -552,5 +557,33 @@ describe("RegistrationTeamsBrowser", () => {
       slot_code: "tank",
       is_substitute: false
     });
+    expect(attachMemberAdmin).not.toHaveBeenCalled();
+  });
+
+  it("attaches an unregistered player by BattleTag", async () => {
+    const scope = await mount();
+
+    await click(menuItem(await rowMenu(scope, "Team Alpha"), "Place player"));
+    const dialog = formDialog()!;
+    await type(dialog.querySelector("input[id$='-tag']") as HTMLInputElement, "Ghost#9999");
+    await submit(dialog);
+
+    expect(attachMemberAdmin).toHaveBeenCalledWith(TOURNAMENT_ID, 1, {
+      battle_tag: "Ghost#9999",
+      slot_code: "tank",
+      is_substitute: false
+    });
+    expect(placeMemberAdmin).not.toHaveBeenCalled();
+  });
+
+  it("renames a team from the inspector", async () => {
+    const scope = await mount();
+    await click(row(scope, "Team Alpha"));
+
+    const inspector = document.body.querySelector("aside[aria-label='Row inspector']")!;
+    await type(inspector.querySelector("#name-1") as HTMLInputElement, "Wolves");
+    await click(buttonWithText(inspector, "Rename"));
+
+    expect(renameAdmin).toHaveBeenCalledWith(TOURNAMENT_ID, 1, "Wolves");
   });
 });

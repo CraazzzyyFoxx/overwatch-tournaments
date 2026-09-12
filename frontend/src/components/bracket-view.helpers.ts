@@ -45,12 +45,7 @@ export interface SlotHint {
 }
 
 function sortMatches(matches: BracketMatch[]) {
-  return [...matches].sort((left, right) => {
-    const leftKey = left.stage_item_id ?? left.challonge_id ?? left.id;
-    const rightKey = right.stage_item_id ?? right.challonge_id ?? right.id;
-
-    return leftKey - rightKey;
-  });
+  return [...matches].sort((left, right) => left.id - right.id);
 }
 
 export function buildRoundGroups(matches: BracketMatch[]): RoundGroup[] {

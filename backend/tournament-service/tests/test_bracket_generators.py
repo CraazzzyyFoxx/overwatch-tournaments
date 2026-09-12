@@ -161,6 +161,40 @@ class DoubleEliminationInvariants(TestCase):
         self.assertEqual(2, len(gf_incoming))
         self.assertEqual({"home", "away"}, {e.target_slot for e in gf_incoming})
 
+    def test_dropout_does_not_rematch_the_same_upper_match(self) -> None:
+        for n in (5, 6, 8):
+            s = double_elimination.generate(list(range(1, n + 1)))
+            for pairing in s.pairings:
+                if pairing.round_number <= 0:
+                    continue
+                w_edges = [
+                    e for e in s.advancement_edges if e.source_local_id == pairing.local_id and e.role == "winner"
+                ]
+                l_edges = [
+                    e for e in s.advancement_edges if e.source_local_id == pairing.local_id and e.role == "loser"
+                ]
+                if len(w_edges) != 1 or len(l_edges) != 1:
+                    continue
+                next_ub = w_edges[0].target_local_id
+                drop_lb = l_edges[0].target_local_id
+                next_loser_targets = [
+                    e.target_local_id for e in s.advancement_edges if e.source_local_id == next_ub and e.role == "loser"
+                ]
+                self.assertNotIn(
+                    drop_lb,
+                    next_loser_targets,
+                    f"{n} teams: loser of {pairing.local_id} met loser of {next_ub}",
+                )
+
+    def test_6_teams_r1_loser_crosses_to_the_other_half(self) -> None:
+        s = double_elimination.generate([1, 2, 3, 4, 5, 6])
+        incoming: dict[int, set[tuple[str, int]]] = {}
+        for edge in s.advancement_edges:
+            incoming.setdefault(edge.target_local_id, set()).add((edge.role, edge.source_local_id))
+        # local 5/6 are the two LB R2 slots: L M1 vs L M4, L M2 vs L M3.
+        self.assertEqual({("loser", 0), ("loser", 3)}, incoming[5])
+        self.assertEqual({("loser", 1), ("loser", 2)}, incoming[6])
+
     def test_lower_bracket_seeds_start_in_lower_bracket_2_2(self) -> None:
         # 2 teams in the upper bracket, 2 seeded directly into the lower bracket.
         s = double_elimination.generate([1, 2], lower_bracket_team_ids=[3, 4])

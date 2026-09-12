@@ -595,13 +595,15 @@
         "shortfall": "Still needed"
       },
       "placePlayerPick": "Pick a player",
-      "placeHint": "Only a player registered for this tournament and on no team can be placed."
+      "placeBattleTag": "BattleTag",
+      "placeHint": "Pick a registered free agent, or type a BattleTag to add a player who has not signed up."
     },
     "errors": {
       "request_failed": "Unable to complete the action. Try again.",
       "team_name_required": "Enter a team name.",
       "team_name_invalid": "A team name cannot contain “#”.",
       "team_name_taken": "A team with this name is already registered.",
+      "battle_tag_required": "Enter a BattleTag.",
       "already_registered": "You are already registered for this tournament.",
       "registration_closed": "Registration for this tournament is closed.",
       "team_not_found": "Team not found.",

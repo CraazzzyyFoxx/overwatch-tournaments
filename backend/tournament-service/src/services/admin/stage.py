@@ -837,6 +837,24 @@ class AdminStageService:
         await session.refresh(inp)
         return inp
 
+    async def delete_stage_item_input(self, session: AsyncSession, input_id: int) -> None:
+        """Remove one seed slot. Inverse of create_stage_item_input.
+
+        Encounters that already name the team stay; recalculation follows.
+        """
+        inp = await self.stage_item_input_repo.get(
+            session,
+            input_id,
+            options=[selectinload(models.StageItemInput.stage_item).selectinload(models.StageItem.stage)],
+        )
+        if not inp:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Stage item input not found")
+        tournament_id = inp.stage_item.stage.tournament_id
+        await self.stage_item_input_repo.delete(session, inp)
+        await enqueue_tournament_recalculation(session, tournament_id)
+        await self._publish_structure_changed(session, tournament_id)
+        await session.commit()
+
     async def activate_stage(
         self,
         session: AsyncSession,

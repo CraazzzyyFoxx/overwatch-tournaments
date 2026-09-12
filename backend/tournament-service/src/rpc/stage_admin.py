@@ -10,7 +10,7 @@ job-returning routes return their payloads as the route did).
 
 Scope: ONLY the stage workflow endpoints (progress, merge-group-stages, activate,
 generate, activate-and-generate, auto-wire, wire-from-groups, seed-teams). Stage /
-stage_item / stage_item_input CRUD creates & updates go through the generic CRUD
+stage_item / stage_item_input CRUD create/update/delete go through the generic CRUD
 engine and are handled separately.
 
 The gateway passes path params as ``data["<name>"]`` (and the primary id as

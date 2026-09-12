@@ -1578,6 +1578,10 @@ class AdminService {
     return response.json();
   }
 
+  async deleteStageItemInput(inputId: number): Promise<void> {
+    await apiFetch(`/api/v1/admin/stages/items/inputs/${inputId}`, { method: "DELETE" });
+  }
+
   async activateStage(stageId: number): Promise<Stage> {
     const response = await apiFetch(`/api/v1/admin/stages/${stageId}/activate`, {
       method: "POST"
