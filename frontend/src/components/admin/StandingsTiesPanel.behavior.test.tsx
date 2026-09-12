@@ -157,11 +157,29 @@ describe("StandingsTiesPanel", () => {
     expect(body.textContent).not.toContain("Unresolved ties");
   });
 
+  it("saves the displayed order without a reorder", async () => {
+    // The engine assigned this order; locking it is still a save.
+    await mount(panel(tiedRows()));
+    expect(button("Save order").disabled).toBe(false);
+
+    await act(async () => {
+      button("Save order").click();
+    });
+    await flush();
+
+    expect(updateStage).toHaveBeenCalledWith(5, {
+      settings_json: {
+        tiebreak_order: ["points", "manual_override"],
+        manual_positions: { "99": 1, "7": 3, "8": 4 }
+      }
+    });
+    expect(recalculateStandings).toHaveBeenCalledWith(42);
+  });
+
   it("saves absolute positions for the cluster's teams and keeps other overrides", async () => {
     // Positions are absolute, not offsets, and a save must not wipe an
     // override an organizer set on an unrelated team.
     await mount(panel(tiedRows()));
-    expect(button("Save order").disabled).toBe(true);
 
     await act(async () => {
       button("Move Team 8 up").click();
@@ -181,11 +199,21 @@ describe("StandingsTiesPanel", () => {
     expect(recalculateStandings).toHaveBeenCalledWith(42);
   });
 
+  it("hides Save when the displayed order is already persisted", async () => {
+    const body = await mount(panel(tiedRows(), { "99": 1, "7": 3, "8": 4 }));
+    expect(body.textContent).toContain("Saved");
+    expect(
+      Array.from(document.body.querySelectorAll("button")).some(
+        (node) => node.textContent?.trim() === "Save order"
+      )
+    ).toBe(false);
+  });
+
   it("resets only its own cluster's overrides", async () => {
     await mount(panel(tiedRows(), { "99": 1, "7": 4, "8": 3 }));
 
     await act(async () => {
-      button("Reset").click();
+      button("Clear override").click();
     });
     await flush();
 
