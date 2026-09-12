@@ -68,6 +68,13 @@ vi.mock("@/stores/workspace.store", () => ({
 }));
 
 vi.mock("next-intl", () => ({ useTranslations: () => (key: string) => key }));
+
+// The invite link's application id is baked into the bundle at build time;
+// here the module supplies it so the link renders at all.
+vi.mock("@/config/site", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/config/site")>()),
+  DISCORD_CLIENT_ID: "1400000000000000000"
+}));
 vi.mock("@/services/balancer-admin.service", () => ({
   default: {
     getWorkspaceBalancerConfig: (...args: unknown[]) => getWorkspaceBalancerConfig(...args),
@@ -316,7 +323,58 @@ describe("Workspace settings › Discord", () => {
     expect(clearDiscordGuild).toHaveBeenCalledWith(7);
   });
 
-  // 6. the mix announcement channel is a workspace setting, editable here --
+  // 6. binding a server proves ownership, NOT that the bot was ever invited to
+  //    it — so a guild the bot cannot see must say so, and the invite link must
+  //    carry that exact guild rather than ask the organiser to pick again.
+  it("tells an organiser the bot is missing, and points the invite at the bound server", async () => {
+    getById.mockResolvedValue(BOUND);
+    getDiscordGuildInfo.mockResolvedValue({
+      guild_id: "222222222222222222",
+      connected: false,
+      name: null,
+      icon_url: null,
+      member_count: 0,
+      owner_id: null,
+      owner_name: null,
+      owner_avatar_url: null
+    });
+    await render();
+
+    expect(container.textContent).toContain("The bot is not in this server");
+
+    const invite = [...container.querySelectorAll("a")].find((node) =>
+      node.getAttribute("href")?.startsWith("https://discord.com/oauth2/authorize")
+    );
+    const url = new URL(invite!.getAttribute("href")!);
+    expect(url.searchParams.get("client_id")).toBe("1400000000000000000");
+    expect(url.searchParams.get("guild_id")).toBe("222222222222222222");
+    const permissions = Number(url.searchParams.get("permissions"));
+    // The mix announcement is content + embed + file in ONE `channel.send`
+    // (discord-service `post_message`), so Embed Links (1 << 14) and Attach
+    // Files (1 << 15) are load-bearing: trim either and that post 403s with
+    // nothing but a service log to show for it.
+    expect(permissions & ((1 << 14) | (1 << 15))).toBe((1 << 14) | (1 << 15));
+    // Manage Roles (1 << 28) is not ours to ask for — the bot only reads roles,
+    // and an unearned bit on the consent screen is a reason to refuse it.
+    expect(permissions & (1 << 28)).toBe(0);
+  });
+
+  // An unreachable Discord degrades to the same `connected: false`
+  // (`_discord_lookup`), carrying an `error`. Reading that as "the bot is
+  // missing" would send the organiser to re-invite a bot that is already there.
+  it("does not blame the bot when Discord itself was unreachable", async () => {
+    getById.mockResolvedValue(BOUND);
+    getDiscordGuildInfo.mockResolvedValue({
+      guild_id: "222222222222222222",
+      connected: false,
+      error: "discord-service unreachable"
+    });
+    await render();
+
+    expect(container.textContent).not.toContain("The bot is not in this server");
+  });
+
+  // 7. the mix announcement channel is a workspace setting, editable here --
   //    and saving it must not wipe the rank-delta knobs sharing the blob.
   it("saves the mix channel without dropping the rank-delta config", async () => {
     getById.mockResolvedValue(BOUND);

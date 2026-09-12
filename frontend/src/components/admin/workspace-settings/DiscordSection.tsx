@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { EYEBROW_CLASS } from "@/components/admin/tone";
 import { DiscordChannelSelect } from "@/components/discord/DiscordChannelSelect";
+import { DISCORD_CLIENT_ID } from "@/config/site";
 import { useDiscordGuildInfo } from "@/hooks/useDiscordEntities";
 import { ApiError, getApiErrorMessage } from "@/lib/api-error";
 import { notify } from "@/lib/notify";
@@ -41,6 +42,42 @@ const BIND_FAILURES: Record<number, string> = {
 function bindFailure(error: unknown): string {
   const status = error instanceof ApiError ? error.status : 0;
   return BIND_FAILURES[status] ?? getApiErrorMessage(error, "Could not link that Discord server.");
+}
+
+// Exactly what the bot does, and nothing else:
+//   View Channels 1024 + Read Message History 65536 — ingesting match logs
+//     (`attachment_processor.process_channel_history`),
+//   Add Reactions 64 — the ✅/❌ it puts on each log it processed,
+//   Send Messages 2048 + Embed Links 16384 + Attach Files 32768 — the mix
+//     announcement, posted as `content` + `embed` + `file` in one call
+//     (`discord-service/src/rabbit/gateway.py` `post_message`); drop either of
+//     the last two and that post 403s with only a log line to show for it.
+// It never writes roles — subscription sync only READS a member's roles — so
+// Manage Roles is deliberately absent: every bit shows up on Discord's consent
+// screen, and one that is never used is just a reason to refuse the install.
+const BOT_PERMISSIONS = "117824";
+
+/**
+ * Discord's install link for our bot, pre-pointed at the bound guild.
+ *
+ * `scope=bot` alone: the bot registers no slash commands. `guild_id` +
+ * `disable_guild_select` mean the organiser confirms the server they already
+ * linked here instead of picking one again — a mismatch between the two is the
+ * whole failure mode this button exists to prevent.
+ *
+ * Null when no application id was built in: a link with an empty `client_id`
+ * only reaches Discord's "invalid application" page.
+ */
+function botInviteUrl(guildId: string): string | null {
+  if (!DISCORD_CLIENT_ID) return null;
+  const params = new URLSearchParams({
+    client_id: DISCORD_CLIENT_ID,
+    scope: "bot",
+    permissions: BOT_PERMISSIONS,
+    guild_id: guildId,
+    disable_guild_select: "true"
+  });
+  return `https://discord.com/oauth2/authorize?${params.toString()}`;
 }
 
 function initials(name: string): string {
@@ -253,6 +290,13 @@ export function DiscordSection({ workspaceId }: Readonly<{ workspaceId: number |
         const icon = boundIcon(workspace, info, manageable);
         const ownerName = info?.owner_name ?? null;
         const ownerAvatar = info?.owner_avatar_url ?? null;
+        const invite = boundId ? botInviteUrl(boundId) : null;
+        // `connected: false` is two different situations and `error` separates
+        // them: with an error Discord (or discord-service) was unreachable and
+        // the lookup degraded rather than 500ing, which says nothing about the
+        // bot; without one, Discord answered and the bot cannot see this guild
+        // — it was never invited, or it was kicked.
+        const botMissing = Boolean(boundId) && info !== undefined && !info.connected && !info.error;
 
         return (
           <>
@@ -303,19 +347,38 @@ export function DiscordSection({ workspaceId }: Readonly<{ workspaceId: number |
                         ) : null}
                       </div>
                     </div>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="text-danger"
-                      disabled={unlink.isPending}
-                      onClick={() => setUnlinkOpen(true)}
-                    >
-                      Unlink server
-                    </Button>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {invite ? (
+                        <Button asChild variant="outline">
+                          <a href={invite} target="_blank" rel="noopener noreferrer">
+                            Add bot to server
+                          </a>
+                        </Button>
+                      ) : null}
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="text-danger"
+                        disabled={unlink.isPending}
+                        onClick={() => setUnlinkOpen(true)}
+                      >
+                        Unlink server
+                      </Button>
+                    </div>
                   </div>
                 ) : (
                   <p className="text-sm text-muted-foreground">No Discord server linked yet.</p>
                 )}
+
+                {botMissing ? (
+                  <div className="flex items-start gap-2 rounded-md border border-warning/30 bg-warning/10 p-2.5">
+                    <AlertTriangle aria-hidden className="mt-0.5 size-3.5 shrink-0 text-warning" />
+                    <p className="max-w-prose text-xs text-warning">
+                      The bot is not in this server, so it cannot read match logs or post mix
+                      announcements. Add it{invite ? " with the button above" : ""}, then reload.
+                    </p>
+                  </div>
+                ) : null}
 
                 <p className="max-w-prose text-xs text-muted-foreground text-pretty">
                   The server this workspace runs in: where Boosty&apos;s bot assigns subscriber

@@ -30,3 +30,11 @@ export const YM_ID = process.env.NEXT_PUBLIC_YM_ID;
 // (`v1.2.3`) as a build arg, so it is baked into the bundle; unset in local
 // dev, where the footer then renders no version at all.
 export const APP_VERSION = process.env.NEXT_PUBLIC_APP_VERSION;
+
+// Discord application id of the platform's bot — the `client_id` of the bot
+// invite link on the workspace Discord settings page. It is the APPLICATION id
+// (same app the bot token belongs to), not the bot user id, and not necessarily
+// the OAuth login client id if login runs on a separate app. Unset hides the
+// invite button rather than emitting a link Discord answers with "invalid
+// application".
+export const DISCORD_CLIENT_ID = process.env.NEXT_PUBLIC_DISCORD_CLIENT_ID;
