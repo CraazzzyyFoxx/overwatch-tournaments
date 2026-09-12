@@ -47,7 +47,10 @@ _BACKFILL = sa.text(
             ) AS kept
         FROM balancer.custom_game AS game
         WHERE game.host_user_id IS NOT NULL
-          AND game.balancer_config_json IS NOT NULL
+          -- `jsonb_each` errors out on a non-object, and the column is a bare
+          -- JSONB: rows holding `null`, a scalar or an array (older writers, a
+          -- hand-edited row) would fail the whole migration, not just skip.
+          AND jsonb_typeof(game.balancer_config_json) = 'object'
           AND game.balancer_config_json <> '{}'::jsonb
         ORDER BY game.host_user_id, COALESCE(game.updated_at, game.created_at) DESC, game.id DESC
     ) AS latest
