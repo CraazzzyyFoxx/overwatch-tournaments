@@ -368,6 +368,8 @@
     },
     "myCard": {
       "title": "Your Registration",
+      "queuePosition": "{position} / {total}",
+      "queuePositionLabel": "Position {position} of {total} registrations",
       "primaryRole": "Primary Role",
       "noSecondaryRoles": "No fallback roles",
       "accounts": "Linked Accounts",
@@ -2231,6 +2233,10 @@
     },
     "participants": {
       "resultCount": "{count, plural, one {# participant shown} other {# participants shown}}",
+      "hidden": {
+        "title": "Participants list hidden",
+        "description": "The organizer publishes only the size of the field and how it splits by role. Your own registration is still shown above."
+      },
       "empty": {
         "title": "No registrations yet",
         "description": "Participants will appear here when registrations are published."
@@ -4976,7 +4982,11 @@
       "display": {
         "title": "Display Options",
         "showRanks": "Show player ranks on participants page",
-        "hint": "When enabled, player rank values will be displayed on the public participants page. When disabled, rank values are completely hidden and omitted from backend payloads."
+        "hint": "When enabled, player rank values will be displayed on the public participants page. When disabled, rank values are completely hidden and omitted from backend payloads.",
+        "hideRegistrations": "Hide the participants list",
+        "hideRegistrationsHint": "The public participants page shows only the registration count and the split by role — no names, no rows. Enforced on the server, so the list is not in the payload either. You still see every registration in this admin table.",
+        "maxParticipants": "Announced capacity",
+        "maxParticipantsHint": "Shown next to the participant count as \"42 / 100\". Informational only — it is not a limit, and registrations past it are still accepted. Leave empty to show nothing."
       },
       "team": {
         "title": "Registered teams",

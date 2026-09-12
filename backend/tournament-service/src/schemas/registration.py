@@ -84,6 +84,11 @@ class RegistrationFormRead(BaseModel):
     require_open_profile: bool = False
     open_profile_scope: str = "main"
     show_ranks: bool = False
+    #: Collapses the public participants list to an aggregate. See
+    #: ``BalancerRegistrationForm.hide_registrations`` — enforced in the read model.
+    hide_registrations: bool = False
+    #: Advisory capacity, never enforced. ``None`` means "not announced".
+    max_participants: int | None = Field(default=None, ge=0)
     require_subscription: bool = False
     # WHEN the requirement bites, once the toggle above is on. See
     # ``enums.SubscriptionEnforcementStage``: ``registration`` implies check-in too.
@@ -125,6 +130,9 @@ class RegistrationFormUpsert(BaseModel):
     require_open_profile: bool = False
     open_profile_scope: str = "main"
     show_ranks: bool = False
+    hide_registrations: bool = False
+    #: Informational only — deliberately no cross-check against the live count.
+    max_participants: int | None = Field(default=None, ge=0)
     require_subscription: bool = False
     # Defaults to the looser stage, so a client that does not know the field yet
     # cannot silently turn a check-in requirement into a sign-up wall.
@@ -251,6 +259,12 @@ class RegistrationRead(BaseModel):
     team: RegistrationTeamBrief | None = None
     submitted_at: datetime | None = None
     reviewed_at: datetime | None = None
+    #: 1-based place in submission order, and the size of that order. Populated
+    #: ONLY by the caller's own registration reads (``reg_pub_*_me``, submit) —
+    #: the participants list would pay a count per row for a number equal to the
+    #: row's own index. ``None`` on every other path.
+    queue_position: int | None = None
+    queue_total: int | None = None
 
 
 class TournamentHistoryEntry(BaseModel):
@@ -503,12 +517,28 @@ class RegistrationListResponse(BaseModel):
     Division grid versions are deduplicated into ``division_grids`` (keyed by version
     id) so each history entry only carries a ``division_grid_version_id`` reference,
     keeping the payload small even when participants have long tournament histories.
+
+    ``hidden`` is the organizer's ``hide_registrations``, answered by the server:
+    when it is set, ``registrations`` is EMPTY and ``total``/``role_counts`` are the
+    whole payload. They are filled on both paths so a consumer reads one field
+    regardless, and so the number can never disagree with the rows beside it —
+    ``Tournament.registrations_count`` is a separately cached read and would.
     """
 
     registrations: list[RegistrationListRead] = Field(default_factory=list)
     # Keyed by stringified version id to match the JSON wire format (object keys are
     # always strings); ``TournamentHistoryEntry.division_grid_version_id`` references these.
     division_grids: dict[str, DivisionGridVersionRead] = Field(default_factory=dict)
+    hidden: bool = False
+    #: Live registrations (``deleted_at IS NULL``) — exactly the row set the visible
+    #: list would have shown, so flipping ``hidden`` never changes the number.
+    total: int = 0
+    #: Primary role -> count, one bucket per registration. Mirrors what the overview
+    #: card used to derive client-side from the rows it can no longer see.
+    role_counts: dict[str, int] = Field(default_factory=dict)
+    #: Advisory capacity from the form, echoed here so a consumer that already reads
+    #: this envelope needs no second request for it.
+    max_participants: int | None = None
 
 
 class RegistrationStatusResponse(BaseModel):

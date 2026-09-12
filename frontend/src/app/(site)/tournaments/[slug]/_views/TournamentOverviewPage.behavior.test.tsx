@@ -21,7 +21,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import en from "@/i18n/messages/en.json";
 import type { Encounter } from "@/types/encounter.types";
 import type { MapRead } from "@/types/map.types";
-import type { Registration } from "@/types/registration.types";
+import type { Registration, RegistrationListResponse } from "@/types/registration.types";
 import type { Team } from "@/types/team.types";
 import type { TournamentLink } from "@/types/stream.types";
 import type { PickBanConfig, Stage, StageSummary, Tournament, TournamentStatus } from "@/types/tournament.types";
@@ -311,6 +311,32 @@ function makeRegistration(id: number, role: string, battleTag: string): Registra
   } as Registration;
 }
 
+/**
+ * The list envelope the server actually returns. `total` and `role_counts` are
+ * ITS answer, not the page's — a tournament that hides its roster sends the
+ * aggregate with no rows at all — so the fixture derives them from the same rows
+ * the real read model would have counted.
+ */
+function regList(
+  registrations: Registration[],
+  overrides: Partial<RegistrationListResponse> = {}
+): RegistrationListResponse {
+  const role_counts: Record<string, number> = {};
+  for (const registration of registrations) {
+    const primary = registration.roles.find((role) => role.is_primary) ?? registration.roles[0];
+    if (primary) role_counts[primary.role] = (role_counts[primary.role] ?? 0) + 1;
+  }
+  return {
+    registrations,
+    division_grids: {},
+    hidden: false,
+    total: registrations.length,
+    role_counts,
+    max_participants: null,
+    ...overrides
+  };
+}
+
 const GAMEMODE = {
   id: 1,
   created_at: new Date(0),
@@ -384,7 +410,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   tournament = makeTournament("live");
   getAllEncounters.mockResolvedValue({ results: [], total: 0, page: 1, per_page: -1 });
-  listRegistrations.mockResolvedValue([]);
+  listRegistrations.mockResolvedValue(regList([]));
   getStandings.mockResolvedValue([]);
   getStages.mockResolvedValue([] as Stage[]);
   getTeams.mockResolvedValue({ results: [ALPHA, BETA, GAMMA, DELTA], total: 4, page: 1, per_page: -1 });
@@ -437,12 +463,14 @@ const COPY = en.tournamentDetail.overview;
 describe("before the tournament starts (§3A)", () => {
   beforeEach(() => {
     tournament = makeTournament("check_in");
-    listRegistrations.mockResolvedValue([
-      makeRegistration(1, "tank", "Hornet#21345"),
-      makeRegistration(2, "dps", "zMize#2978"),
-      makeRegistration(3, "dps", "manqa#21668"),
-      makeRegistration(4, "support", "Naord#2100")
-    ]);
+    listRegistrations.mockResolvedValue(
+      regList([
+        makeRegistration(1, "tank", "Hornet#21345"),
+        makeRegistration(2, "dps", "zMize#2978"),
+        makeRegistration(3, "dps", "manqa#21668"),
+        makeRegistration(4, "support", "Naord#2100")
+      ])
+    );
   });
 
   it("leads with the phase timeline under the anchor the retired /schedule route points at", async () => {

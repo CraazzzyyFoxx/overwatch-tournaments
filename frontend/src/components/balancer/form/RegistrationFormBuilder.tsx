@@ -105,6 +105,8 @@ export default function RegistrationFormBuilder({
   const [requireOpenProfile, setRequireOpenProfile] = useState(false);
   const [openProfileScope, setOpenProfileScope] = useState<"main" | "all">("main");
   const [showRanks, setShowRanks] = useState(false);
+  const [hideRegistrations, setHideRegistrations] = useState(false);
+  const [maxParticipants, setMaxParticipants] = useState<number | null>(null);
   const [maxSubstitutes, setMaxSubstitutes] = useState(0);
   const [subscriptionScope, setSubscriptionScope] = useState<"player" | "team">("player");
   const [teamRankMin, setTeamRankMin] = useState<number | null>(null);
@@ -156,6 +158,8 @@ export default function RegistrationFormBuilder({
       );
       setOpenProfileScope((data?.open_profile_scope as "main" | "all") ?? "main");
       setShowRanks(data?.show_ranks ?? false);
+      setHideRegistrations(data?.hide_registrations ?? false);
+      setMaxParticipants(data?.max_participants ?? null);
       setMaxSubstitutes(data?.max_substitutes ?? 0);
       setSubscriptionScope(data?.subscription_scope === "team" ? "team" : "player");
       setTeamRankMin(data?.team_rank_min ?? null);
@@ -219,6 +223,8 @@ export default function RegistrationFormBuilder({
         require_open_profile: requireOpenProfile,
         open_profile_scope: openProfileScope,
         show_ranks: showRanks,
+        hide_registrations: hideRegistrations,
+        max_participants: maxParticipants,
         max_substitutes: maxSubstitutes,
         subscription_scope: subscriptionScope,
         team_rank_min: teamRankMin,
@@ -596,6 +602,31 @@ export default function RegistrationFormBuilder({
                 id={`${ids}-show-ranks`}
                 checked={showRanks}
                 onCheckedChange={mark(setShowRanks)}
+              />
+            </SettingRow>
+            <SettingRow
+              htmlFor={`${ids}-hide-registrations`}
+              label={t("display.hideRegistrations")}
+              hint={t("display.hideRegistrationsHint")}
+            >
+              <Switch
+                id={`${ids}-hide-registrations`}
+                checked={hideRegistrations}
+                onCheckedChange={mark(setHideRegistrations)}
+              />
+            </SettingRow>
+            <SettingRow
+              htmlFor={`${ids}-max-participants`}
+              label={t("display.maxParticipants")}
+              hint={t("display.maxParticipantsHint")}
+            >
+              <NumberInput
+                id={`${ids}-max-participants`}
+                integer
+                min={0}
+                value={maxParticipants}
+                onValueChange={mark(setMaxParticipants)}
+                className="h-8 w-24"
               />
             </SettingRow>
           </SettingGroup>

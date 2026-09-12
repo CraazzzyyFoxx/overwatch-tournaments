@@ -50,6 +50,8 @@ class _FormRow:
         self.require_open_profile = False
         self.open_profile_scope = "main"
         self.show_ranks = False
+        self.hide_registrations = False
+        self.max_participants = None
         self.built_in_fields_json = {}
         self.custom_fields_json = []
         self.max_substitutes = 0

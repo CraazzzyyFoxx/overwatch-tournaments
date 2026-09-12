@@ -189,6 +189,8 @@ def _form_to_read(
         require_open_profile=form.require_open_profile,
         open_profile_scope=form.open_profile_scope,
         show_ranks=form.show_ranks,
+        hide_registrations=form.hide_registrations,
+        max_participants=form.max_participants,
         max_substitutes=form.max_substitutes,
         require_subscription=form.require_subscription,
         subscription_stage=form.subscription_stage,
@@ -210,6 +212,9 @@ def _reg_to_read(
     subscription_outcome: str | None = None,
     subscription_verdicts: dict[str, Any] | None = None,
     roster: PlayerRoster | None = None,
+    #: Only the caller's own registration reads pass these; see
+    #: ``RegistrationRead.queue_position``.
+    queue: tuple[int, int] | None = None,
 ) -> RegistrationRead:
     """Serialize a registration for public API responses.
 
@@ -312,6 +317,8 @@ def _reg_to_read(
         team=team,
         submitted_at=reg.submitted_at,
         reviewed_at=reg.reviewed_at,
+        queue_position=queue[0] if queue is not None else None,
+        queue_total=queue[1] if queue is not None else None,
     )
 
 

@@ -18,7 +18,11 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import en from "@/i18n/messages/en.json";
-import type { Registration, RegistrationForm } from "@/types/registration.types";
+import type {
+  Registration,
+  RegistrationForm,
+  RegistrationListResponse
+} from "@/types/registration.types";
 import type { Tournament, TournamentStatus } from "@/types/tournament.types";
 
 import TournamentParticipantsPage from "./TournamentParticipantsPage";
@@ -158,6 +162,26 @@ function makeRegistration(overrides: Partial<Registration> = {}): Registration {
   };
 }
 
+/**
+ * The list envelope the server returns. `hidden`/`total`/`role_counts` are ITS
+ * answer: a tournament whose organizer hid the roster sends the aggregate and
+ * NO rows, which is why the page cannot count anything itself.
+ */
+function regList(
+  registrations: Registration[],
+  overrides: Partial<RegistrationListResponse> = {}
+): RegistrationListResponse {
+  return {
+    registrations,
+    division_grids: {},
+    hidden: false,
+    total: registrations.length,
+    role_counts: {},
+    max_participants: null,
+    ...overrides
+  };
+}
+
 const FORM: RegistrationForm = {
   id: 9,
   tournament_id: TOURNAMENT_ID,
@@ -204,7 +228,7 @@ beforeEach(() => {
     }
   });
   tournament = makeTournament("check_in", OPEN_WINDOW);
-  listRegistrations.mockResolvedValue([makeRegistration()]);
+  listRegistrations.mockResolvedValue(regList([makeRegistration()]));
   getForm.mockResolvedValue(FORM);
   getMyRegistration.mockResolvedValue(makeRegistration());
   container = document.createElement("div");
@@ -443,5 +467,56 @@ describe("registration progress steps", () => {
     expect(
       stepLabels().filter((candidate) => candidate.className.includes("aqt-rose"))
     ).toHaveLength(0);
+  });
+});
+
+describe("a roster the organizer hid", () => {
+  /** The server's answer when `hide_registrations` is on: aggregate, no rows. */
+  const HIDDEN = regList([], {
+    hidden: true,
+    total: 48,
+    role_counts: { tank: 8, dps: 24, support: 16 },
+    max_participants: 60
+  });
+
+  it("shows the count and the role split instead of the roster", async () => {
+    listRegistrations.mockResolvedValue(HIDDEN);
+    await mount();
+
+    const summary = container.querySelector(
+      `section[aria-label="${en.tournamentDetail.participants.hidden.title}"]`
+    );
+    expect(summary).not.toBeNull();
+    const text = summary?.textContent ?? "";
+    expect(text).toContain("48");
+    // Advisory capacity, rendered beside the count and never compared to it.
+    expect(text).toContain("/ 60");
+    expect(text).toContain(en.common.roles.tank);
+    expect(text).toContain("24");
+  });
+
+  it("drops the filters and the empty state rather than claiming nobody registered", async () => {
+    listRegistrations.mockResolvedValue(HIDDEN);
+    await mount();
+
+    // No rows is not "no registrations": the roster exists, it is just not published.
+    expect(container.textContent).not.toContain(en.tournamentDetail.participants.empty.title);
+    expect(container.querySelector(".filters")).toBeNull();
+  });
+
+  it("still renders the viewer's own card, with its place in the queue", async () => {
+    listRegistrations.mockResolvedValue(HIDDEN);
+    getMyRegistration.mockResolvedValue(
+      makeRegistration({ queue_position: 12, queue_total: 48 })
+    );
+    await mount();
+
+    const chip = container.querySelector(
+      `[aria-label="${en.registration.myCard.queuePositionLabel
+        .replace("{position}", "12")
+        .replace("{total}", "48")}"]`
+    );
+    expect(chip).not.toBeNull();
+    expect(chip?.textContent).toBe("12 / 48");
   });
 });

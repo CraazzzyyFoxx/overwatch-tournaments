@@ -26,6 +26,7 @@ import {
   Tv,
   ChevronDown,
   ChevronUp,
+  EyeOff,
   LayoutGrid,
   Table2
 } from "lucide-react";
@@ -70,6 +71,7 @@ import {
   useHeroesMap
 } from "./_components/participantsColumns";
 import ParticipantsPool, { poolDivisionOptions } from "./_components/ParticipantsPool";
+import { RegistrationSummary } from "./_components/RegistrationSummary";
 import {
   PARTICIPANT_SEARCH_MAX_LENGTH,
   claimCheckInPrompt,
@@ -579,9 +581,29 @@ function MyRegistrationCard({
             {createElement(StatusIcon, { className: "size-5", "aria-hidden": true })}
           </span>
           <div className="min-w-0">
-            <p className="text-label font-semibold uppercase tracking-label text-[color:var(--aqt-fg-dim)]">
-              {t("registration.myCard.title")}
-            </p>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <p className="text-label font-semibold uppercase tracking-label text-[color:var(--aqt-fg-dim)]">
+                {t("registration.myCard.title")}
+              </p>
+              {/* Where this entry sits in submission order. Server-sent, because a
+                  tournament that hides its participants list gives this card no
+                  rows to count — and counting rows was never the same number
+                  anyway once a row was withdrawn. */}
+              {registration.queue_position != null && registration.queue_total != null ? (
+                <span
+                  aria-label={t("registration.myCard.queuePositionLabel", {
+                    position: registration.queue_position,
+                    total: registration.queue_total
+                  })}
+                  className="rounded-full border border-[color:var(--aqt-border)] bg-[color:var(--aqt-overlay-2)] px-1.5 py-px text-label font-semibold tabular-nums text-[color:var(--aqt-fg-muted)]"
+                >
+                  {t("registration.myCard.queuePosition", {
+                    position: registration.queue_position,
+                    total: registration.queue_total
+                  })}
+                </span>
+              ) : null}
+            </div>
             <h3 className="mt-0.5 text-lg font-bold leading-tight text-[color:var(--aqt-fg)]">
               {statusName}
             </h3>
@@ -905,7 +927,12 @@ function TournamentParticipantsView({ tournament }: Readonly<{ tournament: Tourn
     }
   });
 
-  const registrations = listQuery.data ?? [];
+  const registrationList = listQuery.data ?? null;
+  // Empty by construction when the organizer hid the list: the server ships no
+  // rows, so every filter, column and view below has nothing to operate on and
+  // the summary card replaces them.
+  const registrations = registrationList?.registrations ?? [];
+  const listHidden = registrationList?.hidden === true;
   const myRegistration = myRegQuery.data;
   const form = formQuery.data ?? null;
   const canCheckIn =
@@ -1348,7 +1375,7 @@ function TournamentParticipantsView({ tournament }: Readonly<{ tournament: Tourn
         </AlertDialogContent>
       </AlertDialog>
 
-      {view === "table" && (
+      {!listHidden && view === "table" && (
         <p aria-atomic="true" aria-live="polite" className="sr-only">
           {t("tournamentDetail.participants.resultCount", { count: filtered.length })}
         </p>
@@ -1359,7 +1386,7 @@ function TournamentParticipantsView({ tournament }: Readonly<{ tournament: Tourn
           right (search, division, columns). The switch stays put when the view
           changes — `.filter-search` owns the single `auto` margin between the
           clusters, and a second one would scatter the controls across the bar. */}
-      {!trueEmpty && (
+      {!listHidden && !trueEmpty && (
         <div
           className="filters"
           role="group"
@@ -1473,8 +1500,27 @@ function TournamentParticipantsView({ tournament }: Readonly<{ tournament: Tourn
         </div>
       )}
 
-      {/* Participants list */}
-      {view === "pool" ? (
+      {/* Participants list — or, when the organizer hid it, the only thing the
+          server sent: how many registered and how that field splits by role. */}
+      {listHidden ? (
+        <section
+          aria-label={t("tournamentDetail.participants.hidden.title")}
+          className="relative overflow-hidden rounded-xl border border-[color:var(--aqt-border)] bg-[color:var(--aqt-overlay-1)] p-4 shadow-md backdrop-blur-md sm:p-5"
+        >
+          <div className="mb-3 flex items-center gap-1.5 text-label font-semibold uppercase tracking-label text-[color:var(--aqt-fg-dim)]">
+            <EyeOff aria-hidden className="size-3.5" />
+            {t("tournamentDetail.participants.hidden.title")}
+          </div>
+          <RegistrationSummary
+            total={registrationList?.total ?? 0}
+            roleCounts={registrationList?.role_counts ?? {}}
+            maxParticipants={registrationList?.max_participants}
+          />
+          <p className="mt-3 text-caption text-[color:var(--aqt-fg-faint)]">
+            {t("tournamentDetail.participants.hidden.description")}
+          </p>
+        </section>
+      ) : view === "pool" ? (
         <ParticipantsPool
           registrations={registrations}
           rosterShape={tournament.roster_shape}

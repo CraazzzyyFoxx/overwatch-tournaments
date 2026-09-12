@@ -16,8 +16,7 @@ import RosterSlotGlyph from "@/components/registration/RosterSlotGlyph";
 import TeamName from "@/components/TeamName";
 import { useBracketRoundLabel } from "@/hooks/useBracketRoundLabel";
 import { useMinuteClock } from "@/hooks/useMinuteClock";
-import { normalizePlayerRole, playerRoleSlotCode } from "@/lib/player-role";
-import { ROSTER_SLOT_CODES, type RosterSlotCode } from "@/lib/roster-shape";
+import { ROSTER_SLOT_CODES } from "@/lib/roster-shape";
 import { getStreamStatus, STREAM_STATUS_META } from "@/lib/stream-platform";
 import { tournamentQueryKeys } from "@/lib/tournament-query-keys";
 import { groupTournamentStageFlow } from "@/lib/tournament-stages";
@@ -28,7 +27,6 @@ import registrationService from "@/services/registration.service";
 import teamService from "@/services/team.service";
 import tournamentService from "@/services/tournament.service";
 import type { Encounter } from "@/types/encounter.types";
-import type { Registration } from "@/types/registration.types";
 import type { StreamEntry } from "@/types/stream.types";
 import type { Team } from "@/types/team.types";
 import type { StageSummary, Standings, TournamentStatus } from "@/types/tournament.types";
@@ -51,6 +49,7 @@ import { getBracketRefetchInterval } from "../bracket/bracketData";
 import { buildLiveTeamStreams } from "../bracket/bracketLiveStreams";
 import styles from "../TournamentDetail.module.css";
 import { getPublicPageQueryPresentation } from "./publicPageQueryPresentation";
+import { RegistrationSummary, StatTile } from "./_components/RegistrationSummary";
 
 // ---------------------------------------------------------------------------
 // Which of the three compositions a tournament gets
@@ -201,19 +200,9 @@ function winnerSide(encounter: Encounter): "home" | "away" | null {
   return home > away ? "home" : "away";
 }
 
-/** Registrations per role slot, counted from each entry's primary role. */
-export function countRegistrationRoles(
-  registrations: readonly Registration[]
-): Record<RosterSlotCode, number> {
-  const counts: Record<RosterSlotCode, number> = { tank: 0, dps: 0, support: 0, flex: 0 };
-  for (const registration of registrations) {
-    const roles = registration.roles ?? [];
-    const primary = roles.find((role) => role.is_primary) ?? roles[0];
-    if (!primary) continue;
-    counts[playerRoleSlotCode(normalizePlayerRole(primary.role))] += 1;
-  }
-  return counts;
-}
+/* `countRegistrationRoles` is gone: the split is the server's answer now
+   (`RegistrationListResponse.role_counts`), because a tournament that hides its
+   participants list sends no rows to count. See `RegistrationSummary`. */
 
 /**
  * Calendar days the tournament spans, inclusive. UTC getters on both ends so
@@ -371,35 +360,8 @@ function OverviewStreamCard({
   );
 }
 
-function StatTile({
-  label,
-  value,
-  hint,
-  accent
-}: Readonly<{ label: string; value: string; hint?: string; accent?: string }>) {
-  return (
-    <div className={styles.figure}>
-      <div className={cn(styles.figureLabel, "flex items-center gap-1.5")}>
-        {accent ? (
-          <span aria-hidden className="size-1.5 rounded-full" style={{ background: accent }} />
-        ) : null}
-        {label}
-      </div>
-      <div className={styles.figureValue}>
-        {value}
-        {hint ? <span className={styles.figureHint}>{hint}</span> : null}
-      </div>
-    </div>
-  );
-}
-
-/** The site's role tints (`PlayerRoleIcon` uses the same tokens), keyed by slot code. */
-const ROLE_TINT: Record<RosterSlotCode, string> = {
-  tank: "var(--aqt-tank)",
-  dps: "var(--aqt-damage)",
-  support: "var(--aqt-support)",
-  flex: "var(--aqt-flex)"
-};
+/* `StatTile` and `ROLE_TINT` moved to `_components/RegistrationSummary` so the
+   participants page can render the same registration figures. */
 
 function KeyValue({ term, children }: Readonly<{ term: string; children: React.ReactNode }>) {
   return (
@@ -504,7 +466,10 @@ export default function TournamentOverviewPage({
   const streamsQuery = useTournamentStreamsQuery(variant === "live" ? tournamentId : undefined);
 
   const encounters = encountersQuery.data ? encountersQuery.data.results : [];
-  const registrations = registrationsQuery.data ?? [];
+  const registrationList = registrationsQuery.data ?? null;
+  // Empty whenever the organizer hid the list — the summary below still renders,
+  // because its numbers ride the same envelope rather than these rows.
+  const registrations = registrationList?.registrations ?? [];
   const standings = standingsQuery.data ?? [];
   const teams = teamsQuery.data ? teamsQuery.data.results : [];
 
@@ -589,7 +554,13 @@ export default function TournamentOverviewPage({
     // itself is already resolved by the time this runs.
     data: primary === null ? tournament : primary.data,
     itemCount:
-      primary === null ? 1 : variant === "registration" ? registrations.length : encounters.length,
+      primary === null
+        ? 1
+        : variant === "registration"
+          ? // The count, not the rows: a hidden list ships zero rows and a real
+            // total, and an empty state over "48 registered" would be a lie.
+            (registrationList?.total ?? registrations.length)
+          : encounters.length,
     isPending: primary?.isPending ?? false,
     isError: primary?.isError ?? false,
     isFetching: primary?.isFetching ?? false
@@ -842,7 +813,6 @@ export default function TournamentOverviewPage({
   // ---- A: registration (§3A) ----------------------------------------------
 
   if (variant === "registration") {
-    const roleCounts = countRegistrationRoles(registrations);
     const submitted = [...registrations]
       .filter((registration) => registration.submitted_at !== null)
       .sort((left, right) => String(right.submitted_at).localeCompare(String(left.submitted_at)));
@@ -859,10 +829,6 @@ export default function TournamentOverviewPage({
     // Both aside cards are optional, and an aside column holding nothing reads
     // as a broken layout rather than as restraint.
     const hasAside = linksCard !== null;
-    // The share of each role in the field — what a draft/balancer organizer
-    // reads ("tanks are short"). Role tints, the same dots on the figures above.
-    const roleShares = ROSTER_SLOT_CODES.filter((code) => roleCounts[code] > 0);
-    const roleTotal = roleShares.reduce((sum, code) => sum + roleCounts[code], 0);
 
     const content = (
       <section className={styles.publicDataPage} aria-label={t("common.overview")}>
@@ -893,38 +859,23 @@ export default function TournamentOverviewPage({
                   />
                   <StatTile
                     label={t("tournamentDetail.overview.registration.total")}
-                    value={String(tournament.registrations_count ?? 0)}
+                    value={String(registrationList?.total ?? tournament.registrations_count ?? 0)}
+                    hint={
+                      registrationList?.max_participants
+                        ? `/ ${registrationList.max_participants}`
+                        : undefined
+                    }
                   />
                 </div>
               ) : (
                 <>
-                  <div className="grid gap-2 sm:grid-cols-4">
-                    <StatTile
-                      label={t("tournamentDetail.overview.registration.total")}
-                      value={String(tournament.registrations_count ?? registrations.length)}
-                    />
-                    {roleShares.map((code) => (
-                      <StatTile
-                        key={code}
-                        label={t(`common.roles.${code}`)}
-                        value={String(roleCounts[code])}
-                        accent={ROLE_TINT[code]}
-                      />
-                    ))}
-                  </div>
-                  {roleShares.length > 1 && roleTotal > 0 ? (
-                    <div aria-hidden className="mt-3 flex h-1.5 gap-px overflow-hidden rounded-sm">
-                      {roleShares.map((code) => (
-                        <span
-                          key={code}
-                          style={{
-                            width: `${(roleCounts[code] / roleTotal) * 100}%`,
-                            background: ROLE_TINT[code]
-                          }}
-                        />
-                      ))}
-                    </div>
-                  ) : null}
+                  {/* "Tanks are short" — the same figures the participants page
+                      falls back to when the roster itself is hidden. */}
+                  <RegistrationSummary
+                    total={registrationList?.total ?? registrations.length}
+                    roleCounts={registrationList?.role_counts ?? {}}
+                    maxParticipants={registrationList?.max_participants}
+                  />
                   {latest.length > 0 ? (
                     <p className="mt-2 truncate text-caption text-[color:var(--aqt-fg-faint)]">
                       {t("tournamentDetail.overview.registration.latest")}: {latest.join(" · ")}
