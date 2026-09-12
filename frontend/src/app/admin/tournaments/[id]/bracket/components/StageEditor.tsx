@@ -83,6 +83,7 @@ const SECTION_LABELS: Record<BracketSection, string> = {
 type PendingOp =
   | { kind: "delete-stage" }
   | { kind: "delete-item"; item: StageItem }
+  | { kind: "remove-input"; inputId: number; label: string }
   | { kind: "seed" }
   | { kind: "merge" }
   | { kind: "force-activate" }
@@ -304,6 +305,15 @@ export function StageEditor({
     onError: (error) => notify.apiError(error, { title: "Could not delete this structure item" })
   });
 
+  const removeInputMutation = useMutation({
+    mutationFn: (inputId: number) => adminService.deleteStageItemInput(inputId),
+    onSuccess: () => {
+      setPendingOp(null);
+      onChanged();
+    },
+    onError: (error) => notify.apiError(error, { title: "Could not remove this team slot" })
+  });
+
   const isBracket = BRACKET_STAGE_TYPES.includes(stage.stage_type);
   const canSeed =
     GROUP_STAGE_TYPES.includes(stage.stage_type) && teams.length > 0 && stage.items.length > 0;
@@ -320,6 +330,7 @@ export function StageEditor({
   const pendingByOp: Record<PendingOp["kind"], boolean> = {
     "delete-stage": deleteMutation.isPending,
     "delete-item": deleteItemMutation.isPending,
+    "remove-input": removeInputMutation.isPending,
     seed: seedMutation.isPending,
     merge: mergeMutation.isPending,
     "force-activate": activateAndGenerateMutation.isPending,
@@ -332,6 +343,7 @@ export function StageEditor({
     if (!pendingOp) return;
     if (pendingOp.kind === "delete-stage") deleteMutation.mutate();
     else if (pendingOp.kind === "delete-item") deleteItemMutation.mutate(pendingOp.item.id);
+    else if (pendingOp.kind === "remove-input") removeInputMutation.mutate(pendingOp.inputId);
     else if (pendingOp.kind === "seed") seedMutation.mutate();
     else if (pendingOp.kind === "merge") mergeMutation.mutate();
     else if (pendingOp.kind === "force-activate") activateAndGenerateMutation.mutate(true);
@@ -541,6 +553,9 @@ export function StageEditor({
             encountersHref={encountersHref}
             onChanged={onChanged}
             onRequestDeleteItem={(item) => setPendingOp({ kind: "delete-item", item })}
+            onRequestRemoveInput={(input, label) =>
+              setPendingOp({ kind: "remove-input", inputId: input.id, label })
+            }
           />
         ) : null}
 
@@ -615,6 +630,13 @@ const INTENTS: Record<
       ]
     };
   },
+  "remove-input": (_stage, op) => ({
+    title: "Remove team slot",
+    description: `Remove ${op.kind === "remove-input" ? op.label : "this slot"}? The slot is gone, not emptied: the seeds below it move up, and matches already naming the team keep it.`,
+    confirmLabel: "Remove slot",
+    tone: "danger",
+    cascade: ["This seed slot", "Its place in the generated bracket"]
+  }),
   seed: (stage, _op, { teamCount }) => ({
     title: "Reseed stage from SR",
     description: `Distribute ${teamCount} teams across ${stage.items.length} group(s) of "${stage.name}" with a snake SR draft. Every manual assignment in this stage is cleared first.`,

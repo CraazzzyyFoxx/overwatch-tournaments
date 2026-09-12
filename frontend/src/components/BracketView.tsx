@@ -233,6 +233,7 @@ function addSequentialEdges(
   groups: RoundGroup[],
   nodesById: Map<string, LayoutNode>,
   edges: LayoutEdge[],
+  wiredTargets: ReadonlySet<number>,
   mapper: (matchIndex: number, targetCount: number) => number
 ) {
   for (let groupIndex = 0; groupIndex < groups.length - 1; groupIndex++) {
@@ -243,6 +244,11 @@ function addSequentialEdges(
       const targetIndex = mapper(matchIndex, next.length);
 
       if (targetIndex < 0 || targetIndex >= next.length) {
+        continue;
+      }
+
+      // The match says where its teams come from: never guess over it.
+      if (wiredTargets.has(next[targetIndex].id)) {
         continue;
       }
 
@@ -262,14 +268,25 @@ function addSequentialEdges(
   }
 }
 
+/**
+ * Winner lines from the bracket's own advancement edges.
+ *
+ * Returns the encounters whose feeders are recorded (any role — a lower-bracket
+ * drop is a `loser` edge), so column-index inference can fill in only the
+ * matches that have no provenance of their own, instead of being switched off
+ * for the whole bracket by a single wired match.
+ */
 function addWinnerSourceEdges(
   nodes: LayoutNode[],
   nodesById: Map<string, LayoutNode>,
   edges: LayoutEdge[]
-) {
+): Set<number> {
+  const wired = new Set<number>();
   const seen = new Set<string>();
   for (const node of nodes) {
-    for (const source of node.encounter.sources ?? []) {
+    const sources = node.encounter.sources ?? [];
+    if (sources.length > 0) wired.add(node.encounter.id);
+    for (const source of sources) {
       if (source.role !== "winner") continue;
       const edgeId = `edge-${source.encounter_id}-${node.encounter.id}`;
       if (seen.has(edgeId)) continue;
@@ -283,6 +300,7 @@ function addWinnerSourceEdges(
       });
     }
   }
+  return wired;
 }
 
 // Shared by the upper, lower, and grand-final columns: each pushes one round
@@ -471,22 +489,22 @@ function buildLayout(
 
   const nodesById = new Map(nodes.map((node) => [node.id, node]));
 
-  const recordedSources = nodes.some((node) => (node.encounter.sources?.length ?? 0) > 0);
+  // Recorded advancement edges win; the column-index guesses below only fill in
+  // the matches that carry none (a hand-created encounter, a legacy bracket).
+  const wiredTargets = hasBracketConnections
+    ? addWinnerSourceEdges(nodes, nodesById, edges)
+    : new Set<number>();
 
   if (hasBracketConnections) {
-    if (recordedSources) {
-      addWinnerSourceEdges(nodes, nodesById, edges);
-    } else {
-      addSequentialEdges(upperRounds, nodesById, edges, (matchIndex, targetCount) => {
-        const targetIndex = Math.floor(matchIndex / 2);
-        return targetIndex < targetCount ? targetIndex : -1;
-      });
+    addSequentialEdges(upperRounds, nodesById, edges, wiredTargets, (matchIndex, targetCount) => {
+      const targetIndex = Math.floor(matchIndex / 2);
+      return targetIndex < targetCount ? targetIndex : -1;
+    });
 
-      addSequentialEdges(lowerRounds, nodesById, edges, (matchIndex, targetCount) => {
-        if (targetCount === 0) return -1;
-        return Math.min(matchIndex, targetCount - 1);
-      });
-    }
+    addSequentialEdges(lowerRounds, nodesById, edges, wiredTargets, (matchIndex, targetCount) => {
+      if (targetCount === 0) return -1;
+      return Math.min(matchIndex, targetCount - 1);
+    });
   }
 
   if (isDE && finalRounds.length > 0) {
@@ -494,7 +512,7 @@ function buildLayout(
     const gfMatch = gfGroup?.matches[0];
     const gfNode = gfMatch ? nodesById.get(`match-${gfMatch.id}`) : undefined;
 
-    if (gfNode && !recordedSources) {
+    if (gfNode && gfMatch && !wiredTargets.has(gfMatch.id)) {
       const ubFinalGroup = upperRounds[upperRounds.length - 1];
       const ubFinalMatch = ubFinalGroup?.matches[0];
       const ubFinalNode = ubFinalMatch ? nodesById.get(`match-${ubFinalMatch.id}`) : undefined;
@@ -980,6 +998,7 @@ export function BracketView<M extends BracketMatch>({
           {layout.edges.map((edge) => (
             <path
               key={edge.id}
+              data-edge={edge.id}
               d={edge.path}
               stroke={
                 edge.isCompleted

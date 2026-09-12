@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 //
-// One claim: an assigned team slot can be removed, not only swapped.
+// One claim: an assigned team slot can be removed — through the screen's single
+// confirmation, and never on an empty slot.
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -17,6 +18,7 @@ declare global {
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 const deleteStageItemInput = vi.fn();
+const requestRemoveInput = vi.fn();
 
 vi.mock("@/services/admin.service", () => ({
   default: {
@@ -113,6 +115,7 @@ async function mount(stage: Stage) {
           encountersHref="/admin/encounters"
           onChanged={() => {}}
           onRequestDeleteItem={() => {}}
+          onRequestRemoveInput={(input, label) => requestRemoveInput(input, label)}
         />
       </QueryClientProvider>
     );
@@ -121,19 +124,18 @@ async function mount(stage: Stage) {
 }
 
 beforeEach(() => {
-  deleteStageItemInput.mockReset();
-  deleteStageItemInput.mockResolvedValue(undefined);
+  requestRemoveInput.mockReset();
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
 });
 
 describe("remove assigned team", () => {
-  it("deletes the slot instead of requiring a swap", async () => {
+  it("asks the screen's confirmation before dropping the slot", async () => {
     await mount(groupStage([item(100)]));
 
     const remove = container.querySelector<HTMLButtonElement>(
-      'button[aria-label="Remove team from slot 1 of Group 100"]'
+      'button[aria-label="Remove slot 1 of Group 100"]'
     );
     if (!remove) throw new Error("No remove button on the assigned slot");
 
@@ -142,7 +144,28 @@ describe("remove assigned team", () => {
     });
     await settle();
 
-    expect(deleteStageItemInput).toHaveBeenCalledTimes(1);
-    expect(deleteStageItemInput).toHaveBeenCalledWith(501);
+    // Routed, not executed: a seed is not dropped on a single stray click.
+    expect(deleteStageItemInput).not.toHaveBeenCalled();
+    expect(requestRemoveInput).toHaveBeenCalledTimes(1);
+    expect(requestRemoveInput.mock.calls[0][0]).toMatchObject({ id: 501, slot: 1 });
+  });
+
+  it("offers nothing to remove on an empty slot", async () => {
+    const empty = item(100, {
+      inputs: [
+        {
+          id: 502,
+          stage_item_id: 100,
+          slot: 2,
+          input_type: "empty",
+          team_id: null,
+          source_stage_item_id: null,
+          source_position: null
+        }
+      ]
+    });
+    await mount(groupStage([empty]));
+
+    expect(container.querySelector('button[aria-label="Remove slot 2 of Group 100"]')).toBeNull();
   });
 });
