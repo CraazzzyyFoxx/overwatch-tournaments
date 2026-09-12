@@ -1612,25 +1612,15 @@ class AdminService {
     return response.json();
   }
 
-  async autoWireStage(stageId: number): Promise<Stage> {
-    const response = await apiFetch(`/api/v1/admin/stages/${stageId}/auto-wire`, {
+  /**
+   * Wires the bracket's seeds from a group stage. `sourceStageId` names the
+   * feeding stage — the server cannot infer it when a phase runs several
+   * divisions in parallel, and refuses rather than guessing.
+   */
+  async autoWireStage(stageId: number, sourceStageId?: number): Promise<Stage> {
+    const qs = sourceStageId ? `?source_stage_id=${sourceStageId}` : "";
+    const response = await apiFetch(`/api/v1/admin/stages/${stageId}/auto-wire${qs}`, {
       method: "POST"
-    });
-    return response.json();
-  }
-
-  async wireFromGroups(
-    stageId: number,
-    data: {
-      source_stage_id: number;
-      top: number;
-      top_lb?: number;
-      mode?: "cross" | "snake";
-    }
-  ): Promise<Stage> {
-    const response = await apiFetch(`/api/v1/admin/stages/${stageId}/wire-from-groups`, {
-      method: "POST",
-      body: data
     });
     return response.json();
   }

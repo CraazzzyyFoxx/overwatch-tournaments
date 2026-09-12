@@ -97,7 +97,8 @@ export function GeneralSection({
             onValueChange={(next) => onChange({ order: next ?? 0 })}
           />
           <p className="text-xs text-muted-foreground">
-            Same number = parallel (High and Low both 1). The next number is the next wave.
+            Stages sharing a number run in parallel — give the High and Low divisions the
+            same one. A higher number is a later wave, fed by the ones before it.
           </p>
         </div>
 
@@ -183,25 +184,20 @@ export function SeedingSection({
       GROUP_STAGE_TYPES.includes(candidate.stage_type) &&
       candidate.order < form.order
   );
-  const [sourceId, setSourceId] = useState(() =>
-    sources.length === 1 ? String(sources[0].id) : ""
-  );
+  // Stages arrive async and the phase is editable, so the pick is derived, not
+  // remembered: an unset (or no longer offered) choice falls back to the only
+  // source there is.
+  const [pickedSourceId, setPickedSourceId] = useState("");
+  const sourceId = sources.some((source) => String(source.id) === pickedSourceId)
+    ? pickedSourceId
+    : sources.length === 1
+      ? String(sources[0].id)
+      : "";
+  // How the advancing teams split across upper/lower is the server's rule
+  // (`advance_split`, per-group `advance_count` overrides included); this only
+  // says WHICH stage feeds the bracket.
   const wireMutation = useMutation({
-    mutationFn: (sourceStageId: number) => {
-      const source = stages.find((candidate) => candidate.id === sourceStageId);
-      const advance = source?.advance_count ?? 0;
-      const split =
-        form.stageType === "double_elimination" &&
-        form.splitLowerBracket &&
-        stage.items.some((item) => item.type === "bracket_lower");
-      const topLb = split ? Math.floor(advance / 2) : 0;
-      return adminService.wireFromGroups(stage.id, {
-        source_stage_id: sourceStageId,
-        top: split ? advance - topLb : advance,
-        top_lb: topLb,
-        mode: "snake"
-      });
-    },
+    mutationFn: (sourceStageId: number) => adminService.autoWireStage(stage.id, sourceStageId),
     onSuccess: () => {
       onChanged();
       notify.success("Wired playoff seeds from the selected stage");
@@ -209,7 +205,6 @@ export function SeedingSection({
     onError: (error) =>
       notify.apiError(error, { title: "Could not wire this stage from groups" })
   });
-
 
   // Per-group overrides are stage_item rows, not stage form fields: they PATCH
   // on blur instead of waiting for "Save changes", which is why they carry
@@ -272,7 +267,7 @@ export function SeedingSection({
         <div className="flex flex-col gap-1.5">
           <Label htmlFor={`${ids}-feed`}>Wire seeds from</Label>
           <div className="flex flex-wrap items-center gap-2">
-            <Select value={sourceId} onValueChange={setSourceId}>
+            <Select value={sourceId} onValueChange={setPickedSourceId}>
               <SelectTrigger id={`${ids}-feed`} className="sm:w-[280px]">
                 <SelectValue placeholder="Group stage" />
               </SelectTrigger>

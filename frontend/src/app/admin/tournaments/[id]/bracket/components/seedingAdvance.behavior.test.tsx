@@ -25,12 +25,12 @@ declare global {
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 const updateStageItem = vi.fn();
-const wireFromGroups = vi.fn();
+const autoWireStage = vi.fn();
 
 vi.mock("@/services/admin.service", () => ({
   default: {
     updateStageItem: (...args: unknown[]) => updateStageItem(...args),
-    wireFromGroups: (...args: unknown[]) => wireFromGroups(...args),
+    autoWireStage: (...args: unknown[]) => autoWireStage(...args),
     createStageItem: vi.fn(),
     createStageItemInput: vi.fn(),
     updateStageItemInput: vi.fn()
@@ -197,5 +197,31 @@ describe("parallel division wiring", () => {
 
     expect(container.textContent).toContain("Wire seeds from");
     expect(container.querySelector('[id$="-feed"]')).not.toBeNull();
+  });
+
+  it("hands the server the chosen source and no seeding maths of its own", async () => {
+    // A lone source is preselected, so Wire is actionable on first render even
+    // though the stage list arrives after mount.
+    const groups = groupStage([], { id: 1, name: "Groups", order: 1, advance_count: 4 });
+    const playoff = groupStage([], {
+      id: 20,
+      name: "Playoff",
+      stage_type: "double_elimination",
+      order: 2,
+      split_lower_bracket: true
+    });
+    await mount(playoff, { stages: [groups, playoff] });
+
+    const wire = [...container.querySelectorAll("button")].find(
+      (button) => button.textContent?.trim() === "Wire"
+    );
+    if (!wire) throw new Error("No wire button beside the source picker");
+
+    await act(async () => {
+      wire.click();
+    });
+    await settle();
+
+    expect(autoWireStage).toHaveBeenCalledWith(20, 1);
   });
 });

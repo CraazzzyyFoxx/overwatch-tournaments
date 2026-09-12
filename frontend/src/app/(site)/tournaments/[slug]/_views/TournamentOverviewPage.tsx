@@ -105,12 +105,16 @@ const STAGE_TYPE_LABEL: Record<string, "common.roundRobin" | "common.swiss" | "b
  * Unpublished stages are skipped the way the bracket skips them
  * (`isStageVisibleToViewer`), unless nothing is published at all — an organizer
  * previewing their own tournament still sees which stage is meant.
+ *
+ * A phase running parallel divisions has no single answer, so the lowest id
+ * wins and every card below is titled with that stage's name; the Format card
+ * above lists the whole wave.
  */
 export function pickOverviewStage(
   stages: readonly StageSummary[],
   variant: OverviewVariant
 ): StageSummary | null {
-  const ordered = [...stages].sort((left, right) => left.order - right.order);
+  const ordered = [...stages].sort((left, right) => left.order - right.order || left.id - right.id);
   const visible = ordered.filter((stage) => stage.is_published || stage.is_completed);
   const pool = visible.length > 0 ? visible : ordered;
   if (pool.length === 0) return null;

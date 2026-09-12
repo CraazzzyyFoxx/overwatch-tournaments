@@ -24,9 +24,10 @@ import {
   SelectValue
 } from "@/components/ui/select";
 import { notify } from "@/lib/notify";
-import { nextStageOrder } from "@/lib/tournament-stages";
+import { nextStageOrder, phaseOrderForArrangement } from "@/lib/tournament-stages";
 import { cn } from "@/lib/utils";
 import adminService from "@/services/admin.service";
+import type { Stage, StageType } from "@/types/tournament.types";
 
 import {
   getProgressPercent,
@@ -102,13 +103,14 @@ export function StageList({
   });
 
   const reorderMutation = useMutation({
-    mutationFn: (orderedIds: number[]) =>
-      Promise.all(
-        orderedIds
-          .map((stageId, index) => ({ stageId, index }))
-          .filter(({ stageId, index }) => stages.find((s) => s.id === stageId)?.order !== index)
-          .map(({ stageId, index }) => adminService.updateStage(stageId, { order: index }))
-      ),
+    mutationFn: (arrangement: Stage[]) => {
+      const phases = phaseOrderForArrangement(arrangement);
+      return Promise.all(
+        arrangement
+          .filter((stage) => phases.get(stage.id) !== stage.order)
+          .map((stage) => adminService.updateStage(stage.id, { order: phases.get(stage.id) ?? stage.order }))
+      );
+    },
     onSuccess: () => {
       setPendingOrder(null);
       onChanged();
@@ -118,7 +120,6 @@ export function StageList({
       notify.apiError(error, { title: "Could not reorder the stages" });
     }
   });
-  const ordersTied = new Set(stages.map((stage) => stage.order)).size !== stages.length;
 
 
   const ordered = useMemo(() => {
@@ -164,10 +165,8 @@ export function StageList({
             items={ordered}
             getId={(stage) => String(stage.id)}
             onReorder={(next) => {
-              if (ordersTied) return;
-              const ids = next.map((stage) => stage.id);
-              setPendingOrder(ids);
-              reorderMutation.mutate(ids);
+              setPendingOrder(next.map((stage) => stage.id));
+              reorderMutation.mutate(next);
             }}
           >
             {(stage) => (
@@ -181,7 +180,7 @@ export function StageList({
             )}
           </SortableRows>
           <p className="border-t border-border px-4 py-2 text-xs text-muted-foreground">
-            Same phase number = parallel. Drag sequences unique phases top to bottom.
+            Drag to move a stage between phases · stages sharing a number run in parallel
           </p>
         </>
       )}
@@ -308,7 +307,11 @@ function StageCard({
     >
       <div className="flex flex-col items-center gap-1 pt-0.5">
         <SortableGrip handleProps={handleProps} label={`Reorder ${stage.name}`} />
-        <span aria-hidden className="font-mono text-xs tabular-nums text-muted-foreground">
+        <span
+          title={`Phase ${stage.order}`}
+          className="font-mono text-xs tabular-nums text-muted-foreground"
+        >
+          <span className="sr-only">Phase </span>
           {stage.order}
         </span>
       </div>

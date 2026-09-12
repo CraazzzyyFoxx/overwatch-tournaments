@@ -114,18 +114,35 @@ async def resolve_seeds(session: AsyncSession, encounter: models.Encounter) -> S
     home_position: int | None = None
     away_position: int | None = None
     if encounter.stage_id is not None:
-        current_order = await session.scalar(select(models.Stage.order).where(models.Stage.id == encounter.stage_id))
+        # The stage that actually feeds this bracket: follow the TENTATIVE
+        # inputs' ``source_stage_item_id`` back to its stage. Plain stage order
+        # cannot answer it once a phase runs parallel divisions — "the earlier
+        # stage" is then two stages, only one of which holds these teams.
         previous_stage_id = None
-        if current_order is not None:
+        if encounter.stage_item_id is not None:
             previous_stage_id = await session.scalar(
-                select(models.Stage.id)
-                .where(
-                    models.Stage.tournament_id == encounter.tournament_id,
-                    models.Stage.order < current_order,
+                select(models.StageItem.stage_id)
+                .join(
+                    models.StageItemInput,
+                    models.StageItemInput.source_stage_item_id == models.StageItem.id,
                 )
-                .order_by(models.Stage.order.desc())
+                .where(models.StageItemInput.stage_item_id == encounter.stage_item_id)
                 .limit(1)
             )
+        if previous_stage_id is None:
+            current_order = await session.scalar(
+                select(models.Stage.order).where(models.Stage.id == encounter.stage_id)
+            )
+            if current_order is not None:
+                previous_stage_id = await session.scalar(
+                    select(models.Stage.id)
+                    .where(
+                        models.Stage.tournament_id == encounter.tournament_id,
+                        models.Stage.order < current_order,
+                    )
+                    .order_by(models.Stage.order.desc(), models.Stage.id.desc())
+                    .limit(1)
+                )
         if previous_stage_id is not None:
             rows = await session.execute(
                 select(models.Standing.team_id, sa.func.min(models.Standing.position))

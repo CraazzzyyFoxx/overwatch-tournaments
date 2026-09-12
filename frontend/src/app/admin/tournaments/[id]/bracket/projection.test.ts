@@ -102,6 +102,31 @@ describe("projectedBracketSeedCounts", () => {
     });
   });
 
+  test("projects nothing from a phase running two divisions, as the server refuses to", () => {
+    // Low and High share phase 1: neither is "the" preceding stage, so the
+    // preview may not pick one — guessing here showed a bracket size that the
+    // wiring would never produce.
+    const low = stage({ id: 1, order: 1, stage_type: "round_robin", advance_count: 4, items: [item(10, "group")] });
+    const high = stage({ id: 2, order: 1, stage_type: "round_robin", advance_count: 4, items: [item(20, "group")] });
+    const playoff = stage({ id: 3, order: 2, stage_type: "single_elimination" });
+
+    expect(projectedBracketSeedCounts(playoff, false, [low, high, playoff])).toEqual({
+      upper: 0,
+      lower: 0
+    });
+  });
+
+  test("a sibling bracket in the same phase is not a source either", () => {
+    const groups = stage({ id: 1, order: 1, stage_type: "swiss", advance_count: 2, items: [item(10, "group")] });
+    const sibling = stage({ id: 2, order: 2, stage_type: "single_elimination" });
+    const playoff = stage({ id: 3, order: 2, stage_type: "single_elimination" });
+
+    expect(projectedBracketSeedCounts(playoff, false, [groups, sibling, playoff])).toEqual({
+      upper: 2,
+      lower: 0
+    });
+  });
+
   test("splits EACH group's share for a split DE with a dedicated lower item", () => {
     const groups = stage({
       id: 1,

@@ -342,6 +342,32 @@ class GenerateEncountersGuardTests(IsolatedAsyncioTestCase):
         self.assertTrue(all(e.home_team_id is None for e in existing))
 
 
+class ActivateStageParallelPhaseTests(IsolatedAsyncioTestCase):
+    """Activating a stage moves the tournament to that stage's PHASE.
+
+    Stages sharing an ``order`` (the Low and High divisions of one wave) run at
+    the same time, so activation may only clear ``is_active`` on OTHER phases —
+    clearing it per-stage made the second division switch the first one off.
+    """
+
+    async def test_activation_leaves_the_phase_siblings_active(self) -> None:
+        stage = SimpleNamespace(id=5, tournament_id=1, order=2, items=[], is_active=False, is_published=False)
+        statements: list = []
+        session = SimpleNamespace(
+            execute=AsyncMock(side_effect=lambda statement, *_a, **_kw: statements.append(statement)),
+            flush=AsyncMock(),
+        )
+
+        with patch.object(stage_service.stage_service, "_publish_structure_changed", AsyncMock()):
+            await stage_service.stage_service.activate_stage(session, 5, commit=False, stage=stage)
+
+        self.assertTrue(stage.is_active)
+        self.assertTrue(stage.is_published)
+        sql = str(statements[0].compile(compile_kwargs={"literal_binds": True}))
+        self.assertIn("!= 2", sql)
+        self.assertNotIn("!= 5", sql)
+
+
 class DeactivateStageGuardTests(IsolatedAsyncioTestCase):
     async def test_reverts_an_untouched_stage_to_draft(self) -> None:
         stage = SimpleNamespace(id=5, tournament_id=1, is_active=True, is_published=True)

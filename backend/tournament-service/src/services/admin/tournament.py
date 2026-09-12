@@ -439,38 +439,49 @@ class AdminTournamentService:
         if target_status != TournamentStatus.LIVE:
             return
 
-        stages = sorted(getattr(tournament, "stages", []) or [], key=lambda stage: stage.order)
         group_stages = [
             stage
-            for stage in stages
+            for stage in getattr(tournament, "stages", []) or []
             if stage.stage_type in GROUP_STAGE_TYPES and not getattr(stage, "is_completed", False)
         ]
         if not group_stages:
             return
 
-        active_stage = next((stage for stage in group_stages if getattr(stage, "is_active", False)), None)
-        target_stage = active_stage or group_stages[0]
-        has_encounters = await self._stage_has_encounters(session, target_stage.id)
+        # Stages sharing an ``order`` are one phase and run in parallel (Low /
+        # High divisions), so the whole wave starts, not just its first stage.
+        phase = min(stage.order for stage in group_stages)
+        wave = [stage for stage in group_stages if stage.order == phase]
+        active = [stage for stage in wave if getattr(stage, "is_active", False)]
+        for stage in active or wave:
+            await self._auto_start_stage(session, tournament, stage)
 
-        if not active_stage:
-            if not has_encounters and not _stage_has_ready_inputs(target_stage):
+    async def _auto_start_stage(
+        self,
+        session: AsyncSession,
+        tournament: models.Tournament,
+        stage: models.Stage,
+    ) -> None:
+        has_encounters = await self._stage_has_encounters(session, stage.id)
+
+        if not getattr(stage, "is_active", False):
+            if not has_encounters and not _stage_has_ready_inputs(stage):
                 return
             if has_encounters:
-                await stage_service.activate_stage(session, target_stage.id)
+                await stage_service.activate_stage(session, stage.id)
             else:
                 await request_bracket_job(
                     session,
                     tournament_id=tournament.id,
-                    stage_id=target_stage.id,
+                    stage_id=stage.id,
                     operation="activate_and_generate",
                 )
                 return
 
-        if not has_encounters and _stage_has_ready_inputs(target_stage):
+        if not has_encounters and _stage_has_ready_inputs(stage):
             await request_bracket_job(
                 session,
                 tournament_id=tournament.id,
-                stage_id=target_stage.id,
+                stage_id=stage.id,
                 operation="generate_stage",
             )
 
