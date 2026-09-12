@@ -15,16 +15,8 @@ tests are about the Python merge logic, not the queries underneath it.
 
 from __future__ import annotations
 
-import os
 from typing import Any
 from unittest import IsolatedAsyncioTestCase
-
-os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
-os.environ.setdefault("POSTGRES_USER", "postgres")
-os.environ.setdefault("POSTGRES_PASSWORD", "postgres")
-os.environ.setdefault("POSTGRES_DB", "postgres")
-os.environ.setdefault("POSTGRES_HOST", "localhost")
-os.environ.setdefault("POSTGRES_PORT", "5432")
 
 from shared.core import enums  # noqa: E402
 from shared.repository.stream import SelfDeclaredChannelRow, VerifiedChannelRow  # noqa: E402

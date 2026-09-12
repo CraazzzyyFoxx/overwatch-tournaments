@@ -13,18 +13,10 @@ Each test here stands for a failure that is invisible in production:
 
 from __future__ import annotations
 
-import os
 from typing import Any
 from unittest import IsolatedAsyncioTestCase
 
 import httpx
-
-os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
-os.environ.setdefault("POSTGRES_USER", "postgres")
-os.environ.setdefault("POSTGRES_PASSWORD", "postgres")
-os.environ.setdefault("POSTGRES_DB", "postgres")
-os.environ.setdefault("POSTGRES_HOST", "localhost")
-os.environ.setdefault("POSTGRES_PORT", "5432")
 
 from src.services import helix  # noqa: E402
 from src.services.state import TOKEN_KEY  # noqa: E402

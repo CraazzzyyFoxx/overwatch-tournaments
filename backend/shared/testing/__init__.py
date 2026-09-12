@@ -5,9 +5,9 @@ and its own ``Settings`` (pydantic-settings, extending
 ``shared.core.config.BaseServiceSettings``). Before this module existed, every
 service re-derived the same three things by hand, in nearly every test file:
 
-1. **env** (:mod:`shared.testing.env`) -- a block of
-   ``os.environ.setdefault(...)`` calls so ``Settings()`` can construct
-   without a real ``.env`` file.
+1. **env** (:mod:`shared.testing.env`) -- load a local ``.env`` if present,
+   then the committed ``testing/test.env`` dummy so ``Settings()`` can
+   construct. Process environment always wins.
 2. **cache** (:mod:`shared.testing.cache`) -- cashews has no default backend
    and raises ``NotConfiguredError`` until something calls ``cache.setup(...)``
    in-process.
@@ -22,7 +22,13 @@ re-implement these in individual test modules.
 from __future__ import annotations
 
 from shared.testing.cache import configure_test_cache
-from shared.testing.db import PROTECTED_DB_NAMES, db_session, real_db_sessionmaker
+from shared.testing.db import (
+    PROTECTED_DB_NAMES,
+    create_test_async_engine,
+    db_session,
+    ensure_test_postgres,
+    real_db_sessionmaker,
+)
 from shared.testing.env import apply_test_env_defaults
 from shared.testing.factories import division_grid, division_tier
 from shared.testing.sqlite_dialect import install_postgres_type_shims
@@ -31,9 +37,11 @@ __all__ = (
     "PROTECTED_DB_NAMES",
     "apply_test_env_defaults",
     "configure_test_cache",
+    "create_test_async_engine",
     "db_session",
     "division_grid",
     "division_tier",
+    "ensure_test_postgres",
     "install_postgres_type_shims",
     "real_db_sessionmaker",
 )

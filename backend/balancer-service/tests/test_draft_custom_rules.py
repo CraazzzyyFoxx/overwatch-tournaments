@@ -16,7 +16,7 @@ for candidate in (str(REPO_BACKEND_ROOT), str(BALANCER_SERVICE_ROOT)):
         sys.path.insert(0, candidate)
 
 import sqlalchemy as sa
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from shared.core.enums import DraftFormat, DraftPickStatus, DraftPlayerStatus, DraftStatus
 from shared.core.errors import ApiHTTPException
@@ -25,6 +25,7 @@ from shared.models.balancer.draft import DraftPick
 from shared.models.registration.registration import BalancerRegistration, BalancerRegistrationRole
 from shared.models.tenancy.workspace import Workspace
 from shared.models.tournament import Tournament
+from shared.testing import create_test_async_engine  # noqa: E402
 from src import models
 from src.domain.draft.entities import PoolSeat
 from src.services.draft import lifecycle, selection
@@ -33,15 +34,6 @@ from src.services.draft import lifecycle, selection
 # `role_targets_for_team_size(5)` resolved to 1 tank / 2 dps / 2 support, and
 # `draft_rounds` derives the same 4 rounds.
 _SHAPE = parse_roster_slots({"tank": 1, "dps": 2, "support": 2})
-
-
-def _async_url() -> str:
-    u = os.environ.get("POSTGRES_USER", "postgres")
-    p = os.environ.get("POSTGRES_PASSWORD", "postgres")
-    h = os.environ.get("POSTGRES_HOST", "localhost")
-    port = os.environ.get("POSTGRES_PORT", "5432")
-    db = os.environ.get("POSTGRES_DB", "postgres")
-    return f"postgresql+psycopg://{u}:{p}@{h}:{port}/{db}"
 
 
 _UNIQUE = 0
@@ -55,16 +47,7 @@ def _uniq() -> int:
 
 class DraftCustomRulesTests(IsolatedAsyncioTestCase):
     async def asyncSetUp(self) -> None:
-        self.engine = create_async_engine(_async_url(), connect_args={"connect_timeout": 30})
-        try:
-            async with self.engine.connect() as c:
-                db = (await c.execute(sa.text("select current_database()"))).scalar()
-                if db == "anak_v5":
-                    self.skipTest("refusing to run integration tests against production")
-        except Exception as exc:
-            await self.engine.dispose()
-            self.skipTest(f"database unreachable: {exc}")
-
+        self.engine = create_test_async_engine()
         self.Session = async_sessionmaker(self.engine, expire_on_commit=False)
         self._suffix = f"draft-custom-{os.getpid()}-{_uniq()}"
         async with self.Session() as s:

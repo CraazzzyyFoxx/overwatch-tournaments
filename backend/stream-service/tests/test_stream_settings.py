@@ -14,16 +14,8 @@ Two things that break silently in production if they drift:
 
 from __future__ import annotations
 
-import os
 import re
 from pathlib import Path
-
-os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
-os.environ.setdefault("POSTGRES_USER", "postgres")
-os.environ.setdefault("POSTGRES_PASSWORD", "postgres")
-os.environ.setdefault("POSTGRES_DB", "postgres")
-os.environ.setdefault("POSTGRES_HOST", "localhost")
-os.environ.setdefault("POSTGRES_PORT", "5432")
 
 from src.core.config import Settings  # noqa: E402
 

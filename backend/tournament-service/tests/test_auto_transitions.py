@@ -19,7 +19,6 @@ import asyncio
 import os
 import sys
 import uuid
-from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
@@ -45,18 +44,16 @@ sys.path.insert(0, str(backend_root / "tournament-service"))
 
 import pytest  # noqa: E402
 import sqlalchemy as sa  # noqa: E402
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine  # noqa: E402
-from sqlalchemy.pool import NullPool  # noqa: E402
 
 from shared.core import enums  # noqa: E402
 from shared.models.tenancy.workspace import Workspace  # noqa: E402
 from shared.models.tournament import Tournament, TournamentPhaseSchedule  # noqa: E402
 from shared.services.division_grid.access import get_default_division_grid_version_id  # noqa: E402
+from shared.testing import real_db_sessionmaker as _db_sessions  # noqa: E402
 from src.services.admin import tournament as admin_tournament_service  # noqa: E402
 from src.services.tournament import auto_transitions  # noqa: E402
 
 NOW = datetime.now(UTC)
-
 
 # ─── Mocked control-flow tests (no DB required) ──────────────────────────────
 
@@ -212,32 +209,6 @@ def test_run_due_transitions_opens_registration_once_the_form_exists() -> None:
 
 
 # ─── Real-DB integration tests ───────────────────────────────────────────────
-
-
-@asynccontextmanager
-async def _db_sessions():
-    """Yield a fresh per-test session factory, or skip if the DB is unreachable.
-
-    Pooled asyncpg connections are bound to the event loop that created them,
-    so the module-global engine cannot be shared across ``asyncio.run()``
-    calls: each test gets its own NullPool engine, created and disposed inside
-    the test's single event loop. Probes with ``select current_database()``
-    and hard-guards against ever running against a production database.
-    """
-    from src.core import config
-
-    engine = create_async_engine(config.settings.db_url_asyncpg, poolclass=NullPool)
-    try:
-        try:
-            async with engine.connect() as conn:
-                dbname = (await conn.execute(sa.text("select current_database()"))).scalar()
-        except Exception as exc:  # noqa: BLE001 -- any connect failure => skip, not fail
-            pytest.skip(f"database unreachable: {exc}")
-        if dbname in {"anak_v5", "anak_prod"}:
-            pytest.skip("refusing to run integration tests against production")
-        yield async_sessionmaker(engine, expire_on_commit=False)
-    finally:
-        await engine.dispose()
 
 
 async def _make_workspace(session) -> Workspace:

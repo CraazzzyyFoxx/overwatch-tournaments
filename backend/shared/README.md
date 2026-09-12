@@ -79,7 +79,7 @@ System overview (processes, RabbitMQ, gateway, deployment):
 | `observability/` | Loguru setup, correlation ids, OTel tracing and SQLAlchemy instrumentation, Sentry, dependency health checks, worker metrics (`start_worker_metrics_server`), and `make_rabbit_broker` — which always prepends `DeadlineDropMiddleware` to a broker's middleware stack | Business metrics; those are counters next to the code that moves them |
 | `clients/` | External-API clients with two or more consumers: `ChallongeClient`, `S3Client`, `ResilientHttpClient`, `CircuitBreaker` | Constructing them from settings — that is one line in the service's `src/clients/<name>.py` |
 | `balancer/` | The `BalancerAlgorithm` protocol and its IO types (`PlayerInput`, `RoleMask`, `BalanceOutput`, …), so a caller can depend on a balancer without importing one | Any concrete balancing algorithm |
-| `testing/` | pytest scaffolding every service's `conftest.py` imports: env defaults so `Settings()` constructs, cashews backend setup, a real-Postgres session that skips cleanly and refuses production databases, factories, SQLite dialect shims | Service-specific fixtures |
+| `testing/` | pytest scaffolding every service's `conftest.py` imports: dotenv load (local `.env` then committed `testing/test.env`) so `Settings()` constructs, cashews backend setup, a real-Postgres session that probes with a 2s timeout (or starts `docker-compose.test.yml` on the dummy DSN), skips cleanly, and refuses production databases, factories, SQLite dialect shims | Service-specific fixtures |
 | `tests/` | This package's own suite (84 test modules) covering shared services, repositories and domain logic | — |
 
 Five flat modules sit at the package root and predate the subpackage split:

@@ -15,18 +15,10 @@ The four things that go wrong here are all invisible in a happy-path test:
 from __future__ import annotations
 
 import json
-import os
 from dataclasses import dataclass
 from typing import Any
 from unittest import IsolatedAsyncioTestCase
 from unittest.mock import patch
-
-os.environ.setdefault("REDIS_URL", "redis://localhost:6379/0")
-os.environ.setdefault("POSTGRES_USER", "postgres")
-os.environ.setdefault("POSTGRES_PASSWORD", "postgres")
-os.environ.setdefault("POSTGRES_DB", "postgres")
-os.environ.setdefault("POSTGRES_HOST", "localhost")
-os.environ.setdefault("POSTGRES_PORT", "5432")
 
 from shared.schemas.settings import StreamCollectionConfig  # noqa: E402
 from shared.services.realtime import Resource, Scope  # noqa: E402

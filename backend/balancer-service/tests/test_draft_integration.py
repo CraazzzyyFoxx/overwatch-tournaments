@@ -25,7 +25,7 @@ for candidate in (str(REPO_BACKEND_ROOT), str(BALANCER_SERVICE_ROOT)):
 
 
 import sqlalchemy as sa  # noqa: E402
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine  # noqa: E402
+from sqlalchemy.ext.asyncio import async_sessionmaker  # noqa: E402
 
 from shared.core.enums import (  # noqa: E402
     DraftPickStatus,
@@ -45,6 +45,7 @@ from shared.models.registration.registration import (  # noqa: E402
 )
 from shared.models.tenancy.workspace import Workspace, WorkspaceMember  # noqa: E402
 from shared.models.tournament import Tournament  # noqa: E402
+from shared.testing import create_test_async_engine  # noqa: E402
 from src import models  # noqa: E402
 from src.domain.draft.entities import PoolSeat  # noqa: E402
 from src.services.draft import board as draft_board  # noqa: E402
@@ -61,15 +62,6 @@ from src.services.draft.rosters import draft_rosters  # noqa: E402
 _SHAPE = parse_roster_slots({"tank": 1, "dps": 2})
 
 
-def _async_url() -> str:
-    u = os.environ.get("POSTGRES_USER", "postgres")
-    p = os.environ.get("POSTGRES_PASSWORD", "postgres")
-    h = os.environ.get("POSTGRES_HOST", "localhost")
-    port = os.environ.get("POSTGRES_PORT", "5432")
-    db = os.environ.get("POSTGRES_DB", "postgres")
-    return f"postgresql+psycopg://{u}:{p}@{h}:{port}/{db}"
-
-
 _UNIQUE = 0
 
 
@@ -81,16 +73,7 @@ def _uniq() -> int:
 
 class DraftIntegrationTests(IsolatedAsyncioTestCase):
     async def asyncSetUp(self) -> None:
-        self.engine = create_async_engine(_async_url(), connect_args={"connect_timeout": 30})
-        try:
-            async with self.engine.connect() as c:
-                db = (await c.execute(sa.text("select current_database()"))).scalar()
-                if db == "anak_v5":  # hard guard: never run against prod
-                    self.skipTest("refusing to run integration tests against production anak_v5")
-        except Exception as exc:  # noqa: BLE001
-            await self.engine.dispose()
-            self.skipTest(f"database unreachable: {exc}")
-
+        self.engine = create_test_async_engine()
         self.Session = async_sessionmaker(self.engine, expire_on_commit=False)
         self._suffix = f"draft-it-{os.getpid()}-{_uniq()}"
         async with self.Session() as s:
