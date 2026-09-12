@@ -103,7 +103,11 @@ curl -sX POST -H 'Cookie: owtdev_refresh_token=x' https://dev.owt.craazzzyyfoxx.
   `APP_BIND=127.0.0.1`, `SITE_URL`, `SITE_NAME`, `PLATFORM_ZONE`, `COOKIE_PREFIX=owtdev`,
   `TRACING_ENABLED=false`,
   `SENTRY_ENVIRONMENT=development`, empty `NEXT_PUBLIC_GA_ID`/`NEXT_PUBLIC_YM_ID`,
-  `ANALYTICS_WORKER_CPUS=3`, `ANALYTICS_WORKER_MEMORY=3G`).
+  `ANALYTICS_WORKER_CPUS=3`, `ANALYTICS_WORKER_MEMORY=3G`, and
+  `NEXT_PUBLIC_DISCORD_CLIENT_ID` — the **dev** bot's application id, i.e. the same value as
+  `DISCORD_CLIENT_ID` in `backend/env/auth.env`, never production's; it is baked into the
+  frontend bundle as the `client_id` of the "Add bot to server" link, so pointing it at
+  production's app would invite production's bot).
 - `backend/env/*.env` — from the `.example` files, with `PLATFORM_ZONE`, `PROJECT_URL`,
   `CORS_ORIGINS`, `GATEWAY_WS_ALLOWED_ORIGINS` and `OAUTH_REDIRECT` on the dev host,
   `SESSION_COOKIE_PREFIX=owtdev` in `gateway.env`, a
