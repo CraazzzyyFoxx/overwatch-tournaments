@@ -1107,7 +1107,11 @@ export function BracketView<M extends BracketMatch>({
           role="dialog", aria-modal, a focus trap, focus restore on close and
           scroll locking. Escape came for free there; nothing else did. */}
       <Dialog open={isFullscreen} onOpenChange={setIsFullscreen}>
-        <DialogContent className="left-0 top-0 flex h-screen w-screen max-w-none translate-x-0 translate-y-0 flex-col gap-0 rounded-none border-none bg-[color:var(--aqt-bg)] p-6">
+        {/* `max-h-screen`: a deliberate edge-to-edge surface, so it replaces the
+            primitive's viewport height cap instead of sitting 2rem short of the
+            bottom. (`max-h-none` would not: tailwind-merge v3 does not know that
+            class, so both caps would survive into the class list.) */}
+        <DialogContent className="left-0 top-0 flex h-screen max-h-screen w-screen max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none border-none bg-[color:var(--aqt-bg)] p-6">
           <DialogHeader className="mb-4 flex-row items-start justify-between gap-4 space-y-0 border-b border-[color:var(--aqt-border)] pb-3 pr-12 text-left">
             <div>
               <DialogTitle className="text-xl font-bold uppercase tracking-wider text-[color:var(--aqt-fg)]">
