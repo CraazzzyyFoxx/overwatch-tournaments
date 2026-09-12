@@ -64,6 +64,17 @@ describe("bracket view helpers", () => {
     expect(getRoundSectionMatchCapacity(rounds)).toBe(4);
   });
 
+  it("orders matches in a round by id, not stage_item_id", () => {
+    const rounds = buildRoundGroups([
+      { ...createEncounter(30, 2), stage_item_id: 1 },
+      { ...createEncounter(10, 2), stage_item_id: 1 },
+      { ...createEncounter(20, 2), stage_item_id: 1 }
+    ]);
+
+    expect(rounds[0]?.matches.map((match) => match.id)).toEqual([10, 20, 30]);
+  });
+
+
   it("shows loser source hints for lower bracket slots in double elimination", () => {
     const encounters = [
       createEncounter(1, 1),

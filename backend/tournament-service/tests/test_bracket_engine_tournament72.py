@@ -14,13 +14,10 @@ tournament.stage_item_input, tournament.encounter, tournament.standing):
   "tiebreak_order": ["points", "head_to_head", "median_buchholz",
   "score_differential", "match_wins", "buchholz", "manual_override"]}``.
 
-The tests replay the recorded results through the bracket engine
-(``generate_bracket`` + advancement edges) and through the standings
-calculators, and assert that the engine reproduces the production bracket
-history and final standings exactly. They also verify that different
-``tiebreak_order`` parameter sets rank the same results differently, and
-that concurrent result editing by several participants (both captains, an
-admin) is serialised by the row lock + result-status state machine.
+The tests lock group-stage ranking, playoff seed pairings, standings
+calculators, and concurrent result editing. Playoff later-round pairing is
+cross-drop (not a replay of the production same-half drops).
+
 """
 
 from __future__ import annotations
@@ -160,21 +157,6 @@ GROUP_B_PROD_ORDER = [2071, 2068, 2060, 2058, 2062, 2063, 2065, 2066, 2059, 2053
 PLAYOFF_UB_SEEDS = [2071, 2069, 2068, 2055]  # litnik, Averet, Rasetsu, zMize
 PLAYOFF_LB_SEEDS = [2067, 2058, 2060, 2056]  # Scorpion, TenYokai, vac3x, HOTUKEV
 
-# Recorded playoff results as (winner_id, winner_score, loser_score) per
-# matchup, in chronological order (encounters 5651–5660). The Averet–litnik
-# pair occurs twice: UB Final (litnik 2:0) and Grand Final (Averet 3:0).
-PLAYOFF_RESULTS: dict[frozenset[int], list[tuple[int, int, int]]] = {
-    frozenset({2071, 2055}): [(2071, 2, 1)],
-    frozenset({2069, 2068}): [(2069, 2, 0)],
-    frozenset({2067, 2058}): [(2067, 2, 0)],
-    frozenset({2060, 2056}): [(2060, 2, 0)],
-    frozenset({2069, 2071}): [(2071, 2, 0), (2069, 3, 0)],
-    frozenset({2067, 2055}): [(2055, 2, 0)],
-    frozenset({2060, 2068}): [(2060, 2, 1)],
-    frozenset({2055, 2060}): [(2060, 2, 0)],
-    frozenset({2060, 2069}): [(2069, 2, 1)],
-}
-
 # Production bracket history: {round: set of matchups} (stage 175).
 PLAYOFF_PROD_MATCHES = {
     1: {frozenset({2071, 2055}), frozenset({2069, 2068})},
@@ -253,19 +235,6 @@ def _simulate_bracket(skeleton: BracketSkeleton, decide) -> list[SimpleNamespace
             slots[edge.target_local_id][edge.target_slot] = winner if edge.role == "winner" else loser
     return encounters
 
-
-def _recorded_result(results: dict[frozenset[int], list[tuple[int, int, int]]]):
-    """Decide function replaying recorded results; repeated matchups are
-    consumed chronologically (UB Final before Grand Final)."""
-    remaining = {key: list(games) for key, games in results.items()}
-
-    def decide(home: int, away: int) -> tuple[int, int]:
-        winner, winner_score, loser_score = remaining[frozenset({home, away})].pop(0)
-        if winner == home:
-            return winner_score, loser_score
-        return loser_score, winner_score
-
-    return decide
 
 
 def _stage(stage_type, settings_json: dict | None) -> object:
@@ -423,8 +392,12 @@ class SwissRoundGenerationTournament72Tests(TestCase):
 
 
 class DoubleEliminationPlayoffTournament72Tests(TestCase):
-    """Engine skeleton + advancement edges + recorded results must reproduce
-    the production playoff history and the production final standings."""
+    """Playoff skeleton shape and seed pairings for tournament 72.
+
+    Later-round LB pairing used to follow same-half drops; cross-drop changed
+    that, so production history is not replayed through the generator. Standings
+    still lock the recorded games.
+    """
 
     def _skeleton(self) -> BracketSkeleton:
         return generate_bracket(
@@ -459,21 +432,26 @@ class DoubleEliminationPlayoffTournament72Tests(TestCase):
             {frozenset({p.home_team_id, p.away_team_id}) for p in by_round[-1]},
         )
 
-    def test_replay_reproduces_production_history(self) -> None:
-        encounters = _simulate_bracket(self._skeleton(), _recorded_result(PLAYOFF_RESULTS))
-
-        played = defaultdict(set)
-        for encounter in encounters:
-            played[encounter.round].add(frozenset({encounter.home_team_id, encounter.away_team_id}))
-        self.assertEqual(PLAYOFF_PROD_MATCHES, dict(played))
-
-        # Grand Final: litnik (UB champion, home) 0:3 Averet (LB champion).
+    def test_advancement_fills_every_slot(self) -> None:
+        encounters = _simulate_bracket(self._skeleton(), lambda home, away: (2, 0))
+        self.assertEqual(10, len(encounters))
         grand_final = next(e for e in encounters if e.round == 3)
-        self.assertEqual((2071, 2069), (grand_final.home_team_id, grand_final.away_team_id))
-        self.assertEqual((0, 3), (grand_final.home_score, grand_final.away_score))
+        self.assertIsNotNone(grand_final.home_team_id)
+        self.assertIsNotNone(grand_final.away_team_id)
 
     def test_standings_match_production(self) -> None:
-        encounters = _simulate_bracket(self._skeleton(), _recorded_result(PLAYOFF_RESULTS))
+        encounters = [
+            _encounter(2071, 2055, 2, 1, 1),
+            _encounter(2069, 2068, 2, 0, 1),
+            _encounter(2071, 2069, 2, 0, 2),
+            _encounter(2071, 2069, 0, 3, 3),
+            _encounter(2067, 2058, 2, 0, -1),
+            _encounter(2060, 2056, 2, 0, -1),
+            _encounter(2067, 2055, 0, 2, -2),
+            _encounter(2060, 2068, 2, 1, -2),
+            _encounter(2055, 2060, 0, 2, -3),
+            _encounter(2060, 2069, 1, 2, -4),
+        ]
         calculator = standings_service.PLAYOFF_CALCULATORS[StageType.DOUBLE_ELIMINATION]
         rows = {row.id: row for row in calculator(encounters)}
 
@@ -485,6 +463,7 @@ class DoubleEliminationPlayoffTournament72Tests(TestCase):
                 (row.ranking, row.wins, row.loses, row.matches),
                 f"team {team_id}",
             )
+
 
 
 # ---------------------------------------------------------------------------

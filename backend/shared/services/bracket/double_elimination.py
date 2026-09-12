@@ -17,9 +17,9 @@ they can never play.
 Returns a :class:`BracketSkeleton` with complete advancement edges:
 - Every UB match produces an edge (winner → next UB match).
 - Every UB loser produces an edge to the appropriate LB match
-  ("cross-drop" pattern: loser of UB R1 match k drops to LB R1, loser of
-  UB R2 match k drops to LB R2, etc.) — or, when the LB slot it would have
-  played in is empty, to the first LB match that has an opponent for it.
+  (cross-drop: dropouts are reversed so a loser does not immediately
+  rematch the opponent that just beat them) — or, when the LB slot it
+  would have played in is empty, to the first LB match that has an opponent.
 - LB reduction rounds produce winner-edges to the next LB round.
 - UB final and LB final both feed the Grand Final.
 
@@ -167,9 +167,9 @@ def generate(
     lb_round += 1
 
     for round_num in range(dropout_start, upper_rounds + 1):
-        # Dropout round: each surviving LB slot meets the loser of the matching
-        # upper-bracket match.
-        dropouts = ub_losers[round_num - 1]
+        # Cross-drop: reverse so the loser of UB match k does not immediately
+        # play the loser of the UB match that received k's winner.
+        dropouts = list(reversed(ub_losers[round_num - 1]))
         label = _lb_label(lb_round)
         dropout_round: list[Origin | None] = []
         match_index = 0
