@@ -3,7 +3,7 @@ package tournament
 import "github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/edge"
 
 // StageSubtreeRoutes covers ALL /api/v1/admin/stages/* routing — stage CRUD + list
-// (generic engine), stage_item/stage_item_input create/update (generic engine), and
+// (generic engine), stage_item/stage_item_input create/update/delete (generic engine), and
 // the stage workflows (typed rpc.tournament.stage_*). The patterns are ambiguous
 // under the stdlib ServeMux (e.g. /stages/tournament/{id} vs /stages/{id}/items), so
 // they are served via edge.Subtree (ordered, first-match-wins) mounted at
@@ -16,6 +16,7 @@ var StageSubtreeRoutes = []edge.RouteSpec{
 	{Method: "POST", Pattern: "/api/v1/admin/stages/tournament/{tournament_id}", Queue: "rpc.tournament.admin.create", Entity: "stage", Action: "create", Path: []string{"tournament_id"}, Body: true, Auth: edge.AuthRequired, Success: 201},
 	// stage_item / stage_item_input (literal "items"/"inputs")
 	{Method: "PATCH", Pattern: "/api/v1/admin/stages/items/inputs/{input_id}", Queue: "rpc.tournament.admin.update", Entity: "stage_item_input", Action: "update", IDParam: "input_id", Body: true, Auth: edge.AuthRequired},
+	{Method: "DELETE", Pattern: "/api/v1/admin/stages/items/inputs/{input_id}", Queue: "rpc.tournament.admin.delete", Entity: "stage_item_input", Action: "delete", IDParam: "input_id", Auth: edge.AuthRequired, Success: 204},
 	{Method: "POST", Pattern: "/api/v1/admin/stages/items/{stage_item_id}/inputs", Queue: "rpc.tournament.admin.create", Entity: "stage_item_input", Action: "create", Path: []string{"stage_item_id"}, Body: true, Auth: edge.AuthRequired, Success: 201},
 	{Method: "PATCH", Pattern: "/api/v1/admin/stages/items/{stage_item_id}", Queue: "rpc.tournament.admin.update", Entity: "stage_item", Action: "update", IDParam: "stage_item_id", Body: true, Auth: edge.AuthRequired},
 	{Method: "DELETE", Pattern: "/api/v1/admin/stages/items/{stage_item_id}", Queue: "rpc.tournament.admin.delete", Entity: "stage_item", Action: "delete", IDParam: "stage_item_id", Auth: edge.AuthRequired, Success: 204},

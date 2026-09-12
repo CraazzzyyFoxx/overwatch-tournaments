@@ -143,6 +143,16 @@ export function StageItemsSection({
     }
   });
 
+  const deleteInputMutation = useMutation({
+    mutationFn: (inputId: number) => adminService.deleteStageItemInput(inputId),
+    onSuccess: () => {
+      setEditingInputId(null);
+      setEditingInputTeamDraft("");
+      onChanged();
+    },
+    onError: (error) => notify.apiError(error, { title: "Could not remove this team" })
+  });
+
   return (
     <section className="flex flex-col gap-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -361,6 +371,24 @@ export function StageItemsSection({
                                   <Pencil className="size-3.5" aria-hidden />
                                 </button>
                               ) : null}
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="size-8 shrink-0 text-danger hover:text-danger"
+                                aria-label={`Remove team from slot ${input.slot} of ${item.name}`}
+                                disabled={
+                                  deleteInputMutation.isPending &&
+                                  deleteInputMutation.variables === input.id
+                                }
+                                onClick={() => deleteInputMutation.mutate(input.id)}
+                              >
+                                {deleteInputMutation.isPending &&
+                                deleteInputMutation.variables === input.id ? (
+                                  <Loader2 className="size-3 animate-spin" aria-hidden />
+                                ) : (
+                                  <Trash2 className="size-3.5" aria-hidden />
+                                )}
+                              </Button>
                             </>
                           )}
                         </li>

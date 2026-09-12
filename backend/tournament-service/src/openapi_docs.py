@@ -221,6 +221,10 @@ DOCS: dict[str, dict] = {
         "summary": "Update stage item input",
         "description": "Updates a stage item input by id; requires stage-update permission on its workspace.",
     },
+    "rpc.tournament.admin.delete#stage_item_input": {
+        "summary": "Delete stage item input",
+        "description": "Deletes a stage item input (team slot) by id (204 no body); requires stage-delete permission on its workspace.",
+    },
     # ── generic CRUD engine: encounter ─────────────────────────────────────
     "rpc.tournament.admin.create#encounter": {
         "summary": "Create encounter",
