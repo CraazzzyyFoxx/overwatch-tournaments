@@ -494,6 +494,7 @@ export function StageEditor({
         {activeSection === "seeding" ? (
           <SeedingSection
             stage={stage}
+            stages={stages}
             form={form}
             onChange={(patch) => setForm((current) => ({ ...current, ...patch }))}
             onChanged={onChanged}

@@ -23,10 +23,10 @@ import {
   SelectTrigger,
   SelectValue
 } from "@/components/ui/select";
-import { cn } from "@/lib/utils";
 import { notify } from "@/lib/notify";
+import { nextStageOrder } from "@/lib/tournament-stages";
+import { cn } from "@/lib/utils";
 import adminService from "@/services/admin.service";
-import type { Stage, StageType } from "@/types/tournament.types";
 
 import {
   getProgressPercent,
@@ -89,7 +89,7 @@ export function StageList({
         name: name.trim(),
         stage_type: stageType,
         max_rounds: normalizeMaxRounds(maxRounds),
-        order: stages.length,
+        order: nextStageOrder(stages),
         settings_json:
           stageType === "double_elimination" ? { de_grand_final_type: grandFinalType } : null
       }),
@@ -118,14 +118,17 @@ export function StageList({
       notify.apiError(error, { title: "Could not reorder the stages" });
     }
   });
+  const ordersTied = new Set(stages.map((stage) => stage.order)).size !== stages.length;
+
 
   const ordered = useMemo(() => {
-    if (!pendingOrder) return stages;
+    if (!pendingOrder) {
+      return [...stages].sort((left, right) => left.order - right.order || left.id - right.id);
+    }
     const byId = new Map(stages.map((stage) => [stage.id, stage]));
     const moved = pendingOrder
       .map((id) => byId.get(id))
       .filter((stage): stage is Stage => stage !== undefined);
-    // A stage created or deleted mid-flight is not in the pending order; keep it.
     return moved.length === stages.length ? moved : stages;
   }, [pendingOrder, stages]);
 
@@ -161,16 +164,16 @@ export function StageList({
             items={ordered}
             getId={(stage) => String(stage.id)}
             onReorder={(next) => {
+              if (ordersTied) return;
               const ids = next.map((stage) => stage.id);
               setPendingOrder(ids);
               reorderMutation.mutate(ids);
             }}
           >
-            {(stage, index) => (
+            {(stage) => (
               <StageCard
                 key={stage.id}
                 stage={stage}
-                position={index + 1}
                 progress={progressByStageId.get(stage.id)}
                 selected={selectedStageId === stage.id}
                 onSelect={() => onSelect(stage.id)}
@@ -178,7 +181,7 @@ export function StageList({
             )}
           </SortableRows>
           <p className="border-t border-border px-4 py-2 text-xs text-muted-foreground">
-            Drag to reorder · seeding flows top to bottom
+            Same phase number = parallel. Drag sequences unique phases top to bottom.
           </p>
         </>
       )}
@@ -276,13 +279,11 @@ export function StageList({
 
 function StageCard({
   stage,
-  position,
   progress,
   selected,
   onSelect
 }: Readonly<{
   stage: Stage;
-  position: number;
   progress: StageProgress | undefined;
   selected: boolean;
   onSelect: () => void;
@@ -308,7 +309,7 @@ function StageCard({
       <div className="flex flex-col items-center gap-1 pt-0.5">
         <SortableGrip handleProps={handleProps} label={`Reorder ${stage.name}`} />
         <span aria-hidden className="font-mono text-xs tabular-nums text-muted-foreground">
-          {position}
+          {stage.order}
         </span>
       </div>
 

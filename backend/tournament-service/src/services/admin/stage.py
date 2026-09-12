@@ -413,12 +413,6 @@ class AdminStageService:
         await self.encounter_repo.delete_for_stage(session, stage_id)
         await self.standing_repo.delete_for_stage(session, stage_id)
         await self.stage_repo.delete(session, stage)
-        # Close the gap left in `order` — otherwise the next stage created via
-        # the frontend's `order: stages.length` collides with whatever stage
-        # already sits at that position (two stages sharing one `order` value
-        # silently breaks "preceding stage" lookups like auto-wire's, which
-        # compare `order` strictly).
-        await self._reindex_tournament_stages(session, tournament_id=tournament_id, removed_stage_ids={stage_id})
         await self._publish_structure_changed(session, tournament_id)
         await session.commit()
 
@@ -511,26 +505,6 @@ class AdminStageService:
         result = await session.execute(select(model).where(model.stage_id.in_(source_stage_ids)))
         for row in result.scalars().all():
             row.stage_id = target_stage_id
-
-    async def _reindex_tournament_stages(
-        self,
-        session: AsyncSession,
-        *,
-        tournament_id: int,
-        removed_stage_ids: set[int],
-    ) -> None:
-        # Analytical: an ordered NOT IN scan whose only purpose is to rewrite
-        # ``order`` into a dense 0..n sequence.
-        result = await session.execute(
-            self.stage_repo.select()
-            .where(
-                models.Stage.tournament_id == tournament_id,
-                ~models.Stage.id.in_(removed_stage_ids),
-            )
-            .order_by(models.Stage.order.asc(), models.Stage.id.asc())
-        )
-        for index, stage in enumerate(result.scalars().all()):
-            stage.order = index
 
     async def merge_group_stages(
         self,
@@ -673,11 +647,6 @@ class AdminStageService:
         for source_stage in source_stages:
             await self.stage_repo.delete(session, source_stage)
 
-        await self._reindex_tournament_stages(
-            session,
-            tournament_id=target_stage.tournament_id,
-            removed_stage_ids=set(unique_source_stage_ids),
-        )
         await enqueue_tournament_recalculation(session, target_stage.tournament_id)
         await self._publish_structure_changed(session, target_stage.tournament_id)
         await session.commit()
@@ -1478,30 +1447,34 @@ class AdminStageService:
         stages = await self.stage_repo.bulk_get(session, sorted(source_stage_ids))
         return [s.id for s in stages if not s.is_completed]
 
-    async def _preceding_group_stage(self, session: AsyncSession, stage: models.Stage) -> models.Stage | None:
-        """The group stage immediately before ``stage`` in stage order — the source
-        used for auto-wiring playoff seeds.
-
-        Ties on ``order`` (data predating the delete-stage reindex fix, where two
-        stages can share one order value) break on ``id``: the lower id was
-        created first, so it counts as "earlier" too.
-        """
-        # Analytical: a descending-order "nearest earlier stage of these types"
-        # lookup, not a plain by-tournament list.
+    async def _preceding_phase_group_stages(
+        self, session: AsyncSession, stage: models.Stage
+    ) -> list[models.Stage]:
         result = await session.execute(
             self.stage_repo.select()
             .where(
                 models.Stage.tournament_id == stage.tournament_id,
                 models.Stage.stage_type.in_(GROUPED_GENERATION_STAGE_TYPES),
-                or_(
-                    models.Stage.order < stage.order,
-                    and_(models.Stage.order == stage.order, models.Stage.id < stage.id),
-                ),
+                models.Stage.order < stage.order,
             )
             .options(selectinload(models.Stage.items))
             .order_by(models.Stage.order.desc(), models.Stage.id.desc())
         )
-        return result.scalars().first()
+        groups = list(result.scalars().all())
+        if not groups:
+            return []
+        phase = groups[0].order
+        return [group for group in groups if group.order == phase]
+
+    async def _preceding_group_stage(self, session: AsyncSession, stage: models.Stage) -> models.Stage | None:
+        """The unique group stage in the latest earlier phase.
+
+        Same ``order`` is parallel, not earlier. Several group stages in that
+        earlier phase is ambiguous — returns None so auto-wire does not guess.
+        """
+        tied = await self._preceding_phase_group_stages(session, stage)
+        return tied[0] if len(tied) == 1 else None
+
 
     async def _auto_wire_from_groups(self, session: AsyncSession, stage: models.Stage, *, strict: bool = False) -> bool:
         """Derive playoff seeding from the preceding group stage's ``advance_count``

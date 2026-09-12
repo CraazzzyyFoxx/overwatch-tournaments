@@ -25,10 +25,12 @@ declare global {
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 const updateStageItem = vi.fn();
+const wireFromGroups = vi.fn();
 
 vi.mock("@/services/admin.service", () => ({
   default: {
     updateStageItem: (...args: unknown[]) => updateStageItem(...args),
+    wireFromGroups: (...args: unknown[]) => wireFromGroups(...args),
     createStageItem: vi.fn(),
     createStageItemInput: vi.fn(),
     updateStageItemInput: vi.fn()
@@ -87,7 +89,7 @@ async function settle() {
   }
 }
 
-async function mount(stage: Stage) {
+async function mount(stage: Stage, extras: { stages?: Stage[] } = {}) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   await act(async () => {
     root.render(
@@ -95,6 +97,7 @@ async function mount(stage: Stage) {
         <SeedingSection
           stage={stage}
           form={stageFormFromStage(stage)}
+          stages={extras.stages}
           onChange={() => {}}
           onChanged={() => {}}
         />
@@ -177,5 +180,22 @@ describe("per-group advance count", () => {
     );
 
     expect(container.querySelector('input[id$="-advance-100"]')).toBeNull();
+  });
+});
+
+describe("parallel division wiring", () => {
+  it("lists earlier group stages as wire sources for a playoff", async () => {
+    const low = groupStage([], { id: 1, name: "Groups Low", order: 1 });
+    const high = groupStage([], { id: 2, name: "Groups High", order: 1 });
+    const playoff = groupStage([], {
+      id: 20,
+      name: "Playoff Low",
+      stage_type: "double_elimination",
+      order: 2
+    });
+    await mount(playoff, { stages: [low, high, playoff] });
+
+    expect(container.textContent).toContain("Wire seeds from");
+    expect(container.querySelector('[id$="-feed"]')).not.toBeNull();
   });
 });

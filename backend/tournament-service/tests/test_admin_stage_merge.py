@@ -164,7 +164,7 @@ class AdminStageMergeTests(IsolatedAsyncioTestCase):
         self.assertEqual(target_stage.id, standing_row.stage_id)
         self.assertEqual(target_stage.id, challonge_row.stage_id)
         self.assertEqual(0, target_stage.order)
-        self.assertEqual(1, playoff_stage.order)
+        self.assertEqual(3, playoff_stage.order)
         session.delete.assert_any_await(source_stage_b)
         session.delete.assert_any_await(source_stage_c)
         enqueue_recalc.assert_awaited_once_with(session, target_stage.tournament_id)
@@ -173,23 +173,17 @@ class AdminStageMergeTests(IsolatedAsyncioTestCase):
         self.assertLess(calls.index("publish:99"), calls.index("commit"))
 
 
-class AdminStageDeleteReindexTests(IsolatedAsyncioTestCase):
-    """Deleting a stage must close the gap in the remaining stages' ``order`` —
-    otherwise the next stage created (frontend sends ``order: stages.length``)
-    collides with whatever stage already sits at that position, which breaks
-    order-dependent lookups like auto-wire's "preceding group stage" query."""
+class AdminStageDeleteOrderTests(IsolatedAsyncioTestCase):
+    """Deleting a stage must leave remaining ``order`` values alone — they are
+    phase numbers the organizer owns, and two stages may share one on purpose."""
 
-    async def test_delete_stage_reindexes_remaining_stages_densely(self) -> None:
+    async def test_delete_stage_does_not_renumber_remaining_phases(self) -> None:
         deleted_stage = SimpleNamespace(id=10, tournament_id=99, order=1)
-        # A pre-existing gap (0, 2, 3) as if an earlier stage had already been
-        # deleted without reindexing — the fix must still land on a dense 0..n-1
-        # sequence regardless of the starting values.
         remaining_a = SimpleNamespace(id=9, order=0)
         remaining_b = SimpleNamespace(id=11, order=2)
-        remaining_c = SimpleNamespace(id=12, order=3)
+        remaining_c = SimpleNamespace(id=12, order=2)
 
         session = SimpleNamespace(
-            execute=AsyncMock(return_value=_scalars_result([remaining_a, remaining_b, remaining_c])),
             delete=AsyncMock(),
             flush=AsyncMock(),
             commit=AsyncMock(),
@@ -205,9 +199,10 @@ class AdminStageDeleteReindexTests(IsolatedAsyncioTestCase):
 
         session.delete.assert_awaited_once_with(deleted_stage)
         self.assertEqual(0, remaining_a.order)
-        self.assertEqual(1, remaining_b.order)
+        self.assertEqual(2, remaining_b.order)
         self.assertEqual(2, remaining_c.order)
         session.commit.assert_awaited_once()
+
 
 
 POOL_MODE = enums.MapVetoMode.POOL

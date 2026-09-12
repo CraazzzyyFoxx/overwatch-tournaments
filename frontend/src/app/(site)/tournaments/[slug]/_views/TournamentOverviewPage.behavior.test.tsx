@@ -939,6 +939,53 @@ describe("the reference tail", () => {
     expect(text).toContain(`Playoffs (${en.bracket.doubleElimination.toLowerCase()})`);
     // The derived label used to restate them: "Groups → Playoff — Groups → Playoffs".
     expect(text).not.toContain("Groups → Playoff —");
+    expect(text).toContain(
+      `Groups (${en.common.roundRobin}) → Playoffs (${en.bracket.doubleElimination.toLowerCase()})`
+    );
+  });
+
+  it("joins stages that share a phase order as parallel brackets", async () => {
+    tournament = makeTournament("live", {
+      stages: [
+        makeStage({ id: 6, name: "PlayOff Low division", stage_type: "double_elimination", order: 1 }),
+        makeStage({
+          id: 7,
+          name: "PlayOff High division",
+          stage_type: "double_elimination",
+          order: 1
+        })
+      ]
+    });
+    await mount();
+
+    const card = Array.from(container.querySelectorAll("section")).find((node) =>
+      node.querySelector("h2")?.textContent?.includes(COPY.format.title)
+    );
+    const text = card?.textContent ?? "";
+    const type = en.bracket.doubleElimination.toLowerCase();
+    expect(text).toContain(`PlayOff Low division (${type}) / PlayOff High division (${type})`);
+    expect(text).not.toContain("→");
+  });
+
+  it("renders parallel stages per phase, then an arrow to the next wave", async () => {
+    tournament = makeTournament("live", {
+      stages: [
+        makeStage({ id: 1, name: "Groups Low", stage_type: "round_robin", order: 1 }),
+        makeStage({ id: 2, name: "Groups High", stage_type: "round_robin", order: 1 }),
+        makeStage({ id: 3, name: "Playoff Low", stage_type: "double_elimination", order: 2 }),
+        makeStage({ id: 4, name: "Playoff High", stage_type: "double_elimination", order: 2 })
+      ]
+    });
+    await mount();
+
+    const card = Array.from(container.querySelectorAll("section")).find((node) =>
+      node.querySelector("h2")?.textContent?.includes(COPY.format.title)
+    );
+    const rr = en.common.roundRobin;
+    const de = en.bracket.doubleElimination.toLowerCase();
+    expect(card?.textContent ?? "").toContain(
+      `Groups Low (${rr}) / Groups High (${rr}) → Playoff Low (${de}) / Playoff High (${de})`
+    );
   });
 
   it("gives the links their own aside before the start, with no map pool to share it", async () => {

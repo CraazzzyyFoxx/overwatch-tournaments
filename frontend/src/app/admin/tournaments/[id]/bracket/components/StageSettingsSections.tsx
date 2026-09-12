@@ -27,6 +27,7 @@ import type { Stage, StageItem, StageType } from "@/types/tournament.types";
 
 import {
   BRACKET_STAGE_TYPES,
+  GROUP_STAGE_TYPES,
   normalizeMaxRounds,
   RANKING_PRESETS,
   SEED_RANKING_LABELS,
@@ -84,6 +85,20 @@ export function GeneralSection({
             value={form.name}
             onChange={(event) => onChange({ name: event.target.value })}
           />
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor={`${ids}-phase`}>Phase</Label>
+          <NumberInput
+            id={`${ids}-phase`}
+            integer
+            min={0}
+            value={form.order}
+            onValueChange={(next) => onChange({ order: next ?? 0 })}
+          />
+          <p className="text-xs text-muted-foreground">
+            Same number = parallel (High and Low both 1). The next number is the next wave.
+          </p>
         </div>
 
         <div className="flex flex-col gap-1.5">
@@ -155,12 +170,46 @@ export function SeedingSection({
   stage,
   form,
   onChange,
-  onChanged
-}: SectionProps & { onChanged: () => void }) {
+  onChanged,
+  stages = []
+}: SectionProps & { onChanged: () => void; stages?: Stage[] }) {
   const ids = useId();
   const isBracket = BRACKET_STAGE_TYPES.includes(form.stageType);
   const isGroups = !isBracket;
   const groups = stage.items.filter((item) => item.type === "group");
+  const sources = stages.filter(
+    (candidate) =>
+      candidate.id !== stage.id &&
+      GROUP_STAGE_TYPES.includes(candidate.stage_type) &&
+      candidate.order < form.order
+  );
+  const [sourceId, setSourceId] = useState(() =>
+    sources.length === 1 ? String(sources[0].id) : ""
+  );
+  const wireMutation = useMutation({
+    mutationFn: (sourceStageId: number) => {
+      const source = stages.find((candidate) => candidate.id === sourceStageId);
+      const advance = source?.advance_count ?? 0;
+      const split =
+        form.stageType === "double_elimination" &&
+        form.splitLowerBracket &&
+        stage.items.some((item) => item.type === "bracket_lower");
+      const topLb = split ? Math.floor(advance / 2) : 0;
+      return adminService.wireFromGroups(stage.id, {
+        source_stage_id: sourceStageId,
+        top: split ? advance - topLb : advance,
+        top_lb: topLb,
+        mode: "snake"
+      });
+    },
+    onSuccess: () => {
+      onChanged();
+      notify.success("Wired playoff seeds from the selected stage");
+    },
+    onError: (error) =>
+      notify.apiError(error, { title: "Could not wire this stage from groups" })
+  });
+
 
   // Per-group overrides are stage_item rows, not stage form fields: they PATCH
   // on blur instead of waiting for "Save changes", which is why they carry
@@ -215,6 +264,41 @@ export function SeedingSection({
           <p className="text-xs text-muted-foreground">
             Uses the group stage&apos;s &quot;Teams advancing to playoff&quot; count; auto-wired on
             Activate &amp; generate.
+          </p>
+        </div>
+      ) : null}
+
+      {isBracket && sources.length > 0 ? (
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor={`${ids}-feed`}>Wire seeds from</Label>
+          <div className="flex flex-wrap items-center gap-2">
+            <Select value={sourceId} onValueChange={setSourceId}>
+              <SelectTrigger id={`${ids}-feed`} className="sm:w-[280px]">
+                <SelectValue placeholder="Group stage" />
+              </SelectTrigger>
+              <SelectContent>
+                {sources.map((source) => (
+                  <SelectItem key={source.id} value={String(source.id)}>
+                    {source.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={!sourceId || wireMutation.isPending}
+              onClick={() => wireMutation.mutate(Number(sourceId))}
+            >
+              {wireMutation.isPending ? (
+                <Loader2 className="size-4 animate-spin" aria-hidden />
+              ) : null}
+              Wire
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Which group stage feeds this bracket. Required when two divisions run in parallel.
           </p>
         </div>
       ) : null}

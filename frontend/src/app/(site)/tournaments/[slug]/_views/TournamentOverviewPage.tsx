@@ -20,6 +20,7 @@ import { normalizePlayerRole, playerRoleSlotCode } from "@/lib/player-role";
 import { ROSTER_SLOT_CODES, type RosterSlotCode } from "@/lib/roster-shape";
 import { getStreamStatus, STREAM_STATUS_META } from "@/lib/stream-platform";
 import { tournamentQueryKeys } from "@/lib/tournament-query-keys";
+import { groupTournamentStageFlow } from "@/lib/tournament-stages";
 import { cn } from "@/lib/utils";
 import encounterService from "@/services/encounter.service";
 import heroService from "@/services/hero.service";
@@ -641,31 +642,34 @@ export default function TournamentOverviewPage({
     <OverviewCard title={t("tournamentDetail.overview.format.title")}>
       <dl className="grid gap-2.5">
         {tournament.stages.length > 0 ? (
-          /* The card's own heading already says "Format", and the derived label
-             (`Groups → Playoff`) restated the stage names right beside it —
-             "Groups → Playoff — Groups → Playoffs". The organizer's own stage
-             names carry it, with each stage's type where the name does not. */
+          /* Organizer names + type. Same `order` is one phase (`Low / High`);
+             the next number is the next wave (`Groups → Playoff`). */
           <KeyValue term={t("common.stages")}>
-            {[...tournament.stages]
-              .sort((left, right) => left.order - right.order)
-              .map((stage, index) => {
-                const typeKey = STAGE_TYPE_LABEL[stage.stage_type];
-                return (
-                  <span key={stage.id}>
-                    {index > 0 ? (
-                      <span className="text-[color:var(--aqt-fg-faint)]">{" → "}</span>
-                    ) : null}
-                    {stage.name}
-                    {typeKey ? (
-                      <span className="text-[color:var(--aqt-fg-faint)]">
-                        {" ("}
-                        {t(typeKey).toLowerCase()}
-                        {")"}
-                      </span>
-                    ) : null}
-                  </span>
-                );
-              })}
+            {groupTournamentStageFlow(tournament.stages).map((wave, waveIndex) => (
+              <span key={wave.map((stage) => stage.id).join("-")}>
+                {waveIndex > 0 ? (
+                  <span className="text-[color:var(--aqt-fg-faint)]">{" → "}</span>
+                ) : null}
+                {wave.map((stage, stageIndex) => {
+                  const typeKey = STAGE_TYPE_LABEL[stage.stage_type];
+                  return (
+                    <span key={stage.id}>
+                      {stageIndex > 0 ? (
+                        <span className="text-[color:var(--aqt-fg-faint)]">{" / "}</span>
+                      ) : null}
+                      {stage.name}
+                      {typeKey ? (
+                        <span className="text-[color:var(--aqt-fg-faint)]">
+                          {" ("}
+                          {t(typeKey).toLowerCase()}
+                          {")"}
+                        </span>
+                      ) : null}
+                    </span>
+                  );
+                })}
+              </span>
+            ))}
           </KeyValue>
         ) : null}
         <KeyValue term={t("common.teamFormation")}>
