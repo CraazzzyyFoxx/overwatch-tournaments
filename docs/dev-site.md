@@ -16,7 +16,7 @@ separate cookie namespace.
 | Postgres | its own | host `db_postgres` via `db_pgbouncer`, database `anak_dev` |
 | Tracing | otel-collector → Tempo/Sentry | off (`TRACING_ENABLED=false`) |
 | Cookie names | `owt_*` | `owtdev_*` (`COOKIE_PREFIX`/`SESSION_COOKIE_PREFIX`) |
-| discord-worker | 1 replica | **0 replicas** |
+| discord-worker | 1 replica | 1 replica, own bot token |
 
 ## Why `PLATFORM_ZONE` exists
 
@@ -126,12 +126,12 @@ git fetch origin <branch>:<branch> && git checkout <branch>   # or `git am` a pa
 docker compose -f docker-compose.production.yml build
 docker compose -f docker-compose.production.yml run --rm --no-deps -T app-svc \
     alembic upgrade head </dev/null
-make prod-up PROD_SCALE='app-svc=1 identity-svc=1 tournament-svc=1 frontend=1 discord-worker=0'
+make prod-up PROD_SCALE='app-svc=1 identity-svc=1 tournament-svc=1 frontend=1'
 ```
 
-`discord-worker=0` is not optional: it would be a second bot process on production's token,
-double-handling every Discord event. `stream-svc` gets no Twitch credentials for the same
-reason — polling would share production's Helix rate-limit bucket.
+`discord-worker` runs here: it has its own bot token, not production's. Reusing
+production's token would double-handle every Discord event. `stream-svc` gets no
+Twitch credentials — polling would share production's Helix rate-limit bucket.
 
 Tear down with `make prod-down` (in `~/owt-dev`); the database survives it.
 
