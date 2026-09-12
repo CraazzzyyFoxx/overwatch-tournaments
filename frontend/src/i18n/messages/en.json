@@ -3080,7 +3080,8 @@
           "disagree": "Reports differ — admin decides"
         },
         "report": "Report the result",
-        "amend": "Change my report"
+        "amend": "Change my report",
+        "pickMap": "Which map did you play?"
       },
       "heroBans": {
         "eyebrow": "Hero bans for this map",

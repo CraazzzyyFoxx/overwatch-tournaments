@@ -37,6 +37,7 @@ from shared.core.enums import (
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.models.matches.match import Match
 from shared.models.tournament.encounter import Encounter
+from shared.models.tournament.encounter_report import EncounterMapReport
 from shared.models.tournament.pick_ban import (
     EncounterReadiness,
     PickBanConfig,
@@ -247,6 +248,11 @@ class PickBanSessionService:
         Ranking, most specific first: an exact stage+round config (2), the stage's
         round-less config (1), the tournament-wide config (0).
 
+        A pool-less row is a rules template: it plays nothing, "as if no row
+        existed". So a more specific empty fan-out must not shadow a parent's
+        pool — otherwise saving a stage as a template closes every round's room
+        even after maps are authored at the tournament.
+
         Stays a service query: this loads every candidate row of the cascade and
         ranks them in Python, where ``PickBanConfigRepository.find_for_stage_round``
         matches ONE exact (stage, round) coordinate.
@@ -263,8 +269,7 @@ class PickBanSessionService:
             )
             .options(*_CONFIG_POOL_LOAD)
         )
-        best = None
-        best_rank = -1
+        matched: list[tuple[int, PickBanConfig]] = []
         for config in result.scalars().all():
             if config.round is not None and config.round == round and config.stage_id == stage_id:
                 rank = 2
@@ -274,9 +279,13 @@ class PickBanSessionService:
                 rank = 0
             else:
                 continue
-            if rank > best_rank:
-                best, best_rank = config, rank
-        return best
+            matched.append((rank, config))
+        if not matched:
+            return None
+        pooled = [config for _, config in sorted(matched, key=lambda pair: -pair[0]) if self.has_pool(config)]
+        if pooled:
+            return pooled[0]
+        return max(matched, key=lambda pair: pair[0])[1]
 
     async def _resolve_config(
         self, session: AsyncSession, encounter: Encounter, kind: PickBanKind
@@ -870,7 +879,13 @@ class PickBanSessionService:
             return None
         map_pick_ban = await self.get_pick_ban_session(session, encounter.id, PickBanKind.MAP)
         if map_pick_ban is None:
-            return None
+            result = await session.execute(
+                select(Match).where(Match.encounter_id == encounter.id, Match.map_index == round_number)
+            )
+            match = result.scalars().first()
+            if match is None:
+                return None
+            return engine.winner_side(match.home_score, match.away_score)
         decided = await self.entry_repo.list_by_status(
             session, map_pick_ban.id, (MapPoolEntryStatus.PICKED, MapPoolEntryStatus.PLAYED)
         )
@@ -882,10 +897,38 @@ class PickBanSessionService:
             return None
         return engine.winner_side(match.home_score, match.away_score)
 
+    async def _resolved_report_rounds(self, session: AsyncSession, encounter_id: int) -> int:
+        """How many series positions both captains have agreed, with no map veto."""
+        rows = list(
+            (
+                await session.execute(
+                    select(EncounterMapReport).where(
+                        EncounterMapReport.encounter_id == encounter_id,
+                        EncounterMapReport.map_index > 0,
+                    )
+                )
+            ).scalars().all()
+        )
+        by_index: dict[int, list[EncounterMapReport]] = {}
+        for row in rows:
+            by_index.setdefault(row.map_index, []).append(row)
+        resolved = 0
+        for group in by_index.values():
+            teams = {row.team_id for row in group}
+            scores = {(row.home_score, row.away_score) for row in group}
+            if len(teams) >= 2 and len(scores) == 1:
+                resolved += 1
+        return resolved
+
     async def sync_hero_rounds(self, session: AsyncSession, encounter: Encounter, *, commit: bool = True) -> None:
         """Keep the hero session's rounds in lockstep with the maps the map
         pick-ban has settled: hero round N opens once map N is picked, and not
         before, because heroes are banned for a KNOWN map (design §4).
+
+        No map pool: there is no veto, so the barrier is an agreed map report.
+        Round 1 still opens at ready; round N+1 waits until N reports are
+        resolved (``resolved + 1``). Consecutive hero rounds without a result
+        were a hole — captains had nothing to close a map.
 
         Lazy and read-triggered, like the room's other self-healing steps
         (``auto_complete_decider``/``auto_resolve_timeout``): there is no event for
@@ -903,7 +946,13 @@ class PickBanSessionService:
         hero = await self.get_pick_ban_session(session, encounter.id, PickBanKind.HERO)
         if hero is None or hero.status == MapVetoSessionStatus.CANCELLED:
             return
-        target = min(await self.settled_map_rounds(session, encounter.id), encounter.best_of)
+        map_config = await self._resolve_config(session, encounter, PickBanKind.MAP)
+        if map_config is not None and self.has_pool(map_config):
+            target = min(await self.settled_map_rounds(session, encounter.id), encounter.best_of)
+        elif engine.series_decided(encounter.home_score or 0, encounter.away_score or 0, encounter.best_of):
+            return
+        else:
+            target = min(await self._resolved_report_rounds(session, encounter.id) + 1, int(encounter.best_of))
         if (await self.highest_round_of(session, hero) or 0) >= target:
             return
 

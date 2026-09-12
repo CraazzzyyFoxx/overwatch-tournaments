@@ -96,12 +96,9 @@ export function PregameRoom({ encounterId, seriesReport = true }: Readonly<Prega
   const queryClient = useQueryClient();
   const { isSuperuser, isWorkspaceAdmin, hasWorkspacePermission } = usePermissions();
   const enabled = Number.isFinite(encounterId) && encounterId > 0;
-  // Where every way out of this room leads. The room is opened from the bracket
-  // as well as from the encounter page, and hardcoding the encounter page threw
-  // an organizer working through a round back to a single match every time.
+  const [freeplayMapId, setFreeplayMapId] = useState<number | null>(null);
   const searchParams = useSearchParams();
   const returnTo = safeReturnPath(searchParams?.get(RETURN_TO_PARAM), `/encounters/${encounterId}`);
-
   const mapKey = ["pregame-state", encounterId, "map"];
   const heroKey = ["pregame-state", encounterId, "hero"];
   // Turn timeouts auto-resolve lazily server-side, the next time anyone
@@ -295,21 +292,37 @@ export function PregameRoom({ encounterId, seriesReport = true }: Readonly<Prega
       (pendingRound == null || (heroRound ?? 0) >= pendingRound)
     );
 
+  // No map veto: after hero bans the captains name the map they played and
+  // report its score. That agreed report is the barrier that opens the next
+  // hero round.
+  const winsNeeded = Math.floor((encounter.best_of ?? 0) / 2) + 1;
+  const seriesDecided =
+    (encounter.best_of ?? 0) > 0 &&
+    Math.max(encounter.score?.home ?? 0, encounter.score?.away ?? 0) >= winsNeeded;
+  const freeplayRound = !mapApplies ? (heroRound ?? 1) : null;
+  const awaitingFreeplayReport =
+    !mapApplies &&
+    !heroPhaseOpen &&
+    !seriesDecided &&
+    (heroRound ?? 0) > 0 &&
+    (heroRound ?? 0) <= (encounter.best_of ?? 0);
   const phase: PregamePhase = mapPhaseOpen
     ? "map"
     : heroPhaseOpen
       ? "hero"
-      : pendingMap != null
+      : pendingMap != null || awaitingFreeplayReport
         ? "report"
         : "done";
   // Which map of the series the room is on. During the map phase that is the
   // round being vetoed (one past the settled ones); afterwards it is the round
   // whose map is waiting to be played.
-  const round = pendingRound ?? (mapApplies ? seriesMaps.length + 1 : null);
+  const round = pendingRound ?? freeplayRound ?? (mapApplies ? seriesMaps.length + 1 : null);
   const phases: PregamePhaseStatus[] = [
     ...(mapApplies ? [{ phase: "map" as const, done: !mapPhaseOpen }] : []),
-    ...(heroApplies ? [{ phase: "hero" as const, done: !mapPhaseOpen && !heroPhaseOpen }] : []),
-    ...(mapApplies ? [{ phase: "report" as const, done: phase === "done" }] : [])
+    ...(heroApplies ? [{ phase: "hero" as const, done: !heroPhaseOpen }] : []),
+    ...(mapApplies || awaitingFreeplayReport || phase === "report"
+      ? [{ phase: "report" as const, done: phase === "done" }]
+      : [])
   ];
   // The series' history for the header filmstrip. Three distinct states, and
   // the pool is what tells them apart -- NOT the presence of a `Match` row:
@@ -376,8 +389,9 @@ export function PregameRoom({ encounterId, seriesReport = true }: Readonly<Prega
         };
       });
   /** This map's bans, for the result screen. */
+  const reportRound = pendingRound ?? freeplayRound;
   const heroActions: PregameHeroAction[] =
-    pendingRound == null ? [] : heroActionsFor(pendingRound);
+    reportRound == null ? [] : heroActionsFor(reportRound);
   // The whole series' bans, for the closing screen: by then no map is pending,
   // so `heroActions` is empty and the record of what each map was played under
   // would leave the room with the last grid that closed. Round-scoped pools get
@@ -400,7 +414,7 @@ export function PregameRoom({ encounterId, seriesReport = true }: Readonly<Prega
   const header = (
     <PregameHeader
       encounter={encounter}
-      session={statesByKind[phase === "hero" ? "hero" : "map"].session}
+      session={statesByKind[phase === "hero" || !mapApplies ? "hero" : "map"].session}
       activePhase={phase}
       phases={phases}
       round={round}
@@ -430,28 +444,32 @@ export function PregameRoom({ encounterId, seriesReport = true }: Readonly<Prega
     );
   }
 
-  if (phase === "report" && pendingMap != null && pendingRound != null) {
+  if (phase === "report" && reportRound != null) {
+    const lockedMapId = pendingMap?.item_id ??
+      (mapState.map_reports ?? []).find((report) => report.map_index === reportRound)?.map_id ??
+      null;
+    const reportMapId = lockedMapId ?? freeplayMapId;
+    const reportMap = reportMapId != null ? mapsById[reportMapId] : undefined;
     return (
       <div className="flex flex-col gap-4">
         <PregameMapResult
           encounterId={encounterId}
-          mapId={pendingMap.item_id}
+          mapId={reportMapId}
           mapName={
-            mapsById[pendingMap.item_id]?.name ?? t("map.itemNumber", { id: pendingMap.item_id })
+            reportMap?.name ??
+            (reportMapId != null ? t("map.itemNumber", { id: reportMapId }) : t("mapResult.pickMap"))
           }
-          mapImagePath={mapsById[pendingMap.item_id]?.image_path ?? null}
-          round={pendingRound}
-          viewerSide={mapState.viewer_side}
+          mapImagePath={reportMap?.image_path ?? null}
+          round={reportRound}
+          viewerSide={mapState.viewer_side ?? viewerSide}
           homeName={sideNameOf("home")}
           awayName={sideNameOf("away")}
           homeTeam={encounter.home_team ?? null}
           awayTeam={encounter.away_team ?? null}
-          // By POSITION in the series, not by map: a series may play the same
-          // map twice, and filtering on `map_id` alone carried the earlier
-          // play's claims onto the later one — which read as "both captains
-          // already agreed" on a map nobody had reported yet.
-          reports={(mapState.map_reports ?? []).filter(
-            (report) => report.map_id === pendingMap.item_id && report.map_index === pendingRound
+          reports={(mapState.map_reports ?? []).filter((report) =>
+            pendingMap != null
+              ? report.map_id === pendingMap.item_id && report.map_index === reportRound
+              : report.map_index === reportRound
           )}
           heroActions={heroActions}
           heroUndo={
@@ -467,6 +485,12 @@ export function PregameRoom({ encounterId, seriesReport = true }: Readonly<Prega
           }
           header={header}
           invalidateKeys={[mapKey, heroKey, ["encounter-detail", encounterId]]}
+          mapChoices={
+            pendingMap == null
+              ? (mapsQuery.data?.results ?? []).map((map) => ({ id: map.id, name: map.name }))
+              : undefined
+          }
+          onSelectMap={pendingMap == null ? setFreeplayMapId : undefined}
         />
       </div>
     );

@@ -6,7 +6,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 from unittest import IsolatedAsyncioTestCase
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 backend_root = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(backend_root))
@@ -16,7 +16,7 @@ sys.path.insert(0, str(backend_root / "tournament-service"))
 import sqlalchemy as sa  # noqa: E402
 from sqlalchemy.exc import MissingGreenlet  # noqa: E402
 
-from shared.core.enums import FirstBanRotation, MapVetoMode, PickBanKind  # noqa: E402
+from shared.core.enums import FirstBanRotation, MapVetoMode, MapVetoSessionStatus, PickBanKind  # noqa: E402
 from shared.core.errors import BaseAPIException as HTTPException  # noqa: E402
 from shared.models.tournament.encounter import Encounter  # noqa: E402
 from shared.models.tournament.pick_ban import (  # noqa: E402
@@ -97,6 +97,8 @@ def _encounter(*, best_of: int, home: int | None = 10, away: int | None = 20) ->
         best_of=best_of,
         home_team_id=home,
         away_team_id=away,
+        home_score=0,
+        away_score=0,
     )
 
 
@@ -165,6 +167,7 @@ class _FakeSession:
         self,
         *,
         config: Any = None,
+        configs: list[Any] | None = None,
         existing: Any = None,
         pool_count: int = 0,
         readiness: frozenset[str] = frozenset({"home", "away"}),
@@ -176,6 +179,7 @@ class _FakeSession:
     ) -> None:
         self.map_session = map_session
         self.config = config
+        self.configs = configs
         self.existing = existing
         self.pool_count = pool_count
         # Defaults to "both ready" so every pre-existing test (all written
@@ -230,7 +234,13 @@ class _FakeSession:
             elif statement.table.name == EncounterReadiness.__tablename__:
                 self.readiness = frozenset()
             return _Result([])
-        entity = statement.column_descriptions[0]["entity"]
+        col = statement.column_descriptions[0]
+        entity = col["entity"]
+        col_name = str(col.get("name") or col.get("expr") or "")
+        if entity is None or col_name.endswith("round"):
+            # `list_rounds` is `SELECT pick_ban_entry.round`.
+            if "round" in col_name or entity is None:
+                return _Result([row.round for row in self.entries])
         if entity is PickBanSession:
             # A hero session's gate reads the MAP session ("is round N's map
             # picked yet?"), so the two cannot share one canned answer. Sniff
@@ -243,7 +253,16 @@ class _FakeSession:
             ):
                 return _Result([] if self.map_session is None else [self.map_session])
             return _Result([] if self.existing is None else [self.existing])
+        if getattr(entity, "__name__", None) in {"EncounterMapReport", "Match"}:
+            return _Result([])
         if entity is PickBanConfig:
+            if self.configs is not None:
+                return _Result(
+                    [
+                        config if _loads_config_pool(statement) else _PoolUnloadedConfig(config)
+                        for config in self.configs
+                    ]
+                )
             answer = self._config_answer(statement)
             return _Result([] if answer is None else [answer])
         if entity is EncounterReadiness:
@@ -442,6 +461,153 @@ class UnavailableReasonTests(IsolatedAsyncioTestCase):
     async def test_the_two_slot_reasons_are_distinct_strings(self) -> None:
         self.assertNotEqual(REASON_SLOT_COUNT_MISMATCH, REASON_SLOT_UNDERFILLED)
         self.assertNotIn(REASON_SLOT_COUNT_MISMATCH, {REASON_NOT_CONFIGURED, REASON_TEAMS_UNKNOWN})
+
+
+class ResolveConfigTemplateShadowTests(IsolatedAsyncioTestCase):
+    """A pool-less more-specific row is a rules template: it must not hide a
+    parent's pool. Empty per-round fan-outs were closing every room even after
+    maps existed at the tournament."""
+
+    async def test_empty_round_config_does_not_shadow_tournament_pool(self) -> None:
+        parent = _config(slots=[_slot(1, [11, 12]), _slot(2, [21, 22])])
+        parent.id = 69
+        child = _config(slots=[])
+        child.id = 70
+        child.stage_id = 3
+        child.round = 2
+        session = _FakeSession(configs=[parent, child])
+
+        resolved = await pick_ban_session_service.resolve_config_at_level(
+            session,
+            tournament_id=7,
+            kind=PickBanKind.MAP,
+            stage_id=3,
+            round=2,
+        )
+
+        self.assertIs(resolved, parent)
+
+    async def test_only_templates_still_resolve_to_the_most_specific(self) -> None:
+        parent = _config(slots=[])
+        parent.id = 69
+        child = _config(slots=[])
+        child.id = 70
+        child.stage_id = 3
+        child.round = 2
+        session = _FakeSession(configs=[parent, child])
+
+        resolved = await pick_ban_session_service.resolve_config_at_level(
+            session,
+            tournament_id=7,
+            kind=PickBanKind.MAP,
+            stage_id=3,
+            round=2,
+        )
+
+        self.assertIs(resolved, child)
+
+
+class SyncHeroRoundsWithoutMapPoolTests(IsolatedAsyncioTestCase):
+    """No map veto: round 1 opens at ready; round 2 waits on an agreed report."""
+
+    def _hero_session(self, *, complete: bool) -> tuple[SimpleNamespace, SimpleNamespace, _FakeSession]:
+        config = _config(mode=MapVetoMode.POOL, kind=PickBanKind.HERO, items=[101, 102, 103, 104])
+        config.sequence_json = ["ban_first", "ban_second"]
+        pick_ban = SimpleNamespace(
+            id=900,
+            encounter_id=500,
+            kind=PickBanKind.HERO,
+            config_id=config.id,
+            first_side="home",
+            resolved_sequence_json=["ban_home", "ban_away"],
+            awaiting_choice=False,
+            pending_loser_side=None,
+            status=MapVetoSessionStatus.COMPLETED if complete else MapVetoSessionStatus.ACTIVE,
+            current_step_started_at=None,
+        )
+        entries = (
+            [_entry(101, round=1, status="banned"), _entry(102, round=1, status="banned")]
+            if complete
+            else [_entry(101, round=1, status="banned"), _entry(102, round=1, status="available")]
+        )
+        session = _FakeSession(
+            config=config,
+            existing=pick_ban,
+            map_session=None,
+            entries=entries,
+            encounter=_encounter(best_of=3),
+        )
+        return config, pick_ban, session
+
+    async def test_does_not_open_round_two_before_a_map_report(self) -> None:
+        _config_row, pick_ban, session = self._hero_session(complete=True)
+
+        with patch.object(
+            pick_ban_session_service,
+            "_resolve_config",
+            new=AsyncMock(return_value=_config(slots=[])),
+        ):
+            await pick_ban_session_service.sync_hero_rounds(session, session.encounter, commit=True)
+
+        self.assertEqual([], session.pool_rows)
+        self.assertEqual(MapVetoSessionStatus.COMPLETED, pick_ban.status)
+
+    async def test_opens_round_two_after_an_agreed_map_report(self) -> None:
+        _config_row, pick_ban, session = self._hero_session(complete=True)
+
+        with (
+            patch.object(
+                pick_ban_session_service,
+                "_resolve_config",
+                new=AsyncMock(return_value=_config(slots=[])),
+            ),
+            patch.object(
+                pick_ban_session_service,
+                "_resolved_report_rounds",
+                new=AsyncMock(return_value=1),
+            ),
+        ):
+            await pick_ban_session_service.sync_hero_rounds(session, session.encounter, commit=True)
+
+        self.assertEqual({2}, {row.round for row in session.pool_rows})
+        self.assertEqual(MapVetoSessionStatus.ACTIVE, pick_ban.status)
+
+    async def test_does_not_open_round_two_while_round_one_is_still_in_play(self) -> None:
+        _config_row, pick_ban, session = self._hero_session(complete=False)
+
+        with patch.object(
+            pick_ban_session_service,
+            "_resolve_config",
+            new=AsyncMock(return_value=_config(slots=[])),
+        ):
+            await pick_ban_session_service.sync_hero_rounds(session, session.encounter, commit=True)
+
+        self.assertEqual([], session.pool_rows)
+
+
+class FreeplayMapIndexTests(IsolatedAsyncioTestCase):
+    async def test_first_named_map_is_series_position_one(self) -> None:
+        from src.services.encounter.map_report import MapReportService
+
+        class Repo:
+            async def list_for_encounter(self, session: object, encounter_id: int) -> list:
+                return []
+
+        svc = MapReportService(report_repo=Repo())  # type: ignore[arg-type]
+        self.assertEqual(1, await svc._freeplay_index(None, 500, 21))
+
+    async def test_second_captain_must_report_the_open_map(self) -> None:
+        from src.services.encounter.map_report import MapReportService
+
+        class Repo:
+            async def list_for_encounter(self, session: object, encounter_id: int) -> list:
+                return [SimpleNamespace(map_index=1, map_id=21, team_id=10, home_score=2, away_score=1)]
+
+        svc = MapReportService(report_repo=Repo())  # type: ignore[arg-type]
+        self.assertEqual(1, await svc._freeplay_index(None, 500, 21))
+        with self.assertRaises(HTTPException):
+            await svc._freeplay_index(None, 500, 99)
+
 
 
 class ResetPickBanSessionTests(IsolatedAsyncioTestCase):

@@ -642,7 +642,10 @@ class PickBanActionService:
             # a bare 400 -- see pick_ban_session.unavailable_reason for why this
             # re-derives against PickBanConfig instead of being handed the cause.
             reason = await self.sessions.unavailable_reason(session, encounter, kind)
-            return build_unavailable_state(reason, readiness=readiness)
+            state = build_unavailable_state(reason, readiness=readiness)
+            if kind == PickBanKind.MAP:
+                state["map_reports"] = await self._map_reports(session, encounter)
+            return state
 
         config = await self.config_repo.get(session, pick_ban.config_id) if pick_ban.config_id else None
         pool = await self.get_pick_ban_pool(session, pick_ban, encounter_id, kind)

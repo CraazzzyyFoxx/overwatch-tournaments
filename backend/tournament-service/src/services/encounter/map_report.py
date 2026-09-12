@@ -109,7 +109,7 @@ class MapReportService:
             )
 
     async def _pending_play(
-        self, session: AsyncSession, map_pick_ban: PickBanSession | None, map_id: int
+        self, session: AsyncSession, map_pick_ban: PickBanSession | None, map_id: int, *, encounter_id: int
     ) -> tuple[int, PickBanEntry | None]:
         """Which play of ``map_id`` this report is for: its 1-based position in the
         series and the pool entry that holds it.
@@ -121,11 +121,12 @@ class MapReportService:
         report) it belongs to the LAST one, so the correction lands on the map it
         was typed against instead of on an earlier play of it.
 
-        ``(0, None)`` when this encounter has no map pick-ban session, or its pool
-        never settled this map: there is no series position to speak of.
+        No map pick-ban session: captains name the map they played. An open slot
+        (one side already filed) locks that map; otherwise this is the next
+        1-based series position.
         """
         if map_pick_ban is None:
-            return 0, None
+            return await self._freeplay_index(session, encounter_id, map_id), None
         entries = await self.entry_repo.list_by_session(session, map_pick_ban.id)
         settled = engine.settled_in_order(list(entries))
         plays = [(index, entry) for index, entry in enumerate(settled, start=1) if entry.item_id == map_id]
@@ -133,6 +134,31 @@ class MapReportService:
             return 0, None
         awaiting = [(index, entry) for index, entry in plays if entry.status != MapPoolEntryStatus.PLAYED.value]
         return awaiting[0] if awaiting else plays[-1]
+
+    async def _freeplay_index(self, session: AsyncSession, encounter_id: int, map_id: int) -> int:
+        rows = list(await self.report_repo.list_for_encounter(session, encounter_id))
+        by_index: dict[int, list[EncounterMapReport]] = {}
+        for row in rows:
+            if row.map_index < 1:
+                continue
+            by_index.setdefault(row.map_index, []).append(row)
+
+        def resolved(group: list[EncounterMapReport]) -> bool:
+            teams = {row.team_id for row in group}
+            scores = {(row.home_score, row.away_score) for row in group}
+            return len(teams) >= 2 and len(scores) == 1
+
+        open_indexes = sorted(index for index, group in by_index.items() if not resolved(group))
+        if open_indexes:
+            index = open_indexes[0]
+            filed_map = by_index[index][0].map_id
+            if filed_map != map_id:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Report the map already filed for this round",
+                )
+            return index
+        return (max(by_index) if by_index else 0) + 1
 
     async def submit_map_report(
         self,
@@ -154,7 +180,7 @@ class MapReportService:
                 detail="Stage bracket is a preview and is not active yet; wait for the organizer to activate it",
             )
         map_pick_ban = await pick_ban_session_service.get_pick_ban_session(session, encounter.id, PickBanKind.MAP)
-        map_index, entry = await self._pending_play(session, map_pick_ban, map_id)
+        map_index, entry = await self._pending_play(session, map_pick_ban, map_id, encounter_id=encounter.id)
 
         # Both sides of the slot in ONE read: reconciliation needs the opponent's row
         # anyway, and it cannot change under us inside this transaction.
@@ -234,6 +260,7 @@ class MapReportService:
                 )
                 session.add(match)
             else:
+                already_played = True
                 # Claim the position for this play, so a second play of the same map
                 # writes its own row instead of adopting this one.
                 match.map_index = map_index or None
@@ -243,6 +270,7 @@ class MapReportService:
                 if match.source == MatchSource.CAPTAIN_REPORT.value:
                     match.home_score = resolved_home
                     match.away_score = resolved_away
+
 
         played_round: int | None = None
         if entry is not None:
