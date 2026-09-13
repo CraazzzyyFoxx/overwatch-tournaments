@@ -1,3 +1,4 @@
+import type { BracketRoundShape } from "@/lib/bracket-round-name";
 import type { EncounterSlotSource, Score } from "@/types/encounter.types";
 import type { Team } from "@/types/team.types";
 import type { EncounterResultStatus, StageType } from "@/types/tournament.types";
@@ -195,7 +196,7 @@ export function activeRoundNumber(groups: RoundGroup[]): number | null {
   return (inPlay ?? groups[groups.length - 1])?.round ?? null;
 }
 
-/** The encounter fields `stageFinalRounds` reads. */
+/** The encounter fields `stageRoundShape` reads. */
 export interface StageScopedRound {
   stage_id: number | null;
   round: number;
@@ -208,7 +209,7 @@ export interface StageScopedRound {
  * exist; before that the round list alone decides, which is exact because a
  * predicted bracket never carries a Grand Final Reset.
  */
-export function stageFinalRounds(
+function stageFinalRounds(
   stageId: number | null,
   stageType: StageType | undefined,
   rounds: number[],
@@ -224,28 +225,33 @@ export function stageFinalRounds(
   return getFinalRounds(true, rounds, matchesPerRound.size > 0 ? matchesPerRound : undefined);
 }
 
-/** A round's name, as a `bracket.*` message key plus the depth it interpolates. */
-export interface BracketRoundLabel {
-  key: "round" | "lowerRound" | "grandFinal" | "grandFinalReset";
-  /** Depth for the keys that interpolate `{n}`; absent for the finals. */
-  n?: number;
+/**
+ * What `bracketRoundLabel` needs to name a stage's rounds, for a screen that
+ * already holds the round list — the pick-ban scope picker, the scrim pool
+ * copier. `encounters` may span the whole tournament; only the stage's own are
+ * read.
+ */
+export function stageRoundShape(
+  stageId: number | null,
+  stageType: StageType | undefined,
+  rounds: number[],
+  encounters: StageScopedRound[] | undefined
+): BracketRoundShape {
+  return { rounds, finalRounds: stageFinalRounds(stageId, stageType, rounds, encounters) };
 }
 
-/**
- * What the bracket calls this round. The one place that decides a round's name,
- * so every screen that offers one — the bracket itself, the pick-ban scope
- * picker — shows the organizer the same name for it. Render it with
- * `useBracketRoundLabel`.
- *
- * ``finalRounds`` comes from `getFinalRounds`; its first entry is the Grand
- * Final and anything after it a reset.
- */
-export function bracketRoundLabel(round: number, finalRounds: number[]): BracketRoundLabel {
-  if (round < 0) return { key: "lowerRound", n: -round };
-
-  const finalIndex = finalRounds.indexOf(round);
-  if (finalIndex < 0) return { key: "round", n: round };
-  return { key: finalIndex === 0 ? "grandFinal" : "grandFinalReset" };
+/** The same, for a screen that holds one bracket's matches: the bracket itself. */
+export function bracketRoundShape(
+  stageType: StageType | undefined,
+  encounters: BracketMatch[]
+): BracketRoundShape {
+  return {
+    rounds: [...new Set(encounters.map((match) => match.round))],
+    finalRounds:
+      stageType === "double_elimination"
+        ? [...getDoubleEliminationFinalRounds(encounters)].sort((left, right) => left - right)
+        : []
+  };
 }
 
 /**

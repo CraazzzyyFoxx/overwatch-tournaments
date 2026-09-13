@@ -23,6 +23,7 @@ import TeamName from "@/components/TeamName";
 import { withReturnTo } from "@/lib/return-to";
 import {
   activeRoundNumber,
+  bracketRoundShape,
   buildRoundGroups as buildBracketRoundGroups,
   computeMatchNumbers as computeBracketMatchNumbers,
   computeSlotHints as computeBracketSlotHints,
@@ -344,9 +345,9 @@ function buildLayout(
 
   const isDE = type === "double_elimination";
   const finalRoundNumbers = isDE ? getBracketFinalRounds(encounters) : new Set<number>();
-  // Ascending, so `bracketRoundLabel` reads the first entry as the Grand Final
-  // and any later one as its reset.
-  const finalRoundList = [...finalRoundNumbers].sort((left, right) => left - right);
+  // The bracket's own rounds, so a column header can read "Semifinal" or
+  // "LB Final" rather than a bare depth.
+  const roundShape = bracketRoundShape(type, encounters);
 
   // For DE: split upper encounters into regular UB and Grand Final section.
   const ubEncounters = isDE
@@ -414,7 +415,7 @@ function buildLayout(
       headerY: upperHeaderY,
       headerId: `upper-header-${group.round}`,
       headerSection: "upper",
-      label: roundLabel(group.round, finalRoundList),
+      label: roundLabel(group.round, roundShape),
       startY,
       slotHints,
       matchNumbers,
@@ -447,7 +448,7 @@ function buildLayout(
       headerY: lowerHeaderY,
       headerId: `lower-header-${group.round}`,
       headerSection: "lower",
-      label: roundLabel(group.round, finalRoundList),
+      label: roundLabel(group.round, roundShape),
       startY,
       slotHints,
       matchNumbers,
@@ -478,7 +479,7 @@ function buildLayout(
       headerY: PADDING_Y,
       headerId: `final-header-${group.round}`,
       headerSection: "upper",
-      label: roundLabel(group.round, finalRoundList),
+      label: roundLabel(group.round, roundShape),
       startY,
       slotHints,
       matchNumbers,
@@ -878,7 +879,9 @@ export function BracketView<M extends BracketMatch>({
   const [isGrabbing, setIsGrabbing] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
-  const roundLabel = useBracketRoundLabel();
+  // The tree draws the upper bracket as its own labelled row of columns, so a
+  // "UB " prefix on every header repeats what the picture already says.
+  const roundLabel = useBracketRoundLabel({ bareUpper: true });
   const layout = useMemo(
     () => buildLayout(encounters, type, t, roundLabel),
     [encounters, type, t, roundLabel]

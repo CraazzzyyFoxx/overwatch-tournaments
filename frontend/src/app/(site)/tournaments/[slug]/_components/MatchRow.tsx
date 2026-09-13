@@ -16,7 +16,7 @@ export type MatchRowProps = {
   encounter: Encounter;
   /** Mono leading cell: "21:00 · R5", "M10 · Bo5", a group letter. */
   leading: string;
-  /** Mono trailing cell: "Group B · Bo2", "Lower R4 · Bo3". */
+  /** Mono trailing cell: "Group B · Bo2", "LB Final · Bo3". */
   trailing?: string;
   /** Bracket node for this match; renders a labelled "open in bracket" link when given. */
   bracketHref?: string;

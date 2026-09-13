@@ -12,6 +12,7 @@
  */
 import type { Tone } from "@/components/admin/tone";
 import { resolveBestOf, stageBestOfRoundSections } from "@/lib/best-of";
+import { bracketRoundLabelEn } from "@/lib/bracket-round-name";
 import type { StageBestOfConfig } from "@/types/admin.types";
 import type {
   Stage,
@@ -460,7 +461,10 @@ export function projectStage({
   if (grandFinalRound != null) {
     rounds.push({
       round: grandFinalRound,
-      label: "Grand Final",
+      label: bracketRoundLabelEn(grandFinalRound, {
+        rounds: [grandFinalRound],
+        finalRounds: [grandFinalRound]
+      }),
       section: null,
       bestOf: resolveBestOf(bestOf, grandFinalRound, { isFinal: true }),
       isFinal: true

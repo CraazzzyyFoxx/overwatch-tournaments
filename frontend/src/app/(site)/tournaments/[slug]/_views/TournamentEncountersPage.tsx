@@ -6,8 +6,8 @@ import { useFormatter, useTranslations } from "next-intl";
 import { CalendarClock, ListOrdered } from "lucide-react";
 
 import {
+  bracketRoundShape,
   buildRoundGroups,
-  getDoubleEliminationFinalRounds,
   orderEliminationRounds,
   type RoundGroup
 } from "@/components/bracket-view.helpers";
@@ -184,13 +184,12 @@ function buildStageBlocks(
   const byId = new Map(encounters.map((encounter) => [encounter.id, encounter]));
 
   let groups: RoundGroup[];
-  let finalRoundList: number[] = [];
   let matchNumbers = new Map<number, number>();
+  const shape = bracketRoundShape(isElimination ? stage.type : undefined, encounters);
 
   if (isElimination) {
     const order = orderEliminationRounds(encounters, stage.type);
     groups = [...order.groups].reverse();
-    finalRoundList = order.finalRounds;
     matchNumbers = order.matchNumbers;
   } else {
     groups = buildRoundGroups(encounters).sort((left, right) => right.round - left.round);
@@ -219,7 +218,7 @@ function buildStageBlocks(
       key: `${stageKey(stage.id)}:${group.round}`,
       heading: [
         stage.name,
-        roundLabel(group.round, finalRoundList),
+        roundLabel(group.round, shape),
         rows.length > 1 ? countLabel(rows.length) : null
       ]
         .filter(Boolean)
@@ -469,19 +468,15 @@ const TournamentEncountersPage = ({ tournamentId, slug, now }: TournamentEncount
     const type = stage?.stage_type ?? encounter.stage?.stage_type;
     const bo = `Bo${encounter.best_of}`;
     const name = encounter.stage_item?.name;
+    const shape = bracketRoundShape(
+      type,
+      encounters.filter((row) => row.stage_id === encounter.stage_id)
+    );
     if (IS_ELIMINATION[type ?? ""] === true) {
-      const finals =
-        type === "double_elimination"
-          ? [
-              ...getDoubleEliminationFinalRounds(
-                encounters.filter((row) => row.stage_id === encounter.stage_id)
-              )
-            ].sort((left, right) => left - right)
-          : [];
-      return `${roundLabel(encounter.round, finals)} · ${bo}`;
+      return `${roundLabel(encounter.round, shape)} · ${bo}`;
     }
     return [
-      roundLabel(encounter.round, []),
+      roundLabel(encounter.round, shape),
       name ? (name.length <= 2 ? `${groupWord} ${name}` : name) : null,
       bo
     ]

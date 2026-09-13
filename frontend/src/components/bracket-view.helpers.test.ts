@@ -3,15 +3,16 @@ import { describe, expect, it } from "bun:test";
 import type { Encounter, EncounterSlotSource } from "@/types/encounter.types";
 import {
   activeRoundNumber,
-  bracketRoundLabel,
+  bracketRoundShape,
   buildRoundGroups,
   computeMatchNumbers,
   computeSlotHints,
   getDoubleEliminationFinalRounds,
   getRoundSectionMatchCapacity,
   orderEliminationRounds,
-  stageFinalRounds
+  stageRoundShape
 } from "@/components/bracket-view.helpers";
+import { bracketRoundLabel } from "@/lib/bracket-round-name";
 
 function createEncounter(id: number, round: number, sources?: EncounterSlotSource[]): Encounter {
   return {
@@ -200,13 +201,11 @@ describe("bracket round names", () => {
   ];
 
   it("names the same round identically from a laid-out bracket and from a round list", () => {
-    const fromBracket = [...getDoubleEliminationFinalRounds(generated)].sort(
-      (left, right) => left - right
-    );
+    const fromBracket = bracketRoundShape("double_elimination", generated);
     const rounds = [...new Set(generated.map((match) => match.round))];
-    const fromPicker = stageFinalRounds(1, "double_elimination", rounds, generated);
+    const fromPicker = stageRoundShape(1, "double_elimination", rounds, generated);
 
-    expect(fromPicker).toEqual(fromBracket);
+    expect(fromPicker.finalRounds).toEqual(fromBracket.finalRounds);
     for (const round of rounds) {
       expect(bracketRoundLabel(round, fromPicker)).toEqual(
         bracketRoundLabel(round, fromBracket)
@@ -216,32 +215,32 @@ describe("bracket round names", () => {
 
   it("calls a double elimination's deciding round the grand final, and its rematch a reset", () => {
     const withReset = [...generated, createEncounter(7, 4)];
-    const finalRounds = stageFinalRounds(
+    const shape = stageRoundShape(
       1,
       "double_elimination",
       [...new Set(withReset.map((match) => match.round))],
       withReset
     );
 
-    expect(finalRounds).toEqual([3, 4]);
-    expect(bracketRoundLabel(2, finalRounds)).toEqual({ key: "round", n: 2 });
-    expect(bracketRoundLabel(3, finalRounds)).toEqual({ key: "grandFinal" });
-    expect(bracketRoundLabel(4, finalRounds)).toEqual({ key: "grandFinalReset" });
-    expect(bracketRoundLabel(-2, finalRounds)).toEqual({ key: "lowerRound", n: 2 });
+    expect(shape.finalRounds).toEqual([3, 4]);
+    expect(bracketRoundLabel(2, shape)).toEqual({ key: "upperFinal" });
+    expect(bracketRoundLabel(3, shape)).toEqual({ key: "grandFinal" });
+    expect(bracketRoundLabel(4, shape)).toEqual({ key: "grandFinalReset" });
+    expect(bracketRoundLabel(-2, shape)).toEqual({ key: "lowerFinal", n: 2 });
   });
 
   it("reads the highest round of a predicted bracket as the grand final -- one never has a reset", () => {
-    const finalRounds = stageFinalRounds(1, "double_elimination", [-2, -1, 1, 2, 3], undefined);
+    const shape = stageRoundShape(1, "double_elimination", [-2, -1, 1, 2, 3], undefined);
 
-    expect(finalRounds).toEqual([3]);
-    expect(bracketRoundLabel(3, finalRounds)).toEqual({ key: "grandFinal" });
+    expect(shape.finalRounds).toEqual([3]);
+    expect(bracketRoundLabel(3, shape)).toEqual({ key: "grandFinal" });
   });
 
   it("leaves a single elimination's rounds plain -- it has no grand final", () => {
-    const finalRounds = stageFinalRounds(1, "single_elimination", [1, 2, 3], generated);
+    const shape = stageRoundShape(1, "single_elimination", [1, 2, 3], generated);
 
-    expect(finalRounds).toEqual([]);
-    expect(bracketRoundLabel(3, finalRounds)).toEqual({ key: "round", n: 3 });
+    expect(shape.finalRounds).toEqual([]);
+    expect(bracketRoundLabel(3, shape)).toEqual({ key: "round", n: 3 });
   });
 });
 

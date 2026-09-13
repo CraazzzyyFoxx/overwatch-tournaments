@@ -827,10 +827,10 @@ describe("once it is over (§3C)", () => {
     expect(text).toContain("Gamma");
     expect(text).not.toContain("Delta");
     // The champion's roster comes off the teams read, the finalists' notes off
-    // the bracket: "2–3 in the final", "Eliminated in Lower R1".
+    // the bracket: "2–3 in the final", "Eliminated in LB Final".
     expect(text).toContain("yaLucky · Kenny");
     expect(text).toContain(COPY.result.finalScore.replace("{score}", "2–3"));
-    expect(text).toContain(COPY.result.exitedIn.replace("{round}", "Lower R1"));
+    expect(text).toContain(COPY.result.exitedIn.replace("{round}", "LB Final"));
   });
 
   it("counts the tournament up and links onward to the statistics", async () => {

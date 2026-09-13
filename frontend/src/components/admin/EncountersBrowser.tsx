@@ -49,6 +49,10 @@ import { TournamentLogUploadDialog } from "@/app/admin/tournaments/[id]/componen
 import { invalidateTournamentWorkspace } from "@/app/admin/tournaments/[id]/components/tournamentWorkspace.queryKeys";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useQueryParams } from "@/hooks/useQueryParams";
+import {
+  bracketRoundLabelEn,
+  UNKNOWN_ROUND_SHAPE
+} from "@/lib/bracket-round-name";
 import { hasUnsavedChanges } from "@/lib/form-change";
 import { notify } from "@/lib/notify";
 import { cn } from "@/lib/utils";
@@ -603,7 +607,7 @@ export function EncountersBrowser({
         title={openRow ? `Encounter #${openRow.id}` : ""}
         subtitle={
           openRow
-            ? `${openRow.tournament?.name ?? "Unknown tournament"} · ${encounterScopeLabel(openRow)} · Round ${openRow.round}`
+            ? `${openRow.tournament?.name ?? "Unknown tournament"} · ${encounterScopeLabel(openRow)} · ${bracketRoundLabelEn(openRow.round, UNKNOWN_ROUND_SHAPE)}`
             : undefined
         }
         onPrev={openIndex > 0 ? () => setParams({ id: String(pageRows[openIndex - 1].id) }) : undefined}

@@ -38,7 +38,7 @@ import { getApiErrorMessage } from "@/lib/api-error";
 import { BEST_OF_OPTIONS, DEFAULT_BEST_OF } from "@/lib/best-of";
 import { notify } from "@/lib/notify";
 import { withReturnTo } from "@/lib/return-to";
-import { stageFinalRounds } from "@/components/bracket-view.helpers";
+import { stageRoundShape } from "@/components/bracket-view.helpers";
 import { useBracketRoundLabel } from "@/hooks/useBracketRoundLabel";
 import encounterService from "@/services/encounter.service";
 import scrimService from "@/services/scrim.service";
@@ -125,9 +125,9 @@ export function ScrimCreateDialog({
   );
   // The same round names the bracket shows, so a copied scope is recognizable.
   const roundLabel = useBracketRoundLabel();
-  const finalRounds = useMemo(
+  const roundShape = useMemo(
     () =>
-      stageFinalRounds(
+      stageRoundShape(
         copyStageId,
         stages.find((stage) => stage.id === copyStageId)?.stage_type,
         rounds,
@@ -341,7 +341,7 @@ export function ScrimCreateDialog({
                       <SelectItem value={ALL_ROUNDS_SCOPE}>{t("roundAll")}</SelectItem>
                       {rounds.map((round) => (
                         <SelectItem key={round} value={String(round)}>
-                          {roundLabel(round, finalRounds)}
+                          {roundLabel(round, roundShape)}
                         </SelectItem>
                       ))}
                     </SelectContent>

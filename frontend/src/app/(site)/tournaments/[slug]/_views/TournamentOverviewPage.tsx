@@ -7,15 +7,16 @@ import { useFormatter, useTranslations } from "next-intl";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
+  bracketRoundShape,
   buildRoundGroups,
   orderEliminationRounds,
-  stageFinalRounds,
   type RoundGroup
 } from "@/components/bracket-view.helpers";
 import RosterSlotGlyph from "@/components/registration/RosterSlotGlyph";
 import TeamName from "@/components/TeamName";
 import { useBracketRoundLabel } from "@/hooks/useBracketRoundLabel";
 import { useMinuteClock } from "@/hooks/useMinuteClock";
+import { UNKNOWN_ROUND_SHAPE, type BracketRoundShape } from "@/lib/bracket-round-name";
 import { ROSTER_SLOT_CODES } from "@/lib/roster-shape";
 import { getStreamStatus, STREAM_STATUS_META } from "@/lib/stream-platform";
 import { tournamentQueryKeys } from "@/lib/tournament-query-keys";
@@ -492,17 +493,18 @@ export default function TournamentOverviewPage({
   );
   // Per stage, because "Latest results" spans stages: a group stage's highest
   // round is not a Grand Final, and naming it one would contradict the bracket.
-  const finalRoundsByStage = useMemo(() => {
-    const byStage: Record<number, number[]> = {};
+  const roundShapeByStage = useMemo(() => {
+    const byStage: Record<number, BracketRoundShape> = {};
     for (const item of tournament?.stages ?? []) {
-      const rounds = encounters
-        .filter((encounter) => encounter.stage_id === item.id)
-        .map((encounter) => encounter.round);
-      byStage[item.id] = stageFinalRounds(item.id, item.stage_type, rounds, encounters);
+      byStage[item.id] = bracketRoundShape(
+        item.stage_type,
+        encounters.filter((encounter) => encounter.stage_id === item.id)
+      );
     }
     return byStage;
   }, [encounters, tournament?.stages]);
-  const finalRounds = stageId === null ? [] : (finalRoundsByStage[stageId] ?? []);
+  const roundShape =
+    (stageId === null ? undefined : roundShapeByStage[stageId]) ?? UNKNOWN_ROUND_SHAPE;
 
   const liveTeamStreams = useMemo(
     () => buildLiveTeamStreams(streamsQuery.data),
@@ -521,7 +523,8 @@ export default function TournamentOverviewPage({
   const encounterRound = (encounter: Encounter) =>
     roundLabel(
       encounter.round,
-      encounter.stage_id === null ? [] : (finalRoundsByStage[encounter.stage_id] ?? [])
+      (encounter.stage_id === null ? undefined : roundShapeByStage[encounter.stage_id]) ??
+        UNKNOWN_ROUND_SHAPE
     );
 
   /** `STAGE · ROUND · BoN[ · HH:MM]`; the card's eyebrow is uppercased by CSS. */
@@ -706,7 +709,7 @@ export default function TournamentOverviewPage({
           {pickRoundWindow(roundGroups, currentRoundOf(roundGroups)).map((group) => (
             <div className="min-w-[13rem] flex-1 space-y-1.5" key={group.round}>
               <div className="text-label uppercase tracking-label text-[color:var(--aqt-fg-faint)]">
-                {roundLabel(group.round, finalRounds)}
+                {roundLabel(group.round, roundShape)}
               </div>
               {group.matches.map((match) => {
                 const encounter = stageEncounters.find((item) => item.id === match.id);
@@ -1154,7 +1157,7 @@ export default function TournamentOverviewPage({
       third = podiumTeam(
         eliminated,
         t("tournamentDetail.overview.result.exitedIn", {
-          round: roundLabel(lowerFinal.round, finalRounds)
+          round: roundLabel(lowerFinal.round, roundShape)
         })
       );
     }

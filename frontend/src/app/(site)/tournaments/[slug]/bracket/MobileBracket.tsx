@@ -5,8 +5,8 @@ import { useTranslations } from "next-intl";
 
 import {
   activeRoundNumber,
-  buildRoundGroups,
-  getDoubleEliminationFinalRounds
+  bracketRoundShape,
+  buildRoundGroups
 } from "@/components/bracket-view.helpers";
 import { FilterChip, FilterChipGroup } from "@/components/ui/filter-chip";
 import { useBracketRoundLabel } from "@/hooks/useBracketRoundLabel";
@@ -34,13 +34,11 @@ export function MobileBracket({ encounters, type, highlightMatchId = null }: Rea
   const t = useTranslations();
   const roundLabel = useBracketRoundLabel();
 
-  const { rounds, finalRounds } = useMemo(() => {
+  const { rounds, shape } = useMemo(() => {
     const groups = buildRoundGroups(encounters);
     const upper = groups.filter((g) => g.round > 0).sort((a, b) => a.round - b.round);
     const lower = groups.filter((g) => g.round < 0).sort((a, b) => b.round - a.round);
-    const finals =
-      type === "double_elimination" ? [...getDoubleEliminationFinalRounds(encounters)] : [];
-    return { rounds: [...upper, ...lower], finalRounds: finals };
+    return { rounds: [...upper, ...lower], shape: bracketRoundShape(type, encounters) };
   }, [encounters, type]);
 
   const initialRound =
@@ -53,7 +51,9 @@ export function MobileBracket({ encounters, type, highlightMatchId = null }: Rea
     return <div className="py-8 text-center text-[color:var(--aqt-fg-muted)]">{t("common.noBracketMatches")}</div>;
   }
 
-  const label = (r: number) => roundLabel(r, finalRounds);
+  // The chips list both brackets in one row, so their names keep the UB/LB
+  // prefix the tree's own columns can do without.
+  const label = (r: number) => roundLabel(r, shape);
 
   return (
     <div className="space-y-3">

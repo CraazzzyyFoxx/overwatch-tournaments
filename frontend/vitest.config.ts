@@ -169,6 +169,9 @@ export default defineConfig({
       // the veto room runs the SERVER's sequence — an unrun drift check is
       // worse than none, since it reports green either way.
       "src/lib/best-of.test.ts",
+      // The vocabulary every round name on the site is rendered from; unrun, a
+      // screen could go back to calling the UB Final "Round 3" with a green suite.
+      "src/lib/bracket-round-name.test.ts",
       "src/lib/roster-shape.test.ts",
       "src/lib/return-to.test.ts",
       // Same mixed-runner situation, so file-level again: this one pins the

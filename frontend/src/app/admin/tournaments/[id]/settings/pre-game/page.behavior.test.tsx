@@ -799,8 +799,8 @@ describe("Settings › Pre-game phase predicts a round scope before the bracket 
     await settle();
 
     const labels = roundLabels();
-    expect(labels).toContain("Lower R1");
-    expect(labels).toContain("Lower R2");
+    expect(labels).toContain("LB Round 1");
+    expect(labels).toContain("LB Final");
     expect(labels).toContain("Round 1");
     expect(labels).toContain("Round 2");
   });
@@ -816,7 +816,9 @@ describe("Settings › Pre-game phase predicts a round scope before the bracket 
     const labels = roundLabels();
     expect(labels).toContain("Grand Final");
     expect(labels).not.toContain("Round 3");
-    expect(labels).toContain("Round 2");
+    // Round 2 is the last upper-bracket round, and the bracket calls it that.
+    expect(labels).toContain("UB Final");
+    expect(labels).toContain("LB Final");
   });
 
   it("explains an unresolved scope when neither encounters nor team inputs exist yet", async () => {

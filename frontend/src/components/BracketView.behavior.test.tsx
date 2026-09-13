@@ -290,6 +290,31 @@ describe("BracketView round headers", () => {
       expect(above.every((header) => top(card) - top(header) >= 24)).toBe(true);
     }
   });
+
+  // The tree is the one surface that drops the "UB " prefix: its upper rounds
+  // are their own row of columns. The lower bracket keeps "LB", or the picture
+  // carries two headers reading "Final" for two different matches.
+  it("names the upper bracket bare and the lower bracket by side", () => {
+    render(
+      <BracketView
+        type="double_elimination"
+        encounters={[
+          encounter({ id: 1, round: 1, status: "open" }),
+          encounter({ id: 2, round: 1, status: "open" }),
+          encounter({ id: 3, round: 2, status: "open" }),
+          encounter({ id: 4, round: -1, status: "open" }),
+          encounter({ id: 5, round: -2, status: "open" }),
+          encounter({ id: 6, round: 3, status: "open" })
+        ]}
+      />
+    );
+
+    expect(
+      [...container.querySelectorAll("[data-round-header]")].map((header) =>
+        header.textContent?.trim()
+      )
+    ).toEqual(["Semifinal", "Final", "LB Round 1", "LB Final", "Grand Final"]);
+  });
 });
 
 // Connector lines: the bracket's own advancement edges are the truth, and a

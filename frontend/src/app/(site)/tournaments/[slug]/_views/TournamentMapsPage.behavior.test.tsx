@@ -305,7 +305,7 @@ describe("the pool, in pictures", () => {
     expect(rows[0]?.textContent).toContain(ILIOS.name);
     expect(rows[0]?.textContent).not.toContain(SURAVASA.name);
 
-    expect(rows[1]?.textContent).toContain("Lower R1");
+    expect(rows[1]?.textContent).toContain("LB Round 1");
     expect(rows[1]?.textContent).toContain(SURAVASA.name);
   });
 

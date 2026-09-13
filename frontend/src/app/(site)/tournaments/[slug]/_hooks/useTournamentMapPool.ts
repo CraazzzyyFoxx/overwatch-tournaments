@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { useBracketRoundLabel } from "@/hooks/useBracketRoundLabel";
+import { UNKNOWN_ROUND_SHAPE } from "@/lib/bracket-round-name";
 import mapService from "@/services/map.service";
 import pickBanService from "@/services/pickBan.service";
 import tournamentService from "@/services/tournament.service";
@@ -36,9 +37,9 @@ export type MapPoolScopeView = {
   key: string;
   stageId: number;
   stageName: string;
-  /** "Round 2" / "Lower R1"; `null` for a config that covers the whole stage. */
+  /** "Round 2" / "LB Round 1"; `null` for a config that covers the whole stage. */
   round: string | null;
-  /** The scope in one line — "Playoff · Lower R1" — for labels and titles. */
+  /** The scope in one line — "Playoff · LB Round 1" — for labels and titles. */
   title: string;
   pool: MapPoolView;
   /**
@@ -176,7 +177,10 @@ export function useTournamentMapPool(tournamentId: number): TournamentMapPool {
               )
             )
           }));
-        const round = config.round == null ? null : roundLabel(config.round, []);
+        // No encounters are read here, so the stage's shape is unknown: a round
+        // keeps its plain depth rather than being guessed into a final.
+        const round =
+          config.round == null ? null : roundLabel(config.round, UNKNOWN_ROUND_SHAPE);
         return {
           key: config.round == null ? `stage:${stageId}` : `round:${stageId}:${config.round}`,
           stageId,
