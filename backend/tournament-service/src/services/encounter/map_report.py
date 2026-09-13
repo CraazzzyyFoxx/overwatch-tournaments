@@ -139,7 +139,12 @@ class MapReportService:
         rows = list(await self.report_repo.list_for_encounter(session, encounter_id))
         by_index: dict[int, list[EncounterMapReport]] = {}
         for row in rows:
-            if row.map_index < 1:
+            # Index 0 is the legacy free-play slot: every report filed before this
+            # became 1-based carries it. Dropping those rows would hide the
+            # opponent's half of a slot that is open right now, so an encounter
+            # mid-report at deploy time would answer the second captain with a
+            # fresh slot 1 -- no dispute, no agreement, the first report orphaned.
+            if row.map_index is None or row.map_index < 0:
                 continue
             by_index.setdefault(row.map_index, []).append(row)
 
