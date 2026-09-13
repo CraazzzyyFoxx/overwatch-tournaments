@@ -25,10 +25,8 @@ function game(id: number, status: CustomGame["status"]): CustomGame {
     name: `Mix ${id}`,
     status,
     settings: {
-      points_per_win: null,
+      points_per_win: 0,
       team_names: {},
-      role_mask: null,
-      discord_channel_id: null,
       workspace_discord_channel_id: null
     },
     balance_result: null,

@@ -17,12 +17,23 @@ class TestMixEnums:
 class TestCustomGameModel:
     def test_known_settings_are_not_stored_in_one_config_bag(self):
         columns = models.CustomGame.__table__.columns
-        assert "points_per_win" in columns
         assert "balance_result_json" in columns
         assert "config_json" not in columns
         assert "result_json" not in columns
         assert "outcome_json" not in columns
         assert "co_host_user_ids" not in columns
+
+    def test_what_the_host_configures_is_not_on_the_mix(self):
+        # The solver knobs, the roster shape and the points knob describe how a
+        # person runs their mixes, so they live on `balancer.user_config`; the
+        # Discord target is the workspace's. None of them is a fact about one
+        # lobby, and a mix that stored its own diverged from all three editors.
+        columns = models.CustomGame.__table__.columns
+        assert "points_per_win" not in columns
+        assert "discord_channel_id" not in columns
+        user_columns = models.UserBalancerConfig.__table__.columns
+        assert "role_slots_json" in user_columns
+        assert "points_per_win" in user_columns
 
     def test_lineup_state_is_one_enum_like_column(self):
         columns = models.CustomGamePlayer.__table__.columns
@@ -38,7 +49,7 @@ class TestCustomGameModel:
         assert models.CustomGameCoHost.__table__.schema == "balancer"
         assert models.CustomGamePlayerRole.__table__.schema == "balancer"
         assert models.CustomGameTeamName.__table__.schema == "balancer"
-        assert models.CustomGameRoleSlot.__table__.schema == "balancer"
+        assert not hasattr(models, "CustomGameRoleSlot")
 
     def test_co_host_grant_addresses_a_login_not_a_roster_row(self):
         # Membership is RBAC, so a co-host can hold write access here without a

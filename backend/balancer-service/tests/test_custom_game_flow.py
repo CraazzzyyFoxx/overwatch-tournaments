@@ -104,18 +104,26 @@ class _TeamNames:
             names[index] = name
 
 
-class _RoleSlots:
+class _HostPrefs:
+    """``balancer.user_config`` as a dict: everything the HOST configures.
+
+    The roster shape and the points knob are the account's, not the mix's, so
+    the flow arranges them up front instead of setting them per session.
+    """
+
     def __init__(self) -> None:
-        self.by_game: dict[int, dict[str, int]] = {}
+        self.rows: dict[int, Any] = {}
 
-    async def mapping_for_game(self, _session: Any, game_id: int) -> dict[str, int]:
-        return dict(self.by_game.get(game_id, {}))
+    def save(self, user_id: int, **fields: Any) -> None:
+        self.rows[user_id] = SimpleNamespace(
+            user_id=user_id,
+            config_json=fields.get("config_json", {}),
+            role_slots_json=fields.get("role_slots_json"),
+            points_per_win=fields.get("points_per_win"),
+        )
 
-    async def replace(self, _session: Any, game_id: int, role_mask: dict[str, int] | None) -> None:
-        if role_mask:
-            self.by_game[game_id] = dict(role_mask)
-        else:
-            self.by_game.pop(game_id, None)
+    async def get_by_user(self, _session: Any, user_id: int) -> Any:
+        return self.rows.get(user_id)
 
 
 class _CoHosts:
@@ -207,7 +215,7 @@ class MixFlowTests(IsolatedAsyncioTestCase):
         self.roster = _Roster()
         self.player_roles = _PlayerRoles()
         self.team_names = _TeamNames()
-        self.role_slots = _RoleSlots()
+        self.host_prefs = _HostPrefs()
         self.co_hosts = _CoHosts()
         self.casual = _CasualStore()
 
@@ -239,16 +247,14 @@ class MixFlowTests(IsolatedAsyncioTestCase):
             co_hosts=self.co_hosts,
             player_roles=self.player_roles,
             team_names=self.team_names,
-            role_slots=self.role_slots,
+            # The host's own row: solver knobs, roster shape, points per win.
+            host_prefs=self.host_prefs,
             casual_matches=SimpleNamespace(
                 create=self.casual.create,
                 list_for_custom_game=self.casual.list_for_custom_game,
             ),
             casual_teams=SimpleNamespace(create_many=self.casual.create_many),
             casual_players=SimpleNamespace(create=self.casual.create_player),
-            # This host never saved any solver knobs, so the mix balances on the
-            # engine defaults.
-            host_prefs=SimpleNamespace(get_by_user=AsyncMock(return_value=None)),
             ranks=self.ranks,
             load_roster=AsyncMock(
                 side_effect=lambda _s, *, workspace_id, member_ids: {
@@ -268,6 +274,10 @@ class MixFlowTests(IsolatedAsyncioTestCase):
         )
 
     async def test_a_whole_mix_from_create_to_close(self) -> None:
+        # Everything the host configures is on their account before the mix
+        # exists: two teams of two, and 25 rank points riding on the result.
+        self.host_prefs.save(9, role_slots_json={"tank": 1, "dps": 1}, points_per_win=25)
+
         game = await self.service.create(
             self.session,
             workspace_id=1,
@@ -304,23 +314,13 @@ class MixFlowTests(IsolatedAsyncioTestCase):
         self.assertEqual(narrowed.role_selection_mode, MixRoleSelectionMode.EXPLICIT)
         self.assertEqual(self.player_roles.by_player[narrowed.id], ["dps"])
 
-        # Two teams of two for this run, and a name for the first column.
-        await self.service.set_role_mask(
-            self.session,
-            workspace_id=1,
-            custom_game_id=game.id,
-            role_mask={"tank": 1, "dps": 1},
-            actor_user_id=9,
-        )
+        # A name for the first column -- the only setting that is the mix's own.
         await self.service.set_team_names(
             self.session,
             workspace_id=1,
             custom_game_id=game.id,
             team_names={"0": "Wolves"},
             actor_user_id=9,
-        )
-        await self.service.set_points_per_win(
-            self.session, workspace_id=1, custom_game_id=game.id, points_per_win=25, actor_user_id=9
         )
 
         seated = [
@@ -339,7 +339,9 @@ class MixFlowTests(IsolatedAsyncioTestCase):
         self.assertTrue(payload["players"]["7"]["identity"]["mustPlay"])
         self.assertEqual(list(payload["players"]["8"]["stats"]["classes"]), ["dps"])
         self.assertEqual(role_mask, {"tank": 1, "dps": 1})
-        self.assertIsNone(overrides)
+        # The shape and the points are columns beside the override blob, so
+        # neither leaks into the solver's config: this host set no solver knob.
+        self.assertEqual(overrides, {})
         # The overflow the solver could not seat is benched, nothing else moves.
         by_member = {row.workspace_member_id: row for row in self.roster.rows}
         self.assertEqual(by_member[11].participation, MixParticipation.BENCHED)

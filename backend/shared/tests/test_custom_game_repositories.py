@@ -50,11 +50,3 @@ class CustomGameRepositoryTests(IsolatedAsyncioTestCase):
         result = await custom_game.CustomGameTeamNameRepository().mapping_for_game(session, 11)
 
         self.assertEqual(result, {0: "Wolves", 1: "Bears"})
-
-    async def test_role_slot_repository_returns_an_indexed_mapping(self) -> None:
-        session = _session()
-        session.execute.return_value = SimpleNamespace(all=lambda: [("tank", 1), ("dps", 2)])
-
-        result = await custom_game.CustomGameRoleSlotRepository().mapping_for_game(session, 11)
-
-        self.assertEqual(result, {"tank": 1, "dps": 2})

@@ -3772,7 +3772,7 @@
       "summary": "List custom game matches"
     },
     "rpc.balancer.custom.post_discord": {
-      "description": "Queues an embed of one balance option's teams, the next map and the points at stake to the mix's own channel, or the workspace-wide mix channel when it has none, and returns immediately -- delivery is the bot's, and nothing about the mix changes. Host or co-host only; 409 when neither channel is configured and 404 when the balance option is missing.",
+      "description": "Queues an embed of one balance option's teams, the next map and the points at stake to the workspace-wide mix channel and returns immediately -- delivery is the bot's, and nothing about the mix changes. Host or co-host only; 409 when the workspace has no mix channel configured and 404 when the balance option is missing.",
       "request": {
         "array": false,
         "ref": "balancer.CustomGamePostDiscord"
@@ -3795,14 +3795,6 @@
       "description": "Recommends who is owed the next seat and who should sit out, computed from this mix's own match history. Read-only and public, no authentication required.",
       "summary": "Get custom game rotation hints"
     },
-    "rpc.balancer.custom.set_discord_channel": {
-      "description": "Overrides the workspace-wide mix channel for this one mix, as a digits-only snowflake string, or clears the override with null so the workspace channel applies again. Workspace admin only -- an ordinary host cannot redirect the workspace's Discord. The id is not verified against Discord here, an unreachable channel surfaces when the bot tries to deliver.",
-      "request": {
-        "array": false,
-        "ref": "balancer.CustomGameDiscordChannelPatch"
-      },
-      "summary": "Set custom game Discord channel"
-    },
     "rpc.balancer.custom.set_next_map": {
       "description": "Names the map the mix's next match is played on -- rolled or picked by a host ahead of the lobby -- or clears it with null. The next recorded match takes this map unless the outcome names one explicitly, and clears it either way. Host or co-host only; 404 when the map is not in the catalogue.",
       "request": {
@@ -3818,22 +3810,6 @@
         "ref": "balancer.CustomGamePlayersParticipationPatch"
       },
       "summary": "Set custom game participation"
-    },
-    "rpc.balancer.custom.set_points_per_win": {
-      "description": "Sets how far a decided match moves both teams' ranks in the host's own book, or null to record matches without touching ranks. Host or co-host only.",
-      "request": {
-        "array": false,
-        "ref": "balancer.CustomGamePointsPerWinPatch"
-      },
-      "summary": "Set custom game points per win"
-    },
-    "rpc.balancer.custom.set_role_mask": {
-      "description": "Overrides how many seats of each role a team gets in this mix; null restores the workspace default shape. Host or co-host only.",
-      "request": {
-        "array": false,
-        "ref": "balancer.CustomGameRoleMaskPatch"
-      },
-      "summary": "Set custom game role mask"
     },
     "rpc.balancer.custom.set_team_names": {
       "description": "Renames the balanced teams by index and returns the refreshed mix. Host or co-host only.",
@@ -4198,15 +4174,15 @@
       "summary": "Upsert workspace player"
     },
     "rpc.balancer.prefs.get": {
-      "description": "Returns the signed-in account's own mix solver knobs -- the rank-balance/role-comfort tilt, the per-role weights and how many balance options to keep. A null value means the knob was never set and the mix engine's own default applies. Authentication is the only gate: these are the caller's own preferences.",
+      "description": "Returns the signed-in account's own mix settings -- the rank-balance/role-comfort tilt, the per-role weights, how many balance options to keep, the roster shape its mixes field and how far a decided match moves its rank book -- plus roster_shape, the read-only resolution of that shape. A null value means the setting was never saved and the default applies. Authentication is the only gate: these are the caller's own preferences.",
       "response": {
         "array": false,
         "ref": "balancer.UserMixPreferencesRead"
       },
-      "summary": "Get my mix balancer preferences"
+      "summary": "Get my pickup mix preferences"
     },
     "rpc.balancer.prefs.upsert": {
-      "description": "Replaces all three of the caller's mix solver knobs at once and returns the stored result; a null clears one back to the engine default. They apply to every mix this account hosts -- a mix balances on its host's preferences whoever presses the button.",
+      "description": "Replaces all five of the caller's mix settings at once and returns the stored result with the re-resolved roster_shape; a null clears one back to the default, and 0 points per win stores as unset. They apply to every mix this account hosts -- a mix runs on its host's preferences whoever presses the button. 422 on an impossible roster shape.",
       "request": {
         "array": false,
         "ref": "balancer.UserMixPreferencesUpsert"
@@ -4215,7 +4191,7 @@
         "array": false,
         "ref": "balancer.UserMixPreferencesRead"
       },
-      "summary": "Set my mix balancer preferences"
+      "summary": "Set my pickup mix preferences"
     },
     "rpc.balancer.teams.export_registered": {
       "description": "Materializes the tournament's complete registered teams into balancer teams, optionally narrowed to given team ids, and returns removed/imported/created counts plus every team skipped and why. Requires admin panel access and workspace team-create permission, and emits a teams-changed realtime event when anything was imported.",
@@ -20461,28 +20437,6 @@
       "title": "CustomGameCreate",
       "type": "object"
     },
-    "balancer.CustomGameDiscordChannelPatch": {
-      "additionalProperties": false,
-      "description": "The channel the mix posts its matchup to; ``null`` clears it.\n\nA string, not an integer: a Discord snowflake is a 64-bit id that a\nJavaScript client cannot hold losslessly as a number. Digits only, so the\nserver can turn it back into the ``BIGINT`` column without guessing.",
-      "properties": {
-        "channel_id": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "title": "Channel Id"
-        }
-      },
-      "required": [
-        "channel_id"
-      ],
-      "title": "CustomGameDiscordChannelPatch",
-      "type": "object"
-    },
     "balancer.CustomGameHostTransfer": {
       "additionalProperties": false,
       "properties": {
@@ -20626,27 +20580,6 @@
       "title": "CustomGamePlayersParticipationPatch",
       "type": "object"
     },
-    "balancer.CustomGamePointsPerWinPatch": {
-      "additionalProperties": false,
-      "properties": {
-        "points_per_win": {
-          "anyOf": [
-            {
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "title": "Points Per Win"
-        }
-      },
-      "required": [
-        "points_per_win"
-      ],
-      "title": "CustomGamePointsPerWinPatch",
-      "type": "object"
-    },
     "balancer.CustomGamePostDiscord": {
       "additionalProperties": false,
       "description": "Which balance option's lineup to post, and the PNG of it to attach.\n\nThe image is the matchup card the host is looking at, rasterised in their\nbrowser (see ``frontend/src/hooks/useNodeCapture.ts``) -- the bot has no\nrenderer, and a screenshot of the real card is the one thing guaranteed to\nmatch what the mix page shows. Omitted when the capture fails, and the\ntext embed is then posted instead.",
@@ -20705,30 +20638,6 @@
         "variant_index"
       ],
       "title": "CustomGameRecordOutcome",
-      "type": "object"
-    },
-    "balancer.CustomGameRoleMaskPatch": {
-      "additionalProperties": false,
-      "properties": {
-        "role_mask": {
-          "anyOf": [
-            {
-              "additionalProperties": {
-                "type": "integer"
-              },
-              "type": "object"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "title": "Role Mask"
-        }
-      },
-      "required": [
-        "role_mask"
-      ],
-      "title": "CustomGameRoleMaskPatch",
       "type": "object"
     },
     "balancer.CustomGameRosterUpdate": {
@@ -22546,6 +22455,8 @@
             {
               "enum": [
                 "tournament",
+                "host",
+                "user",
                 "workspace",
                 "default"
               ],
@@ -22876,7 +22787,7 @@
       "type": "object"
     },
     "balancer.UserMixPreferencesRead": {
-      "description": "What is stored. All three are null for an account that never saved any.",
+      "description": "What is stored, plus the shape it resolves to.\n\nAll five stored fields are null for an account that never saved any;\n``roster_shape`` is always present, since a mix always has *some* shape.",
       "properties": {
         "max_result_variants": {
           "anyOf": [
@@ -22933,14 +22844,52 @@
           "default": null,
           "description": "Per-role importance for role-line balance, keyed by roster slot code. An omitted role weighs 1.0; null means no per-role opinion at all.",
           "title": "Mix Role Weights"
+        },
+        "points_per_win": {
+          "anyOf": [
+            {
+              "maximum": 1000,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "How far a decided match moves both teams' ranks in this account's own rank book. 0 and null both mean recording a match adjusts nothing.",
+          "title": "Points Per Win"
+        },
+        "role_mask": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "type": "integer"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "How many seats of each role a team gets in this account's mixes, keyed by roster slot code; null inherits the workspace default and then the built-in Overwatch 5v5 shape.",
+          "title": "Role Mask"
+        },
+        "roster_shape": {
+          "$ref": "#/components/schemas/balancer.RosterShapeRead",
+          "description": "Read-only: role_mask resolved through the fallback chain, so the client never recomputes it. source is 'user' when this account stored a mask and 'default' when it did not."
         }
       },
+      "required": [
+        "roster_shape"
+      ],
       "title": "UserMixPreferencesRead",
       "type": "object"
     },
     "balancer.UserMixPreferencesUpsert": {
       "additionalProperties": false,
-      "description": "A full replacement: all three keys required, each nullable to unset one.",
+      "description": "A full replacement: all five keys required, each nullable to unset one.",
       "properties": {
         "max_result_variants": {
           "anyOf": [
@@ -22994,12 +22943,43 @@
           ],
           "description": "Per-role importance for role-line balance, keyed by roster slot code. An omitted role weighs 1.0; null means no per-role opinion at all.",
           "title": "Mix Role Weights"
+        },
+        "points_per_win": {
+          "anyOf": [
+            {
+              "maximum": 1000,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "How far a decided match moves both teams' ranks in this account's own rank book. 0 and null both mean recording a match adjusts nothing.",
+          "title": "Points Per Win"
+        },
+        "role_mask": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "type": "integer"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "How many seats of each role a team gets in this account's mixes, keyed by roster slot code; null inherits the workspace default and then the built-in Overwatch 5v5 shape.",
+          "title": "Role Mask"
         }
       },
       "required": [
         "mix_comfort_tilt",
         "mix_role_weights",
-        "max_result_variants"
+        "max_result_variants",
+        "role_mask",
+        "points_per_win"
       ],
       "title": "UserMixPreferencesUpsert",
       "type": "object"
@@ -40673,6 +40653,8 @@
             {
               "enum": [
                 "tournament",
+                "host",
+                "user",
                 "workspace",
                 "default"
               ],

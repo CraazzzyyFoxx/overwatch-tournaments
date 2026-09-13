@@ -76,10 +76,8 @@ const GAME_ID = 11;
 
 /** The mix's own settings, all at their defaults. */
 const SETTINGS = {
-  points_per_win: null,
+  points_per_win: 0,
   team_names: {},
-  role_mask: null,
-  discord_channel_id: null,
   workspace_discord_channel_id: null,
 };
 

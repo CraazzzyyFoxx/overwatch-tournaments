@@ -1,21 +1,23 @@
 // @vitest-environment happy-dom
 //
-// The panel writes the whole preference row on every save, so the two ways it
-// can silently misbehave are both about what lands on the wire:
+// The panel has no Save button: every knob writes itself once it stops moving,
+// which puts three things on the line that are cheap to get wrong —
 //
 //  1. a knob left where the engine would have put it anyway must travel as
-//     `null` — storing an explicit 0.5 or 500 would make "never touched"
+//     `null`; storing an explicit 0.5 or 500 would make "never touched"
 //     indistinguishable from "deliberately set to the default", and would put
 //     a row on every account that ever opened this tab;
-//  2. Save must stay inert until something actually changed, or opening the
-//     tab writes a row by itself.
+//  2. a burst of edits (or a slider dragged across the track) must collapse
+//     into ONE write, not one per keystroke;
+//  3. opening the tab, or nudging a knob back to what is already stored, must
+//     write nothing at all.
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import MixBalancerSection from "@/components/account-settings/MixBalancerSection";
-import type { MixBalancerPreferences } from "@/services/mix-preferences.service";
+import type { MixBalancerPreferencesRead } from "@/services/mix-preferences.service";
 
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean;
@@ -45,15 +47,28 @@ vi.mock("@/lib/notify", () => ({
   notify: { success: vi.fn(), error: vi.fn(), apiError: vi.fn() },
 }));
 
-const UNSET: MixBalancerPreferences = {
+const UNSET: MixBalancerPreferencesRead = {
   mix_comfort_tilt: null,
   mix_role_weights: null,
   max_result_variants: null,
+  role_mask: null,
+  points_per_win: null,
+  roster_shape: {
+    slots: { tank: 1, dps: 2, support: 2 },
+    team_size: 5,
+    flex_slots: 0,
+    has_role_slots: true,
+    draft_rounds: 5,
+    source: "default",
+  },
 };
 
-function tick() {
+/** Longer than the panel's own debounce, so a settled write has fired. */
+const AFTER_AUTOSAVE_MS = 1000;
+
+function tick(ms = 0) {
   const { promise, resolve } = Promise.withResolvers<void>();
-  setTimeout(resolve, 0);
+  setTimeout(resolve, ms);
   return promise;
 }
 
@@ -74,14 +89,6 @@ async function mount() {
   return container;
 }
 
-function saveButton(scope: ParentNode) {
-  const button = [...scope.querySelectorAll("button")].find(
-    (node) => node.textContent?.trim() === "mixBalancer.save",
-  );
-  if (!button) throw new Error("Expected the Save button");
-  return button;
-}
-
 function field(scope: ParentNode, id: string) {
   const input = scope.querySelector<HTMLInputElement>(`#${id}`);
   if (!input) throw new Error(`Expected the ${id} field`);
@@ -89,7 +96,7 @@ function field(scope: ParentNode, id: string) {
 }
 
 // React tracks the input's own `value` setter, so write through the prototype
-// one (mirrors the mix dialog's test).
+// one (mirrors the other mix tests).
 const nativeValueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
 
 async function typeInto(input: HTMLInputElement, value: string) {
@@ -99,57 +106,67 @@ async function typeInto(input: HTMLInputElement, value: string) {
   });
 }
 
-async function click(node: Element) {
+async function settle() {
   await act(async () => {
-    node.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    await tick();
+    await tick(AFTER_AUTOSAVE_MS);
   });
 }
 
 beforeEach(() => {
   document.body.innerHTML = "";
   getPreferences.mockReset().mockResolvedValue(UNSET);
-  updatePreferences.mockReset().mockImplementation((preferences) => Promise.resolve(preferences));
+  updatePreferences.mockReset().mockImplementation((preferences) =>
+    Promise.resolve({ ...preferences, roster_shape: UNSET.roster_shape }),
+  );
 });
 
 describe("MixBalancerSection", () => {
-  it("offers no save until a knob moves", async () => {
-    const scope = await mount();
+  it("writes nothing while nothing has changed", async () => {
+    await mount();
+    await settle();
 
-    expect(saveButton(scope).hasAttribute("disabled")).toBe(true);
-
-    await typeInto(field(scope, "mix-result-variants"), "200");
-
-    expect(saveButton(scope).hasAttribute("disabled")).toBe(false);
+    expect(updatePreferences).not.toHaveBeenCalled();
   });
 
-  it("stores only what differs from the engine's own defaults", async () => {
+  it("stores a burst of edits as one row, with the untouched knobs as null", async () => {
     const scope = await mount();
 
     await typeInto(field(scope, "mix-role-weight-tank"), "2.5");
     await typeInto(field(scope, "mix-result-variants"), "200");
-    await click(saveButton(scope));
+    await typeInto(field(scope, "mix-points-per-win"), "50");
+    await settle();
 
+    expect(updatePreferences).toHaveBeenCalledTimes(1);
     expect(updatePreferences).toHaveBeenCalledWith({
-      // Untouched slider: nothing stored, the engine's weighting applies.
+      // Untouched slider and shape: nothing stored, the defaults apply.
       mix_comfort_tilt: null,
       mix_role_weights: { tank: 2.5 },
       max_result_variants: 200,
+      role_mask: null,
+      points_per_win: 50,
     });
   });
 
   it("clears a knob put back to its default instead of pinning it", async () => {
     getPreferences.mockResolvedValue({
-      mix_comfort_tilt: null,
+      ...UNSET,
       mix_role_weights: { tank: 2.5 },
       max_result_variants: 200,
+      points_per_win: 50,
     });
     const scope = await mount();
 
     await typeInto(field(scope, "mix-role-weight-tank"), "1");
     await typeInto(field(scope, "mix-result-variants"), "500");
-    await click(saveButton(scope));
+    await typeInto(field(scope, "mix-points-per-win"), "0");
+    await settle();
 
-    expect(updatePreferences).toHaveBeenCalledWith(UNSET);
+    expect(updatePreferences).toHaveBeenCalledWith({
+      mix_comfort_tilt: null,
+      mix_role_weights: null,
+      max_result_variants: null,
+      role_mask: null,
+      points_per_win: null,
+    });
   });
 });

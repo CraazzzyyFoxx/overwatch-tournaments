@@ -149,7 +149,7 @@ export function summarizeLineup(rows: CustomGamePlayer[]): LineupSummary {
  * A 5v5 mix needs one tank and two of each damage/support per team, so the
  * lineup needs twice that before a balance can seat everyone. Hard-coded
  * because the pickup solver runs the same 1-2-2 shape for every mix; a
- * configurable lock would come from `settings.role_mask`, which no mix sets yet.
+ * configurable lock would come from the host's own roster shape preference.
  */
 const ROLE_DEMAND: Record<RoleCode, number> = { tank: 2, dps: 4, support: 4 };
 

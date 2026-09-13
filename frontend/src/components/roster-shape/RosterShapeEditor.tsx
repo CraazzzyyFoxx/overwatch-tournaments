@@ -101,7 +101,7 @@ interface RosterShapeEditorProps {
    * rather than by shape ("this {entity} pins its own shape..."). Both entities
    * inherit the same workspace default, so every other string stays as-is.
    */
-  entity?: "tournament" | "mix";
+  entity?: "tournament" | "mix" | "account";
 }
 
 export function RosterShapeEditor({
@@ -159,6 +159,10 @@ export function RosterShapeEditor({
   // the workspace" describes a state the admin is in the middle of leaving.
   const sourceNote = (() => {
     if (!effective) return null;
+    // An account-scoped shape has no single workspace behind it: it applies to
+    // every mix its owner hosts, each in whatever workspace it runs in, so
+    // neither "inherited from THE workspace" nor a saved-source note fits.
+    if (entity === "account") return t(isInherit ? "willInheritAccount" : "overridingAccount");
     if (!isInherit) return t(entity === "mix" ? "overridingMix" : "overriding");
     if (effective.source === "tournament") {
       return t(entity === "mix" ? "willInheritMix" : "willInherit");

@@ -6,7 +6,6 @@ import { useQuery } from "@tanstack/react-query";
 
 import { PickupAddPlayersDialog } from "@/app/balancer/mix/PickupAddPlayersDialog";
 import { PickupLobbyPanel } from "@/app/balancer/mix/PickupLobbyPanel";
-import { PickupMixConfigDialog } from "@/app/balancer/mix/PickupMixConfigDialog";
 import { PickupAccessDialog } from "@/app/balancer/mix/PickupAccessDialog";
 import { PickupMixHeader } from "@/app/balancer/mix/PickupMixHeader";
 import { PickupPlayerSheet } from "@/app/balancer/mix/PickupPlayerSheet";
@@ -22,6 +21,7 @@ import { notify } from "@/lib/notify";
 import { customGameKeys, customGameService } from "@/services/custom-game.service";
 import mapService from "@/services/map.service";
 import { useAuthProfileStore } from "@/stores/auth-profile.store";
+import { useAccountSettingsModalStore } from "@/stores/account-settings-modal.store";
 import { useWorkspaceStore } from "@/stores/workspace.store";
 
 /**
@@ -42,6 +42,11 @@ import { useWorkspaceStore } from "@/stores/workspace.store";
  * Which balance option is on screen is the mix's own `selected_variant_index`,
  * not page state: the host's pager is the lobby's pager, and a viewer reads
  * the matchup being called out rather than one their browser chose.
+ *
+ * The mix itself carries no solver or format settings any more: how a lobby is
+ * split, what shape a team has and what a win is worth all belong to the host's
+ * account (`components/account-settings/MixBalancerSection`), which is where
+ * the header's settings button leads.
  */
 export default function BalancerPickupMixPage() {
   const params = useParams<{ gameId: string }>();
@@ -52,18 +57,17 @@ export default function BalancerPickupMixPage() {
   const currentUserId = useAuthProfileStore((state) => state.user?.id ?? null);
   const { canAccessPermission, isSuperuser, isWorkspaceAdmin } = usePermissions();
   const router = useRouter();
+  const openAccountSettings = useAccountSettingsModalStore((state) => state.open);
   // The mix-hosting grant, not a tournament permission: a workspace member can
   // run a pickup game without holding admin rights over teams.
   const canEdit = workspaceId != null && canAccessPermission("custom_game.create", workspaceId);
   // Workspace admin, the gate for the two writes host-or-co-host does not
   // cover: hard-deleting a mix (irreversible -- see `_hard_delete` in
-  // balancer-service's `rpc/custom.py`) and repointing its Discord channel
-  // (the workspace's server, not the host's).
+  // balancer-service's `rpc/custom.py`).
   const isAdminHere = workspaceId != null && (isSuperuser || isWorkspaceAdmin(workspaceId));
 
   const [openPlayerId, setOpenPlayerId] = useState<number | null>(null);
   const [isPoolOpen, setIsPoolOpen] = useState(false);
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isAccessOpen, setIsAccessOpen] = useState(false);
   // The OW catalogue with its gamemodes: the roll pool for the next map and
   // the manual picker. Which map is *chosen* is the mix's own `next_map_id`,
@@ -100,9 +104,6 @@ export default function BalancerPickupMixPage() {
     hardDeleteMix,
     setAuthorRanks,
     setTeamNames,
-    setRoleMask,
-    setPointsPerWin,
-    setDiscordChannel,
     postToDiscord,
     transferHost,
     addCoHost,
@@ -211,7 +212,7 @@ export default function BalancerPickupMixPage() {
               game={game}
               gameLoading={gameQuery.isLoading}
               onOpenPool={() => setIsPoolOpen(true)}
-              onOpenSettings={() => setIsSettingsOpen(true)}
+              onOpenSettings={() => openAccountSettings("preferences")}
               onOpenAccess={() => setIsAccessOpen(true)}
               canDelete={isAdminHere}
               deleting={hardDeleteMix.isPending}
@@ -266,30 +267,6 @@ export default function BalancerPickupMixPage() {
         hostUserId={game?.host_user_id ?? null}
         rows={rows}
         onTogglePlayer={togglePoolMember}
-      />
-
-      <PickupMixConfigDialog
-        open={isSettingsOpen}
-        onOpenChange={setIsSettingsOpen}
-        game={game}
-        workspaceId={workspaceId}
-        canWrite={canWrite}
-        canSetChannel={isAdminHere}
-        saving={
-          setRoleMask.isPending || setPointsPerWin.isPending || setDiscordChannel.isPending
-        }
-        onSave={(input) => {
-          setRoleMask.mutate(input.roleMask, { onSuccess: () => setIsSettingsOpen(false) });
-          if (input.pointsPerWin !== (game?.settings.points_per_win ?? null)) {
-            setPointsPerWin.mutate(input.pointsPerWin);
-          }
-          if (
-            input.discordChannelId !== undefined &&
-            input.discordChannelId !== (game?.settings.discord_channel_id ?? null)
-          ) {
-            setDiscordChannel.mutate(input.discordChannelId);
-          }
-        }}
       />
 
       <PickupAccessDialog

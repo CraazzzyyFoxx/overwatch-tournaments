@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import BigInteger, Boolean, CheckConstraint, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import Boolean, CheckConstraint, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -13,7 +13,6 @@ __all__ = (
     "CustomGameCoHost",
     "CustomGamePlayer",
     "CustomGamePlayerRole",
-    "CustomGameRoleSlot",
     "CustomGameTeamName",
 )
 
@@ -22,9 +21,12 @@ class CustomGame(db.TimeStampIntegerMixin):
     """Workspace pickup mix and its scalar settings.
 
     Repeating facts live in child tables. The remaining JSON column is a versioned
-    solver document, not a bag of application state. The solver *inputs* are not
-    here at all: they are the host's, one row in ``balancer.user_config``, so the
-    same person's mixes all balance the same way.
+    solver document, not a bag of application state. Nothing the *host* configures
+    is here at all -- the solver knobs, the roster shape and the points-per-win
+    all live in one row of ``balancer.user_config``, so the same person's mixes
+    all run the same way -- and the Discord target is the workspace's
+    (``balancer.workspace_config.config_json.mix_discord_channel_id``), not this
+    lobby's.
     """
 
     __tablename__ = "custom_game"
@@ -33,10 +35,7 @@ class CustomGame(db.TimeStampIntegerMixin):
             "status IN ('draft', 'balanced', 'completed', 'cancelled')",
             name="ck_custom_game_status",
         ),
-        CheckConstraint(
-            "points_per_win IS NULL OR points_per_win BETWEEN 1 AND 1000",
-            name="ck_custom_game_points_per_win",
-        ),
+        # (no per-mix points_per_win check: the knob is the host's, see above)
         {"schema": "balancer"},
     )
 
@@ -46,7 +45,6 @@ class CustomGame(db.TimeStampIntegerMixin):
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="draft", server_default="draft")
-    points_per_win: Mapped[int | None] = mapped_column(Integer(), nullable=True)
     # The map the next recorded match is played on -- rolled or picked ahead of
     # the lobby, consumed and cleared by ``record_outcome``. A deleted catalogue
     # map nulls this rather than blocking the delete.
@@ -58,9 +56,6 @@ class CustomGame(db.TimeStampIntegerMixin):
     # into range by readers; ``balance`` resets it, a fresh search renumbers
     # every option.
     selected_variant_index: Mapped[int] = mapped_column(Integer(), nullable=False, default=0, server_default="0")
-    # The Discord channel this mix announces itself in. Stored only -- nothing
-    # reads it yet; the announcement side lands separately.
-    discord_channel_id: Mapped[int | None] = mapped_column(BigInteger(), nullable=True)
     balance_result_json: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     balance_result_version: Mapped[int] = mapped_column(Integer(), nullable=False, default=1, server_default="1")
 
@@ -143,16 +138,3 @@ class CustomGameTeamName(db.Base):
     team_index: Mapped[int] = mapped_column(Integer(), primary_key=True)
     name: Mapped[str] = mapped_column(String(60), nullable=False)
 
-
-class CustomGameRoleSlot(db.Base):
-    __tablename__ = "custom_game_role_slot"
-    __table_args__ = (
-        CheckConstraint("slot_count > 0", name="ck_custom_game_role_slot_count"),
-        {"schema": "balancer"},
-    )
-
-    custom_game_id: Mapped[int] = mapped_column(
-        ForeignKey("balancer.custom_game.id", ondelete="CASCADE"), primary_key=True
-    )
-    role: Mapped[str] = mapped_column(String(16), primary_key=True)
-    slot_count: Mapped[int] = mapped_column(Integer(), nullable=False)

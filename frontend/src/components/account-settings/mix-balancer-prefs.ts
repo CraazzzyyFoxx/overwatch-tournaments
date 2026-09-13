@@ -1,10 +1,10 @@
-import type { RosterSlotCode } from "@/lib/roster-shape";
+import type { RosterSlotCode, RosterSlotMap } from "@/lib/roster-shape";
 import type { MixBalancerPreferences } from "@/services/mix-preferences.service";
 
 /**
- * What a stored mix-balancer preference means, as the settings panel edits it.
- * Pure functions, no React: the panel holds the draft, this decides what a
- * draft means and what gets stored.
+ * What a stored mix preference means, as the settings panel edits it. Pure
+ * functions, no React: the panel holds the draft, this decides what a draft
+ * means and what gets stored.
  *
  * Storing a default is avoided on purpose -- a knob left where the engine
  * would have put it anyway is stored as `null`, so "never touched" stays
@@ -27,6 +27,9 @@ export const MAX_ROLE_WEIGHT = 100;
  */
 export const DEFAULT_RESULT_VARIANTS = 500;
 export const MAX_RESULT_VARIANTS = 500;
+
+/** Ceiling the server enforces on the rank-adjustment-per-win. */
+export const MAX_POINTS_PER_WIN = 1000;
 
 /** Display names for the slot codes, matching the roster-shape vocabulary. */
 export const SLOT_LABELS: Record<RosterSlotCode, string> = {
@@ -69,6 +72,25 @@ export function variantsOf(preferences: MixBalancerPreferences | null | undefine
   return Math.min(MAX_RESULT_VARIANTS, Math.max(1, Math.round(stored)));
 }
 
+/** The stored roster shape override; `null` follows each mix's workspace. */
+export function roleMaskOf(
+  preferences: MixBalancerPreferences | null | undefined,
+): RosterSlotMap | null {
+  const stored = preferences?.role_mask;
+  return stored != null && typeof stored === "object" ? stored : null;
+}
+
+/** Stored points-per-win; `null` (and a stored `0`) means the knob is off. */
+export function pointsPerWinOf(
+  preferences: MixBalancerPreferences | null | undefined,
+): number | null {
+  const stored = preferences?.points_per_win;
+  if (typeof stored !== "number" || !Number.isFinite(stored) || stored <= 0) {
+    return null;
+  }
+  return Math.min(MAX_POINTS_PER_WIN, Math.round(stored));
+}
+
 /** A weight set back to the default drops out of the map instead of being stored. */
 export function withRoleWeight(
   weights: Record<string, number>,
@@ -84,21 +106,42 @@ export function withRoleWeight(
   return next;
 }
 
+/** Every knob as the panel holds it, before it becomes a stored row. */
+export type MixPrefsDraft = {
+  tilt: number;
+  weights: Record<string, number>;
+  variants: number;
+  roleMask: RosterSlotMap | null;
+  pointsPerWin: number | null;
+};
+
+/** The draft a stored row (or an empty one) opens as. */
+export function draftOf(preferences: MixBalancerPreferences | null | undefined): MixPrefsDraft {
+  return {
+    tilt: tiltOf(preferences),
+    weights: roleWeightsOf(preferences),
+    variants: variantsOf(preferences),
+    roleMask: roleMaskOf(preferences),
+    pointsPerWin: pointsPerWinOf(preferences),
+  };
+}
+
 /** The row to store: every knob travels, a default one as `null`. */
-export function preferencesPayload(
-  tilt: number,
-  weights: Record<string, number>,
-  variants: number | null,
-): MixBalancerPreferences {
+export function preferencesPayload(draft: MixPrefsDraft): MixBalancerPreferences {
   const weighted = Object.fromEntries(
-    Object.entries(weights).filter(([, weight]) => weight !== DEFAULT_ROLE_WEIGHT),
+    Object.entries(draft.weights).filter(([, weight]) => weight !== DEFAULT_ROLE_WEIGHT),
   );
   return {
-    mix_comfort_tilt: tilt === DEFAULT_COMFORT_TILT ? null : tilt,
+    mix_comfort_tilt: draft.tilt === DEFAULT_COMFORT_TILT ? null : draft.tilt,
     mix_role_weights: Object.keys(weighted).length > 0 ? weighted : null,
     max_result_variants:
-      variants == null || variants === DEFAULT_RESULT_VARIANTS
+      draft.variants === DEFAULT_RESULT_VARIANTS
         ? null
-        : Math.min(MAX_RESULT_VARIANTS, Math.max(1, Math.round(variants))),
+        : Math.min(MAX_RESULT_VARIANTS, Math.max(1, Math.round(draft.variants))),
+    role_mask: draft.roleMask,
+    points_per_win:
+      draft.pointsPerWin == null || draft.pointsPerWin <= 0
+        ? null
+        : Math.min(MAX_POINTS_PER_WIN, Math.round(draft.pointsPerWin)),
   };
 }

@@ -1,62 +1,53 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
-import { Loader2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Check, Loader2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { NumberInput } from "@/components/ui/number-input";
 import { Slider } from "@/components/ui/slider";
+import { RosterShapeEditor } from "@/components/roster-shape/RosterShapeEditor";
 import { ROSTER_SLOT_CODES } from "@/lib/roster-shape";
 import { notify } from "@/lib/notify";
 import {
   mixPreferencesKeys,
   mixPreferencesService,
   type MixBalancerPreferences,
+  type MixBalancerPreferencesRead,
 } from "@/services/mix-preferences.service";
 
 import {
   DEFAULT_COMFORT_TILT,
   DEFAULT_RESULT_VARIANTS,
   DEFAULT_ROLE_WEIGHT,
+  MAX_POINTS_PER_WIN,
   MAX_RESULT_VARIANTS,
   MAX_ROLE_WEIGHT,
   SLOT_LABELS,
+  draftOf,
   preferencesPayload,
-  roleWeightsOf,
-  tiltOf,
-  variantsOf,
   withRoleWeight,
 } from "./mix-balancer-prefs";
 
-/** The three knobs as the panel edits them, before they become a stored row. */
-type Draft = {
-  tilt: number;
-  weights: Record<string, number>;
-  variants: number;
-};
-
-function draftOf(preferences: MixBalancerPreferences | null | undefined): Draft {
-  return {
-    tilt: tiltOf(preferences),
-    weights: roleWeightsOf(preferences),
-    variants: variantsOf(preferences),
-  };
-}
+/** How long a knob has to sit still before the row is written. */
+const AUTOSAVE_DELAY_MS = 700;
 
 /**
- * How the pickup-mix engine balances for this account.
+ * Everything about how a mix this account hosts is set up and balanced.
  *
  * These knobs used to live on each mix, which meant re-setting them for every
- * new game and storing the same three numbers on every row. They describe how
- * their owner likes a lobby split, not anything about one night, so they sit
- * here instead: every mix this account hosts balances with them -- the same
- * account whose rank book a mix already resolves against.
+ * new game and storing the same numbers on every row. They describe how their
+ * owner runs a pickup night, not anything about one night, so they sit here:
+ * every mix this account hosts uses them -- the same account whose rank book a
+ * mix already resolves against.
  *
- * A knob left at its default is stored as nothing at all, so an account that
- * never opens this panel keeps an empty row and the engine's own weighting.
+ * There is no Save button. A settings panel with one is a panel that silently
+ * discards work when it is closed with the mouse, and none of these writes is
+ * destructive or expensive: each knob autosaves once it stops moving, and the
+ * row is replaced whole. A knob left at its default is stored as nothing at
+ * all, so an account that never opens this panel keeps an empty row.
  */
 export default function MixBalancerSection() {
   const t = useTranslations("accountSettings");
@@ -69,32 +60,36 @@ export default function MixBalancerSection() {
   });
   const stored = preferencesQuery.data;
 
-  // Seeded from the row and re-seeded whenever a fetch lands a different one:
-  // a controlled draft, not a derived value, because the slider and the number
+  // A controlled draft rather than a derived value: the slider and the number
   // fields move far more often than the query refetches.
-  const [draft, setDraft] = useState<Draft>(() => draftOf(stored));
-  const [seeded, setSeeded] = useState<MixBalancerPreferences | undefined>(stored);
+  const [draft, setDraft] = useState(() => draftOf(stored));
+  const [seeded, setSeeded] = useState<MixBalancerPreferencesRead | undefined>(stored);
+  const payload = preferencesPayload(draft);
+  const dirty = seeded != null && !samePayload(payload, preferencesPayload(draftOf(seeded)));
   if (stored !== undefined && stored !== seeded) {
     setSeeded(stored);
-    setDraft(draftOf(stored));
+    // A save that landed while the user kept typing must not roll their newer
+    // edits back: the fresh row only becomes the baseline, and the still-dirty
+    // draft simply schedules the next write.
+    if (!dirty) setDraft(draftOf(stored));
   }
 
-  const payload = preferencesPayload(draft.tilt, draft.weights, draft.variants);
-  const dirty =
-    stored != null &&
-    JSON.stringify(payload) !==
-      JSON.stringify(
-        preferencesPayload(tiltOf(stored), roleWeightsOf(stored), variantsOf(stored)),
-      );
-
   const save = useMutation({
-    mutationFn: () => mixPreferencesService.update(payload),
-    onSuccess: (saved) => {
-      queryClient.setQueryData(mixPreferencesKeys.all, saved);
-      notify.success(t("mixBalancer.saved"));
-    },
+    mutationFn: (body: MixBalancerPreferences) => mixPreferencesService.update(body),
+    onSuccess: (saved) => queryClient.setQueryData(mixPreferencesKeys.all, saved),
     onError: (error) => notify.apiError(error),
   });
+
+  // Debounced on the serialised payload, so dragging the slider across the
+  // track is one write rather than twenty, and a knob nudged back to where it
+  // started writes nothing at all.
+  const pendingPayload = JSON.stringify(payload);
+  const { mutate } = save;
+  useEffect(() => {
+    if (!dirty) return;
+    const timer = setTimeout(() => mutate(JSON.parse(pendingPayload)), AUTOSAVE_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [pendingPayload, dirty, mutate]);
 
   if (preferencesQuery.isLoading) {
     return (
@@ -112,10 +107,37 @@ export default function MixBalancerSection() {
   return (
     <div className="space-y-8">
       <section className="space-y-3">
-        <h4 className="text-sm font-medium text-[color:var(--aqt-fg-muted)]">
-          {t("mixBalancer.title")}
-        </h4>
+        <div className="flex items-baseline justify-between gap-3">
+          <h4 className="text-sm font-medium text-[color:var(--aqt-fg-muted)]">
+            {t("mixBalancer.title")}
+          </h4>
+          {/* One line, three states, no button: saving, saved, or nothing. */}
+          <span
+            role="status"
+            aria-live="polite"
+            className="flex items-center gap-1.5 text-xs text-[color:var(--aqt-fg-dim)]"
+          >
+            {save.isPending || dirty ? (
+              <>
+                <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
+                {t("mixBalancer.saving")}
+              </>
+            ) : save.isSuccess ? (
+              <>
+                <Check className="h-3 w-3" aria-hidden />
+                {t("mixBalancer.saved")}
+              </>
+            ) : null}
+          </span>
+        </div>
         <p className="text-xs text-[color:var(--aqt-fg-dim)]">{t("mixBalancer.desc")}</p>
+
+        <RosterShapeEditor
+          entity="account"
+          value={draft.roleMask}
+          effective={stored?.roster_shape ?? null}
+          onChange={(roleMask) => setDraft((current) => ({ ...current, roleMask }))}
+        />
 
         <div className="space-y-6 rounded-lg border border-[color:var(--aqt-border)] bg-[color:var(--aqt-overlay-2)] px-3 py-3.5">
           <div className="space-y-1.5">
@@ -196,13 +218,27 @@ export default function MixBalancerSection() {
             </p>
           </div>
 
-          <div className="flex justify-end">
-            <Button size="sm" disabled={!dirty || save.isPending} onClick={() => save.mutate()}>
-              {save.isPending ? t("mixBalancer.saving") : t("mixBalancer.save")}
-            </Button>
+          <div className="space-y-1.5">
+            <Label htmlFor="mix-points-per-win">{t("mixBalancer.points.label")}</Label>
+            <NumberInput
+              id="mix-points-per-win"
+              integer
+              min={0}
+              max={MAX_POINTS_PER_WIN}
+              placeholder={t("mixBalancer.points.placeholder")}
+              value={draft.pointsPerWin}
+              onValueChange={(next) => setDraft((current) => ({ ...current, pointsPerWin: next }))}
+              className="h-8 w-24 bg-background/50 px-2 tabular-nums"
+            />
+            <p className="text-xs text-[color:var(--aqt-fg-dim)]">{t("mixBalancer.points.hint")}</p>
           </div>
         </div>
       </section>
     </div>
   );
+}
+
+/** Key order is stable (both sides come out of `preferencesPayload`), so this is a value compare. */
+function samePayload(left: MixBalancerPreferences, right: MixBalancerPreferences): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
 }

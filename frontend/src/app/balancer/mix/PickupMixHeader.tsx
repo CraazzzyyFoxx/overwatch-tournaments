@@ -109,7 +109,8 @@ export function PickupMixHeader({
           className="h-9 w-9 shrink-0"
           disabled={game == null}
           onClick={onOpenSettings}
-          aria-label="Team composition"
+          aria-label="Mix preferences"
+          title="Roster shape, balancing and points per win — your account's, for every mix you host"
         >
           <Settings2 className="size-3.5" aria-hidden="true" />
         </Button>

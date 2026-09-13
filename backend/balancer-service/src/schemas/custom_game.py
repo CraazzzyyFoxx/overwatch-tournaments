@@ -14,17 +14,14 @@ from shared.domain.player_sub_roles import REGISTRATION_ROLE_CODES
 __all__ = (
     "CustomGameCoHostPatch",
     "CustomGameCreate",
-    "CustomGameDiscordChannelPatch",
     "CustomGameHostTransfer",
     "CustomGameNextMapPatch",
     "CustomGameOutcome",
     "CustomGamePlayerPatch",
     "CustomGamePlayerParticipationPatch",
     "CustomGamePlayersParticipationPatch",
-    "CustomGamePointsPerWinPatch",
     "CustomGamePostDiscord",
     "CustomGameRecordOutcome",
-    "CustomGameRoleMaskPatch",
     "CustomGameRosterUpdate",
     "CustomGameSeatSwap",
     "CustomGameTeamNamesPatch",
@@ -98,14 +95,6 @@ class CustomGameTeamNamesPatch(_Request):
     team_names: dict[str, str]
 
 
-class CustomGameRoleMaskPatch(_Request):
-    role_mask: dict[str, int] | None
-
-
-class CustomGamePointsPerWinPatch(_Request):
-    points_per_win: int | None
-
-
 class CustomGameNextMapPatch(_Request):
     """``null`` clears the pick; the next match then records with no map."""
 
@@ -116,27 +105,6 @@ class CustomGameVariantIndexPatch(_Request):
     """Which stored balance option the mix shows, for every viewer at once."""
 
     variant_index: int = Field(ge=0)
-
-
-class CustomGameDiscordChannelPatch(_Request):
-    """The channel the mix posts its matchup to; ``null`` clears it.
-
-    A string, not an integer: a Discord snowflake is a 64-bit id that a
-    JavaScript client cannot hold losslessly as a number. Digits only, so the
-    server can turn it back into the ``BIGINT`` column without guessing.
-    """
-
-    channel_id: str | None
-
-    @field_validator("channel_id")
-    @classmethod
-    def _snowflake(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-        trimmed = value.strip()
-        if not trimmed.isdigit() or not (1 <= len(trimmed) <= 20):
-            raise ValueError("channel_id must be a Discord id (1-20 digits)")
-        return trimmed
 
 
 #: Ceiling on the encoded lineup screenshot. ~6 MiB decoded: far above the

@@ -147,7 +147,6 @@ from .custom_game import (
     CustomGamePlayerRepository,
     CustomGamePlayerRoleRepository,
     CustomGameRepository,
-    CustomGameRoleSlotRepository,
     CustomGameTeamNameRepository,
 )
 from .member_rank import MemberRankRepository
@@ -271,7 +270,6 @@ __all__ = (
     "CustomGamePlayerRepository",
     "CustomGamePlayerRoleRepository",
     "CustomGameRepository",
-    "CustomGameRoleSlotRepository",
     "CustomGameTeamNameRepository",
     "WorkspaceRepository",
     "WorkspaceSubscriptionRequirementRepository",

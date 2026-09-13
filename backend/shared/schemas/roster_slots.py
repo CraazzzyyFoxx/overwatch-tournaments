@@ -59,7 +59,13 @@ class RosterShapeRead(BaseModel):
     # Only a reader that inspects BOTH stored levels can name the level an
     # override lives at. The draft board resolves just the effective shape, so it
     # reports the shape without claiming a level -> None.
-    source: Literal["tournament", "workspace", "default"] | None = None
+    #
+    # Five levels because two different chains end here: a tournament resolves
+    # ``tournament -> workspace -> default``, a pickup mix resolves
+    # ``host -> workspace -> default`` (the host's own ``balancer.user_config``
+    # row), and the account preferences endpoint -- which knows no workspace --
+    # reports its own stored shape as ``user``.
+    source: Literal["tournament", "host", "user", "workspace", "default"] | None = None
 
     @classmethod
     def from_shape(cls, shape: RosterShape, *, source: str | None = None) -> RosterShapeRead:

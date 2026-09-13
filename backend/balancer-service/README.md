@@ -166,9 +166,11 @@ Writes, all in the `balancer` schema unless noted:
 - `balance`, `balance_variant`, `team`, `team_slot` — the saved balancing run and its normalized
   result. `exported_team_id` is the boundary where balancer output becomes tournament truth.
 - `draft_session`, `draft_team`, `draft_player`, `draft_pick`, `draft_audit_event` — the live draft.
-- `workspace_config`, `tournament_config` — the two balancer config scopes.
+- `workspace_config`, `tournament_config`, `user_config` — the three balancer config scopes: the
+  workspace's, one tournament's, and one account's own mix settings (solver knobs, roster shape,
+  points per win) that every mix it hosts runs with.
 - `custom_game`, `custom_game_co_host`, `custom_game_player`, `custom_game_player_role`,
-  `custom_game_team_name`, `custom_game_role_slot` — mixes.
+  `custom_game_team_name` — mixes.
 - `member_rank` — both rank layers.
 - `casual.match`, `casual.team`, `casual.player` — the frozen per-match record a mix writes on
   `record_outcome`; the only durable trace of a played mix game.

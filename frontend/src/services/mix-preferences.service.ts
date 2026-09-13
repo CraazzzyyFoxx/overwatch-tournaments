@@ -1,4 +1,5 @@
 import { apiFetch } from "@/lib/api-fetch";
+import type { RosterShape, RosterSlotMap } from "@/lib/roster-shape";
 
 /**
  * The mix engine's knobs, held per account rather than per mix.
@@ -23,6 +24,23 @@ export type MixBalancerPreferences = {
   mix_role_weights: Record<string, number> | null;
   /** How many balance options one run hands back for the pager to walk. */
   max_result_variants: number | null;
+  /**
+   * How many slots of each kind one team gets, or `null` to follow the
+   * workspace each mix runs in. Same shape a tournament pins, one level up.
+   */
+  role_mask: RosterSlotMap | null;
+  /** Rank points a recorded win moves, in the host's own book; `null`/`0` = off. */
+  points_per_win: number | null;
+};
+
+/**
+ * What a read adds on top: the stored shape already resolved, so the editor can
+ * render team size and draft rounds without reimplementing the server's
+ * resolution. `source` is `"user"` when a shape is stored, `"default"` when the
+ * account follows whatever workspace a mix runs in.
+ */
+export type MixBalancerPreferencesRead = MixBalancerPreferences & {
+  roster_shape: RosterShape;
 };
 
 export const mixPreferencesKeys = {
@@ -31,12 +49,12 @@ export const mixPreferencesKeys = {
 };
 
 export const mixPreferencesService = {
-  get(): Promise<MixBalancerPreferences> {
+  get(): Promise<MixBalancerPreferencesRead> {
     return apiFetch("/api/balancer/me/mix-preferences").then((r) => r.json());
   },
 
   /** Replaces the whole row: every knob travels, `null` clearing it back to the default. */
-  update(preferences: MixBalancerPreferences): Promise<MixBalancerPreferences> {
+  update(preferences: MixBalancerPreferences): Promise<MixBalancerPreferencesRead> {
     return apiFetch("/api/balancer/me/mix-preferences", {
       method: "PUT",
       body: preferences,

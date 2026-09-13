@@ -40,8 +40,13 @@ export interface RosterShape {
   /** `false` only when every slot is flex, i.e. no slot asks for a role. */
   has_role_slots: boolean;
   draft_rounds: number;
-  /** `null` from readers that resolve only the effective shape, not its level. */
-  source: "tournament" | "workspace" | "default" | null;
+  /**
+   * Which level the shape came from. `host`/`user` are the pickup-mix levels:
+   * the account hosting the mix pins one (`user` when the account itself is
+   * being read, `host` when a mix is). `null` from readers that resolve only
+   * the effective shape, not its level.
+   */
+  source: "tournament" | "host" | "user" | "workspace" | "default" | null;
 }
 
 export type RosterPresetId = "ow5v5" | "flex6";

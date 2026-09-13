@@ -144,10 +144,10 @@ describe("PickupMixHeader", () => {
     expect(onOpenPool).toHaveBeenCalledTimes(1);
   });
 
-  it("opens the composition settings on request", async () => {
+  it("hands the settings button to the page, which opens the host's own preferences", async () => {
     const scope = await mount(game());
 
-    await click(scope.querySelector('[aria-label="Team composition"]'));
+    await click(scope.querySelector('[aria-label="Mix preferences"]'));
 
     expect(onOpenSettings).toHaveBeenCalledTimes(1);
   });

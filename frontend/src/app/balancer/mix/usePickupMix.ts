@@ -10,7 +10,6 @@ import {
   type CustomGame,
   type CustomGamePlayerPatch,
 } from "@/services/custom-game.service";
-import type { RosterSlotMap } from "@/lib/roster-shape";
 
 import {
   computeRotationHintPatches,
@@ -189,28 +188,6 @@ export function usePickupMix(workspaceId: number, pickedGameId: number | null) {
       customGameService.setTeamNames(workspaceId, selectedGameId as number, {
         [String(input.teamIndex)]: input.name,
       }),
-    onSuccess: applyGame,
-    onError: (error) => notify.apiError(error),
-  });
-
-  const setRoleMask = useMutation({
-    mutationFn: (roleMask: RosterSlotMap | null) =>
-      customGameService.setRoleMask(workspaceId, selectedGameId as number, roleMask),
-    onSuccess: applyGame,
-    onError: (error) => notify.apiError(error),
-  });
-
-  const setPointsPerWin = useMutation({
-    mutationFn: (pointsPerWin: number | null) =>
-      customGameService.setPointsPerWin(workspaceId, selectedGameId as number, pointsPerWin),
-    onSuccess: applyGame,
-    onError: (error) => notify.apiError(error),
-  });
-
-  /** Where `postToDiscord` sends the matchup; `null` clears it. */
-  const setDiscordChannel = useMutation({
-    mutationFn: (channelId: string | null) =>
-      customGameService.setDiscordChannel(workspaceId, selectedGameId as number, channelId),
     onSuccess: applyGame,
     onError: (error) => notify.apiError(error),
   });
@@ -409,9 +386,6 @@ export function usePickupMix(workspaceId: number, pickedGameId: number | null) {
     hardDeleteMix,
     setAuthorRanks,
     setTeamNames,
-    setRoleMask,
-    setPointsPerWin,
-    setDiscordChannel,
     postToDiscord,
     transferHost,
     addCoHost,

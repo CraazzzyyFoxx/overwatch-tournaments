@@ -31,10 +31,8 @@ function sampleGame(id: number, name: string): CustomGame {
     name,
     status: "completed",
     settings: {
-      points_per_win: null,
+      points_per_win: 0,
       team_names: {},
-      role_mask: null,
-      discord_channel_id: null,
       workspace_discord_channel_id: null
     },
     balance_result: null,

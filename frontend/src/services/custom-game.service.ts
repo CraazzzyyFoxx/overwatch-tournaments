@@ -1,6 +1,6 @@
 import { apiFetch } from "@/lib/api-fetch";
 import { blobToBase64 } from "@/lib/image-capture";
-import type { RosterShape, RosterSlotMap } from "@/lib/roster-shape";
+import type { RosterShape } from "@/lib/roster-shape";
 
 /** Where an effective rank came from, strongest first. */
 export type RankSource = "author" | "workspace" | "ow";
@@ -69,26 +69,30 @@ export type CustomGameCoHost = {
 };
 
 /**
- * The mix's own settings. Each one is a stored fact with its own type -- there
- * is no config blob to parse, and no key that can silently mean two things.
+ * What the mix itself still carries. Each one is a stored fact with its own
+ * type -- there is no config blob to parse, and no key that can silently mean
+ * two things.
+ *
+ * Everything that describes how a host RUNS a mix -- roster shape, solver
+ * knobs, the rank points a win is worth -- lives on their account instead
+ * (`/api/balancer/me/mix-preferences`), and the Discord target is the
+ * workspace's. What is left here is the mix's own state.
  */
 export type CustomGameSettings = {
-  points_per_win: number | null;
+  /**
+   * The host's rank-adjustment-per-win, resolved server-side and read-only
+   * here: the win buttons print it, the host changes it in account settings.
+   * Always a number -- `0` is the knob switched off, and recording a result
+   * then leaves every rank alone.
+   */
+  points_per_win: number;
   /** Host overrides keyed by 0-based team index. Absent index = computed default. */
   team_names: Record<string, string>;
-  /** The mix's own roster shape override; `null` inherits the workspace default. */
-  role_mask: RosterSlotMap | null;
   /**
-   * This mix's own channel override, or `null` when it follows the workspace.
-   * Only a workspace admin can set it (`custom.set_discord_channel`).
-   * A snowflake as a string: Discord ids exceed JS safe integers, so the wire
-   * format is decimal text on the way out and on the way in.
-   */
-  discord_channel_id: string | null;
-  /**
-   * The workspace-wide mix channel, where `postToDiscord` sends the matchup
-   * unless this mix overrides it. Read `discord_channel_id ?? this` for the
-   * channel a post actually lands in -- the same fallback the server applies.
+   * The workspace-wide mix channel -- where `postToDiscord` sends the matchup,
+   * and the only channel a mix can post to. Set by workspace admins in the
+   * workspace's Discord settings; `null` means the workspace named none and
+   * there is nothing to post to.
    */
   workspace_discord_channel_id: string | null;
 };
@@ -119,7 +123,7 @@ export type CustomGame = {
    */
   next_map_id: number | null;
   /**
-   * The mix's resolved team composition -- own `settings.role_mask` override,
+   * The mix's resolved team composition -- the host's own shape preference,
    * else the workspace default, else the built-in Overwatch 5v5 shape.
    */
   roster_shape: RosterShape | null;
@@ -393,30 +397,6 @@ export const customGameService = {
   },
 
   /**
-   * Patch the mix's own roster-shape override, or clear it (`null`) to inherit
-   * the workspace default -- the same override/inherit split
-   * `RosterShapeEditor` already offers for a tournament's `roster_slots_json`.
-   */
-  setRoleMask(workspaceId: number, gameId: number, roleMask: RosterSlotMap | null): Promise<CustomGame> {
-    return apiFetch(`/api/balancer/workspaces/${workspaceId}/custom-games/${gameId}/role-mask`, {
-      method: "PUT",
-      body: { role_mask: roleMask },
-    }).then((r) => r.json());
-  },
-
-  /**
-   * The host's rank-adjustment-per-win knob: recording a win/loss then bumps
-   * the winning team's author-book rank by this many points and the losing
-   * team's down by the same, per player and role. `null`/`0` disables it.
-   */
-  setPointsPerWin(workspaceId: number, gameId: number, pointsPerWin: number | null): Promise<CustomGame> {
-    return apiFetch(`/api/balancer/workspaces/${workspaceId}/custom-games/${gameId}/points-per-win`, {
-      method: "PUT",
-      body: { points_per_win: pointsPerWin },
-    }).then((r) => r.json());
-  },
-
-  /**
    * Names the map the next match is played on, or clears it (`null`). The roll
    * itself happens client-side (`rollNextMap`); this stores the verdict so
    * co-hosts and viewers see the same map and `recordOutcome` stamps it.
@@ -489,18 +469,6 @@ export const customGameService = {
     return apiFetch(`/api/balancer/workspaces/${workspaceId}/custom-games/${gameId}/teams/swap`, {
       method: "POST",
       body: { variant_index: variantIndex, first_uuid: firstUuid, second_uuid: secondUuid },
-    }).then((r) => r.json());
-  },
-
-  /**
-   * Names the channel `postToDiscord` posts the matchup to, or clears it
-   * (`null`). The id travels as a string: a Discord snowflake does not survive
-   * a round trip through a JS number.
-   */
-  setDiscordChannel(workspaceId: number, gameId: number, channelId: string | null): Promise<CustomGame> {
-    return apiFetch(`/api/balancer/workspaces/${workspaceId}/custom-games/${gameId}/discord-channel`, {
-      method: "PUT",
-      body: { channel_id: channelId },
     }).then((r) => r.json());
   },
 
