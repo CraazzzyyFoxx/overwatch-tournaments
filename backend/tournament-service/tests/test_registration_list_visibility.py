@@ -87,9 +87,7 @@ class HiddenListTests(IsolatedAsyncioTestCase):
             patch.object(service, "_resolve_tournament_workspace", AsyncMock(return_value=7)),
             patch.object(service._common_service, "get_registration_form", AsyncMock(return_value=form)),
         ):
-            return session, await service.registration_service.build_public_registration_list(
-                session, tournament_id=42
-            )
+            return session, await service.registration_service.build_public_registration_list(session, tournament_id=42)
 
     async def test_a_hidden_list_answers_with_the_aggregate_and_no_rows(self):
         session, response = await self._build(

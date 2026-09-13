@@ -907,7 +907,9 @@ class PickBanSessionService:
                         EncounterMapReport.map_index > 0,
                     )
                 )
-            ).scalars().all()
+            )
+            .scalars()
+            .all()
         )
         by_index: dict[int, list[EncounterMapReport]] = {}
         for row in rows:

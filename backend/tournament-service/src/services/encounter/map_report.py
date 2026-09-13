@@ -271,7 +271,6 @@ class MapReportService:
                     match.home_score = resolved_home
                     match.away_score = resolved_away
 
-
         played_round: int | None = None
         if entry is not None:
             entry.status = MapPoolEntryStatus.PLAYED.value

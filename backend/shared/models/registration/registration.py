@@ -53,9 +53,7 @@ class BalancerRegistrationForm(db.TimeStampIntegerMixin):
     #: the list payload is cached anonymously, so a client-side hide would be
     #: cosmetic and a per-viewer branch would poison that cache. Organizers read
     #: the full roster through the admin registrations table instead.
-    hide_registrations: Mapped[bool] = mapped_column(
-        Boolean(), nullable=False, server_default="false", default=False
-    )
+    hide_registrations: Mapped[bool] = mapped_column(Boolean(), nullable=False, server_default="false", default=False)
     #: Advisory capacity shown next to the participant count. NOT a limit: nothing
     #: reads it on the write path, and registration past it succeeds. NULL hides it.
     max_participants: Mapped[int | None] = mapped_column(Integer(), nullable=True)

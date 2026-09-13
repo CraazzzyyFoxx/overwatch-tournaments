@@ -609,7 +609,6 @@ class FreeplayMapIndexTests(IsolatedAsyncioTestCase):
             await svc._freeplay_index(None, 500, 99)
 
 
-
 class ResetPickBanSessionTests(IsolatedAsyncioTestCase):
     """Delete + re-create, mirroring ``veto_session.reset_veto_session``:
     the entries are not separately deleted here because

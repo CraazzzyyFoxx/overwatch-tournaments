@@ -204,7 +204,6 @@ class AdminStageDeleteOrderTests(IsolatedAsyncioTestCase):
         session.commit.assert_awaited_once()
 
 
-
 POOL_MODE = enums.MapVetoMode.POOL
 SLOTS_MODE = enums.MapVetoMode.SLOTS
 FIXED = enums.FirstBanRotation.FIXED

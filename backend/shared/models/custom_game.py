@@ -137,4 +137,3 @@ class CustomGameTeamName(db.Base):
     )
     team_index: Mapped[int] = mapped_column(Integer(), primary_key=True)
     name: Mapped[str] = mapped_column(String(60), nullable=False)
-

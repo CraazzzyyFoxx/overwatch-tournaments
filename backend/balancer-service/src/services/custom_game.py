@@ -1417,9 +1417,7 @@ class CustomGameService:
 
         histories = await self._rotation_histories(session, game, roster)
 
-        role_mask = (
-            await self.roster_shape(session, workspace_id=workspace_id, host_user_id=game.host_user_id)
-        ).slots
+        role_mask = (await self.roster_shape(session, workspace_id=workspace_id, host_user_id=game.host_user_id)).slots
         players_per_team = sum(role_mask.values())
         usable_count = len(roster) if players_per_team <= 0 else (len(roster) // players_per_team) * players_per_team
         return recommend_rotation(histories, usable_count=usable_count)

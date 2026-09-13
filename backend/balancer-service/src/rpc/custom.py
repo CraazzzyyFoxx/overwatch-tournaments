@@ -281,9 +281,7 @@ async def _with_roster(session: Any, game: Any) -> dict[str, Any]:
         await custom_game_service.host_points_per_win(session, game.host_user_id),
     )
     roster_shape = (
-        await custom_game_service.roster_shape(
-            session, workspace_id=game.workspace_id, host_user_id=game.host_user_id
-        )
+        await custom_game_service.roster_shape(session, workspace_id=game.workspace_id, host_user_id=game.host_user_id)
     ).model_dump()
     roster = list(await custom_game_service.roster.list_for_game(session, game.id))
     # One name lookup for every identity on the write side: the host and each
@@ -462,9 +460,7 @@ def register(broker: Any, logger: Any) -> None:
             return [
                 _dump_game(
                     row,
-                    await _game_settings(
-                        session, row, workspace_channel_id, points_by_host.get(row.host_user_id, 0)
-                    ),
+                    await _game_settings(session, row, workspace_channel_id, points_by_host.get(row.host_user_id, 0)),
                     host_display_name=host_names.get(row.host_user_id),
                     activity=activity.get(row.id),
                 )

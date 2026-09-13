@@ -82,7 +82,7 @@ class UserMixPrefsServiceTests(IsolatedAsyncioTestCase):
         self.assertEqual(config.config_json, {})
 
     async def test_zero_points_stores_as_unset(self) -> None:
-        """"Off" has one spelling in the column, whichever of null/0 was sent."""
+        """ "Off" has one spelling in the column, whichever of null/0 was sent."""
         config = await self.service.upsert(
             self.session,
             user_id=9,
@@ -174,7 +174,9 @@ class UserMixPreferencesReadTests(TestCase):
     the shape it is about to balance into without re-implementing the chain."""
 
     def test_a_stored_mask_resolves_and_is_reported_as_the_users_own(self) -> None:
-        read = prefs._to_read(SimpleNamespace(config_json={}, role_slots_json={"tank": 1, "flex": 4}, points_per_win=50))
+        read = prefs._to_read(
+            SimpleNamespace(config_json={}, role_slots_json={"tank": 1, "flex": 4}, points_per_win=50)
+        )
 
         self.assertEqual(read.role_mask, {"tank": 1, "flex": 4})
         self.assertEqual(read.points_per_win, 50)
