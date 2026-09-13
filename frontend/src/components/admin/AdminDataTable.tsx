@@ -64,7 +64,7 @@ import { InfiniteScrollFooter } from "@/components/ui/infinite-scroll";
 import { useColumnVisibility } from "@/hooks/useColumnVisibility";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useLocalStorageState } from "@/hooks/useLocalStorageState";
-import { useRowSelectionGestures } from "@/components/admin/useRowSelectionGestures";
+import { isInteractiveRowTarget, useRowSelectionGestures } from "@/components/admin/useRowSelectionGestures";
 import { AdminSavedViews } from "@/components/admin/AdminSavedViews";
 import { AdminTableSearchContext, HighlightMatch } from "@/components/admin/HighlightMatch";
 import { downloadCsv } from "@/lib/csv";
@@ -646,11 +646,9 @@ export function AdminDataTable<TData>({
 
   const hasRowAction = Boolean(onRowClick || onRowDoubleClick);
 
-  const isInteractiveRowTarget = (target: HTMLElement) => {
-    return Boolean(target.closest("button, a, input, select, textarea, [role='button'], [role='link'], [data-radix-collection-item]"));
-  };
-
   const handleRowClick = (event: React.MouseEvent<HTMLTableRowElement>, row: Row<TData>) => {
+    // A sweep, Ctrl+click or Shift+click ends in a click too; that one selected, it does not open.
+    if (gestures.consumeClick()) return;
     if (!onRowClick) return;
     if (isInteractiveRowTarget(event.target as HTMLElement)) return;
 
@@ -968,6 +966,7 @@ export function AdminDataTable<TData>({
           hasRowAction && "cursor-pointer",
           row.id === inspectorId && "bg-primary/10",
         )}
+        onPointerDown={gestures.rowPointerDown(row)}
         onClick={(event) => handleRowClick(event, row)}
         onDoubleClick={(event) => handleRowDoubleClick(event, row)}
         aria-describedby={rowHintId}

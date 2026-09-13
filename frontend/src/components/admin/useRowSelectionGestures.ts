@@ -17,15 +17,29 @@ interface Drag {
   listeners: AbortController;
 }
 
+/** Pointer travel before a press on a row body becomes a sweep rather than a click. */
+const ROW_DRAG_THRESHOLD = 6;
+
+/** Controls inside a row own their own clicks; the row must not treat them as row gestures. */
+export function isInteractiveRowTarget(target: HTMLElement) {
+  return Boolean(target.closest("button, a, input, select, textarea, [role='button'], [role='link'], [data-radix-collection-item]"));
+}
+
 /**
- * Mouse, touch and keyboard selection gestures for the admin table.
+ * Mouse, touch and keyboard selection gestures for the admin table, in the
+ * spreadsheet idiom.
  *
- * Pointer: press a row's checkbox and sweep across neighbours to give them the
- * same state; shift-press extends from the last pressed row. Hit-testing goes
- * through `elementFromPoint` rather than per-row `pointerenter`: touch pointers
- * are implicitly captured by the element they started on, so no other row ever
- * sees them, and rows sliding under a stationary pointer during autoscroll fire
- * no boundary events either. Rows opt in with `data-row-id={row.id}`.
+ * Pointer: press a checkbox or a row body and sweep across neighbours to give
+ * them the same state; Shift+click extends from the last pressed row and
+ * Ctrl/Cmd+click toggles one row. A plain click on a row body is left alone so
+ * the screen's `onRowClick` (the inspector) still works; `consumeClick` tells
+ * that handler when the press it is reacting to was a selection gesture.
+ *
+ * Hit-testing goes through `elementFromPoint` rather than per-row
+ * `pointerenter`: touch pointers are implicitly captured by the element they
+ * started on, so no other row ever sees them, and rows sliding under a
+ * stationary pointer during autoscroll fire no boundary events either. Rows
+ * opt in with `data-row-id={row.id}`.
  *
  * Keyboard (`bodyKeyDown` on the `<tbody>`): arrows move focus between rows,
  * Shift+arrow grows the range from the anchor, Space toggles, Ctrl/Cmd+A
@@ -34,6 +48,8 @@ interface Drag {
 export function useRowSelectionGestures<TData>(table: Table<TData>, selectable: boolean) {
   const dragRef = useRef<Drag | null>(null);
   const anchorRef = useRef<string | null>(null);
+  /** The click that follows this press belongs to a selection gesture, not to `onRowClick`. */
+  const suppressClickRef = useRef(false);
 
   const rowAt = (x: number, y: number): Row<TData> | undefined => {
     const id = document.elementFromPoint(x, y)?.closest<HTMLElement>("[data-row-id]")?.dataset.rowId;
@@ -68,6 +84,7 @@ export function useRowSelectionGestures<TData>(table: Table<TData>, selectable: 
     if (!drag) return;
     cancelAnimationFrame(drag.frame);
     drag.listeners.abort();
+    document.body.style.userSelect = "";
     dragRef.current = null;
   };
 
@@ -101,7 +118,23 @@ export function useRowSelectionGestures<TData>(table: Table<TData>, selectable: 
 
   useEffect(() => end, []);
 
+  const startDrag = (value: boolean, x: number, y: number, scroller: Element) => {
+    end();
+    const listeners = new AbortController();
+    const { signal } = listeners;
+    window.addEventListener("pointermove", onPointerMove, { signal });
+    window.addEventListener("pointerup", end, { signal });
+    window.addEventListener("pointercancel", end, { signal });
+    dragRef.current = { value, x, y, scroller, frame: requestAnimationFrame(tick), listeners };
+  };
+
   return {
+    /** Reports (and clears) whether the click now firing was the tail of a selection gesture. */
+    consumeClick: () => {
+      const suppressed = suppressClickRef.current;
+      suppressClickRef.current = false;
+      return suppressed;
+    },
     checkboxPointerDown: (row: Row<TData>) => (event: React.PointerEvent<HTMLElement>) => {
       if (event.button !== 0) return;
       // No text selection while sweeping, no focus jump to the checkbox.
@@ -110,21 +143,57 @@ export function useRowSelectionGestures<TData>(table: Table<TData>, selectable: 
       if (event.shiftKey && anchorRef.current !== null) paintRange(anchorRef.current, row.id, value);
       else row.toggleSelected(value);
       anchorRef.current = row.id;
-
-      end();
-      const listeners = new AbortController();
-      const { signal } = listeners;
-      window.addEventListener("pointermove", onPointerMove, { signal });
-      window.addEventListener("pointerup", end, { signal });
-      window.addEventListener("pointercancel", end, { signal });
-      dragRef.current = {
-        value,
-        x: event.clientX,
-        y: event.clientY,
-        scroller: scrollParent(event.currentTarget),
-        frame: requestAnimationFrame(tick),
-        listeners,
-      };
+      startDrag(value, event.clientX, event.clientY, scrollParent(event.currentTarget));
+    },
+    /**
+     * Spreadsheet-style gestures on the row body. Ctrl/Cmd+click toggles,
+     * Shift+click extends from the anchor, and a press that travels onto
+     * another row becomes a sweep; only then is the plain click taken away
+     * from `onRowClick`, so text in a cell can still be selected and a still
+     * click still opens the row.
+     */
+    rowPointerDown: (row: Row<TData>) => (event: React.PointerEvent<HTMLElement>) => {
+      suppressClickRef.current = false;
+      if (!selectable || event.button !== 0 || dragRef.current) return;
+      if (isInteractiveRowTarget(event.target as HTMLElement)) return;
+      if (event.ctrlKey || event.metaKey) {
+        if (!row.getCanSelect()) return;
+        row.toggleSelected();
+        anchorRef.current = row.id;
+        suppressClickRef.current = true;
+        return;
+      }
+      if (event.shiftKey) {
+        // Native Shift+click would extend the text selection instead.
+        event.preventDefault();
+        paintRange(anchorRef.current ?? row.id, row.id, true);
+        anchorRef.current ??= row.id;
+        suppressClickRef.current = true;
+        return;
+      }
+      const origin = { x: event.clientX, y: event.clientY };
+      const scroller = scrollParent(event.currentTarget);
+      const armed = new AbortController();
+      const { signal } = armed;
+      window.addEventListener("pointerup", () => armed.abort(), { signal });
+      window.addEventListener("pointercancel", () => armed.abort(), { signal });
+      window.addEventListener(
+        "pointermove",
+        (move) => {
+          if (Math.hypot(move.clientX - origin.x, move.clientY - origin.y) < ROW_DRAG_THRESHOLD) return;
+          const under = rowAt(move.clientX, move.clientY);
+          if (!under || under.id === row.id) return;
+          armed.abort();
+          const value = !row.getIsSelected();
+          paintRange(row.id, under.id, value);
+          anchorRef.current = row.id;
+          suppressClickRef.current = true;
+          document.getSelection()?.removeAllRanges();
+          document.body.style.userSelect = "none";
+          startDrag(value, move.clientX, move.clientY, scroller);
+        },
+        { signal }
+      );
     },
     /**
      * Radix toggles on click, but the pointer press above already did. A

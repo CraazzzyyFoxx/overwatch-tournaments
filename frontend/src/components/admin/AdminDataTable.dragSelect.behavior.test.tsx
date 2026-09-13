@@ -37,7 +37,10 @@ const columns: ColumnDef<Row>[] = [
 let container: HTMLElement;
 let root: Root;
 
+const onRowClick = vi.fn();
+
 async function render() {
+  onRowClick.mockClear();
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -50,6 +53,7 @@ async function render() {
           columns={columns}
           getRowId={(row) => String(row.id)}
           enableRowSelection={(row) => row.original.status !== "locked"}
+          onRowClick={onRowClick}
         />
       </QueryClientProvider>
     );
@@ -172,5 +176,53 @@ describe("AdminDataTable drag selection", () => {
 
     await key({ key: "Escape" });
     expect(selectedIds()).toEqual([]);
+  });
+
+  describe("on the row body", () => {
+    const cell = (id: number) => container.querySelector<HTMLElement>(`tbody tr[data-row-id="${id}"] td:last-child`)!;
+    const pressCell = (id: number, init: MouseEventInit = {}) =>
+      act(async () => {
+        cell(id).dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, button: 0, clientX: 300, clientY: id * 100, ...init }));
+      });
+    const clickCell = (id: number, init: MouseEventInit = {}) =>
+      act(async () => {
+        cell(id).dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 1, ...init }));
+      });
+
+    it("sweeps when the press travels onto another row, and swallows the click that follows", async () => {
+      await render();
+
+      await pressCell(1);
+      await sweepTo(3);
+      await release();
+      await clickCell(1);
+      expect(selectedIds()).toEqual([1, 2]);
+      expect(onRowClick).not.toHaveBeenCalled();
+    });
+
+    it("leaves a still click to onRowClick and does not select", async () => {
+      await render();
+
+      await pressCell(2);
+      await release();
+      await clickCell(2);
+      expect(selectedIds()).toEqual([]);
+      expect(onRowClick).toHaveBeenCalledTimes(1);
+    });
+
+    it("toggles with Ctrl+click and extends with Shift+click", async () => {
+      await render();
+
+      await pressCell(1, { ctrlKey: true });
+      await release();
+      await clickCell(1, { ctrlKey: true });
+      expect(selectedIds()).toEqual([1]);
+
+      await pressCell(4, { shiftKey: true });
+      await release();
+      await clickCell(4, { shiftKey: true });
+      expect(selectedIds()).toEqual([1, 2, 4]);
+      expect(onRowClick).not.toHaveBeenCalled();
+    });
   });
 });
