@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import base64
 import binascii
-from typing import Any, Literal
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, field_validator, model_validator
 
@@ -12,23 +12,20 @@ from shared.core.enums import MixParticipation
 from shared.domain.player_sub_roles import REGISTRATION_ROLE_CODES
 
 __all__ = (
-    "CustomGameBalancerConfigPatch",
     "CustomGameCoHostPatch",
     "CustomGameCreate",
-    "CustomGameDiscordChannelPatch",
     "CustomGameHostTransfer",
     "CustomGameNextMapPatch",
     "CustomGameOutcome",
     "CustomGamePlayerPatch",
     "CustomGamePlayerParticipationPatch",
     "CustomGamePlayersParticipationPatch",
-    "CustomGamePointsPerWinPatch",
     "CustomGamePostDiscord",
     "CustomGameRecordOutcome",
-    "CustomGameRoleMaskPatch",
     "CustomGameRosterUpdate",
     "CustomGameSeatSwap",
     "CustomGameTeamNamesPatch",
+    "CustomGameVariantIndexPatch",
 )
 
 
@@ -39,10 +36,8 @@ class _Request(BaseModel):
 class CustomGameCreate(_Request):
     name: str = Field(min_length=1, max_length=255)
     member_ids: list[int] = Field(default_factory=list, max_length=100)
-    balancer_config: dict[str, Any] | None = None
     #: Start from a previous mix of this workspace: its pool, role setup, role
-    #: shape, points knob, team names, solver overrides and co-hosts, but none
-    #: of its played state.
+    #: shape, points knob, team names and co-hosts, but none of its played state.
     clone_from_game_id: int | None = None
 
     @field_validator("name")
@@ -100,39 +95,16 @@ class CustomGameTeamNamesPatch(_Request):
     team_names: dict[str, str]
 
 
-class CustomGameRoleMaskPatch(_Request):
-    role_mask: dict[str, int] | None
-
-
-class CustomGamePointsPerWinPatch(_Request):
-    points_per_win: int | None
-
-
 class CustomGameNextMapPatch(_Request):
     """``null`` clears the pick; the next match then records with no map."""
 
     map_id: int | None
 
 
-class CustomGameDiscordChannelPatch(_Request):
-    """The channel the mix posts its matchup to; ``null`` clears it.
+class CustomGameVariantIndexPatch(_Request):
+    """Which stored balance option the mix shows, for every viewer at once."""
 
-    A string, not an integer: a Discord snowflake is a 64-bit id that a
-    JavaScript client cannot hold losslessly as a number. Digits only, so the
-    server can turn it back into the ``BIGINT`` column without guessing.
-    """
-
-    channel_id: str | None
-
-    @field_validator("channel_id")
-    @classmethod
-    def _snowflake(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-        trimmed = value.strip()
-        if not trimmed.isdigit() or not (1 <= len(trimmed) <= 20):
-            raise ValueError("channel_id must be a Discord id (1-20 digits)")
-        return trimmed
+    variant_index: int = Field(ge=0)
 
 
 #: Ceiling on the encoded lineup screenshot. ~6 MiB decoded: far above the
@@ -172,10 +144,6 @@ class CustomGamePostDiscord(_Request):
         if not raw.startswith(_PNG_MAGIC):
             raise ValueError("image_b64 must be a PNG")
         return value
-
-
-class CustomGameBalancerConfigPatch(_Request):
-    balancer_config: dict[str, Any] | None
 
 
 class CustomGameHostTransfer(_Request):

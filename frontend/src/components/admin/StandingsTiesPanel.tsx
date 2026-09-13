@@ -2,10 +2,12 @@
 
 import { useMemo, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { ChevronDown, ChevronUp, RotateCcw } from "lucide-react";
+import { ChevronDown, ChevronUp, LoaderCircle, RotateCcw } from "lucide-react";
 
+import { StatusPill } from "@/components/admin/kit/StatusPill";
 import TeamName from "@/components/TeamName";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { notify } from "@/lib/notify";
 import adminService from "@/services/admin.service";
 import type { Stage, Standings } from "@/types/tournament.types";
@@ -136,7 +138,7 @@ export function StandingsTiesPanel({
       setOrder({});
       onChanged();
       notify.success(
-        variables.teamIds ? "Tie order saved and standings recalculated" : "Tie order reset"
+        variables.teamIds ? "Tie order saved and standings recalculated" : "Override cleared"
       );
     },
     onError: (error) => notify.apiError(error)
@@ -144,21 +146,34 @@ export function StandingsTiesPanel({
 
   if (clusters.length === 0) return null;
 
+  const pendingKey = mutation.isPending ? mutation.variables?.cluster.key : undefined;
+
   return (
-    <section className="space-y-2">
-      <div>
-        <h3 className="text-sm font-semibold">Unresolved ties</h3>
-        <p className="text-xs text-muted-foreground">
-          These teams were equal on every configured tiebreaker, so their order was assigned
-          rather than earned. Reordering stores absolute positions the engine re-applies on
-          every recalculation.
-        </p>
-      </div>
-      <div className="grid gap-2 md:grid-cols-2">
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between gap-2">
+          <CardTitle asChild>
+            <h2>Unresolved ties</h2>
+          </CardTitle>
+          <StatusPill tone="warning" className="tabular-nums" aria-hidden>
+            {clusters.length}
+          </StatusPill>
+        </div>
+        <CardDescription className="text-pretty">
+          These teams tied on every tiebreaker. Save an order so recalculation keeps it.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
         {clusters.map((cluster) => {
           const current = order[cluster.key] ?? cluster.rows.map((row) => row.team_id);
-          const dirty = current.some((teamId, index) => teamId !== cluster.rows[index]?.team_id);
-          const busy = mutation.isPending;
+          const persisted = manualPositionsOf(stageById.get(cluster.stageId));
+          const locked = current.every(
+            (teamId, index) => Number(persisted[String(teamId)]) === cluster.head + index
+          );
+          const hasOverride = cluster.rows.some((row) => persisted[String(row.team_id)] != null);
+          const busy = pendingKey === cluster.key;
+          const saving = busy && mutation.variables?.teamIds != null;
+          const clearing = busy && mutation.variables?.teamIds == null;
 
           const move = (index: number, delta: number) => {
             const target = index + delta;
@@ -170,72 +185,110 @@ export function StandingsTiesPanel({
           };
 
           return (
-            <div key={cluster.key} className="rounded-lg border p-3">
-              <p className="text-sm font-medium">
-                <span className="tabular-nums">
-                  {cluster.head}–{cluster.head + cluster.rows.length - 1}
-                </span>
-                <span className="text-muted-foreground"> · {cluster.scope}</span>
-              </p>
-              <ol className="mt-2 space-y-1">
+            <div key={cluster.key} className="space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <p className="min-w-0 truncate text-sm font-medium">
+                  <span className="tabular-nums">
+                    {cluster.head}–{cluster.head + cluster.rows.length - 1}
+                  </span>
+                  <span className="text-muted-foreground"> · {cluster.scope}</span>
+                </p>
+                {locked ? <StatusPill tone="success">Saved</StatusPill> : null}
+              </div>
+              <ol className="rounded-md border border-border">
                 {current.map((teamId, index) => {
                   const row = cluster.rows.find((entry) => entry.team_id === teamId);
                   const name = row?.team?.name ?? `team #${teamId}`;
                   return (
-                    <li key={teamId} className="flex items-center gap-2">
-                      <span className="w-6 shrink-0 text-sm font-bold tabular-nums">
+                    <li
+                      key={teamId}
+                      className="flex items-center gap-2 border-b border-border/50 px-3 py-1.5 last:border-b-0"
+                    >
+                      <span className="w-6 shrink-0 text-sm font-semibold tabular-nums">
                         {cluster.head + index}
                       </span>
-                      <div className="min-w-0 flex-1">
-                        {row?.team ? <TeamName team={row.team} size="xs" /> : name}
-                      </div>
+                      {row?.team ? (
+                        <TeamName
+                          team={row.team}
+                          size="xs"
+                          className="min-w-0 flex-1"
+                          nameClassName="font-medium"
+                        />
+                      ) : (
+                        <span className="min-w-0 flex-1 truncate text-sm font-medium" title={name}>
+                          {name}
+                        </span>
+                      )}
                       <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
-                        {row?.points.toFixed(1) ?? "—"} pts
+                        {row?.points.toFixed(1) ?? "—"}
+                        {"\u00a0"}pts
                       </span>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        aria-label={`Move ${name} up`}
-                        disabled={!canUpdate || busy || index === 0}
-                        onClick={() => move(index, -1)}
-                      >
-                        <ChevronUp aria-hidden className="size-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        aria-label={`Move ${name} down`}
-                        disabled={!canUpdate || busy || index === current.length - 1}
-                        onClick={() => move(index, 1)}
-                      >
-                        <ChevronDown aria-hidden className="size-4" />
-                      </Button>
+                      {canUpdate ? (
+                        <>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            aria-label={`Move ${name} up`}
+                            disabled={busy || index === 0}
+                            onClick={() => move(index, -1)}
+                          >
+                            <ChevronUp aria-hidden />
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            aria-label={`Move ${name} down`}
+                            disabled={busy || index === current.length - 1}
+                            onClick={() => move(index, 1)}
+                          >
+                            <ChevronDown aria-hidden />
+                          </Button>
+                        </>
+                      ) : null}
                     </li>
                   );
                 })}
               </ol>
-              <div className="mt-2 flex justify-end gap-2">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  disabled={!canUpdate || busy}
-                  onClick={() => mutation.mutate({ cluster, teamIds: null })}
-                >
-                  <RotateCcw aria-hidden className="size-4" />
-                  Reset
-                </Button>
-                <Button
-                  size="sm"
-                  disabled={!canUpdate || busy || !dirty}
-                  onClick={() => mutation.mutate({ cluster, teamIds: current })}
-                >
-                  Save order
-                </Button>
-              </div>
+              {canUpdate ? (
+                <div className="flex justify-end gap-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    disabled={busy || !hasOverride}
+                    onClick={() => mutation.mutate({ cluster, teamIds: null })}
+                  >
+                    {clearing ? (
+                      <LoaderCircle aria-hidden className="size-4 animate-spin motion-reduce:animate-none" />
+                    ) : (
+                      <RotateCcw aria-hidden className="size-4" />
+                    )}
+                    Clear override
+                  </Button>
+                  {locked ? null : (
+                    <Button
+                      type="button"
+                      size="sm"
+                      disabled={busy}
+                      onClick={() => mutation.mutate({ cluster, teamIds: current })}
+                    >
+                      {saving ? (
+                        <LoaderCircle
+                          aria-hidden
+                          className="size-4 animate-spin motion-reduce:animate-none"
+                        />
+                      ) : null}
+                      Save order
+                    </Button>
+                  )}
+                </div>
+              ) : null}
             </div>
           );
         })}
-      </div>
-    </section>
+      </CardContent>
+    </Card>
   );
 }

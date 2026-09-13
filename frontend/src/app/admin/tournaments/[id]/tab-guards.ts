@@ -71,6 +71,8 @@ export const SETTINGS_SECTIONS = [
   "rules",
   "schedule",
   "roster",
+  "registration",
+  "admission",
   "pre-game",
   "report-form",
   "links",
@@ -85,6 +87,8 @@ export interface TabAccess {
   canUpdateTournament: boolean;
   canUpdateEncounter: boolean;
   canTeamRead: boolean;
+  /** `team.create` — what `PUT registration-form` actually requires. */
+  canTeamCreate: boolean;
   canReadTournamentLink: boolean;
   canDeleteTournament: boolean;
   teamFormation: "balancer" | "draft";
@@ -119,6 +123,12 @@ export function allowedSettingsSection(section: SettingsSection, p: TabAccess): 
       return p.canReadTournamentLink;
     case "danger":
       return p.canDeleteTournament;
+    // Both write the registration form, whose upsert is gated on `team.create`
+    // server-side. Reaching the tab at all still needs `tournament.update`
+    // (`allowedTab`), so this narrows rather than widens.
+    case "registration":
+    case "admission":
+      return p.canTeamCreate;
     default:
       return p.canUpdateTournament;
   }

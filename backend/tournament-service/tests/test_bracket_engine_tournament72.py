@@ -391,12 +391,21 @@ class SwissRoundGenerationTournament72Tests(TestCase):
 
 
 class DoubleEliminationPlayoffTournament72Tests(TestCase):
-    """Playoff skeleton shape and seed pairings for tournament 72.
+    """Playoff skeleton, seed pairings and placements for tournament 72.
 
     Later-round LB pairing used to follow same-half drops; cross-drop changed
-    that, so production history is not replayed through the generator. Standings
-    still lock the recorded games.
+    that, so the production match history is no longer what the generator
+    produces and is not replayed. The engine is still driven end to end — a
+    deterministic run through the skeleton, its advancement edges and the
+    standings calculator — and the recorded games still lock the calculator.
     """
+
+    # Overall playoff seeding (production stage_item_input slots 1..8).
+    SEEDS = [*PLAYOFF_UB_SEEDS, *PLAYOFF_LB_SEEDS]
+
+    @classmethod
+    def _better_seed_wins(cls, home: int, away: int) -> tuple[int, int]:
+        return (2, 0) if cls.SEEDS.index(home) < cls.SEEDS.index(away) else (0, 2)
 
     def _skeleton(self) -> BracketSkeleton:
         return generate_bracket(
@@ -437,6 +446,20 @@ class DoubleEliminationPlayoffTournament72Tests(TestCase):
         grand_final = next(e for e in encounters if e.round == 3)
         self.assertIsNotNone(grand_final.home_team_id)
         self.assertIsNotNone(grand_final.away_team_id)
+
+    def test_placements_follow_the_engine_from_seeds_to_standings(self) -> None:
+        """Skeleton → advancement edges → playoff calculator, in one pass: the
+        favourite never loses, so the placements come out as the seed order —
+        the four upper-bracket seeds take 1-4, and the lower-bracket pairs share
+        5th and 7th, which is where a double elimination's rounds end."""
+        encounters = _simulate_bracket(self._skeleton(), self._better_seed_wins)
+
+        calculator = standings_service.PLAYOFF_CALCULATORS[StageType.DOUBLE_ELIMINATION]
+        rankings = {row.id: row.ranking for row in calculator(encounters)}
+        self.assertEqual(
+            {2071: 1, 2069: 2, 2068: 3, 2055: 4, 2067: 5, 2060: 5, 2058: 7, 2056: 7},
+            rankings,
+        )
 
     def test_standings_match_production(self) -> None:
         encounters = [

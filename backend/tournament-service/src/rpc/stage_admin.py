@@ -287,6 +287,15 @@ def register(broker: Any, logger: Any) -> None:
             # Route: require_stage_permission("stage", "update").
             ws_id = await auth.get_stage_workspace_id(session, stage_id)
             ensure_workspace_permission(user, ws_id, "stage", "update")
+            # Route reads the optional ``source_stage_id`` from the query string:
+            # which group stage feeds this bracket, when the earlier phase runs
+            # several divisions and no single one is "the" preceding stage.
+            source_vals = (data.get("query") or {}).get("source_stage_id")
+            if isinstance(source_vals, list):
+                source_raw = source_vals[0] if source_vals else None
+            else:
+                source_raw = source_vals
+            source_stage_id = int(source_raw) if source_raw not in (None, "") else None
             await record_admin_audit(
                 session,
                 action="stage.auto_wire",
@@ -295,9 +304,10 @@ def register(broker: Any, logger: Any) -> None:
                 workspace_id=ws_id,
                 entity_type="stage",
                 entity_id=stage_id,
+                after={"source_stage_id": source_stage_id},
             )
             # auto_wire_stage commits internally; returns a Stage.
-            stage = await stage_service.auto_wire_stage(session, stage_id)
+            stage = await stage_service.auto_wire_stage(session, stage_id, source_stage_id=source_stage_id)
             return _dump(await tournament_flows.stage_read(session, stage))
 
         return await _run(logger, op)

@@ -1,0 +1,29 @@
+name: owt-test
+
+# Ephemeral Postgres for host-run pytest (uv run pytest from backend/).
+# Not the compose `postgres` profile: that service has no published ports and
+# a persistent volume. Bound to loopback so a LAN scan cannot reach it.
+#
+#   docker compose -f docker-compose.test.yml up -d --wait
+#
+# pytest starts this itself when POSTGRES_* still point at 127.0.0.1:55432
+# (shared/testing/test.env) and the port is down. CI does not (CI=true) unless
+# TEST_POSTGRES_DOCKER=1.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: anak_test
+    ports:
+      - "127.0.0.1:55432:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d anak_test"]
+      interval: 1s
+      timeout: 5s
+      retries: 30
+      start_period: 5s

@@ -3,7 +3,7 @@
 from collections.abc import Sequence
 
 from loguru import logger
-from sqlalchemy import and_, case, func, or_, select, update
+from sqlalchemy import case, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -413,12 +413,6 @@ class AdminStageService:
         await self.encounter_repo.delete_for_stage(session, stage_id)
         await self.standing_repo.delete_for_stage(session, stage_id)
         await self.stage_repo.delete(session, stage)
-        # Close the gap left in `order` — otherwise the next stage created via
-        # the frontend's `order: stages.length` collides with whatever stage
-        # already sits at that position (two stages sharing one `order` value
-        # silently breaks "preceding stage" lookups like auto-wire's, which
-        # compare `order` strictly).
-        await self._reindex_tournament_stages(session, tournament_id=tournament_id, removed_stage_ids={stage_id})
         await self._publish_structure_changed(session, tournament_id)
         await session.commit()
 
@@ -511,26 +505,6 @@ class AdminStageService:
         result = await session.execute(select(model).where(model.stage_id.in_(source_stage_ids)))
         for row in result.scalars().all():
             row.stage_id = target_stage_id
-
-    async def _reindex_tournament_stages(
-        self,
-        session: AsyncSession,
-        *,
-        tournament_id: int,
-        removed_stage_ids: set[int],
-    ) -> None:
-        # Analytical: an ordered NOT IN scan whose only purpose is to rewrite
-        # ``order`` into a dense 0..n sequence.
-        result = await session.execute(
-            self.stage_repo.select()
-            .where(
-                models.Stage.tournament_id == tournament_id,
-                ~models.Stage.id.in_(removed_stage_ids),
-            )
-            .order_by(models.Stage.order.asc(), models.Stage.id.asc())
-        )
-        for index, stage in enumerate(result.scalars().all()):
-            stage.order = index
 
     async def merge_group_stages(
         self,
@@ -673,11 +647,6 @@ class AdminStageService:
         for source_stage in source_stages:
             await self.stage_repo.delete(session, source_stage)
 
-        await self._reindex_tournament_stages(
-            session,
-            tournament_id=target_stage.tournament_id,
-            removed_stage_ids=set(unique_source_stage_ids),
-        )
         await enqueue_tournament_recalculation(session, target_stage.tournament_id)
         await self._publish_structure_changed(session, target_stage.tournament_id)
         await session.commit()
@@ -864,12 +833,20 @@ class AdminStageService:
         commit: bool = True,
         stage: models.Stage | None = None,
     ) -> models.Stage:
-        """Activate a stage, resolving tentative inputs from previous stages."""
+        """Activate a stage, resolving tentative inputs from previous stages.
+
+        Activation moves the tournament to this stage's phase: stages of OTHER
+        phases go inactive, same-phase siblings (the parallel Low/High divisions
+        that share one ``order``) stay active beside it.
+        """
         stage = stage or await self.get_stage(session, stage_id)
 
         await session.execute(
             update(models.Stage)
-            .where(models.Stage.tournament_id == stage.tournament_id, models.Stage.id != stage_id)
+            .where(
+                models.Stage.tournament_id == stage.tournament_id,
+                models.Stage.order != stage.order,
+            )
             .values(is_active=False)
         )
 
@@ -1478,35 +1455,49 @@ class AdminStageService:
         stages = await self.stage_repo.bulk_get(session, sorted(source_stage_ids))
         return [s.id for s in stages if not s.is_completed]
 
-    async def _preceding_group_stage(self, session: AsyncSession, stage: models.Stage) -> models.Stage | None:
-        """The group stage immediately before ``stage`` in stage order — the source
-        used for auto-wiring playoff seeds.
-
-        Ties on ``order`` (data predating the delete-stage reindex fix, where two
-        stages can share one order value) break on ``id``: the lower id was
-        created first, so it counts as "earlier" too.
-        """
-        # Analytical: a descending-order "nearest earlier stage of these types"
-        # lookup, not a plain by-tournament list.
+    async def _preceding_phase_group_stages(self, session: AsyncSession, stage: models.Stage) -> list[models.Stage]:
         result = await session.execute(
             self.stage_repo.select()
             .where(
                 models.Stage.tournament_id == stage.tournament_id,
                 models.Stage.stage_type.in_(GROUPED_GENERATION_STAGE_TYPES),
-                or_(
-                    models.Stage.order < stage.order,
-                    and_(models.Stage.order == stage.order, models.Stage.id < stage.id),
-                ),
+                models.Stage.order < stage.order,
             )
             .options(selectinload(models.Stage.items))
             .order_by(models.Stage.order.desc(), models.Stage.id.desc())
         )
-        return result.scalars().first()
+        groups = list(result.scalars().all())
+        if not groups:
+            return []
+        phase = groups[0].order
+        return [group for group in groups if group.order == phase]
 
-    async def _auto_wire_from_groups(self, session: AsyncSession, stage: models.Stage, *, strict: bool = False) -> bool:
-        """Derive playoff seeding from the preceding group stage's ``advance_count``
-        and this stage's ``split_lower_bracket`` flag, then wire TENTATIVE inputs
-        (cross seeding). Replaces the manual Automation block.
+    async def _preceding_group_stage(self, session: AsyncSession, stage: models.Stage) -> models.Stage | None:
+        """The unique group stage in the latest earlier phase.
+
+        Same ``order`` is parallel, not earlier. Several group stages in that
+        earlier phase is ambiguous — returns None so nothing guesses which
+        division feeds this bracket.
+        """
+        tied = await self._preceding_phase_group_stages(session, stage)
+        return tied[0] if len(tied) == 1 else None
+
+    async def _auto_wire_from_groups(
+        self,
+        session: AsyncSession,
+        stage: models.Stage,
+        *,
+        strict: bool = False,
+        source_stage_id: int | None = None,
+    ) -> bool:
+        """Derive playoff seeding from a group stage's ``advance_count`` and this
+        stage's ``split_lower_bracket`` flag, then wire TENTATIVE inputs (cross
+        seeding). Replaces the manual Automation block.
+
+        ``source_stage_id`` names the feeding group stage explicitly — required
+        when several divisions share the earlier phase, since none of them is
+        "the" preceding stage. Without it the source is the one group stage of
+        the latest earlier phase.
 
         No-op when the stage is not a bracket, has no preceding group stage, or
         nothing there is configured to advance — neither the source stage's
@@ -1524,7 +1515,25 @@ class AdminStageService:
                     detail="Only single/double elimination stages can be auto-wired from groups",
                 )
             return False
-        source = await self._preceding_group_stage(session, stage)
+
+        if source_stage_id is not None:
+            # ``wire_from_groups`` re-validates tournament and stage type below.
+            source: models.Stage | None = await self.get_stage(session, source_stage_id)
+        else:
+            candidates = await self._preceding_phase_group_stages(session, stage)
+            if len(candidates) > 1:
+                if strict:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=(
+                            f"Phase {candidates[0].order} runs {len(candidates)} group stages "
+                            f"({', '.join(candidate.name for candidate in candidates)}) — "
+                            "pick which one feeds this bracket"
+                        ),
+                    )
+                return False
+            source = candidates[0] if candidates else None
+
         stage_advance = (source.advance_count or 0) if source is not None else 0
         group_advance = any(getattr(item, "advance_count", None) for item in source.items) if source else False
         if source is None or (stage_advance <= 0 and not group_advance):
@@ -1558,15 +1567,24 @@ class AdminStageService:
         return True
 
     async def auto_wire_stage(
-        self, session: AsyncSession, stage_id: int, *, notify: bool = True, commit: bool = True
+        self,
+        session: AsyncSession,
+        stage_id: int,
+        *,
+        source_stage_id: int | None = None,
+        notify: bool = True,
+        commit: bool = True,
     ) -> models.Stage:
         """Standalone trigger for the same group->bracket auto-wiring that
         "Activate & generate" runs automatically. Lets an admin preview/debug the
         wiring, or refresh it after changing the source stage's "Teams advancing
         to playoff" count, without activating or generating anything.
+
+        ``source_stage_id`` names the feeding group stage — the only way to wire
+        a playoff when several divisions share the earlier phase.
         """
         stage = await self.get_stage(session, stage_id)
-        await self._auto_wire_from_groups(session, stage, strict=True)
+        await self._auto_wire_from_groups(session, stage, strict=True, source_stage_id=source_stage_id)
         if notify:
             await self._publish_structure_changed(session, stage.tournament_id)
         if commit:

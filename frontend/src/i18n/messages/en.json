@@ -368,6 +368,10 @@
     },
     "myCard": {
       "title": "Your Registration",
+      "queuePosition": "{position} / {total}",
+      "queuePositionLabel": "Position {position} of {total} registrations",
+      "queueRolePosition": "{role} {position} / {total}",
+      "queueRolePositionLabel": "Position {position} of {total} on {role}",
       "primaryRole": "Primary Role",
       "noSecondaryRoles": "No fallback roles",
       "accounts": "Linked Accounts",
@@ -758,8 +762,35 @@
     },
     "preferences": {
       "title": "Preferences",
-      "desc": "Customize your tournament experience.",
-      "comingSoon": "App preferences coming soon"
+      "desc": "Customize your tournament experience."
+    },
+    "mixBalancer": {
+      "title": "Mixes",
+      "desc": "How your pickup mixes are set up and balanced. Every mix you host uses these, so they are set once here instead of on every game.",
+      "saving": "Saving…",
+      "saved": "Saved",
+      "loadError": "Could not load your mix preferences.",
+      "tilt": {
+        "label": "Balancing (rank balance vs role comfort)",
+        "evenRanks": "Even ranks",
+        "preferredRoles": "Preferred roles",
+        "balanced": "Balanced",
+        "comfort": "{percent}% comfort",
+        "hint": "Pulled left, the engine only cares how evenly the two teams' ranks split. Pulled right, it will accept a wider rank gap to seat more players on the role they asked for. The middle is its own default weighting."
+      },
+      "weights": {
+        "label": "Line importance (1 = normal)",
+        "hint": "How hard the engine works to match that line across the two teams. Raise Tank and a tank mismatch costs more than a support one. Flex only counts on a flex-shaped roster."
+      },
+      "variants": {
+        "label": "Balance options per run",
+        "hint": "How many alternative splits one balance hands back for the pager to walk, up to {max}. The first option is always the best one; the rest are there to pick from."
+      },
+      "points": {
+        "label": "Points per win",
+        "placeholder": "Off",
+        "hint": "Recording who won bumps every winning player's rank by this many points in your own book, and every losing player's down by the same. Leave empty to record results without touching ranks."
+      }
     },
     "favorites": {
       "title": "Favorites",
@@ -2231,6 +2262,10 @@
     },
     "participants": {
       "resultCount": "{count, plural, one {# participant shown} other {# participants shown}}",
+      "hidden": {
+        "title": "Participants list hidden",
+        "description": "The organizer publishes only the size of the field and how it splits by role. Your own registration is still shown above."
+      },
       "empty": {
         "title": "No registrations yet",
         "description": "Participants will appear here when registrations are published."
@@ -2459,7 +2494,13 @@
   },
   "bracket": {
     "round": "Round {n}",
-    "lowerRound": "Lower R{n}",
+    "semifinal": "Semifinal",
+    "final": "Final",
+    "upperRound": "UB Round {n}",
+    "upperSemifinal": "UB Semifinal",
+    "upperFinal": "UB Final",
+    "lowerRound": "LB Round {n}",
+    "lowerFinal": "LB Final",
     "grandFinal": "Grand Final",
     "grandFinalReset": "Grand Final Reset",
     "viewMatch": "View match",
@@ -3080,7 +3121,8 @@
           "disagree": "Reports differ — admin decides"
         },
         "report": "Report the result",
-        "amend": "Change my report"
+        "amend": "Change my report",
+        "pickMap": "Which map did you play?"
       },
       "heroBans": {
         "eyebrow": "Hero bans for this map",
@@ -4973,13 +5015,29 @@
         "manage": "Configure the workspace rule"
       },
       "display": {
-        "title": "Display Options",
+        "title": "Public page",
+        "description": "What a visitor sees of the field on the tournament's Participants tab.",
         "showRanks": "Show player ranks on participants page",
-        "hint": "When enabled, player rank values will be displayed on the public participants page. When disabled, rank values are completely hidden and omitted from backend payloads."
+        "hint": "When enabled, player rank values will be displayed on the public participants page. When disabled, rank values are completely hidden and omitted from backend payloads.",
+        "hideRegistrations": "Hide the participants list",
+        "hideRegistrationsHint": "The public participants page shows only the registration count and the split by role — no names, no rows. Enforced on the server, so the list is not in the payload either. Registration → Entries still shows you every row.",
+        "maxParticipants": "Announced capacity",
+        "maxParticipantsHint": "Shown next to the participant count as \"42 / 100\". Informational only — it is not a limit, and registrations past it are still accepted. Leave empty to show nothing."
+      },
+      "questionnaire": {
+        "title": "Questionnaire",
+        "description": "The fields a registrant fills in. Edited on its own screen, because it is a list rather than a set of switches.",
+        "label": "Registration form",
+        "hint": "Built-in fields, sub-roles and your own custom questions.",
+        "action": "Open the form builder"
+      },
+      "bench": {
+        "title": "Bench",
+        "description": "Extra players a registered team may carry beyond the starter slots above."
       },
       "team": {
         "title": "Registered teams",
-        "description": "Bench size, who pays the subscription, and the starter-rank / identity rules that apply before export.",
+        "description": "Starter-rank and identity rules, checked before a team can be exported.",
         "maxSubstitutes": "Substitutes per team",
         "maxSubstitutesHint": "How many extra players a registered team may take. They do not fill a starter slot and do not complete the roster.",
         "maxSubstitutesAria": "Maximum substitutes per team",
@@ -5386,6 +5444,8 @@
     "overridingMix": "This mix pins its own shape instead of following the workspace.",
     "willInherit": "Saving hands this tournament back to the workspace shape.",
     "willInheritMix": "Saving hands this mix back to the workspace shape.",
+    "overridingAccount": "Every mix you host uses this shape instead of its workspace's.",
+    "willInheritAccount": "Your mixes follow the shape of the workspace they run in.",
     "locked": "A draft session has already been created, so the roster shape is locked. Complete or cancel it to change the shape."
   },
   "scrims": {

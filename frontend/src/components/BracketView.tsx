@@ -23,6 +23,7 @@ import TeamName from "@/components/TeamName";
 import { withReturnTo } from "@/lib/return-to";
 import {
   activeRoundNumber,
+  bracketRoundShape,
   buildRoundGroups as buildBracketRoundGroups,
   computeMatchNumbers as computeBracketMatchNumbers,
   computeSlotHints as computeBracketSlotHints,
@@ -233,6 +234,7 @@ function addSequentialEdges(
   groups: RoundGroup[],
   nodesById: Map<string, LayoutNode>,
   edges: LayoutEdge[],
+  wiredTargets: ReadonlySet<number>,
   mapper: (matchIndex: number, targetCount: number) => number
 ) {
   for (let groupIndex = 0; groupIndex < groups.length - 1; groupIndex++) {
@@ -243,6 +245,11 @@ function addSequentialEdges(
       const targetIndex = mapper(matchIndex, next.length);
 
       if (targetIndex < 0 || targetIndex >= next.length) {
+        continue;
+      }
+
+      // The match says where its teams come from: never guess over it.
+      if (wiredTargets.has(next[targetIndex].id)) {
         continue;
       }
 
@@ -262,14 +269,25 @@ function addSequentialEdges(
   }
 }
 
+/**
+ * Winner lines from the bracket's own advancement edges.
+ *
+ * Returns the encounters whose feeders are recorded (any role — a lower-bracket
+ * drop is a `loser` edge), so column-index inference can fill in only the
+ * matches that have no provenance of their own, instead of being switched off
+ * for the whole bracket by a single wired match.
+ */
 function addWinnerSourceEdges(
   nodes: LayoutNode[],
   nodesById: Map<string, LayoutNode>,
   edges: LayoutEdge[]
-) {
+): Set<number> {
+  const wired = new Set<number>();
   const seen = new Set<string>();
   for (const node of nodes) {
-    for (const source of node.encounter.sources ?? []) {
+    const sources = node.encounter.sources ?? [];
+    if (sources.length > 0) wired.add(node.encounter.id);
+    for (const source of sources) {
       if (source.role !== "winner") continue;
       const edgeId = `edge-${source.encounter_id}-${node.encounter.id}`;
       if (seen.has(edgeId)) continue;
@@ -283,6 +301,7 @@ function addWinnerSourceEdges(
       });
     }
   }
+  return wired;
 }
 
 // Shared by the upper, lower, and grand-final columns: each pushes one round
@@ -326,9 +345,9 @@ function buildLayout(
 
   const isDE = type === "double_elimination";
   const finalRoundNumbers = isDE ? getBracketFinalRounds(encounters) : new Set<number>();
-  // Ascending, so `bracketRoundLabel` reads the first entry as the Grand Final
-  // and any later one as its reset.
-  const finalRoundList = [...finalRoundNumbers].sort((left, right) => left - right);
+  // The bracket's own rounds, so a column header can read "Semifinal" or
+  // "LB Final" rather than a bare depth.
+  const roundShape = bracketRoundShape(type, encounters);
 
   // For DE: split upper encounters into regular UB and Grand Final section.
   const ubEncounters = isDE
@@ -396,7 +415,7 @@ function buildLayout(
       headerY: upperHeaderY,
       headerId: `upper-header-${group.round}`,
       headerSection: "upper",
-      label: roundLabel(group.round, finalRoundList),
+      label: roundLabel(group.round, roundShape),
       startY,
       slotHints,
       matchNumbers,
@@ -429,7 +448,7 @@ function buildLayout(
       headerY: lowerHeaderY,
       headerId: `lower-header-${group.round}`,
       headerSection: "lower",
-      label: roundLabel(group.round, finalRoundList),
+      label: roundLabel(group.round, roundShape),
       startY,
       slotHints,
       matchNumbers,
@@ -460,7 +479,7 @@ function buildLayout(
       headerY: PADDING_Y,
       headerId: `final-header-${group.round}`,
       headerSection: "upper",
-      label: roundLabel(group.round, finalRoundList),
+      label: roundLabel(group.round, roundShape),
       startY,
       slotHints,
       matchNumbers,
@@ -471,22 +490,22 @@ function buildLayout(
 
   const nodesById = new Map(nodes.map((node) => [node.id, node]));
 
-  const recordedSources = nodes.some((node) => (node.encounter.sources?.length ?? 0) > 0);
+  // Recorded advancement edges win; the column-index guesses below only fill in
+  // the matches that carry none (a hand-created encounter, a legacy bracket).
+  const wiredTargets = hasBracketConnections
+    ? addWinnerSourceEdges(nodes, nodesById, edges)
+    : new Set<number>();
 
   if (hasBracketConnections) {
-    if (recordedSources) {
-      addWinnerSourceEdges(nodes, nodesById, edges);
-    } else {
-      addSequentialEdges(upperRounds, nodesById, edges, (matchIndex, targetCount) => {
-        const targetIndex = Math.floor(matchIndex / 2);
-        return targetIndex < targetCount ? targetIndex : -1;
-      });
+    addSequentialEdges(upperRounds, nodesById, edges, wiredTargets, (matchIndex, targetCount) => {
+      const targetIndex = Math.floor(matchIndex / 2);
+      return targetIndex < targetCount ? targetIndex : -1;
+    });
 
-      addSequentialEdges(lowerRounds, nodesById, edges, (matchIndex, targetCount) => {
-        if (targetCount === 0) return -1;
-        return Math.min(matchIndex, targetCount - 1);
-      });
-    }
+    addSequentialEdges(lowerRounds, nodesById, edges, wiredTargets, (matchIndex, targetCount) => {
+      if (targetCount === 0) return -1;
+      return Math.min(matchIndex, targetCount - 1);
+    });
   }
 
   if (isDE && finalRounds.length > 0) {
@@ -494,7 +513,7 @@ function buildLayout(
     const gfMatch = gfGroup?.matches[0];
     const gfNode = gfMatch ? nodesById.get(`match-${gfMatch.id}`) : undefined;
 
-    if (gfNode && !recordedSources) {
+    if (gfNode && gfMatch && !wiredTargets.has(gfMatch.id)) {
       const ubFinalGroup = upperRounds[upperRounds.length - 1];
       const ubFinalMatch = ubFinalGroup?.matches[0];
       const ubFinalNode = ubFinalMatch ? nodesById.get(`match-${ubFinalMatch.id}`) : undefined;
@@ -860,7 +879,9 @@ export function BracketView<M extends BracketMatch>({
   const [isGrabbing, setIsGrabbing] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
-  const roundLabel = useBracketRoundLabel();
+  // The tree draws the upper bracket as its own labelled row of columns, so a
+  // "UB " prefix on every header repeats what the picture already says.
+  const roundLabel = useBracketRoundLabel({ bareUpper: true });
   const layout = useMemo(
     () => buildLayout(encounters, type, t, roundLabel),
     [encounters, type, t, roundLabel]
@@ -980,6 +1001,7 @@ export function BracketView<M extends BracketMatch>({
           {layout.edges.map((edge) => (
             <path
               key={edge.id}
+              data-edge={edge.id}
               d={edge.path}
               stroke={
                 edge.isCompleted
@@ -1107,7 +1129,11 @@ export function BracketView<M extends BracketMatch>({
           role="dialog", aria-modal, a focus trap, focus restore on close and
           scroll locking. Escape came for free there; nothing else did. */}
       <Dialog open={isFullscreen} onOpenChange={setIsFullscreen}>
-        <DialogContent className="left-0 top-0 flex h-screen w-screen max-w-none translate-x-0 translate-y-0 flex-col gap-0 rounded-none border-none bg-[color:var(--aqt-bg)] p-6">
+        {/* `max-h-screen`: a deliberate edge-to-edge surface, so it replaces the
+            primitive's viewport height cap instead of sitting 2rem short of the
+            bottom. (`max-h-none` would not: tailwind-merge v3 does not know that
+            class, so both caps would survive into the class list.) */}
+        <DialogContent className="left-0 top-0 flex h-screen max-h-screen w-screen max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none border-none bg-[color:var(--aqt-bg)] p-6">
           <DialogHeader className="mb-4 flex-row items-start justify-between gap-4 space-y-0 border-b border-[color:var(--aqt-border)] pb-3 pr-12 text-left">
             <div>
               <DialogTitle className="text-xl font-bold uppercase tracking-wider text-[color:var(--aqt-fg)]">

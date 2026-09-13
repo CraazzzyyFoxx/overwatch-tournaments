@@ -48,6 +48,15 @@ class BalancerRegistrationForm(db.TimeStampIntegerMixin):
     require_open_profile: Mapped[bool] = mapped_column(Boolean(), nullable=False, server_default="false", default=False)
     open_profile_scope: Mapped[str] = mapped_column(String(8), nullable=False, server_default="main", default="main")
     show_ranks: Mapped[bool] = mapped_column(Boolean(), nullable=False, server_default="false", default=False)
+    #: Collapses the PUBLIC participants list to an aggregate (count + per-role
+    #: distribution). Enforced server-side in ``build_public_registration_list``:
+    #: the list payload is cached anonymously, so a client-side hide would be
+    #: cosmetic and a per-viewer branch would poison that cache. Organizers read
+    #: the full roster through the admin registrations table instead.
+    hide_registrations: Mapped[bool] = mapped_column(Boolean(), nullable=False, server_default="false", default=False)
+    #: Advisory capacity shown next to the participant count. NOT a limit: nothing
+    #: reads it on the write path, and registration past it succeeds. NULL hides it.
+    max_participants: Mapped[int | None] = mapped_column(Integer(), nullable=True)
     #: Bench size for team registration (decision 4): the roster ``RosterShape`` is
     #: strict, but an organizer may allow this many extra ``is_substitute`` members
     #: per team. Zero disables the bench entirely. Deliberately here and not on

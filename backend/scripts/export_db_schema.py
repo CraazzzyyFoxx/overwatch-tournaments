@@ -109,7 +109,10 @@ def table_indexes(table) -> list[str]:
             col_s = ", ".join(ident(c) for c in cols)
             name = f', name: "{const.name}"' if const.name else ""
             lines.append(f"    ({col_s}) [unique{name}]")
-    for idx in table.indexes:
+    # ``Table.indexes`` is a set: iteration order changes with the interpreter's
+    # hash seed, so an unsorted walk rewrites these committed artifacts with
+    # pure reordering noise on every run. Sort by name (unnamed last).
+    for idx in sorted(table.indexes, key=lambda i: i.name or ""):
         cols = tuple(c.name for c in idx.columns)
         if cols in seen:
             continue
@@ -231,7 +234,7 @@ def emit_sql(tables) -> str:
         ddl = str(CreateTable(table).compile(dialect=DIALECT)).strip()
         out.append(ddl + ";")
         out.append("")
-        for idx in table.indexes:
+        for idx in sorted(table.indexes, key=lambda i: i.name or ""):  # set: sort, see table_indexes
             # UniqueConstraints already land inside CREATE TABLE.
             if idx.unique and frozenset(c.name for c in idx.columns) in {
                 frozenset(c.name for c in const.columns)

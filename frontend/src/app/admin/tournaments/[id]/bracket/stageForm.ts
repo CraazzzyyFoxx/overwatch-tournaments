@@ -26,6 +26,8 @@ import {
 
 export interface StageForm {
   name: string;
+  /** Phase number. Same value = parallel brackets. */
+  order: number;
   stageType: StageType;
   /** Kept as strings: an empty field is "inherit", which `0` cannot express. */
   maxRounds: string;
@@ -53,6 +55,7 @@ export function stageFormFromStage(stage: Stage): StageForm {
 
   return {
     name: stage.name,
+    order: stage.order,
     stageType: stage.stage_type,
     maxRounds: String(stage.max_rounds ?? 5),
     advanceCount: stage.advance_count != null ? String(stage.advance_count) : "",
@@ -112,6 +115,7 @@ export function buildStageUpdatePayload(stage: Stage, form: StageForm): StageUpd
 
   return {
     name: form.name.trim() || stage.name,
+    order: form.order,
     stage_type: form.stageType,
     max_rounds: normalizeMaxRounds(form.maxRounds, stage.max_rounds ?? 5),
     advance_count:
@@ -128,6 +132,7 @@ export function buildStageUpdatePayload(stage: Stage, form: StageForm): StageUpd
  */
 const FIELD_LABELS: Record<keyof StageForm, string> = {
   name: "Name",
+  order: "Phase",
   stageType: "Format",
   maxRounds: "Swiss rounds",
   advanceCount: "Teams advancing",

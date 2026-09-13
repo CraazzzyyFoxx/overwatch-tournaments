@@ -17,6 +17,8 @@ export interface SettingsSectionContext {
   workspaceId: number;
   /** `tournament.update` — every section's edit grant except pre-game's. */
   canUpdateTournament: boolean;
+  /** `team.create` — the edit grant of the two registration-form sections. */
+  canTeamCreate: boolean;
 }
 
 export interface SettingsSectionProps {
@@ -51,6 +53,7 @@ export function SettingsSectionPage({
     canUpdateTournament: canAccessPermission("tournament.update", workspaceId),
     canUpdateEncounter: canAccessPermission("match.update", workspaceId),
     canTeamRead: canAccessPermission("team.read", workspaceId),
+    canTeamCreate: canAccessPermission("team.create", workspaceId),
     canReadTournamentLink: canAccessPermission("tournament_link.read", workspaceId),
     canDeleteTournament: canAccessPermission("tournament.delete", workspaceId),
     teamFormation: tournament?.team_formation === "draft" ? "draft" : "balancer"
@@ -102,7 +105,8 @@ export function SettingsSectionPage({
         tournament,
         tournamentId,
         workspaceId: tournament.workspace_id,
-        canUpdateTournament: access.canUpdateTournament
+        canUpdateTournament: access.canUpdateTournament,
+        canTeamCreate: access.canTeamCreate
       })}
     </div>
   );

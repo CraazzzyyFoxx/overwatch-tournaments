@@ -343,6 +343,12 @@ export interface AdminRegistrationForm {
   require_open_profile?: boolean;
   open_profile_scope?: "main" | "all";
   show_ranks?: boolean;
+  /** Collapses the public participants list to a count + role distribution.
+   *  Enforced server-side; the organizer's own roster is this admin table. */
+  hide_registrations?: boolean;
+  /** Advisory capacity shown next to the count. Never enforced — a registration
+   *  past it is still accepted. */
+  max_participants?: number | null;
   /** Extra ``is_substitute`` members per team. 0 disables the bench. */
   max_substitutes?: number;
   subscription_scope?: "player" | "team";
@@ -372,6 +378,8 @@ export interface AdminRegistrationFormUpsert {
   require_open_profile?: boolean;
   open_profile_scope?: "main" | "all";
   show_ranks?: boolean;
+  hide_registrations?: boolean;
+  max_participants?: number | null;
   /** Extra is_substitute members per team. 0 disables the bench. */
   max_substitutes?: number;
   subscription_scope?: "player" | "team";

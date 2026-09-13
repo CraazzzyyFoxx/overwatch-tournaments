@@ -16,7 +16,7 @@ separate cookie namespace.
 | Postgres | its own | host `db_postgres` via `db_pgbouncer`, database `anak_dev` |
 | Tracing | otel-collector → Tempo/Sentry | off (`TRACING_ENABLED=false`) |
 | Cookie names | `owt_*` | `owtdev_*` (`COOKIE_PREFIX`/`SESSION_COOKIE_PREFIX`) |
-| discord-worker | 1 replica | **0 replicas** |
+| discord-worker | 1 replica | 1 replica, own bot token |
 
 ## Why `PLATFORM_ZONE` exists
 
@@ -103,7 +103,11 @@ curl -sX POST -H 'Cookie: owtdev_refresh_token=x' https://dev.owt.craazzzyyfoxx.
   `APP_BIND=127.0.0.1`, `SITE_URL`, `SITE_NAME`, `PLATFORM_ZONE`, `COOKIE_PREFIX=owtdev`,
   `TRACING_ENABLED=false`,
   `SENTRY_ENVIRONMENT=development`, empty `NEXT_PUBLIC_GA_ID`/`NEXT_PUBLIC_YM_ID`,
-  `ANALYTICS_WORKER_CPUS=3`, `ANALYTICS_WORKER_MEMORY=3G`).
+  `ANALYTICS_WORKER_CPUS=3`, `ANALYTICS_WORKER_MEMORY=3G`, and
+  `NEXT_PUBLIC_DISCORD_CLIENT_ID` — the **dev** bot's application id, i.e. the same value as
+  `DISCORD_CLIENT_ID` in `backend/env/auth.env`, never production's; it is baked into the
+  frontend bundle as the `client_id` of the "Add bot to server" link, so pointing it at
+  production's app would invite production's bot).
 - `backend/env/*.env` — from the `.example` files, with `PLATFORM_ZONE`, `PROJECT_URL`,
   `CORS_ORIGINS`, `GATEWAY_WS_ALLOWED_ORIGINS` and `OAUTH_REDIRECT` on the dev host,
   `SESSION_COOKIE_PREFIX=owtdev` in `gateway.env`, a
@@ -126,12 +130,12 @@ git fetch origin <branch>:<branch> && git checkout <branch>   # or `git am` a pa
 docker compose -f docker-compose.production.yml build
 docker compose -f docker-compose.production.yml run --rm --no-deps -T app-svc \
     alembic upgrade head </dev/null
-make prod-up PROD_SCALE='app-svc=1 identity-svc=1 tournament-svc=1 frontend=1 discord-worker=0'
+make prod-up PROD_SCALE='app-svc=1 identity-svc=1 tournament-svc=1 frontend=1'
 ```
 
-`discord-worker=0` is not optional: it would be a second bot process on production's token,
-double-handling every Discord event. `stream-svc` gets no Twitch credentials for the same
-reason — polling would share production's Helix rate-limit bucket.
+`discord-worker` runs here: it has its own bot token, not production's. Reusing
+production's token would double-handle every Discord event. `stream-svc` gets no
+Twitch credentials — polling would share production's Helix rate-limit bucket.
 
 Tear down with `make prod-down` (in `~/owt-dev`); the database survives it.
 

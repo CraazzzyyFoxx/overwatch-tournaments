@@ -29,10 +29,10 @@ from shared.repository import (
     CustomGamePlayerRepository,
     CustomGamePlayerRoleRepository,
     CustomGameRepository,
-    CustomGameRoleSlotRepository,
     CustomGameTeamNameRepository,
+    UserBalancerConfigRepository,
 )
-from shared.schemas.roster_slots import RosterShapeRead, normalize_roster_slots
+from shared.schemas.roster_slots import RosterShapeRead
 from shared.services.division_grid.access import get_effective_division_grid
 from shared.services.member_rank import MIX_ORDER, MemberRankService, member_rank_service
 from shared.services.roster_shape_access import get_workspace_roster_slots
@@ -45,7 +45,6 @@ from shared.services.workspace_roster import (
 from src.domain.mix_discord import build_lineup_embed
 from src.domain.mix_rotation import PlayerHistory, RotationRecommendation, recommend_rotation, rotation_priority
 from src.domain.mix_stats import SeatOutcome, aggregate_mix_stats, outcome_for
-from src.services.balancer.config.public_contract import normalize_config_overrides
 from src.services.balancer.role_naming import role_slot_code
 from src.services.balancer.solver import run_mix_balance as _run_balance
 
@@ -59,10 +58,6 @@ _MAX_TEAMS = 8
 #: co-host list without bound.
 _MAX_CO_HOSTS = 16
 _MAX_TEAM_NAME_LEN = 60
-#: Upper bound on the host's configurable rank-adjustment-per-win. Generous
-#: for any plausible rank scale, guards against a fat-fingered config wrecking
-#: the rank book in one recorded match.
-_MAX_POINTS_PER_WIN = 1000
 #: A roster row owns only its lineup state. A rank correction goes into the
 #: host's own layer of ``member_rank``, so it outlives the game it was made in.
 _PLAYER_PATCH_FIELDS = frozenset({"participation", "roles", "is_flex"})
@@ -285,10 +280,10 @@ class CustomGameService:
         co_hosts: CustomGameCoHostRepository = CustomGameCoHostRepository(),
         player_roles: CustomGamePlayerRoleRepository = CustomGamePlayerRoleRepository(),
         team_names: CustomGameTeamNameRepository = CustomGameTeamNameRepository(),
-        role_slots: CustomGameRoleSlotRepository = CustomGameRoleSlotRepository(),
         casual_matches: CasualMatchRepository = CasualMatchRepository(),
         casual_teams: CasualTeamRepository = CasualTeamRepository(),
         casual_players: CasualPlayerRepository = CasualPlayerRepository(),
+        host_prefs: UserBalancerConfigRepository = UserBalancerConfigRepository(),
         ranks: MemberRankService | None = None,
         load_roster=list_roster,
         load_hosts=hosts_by_user_id,
@@ -300,10 +295,10 @@ class CustomGameService:
         self.co_hosts = co_hosts
         self.player_roles = player_roles
         self.team_names = team_names
-        self.role_slots = role_slots
         self.casual_matches = casual_matches
         self.casual_teams = casual_teams
         self.casual_players = casual_players
+        self.host_prefs = host_prefs
         self.ranks = ranks if ranks is not None else member_rank_service
         self.load_roster = load_roster
         self.load_hosts = load_hosts
@@ -424,18 +419,19 @@ class CustomGameService:
         name: str,
         actor_user_id: int,
         member_ids: Sequence[int] = (),
-        balancer_config: Mapping[str, Any] | None = None,
         clone_from_game_id: int | None = None,
     ) -> models.CustomGame:
         """Open a mix, optionally starting from a previous one's setup.
 
         A clone copies the parts a host would otherwise re-enter every session --
-        the pool and its per-seat role setup, the role shape, the points knob,
-        the team names, the solver overrides and the co-host grants -- but never
-        anything that describes a *played* session: no balance result, no rolled
-        map, no match history, and every seat back in the pool rather than
-        carrying last week's pins and benchings. Roster members who have since
-        left the workspace are dropped rather than failing the clone.
+        the pool and its per-seat role setup, the team names and the co-host
+        grants -- but never anything that describes a *played* session: no
+        balance result, no rolled map, no match history, and every seat back in
+        the pool rather than carrying last week's pins and benchings. Roster
+        members who have since left the workspace are dropped rather than failing
+        the clone. The roster shape, the points knob and the Discord target are
+        not copied because they are not the mix's: they belong to the host's
+        account and the workspace, and the new mix already inherits both.
         """
         _require_host(actor_user_id, host_user_id)
         trimmed = name.strip() if isinstance(name, str) else ""
@@ -467,14 +463,7 @@ class CustomGameService:
             host_user_id=host_user_id,
             name=trimmed,
             status=MixStatus.DRAFT,
-            balancer_config_json=(normalize_config_overrides(balancer_config) if balancer_config else None),
         )
-        if source is not None:
-            game.points_per_win = source.points_per_win
-            game.discord_channel_id = source.discord_channel_id
-            if game.balancer_config_json is None:
-                # Already normalized when it was stored on the source.
-                game.balancer_config_json = copy.deepcopy(source.balancer_config_json)
         await self.games.create(session, game)
 
         cloned: list[tuple[models.CustomGamePlayer, models.CustomGamePlayer]] = []
@@ -503,9 +492,6 @@ class CustomGameService:
                 roles = roles_by_source_row.get(source_row.id)
                 if roles:
                     await self.player_roles.replace_for_player(session, row.id, roles)
-            role_mask = await self.role_slots.mapping_for_game(session, source.id)
-            if role_mask:
-                await self.role_slots.replace(session, game.id, role_mask)
             for index, team_name in (await self.team_names.mapping_for_game(session, source.id)).items():
                 await self.team_names.set(session, game.id, index, team_name)
             for user_id in await self.co_hosts.user_ids_for_game(session, source.id):
@@ -630,19 +616,46 @@ class CustomGameService:
         await session.flush()
         return game
 
+    async def _host_config(self, session: AsyncSession, host_user_id: int | None) -> Any:
+        """The host's ``balancer.user_config`` row, or ``None`` if they never saved one.
+
+        Everything a mix is configured with hangs off this single row -- solver
+        knobs, roster shape, points per win -- so a caller that needs two of them
+        loads it once and reads both, instead of hitting the table per knob.
+        """
+        if host_user_id is None:
+            return None
+        return await self.host_prefs.get_by_user(session, host_user_id)
+
+    async def _shape_for(self, session: AsyncSession, workspace_id: int, host_config: Any) -> RosterShapeRead:
+        """Host's own shape -> workspace default -> built-in Overwatch 5v5."""
+        host_slots = host_config.role_slots_json if host_config is not None else None
+        workspace_slots = await get_workspace_roster_slots(session, workspace_id)
+        shape = resolve_roster_shape(host_slots or None, workspace_slots)
+        source = "host" if host_slots else "workspace" if workspace_slots else "default"
+        return RosterShapeRead.from_shape(shape, source=source)
+
     async def roster_shape(
         self,
         session: AsyncSession,
         *,
         workspace_id: int,
-        custom_game_id: int,
+        host_user_id: int | None,
     ) -> RosterShapeRead:
-        """Resolve the mix override, workspace default, then built-in shape."""
-        role_mask = await self.role_slots.mapping_for_game(session, custom_game_id)
-        workspace_slots = await get_workspace_roster_slots(session, workspace_id)
-        shape = resolve_roster_shape(role_mask or None, workspace_slots)
-        source = "tournament" if role_mask else "workspace" if workspace_slots else "default"
-        return RosterShapeRead.from_shape(shape, source=source)
+        """The shape this mix fields, resolved from its HOST's saved preferences.
+
+        Keyed by the host rather than by the mix: the shape describes how this
+        person runs their pickup sessions (5v5, 6v6, all-flex), not what happened
+        in one lobby, so it lives in ``balancer.user_config`` alongside their
+        solver knobs. A co-host pressing Balance still gets the host's shape --
+        same reason the ranks resolve against the host's book.
+        """
+        return await self._shape_for(session, workspace_id, await self._host_config(session, host_user_id))
+
+    async def host_points_per_win(self, session: AsyncSession, host_user_id: int | None) -> int:
+        """How far a decided match moves this host's rank book; 0 means "not at all"."""
+        config = await self._host_config(session, host_user_id)
+        return (config.points_per_win or 0) if config is not None else 0
 
     async def balance(
         self,
@@ -715,17 +728,18 @@ class CustomGameService:
                 },
                 "stats": {"classes": classes},
             }
-        role_mask = (
-            await self.roster_shape(
-                session,
-                workspace_id=workspace_id,
-                custom_game_id=game.id,
-            )
-        ).slots
+        # The HOST's row, not the acting co-host's, and read exactly once: the
+        # ranks above are already resolved against the host's own book
+        # (``MIX_ORDER`` + ``author_user_id=game.host_user_id``), so reading the
+        # presser's preferences instead would make the same mix balance
+        # differently depending on who clicked. The same row carries both the
+        # solver overrides and the roster shape, so they come off one load.
+        host_config = await self._host_config(session, game.host_user_id)
+        role_mask = (await self._shape_for(session, workspace_id, host_config)).slots
         try:
             result = await self.run_balance(
                 {"players": player_nodes},
-                game.balancer_config_json,
+                host_config.config_json if host_config is not None else None,
                 _noop_progress,
                 role_mask,
             )
@@ -737,6 +751,9 @@ class CustomGameService:
             # actual, actionable reason from the host.
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
         game.balance_result_json = result
+        # A fresh search renumbers every option, so whatever the host had paged
+        # to describes nothing now -- back to the best one.
+        game.selected_variant_index = 0
         _apply_balance_result(roster, result)
         game.status = MixStatus.BALANCED
         await session.flush()
@@ -773,65 +790,6 @@ class CustomGameService:
         await session.flush()
         return game
 
-    async def set_role_mask(
-        self,
-        session: AsyncSession,
-        *,
-        workspace_id: int,
-        custom_game_id: int,
-        role_mask: Mapping[str, int] | None,
-        actor_user_id: int,
-    ) -> models.CustomGame:
-        """Patch the mix's own roster-shape override, or clear it back to inheriting.
-
-        Mirrors ``Tournament.roster_slots_json``: ``None`` clears the override, and
-        ``balance``/``roster_shape`` then fall back through ``resolve_roster_shape``
-        to the workspace default, then the built-in Overwatch 5v5 shape.
-        """
-        game = await self._writable(
-            session, workspace_id=workspace_id, custom_game_id=custom_game_id, actor_user_id=actor_user_id
-        )
-        try:
-            normalized = normalize_roster_slots(role_mask)
-        except ValueError as exc:
-            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
-        await self.role_slots.replace(session, game.id, normalized)
-        return game
-
-    async def set_points_per_win(
-        self,
-        session: AsyncSession,
-        *,
-        workspace_id: int,
-        custom_game_id: int,
-        points_per_win: int | None,
-        actor_user_id: int,
-    ) -> models.CustomGame:
-        """Patch the host's rank-adjustment-per-win knob. ``None``/``0`` disables it.
-
-        Recording an outcome then bumps the host's own rank book (the layer a
-        mix already resolves against, see ``MIX_ORDER``) by this many points
-        for the winning team and down by the same for the losing team, per
-        player and role -- see :meth:`record_outcome`. A draw never adjusts
-        anything, win or lose.
-        """
-        game = await self._writable(
-            session, workspace_id=workspace_id, custom_game_id=custom_game_id, actor_user_id=actor_user_id
-        )
-        if points_per_win is not None:
-            if not isinstance(points_per_win, int) or isinstance(points_per_win, bool):
-                raise HTTPException(
-                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="points_per_win must be an integer"
-                )
-            if not (0 <= points_per_win <= _MAX_POINTS_PER_WIN):
-                raise HTTPException(
-                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                    detail=f"points_per_win must be between 0 and {_MAX_POINTS_PER_WIN}",
-                )
-        game.points_per_win = points_per_win or None
-        await session.flush()
-        return game
-
     async def set_next_map(
         self,
         session: AsyncSession,
@@ -858,8 +816,37 @@ class CustomGameService:
         await session.flush()
         return game
 
+    async def set_variant_index(
+        self,
+        session: AsyncSession,
+        *,
+        workspace_id: int,
+        custom_game_id: int,
+        variant_index: int,
+        actor_user_id: int,
+    ) -> models.CustomGame:
+        """Page the mix to one of its stored balance options -- for everybody.
+
+        The option on screen is what the lobby is having read out to it, so it
+        is a fact about the mix, not about the browser that happens to be
+        looking: a host clicking through the options moves every viewer with
+        them (same realtime signal as any other mix write), and a viewer who
+        opens the page mid-session lands on the one being played, not on the
+        first. Host-or-co-host only, like every other write here.
+        """
+        game = await self._writable(
+            session, workspace_id=workspace_id, custom_game_id=custom_game_id, actor_user_id=actor_user_id
+        )
+        result = game.balance_result_json if isinstance(game.balance_result_json, dict) else None
+        variants = result.get("variants") if isinstance(result, dict) else None
+        if not isinstance(variants, list) or not (0 <= variant_index < len(variants)):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Balance option not found")
+        game.selected_variant_index = variant_index
+        await session.flush()
+        return game
+
     async def workspace_discord_channel_id(self, session: AsyncSession, workspace_id: int) -> int | None:
-        """The workspace-wide mix channel: where a mix posts unless it names its own.
+        """The workspace-wide mix channel: the ONLY channel a mix ever posts to.
 
         Kept in the workspace balancer config blob
         (``balancer.workspace_config.config_json``) next to the other
@@ -878,33 +865,6 @@ class CustomGameService:
             # A hand-edited config blob is not worth a 500 on every mix read;
             # the workspace simply has no default until an admin re-saves it.
             return None
-
-    async def set_discord_channel(
-        self,
-        session: AsyncSession,
-        *,
-        workspace_id: int,
-        custom_game_id: int,
-        channel_id: int | None,
-        actor_user_id: int,
-    ) -> models.CustomGame:
-        """Override the workspace channel for this one mix, ``None`` to fall back.
-
-        Admin-only at the RPC gate (``_set_discord_channel``): the channel a
-        mix shouts into is the workspace's Discord, not the host's, so an
-        ordinary host posts to whatever the workspace named.
-
-        Unlike :meth:`set_next_map` there is nothing to validate the id
-        against: a channel lives in Discord, not in any table here. A wrong id
-        surfaces when the bot cannot deliver to it, which is the only place
-        that can tell the difference.
-        """
-        game = await self._writable(
-            session, workspace_id=workspace_id, custom_game_id=custom_game_id, actor_user_id=actor_user_id
-        )
-        game.discord_channel_id = channel_id
-        await session.flush()
-        return game
 
     async def discord_lineup(
         self,
@@ -928,9 +888,12 @@ class CustomGameService:
         game = await self._writable(
             session, workspace_id=workspace_id, custom_game_id=custom_game_id, actor_user_id=actor_user_id
         )
-        # The mix's own channel when an admin named one, the workspace default
-        # otherwise -- posting is the host's job either way.
-        channel_id = game.discord_channel_id or await self.workspace_discord_channel_id(session, workspace_id)
+        # The workspace's channel, full stop. A mix used to be able to name its
+        # own, which meant an admin-only per-lobby override of the workspace's
+        # Discord that nobody could see from the workspace settings that
+        # nominally owned it; the workspace-wide setting is the one place it is
+        # configured and the one place it is read.
+        channel_id = await self.workspace_discord_channel_id(session, workspace_id)
         if channel_id is None:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Discord channel not configured")
         result = game.balance_result_json if isinstance(game.balance_result_json, dict) else None
@@ -962,27 +925,11 @@ class CustomGameService:
             variant=variant,
             team_names=team_names,
             next_map=next_map,
-            points_per_win=game.points_per_win,
+            # The host's knob, resolved: the footer promises what recording this
+            # match will actually move. ``0`` is "off", and off prints nothing.
+            points_per_win=await self.host_points_per_win(session, game.host_user_id) or None,
         )
         return channel_id, embed
-
-    async def set_balancer_config(
-        self,
-        session: AsyncSession,
-        *,
-        workspace_id: int,
-        custom_game_id: int,
-        balancer_config: Mapping[str, Any] | None,
-        actor_user_id: int,
-    ) -> models.CustomGame:
-        """Replace the mix's validated solver overrides."""
-        game = await self._writable(
-            session, workspace_id=workspace_id, custom_game_id=custom_game_id, actor_user_id=actor_user_id
-        )
-        normalized = normalize_config_overrides(balancer_config) if balancer_config else {}
-        game.balancer_config_json = normalized or None
-        await session.flush()
-        return game
 
     async def transfer_host(
         self,
@@ -1174,10 +1121,10 @@ class CustomGameService:
         :meth:`close`, and the frozen snapshot is the only record of each: the
         mix itself keeps no mutable copy of "the last result".
 
-        ``points_per_win`` (when set, and only for a decided match) moves both
-        teams' host-authored ranks, and every seat that actually played redeems
-        its ``MUST_PLAY`` pin back to ``POOL`` -- the pin promises one
-        guaranteed seat, not every seat forever.
+        The HOST's ``points_per_win`` (when set, and only for a decided match)
+        moves both teams' host-authored ranks, and every seat that actually
+        played redeems its ``MUST_PLAY`` pin back to ``POOL`` -- the pin promises
+        one guaranteed seat, not every seat forever.
 
         ``map_id`` names the map explicitly; omitted, the match takes the mix's
         ``next_map_id`` (see :meth:`set_next_map`), which is cleared either way
@@ -1207,7 +1154,9 @@ class CustomGameService:
 
         names = await self.team_names.mapping_for_game(session, game.id)
         scores = (1, 0) if winner == 1 else (0, 1) if winner == 2 else (0, 0)
-        points_per_win = game.points_per_win or 0
+        # The host's knob, not the mix's and not the recording co-host's -- the
+        # book being moved is the host's own (see ``_apply_points_delta``).
+        points_per_win = await self.host_points_per_win(session, game.host_user_id)
         match = models.CasualMatch(
             custom_game_id=game.id,
             map_id=map_id,
@@ -1307,7 +1256,7 @@ class CustomGameService:
         older mistake.
 
         The rollback uses ``points_per_win_applied`` frozen on the match, never
-        the mix's current ``points_per_win``: the host may have changed the knob
+        the host's current ``points_per_win``: the host may have changed the knob
         (or turned it off) since, and the point is to return the book to exactly
         where it stood.
 
@@ -1468,7 +1417,7 @@ class CustomGameService:
 
         histories = await self._rotation_histories(session, game, roster)
 
-        role_mask = (await self.roster_shape(session, workspace_id=workspace_id, custom_game_id=game.id)).slots
+        role_mask = (await self.roster_shape(session, workspace_id=workspace_id, host_user_id=game.host_user_id)).slots
         players_per_team = sum(role_mask.values())
         usable_count = len(roster) if players_per_team <= 0 else (len(roster) // players_per_team) * players_per_team
         return recommend_rotation(histories, usable_count=usable_count)

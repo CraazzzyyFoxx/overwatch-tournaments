@@ -7,19 +7,20 @@ import { useFormatter, useTranslations } from "next-intl";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
+  bracketRoundShape,
   buildRoundGroups,
   orderEliminationRounds,
-  stageFinalRounds,
   type RoundGroup
 } from "@/components/bracket-view.helpers";
 import RosterSlotGlyph from "@/components/registration/RosterSlotGlyph";
 import TeamName from "@/components/TeamName";
 import { useBracketRoundLabel } from "@/hooks/useBracketRoundLabel";
 import { useMinuteClock } from "@/hooks/useMinuteClock";
-import { normalizePlayerRole, playerRoleSlotCode } from "@/lib/player-role";
-import { ROSTER_SLOT_CODES, type RosterSlotCode } from "@/lib/roster-shape";
+import { UNKNOWN_ROUND_SHAPE, type BracketRoundShape } from "@/lib/bracket-round-name";
+import { ROSTER_SLOT_CODES } from "@/lib/roster-shape";
 import { getStreamStatus, STREAM_STATUS_META } from "@/lib/stream-platform";
 import { tournamentQueryKeys } from "@/lib/tournament-query-keys";
+import { groupTournamentStageFlow } from "@/lib/tournament-stages";
 import { cn } from "@/lib/utils";
 import encounterService from "@/services/encounter.service";
 import heroService from "@/services/hero.service";
@@ -27,7 +28,6 @@ import registrationService from "@/services/registration.service";
 import teamService from "@/services/team.service";
 import tournamentService from "@/services/tournament.service";
 import type { Encounter } from "@/types/encounter.types";
-import type { Registration } from "@/types/registration.types";
 import type { StreamEntry } from "@/types/stream.types";
 import type { Team } from "@/types/team.types";
 import type { StageSummary, Standings, TournamentStatus } from "@/types/tournament.types";
@@ -50,6 +50,7 @@ import { getBracketRefetchInterval } from "../bracket/bracketData";
 import { buildLiveTeamStreams } from "../bracket/bracketLiveStreams";
 import styles from "../TournamentDetail.module.css";
 import { getPublicPageQueryPresentation } from "./publicPageQueryPresentation";
+import { RegistrationSummary, StatTile } from "./_components/RegistrationSummary";
 
 // ---------------------------------------------------------------------------
 // Which of the three compositions a tournament gets
@@ -104,12 +105,16 @@ const STAGE_TYPE_LABEL: Record<string, "common.roundRobin" | "common.swiss" | "b
  * Unpublished stages are skipped the way the bracket skips them
  * (`isStageVisibleToViewer`), unless nothing is published at all — an organizer
  * previewing their own tournament still sees which stage is meant.
+ *
+ * A phase running parallel divisions has no single answer, so the lowest id
+ * wins and every card below is titled with that stage's name; the Format card
+ * above lists the whole wave.
  */
 export function pickOverviewStage(
   stages: readonly StageSummary[],
   variant: OverviewVariant
 ): StageSummary | null {
-  const ordered = [...stages].sort((left, right) => left.order - right.order);
+  const ordered = [...stages].sort((left, right) => left.order - right.order || left.id - right.id);
   const visible = ordered.filter((stage) => stage.is_published || stage.is_completed);
   const pool = visible.length > 0 ? visible : ordered;
   if (pool.length === 0) return null;
@@ -196,19 +201,9 @@ function winnerSide(encounter: Encounter): "home" | "away" | null {
   return home > away ? "home" : "away";
 }
 
-/** Registrations per role slot, counted from each entry's primary role. */
-export function countRegistrationRoles(
-  registrations: readonly Registration[]
-): Record<RosterSlotCode, number> {
-  const counts: Record<RosterSlotCode, number> = { tank: 0, dps: 0, support: 0, flex: 0 };
-  for (const registration of registrations) {
-    const roles = registration.roles ?? [];
-    const primary = roles.find((role) => role.is_primary) ?? roles[0];
-    if (!primary) continue;
-    counts[playerRoleSlotCode(normalizePlayerRole(primary.role))] += 1;
-  }
-  return counts;
-}
+/* `countRegistrationRoles` is gone: the split is the server's answer now
+   (`RegistrationListResponse.role_counts`), because a tournament that hides its
+   participants list sends no rows to count. See `RegistrationSummary`. */
 
 /**
  * Calendar days the tournament spans, inclusive. UTC getters on both ends so
@@ -366,35 +361,8 @@ function OverviewStreamCard({
   );
 }
 
-function StatTile({
-  label,
-  value,
-  hint,
-  accent
-}: Readonly<{ label: string; value: string; hint?: string; accent?: string }>) {
-  return (
-    <div className={styles.figure}>
-      <div className={cn(styles.figureLabel, "flex items-center gap-1.5")}>
-        {accent ? (
-          <span aria-hidden className="size-1.5 rounded-full" style={{ background: accent }} />
-        ) : null}
-        {label}
-      </div>
-      <div className={styles.figureValue}>
-        {value}
-        {hint ? <span className={styles.figureHint}>{hint}</span> : null}
-      </div>
-    </div>
-  );
-}
-
-/** The site's role tints (`PlayerRoleIcon` uses the same tokens), keyed by slot code. */
-const ROLE_TINT: Record<RosterSlotCode, string> = {
-  tank: "var(--aqt-tank)",
-  dps: "var(--aqt-damage)",
-  support: "var(--aqt-support)",
-  flex: "var(--aqt-flex)"
-};
+/* `StatTile` and `ROLE_TINT` moved to `_components/RegistrationSummary` so the
+   participants page can render the same registration figures. */
 
 function KeyValue({ term, children }: Readonly<{ term: string; children: React.ReactNode }>) {
   return (
@@ -499,7 +467,10 @@ export default function TournamentOverviewPage({
   const streamsQuery = useTournamentStreamsQuery(variant === "live" ? tournamentId : undefined);
 
   const encounters = encountersQuery.data ? encountersQuery.data.results : [];
-  const registrations = registrationsQuery.data ?? [];
+  const registrationList = registrationsQuery.data ?? null;
+  // Empty whenever the organizer hid the list — the summary below still renders,
+  // because its numbers ride the same envelope rather than these rows.
+  const registrations = registrationList?.registrations ?? [];
   const standings = standingsQuery.data ?? [];
   const teams = teamsQuery.data ? teamsQuery.data.results : [];
 
@@ -522,17 +493,18 @@ export default function TournamentOverviewPage({
   );
   // Per stage, because "Latest results" spans stages: a group stage's highest
   // round is not a Grand Final, and naming it one would contradict the bracket.
-  const finalRoundsByStage = useMemo(() => {
-    const byStage: Record<number, number[]> = {};
+  const roundShapeByStage = useMemo(() => {
+    const byStage: Record<number, BracketRoundShape> = {};
     for (const item of tournament?.stages ?? []) {
-      const rounds = encounters
-        .filter((encounter) => encounter.stage_id === item.id)
-        .map((encounter) => encounter.round);
-      byStage[item.id] = stageFinalRounds(item.id, item.stage_type, rounds, encounters);
+      byStage[item.id] = bracketRoundShape(
+        item.stage_type,
+        encounters.filter((encounter) => encounter.stage_id === item.id)
+      );
     }
     return byStage;
   }, [encounters, tournament?.stages]);
-  const finalRounds = stageId === null ? [] : (finalRoundsByStage[stageId] ?? []);
+  const roundShape =
+    (stageId === null ? undefined : roundShapeByStage[stageId]) ?? UNKNOWN_ROUND_SHAPE;
 
   const liveTeamStreams = useMemo(
     () => buildLiveTeamStreams(streamsQuery.data),
@@ -551,7 +523,8 @@ export default function TournamentOverviewPage({
   const encounterRound = (encounter: Encounter) =>
     roundLabel(
       encounter.round,
-      encounter.stage_id === null ? [] : (finalRoundsByStage[encounter.stage_id] ?? [])
+      (encounter.stage_id === null ? undefined : roundShapeByStage[encounter.stage_id]) ??
+        UNKNOWN_ROUND_SHAPE
     );
 
   /** `STAGE · ROUND · BoN[ · HH:MM]`; the card's eyebrow is uppercased by CSS. */
@@ -584,7 +557,13 @@ export default function TournamentOverviewPage({
     // itself is already resolved by the time this runs.
     data: primary === null ? tournament : primary.data,
     itemCount:
-      primary === null ? 1 : variant === "registration" ? registrations.length : encounters.length,
+      primary === null
+        ? 1
+        : variant === "registration"
+          ? // The count, not the rows: a hidden list ships zero rows and a real
+            // total, and an empty state over "48 registered" would be a lie.
+            (registrationList?.total ?? registrations.length)
+          : encounters.length,
     isPending: primary?.isPending ?? false,
     isError: primary?.isError ?? false,
     isFetching: primary?.isFetching ?? false
@@ -641,31 +620,34 @@ export default function TournamentOverviewPage({
     <OverviewCard title={t("tournamentDetail.overview.format.title")}>
       <dl className="grid gap-2.5">
         {tournament.stages.length > 0 ? (
-          /* The card's own heading already says "Format", and the derived label
-             (`Groups → Playoff`) restated the stage names right beside it —
-             "Groups → Playoff — Groups → Playoffs". The organizer's own stage
-             names carry it, with each stage's type where the name does not. */
+          /* Organizer names + type. Same `order` is one phase (`Low / High`);
+             the next number is the next wave (`Groups → Playoff`). */
           <KeyValue term={t("common.stages")}>
-            {[...tournament.stages]
-              .sort((left, right) => left.order - right.order)
-              .map((stage, index) => {
-                const typeKey = STAGE_TYPE_LABEL[stage.stage_type];
-                return (
-                  <span key={stage.id}>
-                    {index > 0 ? (
-                      <span className="text-[color:var(--aqt-fg-faint)]">{" → "}</span>
-                    ) : null}
-                    {stage.name}
-                    {typeKey ? (
-                      <span className="text-[color:var(--aqt-fg-faint)]">
-                        {" ("}
-                        {t(typeKey).toLowerCase()}
-                        {")"}
-                      </span>
-                    ) : null}
-                  </span>
-                );
-              })}
+            {groupTournamentStageFlow(tournament.stages).map((wave, waveIndex) => (
+              <span key={wave.map((stage) => stage.id).join("-")}>
+                {waveIndex > 0 ? (
+                  <span className="text-[color:var(--aqt-fg-faint)]">{" → "}</span>
+                ) : null}
+                {wave.map((stage, stageIndex) => {
+                  const typeKey = STAGE_TYPE_LABEL[stage.stage_type];
+                  return (
+                    <span key={stage.id}>
+                      {stageIndex > 0 ? (
+                        <span className="text-[color:var(--aqt-fg-faint)]">{" / "}</span>
+                      ) : null}
+                      {stage.name}
+                      {typeKey ? (
+                        <span className="text-[color:var(--aqt-fg-faint)]">
+                          {" ("}
+                          {t(typeKey).toLowerCase()}
+                          {")"}
+                        </span>
+                      ) : null}
+                    </span>
+                  );
+                })}
+              </span>
+            ))}
           </KeyValue>
         ) : null}
         <KeyValue term={t("common.teamFormation")}>
@@ -727,7 +709,7 @@ export default function TournamentOverviewPage({
           {pickRoundWindow(roundGroups, currentRoundOf(roundGroups)).map((group) => (
             <div className="min-w-[13rem] flex-1 space-y-1.5" key={group.round}>
               <div className="text-label uppercase tracking-label text-[color:var(--aqt-fg-faint)]">
-                {roundLabel(group.round, finalRounds)}
+                {roundLabel(group.round, roundShape)}
               </div>
               {group.matches.map((match) => {
                 const encounter = stageEncounters.find((item) => item.id === match.id);
@@ -834,7 +816,6 @@ export default function TournamentOverviewPage({
   // ---- A: registration (§3A) ----------------------------------------------
 
   if (variant === "registration") {
-    const roleCounts = countRegistrationRoles(registrations);
     const submitted = [...registrations]
       .filter((registration) => registration.submitted_at !== null)
       .sort((left, right) => String(right.submitted_at).localeCompare(String(left.submitted_at)));
@@ -851,10 +832,6 @@ export default function TournamentOverviewPage({
     // Both aside cards are optional, and an aside column holding nothing reads
     // as a broken layout rather than as restraint.
     const hasAside = linksCard !== null;
-    // The share of each role in the field — what a draft/balancer organizer
-    // reads ("tanks are short"). Role tints, the same dots on the figures above.
-    const roleShares = ROSTER_SLOT_CODES.filter((code) => roleCounts[code] > 0);
-    const roleTotal = roleShares.reduce((sum, code) => sum + roleCounts[code], 0);
 
     const content = (
       <section className={styles.publicDataPage} aria-label={t("common.overview")}>
@@ -885,38 +862,23 @@ export default function TournamentOverviewPage({
                   />
                   <StatTile
                     label={t("tournamentDetail.overview.registration.total")}
-                    value={String(tournament.registrations_count ?? 0)}
+                    value={String(registrationList?.total ?? tournament.registrations_count ?? 0)}
+                    hint={
+                      registrationList?.max_participants
+                        ? `/ ${registrationList.max_participants}`
+                        : undefined
+                    }
                   />
                 </div>
               ) : (
                 <>
-                  <div className="grid gap-2 sm:grid-cols-4">
-                    <StatTile
-                      label={t("tournamentDetail.overview.registration.total")}
-                      value={String(tournament.registrations_count ?? registrations.length)}
-                    />
-                    {roleShares.map((code) => (
-                      <StatTile
-                        key={code}
-                        label={t(`common.roles.${code}`)}
-                        value={String(roleCounts[code])}
-                        accent={ROLE_TINT[code]}
-                      />
-                    ))}
-                  </div>
-                  {roleShares.length > 1 && roleTotal > 0 ? (
-                    <div aria-hidden className="mt-3 flex h-1.5 gap-px overflow-hidden rounded-sm">
-                      {roleShares.map((code) => (
-                        <span
-                          key={code}
-                          style={{
-                            width: `${(roleCounts[code] / roleTotal) * 100}%`,
-                            background: ROLE_TINT[code]
-                          }}
-                        />
-                      ))}
-                    </div>
-                  ) : null}
+                  {/* "Tanks are short" — the same figures the participants page
+                      falls back to when the roster itself is hidden. */}
+                  <RegistrationSummary
+                    total={registrationList?.total ?? registrations.length}
+                    roleCounts={registrationList?.role_counts ?? {}}
+                    maxParticipants={registrationList?.max_participants}
+                  />
                   {latest.length > 0 ? (
                     <p className="mt-2 truncate text-caption text-[color:var(--aqt-fg-faint)]">
                       {t("tournamentDetail.overview.registration.latest")}: {latest.join(" · ")}
@@ -1195,7 +1157,7 @@ export default function TournamentOverviewPage({
       third = podiumTeam(
         eliminated,
         t("tournamentDetail.overview.result.exitedIn", {
-          round: roundLabel(lowerFinal.round, finalRounds)
+          round: roundLabel(lowerFinal.round, roundShape)
         })
       );
     }

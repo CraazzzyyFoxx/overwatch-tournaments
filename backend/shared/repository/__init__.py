@@ -4,6 +4,7 @@ from .balance import (
     BalancerTeamRepository,
     BalancerTeamSlotRepository,
     BalancerTournamentConfigRepository,
+    UserBalancerConfigRepository,
     WorkspaceBalancerConfigRepository,
 )
 from .base import BaseRepository
@@ -146,7 +147,6 @@ from .custom_game import (
     CustomGamePlayerRepository,
     CustomGamePlayerRoleRepository,
     CustomGameRepository,
-    CustomGameRoleSlotRepository,
     CustomGameTeamNameRepository,
 )
 from .member_rank import MemberRankRepository
@@ -255,6 +255,7 @@ __all__ = (
     "TournamentPreviewAccessRepository",
     "TournamentRecalculationStateRepository",
     "TournamentRepository",
+    "UserBalancerConfigRepository",
     "UserMergeAuditRepository",
     "UserPermissionDenyRepository",
     "UserRepository",
@@ -269,7 +270,6 @@ __all__ = (
     "CustomGamePlayerRepository",
     "CustomGamePlayerRoleRepository",
     "CustomGameRepository",
-    "CustomGameRoleSlotRepository",
     "CustomGameTeamNameRepository",
     "WorkspaceRepository",
     "WorkspaceSubscriptionRequirementRepository",

@@ -229,19 +229,21 @@ describe("stageBestOfRoundSections", () => {
     ).toEqual(["upper", "lower"]);
   });
 
-  it("names a stale grand-final override 'Grand Final', not a bare round", () => {
-    // 4 upper teams -> upper rounds 1..2, grand final = round 3. A leftover
-    // `by_round` on the grand final (owned by `final`) and a dead round 4 land
-    // in the extras; the grand final reads by name so an admin can recognize it.
+  it("names a stale override on a final round, instead of a bare round number", () => {
+    // 4 upper teams -> upper rounds 1..2, grand final = round 3, its reset 4.
+    // Leftover `by_round` keys on those (owned by `final`) and a round the
+    // bracket never has land in the extras; the finals read by name so an admin
+    // can recognize them, and the dead round keeps its bare number.
     const sections = stageBestOfRoundSections({
       stageType: "double_elimination",
       maxRounds: 5,
       bracketTeamCount: 4,
       splitLowerBracket: true,
-      configuredRounds: [3, 4]
+      configuredRounds: [3, 4, 12]
     });
     expect(sections.find((section) => section.key === "other")?.rounds).toEqual([
-      { round: 4, label: "Round 4" },
+      { round: 12, label: "Round 12" },
+      { round: 4, label: "Grand Final Reset" },
       { round: 3, label: "Grand Final" }
     ]);
   });

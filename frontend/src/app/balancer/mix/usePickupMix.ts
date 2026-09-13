@@ -9,9 +9,7 @@ import {
   customGameService,
   type CustomGame,
   type CustomGamePlayerPatch,
-  type MixBalancerConfig,
 } from "@/services/custom-game.service";
-import type { RosterSlotMap } from "@/lib/roster-shape";
 
 import {
   computeRotationHintPatches,
@@ -194,40 +192,6 @@ export function usePickupMix(workspaceId: number, pickedGameId: number | null) {
     onError: (error) => notify.apiError(error),
   });
 
-  const setRoleMask = useMutation({
-    mutationFn: (roleMask: RosterSlotMap | null) =>
-      customGameService.setRoleMask(workspaceId, selectedGameId as number, roleMask),
-    onSuccess: applyGame,
-    onError: (error) => notify.apiError(error),
-  });
-
-  /**
-   * How this mix's engine weighs rank balance against role comfort. Replaces
-   * the whole overrides blob, so callers merge onto `settings.balancer_config`
-   * rather than sending the two keys alone.
-   */
-  const setBalancerConfig = useMutation({
-    mutationFn: (config: MixBalancerConfig | null) =>
-      customGameService.setBalancerConfig(workspaceId, selectedGameId as number, config),
-    onSuccess: applyGame,
-    onError: (error) => notify.apiError(error),
-  });
-
-  const setPointsPerWin = useMutation({
-    mutationFn: (pointsPerWin: number | null) =>
-      customGameService.setPointsPerWin(workspaceId, selectedGameId as number, pointsPerWin),
-    onSuccess: applyGame,
-    onError: (error) => notify.apiError(error),
-  });
-
-  /** Where `postToDiscord` sends the matchup; `null` clears it. */
-  const setDiscordChannel = useMutation({
-    mutationFn: (channelId: string | null) =>
-      customGameService.setDiscordChannel(workspaceId, selectedGameId as number, channelId),
-    onSuccess: applyGame,
-    onError: (error) => notify.apiError(error),
-  });
-
   /**
    * Hands the matchup to the bot for the mix's Discord channel, as the PNG the
    * caller rasterised from the matchup card. Nothing about the mix changes, so
@@ -330,6 +294,36 @@ export function usePickupMix(workspaceId: number, pickedGameId: number | null) {
     onError: (error) => notify.apiError(error),
   });
 
+  /**
+   * Which balance option the mix shows -- stored on the mix, so a viewer reads
+   * the matchup the host is calling out instead of whatever their own browser
+   * last paged to.
+   *
+   * Optimistic, and deliberately not routed through `applyGame`: this changes
+   * nothing about roster, history or rotation, and a pager clicked through
+   * twenty options must not refetch three queries per click or lag a round
+   * trip behind the arrow keys.
+   */
+  const setVariantIndex = useMutation({
+    mutationFn: (variantIndex: number) =>
+      customGameService.setVariantIndex(workspaceId, selectedGameId as number, variantIndex),
+    onMutate: (variantIndex: number) => {
+      const key = customGameKeys.one(workspaceId, selectedGameId ?? 0);
+      const previous = queryClient.getQueryData<CustomGame>(key);
+      if (previous != null) {
+        queryClient.setQueryData(key, { ...previous, selected_variant_index: variantIndex });
+      }
+      return { previous };
+    },
+    onSuccess: (game) => queryClient.setQueryData(customGameKeys.one(workspaceId, game.id), game),
+    onError: (error, _variantIndex, context) => {
+      if (context?.previous != null) {
+        queryClient.setQueryData(customGameKeys.one(workspaceId, selectedGameId ?? 0), context.previous);
+      }
+      notify.apiError(error);
+    },
+  });
+
   const closeMix = useMutation({
     mutationFn: () => customGameService.close(workspaceId, selectedGameId as number),
     onSuccess: (game) => {
@@ -387,14 +381,11 @@ export function usePickupMix(workspaceId: number, pickedGameId: number | null) {
     recordOutcome,
     undoMatch,
     setNextMap,
+    setVariantIndex,
     closeMix,
     hardDeleteMix,
     setAuthorRanks,
     setTeamNames,
-    setRoleMask,
-    setBalancerConfig,
-    setPointsPerWin,
-    setDiscordChannel,
     postToDiscord,
     transferHost,
     addCoHost,

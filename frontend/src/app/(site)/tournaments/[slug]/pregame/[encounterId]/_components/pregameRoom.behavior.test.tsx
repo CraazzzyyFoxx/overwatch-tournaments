@@ -1463,6 +1463,29 @@ describe("phase selection", () => {
     expect(document.body.textContent).toContain(ROOM.hero.title);
   });
 
+  it("asks captains to report the played map after heroes finish without a veto", async () => {
+    getEncounter.mockResolvedValue({
+      ...encounter(),
+      best_of: 3,
+      score: { home: 0, away: 0 }
+    } as unknown as Encounter);
+    mockStates(
+      unavailableState("not_configured", { home: true, away: true }),
+      readyState({
+        session: session({ kind: "hero", status: "completed" }),
+        is_complete: true,
+        pool: [
+          entry({ id: 3, item_id: 101, round: 1, status: "banned", picked_by: "home" }),
+          entry({ id: 4, item_id: 102, round: 1, status: "banned", picked_by: "away" })
+        ]
+      })
+    );
+    await render();
+
+    expect(document.body.textContent).toContain(ROOM.mapResult.pickMap);
+    expect(document.body.textContent).not.toContain(ROOM.seriesDone.title);
+  });
+
   it("holds the hero phase closed until the map it bans for is known", async () => {
     mockStates(
       readyState({

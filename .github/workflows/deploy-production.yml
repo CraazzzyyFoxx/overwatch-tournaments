@@ -187,6 +187,7 @@ jobs:
             NEXT_PUBLIC_GA_ID=${{ vars.NEXT_PUBLIC_GA_ID }}
             NEXT_PUBLIC_YM_ID=${{ vars.NEXT_PUBLIC_YM_ID }}
             NEXT_PUBLIC_APP_VERSION=${{ needs.meta.outputs.tag }}
+            NEXT_PUBLIC_DISCORD_CLIENT_ID=${{ vars.NEXT_PUBLIC_DISCORD_CLIENT_ID }}
 
   deploy:
     needs:

@@ -31,16 +31,14 @@ function sampleGame(id: number, name: string): CustomGame {
     name,
     status: "completed",
     settings: {
-      points_per_win: null,
+      points_per_win: 0,
       team_names: {},
-      role_mask: null,
-      balancer_config: null,
-      discord_channel_id: null,
       workspace_discord_channel_id: null
     },
     balance_result: null,
     created_at: "2026-01-01T00:00:00Z",
     next_map_id: null,
+    selected_variant_index: 0,
     roster_shape: null,
     matches_count: 5,
     last_match_at: null

@@ -61,6 +61,7 @@ class CustomMixPublicReadTests(IsolatedAsyncioTestCase):
         service.hosts = AsyncMock(return_value={})
         service.casual_matches.activity_for_games = AsyncMock(return_value={})
         service.workspace_discord_channel_id = AsyncMock(return_value=None)
+        service.host_prefs.points_per_win_by_user = AsyncMock(return_value={})
         service.mix_stats = AsyncMock(return_value=[])
 
         with patch.object(custom, "custom_game_service", service):

@@ -12,6 +12,7 @@
  */
 import type { Tone } from "@/components/admin/tone";
 import { resolveBestOf, stageBestOfRoundSections } from "@/lib/best-of";
+import { bracketRoundLabelEn } from "@/lib/bracket-round-name";
 import type { StageBestOfConfig } from "@/types/admin.types";
 import type {
   Stage,
@@ -239,25 +240,31 @@ export type BracketTeamCountSource = "seeded" | "slots" | "projected" | "unknown
 /**
  * The upper/lower seed counts the preceding group stage feeds into `stage`,
  * mirroring `_preceding_group_stage` + `_projected_bracket_seed_counts`: the
- * nearest earlier Swiss/round-robin stage sends on each group's OWN
- * `advance_count`, falling back to the stage's number where a group sets none,
- * and a split double elimination splits EACH group's share (the odd team out
- * goes up) rather than halving the total — which for an odd `advance_count` is
- * a differently shaped bracket.
+ * one Swiss/round-robin stage of the latest EARLIER phase sends on each group's
+ * OWN `advance_count`, falling back to the stage's number where a group sets
+ * none, and a split double elimination splits EACH group's share (the odd team
+ * out goes up) rather than halving the total — which for an odd `advance_count`
+ * is a differently shaped bracket.
+ *
+ * Stages sharing `order` run in parallel, so a same-phase group stage is a
+ * sibling, not a source; several of them in the earlier phase is ambiguous and
+ * projects nothing, exactly as the server refuses to wire one.
  */
 export function projectedBracketSeedCounts(
   stage: Stage,
   splitLowerBracket: boolean,
   stages: Stage[]
 ): { upper: number; lower: number } {
-  const source = stages
+  const earlier = stages
     .filter(
       (candidate) =>
-        (candidate.order < stage.order ||
-          (candidate.order === stage.order && candidate.id < stage.id)) &&
+        candidate.order < stage.order &&
         (candidate.stage_type === "swiss" || candidate.stage_type === "round_robin")
     )
-    .sort((left, right) => right.order - left.order || right.id - left.id)[0];
+    .sort((left, right) => right.order - left.order || right.id - left.id);
+  const phase = earlier.at(0)?.order;
+  const sources = earlier.filter((candidate) => candidate.order === phase);
+  const source = sources.length === 1 ? sources[0] : undefined;
   if (!source) return { upper: 0, lower: 0 };
 
   const isSplitDe = stage.stage_type === "double_elimination" && splitLowerBracket;
@@ -454,7 +461,10 @@ export function projectStage({
   if (grandFinalRound != null) {
     rounds.push({
       round: grandFinalRound,
-      label: "Grand Final",
+      label: bracketRoundLabelEn(grandFinalRound, {
+        rounds: [grandFinalRound],
+        finalRounds: [grandFinalRound]
+      }),
       section: null,
       bestOf: resolveBestOf(bestOf, grandFinalRound, { isFinal: true }),
       isFinal: true

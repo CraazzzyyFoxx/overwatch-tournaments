@@ -34,6 +34,41 @@ class WorkspaceBalancerConfigRepository(BaseRepository[models.WorkspaceBalancerC
         return await self.get_by(session, workspace_id=workspace_id)
 
 
+class UserBalancerConfigRepository(BaseRepository[models.UserBalancerConfig]):
+    def __init__(self) -> None:
+        super().__init__(models.UserBalancerConfig)
+
+    async def get_by_user(
+        self,
+        session: AsyncSession,
+        user_id: int,
+    ) -> models.UserBalancerConfig | None:
+        return await self.get_by(session, user_id=user_id)
+
+    async def points_per_win_by_user(
+        self,
+        session: AsyncSession,
+        user_ids: Sequence[int | None],
+    ) -> dict[int, int]:
+        """The stored points-per-win of several hosts in ONE query.
+
+        The mix list dumps this number for every row it returns, and a workspace
+        can easily run a dozen mixes off the same handful of hosts -- reading the
+        host's row per row would be a query per mix for a value most of them
+        share. Hosts without a row, or with the knob off, are simply absent:
+        callers default to 0 ("recording a match touches no ranks").
+        """
+        ids = [user_id for user_id in dict.fromkeys(user_ids) if user_id is not None]
+        if not ids:
+            return {}
+        rows = await session.execute(
+            sa.select(self.model.user_id, self.model.points_per_win).where(
+                self.model.user_id.in_(ids), self.model.points_per_win.is_not(None)
+            )
+        )
+        return dict(rows.all())
+
+
 class BalancerBalanceRepository(BaseRepository[models.BalancerBalance]):
     def __init__(self) -> None:
         super().__init__(models.BalancerBalance)

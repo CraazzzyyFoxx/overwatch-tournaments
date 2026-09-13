@@ -25,14 +25,11 @@ import asyncio
 import os
 import sys
 import uuid
-from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
 import sqlalchemy as sa
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-from sqlalchemy.pool import NullPool
 
 if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
@@ -48,32 +45,9 @@ from shared.models.identity.user import User  # noqa: E402
 from shared.models.tenancy.workspace import Workspace, WorkspaceMember  # noqa: E402
 from shared.models.tournament import Player, Team, Tournament  # noqa: E402
 from shared.services.division_grid.access import get_default_division_grid_version_id  # noqa: E402
+from shared.testing import real_db_sessionmaker as _db_sessions  # noqa: E402
 from src import schemas  # noqa: E402
 from src.services.tournament.service import tournament_service  # noqa: E402
-
-
-@asynccontextmanager
-async def _db_sessions():
-    """Yield a fresh per-test session factory, or skip if the DB is unreachable.
-
-    Per-test NullPool engine for the same reason as
-    ``test_tournament_visibility_reads``: pooled asyncpg connections are bound to
-    the loop that created them, so no engine can outlive one ``asyncio.run``.
-    """
-    from src.core import config
-
-    engine = create_async_engine(config.settings.db_url_asyncpg, poolclass=NullPool)
-    try:
-        try:
-            async with engine.connect() as conn:
-                dbname = (await conn.execute(sa.text("select current_database()"))).scalar()
-        except Exception as exc:  # noqa: BLE001 -- any connect failure => skip, not fail
-            pytest.skip(f"database unreachable: {exc}")
-        if dbname in {"anak_v5", "anak_prod"}:
-            pytest.skip("refusing to run integration tests against production")
-        yield async_sessionmaker(engine, expire_on_commit=False)
-    finally:
-        await engine.dispose()
 
 
 async def _make_workspace(session) -> Workspace:

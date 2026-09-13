@@ -46,7 +46,7 @@ CONFIG_LIMITS: dict[str, dict[str, int | float]] = {
     "stagnation_kick_patience": {"min": 0, "max": 5000},
     "crossover_rate": {"min": 0.0, "max": 1.0},
     "time_limit_ms": {"min": 100, "max": 600000},
-    "max_result_variants": {"min": 1, "max": 200},
+    "max_result_variants": {"min": 1, "max": 500},
     "rank_comfort_tilt": {"min": 0.0, "max": 1.0},
 }
 

@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from shared.core import db
@@ -18,6 +19,7 @@ __all__ = (
     "BalancerTeam",
     "BalancerTeamSlot",
     "BalancerTournamentConfig",
+    "UserBalancerConfig",
     "WorkspaceBalancerConfig",
 )
 
@@ -49,6 +51,45 @@ class WorkspaceBalancerConfig(db.TimeStampIntegerMixin):
     workspace_id: Mapped[int] = mapped_column(ForeignKey("workspace.id", ondelete="CASCADE"), index=True)
     config_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, server_default="{}", default=dict)
     updated_by: Mapped[int | None] = mapped_column(ForeignKey("auth.user.id", ondelete="SET NULL"), nullable=True)
+
+
+class UserBalancerConfig(db.TimeStampIntegerMixin):
+    """One account's own mix settings, applied to every mix it hosts.
+
+    These used to sit on the mix (``custom_game.*``), which made a host re-enter
+    the same preferences every pickup session -- they describe how this person
+    runs their mixes, not what happened in one lobby, so they belong to the
+    account. ``config_json`` is exactly the solver-override blob the mix engine
+    reads (``mix_comfort_tilt``, ``mix_role_weights``, ``max_result_variants``),
+    so it reaches the solver untouched; a knob the user never set is an absent
+    key, never an explicit null, and an untouched account stores ``{}``.
+    """
+
+    __tablename__ = "user_config"
+    __table_args__ = (
+        UniqueConstraint("user_id", name="uq_balancer_user_config_user"),
+        {"schema": "balancer"},
+    )
+
+    user_id: Mapped[int] = mapped_column(ForeignKey("auth.user.id", ondelete="CASCADE"), index=True)
+    config_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default="{}", default=dict)
+    # Columns of their own, deliberately NOT keys inside ``config_json``: that
+    # blob is handed to the solver verbatim as overrides, and neither of these
+    # is one. The roster shape is the shape of the thing being built -- the
+    # runtime applies it *after* the overrides so a saved config can never
+    # contradict it (``_prepare_balance_context``) -- and the points knob never
+    # reaches the solver at all: it moves the host's rank book once a match is
+    # recorded. Folding either into the blob would smuggle a non-override key
+    # into the engine's input.
+    #
+    # Normalized on write (``normalize_roster_slots``), so the stored map can
+    # never hold a zero count; NULL means "no shape of my own", which falls
+    # through to the workspace default and then the built-in Overwatch 5v5.
+    role_slots_json: Mapped[dict[str, int] | None] = mapped_column(JSONB, nullable=True)
+    # How far a decided match moves both teams' ranks in this host's own book.
+    # NULL (the wire's ``0`` or ``null``) means recording a match touches no
+    # ranks at all.
+    points_per_win: Mapped[int | None] = mapped_column(Integer(), nullable=True)
 
 
 class BalancerBalance(db.TimeStampIntegerMixin):

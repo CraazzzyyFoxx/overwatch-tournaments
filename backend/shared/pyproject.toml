@@ -11,6 +11,7 @@ dependencies = [
     "psycopg[binary]>=3.2.3",
     "pydantic[email]>=2.10.5",
     "pydantic-settings>=2.7.1",
+    "python-dotenv>=1.0.0",
     "loguru>=0.7.3",
     "orjson>=3.10.14",
     "httpx>=0.28.1",
@@ -47,7 +48,7 @@ packages = ["shared"]
 package-dir = {"shared" = "."}
 
 [tool.setuptools.package-data]
-shared = ["**/*.py"]
+shared = ["**/*.py", "testing/test.env"]
 
 
 [tool.ty.environment]

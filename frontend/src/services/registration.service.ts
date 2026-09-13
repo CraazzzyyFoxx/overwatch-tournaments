@@ -78,11 +78,14 @@ const registrationService = {
     return response.json();
   },
 
-  async listRegistrations(tournamentId: number): Promise<Registration[]> {
+  /** The whole envelope, not just the rows: `hidden`, `total`, `role_counts` and
+   *  `max_participants` travel with it, and under `hidden` they ARE the payload —
+   *  the server sends no rows at all. */
+  async listRegistrations(tournamentId: number): Promise<RegistrationListResponse> {
     const response = await apiFetch(`/api/v1/tournaments/${tournamentId}/registration/list`,
     );
     const data: RegistrationListResponse = await response.json();
-    return rehydrateRegistrationList(data);
+    return { ...data, registrations: rehydrateRegistrationList(data) };
   },
 };
 

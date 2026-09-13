@@ -275,7 +275,15 @@ beforeEach(() => {
   canReadOrganizerColumns = false;
   searchParams = new URLSearchParams();
   tournament = makeTournament("draft", "check_in", OW5V5_SHAPE);
-  listRegistrations.mockResolvedValue(POOL_ROSTER);
+  // The service returns the whole list envelope; the pool reads its rows.
+  listRegistrations.mockResolvedValue({
+    registrations: POOL_ROSTER,
+    division_grids: {},
+    hidden: false,
+    total: POOL_ROSTER.length,
+    role_counts: {},
+    max_participants: null
+  });
   getForm.mockResolvedValue(makeForm());
   container = document.createElement("div");
   document.body.appendChild(container);

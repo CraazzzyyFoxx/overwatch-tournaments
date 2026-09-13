@@ -15,6 +15,7 @@ import {
 import { NumberInput } from "@/components/ui/number-input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { usePermissions } from "@/hooks/usePermissions";
 import { notify } from "@/lib/notify";
 import balancerAdminService from "@/services/balancer-admin.service";
 import type { WorkspaceBalancerConfig } from "@/types/balancer-admin.types";
@@ -33,6 +34,11 @@ export function WorkspaceBalancerConfigDialog({
   onOpenChange
 }: Readonly<WorkspaceBalancerConfigDialogProps>) {
   const queryClient = useQueryClient();
+  // The pool knobs save with `team.update`; the channel every mix announces in
+  // belongs to the workspace's Discord, so moving it stays `workspace.update`.
+  // Read-only here rather than hidden: a host should see where mixes post.
+  const { canAccessPermission } = usePermissions();
+  const canSetChannel = canAccessPermission("workspace.update", workspaceId);
 
   const [threshold, setThreshold] = useState<number | null>(
     config?.rank_delta_threshold ?? null
@@ -64,7 +70,8 @@ export function WorkspaceBalancerConfigDialog({
       queryClient.invalidateQueries({ queryKey: ["workspace-balancer-config", workspaceId] });
       notify.success("Workspace settings saved.");
       onOpenChange(false);
-    }
+    },
+    onError: (cause) => notify.apiError(cause, { title: "Could not save the workspace settings" })
   });
 
   return (
@@ -125,19 +132,21 @@ export function WorkspaceBalancerConfigDialog({
                   workspaceId={workspaceId}
                   value={mixChannel}
                   onChange={setMixChannel}
+                  disabled={!canSetChannel}
                   ariaLabel="Mix Discord channel"
                   placeholder="No channel"
                 />
               </div>
-              {mixChannel !== "" ? (
+              {canSetChannel && mixChannel !== "" ? (
                 <Button variant="ghost" size="sm" onClick={() => setMixChannel("")}>
                   Clear
                 </Button>
               ) : null}
             </div>
             <p className="text-xs text-muted-foreground">
-              Hosts post here by default. A single mix can be pointed elsewhere from its own
-              settings, but only by a workspace admin.
+              {canSetChannel
+                ? "Hosts post here by default. A single mix can be pointed elsewhere from its own settings, but only by a workspace admin."
+                : "Set by workspace admins. Every mix here posts its matchup to this channel."}
             </p>
           </div>
 

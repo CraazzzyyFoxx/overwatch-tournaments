@@ -20,6 +20,7 @@ const NO_PERMS = {
   canUpdateEncounter: false,
   canTeamRead: false,
   canReadTournamentLink: false,
+  canTeamCreate: false,
   canDeleteTournament: false,
   teamFormation: "balancer"
 } as const;
@@ -29,6 +30,7 @@ const ALL_PERMS = {
   canUpdateEncounter: true,
   canTeamRead: true,
   canReadTournamentLink: true,
+  canTeamCreate: true,
   canDeleteTournament: true,
   teamFormation: "draft"
 } as const;
@@ -130,12 +132,14 @@ describe("sub-tabs", () => {
 });
 
 describe("settings sections", () => {
-  test("carries the eleven sections in navigation order", () => {
+  test("carries the thirteen sections in navigation order", () => {
     expect(SETTINGS_SECTIONS).toEqual([
       "general",
       "rules",
       "schedule",
       "roster",
+      "registration",
+      "admission",
       "pre-game",
       "report-form",
       "links",
@@ -144,6 +148,22 @@ describe("settings sections", () => {
       "preview",
       "danger"
     ]);
+  });
+
+  // Both write the registration form, whose upsert the server gates on
+  // `team.create`. Falling into `default` would let a caller who cannot save
+  // open an editor that 403s on the button.
+  test("registration and admission follow canTeamCreate", () => {
+    for (const section of ["registration", "admission"] as const) {
+      expect(
+        allowedSettingsSection(section, { ...ALL_PERMS, canTeamCreate: false }),
+        section
+      ).toBe(false);
+      expect(
+        allowedSettingsSection(section, { ...NO_PERMS, canTeamCreate: true }),
+        section
+      ).toBe(true);
+    }
   });
 
   // Each of these three inherits the gate of the tab it came from. Without its
@@ -177,7 +197,13 @@ describe("settings sections", () => {
   });
 
   test("every other section needs tournament.update", () => {
-    const inherited: SettingsSection[] = ["pre-game", "links", "danger"];
+    const inherited: SettingsSection[] = [
+      "pre-game",
+      "links",
+      "danger",
+      "registration",
+      "admission"
+    ];
     for (const section of SETTINGS_SECTIONS) {
       if (inherited.includes(section)) continue;
       expect(allowedSettingsSection(section, NO_PERMS), section).toBe(false);

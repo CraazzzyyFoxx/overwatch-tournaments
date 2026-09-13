@@ -21,7 +21,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import en from "@/i18n/messages/en.json";
 import type { Encounter } from "@/types/encounter.types";
 import type { MapRead } from "@/types/map.types";
-import type { Registration } from "@/types/registration.types";
+import type { Registration, RegistrationListResponse } from "@/types/registration.types";
 import type { Team } from "@/types/team.types";
 import type { TournamentLink } from "@/types/stream.types";
 import type { PickBanConfig, Stage, StageSummary, Tournament, TournamentStatus } from "@/types/tournament.types";
@@ -311,6 +311,32 @@ function makeRegistration(id: number, role: string, battleTag: string): Registra
   } as Registration;
 }
 
+/**
+ * The list envelope the server actually returns. `total` and `role_counts` are
+ * ITS answer, not the page's — a tournament that hides its roster sends the
+ * aggregate with no rows at all — so the fixture derives them from the same rows
+ * the real read model would have counted.
+ */
+function regList(
+  registrations: Registration[],
+  overrides: Partial<RegistrationListResponse> = {}
+): RegistrationListResponse {
+  const role_counts: Record<string, number> = {};
+  for (const registration of registrations) {
+    const primary = registration.roles.find((role) => role.is_primary) ?? registration.roles[0];
+    if (primary) role_counts[primary.role] = (role_counts[primary.role] ?? 0) + 1;
+  }
+  return {
+    registrations,
+    division_grids: {},
+    hidden: false,
+    total: registrations.length,
+    role_counts,
+    max_participants: null,
+    ...overrides
+  };
+}
+
 const GAMEMODE = {
   id: 1,
   created_at: new Date(0),
@@ -384,7 +410,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   tournament = makeTournament("live");
   getAllEncounters.mockResolvedValue({ results: [], total: 0, page: 1, per_page: -1 });
-  listRegistrations.mockResolvedValue([]);
+  listRegistrations.mockResolvedValue(regList([]));
   getStandings.mockResolvedValue([]);
   getStages.mockResolvedValue([] as Stage[]);
   getTeams.mockResolvedValue({ results: [ALPHA, BETA, GAMMA, DELTA], total: 4, page: 1, per_page: -1 });
@@ -437,12 +463,14 @@ const COPY = en.tournamentDetail.overview;
 describe("before the tournament starts (§3A)", () => {
   beforeEach(() => {
     tournament = makeTournament("check_in");
-    listRegistrations.mockResolvedValue([
-      makeRegistration(1, "tank", "Hornet#21345"),
-      makeRegistration(2, "dps", "zMize#2978"),
-      makeRegistration(3, "dps", "manqa#21668"),
-      makeRegistration(4, "support", "Naord#2100")
-    ]);
+    listRegistrations.mockResolvedValue(
+      regList([
+        makeRegistration(1, "tank", "Hornet#21345"),
+        makeRegistration(2, "dps", "zMize#2978"),
+        makeRegistration(3, "dps", "manqa#21668"),
+        makeRegistration(4, "support", "Naord#2100")
+      ])
+    );
   });
 
   it("leads with the phase timeline under the anchor the retired /schedule route points at", async () => {
@@ -799,10 +827,10 @@ describe("once it is over (§3C)", () => {
     expect(text).toContain("Gamma");
     expect(text).not.toContain("Delta");
     // The champion's roster comes off the teams read, the finalists' notes off
-    // the bracket: "2–3 in the final", "Eliminated in Lower R1".
+    // the bracket: "2–3 in the final", "Eliminated in LB Final".
     expect(text).toContain("yaLucky · Kenny");
     expect(text).toContain(COPY.result.finalScore.replace("{score}", "2–3"));
-    expect(text).toContain(COPY.result.exitedIn.replace("{round}", "Lower R1"));
+    expect(text).toContain(COPY.result.exitedIn.replace("{round}", "LB Final"));
   });
 
   it("counts the tournament up and links onward to the statistics", async () => {
@@ -939,6 +967,53 @@ describe("the reference tail", () => {
     expect(text).toContain(`Playoffs (${en.bracket.doubleElimination.toLowerCase()})`);
     // The derived label used to restate them: "Groups → Playoff — Groups → Playoffs".
     expect(text).not.toContain("Groups → Playoff —");
+    expect(text).toContain(
+      `Groups (${en.common.roundRobin}) → Playoffs (${en.bracket.doubleElimination.toLowerCase()})`
+    );
+  });
+
+  it("joins stages that share a phase order as parallel brackets", async () => {
+    tournament = makeTournament("live", {
+      stages: [
+        makeStage({ id: 6, name: "PlayOff Low division", stage_type: "double_elimination", order: 1 }),
+        makeStage({
+          id: 7,
+          name: "PlayOff High division",
+          stage_type: "double_elimination",
+          order: 1
+        })
+      ]
+    });
+    await mount();
+
+    const card = Array.from(container.querySelectorAll("section")).find((node) =>
+      node.querySelector("h2")?.textContent?.includes(COPY.format.title)
+    );
+    const text = card?.textContent ?? "";
+    const type = en.bracket.doubleElimination.toLowerCase();
+    expect(text).toContain(`PlayOff Low division (${type}) / PlayOff High division (${type})`);
+    expect(text).not.toContain("→");
+  });
+
+  it("renders parallel stages per phase, then an arrow to the next wave", async () => {
+    tournament = makeTournament("live", {
+      stages: [
+        makeStage({ id: 1, name: "Groups Low", stage_type: "round_robin", order: 1 }),
+        makeStage({ id: 2, name: "Groups High", stage_type: "round_robin", order: 1 }),
+        makeStage({ id: 3, name: "Playoff Low", stage_type: "double_elimination", order: 2 }),
+        makeStage({ id: 4, name: "Playoff High", stage_type: "double_elimination", order: 2 })
+      ]
+    });
+    await mount();
+
+    const card = Array.from(container.querySelectorAll("section")).find((node) =>
+      node.querySelector("h2")?.textContent?.includes(COPY.format.title)
+    );
+    const rr = en.common.roundRobin;
+    const de = en.bracket.doubleElimination.toLowerCase();
+    expect(card?.textContent ?? "").toContain(
+      `Groups Low (${rr}) / Groups High (${rr}) → Playoff Low (${de}) / Playoff High (${de})`
+    );
   });
 
   it("gives the links their own aside before the start, with no map pool to share it", async () => {

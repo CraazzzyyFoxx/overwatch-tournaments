@@ -352,7 +352,7 @@ describe("tournament matches", () => {
     // it, then the group rounds counting down.
     expect(headings()).toEqual([
       "Playoffs · Grand Final",
-      "Playoffs · Round 1 · 2 matches",
+      "Playoffs · UB Final · 2 matches",
       "Groups · Round 5",
       "Groups · Round 4"
     ]);
@@ -407,7 +407,7 @@ describe("tournament matches", () => {
 
     expect(headings()).toEqual([
       "Playoffs · Grand Final",
-      "Playoffs · Round 1",
+      "Playoffs · UB Final",
       "Groups · Round 5"
     ]);
     expect(byTeam).toContain("Alpha");

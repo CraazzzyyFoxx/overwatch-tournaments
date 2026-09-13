@@ -48,6 +48,7 @@ export default function TeamsLayout({ children }: Readonly<{ children: ReactNode
     canUpdateTournament: canAccessPermission("tournament.update", workspaceId),
     canUpdateEncounter: canAccessPermission("match.update", workspaceId),
     canTeamRead: canAccessPermission("team.read", workspaceId),
+    canTeamCreate: canAccessPermission("team.create", workspaceId),
     canReadTournamentLink: canAccessPermission("tournament_link.read", workspaceId),
     canDeleteTournament: canAccessPermission("tournament.delete", workspaceId),
     teamFormation: tournamentQuery.data?.team_formation === "draft" ? "draft" : "balancer"

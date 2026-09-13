@@ -91,7 +91,12 @@ type PickupTeamsPanelProps = {
   balancing: boolean;
   activeCount: number;
   onBalance: () => void;
-  /** Which of the solver's options is on screen — owned by the page so the board agrees. */
+  /**
+   * Which of the solver's options is on screen — the mix's own
+   * `selected_variant_index`, so the host's pager moves every viewer with it.
+   * Viewers get no pager at all: the matchup is read out to a lobby, and a
+   * player quietly paging their own copy is looking at teams nobody is playing.
+   */
   variantIndex: number;
   onVariantIndexChange: (index: number) => void;
   recordingOutcome: boolean;
@@ -292,7 +297,7 @@ export function PickupTeamsPanel({
             </Button>
           ) : null}
 
-          {variants.length > 1 ? (
+          {canWrite && variants.length > 1 ? (
             <div className="flex h-9 items-center gap-0.5 rounded-lg border border-[color:var(--aqt-border)] bg-white/[0.015] px-1">
               <Button
                 type="button"
@@ -364,11 +369,9 @@ export function PickupTeamsPanel({
               >
                 <ClipboardCopy className="size-4" aria-hidden="true" />
               </Button>
-              {/* The workspace channel is the default every mix posts to, so a
-                  mix with no override of its own still has somewhere to send. */}
-              {canWrite &&
-              onPostToDiscord &&
-              (game?.settings.discord_channel_id ?? game?.settings.workspace_discord_channel_id) ? (
+              {/* The workspace's channel is the only target a mix has; without
+                  one there is nowhere to post, so the button stays off. */}
+              {canWrite && onPostToDiscord && game?.settings.workspace_discord_channel_id ? (
                 <Button
                   type="button"
                   variant="ghost"

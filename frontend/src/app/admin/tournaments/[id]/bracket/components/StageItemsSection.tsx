@@ -27,7 +27,7 @@ import {
 } from "@/components/ui/select";
 import { notify } from "@/lib/notify";
 import adminService from "@/services/admin.service";
-import type { Stage, StageItem, StageItemType } from "@/types/tournament.types";
+import type { Stage, StageItem, StageItemInput, StageItemType } from "@/types/tournament.types";
 import type { Team } from "@/types/team.types";
 
 import {
@@ -50,6 +50,8 @@ interface StageItemsSectionProps {
   onChanged: () => void;
   /** Routes to the screen's one `ConfirmDialog`. */
   onRequestDeleteItem: (item: StageItem) => void;
+  /** Routes to the same dialog: removing a team slot drops a seed. */
+  onRequestRemoveInput: (input: StageItemInput, label: string) => void;
 }
 
 /**
@@ -66,7 +68,8 @@ export function StageItemsSection({
   progress,
   encountersHref,
   onChanged,
-  onRequestDeleteItem
+  onRequestDeleteItem,
+  onRequestRemoveInput
 }: Readonly<StageItemsSectionProps>) {
   const [draftName, setDraftName] = useState("");
   const [draftType, setDraftType] = useState<StageItemType>(getDefaultStageItemType(stage.stage_type));
@@ -141,16 +144,6 @@ export function StageItemsSection({
       });
       onChanged();
     }
-  });
-
-  const deleteInputMutation = useMutation({
-    mutationFn: (inputId: number) => adminService.deleteStageItemInput(inputId),
-    onSuccess: () => {
-      setEditingInputId(null);
-      setEditingInputTeamDraft("");
-      onChanged();
-    },
-    onError: (error) => notify.apiError(error, { title: "Could not remove this team" })
   });
 
   return (
@@ -355,40 +348,35 @@ export function StageItemsSection({
                                 {input.input_type}
                               </Badge>
                               {input.input_type !== "empty" ? (
-                                <button
-                                  type="button"
-                                  className="shrink-0 rounded p-1 text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                                  aria-label={
-                                    input.input_type === "tentative"
-                                      ? `Override team in slot ${input.slot} of ${item.name}`
-                                      : `Change team in slot ${input.slot} of ${item.name}`
-                                  }
-                                  onClick={() => {
-                                    setEditingInputId(input.id);
-                                    setEditingInputTeamDraft(input.team_id?.toString() ?? "");
-                                  }}
-                                >
-                                  <Pencil className="size-3.5" aria-hidden />
-                                </button>
+                                <>
+                                  <button
+                                    type="button"
+                                    className="shrink-0 rounded p-1 text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                    aria-label={
+                                      input.input_type === "tentative"
+                                        ? `Override team in slot ${input.slot} of ${item.name}`
+                                        : `Change team in slot ${input.slot} of ${item.name}`
+                                    }
+                                    onClick={() => {
+                                      setEditingInputId(input.id);
+                                      setEditingInputTeamDraft(input.team_id?.toString() ?? "");
+                                    }}
+                                  >
+                                    <Pencil className="size-3.5" aria-hidden />
+                                  </button>
+                                  <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    className="size-8 shrink-0 text-danger hover:text-danger"
+                                    aria-label={`Remove slot ${input.slot} of ${item.name}`}
+                                    onClick={() =>
+                                      onRequestRemoveInput(input, `${label} (#${input.slot})`)
+                                    }
+                                  >
+                                    <Trash2 className="size-3.5" aria-hidden />
+                                  </Button>
+                                </>
                               ) : null}
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                className="size-8 shrink-0 text-danger hover:text-danger"
-                                aria-label={`Remove team from slot ${input.slot} of ${item.name}`}
-                                disabled={
-                                  deleteInputMutation.isPending &&
-                                  deleteInputMutation.variables === input.id
-                                }
-                                onClick={() => deleteInputMutation.mutate(input.id)}
-                              >
-                                {deleteInputMutation.isPending &&
-                                deleteInputMutation.variables === input.id ? (
-                                  <Loader2 className="size-3 animate-spin" aria-hidden />
-                                ) : (
-                                  <Trash2 className="size-3.5" aria-hidden />
-                                )}
-                              </Button>
                             </>
                           )}
                         </li>

@@ -70,12 +70,9 @@ OPERATIONS: dict[str, Op] = {
     "rpc.balancer.custom.update_player": Op(request=custom_game.CustomGamePlayerPatch),
     "rpc.balancer.custom.set_participation": Op(request=custom_game.CustomGamePlayersParticipationPatch),
     "rpc.balancer.custom.set_team_names": Op(request=custom_game.CustomGameTeamNamesPatch),
-    "rpc.balancer.custom.set_role_mask": Op(request=custom_game.CustomGameRoleMaskPatch),
-    "rpc.balancer.custom.set_points_per_win": Op(request=custom_game.CustomGamePointsPerWinPatch),
     "rpc.balancer.custom.set_next_map": Op(request=custom_game.CustomGameNextMapPatch),
-    "rpc.balancer.custom.set_discord_channel": Op(request=custom_game.CustomGameDiscordChannelPatch),
+    "rpc.balancer.custom.set_variant_index": Op(request=custom_game.CustomGameVariantIndexPatch),
     "rpc.balancer.custom.post_discord": Op(request=custom_game.CustomGamePostDiscord),
-    "rpc.balancer.custom.set_balancer_config": Op(request=custom_game.CustomGameBalancerConfigPatch),
     "rpc.balancer.custom.transfer_host": Op(request=custom_game.CustomGameHostTransfer),
     "rpc.balancer.custom.add_co_host": Op(request=custom_game.CustomGameCoHostPatch),
     "rpc.balancer.custom.swap_seats": Op(request=custom_game.CustomGameSeatSwap),
@@ -109,4 +106,7 @@ OPERATIONS: dict[str, Op] = {
             ),
         )
     ),
+    # ── the caller's own mix solver knobs ──────────────────────────────────
+    "rpc.balancer.prefs.get": Op(response=schemas.UserMixPreferencesRead),
+    "rpc.balancer.prefs.upsert": Op(request=schemas.UserMixPreferencesUpsert, response=schemas.UserMixPreferencesRead),
 }

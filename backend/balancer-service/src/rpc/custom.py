@@ -1,7 +1,7 @@
 """Pickup mixes over typed RPC.
 
 ``rpc.balancer.custom.{create,list,get,update_roster,update_player,set_participation,
-balance,set_team_names,set_role_mask,set_points_per_win,set_balancer_config,set_discord_channel,
+balance,set_team_names,set_next_map,set_variant_index,
 post_discord,transfer_host,add_co_host,remove_co_host,swap_seats,record_outcome,match_history,
 undo_match,rotation,stats,close,delete,hard_delete}``.
 
@@ -10,8 +10,8 @@ Writes require ``actor`` to be the host or a co-host; the per-mix check lives in
 ``match_history``, ``rotation``) are public: the gateway forwards no identity
 for them (``AuthNone``) and none of them inspects the caller -- a mix board is
 read out to a lobby, whose players need no account here.
-``set_discord_channel`` and ``hard_delete`` additionally require workspace
-admin (``_require_workspace_admin``). Every request body is validated by a
+``hard_delete`` additionally requires workspace admin
+(``_require_workspace_admin``). Every request body is validated by a
 Pydantic model in ``src.schemas.custom_game`` before it reaches a use case --
 nothing here hand-parses a dict.
 """
@@ -118,9 +118,9 @@ def _require_mix(data: dict[str, Any], user: Any, workspace_id: int, action: str
 def _require_workspace_admin(user: Any, workspace_id: int) -> None:
     """Workspace admin (or superuser), on top of the membership ``_require_mix`` settles.
 
-    Two writes need more than the host-or-co-host grant every other mix write
-    checks: ``hard_delete`` (destroys rows) and ``set_discord_channel`` (points
-    the workspace's Discord at a channel of the host's choosing).
+    One write needs more than the host-or-co-host grant every other mix write
+    checks: ``hard_delete``, which destroys the mix row and every match it ever
+    recorded.
     """
     if not user.is_workspace_admin(workspace_id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Workspace admin required")
@@ -168,26 +168,25 @@ def _dump_row(
 
 
 def _dump_settings(
-    game: Any,
     team_names: dict[int, str],
-    role_mask: dict[str, int],
+    points_per_win: int,
     workspace_discord_channel_id: int | None,
 ) -> dict[str, Any]:
-    """The mix's own settings, each one a stored fact rather than a config blob."""
+    """The mix's own settings, each one a stored fact rather than a config blob.
+
+    Only ``team_names`` is actually the mix's. The other two are resolved
+    read-onlys the board would otherwise have to fetch from two more endpoints:
+    the host's points knob (``balancer.user_config``, rendered on the win
+    buttons as "+50") and the workspace's Discord channel (whose editor lives in
+    the workspace admin panel). Neither is writable through a mix.
+    """
     return {
-        "points_per_win": game.points_per_win,
+        # 0 means the host turned rank adjustment off; the wire says so with the
+        # number rather than a null, since every renderer wants an integer.
+        "points_per_win": points_per_win,
         "team_names": {str(index): name for index, name in sorted(team_names.items())},
-        "role_mask": role_mask or None,
-        "balancer_config": game.balancer_config_json,
         # A Discord snowflake as a string: it outgrows a JavaScript safe
         # integer, so the wire never carries it as a number.
-        #
-        # Two fields, not one effective channel: the admin editor needs to know
-        # whether this mix overrides the workspace default, and everything else
-        # (the Post button, the hint under the picker) reads
-        # ``discord_channel_id ?? workspace_discord_channel_id`` -- the same
-        # fallback ``CustomGameService.discord_lineup`` applies server-side.
-        "discord_channel_id": str(game.discord_channel_id) if game.discord_channel_id is not None else None,
         "workspace_discord_channel_id": (
             str(workspace_discord_channel_id) if workspace_discord_channel_id is not None else None
         ),
@@ -221,6 +220,9 @@ def _dump_game(
         "status": game.status,
         "settings": settings,
         "balance_result": game.balance_result_json,
+        # Which of those options the mix is *showing*: the host's pager, read by
+        # every client, so a viewer never studies a matchup nobody is calling.
+        "selected_variant_index": game.selected_variant_index,
         # The map the next match is played on, rolled or picked by a host; the
         # client resolves name/mode/thumbnail against the catalogue it already
         # holds, so only the id travels.
@@ -248,14 +250,17 @@ def _dump_game(
     return out
 
 
-async def _game_settings(session: Any, game: Any, workspace_channel_id: int | None) -> dict[str, Any]:
-    """The mix's settings. The workspace channel is passed in, not read here:
-    it is one value for every mix in the list, and looking it up per row would
-    widen this reader's existing per-mix queries by a third."""
+async def _game_settings(
+    session: Any, game: Any, workspace_channel_id: int | None, points_per_win: int
+) -> dict[str, Any]:
+    """The mix's settings. The workspace channel and the host's points knob are
+    passed in, not read here: the channel is one value for every mix in the list
+    and the points come from the host's account row, which several mixes in the
+    same list routinely share. Reading either per row would widen this reader's
+    existing per-mix queries by a third for values it already holds."""
     return _dump_settings(
-        game,
         await custom_game_service.team_names.mapping_for_game(session, game.id),
-        await custom_game_service.role_slots.mapping_for_game(session, game.id),
+        points_per_win,
         workspace_channel_id,
     )
 
@@ -270,10 +275,13 @@ async def _with_roster(session: Any, game: Any) -> dict[str, Any]:
     overwrite.
     """
     settings = await _game_settings(
-        session, game, await custom_game_service.workspace_discord_channel_id(session, game.workspace_id)
+        session,
+        game,
+        await custom_game_service.workspace_discord_channel_id(session, game.workspace_id),
+        await custom_game_service.host_points_per_win(session, game.host_user_id),
     )
     roster_shape = (
-        await custom_game_service.roster_shape(session, workspace_id=game.workspace_id, custom_game_id=game.id)
+        await custom_game_service.roster_shape(session, workspace_id=game.workspace_id, host_user_id=game.host_user_id)
     ).model_dump()
     roster = list(await custom_game_service.roster.list_for_game(session, game.id))
     # One name lookup for every identity on the write side: the host and each
@@ -424,7 +432,6 @@ def register(broker: Any, logger: Any) -> None:
                 # An empty list opens an empty mix; the host fills it from the
                 # roster sheet afterwards. There is no pool to default to.
                 member_ids=body.member_ids,
-                balancer_config=body.balancer_config,
                 clone_from_game_id=body.clone_from_game_id,
             )
             await emit_pickup_mix_updated(session, workspace_id, change="create", actor_user_id=user.id)
@@ -443,10 +450,17 @@ def register(broker: Any, logger: Any) -> None:
             # otherwise cost a query per mix.
             activity = await custom_game_service.casual_matches.activity_for_games(session, [row.id for row in rows])
             workspace_channel_id = await custom_game_service.workspace_discord_channel_id(session, workspace_id)
+            # Same reason as the activity read above: every row dumps its host's
+            # points knob, and a workspace's mixes are typically run by a handful
+            # of people, so one grouped read beats a per-row lookup of the same
+            # few account rows. Absent = knob off = 0.
+            points_by_host = await custom_game_service.host_prefs.points_per_win_by_user(
+                session, [row.host_user_id for row in rows]
+            )
             return [
                 _dump_game(
                     row,
-                    await _game_settings(session, row, workspace_channel_id),
+                    await _game_settings(session, row, workspace_channel_id, points_by_host.get(row.host_user_id, 0)),
                     host_display_name=host_names.get(row.host_user_id),
                     activity=activity.get(row.id),
                 )
@@ -571,46 +585,6 @@ def register(broker: Any, logger: Any) -> None:
 
         return await c.envelope(logger, "custom.set_team_names", op, session_factory=_SF)
 
-    @broker.subscriber("rpc.balancer.custom.set_role_mask")
-    async def _set_role_mask(data: dict, msg: RabbitMessage) -> dict:
-        async def op(session: Any) -> Any:
-            user = c.active_actor(data)
-            workspace_id = _int(data, "workspace_id")
-            _require_mix(data, user, workspace_id, "update")
-            body = _body(schemas.CustomGameRoleMaskPatch, data)
-            game = await custom_game_service.set_role_mask(
-                session,
-                workspace_id=workspace_id,
-                custom_game_id=_game_id(data),
-                role_mask=body.role_mask,
-                actor_user_id=user.id,
-            )
-            await emit_pickup_mix_updated(session, workspace_id, change="role_mask", actor_user_id=user.id)
-            await session.commit()
-            return await _with_roster(session, game)
-
-        return await c.envelope(logger, "custom.set_role_mask", op, session_factory=_SF)
-
-    @broker.subscriber("rpc.balancer.custom.set_points_per_win")
-    async def _set_points_per_win(data: dict, msg: RabbitMessage) -> dict:
-        async def op(session: Any) -> Any:
-            user = c.active_actor(data)
-            workspace_id = _int(data, "workspace_id")
-            _require_mix(data, user, workspace_id, "update")
-            body = _body(schemas.CustomGamePointsPerWinPatch, data)
-            game = await custom_game_service.set_points_per_win(
-                session,
-                workspace_id=workspace_id,
-                custom_game_id=_game_id(data),
-                points_per_win=body.points_per_win,
-                actor_user_id=user.id,
-            )
-            await emit_pickup_mix_updated(session, workspace_id, change="points_per_win", actor_user_id=user.id)
-            await session.commit()
-            return await _with_roster(session, game)
-
-        return await c.envelope(logger, "custom.set_points_per_win", op, session_factory=_SF)
-
     @broker.subscriber("rpc.balancer.custom.set_next_map")
     async def _set_next_map(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
@@ -631,36 +605,28 @@ def register(broker: Any, logger: Any) -> None:
 
         return await c.envelope(logger, "custom.set_next_map", op, session_factory=_SF)
 
-    @broker.subscriber("rpc.balancer.custom.set_discord_channel")
-    async def _set_discord_channel(data: dict, msg: RabbitMessage) -> dict:
-        """Overrides the workspace mix channel for this one mix. Workspace admin only.
-
-        Clearing it (``null``) falls back to the workspace-wide channel an admin
-        set in the balancer workspace config; an ordinary host can change
-        neither, so nobody can redirect the workspace's Discord by hosting a
-        mix in it.
-        """
+    @broker.subscriber("rpc.balancer.custom.set_variant_index")
+    async def _set_variant_index(data: dict, msg: RabbitMessage) -> dict:
+        """Which balance option the mix shows. The pager is the host's, the
+        view is everyone's -- see ``CustomGameService.set_variant_index``."""
 
         async def op(session: Any) -> Any:
             user = c.active_actor(data)
             workspace_id = _int(data, "workspace_id")
             _require_mix(data, user, workspace_id, "update")
-            _require_workspace_admin(user, workspace_id)
-            body = _body(schemas.CustomGameDiscordChannelPatch, data)
-            game = await custom_game_service.set_discord_channel(
+            body = _body(schemas.CustomGameVariantIndexPatch, data)
+            game = await custom_game_service.set_variant_index(
                 session,
                 workspace_id=workspace_id,
                 custom_game_id=_game_id(data),
-                # Digits on the wire, a BIGINT in the column -- the schema has
-                # already rejected anything else.
-                channel_id=int(body.channel_id) if body.channel_id is not None else None,
+                variant_index=body.variant_index,
                 actor_user_id=user.id,
             )
-            await emit_pickup_mix_updated(session, workspace_id, change="discord_channel", actor_user_id=user.id)
+            await emit_pickup_mix_updated(session, workspace_id, change="variant_index", actor_user_id=user.id)
             await session.commit()
             return await _with_roster(session, game)
 
-        return await c.envelope(logger, "custom.set_discord_channel", op, session_factory=_SF)
+        return await c.envelope(logger, "custom.set_variant_index", op, session_factory=_SF)
 
     @broker.subscriber("rpc.balancer.custom.post_discord")
     async def _post_discord(data: dict, msg: RabbitMessage) -> dict:
@@ -694,26 +660,6 @@ def register(broker: Any, logger: Any) -> None:
             return {"status": "queued", "channel_id": str(channel_id)}
 
         return await c.envelope(logger, "custom.post_discord", op, session_factory=_SF)
-
-    @broker.subscriber("rpc.balancer.custom.set_balancer_config")
-    async def _set_balancer_config(data: dict, msg: RabbitMessage) -> dict:
-        async def op(session: Any) -> Any:
-            user = c.active_actor(data)
-            workspace_id = _int(data, "workspace_id")
-            _require_mix(data, user, workspace_id, "update")
-            body = _body(schemas.CustomGameBalancerConfigPatch, data)
-            game = await custom_game_service.set_balancer_config(
-                session,
-                workspace_id=workspace_id,
-                custom_game_id=_game_id(data),
-                balancer_config=body.balancer_config,
-                actor_user_id=user.id,
-            )
-            await emit_pickup_mix_updated(session, workspace_id, change="balancer_config", actor_user_id=user.id)
-            await session.commit()
-            return await _with_roster(session, game)
-
-        return await c.envelope(logger, "custom.set_balancer_config", op, session_factory=_SF)
 
     @broker.subscriber("rpc.balancer.custom.transfer_host")
     async def _transfer_host(data: dict, msg: RabbitMessage) -> dict:
@@ -908,7 +854,10 @@ def register(broker: Any, logger: Any) -> None:
             return _dump_game(
                 game,
                 await _game_settings(
-                    session, game, await custom_game_service.workspace_discord_channel_id(session, workspace_id)
+                    session,
+                    game,
+                    await custom_game_service.workspace_discord_channel_id(session, workspace_id),
+                    await custom_game_service.host_points_per_win(session, game.host_user_id),
                 ),
                 activity=(await custom_game_service.casual_matches.activity_for_games(session, [game.id])).get(game.id),
             )

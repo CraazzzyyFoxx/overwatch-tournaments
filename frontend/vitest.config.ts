@@ -78,6 +78,7 @@ export default defineConfig({
       "src/app/balancer/components/forced-flex-parity.test.ts",
       "src/app/balancer/components/BalancingPoolSidebar.behavior.test.tsx",
       "src/app/balancer/components/WorkspacePlayersSidebar.behavior.test.tsx",
+      "src/app/balancer/components/WorkspaceBalancerConfigDialog.behavior.test.tsx",
       "src/app/balancer/tool-context.test.ts",
       "src/app/balancer/redirect-map.test.ts",
       "src/app/balancer/BalancerLayoutClient.behavior.test.tsx",
@@ -168,6 +169,9 @@ export default defineConfig({
       // the veto room runs the SERVER's sequence — an unrun drift check is
       // worse than none, since it reports green either way.
       "src/lib/best-of.test.ts",
+      // The vocabulary every round name on the site is rendered from; unrun, a
+      // screen could go back to calling the UB Final "Round 3" with a green suite.
+      "src/lib/bracket-round-name.test.ts",
       "src/lib/roster-shape.test.ts",
       "src/lib/return-to.test.ts",
       // Same mixed-runner situation, so file-level again: this one pins the
@@ -190,6 +194,7 @@ export default defineConfig({
       // Was in the same unrun state when the register-button gate got its first
       // real test: the stream-visibility cases in it had never executed either.
       "src/lib/tournament-status.test.ts",
+      "src/lib/tournament-stages.test.ts",
       "src/lib/division-grid.test.ts",
       "src/components/Header.mobile-layout.test.ts",
       "src/components/WorkspaceBootstrap.helpers.test.ts",
@@ -210,6 +215,7 @@ export default defineConfig({
       // these are its only vitest files so far.
       "src/components/account-settings/MyAccountSection.behavior.test.tsx",
       "src/components/account-settings/FavoritesSection.behavior.test.tsx",
+      "src/components/account-settings/MixBalancerSection.behavior.test.tsx",
       // Same file-level rule: `src/components/match` is otherwise untested, and
       // this pins that the log download is offered only to a signed-in viewer.
       "src/components/match/MatchLogIndicator.behavior.test.tsx",

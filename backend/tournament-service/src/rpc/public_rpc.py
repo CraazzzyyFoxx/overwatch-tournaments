@@ -476,6 +476,7 @@ def register(broker: Any, logger: Any) -> None:
                     subscription_outcome=chips.subscription_outcome,
                     subscription_verdicts=chips.subscription_verdicts,
                     roster=(await _public_rosters(session, [reg])).get(reg.id),
+                    queue=await reg_service.registration_service.queue_position(session, reg),
                 )
             )
 
@@ -522,6 +523,7 @@ def register(broker: Any, logger: Any) -> None:
                     status_meta_map=status_meta_map,
                     show_ranks=form.show_ranks,
                     roster=(await _public_rosters(session, [updated])).get(updated.id),
+                    queue=await reg_service.registration_service.queue_position(session, updated),
                 )
             )
 
@@ -594,6 +596,7 @@ def register(broker: Any, logger: Any) -> None:
                     status_meta_map=status_meta_map,
                     show_ranks=form.show_ranks if form else False,
                     roster=(await _public_rosters(session, [checked_in])).get(checked_in.id),
+                    queue=await reg_service.registration_service.queue_position(session, checked_in),
                 )
             )
 

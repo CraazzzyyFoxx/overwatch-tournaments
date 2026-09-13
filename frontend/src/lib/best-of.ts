@@ -14,6 +14,7 @@
  * the backend's sequence, so a divergence here is a UI that previews steps the
  * captains will not be asked to take.
  */
+import { bracketRoundLabelEn, type BracketRoundShape } from "@/lib/bracket-round-name";
 import type { StageBestOfConfig } from "@/types/admin.types";
 import type { StageType, VetoSequenceToken } from "@/types/tournament.types";
 
@@ -168,34 +169,21 @@ export function stageBestOfRoundSections({
 }: StageBestOfShape): BestOfRoundSection[] {
   const flatRounds = Math.max(1, Math.floor(maxRounds) || 1);
 
-  if (stageType === "single_elimination") {
-    // Round count is `ceil(log2(teams))` (`services/bracket/single_elimination.py`),
-    // NOT `max_rounds` — a 5-team and a 32-team bracket carry different depths a
-    // shared planning default cannot express.
-    const rounds = bracketTeamCount >= 2 ? Math.ceil(Math.log2(bracketTeamCount)) : flatRounds;
-    return withUnlistedRounds(
-      [
-        {
-          key: "rounds",
-          label: null,
-          rounds: countUp(rounds).map((round) => ({ round, label: `Round ${round}` }))
-        }
-      ],
-      configuredRounds
-    );
-  }
-
   if (stageType !== "double_elimination") {
-    // Swiss / round-robin play a flat `1..max_rounds` the caller already knows.
+    // A single elimination's round count is `ceil(log2(teams))`
+    // (`services/bracket/single_elimination.py`), NOT `max_rounds` — a 5-team
+    // and a 32-team bracket carry different depths a shared planning default
+    // cannot express. Swiss / round-robin play a flat `1..max_rounds` the
+    // caller already knows.
+    const depth =
+      stageType === "single_elimination" && bracketTeamCount >= 2
+        ? Math.ceil(Math.log2(bracketTeamCount))
+        : flatRounds;
+    const shape: BracketRoundShape = { rounds: countUp(depth), finalRounds: [] };
     return withUnlistedRounds(
-      [
-        {
-          key: "rounds",
-          label: null,
-          rounds: countUp(flatRounds).map((round) => ({ round, label: `Round ${round}` }))
-        }
-      ],
-      configuredRounds
+      [{ key: "rounds", label: null, rounds: labelRounds(shape.rounds, shape) }],
+      configuredRounds,
+      shape
     );
   }
 
@@ -208,41 +196,34 @@ export function stageBestOfRoundSections({
   // plus the reduction that merges them with the upper bracket's first losers.
   const lowerRounds = Math.max(0, 2 * (upperRounds - 1) + (splitLowerBracket ? 2 : 0));
 
+  // The grand final is `upperRounds + 1` and its reset the round after
+  // (`double_elimination.generate`). Neither is an editable row — `final` owns
+  // the grand final — but both belong to the shape, so a `by_round` key on one
+  // reads by name and the round below them reads "UB Final" rather than as bare
+  // numbers. A stage with no reset simply never carries that round.
+  const upper = countUp(upperRounds);
+  const lower = countUp(lowerRounds).map((depth) => -depth);
+  const grandFinal = upperRounds + 1;
+  const shape: BracketRoundShape = {
+    rounds: [...upper, ...lower, grandFinal, grandFinal + 1],
+    finalRounds: [grandFinal, grandFinal + 1]
+  };
+
   const sections: BestOfRoundSection[] = [
-    {
-      key: "upper",
-      label: "Upper bracket",
-      rounds: countUp(upperRounds).map((round) => ({
-        round,
-        label: upperBracketRoundLabel(round, upperRounds)
-      }))
-    }
+    { key: "upper", label: "Upper bracket", rounds: labelRounds(upper, shape) }
   ];
   if (lowerRounds > 0) {
-    sections.push({
-      key: "lower",
-      label: "Lower bracket",
-      rounds: countUp(lowerRounds).map((depth) => ({
-        round: -depth,
-        label: depth === lowerRounds ? "LB Final" : `LB Round ${depth}`
-      }))
-    });
+    sections.push({ key: "lower", label: "Lower bracket", rounds: labelRounds(lower, shape) });
   }
-  // The grand final is `upperRounds + 1` (`double_elimination.generate`). It is
-  // never an editable row — `final` owns it — but a stale `by_round` key on it
-  // reads as a bare "Round N", so name it "Grand Final" where it surfaces.
-  return withUnlistedRounds(sections, configuredRounds, upperRounds + 1);
+  return withUnlistedRounds(sections, configuredRounds, shape);
 }
 
 function countUp(count: number): number[] {
   return Array.from({ length: Math.max(0, count) }, (_, index) => index + 1);
 }
 
-/** Mirrors `_ub_round_label`, minus the per-match index the editor has no use for. */
-function upperBracketRoundLabel(round: number, upperRounds: number): string {
-  if (round === upperRounds) return "UB Final";
-  if (round === upperRounds - 1) return "UB Semifinal";
-  return `UB Round ${round}`;
+function labelRounds(rounds: number[], shape: BracketRoundShape): BestOfRoundOption[] {
+  return rounds.map((round) => ({ round, label: bracketRoundLabelEn(round, shape) }));
 }
 
 /**
@@ -252,29 +233,23 @@ function upperBracketRoundLabel(round: number, upperRounds: number): string {
  * than the derivation assumed (or one configured before this editor grouped its
  * rounds) can carry a `by_round` key with nowhere to render. Such a key still
  * changes matches, so it gets a row rather than becoming an invisible override.
- * A key on the grand-final round is named "Grand Final" rather than a bare
- * "Round N", since that number means nothing to an organizer.
  */
 function withUnlistedRounds(
   sections: BestOfRoundSection[],
   configuredRounds: number[],
-  grandFinalRound?: number
+  shape: BracketRoundShape
 ): BestOfRoundSection[] {
   const offered = new Set(sections.flatMap((section) => section.rounds.map((row) => row.round)));
   const unlisted = [...new Set(configuredRounds)]
     .filter((round) => !offered.has(round))
     .sort((left, right) => right - left);
   if (unlisted.length === 0) return sections;
-  const label = (round: number) => {
-    if (round === grandFinalRound) return "Grand Final";
-    return round < 0 ? `LB Round ${-round}` : `Round ${round}`;
-  };
   return [
     ...sections,
     {
       key: "other",
       label: "Other configured rounds",
-      rounds: unlisted.map((round) => ({ round, label: label(round) }))
+      rounds: labelRounds(unlisted, shape)
     }
   ];
 }

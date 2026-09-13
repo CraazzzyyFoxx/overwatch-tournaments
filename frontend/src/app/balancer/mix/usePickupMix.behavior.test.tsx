@@ -25,6 +25,7 @@ const listMatches = vi.fn();
 const rotation = vi.fn();
 const undoMatch = vi.fn();
 const postToDiscord = vi.fn();
+const setVariantIndex = vi.fn();
 
 vi.mock("@/services/custom-game.service", () => ({
   customGameKeys: {
@@ -44,6 +45,7 @@ vi.mock("@/services/custom-game.service", () => ({
     rotation: (...args: unknown[]) => rotation(...args),
     undoMatch: (...args: unknown[]) => undoMatch(...args),
     postToDiscord: (...args: unknown[]) => postToDiscord(...args),
+    setVariantIndex: (...args: unknown[]) => setVariantIndex(...args),
   },
 }));
 
@@ -74,11 +76,8 @@ const GAME_ID = 11;
 
 /** The mix's own settings, all at their defaults. */
 const SETTINGS = {
-  points_per_win: null,
+  points_per_win: 0,
   team_names: {},
-  role_mask: null,
-  balancer_config: null,
-  discord_channel_id: null,
   workspace_discord_channel_id: null,
 };
 
@@ -96,6 +95,7 @@ function game(overrides: Record<string, unknown> = {}) {
     created_at: null,
     roster_shape: null,
     next_map_id: null,
+    selected_variant_index: 0,
     matches_count: 0,
     last_match_at: null,
     ...overrides,
@@ -113,6 +113,7 @@ type HarnessApi = {
   applyRotationHints: () => void;
   undoMatch: (matchId: number) => void;
   postToDiscord: (variantIndex: number, image: Blob | null) => void;
+  setVariantIndex: (index: number) => void;
   client: QueryClient;
 };
 
@@ -128,12 +129,14 @@ function Harness({
     applyRotationHints,
     undoMatch: undo,
     postToDiscord: post,
+    setVariantIndex: paging,
   } = usePickupMix(WORKSPACE_ID, GAME_ID);
   onReady({
     setRoster: (ids) => setRoster.mutate(ids),
     applyRotationHints: () => applyRotationHints.mutate(),
     undoMatch: (matchId) => undo.mutate(matchId),
     postToDiscord: (variantIndex, image) => post.mutate({ variantIndex, image }),
+    setVariantIndex: (index) => paging.mutate(index),
     client,
   });
   return null;
@@ -175,6 +178,7 @@ beforeEach(() => {
   rotation.mockResolvedValue([]);
   undoMatch.mockResolvedValue(game({ players: [] }));
   postToDiscord.mockResolvedValue({ status: "queued", channel_id: "123" });
+  setVariantIndex.mockResolvedValue(game({ players: [], selected_variant_index: 2 }));
 });
 
 describe("usePickupMix", () => {
@@ -227,6 +231,25 @@ describe("usePickupMix", () => {
     expect(postToDiscord).toHaveBeenCalledWith(WORKSPACE_ID, GAME_ID, 1, image);
     // Nothing about the mix changed, so a refetch would be pure noise.
     expect(client.getQueryState(gameKey)?.isInvalidated).toBe(false);
+  });
+
+  it("pages the mix optimistically, without dragging the other caches along", async () => {
+    const { setVariantIndex: page, client } = await mount();
+    const gameKey = ["custom-games", WORKSPACE_ID, GAME_ID];
+    const matchesBefore = listMatches.mock.calls.length;
+    // Never resolves: the cached game must already carry the new option, or a
+    // host clicking through the pager watches it lag a round trip behind.
+    setVariantIndex.mockReturnValueOnce(Promise.withResolvers<unknown>().promise);
+
+    await act(async () => {
+      page(2);
+      await tick();
+    });
+
+    expect(setVariantIndex).toHaveBeenCalledWith(WORKSPACE_ID, GAME_ID, 2);
+    expect(client.getQueryData<{ selected_variant_index: number }>(gameKey)?.selected_variant_index).toBe(2);
+    // A view change: roster, history and rotation all say exactly what they said.
+    expect(listMatches.mock.calls.length).toBe(matchesBefore);
   });
 
   it("subscribes to this workspace's invalidation topic and refetches both caches on pickup_mix", async () => {

@@ -190,9 +190,9 @@ def register(broker: Any, logger: Any) -> None:
                     "slot_count": len(body.slots),
                 },
             )
+            payload = _serialize_config(config)
             await session.commit()
-            await session.refresh(config, ["items"])
-            return _serialize_config(config)
+            return payload
 
         return await _run(logger, op)
 

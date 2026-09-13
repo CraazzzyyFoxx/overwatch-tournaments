@@ -186,6 +186,7 @@ export function TournamentHubShell({
     canUpdateTournament,
     canUpdateEncounter,
     canTeamRead,
+    canTeamCreate: canCreateTeam,
     canReadTournamentLink,
     canDeleteTournament,
     teamFormation

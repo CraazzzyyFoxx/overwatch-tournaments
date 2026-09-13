@@ -100,7 +100,13 @@ afterEach(async () => {
 
 describe("Settings rail", () => {
   it("offers every section, in rail order, to a caller who may open them all", async () => {
-    granted = ["tournament.update", "match.update", "tournament_link.read", "tournament.delete"];
+    granted = [
+      "tournament.update",
+      "match.update",
+      "tournament_link.read",
+      "tournament.delete",
+      "team.create"
+    ];
     await render();
 
     expect(railLabels()).toEqual(SETTINGS_SECTIONS.map((key) => SETTINGS_SECTION_LABELS[key]));
@@ -116,6 +122,8 @@ describe("Settings rail", () => {
     expect(labels).not.toContain("Pre-game phase");
     expect(labels).not.toContain("Links");
     expect(labels).not.toContain("Delete tournament");
+    // Both registration sections write the form, which needs `team.create`.
+    expect(labels).not.toContain("Admission");
   });
 
   it("marks the section named by the path", async () => {

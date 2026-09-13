@@ -70,8 +70,8 @@ class RequireMixTests(TestCase):
 
 
 class RequireWorkspaceAdminTests(TestCase):
-    """``set_discord_channel`` and ``hard_delete`` need more than host-or-co-host:
-    one destroys rows, the other points the workspace's Discord somewhere else.
+    """``hard_delete`` needs more than host-or-co-host: it destroys the mix row
+    and every match it ever recorded.
     """
 
     def test_admin_passes(self) -> None:

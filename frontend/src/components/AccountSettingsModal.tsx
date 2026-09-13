@@ -10,6 +10,7 @@ import { useTranslations } from "next-intl";
 import { cn } from "@/lib/utils";
 import AccountSessionsSection from "./account-settings/AccountSessionsSection";
 import MyAccountSection from "./account-settings/MyAccountSection";
+import MixBalancerSection from "./account-settings/MixBalancerSection";
 import FavoritesSection from "./account-settings/FavoritesSection";
 import { useRouter, useSearchParams } from "next/navigation";
 
@@ -116,10 +117,7 @@ const AccountSettingsModal = () => {
                     <h3 className={HEADING_CLASS}>{t("preferences.title")}</h3>
                     <p className={SUBHEADING_CLASS}>{t("preferences.desc")}</p>
                   </div>
-                  <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border/40 py-20 text-[color:var(--aqt-fg-dim)]">
-                    <MonitorCog className="mb-4 h-12 w-12 opacity-50" aria-hidden />
-                    <p>{t("preferences.comingSoon")}</p>
-                  </div>
+                  <MixBalancerSection />
                 </TabsContent>
 
                 <TabsContent value="favorites" className={PANEL_CLASS}>

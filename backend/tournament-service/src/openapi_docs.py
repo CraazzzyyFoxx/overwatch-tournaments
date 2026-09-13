@@ -493,7 +493,7 @@ DOCS: dict[str, dict] = {
     },
     "rpc.tournament.stage_auto_wire": {
         "summary": "Auto-wire stage from groups",
-        "description": "Wires the stage's TENTATIVE inputs from the preceding round-robin/Swiss stage's \"Teams advancing to playoff\" count — the same auto-wire Activate & generate runs automatically, exposed standalone for preview/debugging; requires stage-update permission on its workspace.",
+        "description": "Wires the stage's TENTATIVE inputs from a round-robin/Swiss stage's \"Teams advancing to playoff\" count — the same auto-wire Activate & generate runs automatically, exposed standalone for preview/debugging. The source is the one group stage of the latest earlier phase; pass source_stage_id to name it when that phase runs several divisions in parallel. Requires stage-update permission on its workspace.",
     },
     "rpc.tournament.stage_wire": {
         "summary": "Wire stage from groups",

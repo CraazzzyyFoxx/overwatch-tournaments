@@ -5,7 +5,7 @@ import { useMemo } from "react";
 import { useTranslations } from "next-intl";
 import { LoaderCircle } from "lucide-react";
 
-import { stageFinalRounds } from "@/components/bracket-view.helpers";
+import { stageRoundShape } from "@/components/bracket-view.helpers";
 import { useBracketRoundLabel } from "@/hooks/useBracketRoundLabel";
 import { cn } from "@/lib/utils";
 import type { PickBanConfig, PickBanKind, Stage } from "@/types/tournament.types";
@@ -70,7 +70,7 @@ export function ScopeTree({
   const expandedStageId = selected?.stageId ?? null;
   const expandedStage = sortedStages.find((stage) => stage.id === expandedStageId);
   const { rounds, loading: roundsLoading } = useStageRounds(expandedStage, encounters);
-  const finalRounds = stageFinalRounds(
+  const roundShape = stageRoundShape(
     expandedStageId,
     expandedStage?.stage_type,
     rounds,
@@ -134,7 +134,7 @@ export function ScopeTree({
                       rounds.map((round) =>
                         node(
                           { stageId: stage.id, round },
-                          roundLabel(round, finalRounds),
+                          roundLabel(round, roundShape),
                           2
                         )
                       )

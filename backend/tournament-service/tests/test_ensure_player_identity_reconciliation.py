@@ -19,14 +19,8 @@ import asyncio
 import os
 import sys
 import uuid
-from contextlib import asynccontextmanager
 from pathlib import Path
 from types import SimpleNamespace
-
-import pytest
-import sqlalchemy as sa
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-from sqlalchemy.pool import NullPool
 
 if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
@@ -49,33 +43,8 @@ sys.path.insert(0, str(backend_root / "tournament-service"))
 from shared.core.social import SocialProvider  # noqa: E402
 from shared.models.identity.auth_user import AuthUser  # noqa: E402
 from shared.models.identity.user import User  # noqa: E402
+from shared.testing import real_db_sessionmaker as _db_sessions  # noqa: E402
 from src.services.registration import service as reg_service  # noqa: E402
-
-
-@asynccontextmanager
-async def _db_sessions():
-    """Yield a fresh per-test session factory, or skip if the DB is unreachable.
-
-    Pooled asyncpg connections are bound to the event loop that created them,
-    so the module-global engine cannot be shared across ``asyncio.run()``
-    calls: each test gets its own NullPool engine, created and disposed inside
-    the test's single event loop. Probes with ``select current_database()``
-    and hard-guards against ever running against a production database.
-    """
-    from src.core import config
-
-    engine = create_async_engine(config.settings.db_url_asyncpg, poolclass=NullPool)
-    try:
-        try:
-            async with engine.connect() as conn:
-                dbname = (await conn.execute(sa.text("select current_database()"))).scalar()
-        except Exception as exc:  # noqa: BLE001 -- any connect failure => skip, not fail
-            pytest.skip(f"database unreachable: {exc}")
-        if dbname in {"anak_v5", "anak_prod"}:
-            pytest.skip("refusing to run integration tests against production")
-        yield async_sessionmaker(engine, expire_on_commit=False)
-    finally:
-        await engine.dispose()
 
 
 async def _make_auth_user(session, suffix: str) -> AuthUser:

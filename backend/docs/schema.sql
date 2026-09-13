@@ -65,15 +65,15 @@ CREATE TABLE achievements.evaluation_result (
 	FOREIGN KEY(run_id) REFERENCES achievements.evaluation_run (id) ON DELETE SET NULL
 );
 
-CREATE INDEX ix_achievements_evaluation_result_workspace_member_id ON achievements.evaluation_result (workspace_member_id);
-
 CREATE INDEX ix_achievements_evaluation_result_achievement_rule_id ON achievements.evaluation_result (achievement_rule_id);
 
-CREATE INDEX ix_achievements_evaluation_result_tournament_id ON achievements.evaluation_result (tournament_id);
+CREATE INDEX ix_achievements_evaluation_result_match_id ON achievements.evaluation_result (match_id) WHERE match_id IS NOT NULL;
 
 CREATE INDEX ix_achievements_evaluation_result_run_id ON achievements.evaluation_result (run_id);
 
-CREATE INDEX ix_achievements_evaluation_result_match_id ON achievements.evaluation_result (match_id) WHERE match_id IS NOT NULL;
+CREATE INDEX ix_achievements_evaluation_result_tournament_id ON achievements.evaluation_result (tournament_id);
+
+CREATE INDEX ix_achievements_evaluation_result_workspace_member_id ON achievements.evaluation_result (workspace_member_id);
 
 CREATE TABLE achievements.evaluation_run (
 	created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
@@ -94,9 +94,9 @@ CREATE TABLE achievements.evaluation_run (
 	FOREIGN KEY(tournament_id) REFERENCES tournament.tournament (id) ON DELETE SET NULL
 );
 
-CREATE INDEX ix_achievements_evaluation_run_workspace_id ON achievements.evaluation_run (workspace_id);
-
 CREATE INDEX ix_achievements_evaluation_run_id ON achievements.evaluation_run (id);
+
+CREATE INDEX ix_achievements_evaluation_run_workspace_id ON achievements.evaluation_run (workspace_id);
 
 CREATE TABLE achievements.override (
 	id BIGSERIAL NOT NULL, 
@@ -117,13 +117,13 @@ CREATE TABLE achievements.override (
 	FOREIGN KEY(granted_by) REFERENCES auth."user" (id) ON DELETE SET NULL
 );
 
-CREATE INDEX ix_achievements_override_workspace_member_id ON achievements.override (workspace_member_id);
-
-CREATE INDEX ix_achievements_override_tournament_id ON achievements.override (tournament_id);
-
 CREATE INDEX ix_achievements_override_achievement_rule_id ON achievements.override (achievement_rule_id);
 
 CREATE INDEX ix_achievements_override_match_id ON achievements.override (match_id);
+
+CREATE INDEX ix_achievements_override_tournament_id ON achievements.override (tournament_id);
+
+CREATE INDEX ix_achievements_override_workspace_member_id ON achievements.override (workspace_member_id);
 
 CREATE TABLE achievements.rule (
 	id BIGSERIAL NOT NULL, 
@@ -150,9 +150,9 @@ CREATE TABLE achievements.rule (
 	FOREIGN KEY(hero_id) REFERENCES overwatch.hero (id) ON DELETE SET NULL
 );
 
-CREATE INDEX ix_achievements_rule_workspace_id ON achievements.rule (workspace_id);
-
 CREATE INDEX ix_achievements_rule_slug ON achievements.rule (slug);
+
+CREATE INDEX ix_achievements_rule_workspace_id ON achievements.rule (workspace_id);
 
 CREATE TABLE analytics.algorithms (
 	id BIGSERIAL NOT NULL, 
@@ -183,9 +183,9 @@ CREATE TABLE analytics.anomaly_feedback (
 
 CREATE INDEX ix_analytics_anomaly_feedback_kind ON analytics.anomaly_feedback (kind);
 
-CREATE INDEX ix_analytics_anomaly_feedback_reviewer_user_id ON analytics.anomaly_feedback (reviewer_user_id);
-
 CREATE INDEX ix_analytics_anomaly_feedback_player_id ON analytics.anomaly_feedback (player_id);
+
+CREATE INDEX ix_analytics_anomaly_feedback_reviewer_user_id ON analytics.anomaly_feedback (reviewer_user_id);
 
 CREATE INDEX ix_analytics_anomaly_feedback_tournament_id ON analytics.anomaly_feedback (tournament_id);
 
@@ -210,15 +210,15 @@ CREATE TABLE analytics.job (
 	FOREIGN KEY(requested_by_user_id) REFERENCES auth."user" (id) ON DELETE SET NULL
 );
 
-CREATE INDEX ix_analytics_job_tournament_id ON analytics.job (tournament_id);
+CREATE INDEX ix_analytics_job_requested_by_user_id ON analytics.job (requested_by_user_id);
 
 CREATE INDEX ix_analytics_job_status ON analytics.job (status);
+
+CREATE INDEX ix_analytics_job_tournament_id ON analytics.job (tournament_id);
 
 CREATE INDEX ix_analytics_job_workspace_id ON analytics.job (workspace_id);
 
 CREATE UNIQUE INDEX uq_analytics_job_one_running_per_workspace ON analytics.job (workspace_id) WHERE status IN ('pending', 'running');
-
-CREATE INDEX ix_analytics_job_requested_by_user_id ON analytics.job (requested_by_user_id);
 
 CREATE TABLE analytics.match_quality (
 	id BIGSERIAL NOT NULL, 
@@ -260,13 +260,13 @@ CREATE TABLE analytics.ml_model_artifact (
 	FOREIGN KEY(training_cutoff_tournament_id) REFERENCES tournament.tournament (id) ON DELETE SET NULL
 );
 
-CREATE INDEX ix_analytics_ml_model_artifact_training_cutoff_tournament_id ON analytics.ml_model_artifact (training_cutoff_tournament_id);
+CREATE INDEX ix_analytics_ml_model_artifact_algorithm_id ON analytics.ml_model_artifact (algorithm_id);
 
 CREATE INDEX ix_analytics_ml_model_artifact_is_active ON analytics.ml_model_artifact (is_active);
 
 CREATE INDEX ix_analytics_ml_model_artifact_model_kind ON analytics.ml_model_artifact (model_kind);
 
-CREATE INDEX ix_analytics_ml_model_artifact_algorithm_id ON analytics.ml_model_artifact (algorithm_id);
+CREATE INDEX ix_analytics_ml_model_artifact_training_cutoff_tournament_id ON analytics.ml_model_artifact (training_cutoff_tournament_id);
 
 CREATE TABLE analytics.performance (
 	id BIGSERIAL NOT NULL, 
@@ -296,11 +296,11 @@ CREATE TABLE analytics.performance (
 	FOREIGN KEY(algorithm_id) REFERENCES analytics.algorithms (id) ON DELETE CASCADE
 );
 
+CREATE INDEX ix_analytics_performance_algorithm_id ON analytics.performance (algorithm_id);
+
 CREATE INDEX ix_analytics_performance_player_id ON analytics.performance (player_id);
 
 CREATE INDEX ix_analytics_performance_tournament_id ON analytics.performance (tournament_id);
-
-CREATE INDEX ix_analytics_performance_algorithm_id ON analytics.performance (algorithm_id);
 
 CREATE TABLE analytics.player_anomaly (
 	id BIGSERIAL NOT NULL, 
@@ -321,13 +321,13 @@ CREATE TABLE analytics.player_anomaly (
 	FOREIGN KEY(source_encounter_id) REFERENCES tournament.encounter (id) ON DELETE CASCADE
 );
 
-CREATE INDEX ix_analytics_player_anomaly_source_encounter_id ON analytics.player_anomaly (source_encounter_id);
+CREATE INDEX ix_analytics_player_anomaly_kind ON analytics.player_anomaly (kind);
 
 CREATE INDEX ix_analytics_player_anomaly_player_id ON analytics.player_anomaly (player_id);
 
-CREATE INDEX ix_analytics_player_anomaly_tournament_id ON analytics.player_anomaly (tournament_id);
+CREATE INDEX ix_analytics_player_anomaly_source_encounter_id ON analytics.player_anomaly (source_encounter_id);
 
-CREATE INDEX ix_analytics_player_anomaly_kind ON analytics.player_anomaly (kind);
+CREATE INDEX ix_analytics_player_anomaly_tournament_id ON analytics.player_anomaly (tournament_id);
 
 CREATE TABLE analytics.player_shift (
 	id BIGSERIAL NOT NULL, 
@@ -372,9 +372,9 @@ CREATE TABLE analytics.shifts (
 
 CREATE INDEX ix_analytics_shifts_algorithm_id ON analytics.shifts (algorithm_id);
 
-CREATE INDEX ix_analytics_shifts_tournament_id ON analytics.shifts (tournament_id);
-
 CREATE INDEX ix_analytics_shifts_player_id ON analytics.shifts (player_id);
+
+CREATE INDEX ix_analytics_shifts_tournament_id ON analytics.shifts (tournament_id);
 
 CREATE TABLE analytics.standings_distribution (
 	id BIGSERIAL NOT NULL, 
@@ -423,11 +423,11 @@ CREATE TABLE auth.api_key (
 	FOREIGN KEY(workspace_id) REFERENCES workspace (id) ON DELETE CASCADE
 );
 
+CREATE INDEX ix_api_key_owner_workspace ON auth.api_key (auth_user_id, workspace_id);
+
 CREATE INDEX ix_api_key_public_id_active ON auth.api_key (public_id, revoked_at);
 
 CREATE INDEX ix_auth_api_key_auth_user_id ON auth.api_key (auth_user_id);
-
-CREATE INDEX ix_api_key_owner_workspace ON auth.api_key (auth_user_id, workspace_id);
 
 CREATE UNIQUE INDEX ix_auth_api_key_public_id ON auth.api_key (public_id);
 
@@ -475,11 +475,11 @@ CREATE TABLE auth.permissions (
 	PRIMARY KEY (id)
 );
 
-CREATE INDEX ix_auth_permissions_resource ON auth.permissions (resource);
-
 CREATE INDEX ix_auth_permissions_action ON auth.permissions (action);
 
 CREATE UNIQUE INDEX ix_auth_permissions_name ON auth.permissions (name);
+
+CREATE INDEX ix_auth_permissions_resource ON auth.permissions (resource);
 
 CREATE TABLE auth.refresh_token (
 	id BIGSERIAL NOT NULL, 
@@ -512,9 +512,9 @@ CREATE TABLE auth.role_permissions (
 	FOREIGN KEY(permission_id) REFERENCES auth.permissions (id) ON DELETE CASCADE
 );
 
-CREATE INDEX ix_role_permissions_role_id ON auth.role_permissions (role_id);
-
 CREATE INDEX ix_role_permissions_permission_id ON auth.role_permissions (permission_id);
+
+CREATE INDEX ix_role_permissions_role_id ON auth.role_permissions (role_id);
 
 CREATE TABLE auth.roles (
 	id BIGSERIAL NOT NULL, 
@@ -530,11 +530,11 @@ CREATE TABLE auth.roles (
 
 CREATE INDEX ix_auth_roles_name ON auth.roles (name);
 
+CREATE INDEX ix_auth_roles_workspace_id ON auth.roles (workspace_id);
+
 CREATE UNIQUE INDEX uq_roles_name_global ON auth.roles (name) WHERE workspace_id IS NULL;
 
 CREATE UNIQUE INDEX uq_roles_name_workspace ON auth.roles (name, workspace_id) WHERE workspace_id IS NOT NULL;
-
-CREATE INDEX ix_auth_roles_workspace_id ON auth.roles (workspace_id);
 
 CREATE TABLE auth."user" (
 	id BIGSERIAL NOT NULL, 
@@ -552,9 +552,9 @@ CREATE TABLE auth."user" (
 	PRIMARY KEY (id)
 );
 
-CREATE UNIQUE INDEX ix_auth_user_username ON auth."user" (username);
-
 CREATE UNIQUE INDEX ix_auth_user_email ON auth."user" (email);
+
+CREATE UNIQUE INDEX ix_auth_user_username ON auth."user" (username);
 
 CREATE TABLE auth.user_permission_deny (
 	id BIGSERIAL NOT NULL, 
@@ -574,9 +574,9 @@ CREATE TABLE auth.user_permission_deny (
 
 CREATE INDEX ix_auth_user_permission_deny_workspace_id ON auth.user_permission_deny (workspace_id);
 
-CREATE UNIQUE INDEX uq_user_permission_deny_user_perm_workspace ON auth.user_permission_deny (user_id, permission_id, COALESCE(workspace_id, 0));
-
 CREATE INDEX ix_user_permission_deny_user_id ON auth.user_permission_deny (user_id);
+
+CREATE UNIQUE INDEX uq_user_permission_deny_user_perm_workspace ON auth.user_permission_deny (user_id, permission_id, COALESCE(workspace_id, 0));
 
 CREATE TABLE auth.user_roles (
 	id SERIAL NOT NULL, 
@@ -588,9 +588,9 @@ CREATE TABLE auth.user_roles (
 	FOREIGN KEY(role_id) REFERENCES auth.roles (id) ON DELETE CASCADE
 );
 
-CREATE INDEX ix_user_roles_user_id ON auth.user_roles (user_id);
-
 CREATE INDEX ix_user_roles_role_id ON auth.user_roles (role_id);
+
+CREATE INDEX ix_user_roles_user_id ON auth.user_roles (user_id);
 
 CREATE TABLE balancer.balance (
 	id BIGSERIAL NOT NULL, 
@@ -615,9 +615,9 @@ CREATE TABLE balancer.balance (
 	FOREIGN KEY(saved_by) REFERENCES auth."user" (id) ON DELETE SET NULL
 );
 
-CREATE INDEX ix_balancer_balance_workspace_id ON balancer.balance (workspace_id);
-
 CREATE INDEX ix_balancer_balance_tournament_id ON balancer.balance (tournament_id);
+
+CREATE INDEX ix_balancer_balance_workspace_id ON balancer.balance (workspace_id);
 
 CREATE TABLE balancer.balance_variant (
 	id BIGSERIAL NOT NULL, 
@@ -644,16 +644,15 @@ CREATE TABLE balancer.custom_game (
 	host_user_id BIGINT, 
 	name VARCHAR(255) NOT NULL, 
 	status VARCHAR(16) DEFAULT 'draft' NOT NULL, 
-	points_per_win INTEGER, 
-	balancer_config_json JSONB, 
-	balancer_config_version INTEGER DEFAULT '1' NOT NULL, 
+	next_map_id BIGINT, 
+	selected_variant_index INTEGER DEFAULT '0' NOT NULL, 
 	balance_result_json JSONB, 
 	balance_result_version INTEGER DEFAULT '1' NOT NULL, 
 	PRIMARY KEY (id), 
 	CONSTRAINT ck_custom_game_status CHECK (status IN ('draft', 'balanced', 'completed', 'cancelled')), 
-	CONSTRAINT ck_custom_game_points_per_win CHECK (points_per_win IS NULL OR points_per_win BETWEEN 1 AND 1000), 
 	FOREIGN KEY(workspace_id) REFERENCES workspace (id) ON DELETE CASCADE, 
-	FOREIGN KEY(host_user_id) REFERENCES auth."user" (id) ON DELETE SET NULL
+	FOREIGN KEY(host_user_id) REFERENCES auth."user" (id) ON DELETE SET NULL, 
+	FOREIGN KEY(next_map_id) REFERENCES overwatch.map (id) ON DELETE SET NULL
 );
 
 CREATE INDEX ix_balancer_custom_game_host_user_id ON balancer.custom_game (host_user_id);
@@ -700,15 +699,6 @@ CREATE TABLE balancer.custom_game_player_role (
 	FOREIGN KEY(custom_game_player_id) REFERENCES balancer.custom_game_player (id) ON DELETE CASCADE
 );
 
-CREATE TABLE balancer.custom_game_role_slot (
-	custom_game_id BIGINT NOT NULL, 
-	role VARCHAR(16) NOT NULL, 
-	slot_count INTEGER NOT NULL, 
-	PRIMARY KEY (custom_game_id, role), 
-	CONSTRAINT ck_custom_game_role_slot_count CHECK (slot_count > 0), 
-	FOREIGN KEY(custom_game_id) REFERENCES balancer.custom_game (id) ON DELETE CASCADE
-);
-
 CREATE TABLE balancer.custom_game_team_name (
 	custom_game_id BIGINT NOT NULL, 
 	team_index INTEGER NOT NULL, 
@@ -735,9 +725,9 @@ CREATE TABLE balancer.draft_audit_event (
 	FOREIGN KEY(actor_auth_user_id) REFERENCES auth."user" (id) ON DELETE SET NULL
 );
 
-CREATE INDEX ix_draft_audit_session_created ON balancer.draft_audit_event (session_id, created_at);
-
 CREATE INDEX ix_balancer_draft_audit_event_actor_auth_user_id ON balancer.draft_audit_event (actor_auth_user_id);
+
+CREATE INDEX ix_draft_audit_session_created ON balancer.draft_audit_event (session_id, created_at);
 
 CREATE TABLE balancer.draft_pick (
 	id BIGSERIAL NOT NULL, 
@@ -767,9 +757,9 @@ CREATE TABLE balancer.draft_pick (
 	FOREIGN KEY(picked_by_workspace_member_id) REFERENCES workspace_member (id) ON DELETE SET NULL
 );
 
-CREATE INDEX ix_balancer_draft_pick_picked_player_id ON balancer.draft_pick (picked_player_id);
-
 CREATE INDEX ix_balancer_draft_pick_draft_team_id ON balancer.draft_pick (draft_team_id);
+
+CREATE INDEX ix_balancer_draft_pick_picked_player_id ON balancer.draft_pick (picked_player_id);
 
 CREATE INDEX ix_draft_pick_session_status ON balancer.draft_pick (session_id, status);
 
@@ -792,13 +782,13 @@ CREATE TABLE balancer.draft_player (
 	FOREIGN KEY(drafted_by_team_id) REFERENCES balancer.draft_team (id) ON DELETE SET NULL
 );
 
+CREATE INDEX ix_balancer_draft_player_drafted_by_team_id ON balancer.draft_player (drafted_by_team_id);
+
 CREATE INDEX ix_balancer_draft_player_registration_id ON balancer.draft_player (registration_id);
 
 CREATE INDEX ix_balancer_draft_player_workspace_member_id ON balancer.draft_player (workspace_member_id);
 
 CREATE INDEX ix_draft_player_session_status ON balancer.draft_player (session_id, status);
-
-CREATE INDEX ix_balancer_draft_player_drafted_by_team_id ON balancer.draft_player (drafted_by_team_id);
 
 CREATE TABLE balancer.draft_session (
 	id BIGSERIAL NOT NULL, 
@@ -826,13 +816,13 @@ CREATE TABLE balancer.draft_session (
 	FOREIGN KEY(source_balance_id) REFERENCES balancer.balance (id) ON DELETE SET NULL
 );
 
-CREATE INDEX ix_draft_session_tournament_status ON balancer.draft_session (tournament_id, status);
+CREATE INDEX ix_balancer_draft_session_source_balance_id ON balancer.draft_session (source_balance_id);
 
 CREATE INDEX ix_balancer_draft_session_workspace_id ON balancer.draft_session (workspace_id);
 
-CREATE INDEX ix_balancer_draft_session_source_balance_id ON balancer.draft_session (source_balance_id);
-
 CREATE INDEX ix_draft_session_status_created ON balancer.draft_session (status, created_at);
+
+CREATE INDEX ix_draft_session_tournament_status ON balancer.draft_session (tournament_id, status);
 
 CREATE UNIQUE INDEX uq_draft_session_active_tournament ON balancer.draft_session (tournament_id) WHERE status IN ('setup','ready','live','paused');
 
@@ -854,13 +844,13 @@ CREATE TABLE balancer.draft_team (
 	FOREIGN KEY(exported_team_id) REFERENCES tournament.team (id) ON DELETE SET NULL
 );
 
-CREATE INDEX ix_balancer_draft_team_exported_team_id ON balancer.draft_team (exported_team_id);
+CREATE INDEX ix_balancer_draft_team_captain_auth_user_id ON balancer.draft_team (captain_auth_user_id);
 
 CREATE INDEX ix_balancer_draft_team_captain_workspace_member_id ON balancer.draft_team (captain_workspace_member_id);
 
-CREATE INDEX ix_balancer_draft_team_session_id ON balancer.draft_team (session_id);
+CREATE INDEX ix_balancer_draft_team_exported_team_id ON balancer.draft_team (exported_team_id);
 
-CREATE INDEX ix_balancer_draft_team_captain_auth_user_id ON balancer.draft_team (captain_auth_user_id);
+CREATE INDEX ix_balancer_draft_team_session_id ON balancer.draft_team (session_id);
 
 CREATE TABLE balancer.member_rank (
 	id BIGSERIAL NOT NULL, 
@@ -877,13 +867,13 @@ CREATE TABLE balancer.member_rank (
 	FOREIGN KEY(author_user_id) REFERENCES auth."user" (id) ON DELETE CASCADE
 );
 
-CREATE INDEX ix_balancer_member_rank_workspace_id ON balancer.member_rank (workspace_id);
-
-CREATE UNIQUE INDEX uq_member_rank_author ON balancer.member_rank (workspace_id, author_user_id, workspace_member_id, role) WHERE author_user_id IS NOT NULL;
-
 CREATE INDEX ix_balancer_member_rank_author_user_id ON balancer.member_rank (author_user_id);
 
+CREATE INDEX ix_balancer_member_rank_workspace_id ON balancer.member_rank (workspace_id);
+
 CREATE INDEX ix_balancer_member_rank_workspace_member_id ON balancer.member_rank (workspace_member_id);
+
+CREATE UNIQUE INDEX uq_member_rank_author ON balancer.member_rank (workspace_id, author_user_id, workspace_member_id, role) WHERE author_user_id IS NOT NULL;
 
 CREATE UNIQUE INDEX uq_member_rank_canon ON balancer.member_rank (workspace_id, workspace_member_id, role) WHERE author_user_id IS NULL;
 
@@ -919,6 +909,7 @@ CREATE TABLE balancer.registration (
 	registration_team_id BIGINT, 
 	team_slot_code VARCHAR(16), 
 	is_substitute BOOLEAN DEFAULT 'false' NOT NULL, 
+	is_team_manager BOOLEAN DEFAULT 'false' NOT NULL, 
 	PRIMARY KEY (id), 
 	FOREIGN KEY(tournament_id) REFERENCES tournament.tournament (id) ON DELETE CASCADE, 
 	FOREIGN KEY(workspace_member_id) REFERENCES workspace_member (id) ON DELETE SET NULL, 
@@ -928,17 +919,17 @@ CREATE TABLE balancer.registration (
 	FOREIGN KEY(registration_team_id) REFERENCES balancer.registration_team (id) ON DELETE SET NULL
 );
 
-CREATE INDEX ix_balancer_registration_workspace_member_id ON balancer.registration (workspace_member_id);
-
 CREATE INDEX ix_balancer_registration_registration_team_id ON balancer.registration (registration_team_id);
-
-CREATE UNIQUE INDEX uq_balancer_registration_user ON balancer.registration (tournament_id, workspace_member_id) WHERE deleted_at IS NULL;
 
 CREATE INDEX ix_balancer_registration_tournament_balancer_status ON balancer.registration (tournament_id, status, balancer_status) WHERE deleted_at IS NULL;
 
 CREATE INDEX ix_balancer_registration_tournament_id ON balancer.registration (tournament_id);
 
+CREATE INDEX ix_balancer_registration_workspace_member_id ON balancer.registration (workspace_member_id);
+
 CREATE UNIQUE INDEX uq_balancer_registration_tournament_tag_active ON balancer.registration (tournament_id, battle_tag_normalized) WHERE battle_tag_normalized IS NOT NULL AND deleted_at IS NULL;
+
+CREATE UNIQUE INDEX uq_balancer_registration_user ON balancer.registration (tournament_id, workspace_member_id) WHERE deleted_at IS NULL;
 
 CREATE TABLE balancer.registration_form (
 	id BIGSERIAL NOT NULL, 
@@ -953,18 +944,26 @@ CREATE TABLE balancer.registration_form (
 	require_open_profile BOOLEAN DEFAULT 'false' NOT NULL, 
 	open_profile_scope VARCHAR(8) DEFAULT 'main' NOT NULL, 
 	show_ranks BOOLEAN DEFAULT 'false' NOT NULL, 
+	hide_registrations BOOLEAN DEFAULT 'false' NOT NULL, 
+	max_participants INTEGER, 
 	max_substitutes INTEGER DEFAULT '0' NOT NULL, 
 	require_subscription BOOLEAN DEFAULT 'false' NOT NULL, 
 	subscription_stage VARCHAR(16) DEFAULT 'check_in' NOT NULL, 
+	subscription_scope VARCHAR(16) DEFAULT 'player' NOT NULL, 
+	team_rank_min INTEGER, 
+	team_rank_max INTEGER, 
+	team_max_rank_spread INTEGER, 
+	team_unique_identity BOOLEAN DEFAULT 'false' NOT NULL, 
+	team_require_discord_guild BOOLEAN DEFAULT 'false' NOT NULL, 
 	PRIMARY KEY (id), 
 	CONSTRAINT uq_balancer_registration_form_tournament UNIQUE (tournament_id), 
 	FOREIGN KEY(tournament_id) REFERENCES tournament.tournament (id) ON DELETE CASCADE, 
 	FOREIGN KEY(workspace_id) REFERENCES workspace (id) ON DELETE CASCADE
 );
 
-CREATE INDEX ix_balancer_registration_form_workspace_id ON balancer.registration_form (workspace_id);
-
 CREATE INDEX ix_balancer_registration_form_tournament_id ON balancer.registration_form (tournament_id);
+
+CREATE INDEX ix_balancer_registration_form_workspace_id ON balancer.registration_form (workspace_id);
 
 CREATE TABLE balancer.registration_google_sheet_binding (
 	id BIGSERIAL NOT NULL, 
@@ -984,9 +983,9 @@ CREATE TABLE balancer.registration_google_sheet_binding (
 	FOREIGN KEY(registration_id) REFERENCES balancer.registration (id) ON DELETE CASCADE
 );
 
-CREATE INDEX ix_balancer_registration_google_sheet_binding_registration_id ON balancer.registration_google_sheet_binding (registration_id);
-
 CREATE INDEX ix_balancer_registration_google_sheet_binding_feed_id ON balancer.registration_google_sheet_binding (feed_id);
+
+CREATE INDEX ix_balancer_registration_google_sheet_binding_registration_id ON balancer.registration_google_sheet_binding (registration_id);
 
 CREATE TABLE balancer.registration_google_sheet_feed (
 	id BIGSERIAL NOT NULL, 
@@ -1088,25 +1087,37 @@ CREATE TABLE balancer.registration_team (
 	deleted_by BIGINT, 
 	invite_cap_reset_at TIMESTAMP WITH TIME ZONE, 
 	invite_cap_reset_by BIGINT, 
+	admission VARCHAR(16) DEFAULT 'pending' NOT NULL, 
+	rejection_reason TEXT, 
+	organizer_notes TEXT, 
+	roster_locked_at TIMESTAMP WITH TIME ZONE, 
+	roster_locked_by BIGINT, 
+	subscription_covered_at TIMESTAMP WITH TIME ZONE, 
+	subscription_covered_by BIGINT, 
+	subscription_provider VARCHAR(32), 
+	subscription_tier_rank INTEGER, 
+	subscription_expires_at TIMESTAMP WITH TIME ZONE, 
 	PRIMARY KEY (id), 
 	FOREIGN KEY(tournament_id) REFERENCES tournament.tournament (id) ON DELETE CASCADE, 
 	FOREIGN KEY(workspace_id) REFERENCES workspace (id) ON DELETE CASCADE, 
 	FOREIGN KEY(exported_team_id) REFERENCES tournament.team (id) ON DELETE SET NULL, 
 	FOREIGN KEY(deleted_by) REFERENCES auth."user" (id) ON DELETE SET NULL, 
-	FOREIGN KEY(invite_cap_reset_by) REFERENCES auth."user" (id) ON DELETE SET NULL
+	FOREIGN KEY(invite_cap_reset_by) REFERENCES auth."user" (id) ON DELETE SET NULL, 
+	FOREIGN KEY(roster_locked_by) REFERENCES auth."user" (id) ON DELETE SET NULL, 
+	FOREIGN KEY(subscription_covered_by) REFERENCES auth."user" (id) ON DELETE SET NULL
 );
-
-CREATE UNIQUE INDEX uq_balancer_registration_team_name_active ON balancer.registration_team (tournament_id, name_normalized) WHERE deleted_at IS NULL;
-
-CREATE INDEX ix_balancer_registration_team_tournament_id ON balancer.registration_team (tournament_id);
-
-CREATE INDEX ix_balancer_registration_team_tournament_status ON balancer.registration_team (tournament_id, status) WHERE deleted_at IS NULL;
 
 CREATE INDEX ix_balancer_registration_team_captain_registration_id ON balancer.registration_team (captain_registration_id);
 
 CREATE INDEX ix_balancer_registration_team_exported_team_id ON balancer.registration_team (exported_team_id);
 
+CREATE INDEX ix_balancer_registration_team_tournament_id ON balancer.registration_team (tournament_id);
+
+CREATE INDEX ix_balancer_registration_team_tournament_status ON balancer.registration_team (tournament_id, status) WHERE deleted_at IS NULL;
+
 CREATE INDEX ix_balancer_registration_team_workspace_id ON balancer.registration_team (workspace_id);
+
+CREATE UNIQUE INDEX uq_balancer_registration_team_name_active ON balancer.registration_team (tournament_id, name_normalized) WHERE deleted_at IS NULL;
 
 CREATE TABLE balancer.registration_team_invite (
 	id BIGSERIAL NOT NULL, 
@@ -1134,13 +1145,13 @@ CREATE TABLE balancer.registration_team_invite (
 	FOREIGN KEY(accepted_registration_id) REFERENCES balancer.registration (id) ON DELETE SET NULL
 );
 
-CREATE INDEX ix_balancer_registration_team_invite_team_id ON balancer.registration_team_invite (team_id);
+CREATE INDEX ix_balancer_registration_team_invite_target_auth_user_id ON balancer.registration_team_invite (target_auth_user_id);
 
-CREATE UNIQUE INDEX uq_balancer_registration_team_invite_token ON balancer.registration_team_invite (token_sha256) WHERE token_sha256 IS NOT NULL;
+CREATE INDEX ix_balancer_registration_team_invite_team_id ON balancer.registration_team_invite (team_id);
 
 CREATE INDEX ix_balancer_registration_team_invite_team_state ON balancer.registration_team_invite (team_id, state);
 
-CREATE INDEX ix_balancer_registration_team_invite_target_auth_user_id ON balancer.registration_team_invite (target_auth_user_id);
+CREATE UNIQUE INDEX uq_balancer_registration_team_invite_token ON balancer.registration_team_invite (token_sha256) WHERE token_sha256 IS NOT NULL;
 
 CREATE TABLE balancer.team (
 	id BIGSERIAL NOT NULL, 
@@ -1163,9 +1174,9 @@ CREATE TABLE balancer.team (
 
 CREATE INDEX ix_balancer_team_balance_id ON balancer.team (balance_id);
 
-CREATE INDEX ix_balancer_team_variant_id ON balancer.team (variant_id);
-
 CREATE INDEX ix_balancer_team_exported_team_id ON balancer.team (exported_team_id);
+
+CREATE INDEX ix_balancer_team_variant_id ON balancer.team (variant_id);
 
 CREATE TABLE balancer.team_slot (
 	id BIGSERIAL NOT NULL, 
@@ -1205,6 +1216,21 @@ CREATE INDEX ix_balancer_tournament_config_tournament_id ON balancer.tournament_
 
 CREATE INDEX ix_balancer_tournament_config_workspace_id ON balancer.tournament_config (workspace_id);
 
+CREATE TABLE balancer.user_config (
+	id BIGSERIAL NOT NULL, 
+	created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
+	updated_at TIMESTAMP WITH TIME ZONE, 
+	user_id BIGINT NOT NULL, 
+	config_json JSONB DEFAULT '{}' NOT NULL, 
+	role_slots_json JSONB, 
+	points_per_win INTEGER, 
+	PRIMARY KEY (id), 
+	CONSTRAINT uq_balancer_user_config_user UNIQUE (user_id), 
+	FOREIGN KEY(user_id) REFERENCES auth."user" (id) ON DELETE CASCADE
+);
+
+CREATE INDEX ix_balancer_user_config_user_id ON balancer.user_config (user_id);
+
 CREATE TABLE balancer.workspace_config (
 	id BIGSERIAL NOT NULL, 
 	created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
@@ -1227,6 +1253,7 @@ CREATE TABLE casual.match (
 	custom_game_id BIGINT NOT NULL, 
 	map_id BIGINT, 
 	recorded_by BIGINT, 
+	points_per_win_applied INTEGER, 
 	PRIMARY KEY (id), 
 	FOREIGN KEY(custom_game_id) REFERENCES balancer.custom_game (id) ON DELETE CASCADE, 
 	FOREIGN KEY(map_id) REFERENCES overwatch.map (id) ON DELETE SET NULL, 
@@ -1308,15 +1335,15 @@ CREATE TABLE log_processing.record (
 	FOREIGN KEY(attached_encounter_id) REFERENCES tournament.encounter (id) ON DELETE SET NULL
 );
 
-CREATE INDEX ix_log_processing_record_tournament_id ON log_processing.record (tournament_id);
-
-CREATE INDEX ix_log_processing_record_uploader_id ON log_processing.record (uploader_id);
+CREATE INDEX ix_log_processing_record_attached_encounter_id ON log_processing.record (attached_encounter_id);
 
 CREATE INDEX ix_log_processing_record_content_hash ON log_processing.record (content_hash);
 
 CREATE INDEX ix_log_processing_record_status_created ON log_processing.record (status, created_at);
 
-CREATE INDEX ix_log_processing_record_attached_encounter_id ON log_processing.record (attached_encounter_id);
+CREATE INDEX ix_log_processing_record_tournament_id ON log_processing.record (tournament_id);
+
+CREATE INDEX ix_log_processing_record_uploader_id ON log_processing.record (uploader_id);
 
 CREATE TABLE matches.event (
 	id BIGSERIAL NOT NULL, 
@@ -1340,19 +1367,19 @@ CREATE TABLE matches.event (
 	FOREIGN KEY(related_hero_id) REFERENCES overwatch.hero (id) ON DELETE CASCADE
 );
 
-CREATE INDEX ix_matches_event_match_id ON matches.event (match_id);
-
-CREATE INDEX ix_matches_assists_related_team_id ON matches.event (related_team_id);
-
-CREATE INDEX ix_matches_event_user_id ON matches.event (user_id);
+CREATE INDEX ix_matches_assists_hero_id ON matches.event (hero_id);
 
 CREATE INDEX ix_matches_assists_related_hero_id ON matches.event (related_hero_id);
 
-CREATE INDEX ix_matches_event_team_id ON matches.event (team_id);
-
-CREATE INDEX ix_matches_assists_hero_id ON matches.event (hero_id);
+CREATE INDEX ix_matches_assists_related_team_id ON matches.event (related_team_id);
 
 CREATE INDEX ix_matches_assists_related_user_id ON matches.event (related_user_id);
+
+CREATE INDEX ix_matches_event_match_id ON matches.event (match_id);
+
+CREATE INDEX ix_matches_event_team_id ON matches.event (team_id);
+
+CREATE INDEX ix_matches_event_user_id ON matches.event (user_id);
 
 CREATE TABLE matches.kill_feed (
 	id BIGSERIAL NOT NULL, 
@@ -1380,19 +1407,19 @@ CREATE TABLE matches.kill_feed (
 	FOREIGN KEY(victim_hero_id) REFERENCES overwatch.hero (id) ON DELETE CASCADE
 );
 
-CREATE INDEX ix_matches_kill_feed_victim_hero_id ON matches.kill_feed (victim_hero_id);
-
-CREATE INDEX ix_matches_kill_feed_victim_id ON matches.kill_feed (victim_id);
-
 CREATE INDEX ix_matches_kill_feed_killer_hero_id ON matches.kill_feed (killer_hero_id);
-
-CREATE INDEX ix_matches_kill_feed_victim_team_id ON matches.kill_feed (victim_team_id);
 
 CREATE INDEX ix_matches_kill_feed_killer_id ON matches.kill_feed (killer_id);
 
 CREATE INDEX ix_matches_kill_feed_killer_team_id ON matches.kill_feed (killer_team_id);
 
 CREATE INDEX ix_matches_kill_feed_match_id ON matches.kill_feed (match_id);
+
+CREATE INDEX ix_matches_kill_feed_victim_hero_id ON matches.kill_feed (victim_hero_id);
+
+CREATE INDEX ix_matches_kill_feed_victim_id ON matches.kill_feed (victim_id);
+
+CREATE INDEX ix_matches_kill_feed_victim_team_id ON matches.kill_feed (victim_team_id);
 
 CREATE TABLE matches.match (
 	id BIGSERIAL NOT NULL, 
@@ -1418,13 +1445,13 @@ CREATE TABLE matches.match (
 	FOREIGN KEY(map_id) REFERENCES overwatch.map (id) ON DELETE CASCADE
 );
 
-CREATE INDEX ix_matches_match_log_record_id ON matches.match (log_record_id);
+CREATE INDEX ix_matches_match_away_team_id ON matches.match (away_team_id);
 
 CREATE INDEX ix_matches_match_encounter_id ON matches.match (encounter_id);
 
-CREATE INDEX ix_matches_match_away_team_id ON matches.match (away_team_id);
-
 CREATE INDEX ix_matches_match_home_team_id ON matches.match (home_team_id);
+
+CREATE INDEX ix_matches_match_log_record_id ON matches.match (log_record_id);
 
 CREATE INDEX ix_matches_match_map_id ON matches.match (map_id);
 
@@ -1462,19 +1489,19 @@ CREATE TABLE matches.statistics (
 	FOREIGN KEY(hero_id) REFERENCES overwatch.hero (id) ON DELETE CASCADE
 );
 
-CREATE INDEX ix_matches_statistics_team_id ON matches.statistics (team_id);
-
-CREATE INDEX ix_match_statistics_user_round_name ON matches.statistics (user_id, round, name);
-
-CREATE INDEX ix_match_statistics_user_name_r0 ON matches.statistics (user_id, name) WHERE round = 0 AND hero_id IS NULL;
-
-CREATE INDEX ix_match_statistics_playtime_r0 ON matches.statistics (match_id, user_id, hero_id) WHERE round = 0 AND name = 'HeroTimePlayed';
-
 CREATE INDEX ix_match_statistics_match_name_round ON matches.statistics (match_id, name, round);
 
 CREATE INDEX ix_match_statistics_match_user_round ON matches.statistics (match_id, user_id, round);
 
+CREATE INDEX ix_match_statistics_playtime_r0 ON matches.statistics (match_id, user_id, hero_id) WHERE round = 0 AND name = 'HeroTimePlayed';
+
 CREATE INDEX ix_match_statistics_user_hero_r0 ON matches.statistics (user_id, hero_id, name) WHERE round = 0 AND hero_id IS NOT NULL;
+
+CREATE INDEX ix_match_statistics_user_name_r0 ON matches.statistics (user_id, name) WHERE round = 0 AND hero_id IS NULL;
+
+CREATE INDEX ix_match_statistics_user_round_name ON matches.statistics (user_id, round, name);
+
+CREATE INDEX ix_matches_statistics_team_id ON matches.statistics (team_id);
 
 CREATE TABLE overwatch.catalog_alias_miss (
 	id BIGSERIAL NOT NULL, 
@@ -1596,13 +1623,13 @@ CREATE TABLE overwatch_rank.rank_snapshot (
 	FOREIGN KEY(social_account_id) REFERENCES players.social_account (id) ON DELETE CASCADE
 );
 
-CREATE INDEX ix_rank_snapshot_user_captured ON overwatch_rank.rank_snapshot (user_id, captured_at);
-
 CREATE INDEX ix_overwatch_rank_rank_snapshot_captured_at ON overwatch_rank.rank_snapshot (captured_at);
+
+CREATE INDEX ix_rank_snapshot_latest_ranked ON overwatch_rank.rank_snapshot (social_account_id, role, captured_at DESC) WHERE rank_value IS NOT NULL AND is_ranked IS TRUE;
 
 CREATE INDEX ix_rank_snapshot_series_captured ON overwatch_rank.rank_snapshot (social_account_id, role, platform, captured_at);
 
-CREATE INDEX ix_rank_snapshot_latest_ranked ON overwatch_rank.rank_snapshot (social_account_id, role, captured_at DESC) WHERE rank_value IS NOT NULL AND is_ranked IS TRUE;
+CREATE INDEX ix_rank_snapshot_user_captured ON overwatch_rank.rank_snapshot (user_id, captured_at);
 
 CREATE TABLE players.favorite_player (
 	id BIGSERIAL NOT NULL, 
@@ -1616,9 +1643,9 @@ CREATE TABLE players.favorite_player (
 	FOREIGN KEY(player_id) REFERENCES players."user" (id) ON DELETE CASCADE
 );
 
-CREATE INDEX ix_players_favorite_player_auth_user_id ON players.favorite_player (auth_user_id);
-
 CREATE INDEX ix_favorite_player_auth_user ON players.favorite_player (auth_user_id);
+
+CREATE INDEX ix_players_favorite_player_auth_user_id ON players.favorite_player (auth_user_id);
 
 CREATE INDEX ix_players_favorite_player_player_id ON players.favorite_player (player_id);
 
@@ -1639,17 +1666,17 @@ CREATE TABLE players.social_account (
 	FOREIGN KEY(user_id) REFERENCES players."user" (id) ON DELETE CASCADE
 );
 
-CREATE UNIQUE INDEX uq_social_account_provider_subject ON players.social_account (provider, provider_user_id) WHERE provider_user_id IS NOT NULL;
+CREATE INDEX ix_social_account_provider ON players.social_account (provider);
 
 CREATE INDEX ix_social_account_provider_user_id ON players.social_account (provider_user_id);
 
-CREATE UNIQUE INDEX uq_social_account_user_provider_handle_nullnorm ON players.social_account (user_id, provider, lower(btrim(username))) WHERE username_normalized IS NULL;
-
-CREATE INDEX ix_social_account_provider ON players.social_account (provider);
+CREATE INDEX ix_social_account_user_id ON players.social_account (user_id);
 
 CREATE INDEX ix_social_account_username_normalized ON players.social_account (username_normalized);
 
-CREATE INDEX ix_social_account_user_id ON players.social_account (user_id);
+CREATE UNIQUE INDEX uq_social_account_provider_subject ON players.social_account (provider, provider_user_id) WHERE provider_user_id IS NOT NULL;
+
+CREATE UNIQUE INDEX uq_social_account_user_provider_handle_nullnorm ON players.social_account (user_id, provider, lower(btrim(username))) WHERE username_normalized IS NULL;
 
 CREATE TABLE players.social_account_visibility (
 	id BIGSERIAL NOT NULL, 
@@ -1662,13 +1689,13 @@ CREATE TABLE players.social_account_visibility (
 	FOREIGN KEY(workspace_id) REFERENCES workspace (id) ON DELETE CASCADE
 );
 
-CREATE INDEX ix_social_account_visibility_workspace_id ON players.social_account_visibility (workspace_id);
-
-CREATE UNIQUE INDEX uq_social_visibility_workspace ON players.social_account_visibility (account_id, workspace_id) WHERE workspace_id IS NOT NULL;
-
 CREATE INDEX ix_social_account_visibility_account_id ON players.social_account_visibility (account_id);
 
+CREATE INDEX ix_social_account_visibility_workspace_id ON players.social_account_visibility (workspace_id);
+
 CREATE UNIQUE INDEX uq_social_visibility_global ON players.social_account_visibility (account_id) WHERE workspace_id IS NULL;
+
+CREATE UNIQUE INDEX uq_social_visibility_workspace ON players.social_account_visibility (account_id, workspace_id) WHERE workspace_id IS NOT NULL;
 
 CREATE TABLE players."user" (
 	id BIGSERIAL NOT NULL, 
@@ -1733,9 +1760,9 @@ CREATE TABLE audit_log (
 
 CREATE INDEX ix_audit_log_actor_created ON audit_log (actor_auth_user_id, created_at);
 
-CREATE INDEX ix_audit_log_workspace_created ON audit_log (workspace_id, created_at);
-
 CREATE INDEX ix_audit_log_entity_created ON audit_log (entity_type, entity_id, created_at);
+
+CREATE INDEX ix_audit_log_workspace_created ON audit_log (workspace_id, created_at);
 
 CREATE TABLE division_grid (
 	id BIGSERIAL NOT NULL, 
@@ -1758,11 +1785,11 @@ CREATE TABLE division_grid (
 	FOREIGN KEY(source_grid_id) REFERENCES division_grid (id) ON DELETE SET NULL
 );
 
+CREATE INDEX ix_division_grid_source_fingerprint ON division_grid (source_fingerprint);
+
 CREATE INDEX ix_division_grid_source_grid_id ON division_grid (source_grid_id);
 
 CREATE INDEX ix_division_grid_source_key ON division_grid (source_key);
-
-CREATE INDEX ix_division_grid_source_fingerprint ON division_grid (source_fingerprint);
 
 CREATE INDEX ix_division_grid_source_workspace_id ON division_grid (source_workspace_id);
 
@@ -1829,11 +1856,11 @@ CREATE TABLE division_grid_mapping_rule (
 	FOREIGN KEY(target_tier_id) REFERENCES division_grid_tier (id) ON DELETE CASCADE
 );
 
+CREATE INDEX ix_division_grid_mapping_rule_mapping_id ON division_grid_mapping_rule (mapping_id);
+
 CREATE INDEX ix_division_grid_mapping_rule_source_tier_id ON division_grid_mapping_rule (source_tier_id);
 
 CREATE INDEX ix_division_grid_mapping_rule_target_tier_id ON division_grid_mapping_rule (target_tier_id);
-
-CREATE INDEX ix_division_grid_mapping_rule_mapping_id ON division_grid_mapping_rule (mapping_id);
 
 CREATE TABLE division_grid_tier (
 	id BIGSERIAL NOT NULL, 
@@ -1917,9 +1944,9 @@ CREATE TABLE notification (
 
 CREATE INDEX ix_notification_audience_published ON notification (audience, published_at DESC) WHERE audience <> 'user';
 
-CREATE INDEX ix_notification_source_workspace_published ON notification (source_workspace_id, published_at DESC) WHERE source_workspace_id IS NOT NULL;
-
 CREATE INDEX ix_notification_recipient_published ON notification (recipient_auth_user_id, published_at DESC);
+
+CREATE INDEX ix_notification_source_workspace_published ON notification (source_workspace_id, published_at DESC) WHERE source_workspace_id IS NOT NULL;
 
 CREATE TABLE notification_read (
 	auth_user_id BIGINT NOT NULL, 
@@ -1988,13 +2015,13 @@ CREATE TABLE workspace (
 
 CREATE UNIQUE INDEX ix_workspace_custom_domain ON workspace (custom_domain);
 
-CREATE INDEX ix_workspace_owner_id ON workspace (owner_id);
+CREATE INDEX ix_workspace_default_division_grid_version_id ON workspace (default_division_grid_version_id);
 
-CREATE UNIQUE INDEX ix_workspace_subdomain ON workspace (subdomain);
+CREATE INDEX ix_workspace_owner_id ON workspace (owner_id);
 
 CREATE UNIQUE INDEX ix_workspace_slug ON workspace (slug);
 
-CREATE INDEX ix_workspace_default_division_grid_version_id ON workspace (default_division_grid_version_id);
+CREATE UNIQUE INDEX ix_workspace_subdomain ON workspace (subdomain);
 
 CREATE TABLE workspace_member (
 	id BIGSERIAL NOT NULL, 
@@ -2010,9 +2037,9 @@ CREATE TABLE workspace_member (
 	FOREIGN KEY(player_id) REFERENCES players."user" (id) ON DELETE CASCADE
 );
 
-CREATE INDEX ix_workspace_member_workspace_id ON workspace_member (workspace_id);
-
 CREATE INDEX ix_workspace_member_player_id ON workspace_member (player_id);
+
+CREATE INDEX ix_workspace_member_workspace_id ON workspace_member (workspace_id);
 
 CREATE TABLE realtime.workspace_event (
 	id BIGSERIAL NOT NULL, 
@@ -2027,15 +2054,15 @@ CREATE TABLE realtime.workspace_event (
 	PRIMARY KEY (id)
 );
 
-CREATE INDEX ix_realtime_workspace_event_tournament_id ON realtime.workspace_event (tournament_id);
-
 CREATE INDEX ix_realtime_workspace_event_actor_user_id ON realtime.workspace_event (actor_user_id);
+
+CREATE INDEX ix_realtime_workspace_event_occurred_at ON realtime.workspace_event (occurred_at);
 
 CREATE INDEX ix_realtime_workspace_event_topic_id ON realtime.workspace_event (topic, id);
 
-CREATE INDEX ix_realtime_workspace_event_workspace_id ON realtime.workspace_event (workspace_id);
+CREATE INDEX ix_realtime_workspace_event_tournament_id ON realtime.workspace_event (tournament_id);
 
-CREATE INDEX ix_realtime_workspace_event_occurred_at ON realtime.workspace_event (occurred_at);
+CREATE INDEX ix_realtime_workspace_event_workspace_id ON realtime.workspace_event (workspace_id);
 
 CREATE TABLE subscriptions.check_log (
 	id BIGSERIAL NOT NULL, 
@@ -2056,11 +2083,11 @@ CREATE TABLE subscriptions.check_log (
 	FOREIGN KEY(auth_user_id) REFERENCES auth."user" (id) ON DELETE SET NULL
 );
 
+CREATE INDEX ix_subscription_check_log_created_at ON subscriptions.check_log (created_at);
+
 CREATE INDEX ix_subscription_check_log_state_created ON subscriptions.check_log (state, created_at);
 
 CREATE INDEX ix_subscription_check_log_user_created ON subscriptions.check_log (auth_user_id, created_at);
-
-CREATE INDEX ix_subscription_check_log_created_at ON subscriptions.check_log (created_at);
 
 CREATE INDEX ix_subscriptions_check_log_workspace_id ON subscriptions.check_log (workspace_id);
 
@@ -2084,11 +2111,11 @@ CREATE TABLE subscriptions.entitlement (
 	FOREIGN KEY(auth_user_id) REFERENCES auth."user" (id) ON DELETE CASCADE
 );
 
+CREATE INDEX ix_subscription_entitlement_workspace_provider ON subscriptions.entitlement (workspace_id, provider);
+
 CREATE INDEX ix_subscriptions_entitlement_auth_user_id ON subscriptions.entitlement (auth_user_id);
 
 CREATE INDEX ix_subscriptions_entitlement_workspace_id ON subscriptions.entitlement (workspace_id);
-
-CREATE INDEX ix_subscription_entitlement_workspace_provider ON subscriptions.entitlement (workspace_id, provider);
 
 CREATE TABLE subscriptions.provider_config (
 	id BIGSERIAL NOT NULL, 
@@ -2174,9 +2201,9 @@ CREATE TABLE tournament.challonge_source (
 
 CREATE INDEX ix_challonge_source_stage ON tournament.challonge_source (stage_id);
 
-CREATE INDEX ix_challonge_source_tournament ON tournament.challonge_source (tournament_id);
-
 CREATE INDEX ix_challonge_source_stage_item ON tournament.challonge_source (stage_item_id);
+
+CREATE INDEX ix_challonge_source_tournament ON tournament.challonge_source (tournament_id);
 
 CREATE TABLE tournament.challonge_sync_log (
 	id BIGSERIAL NOT NULL, 
@@ -2200,11 +2227,11 @@ CREATE TABLE tournament.challonge_sync_log (
 	FOREIGN KEY(source_id) REFERENCES tournament.challonge_source (id) ON DELETE SET NULL
 );
 
+CREATE INDEX ix_challonge_sync_log_tournament_created ON tournament.challonge_sync_log (tournament_id, created_at DESC);
+
 CREATE INDEX ix_tournament_challonge_sync_log_source_id ON tournament.challonge_sync_log (source_id);
 
 CREATE INDEX ix_tournament_challonge_sync_log_tournament_id ON tournament.challonge_sync_log (tournament_id);
-
-CREATE INDEX ix_challonge_sync_log_tournament_created ON tournament.challonge_sync_log (tournament_id, created_at DESC);
 
 CREATE TABLE tournament.computation_job (
 	id BIGSERIAL NOT NULL, 
@@ -2231,7 +2258,11 @@ CREATE TABLE tournament.computation_job (
 	FOREIGN KEY(requested_by_user_id) REFERENCES auth."user" (id) ON DELETE SET NULL
 );
 
-CREATE UNIQUE INDEX uq_tournament_computation_job_active_key ON tournament.computation_job (idempotency_key) WHERE status IN ('pending', 'running');
+CREATE INDEX ix_tournament_computation_job_requested_by_user_id ON tournament.computation_job (requested_by_user_id);
+
+CREATE INDEX ix_tournament_computation_job_stage_id ON tournament.computation_job (stage_id);
+
+CREATE INDEX ix_tournament_computation_job_stage_item_id ON tournament.computation_job (stage_item_id);
 
 CREATE INDEX ix_tournament_computation_job_status ON tournament.computation_job (status);
 
@@ -2239,11 +2270,7 @@ CREATE INDEX ix_tournament_computation_job_tournament_id ON tournament.computati
 
 CREATE INDEX ix_tournament_computation_job_tournament_kind ON tournament.computation_job (tournament_id, kind);
 
-CREATE INDEX ix_tournament_computation_job_stage_item_id ON tournament.computation_job (stage_item_id);
-
-CREATE INDEX ix_tournament_computation_job_requested_by_user_id ON tournament.computation_job (requested_by_user_id);
-
-CREATE INDEX ix_tournament_computation_job_stage_id ON tournament.computation_job (stage_id);
+CREATE UNIQUE INDEX uq_tournament_computation_job_active_key ON tournament.computation_job (idempotency_key) WHERE status IN ('pending', 'running');
 
 CREATE TABLE tournament.encounter (
 	id BIGSERIAL NOT NULL, 
@@ -2275,21 +2302,21 @@ CREATE TABLE tournament.encounter (
 	FOREIGN KEY(stage_item_id) REFERENCES tournament.stage_item (id) ON DELETE SET NULL
 );
 
-CREATE INDEX ix_tournament_encounter_home_team_id ON tournament.encounter (home_team_id);
+CREATE INDEX ix_encounter_status_live_upcoming ON tournament.encounter (tournament_id, status) WHERE status IN ('PENDING'::tournament.encounterstatus, 'OPEN'::tournament.encounterstatus);
 
 CREATE INDEX ix_encounter_tournament_status ON tournament.encounter (tournament_id, status);
 
-CREATE INDEX ix_tournament_encounter_stage_id ON tournament.encounter (stage_id);
-
 CREATE INDEX ix_tournament_encounter_away_team_id ON tournament.encounter (away_team_id);
+
+CREATE INDEX ix_tournament_encounter_home_team_id ON tournament.encounter (home_team_id);
 
 CREATE INDEX ix_tournament_encounter_round ON tournament.encounter (round);
 
-CREATE INDEX ix_encounter_status_live_upcoming ON tournament.encounter (tournament_id, status) WHERE status IN ('PENDING'::tournament.encounterstatus, 'OPEN'::tournament.encounterstatus);
-
-CREATE INDEX ix_tournament_encounter_tournament_id ON tournament.encounter (tournament_id);
+CREATE INDEX ix_tournament_encounter_stage_id ON tournament.encounter (stage_id);
 
 CREATE INDEX ix_tournament_encounter_stage_item_id ON tournament.encounter (stage_item_id);
+
+CREATE INDEX ix_tournament_encounter_tournament_id ON tournament.encounter (tournament_id);
 
 CREATE TABLE tournament.encounter_captain_report (
 	id BIGSERIAL NOT NULL, 
@@ -2312,9 +2339,9 @@ CREATE TABLE tournament.encounter_captain_report (
 	FOREIGN KEY(reporter_user_id) REFERENCES players."user" (id) ON DELETE SET NULL
 );
 
-CREATE INDEX ix_tournament_encounter_captain_report_team_id ON tournament.encounter_captain_report (team_id);
-
 CREATE INDEX ix_tournament_encounter_captain_report_encounter_id ON tournament.encounter_captain_report (encounter_id);
+
+CREATE INDEX ix_tournament_encounter_captain_report_team_id ON tournament.encounter_captain_report (team_id);
 
 CREATE TABLE tournament.encounter_link (
 	id BIGSERIAL NOT NULL, 
@@ -2330,9 +2357,9 @@ CREATE TABLE tournament.encounter_link (
 	FOREIGN KEY(target_encounter_id) REFERENCES tournament.encounter (id) ON DELETE CASCADE
 );
 
-CREATE INDEX ix_tournament_encounter_link_target_encounter_id ON tournament.encounter_link (target_encounter_id);
-
 CREATE INDEX ix_tournament_encounter_link_source_encounter_id ON tournament.encounter_link (source_encounter_id);
+
+CREATE INDEX ix_tournament_encounter_link_target_encounter_id ON tournament.encounter_link (target_encounter_id);
 
 CREATE TABLE tournament.encounter_map_code (
 	id BIGSERIAL NOT NULL, 
@@ -2349,9 +2376,9 @@ CREATE TABLE tournament.encounter_map_code (
 	FOREIGN KEY(map_id) REFERENCES overwatch.map (id) ON DELETE SET NULL
 );
 
-CREATE INDEX ix_tournament_encounter_map_code_report_id ON tournament.encounter_map_code (report_id);
-
 CREATE INDEX ix_tournament_encounter_map_code_map_id ON tournament.encounter_map_code (map_id);
+
+CREATE INDEX ix_tournament_encounter_map_code_report_id ON tournament.encounter_map_code (report_id);
 
 CREATE TABLE tournament.encounter_map_report (
 	id BIGSERIAL NOT NULL, 
@@ -2374,11 +2401,11 @@ CREATE TABLE tournament.encounter_map_report (
 	FOREIGN KEY(reporter_user_id) REFERENCES players."user" (id) ON DELETE SET NULL
 );
 
-CREATE INDEX ix_tournament_encounter_map_report_team_id ON tournament.encounter_map_report (team_id);
+CREATE INDEX ix_tournament_encounter_map_report_encounter_id ON tournament.encounter_map_report (encounter_id);
 
 CREATE INDEX ix_tournament_encounter_map_report_map_id ON tournament.encounter_map_report (map_id);
 
-CREATE INDEX ix_tournament_encounter_map_report_encounter_id ON tournament.encounter_map_report (encounter_id);
+CREATE INDEX ix_tournament_encounter_map_report_team_id ON tournament.encounter_map_report (team_id);
 
 CREATE TABLE tournament.encounter_pick_ban_ledger (
 	id BIGSERIAL NOT NULL, 
@@ -2465,11 +2492,11 @@ CREATE TABLE tournament.encounter_saved_view (
 	FOREIGN KEY(auth_user_id) REFERENCES auth."user" (id) ON DELETE CASCADE
 );
 
-CREATE INDEX ix_tournament_encounter_saved_view_workspace_id ON tournament.encounter_saved_view (workspace_id);
-
 CREATE INDEX ix_encounter_saved_view_workspace_user ON tournament.encounter_saved_view (workspace_id, auth_user_id);
 
 CREATE INDEX ix_tournament_encounter_saved_view_auth_user_id ON tournament.encounter_saved_view (auth_user_id);
+
+CREATE INDEX ix_tournament_encounter_saved_view_workspace_id ON tournament.encounter_saved_view (workspace_id);
 
 CREATE TABLE tournament.pick_ban_config (
 	id BIGSERIAL NOT NULL, 
@@ -2495,9 +2522,9 @@ CREATE TABLE tournament.pick_ban_config (
 	FOREIGN KEY(stage_id) REFERENCES tournament.stage (id) ON DELETE CASCADE
 );
 
-CREATE UNIQUE INDEX uq_pick_ban_config_level ON tournament.pick_ban_config (tournament_id, kind, stage_id, round) NULLS NOT DISTINCT;
-
 CREATE INDEX ix_tournament_pick_ban_config_tournament_id ON tournament.pick_ban_config (tournament_id);
+
+CREATE UNIQUE INDEX uq_pick_ban_config_level ON tournament.pick_ban_config (tournament_id, kind, stage_id, round) NULLS NOT DISTINCT;
 
 CREATE TABLE tournament.pick_ban_config_item (
 	id BIGSERIAL NOT NULL, 
@@ -2564,13 +2591,13 @@ CREATE TABLE tournament.pick_ban_entry (
 	FOREIGN KEY(team_id) REFERENCES tournament.team (id) ON DELETE SET NULL
 );
 
-CREATE INDEX ix_tournament_pick_ban_entry_team_id ON tournament.pick_ban_entry (team_id);
-
-CREATE UNIQUE INDEX uq_pick_ban_entry_session_action_index ON tournament.pick_ban_entry (session_id, action_index) WHERE action_index IS NOT NULL;
-
 CREATE INDEX ix_tournament_pick_ban_entry_item_id ON tournament.pick_ban_entry (item_id);
 
 CREATE INDEX ix_tournament_pick_ban_entry_session_id ON tournament.pick_ban_entry (session_id);
+
+CREATE INDEX ix_tournament_pick_ban_entry_team_id ON tournament.pick_ban_entry (team_id);
+
+CREATE UNIQUE INDEX uq_pick_ban_entry_session_action_index ON tournament.pick_ban_entry (session_id, action_index) WHERE action_index IS NOT NULL;
 
 CREATE TABLE tournament.pick_ban_session (
 	id BIGSERIAL NOT NULL, 
@@ -2624,17 +2651,17 @@ CREATE TABLE tournament.player (
 	FOREIGN KEY(team_id) REFERENCES tournament.team (id) ON DELETE CASCADE
 );
 
-CREATE INDEX ix_player_tournament_role_sub_role ON tournament.player (tournament_id, role, sub_role);
+CREATE INDEX ix_player_member_not_sub ON tournament.player (workspace_member_id, tournament_id) WHERE is_substitution = false;
 
 CREATE INDEX ix_player_related_player_id ON tournament.player (related_player_id);
 
-CREATE INDEX ix_tournament_player_tournament_id ON tournament.player (tournament_id);
-
-CREATE INDEX ix_player_member_not_sub ON tournament.player (workspace_member_id, tournament_id) WHERE is_substitution = false;
-
 CREATE INDEX ix_player_team_workspace_member ON tournament.player (team_id, workspace_member_id);
 
+CREATE INDEX ix_player_tournament_role_sub_role ON tournament.player (tournament_id, role, sub_role);
+
 CREATE INDEX ix_player_workspace_member_tournament ON tournament.player (workspace_member_id, tournament_id);
+
+CREATE INDEX ix_tournament_player_tournament_id ON tournament.player (tournament_id);
 
 CREATE TABLE tournament.player_sub_role (
 	id BIGSERIAL NOT NULL, 
@@ -2688,17 +2715,17 @@ CREATE TABLE tournament.scrim_room (
 	FOREIGN KEY(created_by_auth_user_id) REFERENCES auth."user" (id) ON DELETE CASCADE
 );
 
-CREATE INDEX ix_tournament_scrim_room_tournament_id ON tournament.scrim_room (tournament_id);
-
-CREATE INDEX ix_tournament_scrim_room_stage_id ON tournament.scrim_room (stage_id);
-
-CREATE INDEX ix_tournament_scrim_room_workspace_id ON tournament.scrim_room (workspace_id);
-
 CREATE INDEX ix_scrim_room_open_by_creator ON tournament.scrim_room (created_by_auth_user_id) WHERE closed_at IS NULL;
+
+CREATE INDEX ix_tournament_scrim_room_created_by_auth_user_id ON tournament.scrim_room (created_by_auth_user_id);
 
 CREATE INDEX ix_tournament_scrim_room_encounter_id ON tournament.scrim_room (encounter_id);
 
-CREATE INDEX ix_tournament_scrim_room_created_by_auth_user_id ON tournament.scrim_room (created_by_auth_user_id);
+CREATE INDEX ix_tournament_scrim_room_stage_id ON tournament.scrim_room (stage_id);
+
+CREATE INDEX ix_tournament_scrim_room_tournament_id ON tournament.scrim_room (tournament_id);
+
+CREATE INDEX ix_tournament_scrim_room_workspace_id ON tournament.scrim_room (workspace_id);
 
 CREATE TABLE tournament.slug_redirect (
 	id BIGSERIAL NOT NULL, 
@@ -2798,15 +2825,15 @@ CREATE TABLE tournament.standing (
 	FOREIGN KEY(stage_item_id) REFERENCES tournament.stage_item (id) ON DELETE SET NULL
 );
 
+CREATE INDEX ix_standing_stage_stage_item_team ON tournament.standing (stage_id, stage_item_id, team_id);
+
+CREATE INDEX ix_standing_tournament_position ON tournament.standing (tournament_id, overall_position);
+
 CREATE INDEX ix_tournament_standing_stage_id ON tournament.standing (stage_id);
 
 CREATE INDEX ix_tournament_standing_stage_item_id ON tournament.standing (stage_item_id);
 
-CREATE INDEX ix_standing_tournament_position ON tournament.standing (tournament_id, overall_position);
-
 CREATE INDEX ix_tournament_standing_team_id ON tournament.standing (team_id);
-
-CREATE INDEX ix_standing_stage_stage_item_team ON tournament.standing (stage_id, stage_item_id, team_id);
 
 CREATE INDEX ix_tournament_standing_tournament_id ON tournament.standing (tournament_id);
 
@@ -2824,9 +2851,9 @@ CREATE TABLE tournament.team (
 	FOREIGN KEY(tournament_id) REFERENCES tournament.tournament (id) ON DELETE CASCADE
 );
 
-CREATE INDEX ix_tournament_team_tournament_id ON tournament.team (tournament_id);
-
 CREATE INDEX ix_tournament_team_captain_id ON tournament.team (captain_id);
+
+CREATE INDEX ix_tournament_team_tournament_id ON tournament.team (tournament_id);
 
 CREATE TABLE tournament.tournament (
 	id BIGSERIAL NOT NULL, 
@@ -2857,13 +2884,13 @@ CREATE TABLE tournament.tournament (
 	FOREIGN KEY(division_grid_version_id) REFERENCES division_grid_version (id) ON DELETE SET NULL
 );
 
-CREATE INDEX ix_tournament_tournament_is_hidden ON tournament.tournament (is_hidden);
-
 CREATE INDEX ix_tournament_tournament_division_grid_version_id ON tournament.tournament (division_grid_version_id);
 
-CREATE INDEX ix_tournament_tournament_workspace_id ON tournament.tournament (workspace_id);
+CREATE INDEX ix_tournament_tournament_is_hidden ON tournament.tournament (is_hidden);
 
 CREATE UNIQUE INDEX ix_tournament_tournament_slug ON tournament.tournament (slug);
+
+CREATE INDEX ix_tournament_tournament_workspace_id ON tournament.tournament (workspace_id);
 
 CREATE TABLE tournament.tournament_link (
 	id BIGSERIAL NOT NULL, 
@@ -2898,9 +2925,9 @@ CREATE TABLE tournament.tournament_phase_schedule (
 	FOREIGN KEY(tournament_id) REFERENCES tournament.tournament (id) ON DELETE CASCADE
 );
 
-CREATE INDEX ix_tournament_tournament_phase_schedule_tournament_id ON tournament.tournament_phase_schedule (tournament_id);
-
 CREATE INDEX ix_tournament_tournament_phase_schedule_starts_at ON tournament.tournament_phase_schedule (starts_at);
+
+CREATE INDEX ix_tournament_tournament_phase_schedule_tournament_id ON tournament.tournament_phase_schedule (tournament_id);
 
 CREATE TABLE tournament.tournament_preview_access (
 	id BIGSERIAL NOT NULL, 

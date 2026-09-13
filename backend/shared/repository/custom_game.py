@@ -134,35 +134,3 @@ class CustomGameTeamNameRepository:
         else:
             current.name = name
         await session.flush()
-
-
-class CustomGameRoleSlotRepository:
-    async def mapping_for_game(self, session: AsyncSession, custom_game_id: int) -> dict[str, int]:
-        result = await session.execute(
-            sa.select(models.CustomGameRoleSlot.role, models.CustomGameRoleSlot.slot_count).where(
-                models.CustomGameRoleSlot.custom_game_id == custom_game_id
-            )
-        )
-        return dict(result.all())
-
-    async def replace(
-        self,
-        session: AsyncSession,
-        custom_game_id: int,
-        role_mask: dict[str, int] | None,
-    ) -> None:
-        await session.execute(
-            sa.delete(models.CustomGameRoleSlot).where(models.CustomGameRoleSlot.custom_game_id == custom_game_id)
-        )
-        if role_mask:
-            session.add_all(
-                [
-                    models.CustomGameRoleSlot(
-                        custom_game_id=custom_game_id,
-                        role=role,
-                        slot_count=slot_count,
-                    )
-                    for role, slot_count in role_mask.items()
-                ]
-            )
-        await session.flush()

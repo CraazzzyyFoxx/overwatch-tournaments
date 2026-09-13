@@ -134,7 +134,7 @@ class AlgorithmConfig(BaseSettings):
     max_result_variants: int = Field(
         default=10,
         ge=1,
-        le=200,
+        le=500,
         description="Maximum number of solution variants returned by the solver.",
     )
 

@@ -173,6 +173,8 @@ def serialize_registration_form(
         require_open_profile=form.require_open_profile,
         open_profile_scope=form.open_profile_scope,
         show_ranks=form.show_ranks,
+        hide_registrations=form.hide_registrations,
+        max_participants=form.max_participants,
         max_substitutes=form.max_substitutes,
         require_subscription=form.require_subscription,
         subscription_stage=form.subscription_stage,

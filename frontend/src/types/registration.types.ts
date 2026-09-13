@@ -260,6 +260,10 @@ export interface RegistrationForm {
   require_open_profile?: boolean;
   open_profile_scope?: "main" | "all";
   show_ranks?: boolean;
+  /** The public list is served as a count + role distribution only. */
+  hide_registrations?: boolean;
+  /** Informational capacity; not a limit. */
+  max_participants?: number | null;
   require_subscription?: boolean;
   subscription_scope?: "player" | "team";
   subscription_stage?: "registration" | "check_in";
@@ -333,6 +337,18 @@ export interface Registration {
   team?: RegistrationTeamBrief | null;
   submitted_at: string | null;
   reviewed_at: string | null;
+  /** Place in submission order and the size of that order — overall, and within
+   *  this registration's primary role. The role pair is the one that answers
+   *  "am I getting in": a field fills role by role. `queue_role` names the
+   *  bucket the role numbers were counted in, so the label never disagrees with
+   *  them. Sent ONLY on the caller's own registration reads
+   *  (`/registration/me`, submit, check-in), never on list rows — there the
+   *  index is the position. */
+  queue_position?: number | null;
+  queue_total?: number | null;
+  queue_role?: string | null;
+  queue_role_position?: number | null;
+  queue_role_total?: number | null;
   /** Capped to the most recent few entries; see `tournament_history_count` for the true total. */
   tournament_history?: TournamentHistoryEntry[];
   tournament_history_count?: number;
@@ -344,6 +360,15 @@ export interface Registration {
 export interface RegistrationListResponse {
   registrations: Registration[];
   division_grids: Record<string, DivisionGridVersion>;
+  /** Server answer to `hide_registrations`: when true, `registrations` is empty
+   *  and `total` + `role_counts` are the whole payload. */
+  hidden: boolean;
+  /** Live registrations — the same set the visible list would have shown, so the
+   *  number does not move when the organizer flips the toggle. */
+  total: number;
+  /** Primary role code -> count. Server-computed on both paths. */
+  role_counts: Record<string, number>;
+  max_participants: number | null;
 }
 
 export interface RegistrationRole {

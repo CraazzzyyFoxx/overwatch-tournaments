@@ -51,7 +51,8 @@ DOCS: dict[str, dict] = {
         "summary": "Upsert workspace balancer config",
         "description": (
             "Creates or updates the workspace-level rank-delta threshold, hide-from-pool flag and the "
-            "workspace-wide Discord channel for mix matchups, requiring workspace update permission."
+            "workspace-wide Discord channel for mix matchups, requiring team update permission; changing "
+            "the Discord channel additionally requires workspace update permission."
         ),
     },
     "rpc.balancer.admin.teams_import": {
@@ -216,14 +217,6 @@ DOCS: dict[str, dict] = {
         "summary": "Set custom game team names",
         "description": "Renames the balanced teams by index and returns the refreshed mix. Host or co-host only.",
     },
-    "rpc.balancer.custom.set_role_mask": {
-        "summary": "Set custom game role mask",
-        "description": "Overrides how many seats of each role a team gets in this mix; null restores the workspace default shape. Host or co-host only.",
-    },
-    "rpc.balancer.custom.set_points_per_win": {
-        "summary": "Set custom game points per win",
-        "description": "Sets how far a decided match moves both teams' ranks in the host's own book, or null to record matches without touching ranks. Host or co-host only.",
-    },
     "rpc.balancer.custom.set_next_map": {
         "summary": "Set custom game next map",
         "description": (
@@ -233,29 +226,23 @@ DOCS: dict[str, dict] = {
             "the map is not in the catalogue."
         ),
     },
-    "rpc.balancer.custom.set_discord_channel": {
-        "summary": "Set custom game Discord channel",
+    "rpc.balancer.custom.set_variant_index": {
+        "summary": "Set custom game shown balance option",
         "description": (
-            "Overrides the workspace-wide mix channel for this one mix, as a digits-only snowflake "
-            "string, or clears the override with null so the workspace channel applies again. "
-            "Workspace admin only -- an ordinary host cannot redirect the workspace's Discord. The id "
-            "is not verified against Discord here, an unreachable channel surfaces when the bot tries "
-            "to deliver."
+            "Pages the mix to one of the balance options its last run produced, for every viewer at "
+            "once -- the option on screen is a fact about the mix, not about one browser. Host or "
+            "co-host only; 404 when the index points past the stored options. Re-balancing resets it "
+            "to the first option."
         ),
     },
     "rpc.balancer.custom.post_discord": {
         "summary": "Post custom game lineup to Discord",
         "description": (
             "Queues an embed of one balance option's teams, the next map and the points at stake "
-            "to the mix's own channel, or the workspace-wide mix channel when it has none, and "
-            "returns immediately -- delivery is the bot's, and nothing about the mix changes. Host "
-            "or co-host only; 409 when neither channel is configured and 404 when the balance option "
-            "is missing."
+            "to the workspace-wide mix channel and returns immediately -- delivery is the bot's, "
+            "and nothing about the mix changes. Host or co-host only; 409 when the workspace has "
+            "no mix channel configured and 404 when the balance option is missing."
         ),
-    },
-    "rpc.balancer.custom.set_balancer_config": {
-        "summary": "Set custom game balancer config",
-        "description": "Replaces the mix's solver overrides with a validated config, or clears them with null, and returns the refreshed mix. Host or co-host only.",
     },
     "rpc.balancer.custom.transfer_host": {
         "summary": "Transfer custom game host",
@@ -376,6 +363,26 @@ DOCS: dict[str, dict] = {
             "narrowed to given team ids, and returns removed/imported/created counts plus every team "
             "skipped and why. Requires admin panel access and workspace team-create permission, and "
             "emits a teams-changed realtime event when anything was imported."
+        ),
+    },
+    "rpc.balancer.prefs.get": {
+        "summary": "Get my pickup mix preferences",
+        "description": (
+            "Returns the signed-in account's own mix settings -- the rank-balance/role-comfort tilt, "
+            "the per-role weights, how many balance options to keep, the roster shape its mixes "
+            "field and how far a decided match moves its rank book -- plus roster_shape, the "
+            "read-only resolution of that shape. A null value means the setting was never saved and "
+            "the default applies. Authentication is the only gate: these are the caller's own "
+            "preferences."
+        ),
+    },
+    "rpc.balancer.prefs.upsert": {
+        "summary": "Set my pickup mix preferences",
+        "description": (
+            "Replaces all five of the caller's mix settings at once and returns the stored result "
+            "with the re-resolved roster_shape; a null clears one back to the default, and 0 points "
+            "per win stores as unset. They apply to every mix this account hosts -- a mix runs on "
+            "its host's preferences whoever presses the button. 422 on an impossible roster shape."
         ),
     },
 }

@@ -26,7 +26,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { ConfirmDialog } from "@/components/admin/kit/ConfirmDialog";
 import { SaveBar } from "@/components/admin/kit/SaveBar";
-import { stageFinalRounds } from "@/components/bracket-view.helpers";
+import { stageRoundShape } from "@/components/bracket-view.helpers";
 import { useBracketRoundLabel } from "@/hooks/useBracketRoundLabel";
 import { hasUnsavedChanges } from "@/lib/form-change";
 import type {
@@ -161,7 +161,7 @@ export function PreGameEditor({
     isStageScope ? stage : null,
     encounters
   );
-  const finalRounds = stageFinalRounds(scope.stageId, stage?.stage_type, rounds, encounters);
+  const roundShape = stageRoundShape(scope.stageId, stage?.stage_type, rounds, encounters);
   const roundLabel = useBracketRoundLabel();
 
   // A stage screen that saved per-round groups leaves nothing at the stage
@@ -380,7 +380,7 @@ export function PreGameEditor({
               slotCount={slotCount}
               isStageScope={isStageScope}
               roundsLoading={roundsLoading}
-              roundLabelFor={(round) => roundLabel(round, finalRounds)}
+              roundLabelFor={(round) => roundLabel(round, roundShape)}
               patchRoundSlot={patchRoundSlot}
               onModeChange={changeMode}
               catalogue={catalogue}
@@ -551,7 +551,7 @@ function PoolStep({
   isStageScope: boolean;
   /** The stage's rounds are still being predicted, so they cannot be listed. */
   roundsLoading: boolean;
-  /** What the bracket calls a round — "Lower R1", "Grand Final", not "-1". */
+  /** What the bracket calls a round — "LB Round 1", "Grand Final", not "-1". */
   roundLabelFor: (round: number) => string;
   catalogue: CatalogueItem[];
   catalogueById: Map<number, CatalogueItem>;

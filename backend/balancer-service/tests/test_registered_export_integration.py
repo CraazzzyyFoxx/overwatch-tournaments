@@ -30,7 +30,7 @@ for path in (str(SERVICE_ROOT), str(BACKEND_ROOT)):
 
 
 import sqlalchemy as sa  # noqa: E402
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine  # noqa: E402
+from sqlalchemy.ext.asyncio import async_sessionmaker  # noqa: E402
 
 from shared.core.enums import HeroClass  # noqa: E402
 from shared.models.identity.user import User  # noqa: E402
@@ -42,6 +42,7 @@ from shared.models.registration.registration import (  # noqa: E402
 )
 from shared.models.tenancy.workspace import Workspace, WorkspaceMember  # noqa: E402
 from shared.models.tournament.tournament import Tournament  # noqa: E402
+from shared.testing import create_test_async_engine  # noqa: E402
 from src import models  # noqa: E402
 from src.services.registered_teams import registered_teams_service  # noqa: E402
 
@@ -54,31 +55,13 @@ def _uniq() -> int:
     return _UNIQUE
 
 
-def _async_url() -> str:
-    user = os.environ.get("POSTGRES_USER", "postgres")
-    password = os.environ.get("POSTGRES_PASSWORD", "postgres")
-    host = os.environ.get("POSTGRES_HOST", "localhost")
-    port = os.environ.get("POSTGRES_PORT", "5432")
-    db = os.environ.get("POSTGRES_DB", "postgres")
-    return f"postgresql+psycopg://{user}:{password}@{host}:{port}/{db}"
-
-
 #: tank 1 + dps 2 = a 3-person roster, so "complete" is reachable with few rows.
 _SHAPE = {"tank": 1, "dps": 2}
 
 
 class RegisteredExportIntegrationTests(IsolatedAsyncioTestCase):
     async def asyncSetUp(self) -> None:
-        self.engine = create_async_engine(_async_url(), connect_args={"connect_timeout": 30})
-        try:
-            async with self.engine.connect() as conn:
-                current = (await conn.execute(sa.text("select current_database()"))).scalar()
-                if current == "anak_v5":  # hard guard: never run against prod
-                    self.skipTest("refusing to run integration tests against production anak_v5")
-        except Exception as exc:  # noqa: BLE001
-            await self.engine.dispose()
-            self.skipTest(f"database unreachable: {exc}")
-
+        self.engine = create_test_async_engine()
         self.Session = async_sessionmaker(self.engine, expire_on_commit=False)
         self.suffix = f"regexp-{os.getpid()}-{_uniq()}"
 

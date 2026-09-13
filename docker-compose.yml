@@ -458,6 +458,7 @@ services:
       - NEXT_PUBLIC_CACHE_POLICY=${NEXT_PUBLIC_CACHE_POLICY}
       - NEXT_PUBLIC_GA_ID=${NEXT_PUBLIC_GA_ID}
       - NEXT_PUBLIC_YM_ID=${NEXT_PUBLIC_YM_ID}
+      - NEXT_PUBLIC_DISCORD_CLIENT_ID=${NEXT_PUBLIC_DISCORD_CLIENT_ID}
       # Single gateway origin: the browser uses relative same-origin paths
       # (/api/v1, /api/balancer, /api/analytics, /api/auth, /api/realtime/ws).
       # Only server-side (SSR + route handlers + middleware) fetches need a base.

@@ -8,6 +8,13 @@ import { useTranslations } from "next-intl";
 import { TeamLogo, type TeamNameInput } from "@/components/TeamName";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from "@/components/ui/select";
 import { MapReportDialog } from "@/components/pick-ban/MapReportDialog";
 import { cn } from "@/lib/utils";
 import type { PickBanMapReport } from "@/types/tournament.types";
@@ -16,8 +23,8 @@ import { PregameHeroBans, type PregameHeroAction } from "./PregameHeroBans";
 
 interface PregameMapResultProps {
   encounterId: number;
-  /** The map awaiting its result — picked by the veto, not yet reconciled. */
-  mapId: number;
+  /** Null until captains name the map they played (no veto). */
+  mapId: number | null;
   mapName: string;
   /** The map's still, for the phase's banner. Empty when the catalog has none. */
   mapImagePath: string | null;
@@ -47,6 +54,9 @@ interface PregameMapResultProps {
   header: React.ReactNode;
   /** Query keys to invalidate once a report lands. */
   invalidateKeys: unknown[][];
+  /** Catalog for naming the played map when there was no veto pick. */
+  mapChoices?: ReadonlyArray<{ id: number; name: string }>;
+  onSelectMap?: (mapId: number) => void;
 }
 
 /** What a side's claim tile may show, in the order the phase moves through. */
@@ -86,7 +96,9 @@ export function PregameMapResult({
   heroActions,
   heroUndo,
   header,
-  invalidateKeys
+  invalidateKeys,
+  mapChoices,
+  onSelectMap
 }: Readonly<PregameMapResultProps>) {
   const t = useTranslations("pickBan.room");
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -153,9 +165,30 @@ export function PregameMapResult({
                 <span className="text-label font-bold uppercase tracking-label text-[color:var(--aqt-teal)]">
                   {t("round.label", { n: round })} · {t("mapResult.eyebrow")}
                 </span>
-                <h2 className="font-onest text-2xl font-semibold leading-tight tracking-[-0.015em] sm:text-3xl">
-                  {mapName}
-                </h2>
+                {mapChoices != null && onSelectMap != null && reports.length === 0 ? (
+                  <Select
+                    value={mapId != null ? String(mapId) : ""}
+                    onValueChange={(value) => onSelectMap(Number(value))}
+                  >
+                    <SelectTrigger
+                      className="mt-2 max-w-sm bg-[color:var(--aqt-card)]"
+                      aria-label={t("mapResult.pickMap")}
+                    >
+                      <SelectValue placeholder={t("mapResult.pickMap")} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {mapChoices.map((map) => (
+                        <SelectItem key={map.id} value={String(map.id)}>
+                          {map.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <h2 className="font-onest text-2xl font-semibold leading-tight tracking-[-0.015em] sm:text-3xl">
+                    {mapName}
+                  </h2>
+                )}
               </div>
             </div>
 
@@ -223,6 +256,7 @@ export function PregameMapResult({
                   <Button
                     onClick={() => setDialogOpen(true)}
                     variant={ownReport == null ? "default" : "outline"}
+                    disabled={mapId == null}
                   >
                     {ownReport == null ? t("mapResult.report") : t("mapResult.amend")}
                   </Button>
@@ -233,7 +267,7 @@ export function PregameMapResult({
         </CardContent>
       </Card>
 
-      {viewerSide != null && dialogOpen ? (
+      {viewerSide != null && dialogOpen && mapId != null ? (
         <MapReportDialog
           encounterId={encounterId}
           mapId={mapId}

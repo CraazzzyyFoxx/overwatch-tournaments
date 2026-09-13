@@ -504,7 +504,9 @@ const TournamentTeamsView = ({ tournament, slug }: { tournament: Tournament; slu
   const heroesMap = useHeroesMap({ enabled: hasPlayerRegistrations });
   const registrationsByUser = useMemo(() => {
     const byUser = new Map<number, Registration>();
-    for (const registration of registrationsQuery.data ?? []) {
+    // Empty when the organizer hid the participants list; the roster expansion
+    // then simply renders without declared heroes.
+    for (const registration of registrationsQuery.data?.registrations ?? []) {
       if (registration.user_id !== null) byUser.set(registration.user_id, registration);
     }
     return byUser;

@@ -48,6 +48,7 @@ from src.schemas.registration import (
 )
 from src.schemas.registration_build import (
     AdmissionChips,
+    QueuePlace,
     _build_tournament_history,
     _public_rosters,
     _reg_to_read,
@@ -170,6 +171,52 @@ class TeamPlacement:
     registration_team_id: int
     slot_code: str
     is_substitute: bool = False
+
+
+def _role_counts(registrations: Sequence[models.BalancerRegistration]) -> dict[str, int]:
+    """Primary role -> number of registrations declaring it. One bucket per row.
+
+    The primary role, or the highest-priority one when nothing is flagged primary:
+    the same rule the overview card applied to the rows it used to receive, kept in
+    ONE place now that the hidden list is the only thing that can answer it.
+    """
+    counts: dict[str, int] = {}
+    for registration in registrations:
+        roles = sorted(registration.roles or [], key=lambda role: (not role.is_primary, role.priority))
+        if not roles:
+            continue
+        counts[roles[0].role] = counts.get(roles[0].role, 0) + 1
+    return counts
+
+
+def _primary_role_select(tournament_id: int) -> sa.Subquery:
+    """``(registration_id, role)`` — one row per live registration, its primary role.
+
+    The SQL form of the rule ``_role_counts`` applies in Python: the role flagged
+    primary, or the highest-priority one when none is. ``DISTINCT ON`` rather
+    than a window function because the answer is one row, not a ranking.
+    """
+    return (
+        sa.select(
+            models.BalancerRegistrationRole.registration_id.label("registration_id"),
+            models.BalancerRegistrationRole.role.label("role"),
+        )
+        .join(
+            models.BalancerRegistration,
+            models.BalancerRegistration.id == models.BalancerRegistrationRole.registration_id,
+        )
+        .where(
+            models.BalancerRegistration.tournament_id == tournament_id,
+            models.BalancerRegistration.deleted_at.is_(None),
+        )
+        .distinct(models.BalancerRegistrationRole.registration_id)
+        .order_by(
+            models.BalancerRegistrationRole.registration_id,
+            models.BalancerRegistrationRole.is_primary.desc(),
+            models.BalancerRegistrationRole.priority.asc(),
+        )
+        .subquery()
+    )
 
 
 class RegistrationService:
@@ -873,6 +920,7 @@ class RegistrationService:
             status_meta_map=status_meta_map,
             show_ranks=form.show_ranks,
             roster=rosters.get(registration.id),
+            queue=await self.queue_position(session, registration),
         )
 
     async def resolve_admission_list(
@@ -928,6 +976,65 @@ class RegistrationService:
         config = AdmissionConfig.from_form(form, subscription_rule=rule)
         return await resolve_admission(session, registrations, config=config, resolver=resolver)
 
+    async def queue_position(self, session: AsyncSession, reg: models.BalancerRegistration) -> QueuePlace:
+        """Where this entry sits in the queue, overall and inside its own role.
+
+        Ordered by ``(submitted_at, id)`` — the list's own ``ORDER BY
+        submitted_at`` plus a deterministic tiebreak, so "position 5" is the
+        fifth row of the participants table and not a second opinion about it.
+        ``submitted_at`` is NOT NULL, so the row comparison has no null branch.
+
+        The role place is the one that actually answers "am I getting in": a
+        tournament fills role by role, so 2nd of 119 means nothing next to 42
+        other DPS. ``role`` is the registration's PRIMARY role, resolved by the
+        same rule ``_role_counts`` applies to the public split — the label the
+        client prints must name the bucket the number was counted in.
+
+        Two statements, and deliberately not one: inlining the role lookup as a
+        scalar subquery made SQLAlchemy repeat that whole ``DISTINCT ON`` block
+        three times in the emitted SQL. Splitting it costs one trivial round
+        trip and keeps the invariant that matters — all four counts come from a
+        single scan, so a place can never fall outside its own total.
+
+        Counted over the same ``deleted_at IS NULL`` rows as the list, which is
+        also why the total is not read off the separately cached
+        ``Tournament.registrations_count``: two caches can disagree, and "5 of
+        4" is worse than one aggregate.
+        """
+        mine = _primary_role_select(reg.tournament_id)
+        role = await session.scalar(sa.select(mine.c.role).where(mine.c.registration_id == reg.id))
+        by_row = _primary_role_select(reg.tournament_id)
+        ordered = sa.tuple_(models.BalancerRegistration.submitted_at, models.BalancerRegistration.id) <= sa.tuple_(
+            reg.submitted_at, reg.id
+        )
+        same_role = by_row.c.role == role
+        result = await session.execute(
+            sa.select(
+                sa.func.count().filter(ordered),
+                sa.func.count(),
+                sa.func.count().filter(sa.and_(same_role, ordered)),
+                sa.func.count().filter(same_role),
+            )
+            .select_from(models.BalancerRegistration)
+            # OUTER: a registration that declared no role is still one of the
+            # entries, it just lands in no role bucket.
+            .outerjoin(by_row, by_row.c.registration_id == models.BalancerRegistration.id)
+            .where(
+                models.BalancerRegistration.tournament_id == reg.tournament_id,
+                models.BalancerRegistration.deleted_at.is_(None),
+            )
+        )
+        position, total, role_position, role_total = result.one()
+        return QueuePlace(
+            position=int(position),
+            total=int(total),
+            # No declared role means no role queue to be in — reported as absent
+            # rather than as "1 of 1", which would read as a place nobody holds.
+            role=role,
+            role_position=int(role_position) if role else None,
+            role_total=int(role_total) if role else None,
+        )
+
     async def build_public_registration_list(
         self,
         session: AsyncSession,
@@ -950,6 +1057,36 @@ class RegistrationService:
         on this worker (see lesson_cashews_disabling_shared_cache).
         """
         workspace_id = await _resolve_tournament_workspace(session, tournament_id)
+
+        form = await _common_service.get_registration_form(session, tournament_id)
+        max_participants = form.max_participants if form is not None else None
+
+        # The organizer publishes the shape of the field, not the field. Enforced
+        # HERE and not in the client because this payload is cached per tournament
+        # with no viewer in the key (``registration_list:{id}:``) -- a per-viewer
+        # branch would serve one reader's answer to the next. Organizers read the
+        # full roster through the admin registrations table.
+        if form is not None and form.hide_registrations:
+            hidden_rows = list(
+                await session.scalars(
+                    self.registration_repo.select()
+                    .where(
+                        models.BalancerRegistration.tournament_id == tournament_id,
+                        models.BalancerRegistration.deleted_at.is_(None),
+                    )
+                    # Roles only: no identity, no team, no history, no admission.
+                    # ponytail: counted in Python over two light queries rather than
+                    # one GROUP BY, so both paths share ``_role_counts`` and cannot
+                    # drift. Push it into SQL if a field ever gets big enough to care.
+                    .options(selectinload(models.BalancerRegistration.roles))
+                )
+            )
+            return RegistrationListResponse(
+                hidden=True,
+                total=len(hidden_rows),
+                role_counts=_role_counts(hidden_rows),
+                max_participants=max_participants,
+            )
 
         # Analytical: the whole participants table in one ordered read with every
         # loader the serializer needs.
@@ -975,7 +1112,6 @@ class RegistrationService:
         registrations = result.scalars().all()
         status_meta_map = await get_status_metas_map(session, workspace_id=workspace_id)
 
-        form = await _common_service.get_registration_form(session, tournament_id)
         admissions = await self.resolve_admission_list(session, registrations, form=form)
         show_ranks = form.show_ranks if form is not None else False
         rosters = await _public_rosters(session, registrations)
@@ -1014,6 +1150,9 @@ class RegistrationService:
         return RegistrationListResponse(
             registrations=registrations_read,
             division_grids=division_grids,
+            total=len(registrations),
+            role_counts=_role_counts(registrations),
+            max_participants=max_participants,
         )
 
     async def upsert_registration_form(
@@ -1047,6 +1186,8 @@ class RegistrationService:
                     require_open_profile=body.require_open_profile,
                     open_profile_scope=body.open_profile_scope,
                     show_ranks=body.show_ranks,
+                    hide_registrations=body.hide_registrations,
+                    max_participants=body.max_participants,
                     require_subscription=body.require_subscription,
                     subscription_stage=body.subscription_stage.value,
                     subscription_scope=body.subscription_scope,
@@ -1065,6 +1206,8 @@ class RegistrationService:
             form.require_open_profile = body.require_open_profile
             form.open_profile_scope = body.open_profile_scope
             form.show_ranks = body.show_ranks
+            form.hide_registrations = body.hide_registrations
+            form.max_participants = body.max_participants
             form.require_subscription = body.require_subscription
             form.subscription_stage = body.subscription_stage.value
             form.subscription_scope = body.subscription_scope

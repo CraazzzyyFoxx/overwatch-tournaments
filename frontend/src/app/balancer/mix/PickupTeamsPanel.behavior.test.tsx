@@ -124,11 +124,8 @@ function variant(offset: number) {
 }
 
 const SETTINGS = {
-  points_per_win: null,
+  points_per_win: 0,
   team_names: {},
-  role_mask: null,
-  balancer_config: null,
-  discord_channel_id: null,
   workspace_discord_channel_id: null,
 };
 
@@ -164,6 +161,7 @@ function game(overrides: Partial<CustomGame> = {}): CustomGame {
     balance_result: { variants: [variant(0), variant(100), variant(200)] },
     created_at: null,
     next_map_id: null,
+    selected_variant_index: 0,
     roster_shape: null,
     players: [],
     matches_count: 0,
@@ -601,12 +599,17 @@ describe("PickupTeamsPanel", () => {
     expect(onCopyBattleTags).toHaveBeenCalledTimes(1);
   });
 
-  it("hides write controls for a read-only viewer but still shows the teams", async () => {
-    const scope = await mount(game(), { canWrite: false });
+  it("gives a read-only viewer the teams but no controls -- not even the pager", async () => {
+    // The option on screen is the host's to choose (the mix's own
+    // `selected_variant_index`): a viewer paging their own copy would be
+    // reading out a matchup nobody is playing.
+    const scope = await mount(game(), { canWrite: false, variantIndex: 1 });
 
     expect(byName(scope, "Balance teams")).toBeNull();
     expect(scope.textContent).toContain("karin");
-    expect(pagerLabel(scope)).toBe("1 / 3");
+    expect(byName(scope, "Next balance option")).toBeNull();
+    expect(byName(scope, "Previous balance option")).toBeNull();
+    expect(pagerLabel(scope)).toBeUndefined();
   });
 
   it("separates no mix at all from a mix with no teams", async () => {
@@ -693,19 +696,10 @@ describe("PickupTeamsPanel", () => {
     expect(byName(scope, "Post to Discord")).toBeNull();
   });
 
-  it("posts on the workspace channel alone, without a per-mix override", async () => {
-    // The workspace-wide channel is the default a host gets; only an admin can
-    // override it per mix, so the button must not wait for one.
-    const scope = await mount(
-      game({ settings: { ...SETTINGS, workspace_discord_channel_id: "999" } }),
-    );
-
-    await click(byName(scope, "Post to Discord"));
-    expect(onPostToDiscord).toHaveBeenCalledWith(0, LINEUP_PNG);
-  });
-
-  it("posts the option on screen, rasterised, to the mix's configured channel", async () => {
-    const withChannel = game({ settings: { ...SETTINGS, discord_channel_id: "123" } });
+  it("posts the option on screen, rasterised, to the workspace channel", async () => {
+    // The workspace's channel is the only target a mix has: nothing about the
+    // mix names one, so the button follows the workspace alone.
+    const withChannel = game({ settings: { ...SETTINGS, workspace_discord_channel_id: "123" } });
     const scope = await mount(withChannel);
 
     await click(byName(scope, "Post to Discord"));
@@ -720,7 +714,7 @@ describe("PickupTeamsPanel", () => {
 
   it("posts without an image when the capture fails", async () => {
     captureSpies.rasterize.mockRejectedValue(new Error("tainted canvas"));
-    const scope = await mount(game({ settings: { ...SETTINGS, discord_channel_id: "123" } }));
+    const scope = await mount(game({ settings: { ...SETTINGS, workspace_discord_channel_id: "123" } }));
 
     await click(byName(scope, "Post to Discord"));
 
@@ -730,7 +724,7 @@ describe("PickupTeamsPanel", () => {
   });
 
   it("hides Post to Discord from a read-only viewer", async () => {
-    const scope = await mount(game({ settings: { ...SETTINGS, discord_channel_id: "123" } }), {
+    const scope = await mount(game({ settings: { ...SETTINGS, workspace_discord_channel_id: "123" } }), {
       canWrite: false,
     });
 

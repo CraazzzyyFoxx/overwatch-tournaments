@@ -26,7 +26,6 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 vi.mock("next-intl", () => ({ useTranslations: () => (key: string) => key }));
 
 const onOpenPool = vi.fn();
-const onOpenSettings = vi.fn();
 const onOpenAccess = vi.fn();
 
 function game(overrides: Partial<CustomGame> = {}): CustomGame {
@@ -41,6 +40,7 @@ function game(overrides: Partial<CustomGame> = {}): CustomGame {
     balance_result: null,
     created_at: "2026-01-01T00:00:00Z",
     next_map_id: null,
+    selected_variant_index: 0,
     matches_count: 0,
     last_match_at: null,
     ...overrides,
@@ -70,7 +70,6 @@ async function mount(
         game={currentGame}
         gameLoading={props.gameLoading ?? false}
         onOpenPool={onOpenPool}
-        onOpenSettings={onOpenSettings}
         onOpenAccess={onOpenAccess}
       />,
     );
@@ -101,7 +100,6 @@ beforeEach(() => {
   }
   document.body.innerHTML = "";
   onOpenPool.mockReset();
-  onOpenSettings.mockReset();
   onOpenAccess.mockReset();
 });
 
@@ -141,14 +139,6 @@ describe("PickupMixHeader", () => {
     await click(byName(scope, "Add players"));
 
     expect(onOpenPool).toHaveBeenCalledTimes(1);
-  });
-
-  it("opens the composition settings on request", async () => {
-    const scope = await mount(game());
-
-    await click(scope.querySelector('[aria-label="Team composition"]'));
-
-    expect(onOpenSettings).toHaveBeenCalledTimes(1);
   });
 
   it("opens the access dialog on request", async () => {

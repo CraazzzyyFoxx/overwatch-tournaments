@@ -12,7 +12,7 @@ schema name — `ranks/` writes to `overwatch_rank`, `ingestion/` to `log_proces
 > `--check` and fails on drift, so the diagrams cannot fall behind the models again.
 
 <!-- ERD:auto _alembic_head -->
-Alembic head: **`mixops01`** (59 revisions in `backend/migrations/versions/`).
+Alembic head: **`mixhost1`** (63 revisions in `backend/migrations/versions/`).
 <!-- /ERD:auto -->
 
 **Reading the diagrams**
@@ -1415,6 +1415,8 @@ erDiagram
         boolean require_open_profile
         varchar(8) open_profile_scope
         boolean show_ranks
+        boolean hide_registrations
+        int max_participants "nullable"
         int max_substitutes
         boolean require_subscription
         varchar(16) subscription_stage
@@ -1750,6 +1752,15 @@ erDiagram
         json config_json
         bigint updated_by FK "nullable"
     }
+    BALANCER_USER_CONFIG {
+        bigint id PK
+        timestamptz created_at
+        timestamptz updated_at "nullable"
+        bigint user_id FK,UK
+        jsonb config_json
+        jsonb role_slots_json "nullable"
+        int points_per_win "nullable"
+    }
     BALANCER_WORKSPACE_CONFIG {
         bigint id PK
         timestamptz created_at
@@ -1764,6 +1775,7 @@ erDiagram
     AUTH_USER |o--o{ BALANCER_DRAFT_TEAM : "captain_auth_user_id"
     AUTH_USER |o--o{ BALANCER_TOURNAMENT_CONFIG : "updated_by"
     AUTH_USER |o--o{ BALANCER_WORKSPACE_CONFIG : "updated_by"
+    AUTH_USER ||--o| BALANCER_USER_CONFIG : "user_id"
     BALANCER_BALANCE |o--o{ BALANCER_DRAFT_SESSION : "source_balance_id"
     BALANCER_BALANCE ||--o{ BALANCER_BALANCE_VARIANT : "balance_id"
     BALANCER_BALANCE ||--o{ BALANCER_TEAM : "balance_id"
@@ -1824,11 +1836,8 @@ erDiagram
         bigint host_user_id FK "nullable"
         varchar(255) name
         varchar(16) status
-        int points_per_win "nullable"
         bigint next_map_id FK "nullable"
-        bigint discord_channel_id "nullable"
-        jsonb balancer_config_json "nullable"
-        int balancer_config_version
+        int selected_variant_index
         jsonb balance_result_json "nullable"
         int balance_result_version
     }
@@ -1852,11 +1861,6 @@ erDiagram
         varchar(16) role PK
         int priority
     }
-    BALANCER_CUSTOM_GAME_ROLE_SLOT {
-        bigint custom_game_id PK,FK
-        varchar(16) role PK
-        int slot_count
-    }
     BALANCER_CUSTOM_GAME_TEAM_NAME {
         bigint custom_game_id PK,FK
         int team_index PK
@@ -1867,7 +1871,6 @@ erDiagram
     AUTH_USER ||--o| BALANCER_CUSTOM_GAME_CO_HOST : "user_id"
     BALANCER_CUSTOM_GAME ||--o{ BALANCER_CUSTOM_GAME_PLAYER : "custom_game_id"
     BALANCER_CUSTOM_GAME ||--o| BALANCER_CUSTOM_GAME_CO_HOST : "custom_game_id"
-    BALANCER_CUSTOM_GAME ||--o| BALANCER_CUSTOM_GAME_ROLE_SLOT : "custom_game_id"
     BALANCER_CUSTOM_GAME ||--o| BALANCER_CUSTOM_GAME_TEAM_NAME : "custom_game_id"
     BALANCER_CUSTOM_GAME_PLAYER ||--o| BALANCER_CUSTOM_GAME_PLAYER_ROLE : "custom_game_player_id"
     OVERWATCH_MAP |o--o{ BALANCER_CUSTOM_GAME : "next_map_id"

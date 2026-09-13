@@ -24,15 +24,16 @@ from typing import Any
 from shared.testing import apply_test_env_defaults
 
 # Must run before any sibling test module imports ``src.core.config`` --
-# conftest.py always imports first in its own directory. A real environment /
-# loaded ``.env`` still wins over these (``setdefault``).
+# conftest.py always imports first in its own directory. Process env and a
+# local ``.env`` win; committed ``shared/testing/test.env`` fills the rest.
 apply_test_env_defaults()
 
 import pytest  # noqa: E402
 from sqlalchemy import create_engine  # noqa: E402
 from sqlalchemy.orm import Session, sessionmaker  # noqa: E402
 
-from shared.testing import configure_test_cache, db_session  # noqa: E402,F401
+from shared.testing import configure_test_cache, db_session, ensure_test_postgres  # noqa: E402,F401
+from shared.testing.db import CONNECT_TIMEOUT  # noqa: E402
 from src.core.config import settings  # noqa: E402
 
 # The cashews cache is a process-global singleton with no default backend --
@@ -44,7 +45,8 @@ configure_test_cache()
 
 
 def _create_test_engine():
-    connect_args: dict[str, str] = {}
+    ensure_test_postgres()
+    connect_args: dict[str, object] = {"connect_timeout": CONNECT_TIMEOUT}
     if settings.db_statement_timeout > 0:
         connect_args["options"] = f"-c statement_timeout={settings.db_statement_timeout}"
 
@@ -55,7 +57,7 @@ def _create_test_engine():
     )
 
 
-@pytest.fixture(scope="session", autouse=True)
+@pytest.fixture(scope="session")
 def db() -> Generator[Session]:
     test_engine = _create_test_engine()
     test_session_maker = sessionmaker(test_engine, class_=Session, expire_on_commit=False)
@@ -146,26 +148,11 @@ def rpc() -> RpcHarness:
     integration tests can dispatch ``harness.call("rpc.app.<topic>", envelope)``.
 
     These are read-integration tests: the handlers open their own async session
-    against the populated test DB (anak_dev). Probe it once and skip cleanly when
-    unreachable (mirrors the balancer integration tests), and never run against
-    production.
+    against whatever ``POSTGRES_*`` resolved to (a local ``.env`` or the
+    ephemeral ``anak_test``). :func:`ensure_test_postgres` skips in ~2s when
+    that DSN is down, and never runs against production.
     """
-    import asyncio
-
-    import sqlalchemy as sa
-
-    from src.core import db
-
-    async def _probe() -> str | None:
-        async with db.async_session_maker() as session:
-            return (await session.execute(sa.text("select current_database()"))).scalar()
-
-    try:
-        dbname = asyncio.run(_probe())
-    except Exception as exc:  # noqa: BLE001 — any connect failure => skip, not fail
-        pytest.skip(f"database unreachable: {exc}")
-    if dbname in {"anak_v5", "anak_prod"}:  # hard guard: never run against prod
-        pytest.skip("refusing to run integration tests against production")
+    ensure_test_postgres()
 
     from src.rpc import (
         achievements,

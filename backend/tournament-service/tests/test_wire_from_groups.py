@@ -602,7 +602,9 @@ class PerGroupAdvanceCountTests(IsolatedAsyncioTestCase):
                 "get_stage",
                 AsyncMock(side_effect=[target, target, source, target]),
             ),
-            patch.object(stage_service.stage_service, "_preceding_group_stage", AsyncMock(return_value=source)),
+            patch.object(
+                stage_service.stage_service, "_preceding_phase_group_stages", AsyncMock(return_value=[source])
+            ),
         ):
             await stage_service.stage_service.auto_wire_stage(session, target.id)
 
@@ -622,11 +624,61 @@ class AutoWireStageTests(IsolatedAsyncioTestCase):
         target = _playoff_stage(stage_id=2, tournament_id=99)
         session = SimpleNamespace(add=Mock(), commit=AsyncMock())
 
-        with patch.object(stage_service.stage_service, "_preceding_group_stage", AsyncMock(return_value=None)):
+        with patch.object(stage_service.stage_service, "_preceding_phase_group_stages", AsyncMock(return_value=[])):
             with self.assertRaises(Exception) as ctx:
                 await stage_service.stage_service._auto_wire_from_groups(session, target, strict=True)
 
         self.assertIn("Teams advancing to playoff", str(ctx.exception))
+
+    async def test_strict_names_the_parallel_group_stages_instead_of_guessing(self) -> None:
+        """Two divisions share the earlier phase: neither is "the" preceding
+        stage, so the refusal must say so and name them — the old message
+        claimed nothing was configured to advance, which was simply wrong."""
+        low = _group_stage(stage_id=1, tournament_id=99, num_groups=1)
+        low.name, low.order, low.advance_count = "Groups Low", 1, 4
+        high = _group_stage(stage_id=2, tournament_id=99, num_groups=1)
+        high.name, high.order, high.advance_count = "Groups High", 1, 4
+        target = _playoff_stage(stage_id=3, tournament_id=99)
+        session = SimpleNamespace(add=Mock(), commit=AsyncMock())
+
+        with patch.object(
+            stage_service.stage_service, "_preceding_phase_group_stages", AsyncMock(return_value=[low, high])
+        ):
+            with self.assertRaises(Exception) as ctx:
+                await stage_service.stage_service._auto_wire_from_groups(session, target, strict=True)
+
+        message = str(ctx.exception)
+        self.assertIn("Groups Low", message)
+        self.assertIn("Groups High", message)
+
+    async def test_explicit_source_wires_the_named_division(self) -> None:
+        """Same ambiguous phase, but the organizer picked the source: wiring runs
+        against exactly that stage and never consults the phase lookup."""
+        source = _group_stage(stage_id=1, tournament_id=99, num_groups=2)
+        source.advance_count = 2
+        target = _playoff_stage(stage_id=3, tournament_id=99)
+
+        added_inputs: list = []
+        session = SimpleNamespace(
+            add=Mock(side_effect=lambda obj: added_inputs.append(obj)),
+            commit=AsyncMock(),
+            flush=AsyncMock(),
+        )
+        preceding = AsyncMock()
+
+        with (
+            patch.object(
+                stage_service.stage_service,
+                "get_stage",
+                AsyncMock(side_effect=[target, source, target, source, target]),
+            ),
+            patch.object(stage_service.stage_service, "_preceding_phase_group_stages", preceding),
+        ):
+            await stage_service.stage_service.auto_wire_stage(session, target.id, source_stage_id=source.id)
+
+        preceding.assert_not_awaited()
+        self.assertEqual(4, len(added_inputs))
+        self.assertEqual({100, 101}, {inp.source_stage_item_id for inp in added_inputs})
 
     async def test_strict_raises_for_non_bracket_stage(self) -> None:
         stage = SimpleNamespace(id=1, tournament_id=99, stage_type=enums.StageType.ROUND_ROBIN, items=[])
@@ -656,7 +708,9 @@ class AutoWireStageTests(IsolatedAsyncioTestCase):
                 "get_stage",
                 AsyncMock(side_effect=[target, target, source, target]),
             ),
-            patch.object(stage_service.stage_service, "_preceding_group_stage", AsyncMock(return_value=source)),
+            patch.object(
+                stage_service.stage_service, "_preceding_phase_group_stages", AsyncMock(return_value=[source])
+            ),
         ):
             result = await stage_service.stage_service.auto_wire_stage(session, target.id)
 
