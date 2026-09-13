@@ -6,6 +6,12 @@ wrote ``status`` without ``result_status`` — the route to a ``completed`` +
 boundary: the field editor refuses the transition and names the endpoint that
 owns it, and it no longer runs advancement or emits a completion event as a side
 effect of unrelated edits.
+
+Leaving ``COMPLETED`` is the same boundary from the other side: a bare ``status``
+write left ``result_status='confirmed'`` next to a non-COMPLETED status, and the
+row died on ``ck_encounter_result_status_matches_status`` -- an IntegrityError in
+place of a message naming the reopen endpoint, which is the only writer that also
+clears the score and unwinds the bracket.
 """
 
 from __future__ import annotations
@@ -126,6 +132,47 @@ class UpdateEncounterGuards(IsolatedAsyncioTestCase):
 
         self.assertEqual("renamed", encounter.name)
         recalc.assert_awaited_once()
+
+    async def test_rejects_reopening_through_the_field_editor(self) -> None:
+        """Flipping a completed encounter back to ``open`` here wrote ``status``
+        alone, leaving ``result_status='confirmed'`` for the check constraint to
+        reject -- the edit died on an IntegrityError mid-transaction."""
+        with assert_http_status(self, 409):
+            await enc_service.encounter_service.update_encounter(
+                _session(_encounter()),
+                10,
+                schemas.EncounterUpdate(status="open"),
+            )
+
+    async def test_rejects_rewiring_a_completed_encounters_teams(self) -> None:
+        """A confirmed score belongs to the matchup that played it; re-assigning a
+        slot under it must go through reopen, which voids the result first."""
+        with assert_http_status(self, 409):
+            await enc_service.encounter_service.update_encounter(
+                _session(_encounter()),
+                10,
+                schemas.EncounterUpdate(away_team_id=99),
+            )
+
+    async def test_repeating_the_current_status_is_not_a_transition(self) -> None:
+        """The admin form posts every field, so renaming a completed encounter
+        arrives carrying ``status=completed``. Refusing that edit is what pushed
+        admins into flipping the status by hand to get their change through."""
+        encounter = _encounter()
+        session = _session(encounter)
+
+        with (
+            patch.object(enc_service, "enqueue_tournament_recalculation", AsyncMock()),
+            patch.object(enc_service.encounter_service, "_resolve_stage_refs", AsyncMock(return_value=(5, 6))),
+        ):
+            await enc_service.encounter_service.update_encounter(
+                session,
+                10,
+                schemas.EncounterUpdate(name="renamed", status="completed"),
+            )
+
+        self.assertEqual("renamed", encounter.name)
+        self.assertEqual(enums.EncounterStatus.COMPLETED, encounter.status)
 
 
 class BulkEndpointIsGone(IsolatedAsyncioTestCase):

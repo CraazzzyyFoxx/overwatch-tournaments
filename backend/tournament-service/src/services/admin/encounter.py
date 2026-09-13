@@ -43,6 +43,43 @@ def _reject_completed_status(new_status: str | None) -> None:
         )
 
 
+def _reject_settled_result_edits(encounter: models.Encounter, update_data: dict) -> None:
+    """Completion is not a field edit -- in either direction.
+
+    Into ``COMPLETED``: the result endpoint owns it (``_reject_completed_status``).
+    Out of it -- or rewiring a settled encounter's team slots -- the reopen
+    endpoint owns it: that one clears ``result_status``/``confirmed_at``/score and
+    unwinds whatever the old result advanced downstream. The bare status write
+    this used to allow left ``result_status='confirmed'`` beside a non-COMPLETED
+    status, which the database refuses outright
+    (``ck_encounter_result_status_matches_status``), so the edit died on an
+    IntegrityError instead of on a message naming the endpoint that can do it.
+
+    Repeating the encounter's current status is not a transition: the admin form
+    posts every field, so renaming a completed encounter must not trip the
+    completion guard and push admins into flipping the status by hand.
+    """
+    new_status = update_data.get("status", encounter.status)
+    if new_status != encounter.status:
+        _reject_completed_status(new_status.value)
+    if encounter.status != enums.EncounterStatus.COMPLETED:
+        return
+    teams_changed = any(
+        field in update_data and update_data[field] != getattr(encounter, field)
+        for field in ("home_team_id", "away_team_id")
+    )
+    if new_status == encounter.status and not teams_changed:
+        return
+    raise HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail=(
+            "use_reopen_endpoint: reopen the result via POST "
+            "/api/v1/admin/encounters/{encounter_id}/result/reopen before changing a completed "
+            "encounter's status or teams"
+        ),
+    )
+
+
 class AdminEncounterService:
     def __init__(
         self,
@@ -190,8 +227,6 @@ class AdminEncounterService:
         self, session: AsyncSession, encounter_id: int, data: schemas.EncounterUpdate
     ) -> models.Encounter:
         """Update encounter fields"""
-        _reject_completed_status(data.status)
-
         encounter = await self.encounter_repo.get_for_update(
             session,
             encounter_id,
@@ -208,6 +243,18 @@ class AdminEncounterService:
 
         # Update fields
         update_data = data.model_dump(exclude_unset=True)
+
+        # Status first: the completion guards must fire before any other
+        # validation or write this method does.
+        if "status" in update_data:
+            try:
+                update_data["status"] = enums.EncounterStatus(update_data["status"].lower())
+            except ValueError:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Invalid status. Must be one of: {', '.join([s.value for s in enums.EncounterStatus])}",
+                )
+        _reject_settled_result_edits(encounter, update_data)
 
         if "home_team_id" in update_data and update_data["home_team_id"] is not None:
             await self._require_team_in_tournament(
@@ -233,16 +280,6 @@ class AdminEncounterService:
         )
         update_data["stage_id"] = resolved_stage_id
         update_data["stage_item_id"] = resolved_stage_item_id
-
-        # Handle status conversion
-        if "status" in update_data:
-            try:
-                update_data["status"] = enums.EncounterStatus(update_data["status"].lower())
-            except ValueError:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Invalid status. Must be one of: {', '.join([s.value for s in enums.EncounterStatus])}",
-                )
 
         tournament_id = encounter.tournament_id
         previous_teams = (encounter.home_team_id, encounter.away_team_id)
