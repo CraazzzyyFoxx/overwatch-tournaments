@@ -1,21 +1,30 @@
 "use client";
 
-import React, { Fragment, useEffect, useId, useRef, useState } from "react";
+import React, { Fragment, useCallback, useEffect, useId, useRef, useState } from "react";
 import {
+  Cell,
   ColumnDef,
   ColumnFiltersState,
+  ColumnOrderState,
+  ColumnSizingState,
   flexRender,
   getCoreRowModel,
   getExpandedRowModel,
   getFilteredRowModel,
   getPaginationRowModel,
   getSortedRowModel,
+  Header,
   Row,
   RowSelectionState,
   SortingState,
   useReactTable,
 } from "@tanstack/react-table";
-import { ArrowDown, ArrowUp, ArrowUpDown, ChevronDown, ChevronLeft, ChevronRight, CircleMinus, LoaderCircle, Search } from "lucide-react";
+import { useVirtualizer, type VirtualItem } from "@tanstack/react-virtual";
+import { closestCenter, DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
+import { arrayMove, horizontalListSortingStrategy, SortableContext, useSortable } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import Link from "next/link";
+import { ArrowDown, ArrowUp, ArrowUpDown, ChevronDown, ChevronLeft, ChevronRight, CircleMinus, Download, LoaderCircle, Rows3, Rows4, Search } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useDebounce } from "use-debounce";
 import {
@@ -50,10 +59,15 @@ import {
 } from "@/components/admin/admin-table-columns";
 import { CategorizedColumnPicker } from "@/components/ui/categorized-column-picker";
 import { Checkbox } from "@/components/ui/checkbox";
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { InfiniteScrollFooter } from "@/components/ui/infinite-scroll";
 import { useColumnVisibility } from "@/hooks/useColumnVisibility";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { useDragRowSelect } from "@/components/admin/useDragRowSelect";
+import { useLocalStorageState } from "@/hooks/useLocalStorageState";
+import { useRowSelectionGestures } from "@/components/admin/useRowSelectionGestures";
+import { AdminSavedViews } from "@/components/admin/AdminSavedViews";
+import { AdminTableSearchContext, HighlightMatch } from "@/components/admin/HighlightMatch";
+import { downloadCsv } from "@/lib/csv";
 import { EYEBROW_CLASS } from "@/components/admin/tone";
 
 const ADMIN_ACTION_COLUMN_ID = "actions";
@@ -61,6 +75,13 @@ const ADMIN_ACTION_COLUMN_MIN_WIDTH = 80;
 /** Width of the select/expand column — keep in sync with its `w-10` class. */
 const ADMIN_LEADING_COLUMN_WIDTH = 40;
 const DEFAULT_PAGE_SIZE_OPTIONS = [10, 15, 25, 50, 100];
+/**
+ * Rows past which the body is virtualised. Below it every row is in the DOM,
+ * which keeps find-in-page and the tests' plain DOM queries working; above it
+ * an infinite list of a few hundred `<tr>`s starts stuttering on scroll.
+ */
+const VIRTUALIZE_FROM = 100;
+const ROW_HEIGHT_ESTIMATE = { comfortable: 41, compact: 33 } as const;
 const COLUMN_CATEGORY_LABELS: Record<AdminColumnCategory, string> = {
   core: "Core",
   meta: "Meta",
@@ -74,6 +95,25 @@ function parsePositiveInt(value: string | null, fallback: number) {
 
 function parseSortDir(value: string | null): SortDir {
   return value === "desc" ? "desc" : "asc";
+}
+
+/** `?sort=a,b&dir=desc,asc` — one entry per sorted column, `dir` omitted when every one is ascending. */
+function parseSorting(params: URLSearchParams, fallback: SortingState): SortingState {
+  const sort = params.get("sort");
+  if (!sort) return fallback;
+  const dirs = (params.get("dir") ?? "").split(",");
+  return sort.split(",").filter(Boolean).map((id, index) => ({ id, desc: parseSortDir(dirs[index] ?? null) === "desc" }));
+}
+
+function writeSorting(params: URLSearchParams, sorting: SortingState) {
+  if (sorting.length === 0) { params.delete("sort"); params.delete("dir"); return; }
+  params.set("sort", sorting.map((entry) => entry.id).join(","));
+  if (sorting.some((entry) => entry.desc)) params.set("dir", sorting.map((entry) => (entry.desc ? "desc" : "asc")).join(","));
+  else params.delete("dir");
+}
+
+function serializeSorting(sorting: SortingState) {
+  return sorting.map((entry) => `${entry.id}:${entry.desc ? "desc" : "asc"}`).join(",");
 }
 
 /**
@@ -275,15 +315,28 @@ export function AdminDataTable<TData>({
   const filterSpecsRef = useRef(filterSpecs);
   filterSpecsRef.current = filterSpecs;
   const serializedFilters = serializeFilters(filters);
+  // Server mode sorts by one column: the backend takes a single `sort_by`.
   const sortField = sorting[0]?.id ?? null;
   const sortDir: SortDir = sorting[0]?.desc ? "desc" : "asc";
+  const sortKey = serializeSorting(sorting);
   const previousDebouncedSearchRef = useRef("");
   const previousPageSizeRef = useRef(initialPageSize);
   const previousFilterKeyRef = useRef(filterKey);
-  const previousSortRef = useRef<{ field: string | null; dir: SortDir }>({ field: null, dir: "asc" });
+  const previousSortRef = useRef("");
   const rowClickTimeoutRef = useRef<number | null>(null);
   const previousFiltersRef = useRef("");
-  const previousUrlStateRef = useRef({ page: 1, search: "", pageSize: initialPageSize, sortField: null as string | null, sortDir: "asc" as SortDir, filters: "" });
+  const previousUrlStateRef = useRef({ page: 1, search: "", pageSize: initialPageSize, sortKey: "", filters: "" });
+  // Per-user table preferences. Widths and order are per screen (falling back
+  // to the route when the screen gave no key); density is one setting everywhere.
+  // ponytail: two tables on one route without `columnsStorageKey` share prefs.
+  const prefsKey = columnsStorageKey ?? `admin-table:${pathname}`;
+  const [density, setDensity] = useLocalStorageState<"comfortable" | "compact">("admin-table-density", "comfortable");
+  const [columnSizing, setColumnSizing] = useLocalStorageState<ColumnSizingState>(`${prefsKey}:sizing`, {});
+  const [columnOrder, setColumnOrder] = useLocalStorageState<ColumnOrderState>(`${prefsKey}:order`, []);
+  const [focusedRowId, setFocusedRowId] = useState<string | null>(null);
+  const [scrollElement, setScrollElement] = useState<HTMLElement | null>(null);
+  // The shadcn `Table` wraps the `<table>` in the element that actually scrolls.
+  const tableRef = useCallback((table: HTMLTableElement | null) => setScrollElement(table?.parentElement ?? null), []);
   /**
    * The filter set the last URL parse asked for, held until state carries it.
    *
@@ -327,12 +380,11 @@ export function AdminDataTable<TData>({
   }, [filterKey]);
 
   useEffect(() => {
-    const prev = previousSortRef.current;
-    if (prev.field !== sortField || prev.dir !== sortDir) {
-      previousSortRef.current = { field: sortField, dir: sortDir };
+    if (previousSortRef.current !== sortKey) {
+      previousSortRef.current = sortKey;
       setCurrentPage(1);
     }
-  }, [sortField, sortDir]);
+  }, [sortKey]);
 
   useEffect(() => {
     if (previousFiltersRef.current !== serializedFilters) {
@@ -385,7 +437,7 @@ export function AdminDataTable<TData>({
     .filter((column): column is typeof column & { category: AdminColumnCategory } =>
       Boolean(column.id) && column.category !== undefined,
     );
-  const { visibility, toggleColumn, resetToDefaults } = useColumnVisibility(
+  const { visibility, toggleColumn, setVisibility, resetToDefaults } = useColumnVisibility(
     columnsStorageKey ?? null,
     pickerColumns,
   );
@@ -422,6 +474,14 @@ export function AdminDataTable<TData>({
     getExpandedRowModel: renderExpanded ? getExpandedRowModel() : undefined,
     getRowCanExpand: renderExpanded ? () => true : undefined,
     enableRowSelection: enableRowSelection,
+    // Shift+click stacks sorts in client mode; server mode takes one column.
+    enableMultiSort: isClientMode,
+    isMultiSortEvent: (event) => (event as React.MouseEvent).shiftKey,
+    enableColumnResizing: true,
+    // One write per drag rather than one per pointer move: sizing is persisted.
+    columnResizeMode: "onEnd",
+    onColumnSizingChange: setColumnSizing,
+    onColumnOrderChange: setColumnOrder,
     onSortingChange: setSorting,
     onRowSelectionChange: setRowSelection,
     // Pagination is controlled by this component's own page state, so TanStack
@@ -442,6 +502,8 @@ export function AdminDataTable<TData>({
     state: {
       sorting,
       rowSelection,
+      columnSizing,
+      columnOrder,
       columnVisibility: visibility,
       ...(isClientMode
         ? { columnFilters, pagination: paginationState }
@@ -465,11 +527,17 @@ export function AdminDataTable<TData>({
   const totalPageCount = Math.max(1, Math.ceil(safeTotal / effectivePageSize));
   const rangeStart = safeTotal > 0 ? (safeCurrentPage - 1) * effectivePageSize + 1 : 0;
   const rangeEnd = safeTotal > 0 ? Math.min(safeCurrentPage * effectivePageSize, safeTotal) : 0;
-  const selectedRows = table.getSelectedRowModel().rows;
-  const dragSelect = useDragRowSelect(table);
-  const selectableRows = enableRowSelection
-    ? table.getRowModel().rows.filter((row) => row.getCanSelect())
-    : [];
+  const pageRows = table.getRowModel().rows;
+  // Server mode only holds the current page, so a row selected two pages back
+  // would vanish from `bulkActions` while its checkbox state lived on. Remember
+  // every selected row's data as it passes through; forget it when deselected.
+  const selectedDataRef = useRef(new Map<string, TData>());
+  for (const row of pageRows) if (row.getIsSelected()) selectedDataRef.current.set(row.id, row.original);
+  for (const id of selectedDataRef.current.keys()) if (!rowSelection[id]) selectedDataRef.current.delete(id);
+  const selectedData = [...selectedDataRef.current.values()];
+  const selectedOnPage = pageRows.filter((row) => row.getIsSelected()).length;
+  const gestures = useRowSelectionGestures(table, Boolean(enableRowSelection));
+  const selectableRows = enableRowSelection ? pageRows.filter((row) => row.getCanSelect()) : [];
 
   useEffect(() => {
     if (safeCurrentPage > totalPageCount) {
@@ -485,23 +553,21 @@ export function AdminDataTable<TData>({
       const nextSearch = params.get("search") ?? "";
       const nextPageSize = parsePositiveInt(params.get("per_page"), initialPageSize);
       // No `?sort=` yet means the table is still on its default sort, not unsorted.
-      const nextSortField = params.get("sort") ?? initialSort?.field ?? null;
-      const nextSortDir = params.get("sort")
-        ? parseSortDir(params.get("dir"))
-        : (initialSort?.dir ?? parseSortDir(params.get("dir")));
+      const nextSorting = parseSorting(params, initialSort ? [{ id: initialSort.field, desc: initialSort.dir === "desc" }] : []);
+      const nextSortKey = serializeSorting(nextSorting);
       const nextFilters = parseFiltersFromParams(filterSpecsRef.current, params);
       const nextSerializedFilters = serializeFilters(nextFilters);
 
       previousDebouncedSearchRef.current = nextSearch;
       previousPageSizeRef.current = nextPageSize;
-      previousSortRef.current = { field: nextSortField, dir: nextSortDir };
+      previousSortRef.current = nextSortKey;
       previousFiltersRef.current = nextSerializedFilters;
-      previousUrlStateRef.current = { page: nextPage, search: nextSearch, pageSize: nextPageSize, sortField: nextSortField, sortDir: nextSortDir, filters: nextSerializedFilters };
+      previousUrlStateRef.current = { page: nextPage, search: nextSearch, pageSize: nextPageSize, sortKey: nextSortKey, filters: nextSerializedFilters };
       pendingUrlFiltersRef.current = nextSerializedFilters;
       setCurrentPage(nextPage);
       setSearchValue(nextSearch);
       setPageSize(nextPageSize);
-      setSorting(nextSortField ? [{ id: nextSortField, desc: nextSortDir === "desc" }] : []);
+      setSorting(nextSorting);
       setFilters(nextFilters);
     };
 
@@ -528,53 +594,54 @@ export function AdminDataTable<TData>({
     const searchChanged = prev.search !== debouncedSearchValue;
     const pageChanged = prev.page !== safeCurrentPage;
     const pageSizeChanged = prev.pageSize !== safePageSize;
-    const sortFieldChanged = prev.sortField !== sortField;
-    const sortDirChanged = prev.sortDir !== sortDir;
+    const sortChanged = prev.sortKey !== sortKey;
     const filtersChanged = prev.filters !== serializedFilters;
 
-    if (!searchChanged && !pageChanged && !pageSizeChanged && !sortFieldChanged && !sortDirChanged && !filtersChanged) return;
+    if (!searchChanged && !pageChanged && !pageSizeChanged && !sortChanged && !filtersChanged) return;
 
     const currentSearch = params.get("search") ?? "";
     const currentPageParam = Number.parseInt(params.get("page") ?? "1", 10) || 1;
     const currentPageSizeParam = parsePositiveInt(params.get("per_page"), initialPageSize);
-    const currentSortField = params.get("sort") ?? null;
-    const currentSortDir = parseSortDir(params.get("dir"));
+    const currentSortKey = serializeSorting(parseSorting(params, []));
     const currentFilters = serializeFilters(parseFiltersFromParams(filterSpecsRef.current, params));
 
     if (
       currentSearch === debouncedSearchValue &&
       currentPageParam === safeCurrentPage &&
       currentPageSizeParam === safePageSize &&
-      currentSortField === sortField &&
-      currentSortDir === sortDir &&
+      currentSortKey === sortKey &&
       currentFilters === serializedFilters
     ) {
-      previousUrlStateRef.current = { page: safeCurrentPage, search: debouncedSearchValue, pageSize: safePageSize, sortField, sortDir, filters: serializedFilters };
+      previousUrlStateRef.current = { page: safeCurrentPage, search: debouncedSearchValue, pageSize: safePageSize, sortKey, filters: serializedFilters };
       return;
     }
 
     if (debouncedSearchValue) params.set("search", debouncedSearchValue); else params.delete("search");
     if (safeCurrentPage > 1) params.set("page", String(safeCurrentPage)); else params.delete("page");
     if (safePageSize !== initialPageSize) params.set("per_page", String(safePageSize)); else params.delete("per_page");
-    if (sortField) { params.set("sort", sortField); if (sortDir === "desc") params.set("dir", "desc"); else params.delete("dir"); } else { params.delete("sort"); params.delete("dir"); }
+    writeSorting(params, sorting);
     writeFiltersToParams(filterSpecsRef.current, filters, params);
 
     const query = params.toString();
     const nextUrl = query ? `${pathname}?${query}` : pathname;
 
-    if (searchChanged || pageSizeChanged || sortFieldChanged || sortDirChanged || filtersChanged) {
+    if (searchChanged || pageSizeChanged || sortChanged || filtersChanged) {
       window.history.replaceState(null, "", nextUrl);
     } else {
       window.history.pushState(null, "", nextUrl);
     }
 
-    previousUrlStateRef.current = { page: safeCurrentPage, search: debouncedSearchValue, pageSize: safePageSize, sortField, sortDir, filters: serializedFilters };
-  }, [safeCurrentPage, debouncedSearchValue, initialPageSize, safePageSize, pathname, sortField, sortDir, filters, serializedFilters]);
+    previousUrlStateRef.current = { page: safeCurrentPage, search: debouncedSearchValue, pageSize: safePageSize, sortKey, filters: serializedFilters };
+  }, [safeCurrentPage, debouncedSearchValue, initialPageSize, safePageSize, pathname, sorting, sortKey, filters, serializedFilters]);
 
   const getColumnStyle = (column: { id: string; getSize: () => number; columnDef: { size?: number } }) => {
-    const configuredSize = typeof column.columnDef.size === "number" ? column.getSize() : undefined;
+    const resized = columnSizing[column.id] !== undefined;
+    const configuredSize = resized || typeof column.columnDef.size === "number" ? column.getSize() : undefined;
     const width = column.id === ADMIN_ACTION_COLUMN_ID ? Math.max(configuredSize ?? 0, ADMIN_ACTION_COLUMN_MIN_WIDTH) : configuredSize;
-    return width ? { width, minWidth: width } : undefined;
+    if (!width) return undefined;
+    // Auto table layout treats `width` as a floor; a user-dragged width is a
+    // ceiling too, or shrinking a column would visibly do nothing.
+    return resized ? { width, minWidth: width, maxWidth: width } : { width, minWidth: width };
   };
 
   const hasRowAction = Boolean(onRowClick || onRowDoubleClick);
@@ -607,25 +674,34 @@ export function AdminDataTable<TData>({
     setPageSize(nextPageSize);
   };
 
-  const handleRowKeyDown = (event: React.KeyboardEvent<HTMLTableRowElement>, row: Row<TData>) => {
+  /** Arrow/Space/Escape/Ctrl+A go to the selection gestures; Enter (and Space without selection) opens the row. */
+  const handleBodyKeyDown = (event: React.KeyboardEvent<HTMLTableSectionElement>) => {
+    if (gestures.bodyKeyDown(event)) return;
     if (!onRowClick) return;
-    if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onRowClick(row); }
+    const target = event.target as HTMLElement;
+    if (target.dataset.rowId === undefined) return;
+    const row = table.getRowModel().rowsById[target.dataset.rowId];
+    if (row && (event.key === "Enter" || (event.key === " " && !enableRowSelection))) {
+      event.preventDefault();
+      onRowClick(row);
+    }
   };
 
   const hasLeadingColumn = Boolean(enableRowSelection || renderExpanded);
   const leadingColumnCount = hasLeadingColumn ? 1 : 0;
-  const bodyColumnCount = table.getVisibleLeafColumns().length + leadingColumnCount;
+  const visibleColumns = table.getVisibleLeafColumns();
+  const bodyColumnCount = visibleColumns.length + leadingColumnCount;
 
   // Sticky pins a left-edge PREFIX of the visible columns: a pinned column with
   // scrolling ones in front of it would park itself over the wrong neighbours.
-  // Offsets are summed from declared sizes rather than measured, so every
-  // pinned column after the first must set `size`.
+  // Offsets are summed from declared (or dragged) sizes rather than measured,
+  // so every pinned column after the first must set `size`.
   const stickyLeft = new Map<string, number>();
   let stickyOffset = hasLeadingColumn ? ADMIN_LEADING_COLUMN_WIDTH : 0;
-  for (const column of table.getVisibleLeafColumns()) {
+  for (const column of visibleColumns) {
     if (!readAdminColumnMeta<TData>(column.columnDef.meta).sticky) break;
     stickyLeft.set(column.id, stickyOffset);
-    stickyOffset += typeof column.columnDef.size === "number" ? column.getSize() : 0;
+    stickyOffset += getColumnStyle(column)?.width ?? 0;
   }
   const lastStickyId = [...stickyLeft.keys()].pop() ?? null;
 
@@ -638,15 +714,71 @@ export function AdminDataTable<TData>({
       style: { ...style, left }
     };
   };
-  const pageRows = table.getRowModel().rows;
   const rowGroups = groupRows
     ? groupRows(pageRows)
     : [{ key: "all", label: null, rows: pageRows }];
 
+  // One flat list of everything the body renders, so the virtualiser can
+  // measure group headers and expanded details like any other row.
+  type BodyItem =
+    | { kind: "group"; key: string; group: AdminDataTableGroup<TData> }
+    | { kind: "row"; key: string; row: Row<TData> }
+    | { kind: "detail"; key: string; row: Row<TData> };
+  const bodyItems: BodyItem[] = rowGroups.flatMap((group) => [
+    ...(group.label !== null ? [{ kind: "group" as const, key: `group:${group.key}`, group }] : []),
+    ...group.rows.flatMap((row) => [
+      { kind: "row" as const, key: row.id, row },
+      ...(renderExpanded && row.getIsExpanded() ? [{ kind: "detail" as const, key: `detail:${row.id}`, row }] : [])
+    ])
+  ]);
+  const virtualize = !isMobile && bodyItems.length > VIRTUALIZE_FROM;
+  const virtualizer = useVirtualizer({
+    count: bodyItems.length,
+    getScrollElement: () => scrollElement,
+    estimateSize: () => ROW_HEIGHT_ESTIMATE[density],
+    getItemKey: (index) => bodyItems[index].key,
+    overscan: 12,
+    enabled: virtualize
+  });
+  const virtualItems = virtualize ? virtualizer.getVirtualItems() : [];
+  const firstRowId = bodyItems.find((item) => item.kind === "row")?.row.id ?? null;
+  // Roving tabindex: one row is in the Tab order, arrows move between the rest.
+  const tabbableRowId = focusedRowId !== null && table.getRowModel().rowsById[focusedRowId] ? focusedRowId : firstRowId;
+
+  // Column drag-to-reorder. Only the header row is sortable; the actions
+  // column keeps its place at the right edge.
+  const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+  const leafColumnIds = table.getAllLeafColumns().map((column) => column.id);
+  const handleColumnDragEnd = ({ active, over }: DragEndEvent) => {
+    if (!over || active.id === over.id) return;
+    const order = columnOrder.length > 0 ? columnOrder : leafColumnIds;
+    setColumnOrder(arrayMove(order, order.indexOf(String(active.id)), order.indexOf(String(over.id))));
+  };
+
+  /** Selected rows when there are any, else the whole current view (every filtered row in client mode). */
+  const exportCsv = () => {
+    const exportColumns = visibleColumns.filter((column) => column.id !== ADMIN_ACTION_COLUMN_ID);
+    const source = isClientMode ? table.getFilteredRowModel().rows : pageRows;
+    const rows = selectedData.length > 0 ? source.filter((row) => row.getIsSelected()) : source;
+    downloadCsv(pathname.split("/").filter(Boolean).pop() ?? "export", [
+      exportColumns.map((column) => (typeof column.columnDef.header === "string" ? column.columnDef.header : column.id)),
+      ...rows.map((row) => exportColumns.map((column) => row.getValue(column.id)))
+    ]);
+  };
+
+  // Right-click / long-press menu mirrors the kebab column, when a screen has one.
+  const rowActions = columns.map((column) => readAdminColumnMeta<TData>(column.meta).rowActions).find(Boolean);
+  // Only cells left on TanStack's default renderer get search highlighting;
+  // custom cells opt in through `useAdminTableSearch`.
+  const customCellIds = new Set(columns.filter((column) => column.cell !== undefined).map(columnDefId));
+
+  const cellPadding = density === "compact" ? "py-1" : "py-2.5";
+
   const renderLeadingCell = (row: Row<TData>) => (
     <TableCell
       className={cn(
-        "w-10 py-2.5 pl-4",
+        "w-10 pl-4",
+        cellPadding,
         cellAlign === "top" ? "align-top" : "align-middle",
         stickyLeft.size > 0 && "admin-sticky-col"
       )}
@@ -672,8 +804,8 @@ export function AdminDataTable<TData>({
           <Checkbox
             checked={row.getIsSelected()}
             onCheckedChange={(checked) => row.toggleSelected(checked === true)}
-            onPointerDown={dragSelect.checkboxPointerDown(row)}
-            onClick={dragSelect.checkboxClick}
+            onPointerDown={gestures.checkboxPointerDown(row)}
+            onClick={gestures.checkboxClick}
             className="touch-none"
             aria-label={`Select row ${row.id}`}
           />
@@ -690,11 +822,6 @@ export function AdminDataTable<TData>({
    */
   const showSearch = searchPlaceholder !== undefined || toolbar === undefined;
   const searchLabel = searchPlaceholder ?? "Search…";
-  const hasToolbarTrailing =
-    Boolean(actions) ||
-    Boolean(columnsStorageKey) ||
-    isRefreshing ||
-    Boolean(bulkActions && selectedRows.length > 0);
 
   const emptyState = (
     <div className="flex flex-col items-center justify-center gap-2">
@@ -777,71 +904,225 @@ export function AdminDataTable<TData>({
     );
   };
 
+  const renderCell = (cell: Cell<TData, unknown>, index: number, count: number) => {
+    const isActionColumn = cell.column.id === ADMIN_ACTION_COLUMN_ID;
+    const isFirstColumn = index === 0 && !hasLeadingColumn;
+    const isLastColumn = index === count - 1;
+    const columnMeta = readAdminColumnMeta<TData>(cell.column.columnDef.meta);
+    const align = columnMeta.align ?? (isActionColumn ? "right" : "left");
+    const sticky = stickyCell(cell.column.id, getColumnStyle(cell.column));
+    const content =
+      debouncedSearchValue && !isActionColumn && !customCellIds.has(cell.column.id) ? (
+        <HighlightMatch text={String(cell.getValue() ?? "")} query={debouncedSearchValue} />
+      ) : (
+        flexRender(cell.column.columnDef.cell, cell.getContext())
+      );
+
+    return (
+      <TableCell
+        key={cell.id}
+        className={cn(
+          "text-sm",
+          cellPadding,
+          cellAlign === "top" ? "align-top" : "align-middle",
+          isFirstColumn && "pl-4 text-muted-foreground",
+          isLastColumn && "pr-4",
+          isActionColumn && "whitespace-nowrap",
+          columnMeta.numeric && "tabular-nums",
+          ALIGN_CLASS[align],
+          RESPONSIVE_CLASS[columnMeta.responsive ?? "always"],
+          columnMeta.className,
+          sticky.className,
+        )}
+        style={sticky.style}
+      >
+        {isActionColumn ? (
+          // Always visible: hiding the primary row actions behind hover made
+          // them unreachable without a mouse on every list screen.
+          <div className="flex w-full items-center justify-end">{content}</div>
+        ) : align === "left" ? (
+          content
+        ) : (
+          // `text-center` on the <td> does not centre a Tooltip/icon
+          // (inline-flex trigger inside a full-width cell). Match the header flex.
+          <div className={cn("flex w-full items-center", ALIGN_FLEX_CLASS[align])}>{content}</div>
+        )}
+      </TableCell>
+    );
+  };
+
+  const renderRow = (row: Row<TData>, virtual?: VirtualItem) => {
+    const cells = row.getVisibleCells();
+    const tr = (
+      <TableRow
+        ref={virtual ? virtualizer.measureElement : undefined}
+        data-index={virtual?.index}
+        data-row-id={row.id}
+        data-selected={row.getIsSelected() || undefined}
+        aria-current={row.id === inspectorId ? "true" : undefined}
+        tabIndex={row.id === tabbableRowId ? 0 : -1}
+        onFocus={(event) => { if (event.target === event.currentTarget) setFocusedRowId(row.id); }}
+        className={cn(
+          "group border-b border-border/30 transition-colors hover:bg-accent/20 data-[selected]:bg-accent/30",
+          "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/50 focus-visible:ring-inset",
+          hasRowAction && "cursor-pointer",
+          row.id === inspectorId && "bg-primary/10",
+        )}
+        onClick={(event) => handleRowClick(event, row)}
+        onDoubleClick={(event) => handleRowDoubleClick(event, row)}
+        aria-describedby={rowHintId}
+      >
+        {hasLeadingColumn ? renderLeadingCell(row) : null}
+        {cells.map((cell, index) => renderCell(cell, index, cells.length))}
+      </TableRow>
+    );
+    const actions = rowActions?.(row.original).filter((action) => !action.hidden) ?? [];
+    if (actions.length === 0) return <Fragment key={row.id}>{tr}</Fragment>;
+    return (
+      <ContextMenu key={row.id}>
+        <ContextMenuTrigger asChild>{tr}</ContextMenuTrigger>
+        <ContextMenuContent className="w-48">
+          {actions.map((action) => {
+            const Icon = action.icon;
+            const content = (
+              <>
+                {Icon ? <Icon aria-hidden className="size-3.5" /> : null}
+                {action.label}
+              </>
+            );
+            return (
+              <ContextMenuItem
+                key={action.label}
+                asChild={action.href !== undefined}
+                onSelect={action.onSelect}
+                className={cn("gap-2", action.destructive && "text-danger focus:text-danger")}
+              >
+                {action.href !== undefined ? <Link href={action.href}>{content}</Link> : content}
+              </ContextMenuItem>
+            );
+          })}
+        </ContextMenuContent>
+      </ContextMenu>
+    );
+  };
+
+  const renderItem = (item: BodyItem, virtual?: VirtualItem) => {
+    const measure = virtual ? { ref: virtualizer.measureElement, "data-index": virtual.index } : {};
+    if (item.kind === "row") return renderRow(item.row, virtual);
+    if (item.kind === "group") {
+      return (
+        <TableRow key={item.key} {...measure} className="hover:bg-transparent">
+          <TableCell colSpan={bodyColumnCount} className={cn(EYEBROW_CLASS, "border-b border-border/40 bg-muted/30 py-2 pl-4")}>
+            {item.group.label}
+          </TableCell>
+        </TableRow>
+      );
+    }
+    return (
+      <TableRow key={item.key} {...measure} className="hover:bg-transparent">
+        <TableCell colSpan={bodyColumnCount} className="border-b border-border/30 bg-muted/10 px-4 py-4">
+          {renderExpanded?.(item.row)}
+        </TableCell>
+      </TableRow>
+    );
+  };
+
+  const padTop = virtualItems[0]?.start ?? 0;
+  const padBottom = virtualItems.length > 0 ? virtualizer.getTotalSize() - virtualItems[virtualItems.length - 1].end : 0;
+  const offPageSelected = selectedData.length - selectedOnPage;
+
   return (
+    <AdminTableSearchContext.Provider value={debouncedSearchValue}>
     <div className="rounded-xl border border-border/50 bg-card/50 overflow-hidden">
       {/* ── TOOLBAR ─────────────────────────────────────── */}
       {/* One row: search, then the screen's filter bar (chips wrap inside it),
           then the table's own controls. Two stacked rows cost a full band of
           chrome for a chip row that is empty most of the time. */}
-      {toolbar || showSearch || hasToolbarTrailing ? (
-        <div className="flex flex-wrap items-center gap-3 border-b border-border/40 px-4 py-2.5">
-          {showSearch ? (
-            <div className="relative w-64 shrink-0">
-              <Label htmlFor={searchInputId} className="sr-only">{searchLabel}</Label>
-              <Search aria-hidden className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                id={searchInputId}
-                autoComplete="off"
-                className="h-8 border-border bg-muted/30 pl-9 text-sm placeholder:text-muted-foreground focus-visible:ring-1 focus-visible:ring-ring focus-visible:border-ring"
-                name="admin-table-search"
-                placeholder={searchLabel}
-                value={searchValue}
-                onChange={(event) => setSearchValue(event.target.value)}
-              />
-            </div>
-          ) : null}
-
-          {toolbar ? <div className="min-w-0 flex-1">{toolbar}</div> : null}
-
-          {isRefreshing ? (
-            <output className="flex shrink-0 items-center text-muted-foreground">
-              <LoaderCircle aria-hidden className="size-3 animate-spin" />
-              <span className="sr-only">Refreshing results…</span>
-            </output>
-          ) : null}
-
-          <div className="ml-auto flex shrink-0 items-center gap-2">
-            {bulkActions && selectedRows.length > 0
-              ? bulkActions(
-                  selectedRows.map((row) => row.original),
-                  () => setRowSelection({})
-                )
-              : null}
-            {columnsStorageKey ? (
-              <CategorizedColumnPicker<AdminColumnCategory, (typeof pickerColumns)[number]>
-                columns={pickerColumns}
-                categories={["core", "meta", "admin"]}
-                categoryLabel={(category) => COLUMN_CATEGORY_LABELS[category]}
-                visibility={visibility}
-                onToggle={toggleColumn}
-                onReset={resetToDefaults}
-                triggerLabel="Columns"
-                resetLabel="Reset to defaults"
-                isMandatory={(id) => pickerColumns.some((column) => column.id === id && column.mandatory)}
-              />
-            ) : null}
-            {actions}
+      <div className="flex flex-wrap items-center gap-3 border-b border-border/40 px-4 py-2.5">
+        {showSearch ? (
+          <div className="relative w-64 shrink-0">
+            <Label htmlFor={searchInputId} className="sr-only">{searchLabel}</Label>
+            <Search aria-hidden className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              id={searchInputId}
+              autoComplete="off"
+              className="h-8 border-border bg-muted/30 pl-9 text-sm placeholder:text-muted-foreground focus-visible:ring-1 focus-visible:ring-ring focus-visible:border-ring"
+              name="admin-table-search"
+              placeholder={searchLabel}
+              value={searchValue}
+              onChange={(event) => setSearchValue(event.target.value)}
+            />
           </div>
+        ) : null}
+
+        {toolbar ? <div className="min-w-0 flex-1">{toolbar}</div> : null}
+
+        {isRefreshing ? (
+          <output className="flex shrink-0 items-center text-muted-foreground">
+            <LoaderCircle aria-hidden className="size-3 animate-spin" />
+            <span className="sr-only">Refreshing results…</span>
+          </output>
+        ) : null}
+
+        <div className="ml-auto flex shrink-0 items-center gap-2">
+          {bulkActions && selectedData.length > 0 ? bulkActions(selectedData, () => setRowSelection({})) : null}
+          {offPageSelected > 0 ? (
+            <span className="text-xs tabular-nums text-muted-foreground" title="Selected rows not on this page are included in bulk actions">
+              {offPageSelected} on other pages
+            </span>
+          ) : null}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-8"
+            onClick={exportCsv}
+            disabled={pageRows.length === 0}
+            title={selectedData.length > 0 ? `Export ${selectedData.length} selected rows as CSV` : "Export the current view as CSV"}
+          >
+            <Download aria-hidden className="size-3.5" />
+            CSV
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-8 w-8 px-0"
+            aria-pressed={density === "compact"}
+            aria-label={density === "compact" ? "Comfortable rows" : "Compact rows"}
+            title={density === "compact" ? "Comfortable rows" : "Compact rows"}
+            onClick={() => setDensity(density === "compact" ? "comfortable" : "compact")}
+          >
+            {density === "compact" ? <Rows3 aria-hidden className="size-3.5" /> : <Rows4 aria-hidden className="size-3.5" />}
+          </Button>
+          <AdminSavedViews
+            storageKey={prefsKey}
+            extra={{ get: () => visibility, apply: (next) => setVisibility(next as Record<string, boolean>) }}
+          />
+          {columnsStorageKey ? (
+            <CategorizedColumnPicker<AdminColumnCategory, (typeof pickerColumns)[number]>
+              columns={pickerColumns}
+              categories={["core", "meta", "admin"]}
+              categoryLabel={(category) => COLUMN_CATEGORY_LABELS[category]}
+              visibility={visibility}
+              onToggle={toggleColumn}
+              onReset={resetToDefaults}
+              triggerLabel="Columns"
+              resetLabel="Reset to defaults"
+              isMandatory={(id) => pickerColumns.some((column) => column.id === id && column.mandatory)}
+            />
+          ) : null}
+          {actions}
         </div>
-      ) : null}
+      </div>
 
       {/* ── TABLE ───────────────────────────────────────── */}
-      <div className="overflow-x-auto">
-        {onRowClick ? (
-          <p id={rowHintId} className="sr-only">
-            Press Enter to open the focused row.
-          </p>
-        ) : null}
+      <div>
+        <p id={rowHintId} className="sr-only">
+          Use the Up and Down arrows to move between rows
+          {enableRowSelection ? ", Space to select, Shift with an arrow to extend the selection" : ""}
+          {onRowClick ? ", Enter to open the focused row" : ""}.
+        </p>
         {isMobile ? (
           pageRows.length > 0 ? (
             <ul aria-label="Rows">{rowGroups.flatMap((group) => group.rows).map(renderMobileRow)}</ul>
@@ -849,15 +1130,24 @@ export function AdminDataTable<TData>({
             <div className="py-8 text-center">{emptyState}</div>
           )
         ) : (
-        <Table className="min-w-full border-separate border-spacing-0">
-          <TableHeader>
+        <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={handleColumnDragEnd}>
+        <SortableContext
+          items={visibleColumns.filter((column) => column.id !== ADMIN_ACTION_COLUMN_ID).map((column) => column.id)}
+          strategy={horizontalListSortingStrategy}
+        >
+        {/* The table scrolls in its own box so the header can stick and the
+            body can be virtualised. ponytail: fixed offset for the shell chrome
+            above; turn into a CSS variable if a screen needs a taller box. */}
+        <Table ref={tableRef} wrapperClassName="max-h-[calc(100dvh-14rem)]" className="min-w-full border-separate border-spacing-0">
+          <TableHeader className="sticky top-0 z-10">
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id} className="hover:bg-transparent">
                 {hasLeadingColumn ? (
                   <TableHead
                     className={cn(
-                      "h-9 w-10 border-b border-border/40 pl-4 text-left",
-                      stickyLeft.size > 0 ? "admin-sticky-col" : "bg-muted/20"
+                      "w-10 border-b border-border/40 pl-4 text-left",
+                      density === "compact" ? "h-8" : "h-9",
+                      stickyLeft.size > 0 ? "admin-sticky-col" : "admin-table-head"
                     )}
                     style={stickyLeft.size > 0 ? { left: 0 } : undefined}
                   >
@@ -882,17 +1172,21 @@ export function AdminDataTable<TData>({
                   const isLastColumn = index === headerGroup.headers.length - 1;
                   const canSort = header.column.getCanSort();
                   const sorted = header.column.getIsSorted();
+                  const sortIndex = sorting.length > 1 ? header.column.getSortIndex() : -1;
                   const columnMeta = readAdminColumnMeta<TData>(header.column.columnDef.meta);
                   const align = columnMeta.align ?? (isActionColumn ? "right" : "left");
                   const sticky = stickyCell(header.column.id, getColumnStyle(header.column));
 
                   return (
-                    <TableHead
+                    <SortableHead
                       key={header.id}
+                      header={header}
+                      disabled={isActionColumn}
                       aria-sort={canSort ? ariaSortValue(sorted) : undefined}
                       className={cn(
-                        "h-9 border-b border-border/40 text-xs font-medium text-muted-foreground",
-                        sticky.className ?? "bg-muted/20",
+                        "border-b border-border/40 text-xs font-medium text-muted-foreground",
+                        density === "compact" ? "h-8" : "h-9",
+                        sticky.className ?? "admin-table-head",
                         isFirstColumn && "pl-4",
                         isLastColumn && "pr-4",
                         ALIGN_CLASS[align],
@@ -907,6 +1201,7 @@ export function AdminDataTable<TData>({
                             <button
                               type="button"
                               onClick={header.column.getToggleSortingHandler()}
+                              title={isClientMode ? "Click to sort, Shift+click to add a second sort" : undefined}
                               className={cn(
                                 "inline-flex items-center gap-1 rounded transition-colors hover:text-foreground",
                                 sorted ? "text-foreground" : "text-muted-foreground",
@@ -920,134 +1215,64 @@ export function AdminDataTable<TData>({
                               ) : (
                                 <ArrowUpDown aria-hidden className="size-3 shrink-0 opacity-30" />
                               )}
+                              {sortIndex >= 0 ? (
+                                <span aria-label={`Sort priority ${sortIndex + 1}`} className="font-mono text-[10px] tabular-nums opacity-70">{sortIndex + 1}</span>
+                              ) : null}
                             </button>
                           ) : (
                             flexRender(header.column.columnDef.header, header.getContext())
                           )}
                         </span>
                       )}
-                    </TableHead>
+                    </SortableHead>
                   );
                 })}
               </TableRow>
             ))}
           </TableHeader>
-          <TableBody>
-            {pageRows.length > 0 ? (
-              rowGroups.map((group) => (
-                <Fragment key={group.key}>
-                  {group.label !== null ? (
-                    <TableRow className="hover:bg-transparent">
-                      <TableCell
-                        colSpan={bodyColumnCount}
-                        className={cn(EYEBROW_CLASS, "border-b border-border/40 bg-muted/30 py-2 pl-4")}
-                      >
-                        {group.label}
-                      </TableCell>
-                    </TableRow>
-                  ) : null}
-                  {group.rows.map((row) => (
-                    <Fragment key={row.id}>
-                      <TableRow
-                        data-row-id={row.id}
-                        data-state={row.getIsSelected() && "selected"}
-                        aria-current={row.id === inspectorId ? "true" : undefined}
-                        className={cn(
-                          "group border-b border-border/30 transition-colors hover:bg-accent/20 data-[state=selected]:bg-accent/30",
-                          hasRowAction && "cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/50 focus-visible:ring-inset",
-                          row.id === inspectorId && "bg-primary/10",
-                        )}
-                        onClick={(event) => handleRowClick(event, row)}
-                        onDoubleClick={(event) => handleRowDoubleClick(event, row)}
-                        onKeyDown={(event) => handleRowKeyDown(event, row)}
-                        tabIndex={onRowClick ? 0 : undefined}
-                        aria-describedby={onRowClick ? rowHintId : undefined}
-                      >
-                        {hasLeadingColumn ? renderLeadingCell(row) : null}
-                        {row.getVisibleCells().map((cell, index) => {
-                          const isActionColumn = cell.column.id === ADMIN_ACTION_COLUMN_ID;
-                          const isFirstColumn = index === 0 && !hasLeadingColumn;
-                          const isLastColumn = index === row.getVisibleCells().length - 1;
-                          const columnMeta = readAdminColumnMeta<TData>(cell.column.columnDef.meta);
-                          const align = columnMeta.align ?? (isActionColumn ? "right" : "left");
-                          const sticky = stickyCell(cell.column.id, getColumnStyle(cell.column));
-
-                          return (
-                            <TableCell
-                              key={cell.id}
-                              className={cn(
-                                "py-2.5 text-sm",
-                                cellAlign === "top" ? "align-top" : "align-middle",
-                                isFirstColumn && "pl-4 text-muted-foreground",
-                                isLastColumn && "pr-4",
-                                isActionColumn && "whitespace-nowrap",
-                                columnMeta.numeric && "tabular-nums",
-                                ALIGN_CLASS[align],
-                                RESPONSIVE_CLASS[columnMeta.responsive ?? "always"],
-                                columnMeta.className,
-                                sticky.className,
-                              )}
-                              style={sticky.style}
-                            >
-                              {isActionColumn ? (
-                                // Always visible: hiding the primary row
-                                // actions behind hover made them unreachable
-                                // without a mouse on every list screen.
-                                <div className="flex w-full items-center justify-end">
-                                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                                </div>
-                              ) : align === "left" ? (
-                                flexRender(cell.column.columnDef.cell, cell.getContext())
-                              ) : (
-                                // `text-center` on the <td> does not centre a
-                                // Tooltip/icon (inline-flex trigger inside a
-                                // full-width cell). Match the header flex.
-                                <div className={cn("flex w-full items-center", ALIGN_FLEX_CLASS[align])}>
-                                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                                </div>
-                              )}
-                            </TableCell>
-                          );
-                        })}
-                      </TableRow>
-                      {renderExpanded && row.getIsExpanded() ? (
-                        <TableRow className="hover:bg-transparent">
-                          <TableCell colSpan={bodyColumnCount} className="border-b border-border/30 bg-muted/10 px-4 py-4">
-                            {renderExpanded(row)}
-                          </TableCell>
-                        </TableRow>
-                      ) : null}
-                    </Fragment>
-                  ))}
-                </Fragment>
-              ))
-            ) : (
+          <TableBody onKeyDown={handleBodyKeyDown}>
+            {bodyItems.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={bodyColumnCount} className="py-8 text-center">
                   {emptyState}
                 </TableCell>
               </TableRow>
+            ) : virtualize ? (
+              <>
+                {padTop > 0 ? <tr aria-hidden style={{ height: padTop }} /> : null}
+                {virtualItems.map((virtual) => renderItem(bodyItems[virtual.index], virtual))}
+                {padBottom > 0 ? <tr aria-hidden style={{ height: padBottom }} /> : null}
+              </>
+            ) : (
+              bodyItems.map((item) => renderItem(item))
             )}
+            {safeTotal > 0 && isInfinite ? (
+              // Inside the scroll box, where the sentinel is only in view once
+              // the user has actually reached the bottom of the loaded rows.
+              <TableRow className="hover:bg-transparent">
+                <TableCell colSpan={bodyColumnCount} className="border-t border-border/40 px-4 py-3">
+                  <InfiniteScrollFooter
+                    root={scrollElement}
+                    loaded={pageRows.length}
+                    total={safeTotal}
+                    unit={rowUnit}
+                    hasNextPage={pageRows.length < safeTotal}
+                    // Client mode already holds every row, so a batch appears in
+                    // the same commit — there is no in-flight page to report.
+                    isFetchingNextPage={false}
+                    fetchNextPage={() => setCurrentPage(safeCurrentPage + 1)}
+                  />
+                </TableCell>
+              </TableRow>
+            ) : null}
           </TableBody>
         </Table>
+        </SortableContext>
+        </DndContext>
         )}
       </div>
 
       {/* ── FOOTER: pagination ─────────────────────────── */}
-      {safeTotal > 0 && isInfinite ? (
-        <div className="border-t border-border/40 px-4 py-3">
-          <InfiniteScrollFooter
-            loaded={pageRows.length}
-            total={safeTotal}
-            unit={rowUnit}
-            hasNextPage={pageRows.length < safeTotal}
-            // Client mode already holds every row, so a batch appears in the
-            // same commit — there is no in-flight page to report.
-            isFetchingNextPage={false}
-            fetchNextPage={() => setCurrentPage(safeCurrentPage + 1)}
-          />
-        </div>
-      ) : null}
       {safeTotal > 0 && !isInfinite && (
         <div className="flex items-center justify-between gap-3 border-t border-border/40 px-4 py-2">
           <div className="flex items-center gap-3 text-sm text-muted-foreground">
@@ -1129,5 +1354,50 @@ export function AdminDataTable<TData>({
         </div>
       )}
     </div>
+    </AdminTableSearchContext.Provider>
+  );
+}
+
+/**
+ * Header cell that can be dragged to reorder its column and has a resize
+ * handle on its right edge. Only dnd-kit's pointer listeners are spread, not
+ * its `attributes`: those would put `role="button"` on a `<th>`.
+ */
+function SortableHead<TData>({
+  header,
+  disabled,
+  className,
+  style,
+  children,
+  ...rest
+}: Readonly<
+  { header: Header<TData, unknown>; disabled?: boolean } & React.ThHTMLAttributes<HTMLTableCellElement>
+>) {
+  const { setNodeRef, listeners, transform, transition, isDragging } = useSortable({ id: header.column.id, disabled });
+  const resizeHandler = header.getResizeHandler();
+  return (
+    <TableHead
+      ref={setNodeRef}
+      {...rest}
+      {...listeners}
+      className={cn(className, "relative select-none", isDragging && "z-20 opacity-70")}
+      style={{ ...style, transform: CSS.Translate.toString(transform), transition }}
+    >
+      {children}
+      <div
+        role="separator"
+        aria-orientation="vertical"
+        aria-label={`Resize ${header.column.id} column`}
+        title="Drag to resize, double-click to reset"
+        onPointerDown={(event) => event.stopPropagation()}
+        onMouseDown={resizeHandler}
+        onTouchStart={resizeHandler}
+        onDoubleClick={() => header.column.resetSize()}
+        className={cn(
+          "absolute right-0 top-0 h-full w-1.5 cursor-col-resize touch-none hover:bg-primary/40",
+          header.column.getIsResizing() && "bg-primary"
+        )}
+      />
+    </TableHead>
   );
 }

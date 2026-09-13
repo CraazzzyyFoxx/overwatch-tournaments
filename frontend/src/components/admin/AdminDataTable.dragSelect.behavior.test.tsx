@@ -60,7 +60,7 @@ async function render() {
 
 const checkbox = (id: number) => container.querySelector<HTMLElement>(`button[aria-label="Select row ${id}"]`)!;
 const selectedIds = () =>
-  [...container.querySelectorAll('tbody tr[data-state="selected"]')].map((tr) => Number(tr.getAttribute("data-row-id")));
+  [...container.querySelectorAll("tbody tr[data-selected]")].map((tr) => Number(tr.getAttribute("data-row-id")));
 
 async function press(id: number, init: MouseEventInit = {}) {
   await act(async () => {
@@ -138,6 +138,39 @@ describe("AdminDataTable drag selection", () => {
     await act(async () => {
       checkbox(1).dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 0 }));
     });
+    expect(selectedIds()).toEqual([]);
+  });
+
+  it("moves focus with the arrows, extends with Shift, toggles with Space, clears with Escape", async () => {
+    await render();
+    const rowEl = (id: number) => container.querySelector<HTMLElement>(`tbody tr[data-row-id="${id}"]`)!;
+    const key = (init: KeyboardEventInit) =>
+      act(async () => {
+        document.activeElement!.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, cancelable: true, ...init }));
+      });
+
+    // Only one row is in the Tab order; the rest are reached with the arrows.
+    expect(rowEl(1).tabIndex).toBe(0);
+    expect(rowEl(2).tabIndex).toBe(-1);
+    rowEl(1).focus();
+
+    await key({ key: "ArrowDown", shiftKey: true });
+    expect(document.activeElement).toBe(rowEl(2));
+    expect(selectedIds()).toEqual([1, 2]);
+
+    // Shrinking the range back deselects the row the arrow left.
+    await key({ key: "ArrowUp", shiftKey: true });
+    expect(document.activeElement).toBe(rowEl(1));
+    expect(selectedIds()).toEqual([1]);
+
+    await key({ key: "ArrowDown" });
+    await key({ key: " " });
+    expect(selectedIds()).toEqual([1, 2]);
+
+    await key({ key: "a", ctrlKey: true });
+    expect(selectedIds()).toEqual([1, 2, 4]);
+
+    await key({ key: "Escape" });
     expect(selectedIds()).toEqual([]);
   });
 });

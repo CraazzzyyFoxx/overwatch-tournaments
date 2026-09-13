@@ -1,9 +1,8 @@
 // @vitest-environment happy-dom
 //
 // Sticky columns on the admin table. What is pinned here:
-//  1. a column with `meta.sticky` gets the opaque sticky class in both its
-//     header and its body cells — a translucent pinned cell shows the columns
-//     scrolling underneath it;
+//  1. a column with `meta.sticky` gets the sticky class in both its header
+//     and its body cells;
 //  2. offsets stack from declared sizes, and the expand/select column is
 //     pinned first so the pinned block has no gap;
 //  3. `sticky` is only honoured on a left-edge prefix — a flagged column with
@@ -87,14 +86,6 @@ describe("AdminDataTable sticky columns", () => {
     const cells = [...container.querySelectorAll("tbody td")];
     expect(cells[0]?.classList.contains("admin-sticky-col")).toBe(true);
     expect(cells[1]?.classList.contains("admin-sticky-col")).toBe(false);
-  });
-
-  it("keeps the pinned header opaque instead of the translucent default", async () => {
-    await render([column("name", true), column("team", false)]);
-
-    const headers = [...container.querySelectorAll("thead th")];
-    expect(headers[0]?.className).not.toContain("bg-muted/20");
-    expect(headers[1]?.className).toContain("bg-muted/20");
   });
 
   it("stacks offsets from declared sizes", async () => {

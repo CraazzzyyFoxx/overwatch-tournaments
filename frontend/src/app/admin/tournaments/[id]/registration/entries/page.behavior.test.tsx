@@ -345,7 +345,7 @@ describe("Registration entries", () => {
     const scope = await mount("?admission=admitted");
 
     expect(scope.querySelector("button[aria-label='Remove filter Admission: Admitted']")).not.toBeNull();
-    expect(scope.querySelectorAll("tbody tr").length).toBe(1);
+    expect(scope.querySelectorAll("tbody tr[data-row-id]").length).toBe(1);
   });
 
   it("drops the page cursor when the filters are cleared", async () => {

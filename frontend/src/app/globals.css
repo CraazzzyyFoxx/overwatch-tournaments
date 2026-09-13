@@ -3780,11 +3780,18 @@ th.admin-sticky-col {
   background-color: color-mix(in srgb, hsl(var(--muted)) 20%, var(--admin-sticky-bg));
 }
 
+/* Header cells share the pinned-cell surface: the header sticks to the top of
+   the scroll box, so a translucent one would show the rows passing under it. */
+.admin-table-head {
+  --admin-sticky-bg: color-mix(in srgb, hsl(var(--card)) 50%, hsl(var(--background)));
+  background-color: color-mix(in srgb, hsl(var(--muted)) 20%, var(--admin-sticky-bg));
+}
+
 tbody tr:hover > .admin-sticky-col {
   background-color: color-mix(in srgb, hsl(var(--accent)) 20%, var(--admin-sticky-bg));
 }
 
-tbody tr[data-state="selected"] > .admin-sticky-col {
+tbody tr[data-selected] > .admin-sticky-col {
   background-color: color-mix(in srgb, hsl(var(--accent)) 30%, var(--admin-sticky-bg));
 }
 

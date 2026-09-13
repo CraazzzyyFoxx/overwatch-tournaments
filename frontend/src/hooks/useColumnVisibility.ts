@@ -70,10 +70,19 @@ export function useColumnVisibility<T extends VisibilityColumn>(
     [storageKey, stored, defaults]
   );
 
+  /** Replaces the whole map at once — saved views restore a full snapshot. */
+  const setVisibility = useCallback(
+    (next: Record<string, boolean>) => {
+      setOverrides(next);
+      saveVisibility(storageKey, next);
+    },
+    [storageKey]
+  );
+
   const resetToDefaults = useCallback(() => {
     setOverrides(defaults);
     saveVisibility(storageKey, defaults);
   }, [storageKey, defaults]);
 
-  return { visibility, toggleColumn, resetToDefaults };
+  return { visibility, toggleColumn, setVisibility, resetToDefaults };
 }

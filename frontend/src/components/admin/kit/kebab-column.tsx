@@ -52,7 +52,7 @@ export function createKebabColumn<T>(
     header: () => <span className="sr-only">Actions</span>,
     enableSorting: false,
     size: 56,
-    meta: adminColumnMeta<T>({ align: "right" }),
+    meta: adminColumnMeta<T>({ align: "right", rowActions: items }),
     cell: ({ row }) => {
       const actions = items(row.original).filter((action) => !action.hidden);
       if (actions.length === 0) return null;
