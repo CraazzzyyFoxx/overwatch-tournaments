@@ -53,6 +53,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { InfiniteScrollFooter } from "@/components/ui/infinite-scroll";
 import { useColumnVisibility } from "@/hooks/useColumnVisibility";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useDragRowSelect } from "@/components/admin/useDragRowSelect";
 import { EYEBROW_CLASS } from "@/components/admin/tone";
 
 const ADMIN_ACTION_COLUMN_ID = "actions";
@@ -465,6 +466,7 @@ export function AdminDataTable<TData>({
   const rangeStart = safeTotal > 0 ? (safeCurrentPage - 1) * effectivePageSize + 1 : 0;
   const rangeEnd = safeTotal > 0 ? Math.min(safeCurrentPage * effectivePageSize, safeTotal) : 0;
   const selectedRows = table.getSelectedRowModel().rows;
+  const dragSelect = useDragRowSelect(table);
   const selectableRows = enableRowSelection
     ? table.getRowModel().rows.filter((row) => row.getCanSelect())
     : [];
@@ -670,6 +672,9 @@ export function AdminDataTable<TData>({
           <Checkbox
             checked={row.getIsSelected()}
             onCheckedChange={(checked) => row.toggleSelected(checked === true)}
+            onPointerDown={dragSelect.checkboxPointerDown(row)}
+            onClick={dragSelect.checkboxClick}
+            className="touch-none"
             aria-label={`Select row ${row.id}`}
           />
         ) : null}
@@ -944,6 +949,7 @@ export function AdminDataTable<TData>({
                   {group.rows.map((row) => (
                     <Fragment key={row.id}>
                       <TableRow
+                        data-row-id={row.id}
                         data-state={row.getIsSelected() && "selected"}
                         aria-current={row.id === inspectorId ? "true" : undefined}
                         className={cn(
