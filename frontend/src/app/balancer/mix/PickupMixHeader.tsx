@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, Settings2, Trash2, UserCog, UserPlus } from "lucide-react";
+import { ArrowLeft, Trash2, UserCog, UserPlus } from "lucide-react";
 
 import { PANEL_CLASS } from "@/app/balancer/components/balancer-page-helpers";
 import { EYEBROW_CLASS } from "@/app/balancer/mix/pickup-chrome";
@@ -26,7 +26,6 @@ type PickupMixHeaderProps = {
   game: CustomGame | undefined;
   gameLoading: boolean;
   onOpenPool: () => void;
-  onOpenSettings: () => void;
   onOpenAccess: () => void;
   /** Workspace admin (or superuser) -- gates the irreversible hard delete,
    * a stronger grant than the host-or-co-host `canWrite` above. */
@@ -58,7 +57,6 @@ export function PickupMixHeader({
   game,
   gameLoading,
   onOpenPool,
-  onOpenSettings,
   onOpenAccess,
   canDelete = false,
   deleting = false,
@@ -101,20 +99,6 @@ export function PickupMixHeader({
         </Button>
       ) : null}
 
-      {canWrite ? (
-        <Button
-          type="button"
-          variant="outline"
-          size="icon"
-          className="h-9 w-9 shrink-0"
-          disabled={game == null}
-          onClick={onOpenSettings}
-          aria-label="Mix preferences"
-          title="Roster shape, balancing and points per win — your account's, for every mix you host"
-        >
-          <Settings2 className="size-3.5" aria-hidden="true" />
-        </Button>
-      ) : null}
       {canWrite ? (
         <Button
           type="button"

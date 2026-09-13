@@ -26,7 +26,6 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 vi.mock("next-intl", () => ({ useTranslations: () => (key: string) => key }));
 
 const onOpenPool = vi.fn();
-const onOpenSettings = vi.fn();
 const onOpenAccess = vi.fn();
 
 function game(overrides: Partial<CustomGame> = {}): CustomGame {
@@ -71,7 +70,6 @@ async function mount(
         game={currentGame}
         gameLoading={props.gameLoading ?? false}
         onOpenPool={onOpenPool}
-        onOpenSettings={onOpenSettings}
         onOpenAccess={onOpenAccess}
       />,
     );
@@ -102,7 +100,6 @@ beforeEach(() => {
   }
   document.body.innerHTML = "";
   onOpenPool.mockReset();
-  onOpenSettings.mockReset();
   onOpenAccess.mockReset();
 });
 
@@ -142,14 +139,6 @@ describe("PickupMixHeader", () => {
     await click(byName(scope, "Add players"));
 
     expect(onOpenPool).toHaveBeenCalledTimes(1);
-  });
-
-  it("hands the settings button to the page, which opens the host's own preferences", async () => {
-    const scope = await mount(game());
-
-    await click(scope.querySelector('[aria-label="Mix preferences"]'));
-
-    expect(onOpenSettings).toHaveBeenCalledTimes(1);
   });
 
   it("opens the access dialog on request", async () => {

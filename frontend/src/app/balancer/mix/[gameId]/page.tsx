@@ -21,7 +21,6 @@ import { notify } from "@/lib/notify";
 import { customGameKeys, customGameService } from "@/services/custom-game.service";
 import mapService from "@/services/map.service";
 import { useAuthProfileStore } from "@/stores/auth-profile.store";
-import { useAccountSettingsModalStore } from "@/stores/account-settings-modal.store";
 import { useWorkspaceStore } from "@/stores/workspace.store";
 
 /**
@@ -45,8 +44,9 @@ import { useWorkspaceStore } from "@/stores/workspace.store";
  *
  * The mix itself carries no solver or format settings any more: how a lobby is
  * split, what shape a team has and what a win is worth all belong to the host's
- * account (`components/account-settings/MixBalancerSection`), which is where
- * the header's settings button leads.
+ * account, edited once in account settings
+ * (`components/account-settings/MixBalancerSection`) rather than anywhere on
+ * this screen.
  */
 export default function BalancerPickupMixPage() {
   const params = useParams<{ gameId: string }>();
@@ -57,7 +57,6 @@ export default function BalancerPickupMixPage() {
   const currentUserId = useAuthProfileStore((state) => state.user?.id ?? null);
   const { canAccessPermission, isSuperuser, isWorkspaceAdmin } = usePermissions();
   const router = useRouter();
-  const openAccountSettings = useAccountSettingsModalStore((state) => state.open);
   // The mix-hosting grant, not a tournament permission: a workspace member can
   // run a pickup game without holding admin rights over teams.
   const canEdit = workspaceId != null && canAccessPermission("custom_game.create", workspaceId);
@@ -212,7 +211,6 @@ export default function BalancerPickupMixPage() {
               game={game}
               gameLoading={gameQuery.isLoading}
               onOpenPool={() => setIsPoolOpen(true)}
-              onOpenSettings={() => openAccountSettings("preferences")}
               onOpenAccess={() => setIsAccessOpen(true)}
               canDelete={isAdminHere}
               deleting={hardDeleteMix.isPending}
