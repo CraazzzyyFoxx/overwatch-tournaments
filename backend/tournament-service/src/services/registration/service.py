@@ -48,6 +48,7 @@ from src.schemas.registration import (
 )
 from src.schemas.registration_build import (
     AdmissionChips,
+    QueuePlace,
     _build_tournament_history,
     _public_rosters,
     _reg_to_read,
@@ -186,6 +187,36 @@ def _role_counts(registrations: Sequence[models.BalancerRegistration]) -> dict[s
             continue
         counts[roles[0].role] = counts.get(roles[0].role, 0) + 1
     return counts
+
+
+def _primary_role_select(tournament_id: int) -> sa.Subquery:
+    """``(registration_id, role)`` — one row per live registration, its primary role.
+
+    The SQL form of the rule ``_role_counts`` applies in Python: the role flagged
+    primary, or the highest-priority one when none is. ``DISTINCT ON`` rather
+    than a window function because the answer is one row, not a ranking.
+    """
+    return (
+        sa.select(
+            models.BalancerRegistrationRole.registration_id.label("registration_id"),
+            models.BalancerRegistrationRole.role.label("role"),
+        )
+        .join(
+            models.BalancerRegistration,
+            models.BalancerRegistration.id == models.BalancerRegistrationRole.registration_id,
+        )
+        .where(
+            models.BalancerRegistration.tournament_id == tournament_id,
+            models.BalancerRegistration.deleted_at.is_(None),
+        )
+        .distinct(models.BalancerRegistrationRole.registration_id)
+        .order_by(
+            models.BalancerRegistrationRole.registration_id,
+            models.BalancerRegistrationRole.is_primary.desc(),
+            models.BalancerRegistrationRole.priority.asc(),
+        )
+        .subquery()
+    )
 
 
 class RegistrationService:
@@ -945,30 +976,64 @@ class RegistrationService:
         config = AdmissionConfig.from_form(form, subscription_rule=rule)
         return await resolve_admission(session, registrations, config=config, resolver=resolver)
 
-    async def queue_position(self, session: AsyncSession, reg: models.BalancerRegistration) -> tuple[int, int]:
-        """``(1-based place in submission order, size of that order)``.
+    async def queue_position(self, session: AsyncSession, reg: models.BalancerRegistration) -> QueuePlace:
+        """Where this entry sits in the queue, overall and inside its own role.
 
         Ordered by ``(submitted_at, id)`` — the list's own ``ORDER BY
         submitted_at`` plus a deterministic tiebreak, so "position 5" is the
         fifth row of the participants table and not a second opinion about it.
         ``submitted_at`` is NOT NULL, so the row comparison has no null branch.
 
-        Counted over the same ``deleted_at IS NULL`` set as the list, which is why
-        the total is computed here instead of read off the separately cached
-        ``Tournament.registrations_count``: two caches can disagree, and "5 of 4"
-        is worse than one extra aggregate.
+        The role place is the one that actually answers "am I getting in": a
+        tournament fills role by role, so 2nd of 119 means nothing next to 42
+        other DPS. ``role`` is the registration's PRIMARY role, resolved by the
+        same rule ``_role_counts`` applies to the public split — the label the
+        client prints must name the bucket the number was counted in.
+
+        Two statements, and deliberately not one: inlining the role lookup as a
+        scalar subquery made SQLAlchemy repeat that whole ``DISTINCT ON`` block
+        three times in the emitted SQL. Splitting it costs one trivial round
+        trip and keeps the invariant that matters — all four counts come from a
+        single scan, so a place can never fall outside its own total.
+
+        Counted over the same ``deleted_at IS NULL`` rows as the list, which is
+        also why the total is not read off the separately cached
+        ``Tournament.registrations_count``: two caches can disagree, and "5 of
+        4" is worse than one aggregate.
         """
-        mine = sa.tuple_(models.BalancerRegistration.submitted_at, models.BalancerRegistration.id) <= sa.tuple_(
+        mine = _primary_role_select(reg.tournament_id)
+        role = await session.scalar(sa.select(mine.c.role).where(mine.c.registration_id == reg.id))
+        by_row = _primary_role_select(reg.tournament_id)
+        ordered = sa.tuple_(models.BalancerRegistration.submitted_at, models.BalancerRegistration.id) <= sa.tuple_(
             reg.submitted_at, reg.id
         )
+        same_role = by_row.c.role == role
         result = await session.execute(
-            sa.select(sa.func.count().filter(mine), sa.func.count()).where(
+            sa.select(
+                sa.func.count().filter(ordered),
+                sa.func.count(),
+                sa.func.count().filter(sa.and_(same_role, ordered)),
+                sa.func.count().filter(same_role),
+            )
+            .select_from(models.BalancerRegistration)
+            # OUTER: a registration that declared no role is still one of the
+            # entries, it just lands in no role bucket.
+            .outerjoin(by_row, by_row.c.registration_id == models.BalancerRegistration.id)
+            .where(
                 models.BalancerRegistration.tournament_id == reg.tournament_id,
                 models.BalancerRegistration.deleted_at.is_(None),
             )
         )
-        position, total = result.one()
-        return int(position), int(total)
+        position, total, role_position, role_total = result.one()
+        return QueuePlace(
+            position=int(position),
+            total=int(total),
+            # No declared role means no role queue to be in — reported as absent
+            # rather than as "1 of 1", which would read as a place nobody holds.
+            role=role,
+            role_position=int(role_position) if role else None,
+            role_total=int(role_total) if role else None,
+        )
 
     async def build_public_registration_list(
         self,

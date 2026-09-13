@@ -201,6 +201,27 @@ def _form_to_read(
     )
 
 
+@dataclass(frozen=True, slots=True)
+class QueuePlace:
+    """Where one registration sits in the queue it is waiting in.
+
+    Overall AND inside its own primary role, because those answer different
+    questions: the first is how early you signed up, the second is whether the
+    slots you are competing for are already gone. ``role`` travels with the
+    numbers so the client labels the bucket they were counted in rather than
+    re-deriving it from a role list the roster engine may have synthesized.
+
+    ``role`` is ``None`` for a registration that declared no role at all; the
+    two role numbers are then absent too.
+    """
+
+    position: int
+    total: int
+    role: str | None = None
+    role_position: int | None = None
+    role_total: int | None = None
+
+
 def _reg_to_read(
     reg: models.BalancerRegistration,
     *,
@@ -212,9 +233,9 @@ def _reg_to_read(
     subscription_outcome: str | None = None,
     subscription_verdicts: dict[str, Any] | None = None,
     roster: PlayerRoster | None = None,
-    #: Only the caller's own registration reads pass these; see
+    #: Only the caller's own registration reads pass this; see
     #: ``RegistrationRead.queue_position``.
-    queue: tuple[int, int] | None = None,
+    queue: QueuePlace | None = None,
 ) -> RegistrationRead:
     """Serialize a registration for public API responses.
 
@@ -317,8 +338,11 @@ def _reg_to_read(
         team=team,
         submitted_at=reg.submitted_at,
         reviewed_at=reg.reviewed_at,
-        queue_position=queue[0] if queue is not None else None,
-        queue_total=queue[1] if queue is not None else None,
+        queue_position=queue.position if queue is not None else None,
+        queue_total=queue.total if queue is not None else None,
+        queue_role=queue.role if queue is not None else None,
+        queue_role_position=queue.role_position if queue is not None else None,
+        queue_role_total=queue.role_total if queue is not None else None,
     )
 
 

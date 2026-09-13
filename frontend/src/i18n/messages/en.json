@@ -370,6 +370,8 @@
       "title": "Your Registration",
       "queuePosition": "{position} / {total}",
       "queuePositionLabel": "Position {position} of {total} registrations",
+      "queueRolePosition": "{role} {position} / {total}",
+      "queueRolePositionLabel": "Position {position} of {total} on {role}",
       "primaryRole": "Primary Role",
       "noSecondaryRoles": "No fallback roles",
       "accounts": "Linked Accounts",

@@ -53,6 +53,7 @@ import { cn, hexToRgba } from "@/lib/utils";
 import { activeRequirements, formatAdmissionReason, formatRequirementName } from "@/lib/admission";
 import { formatShortfall } from "@/lib/registration-team-shortfall";
 import { getRegistrationTeamStatus } from "@/lib/registration-team-tone";
+import { normalizePlayerRole, playerRoleSlotCode } from "@/lib/player-role";
 import { reachedAtLeast } from "@/lib/tournament-lifecycle";
 import { isPhaseWindowActive } from "@/lib/tournament-status";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
@@ -71,7 +72,7 @@ import {
   useHeroesMap
 } from "./_components/participantsColumns";
 import ParticipantsPool, { poolDivisionOptions } from "./_components/ParticipantsPool";
-import { RegistrationSummary } from "./_components/RegistrationSummary";
+import { RegistrationSummary, ROLE_TINT } from "./_components/RegistrationSummary";
 import {
   PARTICIPANT_SEARCH_MAX_LENGTH,
   claimCheckInPrompt,
@@ -308,6 +309,10 @@ function RegistrationRoleChip({
   );
 }
 
+/** Both queue chips wear the same shell; only their contents differ. */
+const QUEUE_CHIP_CLASS =
+  "rounded-full border border-[color:var(--aqt-border)] bg-[color:var(--aqt-overlay-2)] px-1.5 py-px text-label font-semibold tabular-nums text-[color:var(--aqt-fg-muted)]";
+
 function MyRegistrationCard({
   registration,
   canCheckIn,
@@ -343,6 +348,23 @@ function MyRegistrationCard({
     ? (teamsQuery.data?.items.find((item) => item.id === teamBrief.id) ?? null)
     : null;
 
+  // The role place, resolved once: the server sends the role its counts were
+  // taken in, and the site's own slot vocabulary supplies the label and tint so
+  // the chip reads like the role figures on the summary beside it.
+  const roleQueue =
+    registration.queue_role != null &&
+    registration.queue_role_position != null &&
+    registration.queue_role_total != null
+      ? (() => {
+          const slot = playerRoleSlotCode(normalizePlayerRole(registration.queue_role));
+          return {
+            label: t(`common.roles.${slot}`),
+            tint: ROLE_TINT[slot],
+            position: registration.queue_role_position,
+            total: registration.queue_role_total
+          };
+        })()
+      : null;
   const primaryRole = registration.roles.find((r) => r.is_primary);
   const secondaryRoles = registration.roles
     .filter((r) => !r.is_primary)
@@ -595,11 +617,37 @@ function MyRegistrationCard({
                     position: registration.queue_position,
                     total: registration.queue_total
                   })}
-                  className="rounded-full border border-[color:var(--aqt-border)] bg-[color:var(--aqt-overlay-2)] px-1.5 py-px text-label font-semibold tabular-nums text-[color:var(--aqt-fg-muted)]"
+                  className={QUEUE_CHIP_CLASS}
                 >
                   {t("registration.myCard.queuePosition", {
                     position: registration.queue_position,
                     total: registration.queue_total
+                  })}
+                </span>
+              ) : null}
+              {/* The place that decides whether they get in: a field fills role
+                  by role, so 2nd of 119 says little next to 42 other DPS. The
+                  role comes from the server with the numbers rather than off
+                  `roles` above — under the synthesized-role modes those two are
+                  not the same answer. */}
+              {roleQueue ? (
+                <span
+                  aria-label={t("registration.myCard.queueRolePositionLabel", {
+                    role: roleQueue.label,
+                    position: roleQueue.position,
+                    total: roleQueue.total
+                  })}
+                  className={QUEUE_CHIP_CLASS}
+                >
+                  <span
+                    aria-hidden
+                    className="mr-1 inline-block size-1.5 rounded-full align-middle"
+                    style={{ background: roleQueue.tint }}
+                  />
+                  {t("registration.myCard.queueRolePosition", {
+                    role: roleQueue.label,
+                    position: roleQueue.position,
+                    total: roleQueue.total
                   })}
                 </span>
               ) : null}

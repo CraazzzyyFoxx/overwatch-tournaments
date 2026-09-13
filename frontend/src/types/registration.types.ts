@@ -337,11 +337,18 @@ export interface Registration {
   team?: RegistrationTeamBrief | null;
   submitted_at: string | null;
   reviewed_at: string | null;
-  /** 1-based place in submission order and the size of that order. Sent ONLY on
-   *  the caller's own registration reads (`/registration/me`, submit, check-in),
-   *  never on list rows — there the index is the position. */
+  /** Place in submission order and the size of that order — overall, and within
+   *  this registration's primary role. The role pair is the one that answers
+   *  "am I getting in": a field fills role by role. `queue_role` names the
+   *  bucket the role numbers were counted in, so the label never disagrees with
+   *  them. Sent ONLY on the caller's own registration reads
+   *  (`/registration/me`, submit, check-in), never on list rows — there the
+   *  index is the position. */
   queue_position?: number | null;
   queue_total?: number | null;
+  queue_role?: string | null;
+  queue_role_position?: number | null;
+  queue_role_total?: number | null;
   /** Capped to the most recent few entries; see `tournament_history_count` for the true total. */
   tournament_history?: TournamentHistoryEntry[];
   tournament_history_count?: number;

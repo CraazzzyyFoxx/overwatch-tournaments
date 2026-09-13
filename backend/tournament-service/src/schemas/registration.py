@@ -259,12 +259,20 @@ class RegistrationRead(BaseModel):
     team: RegistrationTeamBrief | None = None
     submitted_at: datetime | None = None
     reviewed_at: datetime | None = None
-    #: 1-based place in submission order, and the size of that order. Populated
-    #: ONLY by the caller's own registration reads (``reg_pub_*_me``, submit) —
-    #: the participants list would pay a count per row for a number equal to the
-    #: row's own index. ``None`` on every other path.
+    #: Place in submission order and the size of that order — overall, and inside
+    #: this registration's primary role. The role pair is the one that answers
+    #: "am I getting in": a field fills role by role, so 2nd of 119 says little
+    #: next to 42 other DPS. ``queue_role`` names the bucket the role numbers
+    #: were counted in, so the client never has to re-derive it.
+    #:
+    #: Populated ONLY by the caller's own registration reads (``reg_pub_*_me``,
+    #: submit) — the participants list would pay a count per row for a number
+    #: equal to the row's own index. ``None`` on every other path.
     queue_position: int | None = None
     queue_total: int | None = None
+    queue_role: str | None = None
+    queue_role_position: int | None = None
+    queue_role_total: int | None = None
 
 
 class TournamentHistoryEntry(BaseModel):

@@ -504,19 +504,48 @@ describe("a roster the organizer hid", () => {
     expect(container.querySelector(".filters")).toBeNull();
   });
 
-  it("still renders the viewer's own card, with its place in the queue", async () => {
+  it("still renders the viewer's own card, with its place overall and on its role", async () => {
     listRegistrations.mockResolvedValue(HIDDEN);
     getMyRegistration.mockResolvedValue(
-      makeRegistration({ queue_position: 12, queue_total: 48 })
+      makeRegistration({
+        queue_position: 12,
+        queue_total: 48,
+        queue_role: "dps",
+        queue_role_position: 4,
+        queue_role_total: 24
+      })
     );
     await mount();
 
-    const chip = container.querySelector(
-      `[aria-label="${en.registration.myCard.queuePositionLabel
-        .replace("{position}", "12")
-        .replace("{total}", "48")}"]`
+    const chip = (label: string) => container.querySelector(`[aria-label="${label}"]`);
+    const overall = chip(
+      en.registration.myCard.queuePositionLabel.replace("{position}", "12").replace("{total}", "48")
     );
-    expect(chip).not.toBeNull();
-    expect(chip?.textContent).toBe("12 / 48");
+    expect(overall?.textContent).toBe("12 / 48");
+
+    // The place that decides whether they get in — 12th of 48 says little next
+    // to the 24 other DPS competing for the same slots.
+    const onRole = chip(
+      en.registration.myCard.queueRolePositionLabel
+        .replace("{position}", "4")
+        .replace("{total}", "24")
+        .replace("{role}", en.common.roles.dps)
+    );
+    expect(onRole?.textContent).toBe(`${en.common.roles.dps} 4 / 24`);
+  });
+
+  it("says nothing about a role queue for a registration that declared no role", async () => {
+    // The server sends the role numbers as absent, not as zero: "0 of 0" and
+    // "1 of 1" are both places nobody holds.
+    listRegistrations.mockResolvedValue(HIDDEN);
+    getMyRegistration.mockResolvedValue(
+      makeRegistration({ roles: [], queue_position: 12, queue_total: 48 })
+    );
+    await mount();
+
+    expect(
+      container.querySelector('[aria-label^="Position 4 of"]')
+    ).toBeNull();
+    expect(container.textContent).toContain("12 / 48");
   });
 });

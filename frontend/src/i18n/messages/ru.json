@@ -370,6 +370,8 @@
       "title": "Ваша заявка",
       "queuePosition": "{position} / {total}",
       "queuePositionLabel": "Позиция {position} из {total} заявок",
+      "queueRolePosition": "{role} {position} / {total}",
+      "queueRolePositionLabel": "Позиция {position} из {total} на роли {role}",
       "primaryRole": "Основная роль",
       "noSecondaryRoles": "Запасные роли отсутствуют",
       "accounts": "Привязанные аккаунты",
