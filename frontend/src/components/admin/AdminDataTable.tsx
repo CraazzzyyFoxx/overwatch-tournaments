@@ -878,7 +878,7 @@ export function AdminDataTable<TData>({
         key={row.id}
         aria-current={row.id === inspectorId ? "true" : undefined}
         className={cn(
-          "flex items-start gap-2 border-b border-border/30 px-4 py-3 last:border-b-0",
+          "group flex items-start gap-2 border-b border-border/30 px-4 py-3 last:border-b-0",
           row.id === inspectorId && "bg-primary/10",
         )}
       >
@@ -935,8 +935,8 @@ export function AdminDataTable<TData>({
         style={sticky.style}
       >
         {isActionColumn ? (
-          // Always visible: hiding the primary row actions behind hover made
-          // them unreachable without a mouse on every list screen.
+          // The kebab gates its own visibility (hover, focus-within, touch);
+          // this wrapper only aligns it.
           <div className="flex w-full items-center justify-end">{content}</div>
         ) : align === "left" ? (
           content

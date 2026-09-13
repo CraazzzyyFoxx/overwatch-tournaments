@@ -1,16 +1,14 @@
 // @vitest-environment happy-dom
 //
 // The P0-10 additions to the admin table. What is pinned here:
-//  1. row actions are ALWAYS rendered visible — the column used to be
-//     `opacity-0` until hover, which made every list screen's primary actions
-//     mouse-only;
-//  2. `inspectorId` marks the open row with `aria-current="true"` (NOT
+//  1. `inspectorId` marks the open row with `aria-current="true"` (NOT
 //     `aria-selected`, which `role=table` does not allow on a row);
-//  3. a `toolbar` without a `searchPlaceholder` suppresses the table's own
+//  2. a `toolbar` without a `searchPlaceholder` suppresses the table's own
 //     search box, so a screen never ships two search fields over one table;
-//  4. passing both keeps the built-in box, for a chips-only toolbar;
-//  5. below `md` the rows become cards, using `renderMobileCard` when given
+//  3. passing both keeps the built-in box, for a chips-only toolbar;
+//  4. below `md` the rows become cards, using `renderMobileCard` when given
 //     and the first three visible columns otherwise.
+// The kebab's own visibility rules live in `kit/kebab-column.behavior.test.tsx`.
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
 import { act } from "react";
@@ -106,16 +104,6 @@ afterEach(async () => {
 });
 
 describe("AdminDataTable row actions and inspector", () => {
-  it("renders the actions column without a hover gate", async () => {
-    await render();
-
-    const cell = container
-      .querySelector('button[aria-label="Actions for 8812"]')
-      ?.closest("div");
-    expect(cell?.className).not.toContain("opacity-0");
-    expect(cell?.className).not.toContain("group-hover");
-  });
-
   it("marks the inspected row with aria-current, never aria-selected", async () => {
     await render({ inspectorId: "8812" });
 
