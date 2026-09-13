@@ -851,32 +851,21 @@ class SerializeNeedsTheSlotChain(_UpsertCase):
     # `list_configs` + `serialize_pick_ban_config` path as the admin list above.
 
 
-class RefreshMustNotReachForTheSlotChain(_UpsertCase):
-    """The one site in this sweep that must NOT gain ``slots``.
+class SerializedSlotsSurviveTheCommit(_UpsertCase):
+    """The upsert serializes BEFORE it commits, and reloads nothing.
 
-    ``Session.refresh(instance, attribute_names)`` expires exactly the named
-    attributes and reloads them with ``only_load_props``; it takes no loader
-    options at all (SQLAlchemy 2.0.45), so it cannot express
-    ``slots -> items``. Today ``config.slots`` and each slot's ``items`` are
-    correct here without any reload: they were assigned above and
-    ``expire_on_commit=False`` leaves them loaded across the commit.
-
-    Adding ``"slots"`` would therefore expire a correct collection and reload it
-    with every slot's ``items`` lazy, turning ``serialize_pick_ban_config``'s
-    ``slot.items`` read into exactly the ``MissingGreenlet`` the rest of this
-    sweep exists to prevent. If ``slots`` ever does need re-reading here, the fix
-    is a fresh SELECT carrying the two-level chain, never a wider refresh.
+    ``config.slots`` and each slot's ``items`` are already loaded here -- they
+    were assigned above -- so the response is built from them directly. The
+    handler used to ``session.refresh(config, ["items"])`` first; a refresh that
+    also named ``slots`` would have expired a correct collection and reloaded it
+    with every slot's ``items`` lazy, i.e. the ``MissingGreenlet`` the rest of
+    this sweep exists to prevent. ``Session.refresh`` takes no loader options
+    (SQLAlchemy 2.0.45), so it can never express ``slots -> items``: if this
+    site ever does need re-reading, it takes a fresh SELECT carrying the
+    two-level chain, never a wider refresh.
     """
 
-    async def test_the_upsert_refreshes_the_flat_pool_and_nothing_else(self) -> None:
-        _, session = await self.invoke(slot_body(), existing=_config(POOL, item_ids=FLAT_ITEM_IDS))
-
-        self.assertEqual([["items"]], [names for _obj, names in session.refreshes])
-
-    async def test_the_response_still_carries_the_slots_across_the_commit(self) -> None:
-        # The observable half: whatever the refresh does, the serialized slots
-        # must survive it, so this fails on a refresh that dropped the pool
-        # shape rather than only on the argument list above.
+    async def test_the_response_carries_the_slots_across_the_commit(self) -> None:
         envelope, _ = await self.invoke(slot_body(), existing=_config(POOL, item_ids=FLAT_ITEM_IDS))
 
         self.assertTrue(envelope["ok"], envelope)
