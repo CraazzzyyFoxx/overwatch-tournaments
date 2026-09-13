@@ -39103,6 +39103,42 @@
           "default": null,
           "title": "Queue Position"
         },
+        "queue_role": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Queue Role"
+        },
+        "queue_role_position": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Queue Role Position"
+        },
+        "queue_role_total": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Queue Role Total"
+        },
         "queue_total": {
           "anyOf": [
             {
