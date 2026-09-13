@@ -109,12 +109,10 @@ describe("admin registration form i18n", () => {
         errors.filter((args) => /MISSING_MESSAGE|INSUFFICIENT_PATH|IntlError/.test(String(args[0])))
       ).toEqual([]);
 
-      // Sanity: the localized copy actually differs per locale.
+      // Sanity: the localized copy actually differs per locale. The subscription
+      // rule summary moved with the admission rules to `settings/admission`,
+      // which has its own i18n test.
       expect(text).toContain(locale === "ru" ? "Саброли" : "Subroles");
-      // The subscription rule summary — the string that used to be Russian in both locales.
-      expect(text).toContain(
-        locale === "ru" ? "Boosty уровень 2 или Twitch" : "Boosty level 2 or Twitch"
-      );
 
       await act(async () => {
         root.unmount();

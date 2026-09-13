@@ -5003,17 +5003,29 @@
         "manage": "Configure the workspace rule"
       },
       "display": {
-        "title": "Display Options",
+        "title": "Public page",
+        "description": "What a visitor sees of the field on the tournament's Participants tab.",
         "showRanks": "Show player ranks on participants page",
         "hint": "When enabled, player rank values will be displayed on the public participants page. When disabled, rank values are completely hidden and omitted from backend payloads.",
         "hideRegistrations": "Hide the participants list",
-        "hideRegistrationsHint": "The public participants page shows only the registration count and the split by role — no names, no rows. Enforced on the server, so the list is not in the payload either. You still see every registration in this admin table.",
+        "hideRegistrationsHint": "The public participants page shows only the registration count and the split by role — no names, no rows. Enforced on the server, so the list is not in the payload either. Registration → Entries still shows you every row.",
         "maxParticipants": "Announced capacity",
         "maxParticipantsHint": "Shown next to the participant count as \"42 / 100\". Informational only — it is not a limit, and registrations past it are still accepted. Leave empty to show nothing."
       },
+      "questionnaire": {
+        "title": "Questionnaire",
+        "description": "The fields a registrant fills in. Edited on its own screen, because it is a list rather than a set of switches.",
+        "label": "Registration form",
+        "hint": "Built-in fields, sub-roles and your own custom questions.",
+        "action": "Open the form builder"
+      },
+      "bench": {
+        "title": "Bench",
+        "description": "Extra players a registered team may carry beyond the starter slots above."
+      },
       "team": {
         "title": "Registered teams",
-        "description": "Bench size, who pays the subscription, and the starter-rank / identity rules that apply before export.",
+        "description": "Starter-rank and identity rules, checked before a team can be exported.",
         "maxSubstitutes": "Substitutes per team",
         "maxSubstitutesHint": "How many extra players a registered team may take. They do not fill a starter slot and do not complete the roster.",
         "maxSubstitutesAria": "Maximum substitutes per team",
