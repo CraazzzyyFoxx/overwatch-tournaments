@@ -21,9 +21,7 @@ import {
 
 /** The match-number strip down a card's left edge; part of `CARD_WIDTH`. */
 export const GUTTER_WIDTH = 26;
-// 220 is what the footer needs at its fullest: five controls, a hairline,
-// "20 сент." and "Bo5" side by side.
-export const CARD_WIDTH = 220 + GUTTER_WIDTH;
+export const CARD_WIDTH = 210 + GUTTER_WIDTH;
 export const CARD_HEIGHT = 84;
 export const CARD_ROW_HEIGHT = 30;
 export const ROUND_GAP_X = 48;

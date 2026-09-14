@@ -3,7 +3,7 @@
 import { memo, type ReactNode } from "react";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { ListChecks, Search } from "lucide-react";
-import { useFormatter, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
 
 import type { BracketMatch } from "@/components/bracket-view.helpers";
 import { EncounterRostersModal } from "@/components/EncounterRostersModal";
@@ -19,9 +19,6 @@ import { CARD_HEIGHT, CARD_ROW_HEIGHT, GUTTER_WIDTH, type LayoutNode, type Side 
 /** One footer control: the three viewer links and the admin's edit share it. */
 export const FOOTER_BUTTON =
   "flex items-center justify-center rounded p-0.5 text-[color:var(--aqt-fg-muted)] transition-colors hover:bg-[color:var(--aqt-overlay-3)] hover:text-[color:var(--aqt-fg)]";
-
-/** The footer's one divider: look | act on the left, when | format on the right. */
-const HAIRLINE = <span aria-hidden className="mx-0.5 h-3 w-px shrink-0 bg-[color:var(--aqt-border-2)]" />;
 
 /** dnd-kit id of one team slot; the same string names its draggable and its droppable. */
 export function slotDragId(encounterId: number, side: Side) {
@@ -206,16 +203,10 @@ export const MatchCard = memo(function MatchCard({
   renderActions
 }: Readonly<MatchCardProps>) {
   const t = useTranslations();
-  const format = useFormatter();
   const { data, encounter } = node;
   const isLive = !data.isCompleted && Boolean(encounter.started_at) && !encounter.ended_at;
-  // Where the match stands in time; nothing once it is decided.
-  const stateLabel = isLive
-    ? t("common.live")
-    : !data.isCompleted && encounter.scheduled_at
-      ? format.dateTime(new Date(encounter.scheduled_at), { month: "short", day: "numeric" })
-      : null;
-  // The series format is always worth reading next to the score.
+  // The series format is always worth reading next to the score. When the
+  // match is played is the schedule's business, not the card's.
   const bestOfLabel = encounter.best_of ? `Bo${encounter.best_of}` : null;
   const footerHeight = CARD_HEIGHT - CARD_ROW_HEIGHT * 2;
   const actions = renderActions(encounter);
@@ -276,7 +267,7 @@ export const MatchCard = memo(function MatchCard({
           style={{ height: footerHeight }}
         >
           {/* Look (view, rosters, pre-game) then act (edit, report), one hairline
-              between; LIVE / date and the series format keep the right edge. */}
+              between; the series format keeps the right edge. */}
           <div className="flex min-w-0 items-center gap-0.5">
             {interactive && (
               <>
@@ -306,22 +297,15 @@ export const MatchCard = memo(function MatchCard({
                 </HoverPrefetchLink>
               </>
             )}
-            {interactive && actions && HAIRLINE}
+            {interactive && actions && (
+              <span aria-hidden className="mx-0.5 h-3 w-px shrink-0 bg-[color:var(--aqt-border-2)]" />
+            )}
             {actions}
           </div>
-          {(stateLabel || bestOfLabel) && (
-            <div className="flex shrink-0 items-center gap-1 text-label font-semibold uppercase tracking-wide text-[color:var(--aqt-fg-muted)]">
-              {stateLabel && (
-                <span className={cn("flex items-center gap-1", isLive && "text-[color:var(--aqt-rose)]")}>
-                  {isLive && (
-                    <span className="h-1.5 w-1.5 animate-pulse rounded-full" style={{ background: "var(--aqt-rose)" }} />
-                  )}
-                  {stateLabel}
-                </span>
-              )}
-              {stateLabel && bestOfLabel && HAIRLINE}
-              {bestOfLabel && <span>{bestOfLabel}</span>}
-            </div>
+          {bestOfLabel && (
+            <span className="shrink-0 text-label font-semibold uppercase tracking-wide text-[color:var(--aqt-fg-muted)]">
+              {bestOfLabel}
+            </span>
           )}
         </div>
       </div>
