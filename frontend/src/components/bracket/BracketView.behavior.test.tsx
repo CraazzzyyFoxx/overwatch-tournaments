@@ -225,6 +225,25 @@ describe("BracketView live-stream indicator", () => {
 
     expect(container.querySelector("[data-live-team-stream]")).toBeNull();
   });
+
+  // A reported-but-unconfirmed result leaves the winner in two open matches;
+  // "streaming now" belongs on the newer one only.
+  it("marks only the team's newest match when it stands in two open ones", () => {
+    render(
+      <BracketView
+        encounters={[
+          inPlay(),
+          encounter({ id: 2, round: 2, status: "open", score: { home: 0, away: 0 }, away_team_id: 0, name: "Nova vs TBD" })
+        ]}
+        type="single_elimination"
+        liveTeamStreams={new Map([[7, stream({ channel: "aria", viewer_count: 412 })]])}
+      />
+    );
+
+    const indicators = container.querySelectorAll("[data-live-team-stream]");
+    expect(indicators).toHaveLength(1);
+    expect(indicators[0].closest("[data-match-id]")?.getAttribute("data-match-id")).toBe("2");
+  });
 });
 
 // The tree is routinely wider than its scroller, and round 1 of a running

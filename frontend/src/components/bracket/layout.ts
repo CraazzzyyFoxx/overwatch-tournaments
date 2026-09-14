@@ -45,6 +45,13 @@ export interface MatchNodeData {
   awaySource: string | null;
   homeTeamId: number | null;
   awayTeamId: number | null;
+  /**
+   * This is the team's newest match in the tree — the one it is playing or
+   * waiting to play. A result awaiting confirmation can leave the winner
+   * standing in two open matches; "streaming now" belongs on the newer.
+   */
+  homeIsLatest: boolean;
+  awayIsLatest: boolean;
   homeScore: number;
   awayScore: number;
   winner: Side | null;
@@ -170,7 +177,8 @@ function createNode(
   x: number,
   y: number,
   matchNumber: number,
-  hint: SlotHint
+  hint: SlotHint,
+  latestMatchByTeam: Map<number, number>
 ): LayoutNode {
   const names = getMatchNames(match);
   return {
@@ -186,6 +194,8 @@ function createNode(
       awaySource: names.awayName === "TBD" ? hint.away : null,
       homeTeamId: match.home_team_id > 0 ? match.home_team_id : null,
       awayTeamId: match.away_team_id > 0 ? match.away_team_id : null,
+      homeIsLatest: latestMatchByTeam.get(match.home_team_id) === match.id,
+      awayIsLatest: latestMatchByTeam.get(match.away_team_id) === match.id,
       homeScore: match.score.home,
       awayScore: match.score.away,
       winner: getWinner(match),
@@ -269,17 +279,21 @@ function layoutColumn(params: {
   startY: number;
   slotHints: Map<number, SlotHint>;
   matchNumbers: Map<number, number>;
+  latestMatchByTeam: Map<number, number>;
   headers: LayoutHeader[];
   nodes: LayoutNode[];
 }) {
-  const { group, x, headerY, headerId, headerSection, label, startY, slotHints, matchNumbers } = params;
+  const { group, x, headerY, headerId, headerSection, label, startY, slotHints, matchNumbers, latestMatchByTeam } =
+    params;
 
   params.headers.push({ id: headerId, x, y: headerY, label, section: headerSection });
 
   group.matches.forEach((match, matchIndex) => {
     const hint = slotHints.get(match.id) ?? { home: null, away: null };
     const n = matchNumbers.get(match.id) ?? 0;
-    params.nodes.push(createNode(match, x, startY + matchIndex * (CARD_HEIGHT + MATCH_GAP_Y), n, hint));
+    params.nodes.push(
+      createNode(match, x, startY + matchIndex * (CARD_HEIGHT + MATCH_GAP_Y), n, hint, latestMatchByTeam)
+    );
   });
 }
 
@@ -322,6 +336,18 @@ export function buildLayout(
     isDE,
     hasBracketConnections
   );
+  // Team id → the encounter with its highest match number. Match numbers follow
+  // play order across UB, LB and the finals, so "highest" is "newest".
+  const latestMatchByTeam = new Map<number, number>();
+  for (const match of encounters) {
+    for (const teamId of [match.home_team_id, match.away_team_id]) {
+      if (teamId <= 0) continue;
+      const held = latestMatchByTeam.get(teamId);
+      if (held === undefined || (matchNumbers.get(held) ?? 0) < (matchNumbers.get(match.id) ?? 0)) {
+        latestMatchByTeam.set(teamId, match.id);
+      }
+    }
+  }
   const columnX = (index: number) => PADDING_X + index * (CARD_WIDTH + ROUND_GAP_X);
 
   const upperBaseMatches = getRoundSectionMatchCapacity(upperRounds);
@@ -355,6 +381,7 @@ export function buildLayout(
       startY,
       slotHints,
       matchNumbers,
+      latestMatchByTeam,
       headers,
       nodes
     });
@@ -378,6 +405,7 @@ export function buildLayout(
       startY: lowerTop + Math.max(0, (lowerSectionHeight - sectionHeight(group.matches.length)) / 2),
       slotHints,
       matchNumbers,
+      latestMatchByTeam,
       headers,
       nodes
     });
@@ -399,6 +427,7 @@ export function buildLayout(
       startY: upperTop + Math.max(0, (fullContentHeight - upperTop - totalHeight) / 2),
       slotHints,
       matchNumbers,
+      latestMatchByTeam,
       headers,
       nodes
     });

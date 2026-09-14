@@ -75,10 +75,14 @@ function SlotRow({
   const drag = useDraggable({ id: dragId, data: dragData, disabled: !draggable || teamId === null });
   const drop = useDroppable({ id: dragId, data: dragData, disabled: !draggable });
 
-  // The participant stream on air for this slot's team, if any. A TBD slot has
-  // no team, so it can never carry the indicator.
+  // The participant stream on air for this slot's team, shown on the team's
+  // newest match only (see `homeIsLatest`) and never once that match is
+  // decided. A TBD slot has no team, so it can never carry the indicator.
+  const isLatest = side === "home" ? data.homeIsLatest : data.awayIsLatest;
   const liveStream =
-    liveTeamStreams === undefined || isTbd || teamId === null ? undefined : liveTeamStreams.get(teamId);
+    liveTeamStreams === undefined || isTbd || teamId === null || !isLatest || data.isCompleted
+      ? undefined
+      : liveTeamStreams.get(teamId);
   // The map only ever holds participant entries, which always carry a player;
   // the channel fallback exists because `player` is nullable on the wire (an
   // official broadcast has none).
@@ -220,14 +224,7 @@ export const MatchCard = memo(function MatchCard({
         ? t("bracket.disputed")
         : null;
 
-  // "Streaming now" on a decided match says nothing about that match.
-  const rowProps = {
-    node,
-    onHoverTeam,
-    liveTeamStreams: data.isCompleted ? undefined : liveTeamStreams,
-    draggable,
-    rearranging
-  };
+  const rowProps = { node, onHoverTeam, liveTeamStreams, draggable, rearranging };
 
   return (
     <div
