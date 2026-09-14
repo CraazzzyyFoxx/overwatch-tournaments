@@ -389,35 +389,36 @@ export function BracketView<M extends BracketMatch>({
 
   const rearrangeHint =
     isRearranging && onSwapSlots ? (
-      <p className="min-w-0 text-caption text-[color:var(--aqt-teal)]" data-bracket-rearrange-hint>
+      <p
+        className="pointer-events-none max-w-[60%] rounded-lg border border-[color:color-mix(in_srgb,var(--aqt-teal)_35%,transparent)] bg-[hsl(0_0%_0%/0.7)] px-3 py-1.5 text-caption text-[color:var(--aqt-teal)] backdrop-blur-sm"
+        data-bracket-rearrange-hint
+      >
         {t("bracket.rearrangeHint")}
       </p>
     ) : null;
 
-  // The controls get their own strip rather than floating over the canvas: five
-  // buttons over the top-right corner sat on the grand final's header.
-  const controlBar = (fullscreen: boolean) => (
-    <div
-      className={cn(
-        "flex items-center justify-between gap-4 px-3 py-2",
-        !fullscreen && "border-b border-[color:var(--aqt-border)]"
-      )}
-    >
-      {rearrangeHint ?? <span />}
-      {toolbar(fullscreen)}
+  // Controls float over the canvas the way map controls do: bottom corners,
+  // where no round header ever sits (the grand final's is top-right), and above
+  // the scroller's own bar.
+  const framed = (fullscreen: boolean) => (
+    <div className={cn("relative", fullscreen && "flex min-h-0 flex-1 flex-col")}>
+      {canvas(fullscreen)}
+      <div className="pointer-events-none absolute inset-x-4 bottom-5 z-10 flex items-end justify-between gap-4">
+        {rearrangeHint ?? <span />}
+        <div className="pointer-events-auto">{toolbar(fullscreen)}</div>
+      </div>
     </div>
   );
 
   return (
     <>
       <div className="overflow-hidden rounded-2xl border border-[color:var(--aqt-border)] bg-[color:var(--aqt-bg-2)]">
-        {controlBar(false)}
         {/* The inline frame keeps its footprint while the dialog holds the canvas,
             so closing fullscreen does not reflow the page under the viewer. */}
         {isFullscreen ? (
-          <div className="max-h-[78vh]" style={{ height: layout.height * viewport.scale }} />
+          <div className="max-h-[78vh]" style={{ height: layout.height * viewport.scale + 56 }} />
         ) : (
-          canvas(false)
+          framed(false)
         )}
       </div>
 
@@ -430,7 +431,7 @@ export function BracketView<M extends BracketMatch>({
             bottom. (`max-h-none` would not: tailwind-merge v3 does not know that
             class, so both caps would survive into the class list.) */}
         <DialogContent className="left-0 top-0 flex h-screen max-h-screen w-screen max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none border-none bg-[color:var(--aqt-bg)] p-6">
-          <DialogHeader className="mb-2 flex-row items-start justify-between gap-4 space-y-0 border-b border-[color:var(--aqt-border)] pb-3 pr-12 text-left">
+          <DialogHeader className="mb-4 flex-row items-start justify-between gap-4 space-y-0 border-b border-[color:var(--aqt-border)] pb-3 pr-12 text-left">
             <div>
               <DialogTitle className="text-xl font-bold uppercase tracking-wider text-[color:var(--aqt-fg)]">
                 {bracketTitle}
@@ -440,8 +441,7 @@ export function BracketView<M extends BracketMatch>({
               </DialogDescription>
             </div>
           </DialogHeader>
-          {controlBar(true)}
-          {isFullscreen ? canvas(true) : null}
+          {isFullscreen ? framed(true) : null}
         </DialogContent>
       </Dialog>
     </>

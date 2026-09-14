@@ -118,13 +118,37 @@ function winnerTeamId(match: BracketMatch): number | null {
   return id > 0 ? id : null;
 }
 
+/** Corner radius of a connector's two elbows. */
+const ELBOW_RADIUS = 8;
+
+/**
+ * Source's right edge → across → down/up → into the target's left edge.
+ *
+ * The vertical run sits in the gap just before the TARGET column, not just after
+ * the source: for neighbouring rounds the two are the same gap, but a connector
+ * that spans columns (upper final → grand final over the whole lower bracket)
+ * then travels along its own row, where nothing is drawn, and turns only at the
+ * end — instead of dropping at once and cutting across every column between.
+ * Both feeders of one match therefore share one vertical bar at its door.
+ */
 function buildPath(source: LayoutNode, target: LayoutNode) {
   const startX = source.x + CARD_WIDTH;
   const startY = source.y + CARD_HEIGHT / 2;
   const endX = target.x;
   const endY = target.y + CARD_HEIGHT / 2;
-  const middleX = startX + ROUND_GAP_X / 2;
-  return `M ${startX} ${startY} H ${middleX} V ${endY} H ${endX}`;
+  const middleX = Math.max(startX, endX - ROUND_GAP_X / 2);
+  const dy = endY - startY;
+  const r = Math.min(ELBOW_RADIUS, Math.abs(dy) / 2, (middleX - startX) / 2, (endX - middleX) / 2);
+  if (r < 1) return `M ${startX} ${startY} H ${middleX} V ${endY} H ${endX}`;
+  const dir = Math.sign(dy);
+  return [
+    `M ${startX} ${startY}`,
+    `H ${middleX - r}`,
+    `Q ${middleX} ${startY} ${middleX} ${startY + dir * r}`,
+    `V ${endY - dir * r}`,
+    `Q ${middleX} ${endY} ${middleX + r} ${endY}`,
+    `H ${endX}`
+  ].join(" ");
 }
 
 function edgeBetween(source: LayoutNode, target: LayoutNode): LayoutEdge {

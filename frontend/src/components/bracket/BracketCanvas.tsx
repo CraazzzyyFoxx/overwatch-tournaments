@@ -155,7 +155,9 @@ export function BracketCanvas({
     <div
       ref={attachScroller}
       className={cn(
-        "select-none overflow-auto",
+        // Bottom padding is the floating toolbar's lane: the last row of cards
+        // can always scroll clear of it.
+        "select-none overflow-auto pb-14",
         fullscreen ? "h-full w-full flex-1" : "max-h-[78vh]",
         isGrabbing ? "cursor-grabbing" : "cursor-grab"
       )}
@@ -255,8 +257,10 @@ export function BracketCanvas({
                   rearranging={rearranging}
                   draggable={rearranging && isSlotRearrangeable(match)}
                 />
-                <div className="pointer-events-none absolute top-1/2 -translate-y-1/2" style={{ left: CARD_WIDTH + 6 }}>
-                  <span className="text-label font-semibold tabular-nums text-[color:var(--aqt-fg-muted)]">
+                {/* Sits on the connector leaving the card, so it carries the
+                    canvas colour behind it instead of being struck through. */}
+                <div className="pointer-events-none absolute top-1/2 -translate-y-1/2" style={{ left: CARD_WIDTH + 4 }}>
+                  <span className="rounded bg-[color:var(--aqt-bg-2)] px-1 text-label font-semibold tabular-nums text-[color:var(--aqt-fg-muted)]">
                     {node.data.matchLabel}
                   </span>
                 </div>
