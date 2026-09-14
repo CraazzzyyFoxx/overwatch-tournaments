@@ -758,6 +758,12 @@ export function AdminDataTable<TData>({
     stickyOffset += getColumnStyle(column)?.width ?? 0;
   }
   const lastStickyId = [...stickyLeft.keys()].pop() ?? null;
+  // The pinned block ends in a hard edge that scrolling content slides under;
+  // the default 8px on either side of it reads as none, so both neighbours of
+  // the edge get the same inset the table's outer edges have.
+  const firstScrollingId = lastStickyId ? (visibleColumns[stickyLeft.size]?.id ?? null) : null;
+  const edgePadding = (columnId: string) =>
+    cn(columnId === lastStickyId && "pr-4", columnId === firstScrollingId && "pl-4");
 
   /** Sticky class + `left` for a data cell, or nothing when it is not pinned. */
   const stickyCell = (columnId: string, style?: React.CSSProperties) => {
@@ -987,6 +993,7 @@ export function AdminDataTable<TData>({
           sticky.className ?? "admin-table-head",
           isFirstColumn && "pl-4",
           isLastColumn && "pr-4",
+          edgePadding(header.column.id),
           ALIGN_CLASS[align],
           RESPONSIVE_CLASS[columnMeta.responsive ?? "always"],
           columnMeta.className,
@@ -1049,6 +1056,7 @@ export function AdminDataTable<TData>({
           cellAlign === "top" ? "align-top" : "align-middle",
           isFirstColumn && "pl-4 text-muted-foreground",
           isLastColumn && "pr-4",
+          edgePadding(cell.column.id),
           isActionColumn && "whitespace-nowrap",
           columnMeta.numeric && "tabular-nums",
           ALIGN_CLASS[align],
