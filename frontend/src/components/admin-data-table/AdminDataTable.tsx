@@ -343,6 +343,45 @@ export function AdminDataTable<TData>({
   const [scrollElement, setScrollElement] = useState<HTMLElement | null>(null);
   // The shadcn `Table` wraps the `<table>` in the element that actually scrolls.
   const tableRef = useCallback((table: HTMLTableElement | null) => setScrollElement(table?.parentElement ?? null), []);
+  const cardRef = useRef<HTMLDivElement>(null);
+
+  // The scroll box takes whatever height is left below it in the viewport, so
+  // the page itself never needs to scroll and the table is the one scrollable
+  // thing on screen. Measured rather than laid out with flex: the box sits
+  // under a dozen different screens' headers and tabs, none of which would
+  // otherwise have to know about it.
+  useEffect(() => {
+    const card = cardRef.current;
+    if (!scrollElement || !card) return;
+    let frame = 0;
+    const fit = () => {
+      frame = 0;
+      // Measure with the cap lifted: with the box capped, a page shorter than
+      // the viewport reports the slack under the card as "content below", and
+      // the cap would lock at whatever height the box happened to have.
+      scrollElement.style.maxHeight = "";
+      const cardRect = card.getBoundingClientRect();
+      const chrome = cardRect.height - scrollElement.getBoundingClientRect().height;
+      const cardTop = cardRect.top + window.scrollY;
+      const below = Math.max(0, document.documentElement.scrollHeight - (cardRect.bottom + window.scrollY));
+      scrollElement.style.maxHeight = `${Math.max(240, window.innerHeight - cardTop - chrome - below)}px`;
+    };
+    const schedule = () => { if (!frame) frame = requestAnimationFrame(fit); };
+    fit();
+    window.addEventListener("resize", schedule);
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(schedule);
+    // The table grows and shrinks with its rows inside a capped box, which the
+    // box itself never reports; the card reports toolbar/footer changes.
+    // ponytail: headers collapsing above the card on a page that does not
+    // overflow are not observed; add an observer on the page container if it shows.
+    observer?.observe(scrollElement.firstElementChild ?? scrollElement);
+    observer?.observe(card);
+    return () => {
+      window.removeEventListener("resize", schedule);
+      observer?.disconnect();
+      if (frame) cancelAnimationFrame(frame);
+    };
+  }, [scrollElement]);
   /**
    * The filter set the last URL parse asked for, held until state carries it.
    *
@@ -693,7 +732,12 @@ export function AdminDataTable<TData>({
   const hasLeadingColumn = Boolean(enableRowSelection || renderExpanded);
   const leadingColumnCount = hasLeadingColumn ? 1 : 0;
   const visibleColumns = table.getVisibleLeafColumns();
-  const bodyColumnCount = visibleColumns.length + leadingColumnCount;
+  // +1 for the filler column that swallows leftover width, keeping data columns
+  // packed at their content width instead of stretched proportionally.
+  const bodyColumnCount = visibleColumns.length + leadingColumnCount + 1;
+  const hasActionColumn = visibleColumns.some((column) => column.id === ADMIN_ACTION_COLUMN_ID);
+  /** Filler goes in front of the actions column, or at the very end without one. */
+  const fillerIndex = hasActionColumn ? visibleColumns.length - 1 : visibleColumns.length;
 
   // Sticky pins a left-edge PREFIX of the visible columns: a pinned column with
   // scrolling ones in front of it would park itself over the wrong neighbours.
@@ -905,6 +949,76 @@ export function AdminDataTable<TData>({
     );
   };
 
+  // Auto table layout hands leftover width to every column in proportion to
+  // its content, which reads as random gaps between columns. A `w-full` filler
+  // claims all of it instead, so data columns sit at their content width.
+  const fillerHead = (
+    <TableHead key="filler" aria-hidden className={cn("w-full border-b border-border/40 p-0 admin-table-head", density === "compact" ? "h-8" : "h-9")} />
+  );
+  const fillerCell = <TableCell key="filler" aria-hidden className="w-full p-0" />;
+
+  const renderHead = (header: Header<TData, unknown>, index: number, count: number) => {
+    const isActionColumn = header.column.id === ADMIN_ACTION_COLUMN_ID;
+    const isFirstColumn = index === 0 && !hasLeadingColumn;
+    const isLastColumn = index === count - 1;
+    const canSort = header.column.getCanSort();
+    const sorted = header.column.getIsSorted();
+    const sortIndex = sorting.length > 1 ? header.column.getSortIndex() : -1;
+    const columnMeta = readAdminColumnMeta<TData>(header.column.columnDef.meta);
+    const align = columnMeta.align ?? (isActionColumn ? "right" : "left");
+    const sticky = stickyCell(header.column.id, getColumnStyle(header.column));
+
+    return (
+      <SortableHead
+        key={header.id}
+        header={header}
+        disabled={isActionColumn}
+        aria-sort={canSort ? ariaSortValue(sorted) : undefined}
+        className={cn(
+          "border-b border-border/40 text-xs font-medium text-muted-foreground",
+          density === "compact" ? "h-8" : "h-9",
+          sticky.className ?? "admin-table-head",
+          isFirstColumn && "pl-4",
+          isLastColumn && "pr-4",
+          ALIGN_CLASS[align],
+          RESPONSIVE_CLASS[columnMeta.responsive ?? "always"],
+          columnMeta.className,
+        )}
+        style={sticky.style}
+      >
+        {header.isPlaceholder ? null : (
+          <span className={cn("inline-flex w-full items-center gap-1", ALIGN_FLEX_CLASS[align])}>
+            {canSort ? (
+              <button
+                type="button"
+                onClick={header.column.getToggleSortingHandler()}
+                title={isClientMode ? "Click to sort, Shift+click to add a second sort" : undefined}
+                className={cn(
+                  "inline-flex items-center gap-1 rounded transition-colors hover:text-foreground",
+                  sorted ? "text-foreground" : "text-muted-foreground",
+                )}
+              >
+                {flexRender(header.column.columnDef.header, header.getContext())}
+                {sorted === "asc" ? (
+                  <ArrowUp aria-hidden className="size-3 shrink-0" />
+                ) : sorted === "desc" ? (
+                  <ArrowDown aria-hidden className="size-3 shrink-0" />
+                ) : (
+                  <ArrowUpDown aria-hidden className="size-3 shrink-0 opacity-30" />
+                )}
+                {sortIndex >= 0 ? (
+                  <span aria-label={`Sort priority ${sortIndex + 1}`} className="font-mono text-[10px] tabular-nums opacity-70">{sortIndex + 1}</span>
+                ) : null}
+              </button>
+            ) : (
+              flexRender(header.column.columnDef.header, header.getContext())
+            )}
+          </span>
+        )}
+      </SortableHead>
+    );
+  };
+
   const renderCell = (cell: Cell<TData, unknown>, index: number, count: number) => {
     const isActionColumn = cell.column.id === ADMIN_ACTION_COLUMN_ID;
     const isFirstColumn = index === 0 && !hasLeadingColumn;
@@ -979,7 +1093,11 @@ export function AdminDataTable<TData>({
         aria-describedby={rowHintId}
       >
         {hasLeadingColumn ? renderLeadingCell(row) : null}
-        {cells.map((cell, index) => renderCell(cell, index, cells.length))}
+        {cells.flatMap((cell, index) => [
+          ...(index === fillerIndex ? [fillerCell] : []),
+          renderCell(cell, index, cells.length)
+        ])}
+        {fillerIndex === cells.length ? fillerCell : null}
       </TableRow>
     );
     const actions = rowActions?.(row.original).filter((action) => !action.hidden) ?? [];
@@ -1057,7 +1175,7 @@ export function AdminDataTable<TData>({
 
   return (
     <AdminTableSearchContext.Provider value={debouncedSearchValue}>
-    <div className="rounded-xl border border-border/50 bg-card/50 overflow-hidden">
+    <div ref={cardRef} className="rounded-xl border border-border/50 bg-card/50 overflow-hidden">
       {/* ── TOOLBAR ─────────────────────────────────────── */}
       {/* One row: search, then the screen's filter bar (chips wrap inside it),
           then the table's own controls. Two stacked rows cost a full band of
@@ -1160,9 +1278,9 @@ export function AdminDataTable<TData>({
           strategy={horizontalListSortingStrategy}
         >
         {/* The table scrolls in its own box so the header can stick and the
-            body can be virtualised. ponytail: fixed offset for the shell chrome
-            above; turn into a CSS variable if a screen needs a taller box. */}
-        <Table ref={tableRef} wrapperClassName="max-h-[calc(100dvh-14rem)]" className="min-w-full border-separate border-spacing-0">
+            body can be virtualised; the box's height is measured to fill the
+            viewport (see the effect on `scrollElement`). */}
+        <Table ref={tableRef} className="min-w-full border-separate border-spacing-0">
           <TableHeader className="sticky top-0 z-10">
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id} className="hover:bg-transparent">
@@ -1190,67 +1308,11 @@ export function AdminDataTable<TData>({
                     ) : null}
                   </TableHead>
                 ) : null}
-                {headerGroup.headers.map((header, index) => {
-                  const isActionColumn = header.column.id === ADMIN_ACTION_COLUMN_ID;
-                  const isFirstColumn = index === 0 && !hasLeadingColumn;
-                  const isLastColumn = index === headerGroup.headers.length - 1;
-                  const canSort = header.column.getCanSort();
-                  const sorted = header.column.getIsSorted();
-                  const sortIndex = sorting.length > 1 ? header.column.getSortIndex() : -1;
-                  const columnMeta = readAdminColumnMeta<TData>(header.column.columnDef.meta);
-                  const align = columnMeta.align ?? (isActionColumn ? "right" : "left");
-                  const sticky = stickyCell(header.column.id, getColumnStyle(header.column));
-
-                  return (
-                    <SortableHead
-                      key={header.id}
-                      header={header}
-                      disabled={isActionColumn}
-                      aria-sort={canSort ? ariaSortValue(sorted) : undefined}
-                      className={cn(
-                        "border-b border-border/40 text-xs font-medium text-muted-foreground",
-                        density === "compact" ? "h-8" : "h-9",
-                        sticky.className ?? "admin-table-head",
-                        isFirstColumn && "pl-4",
-                        isLastColumn && "pr-4",
-                        ALIGN_CLASS[align],
-                        RESPONSIVE_CLASS[columnMeta.responsive ?? "always"],
-                        columnMeta.className,
-                      )}
-                      style={sticky.style}
-                    >
-                      {header.isPlaceholder ? null : (
-                        <span className={cn("inline-flex w-full items-center gap-1", ALIGN_FLEX_CLASS[align])}>
-                          {canSort ? (
-                            <button
-                              type="button"
-                              onClick={header.column.getToggleSortingHandler()}
-                              title={isClientMode ? "Click to sort, Shift+click to add a second sort" : undefined}
-                              className={cn(
-                                "inline-flex items-center gap-1 rounded transition-colors hover:text-foreground",
-                                sorted ? "text-foreground" : "text-muted-foreground",
-                              )}
-                            >
-                              {flexRender(header.column.columnDef.header, header.getContext())}
-                              {sorted === "asc" ? (
-                                <ArrowUp aria-hidden className="size-3 shrink-0" />
-                              ) : sorted === "desc" ? (
-                                <ArrowDown aria-hidden className="size-3 shrink-0" />
-                              ) : (
-                                <ArrowUpDown aria-hidden className="size-3 shrink-0 opacity-30" />
-                              )}
-                              {sortIndex >= 0 ? (
-                                <span aria-label={`Sort priority ${sortIndex + 1}`} className="font-mono text-[10px] tabular-nums opacity-70">{sortIndex + 1}</span>
-                              ) : null}
-                            </button>
-                          ) : (
-                            flexRender(header.column.columnDef.header, header.getContext())
-                          )}
-                        </span>
-                      )}
-                    </SortableHead>
-                  );
-                })}
+                {headerGroup.headers.flatMap((header, index) => [
+                  ...(index === fillerIndex ? [fillerHead] : []),
+                  renderHead(header, index, headerGroup.headers.length)
+                ])}
+                {fillerIndex === headerGroup.headers.length ? fillerHead : null}
               </TableRow>
             ))}
           </TableHeader>

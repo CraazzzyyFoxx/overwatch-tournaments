@@ -61,8 +61,9 @@ async function render(columns: ColumnDef<Row>[]) {
   });
 }
 
-const headerTexts = () => [...container.querySelectorAll("thead th")].map((th) => th.textContent?.trim());
-const cellTexts = () => [...container.querySelectorAll("tbody tr[data-row-id] td")].map((td) => td.textContent?.trim());
+// The filler column that soaks up leftover width is `aria-hidden` and not a column of the data.
+const headerTexts = () => [...container.querySelectorAll("thead th:not([aria-hidden])")].map((th) => th.textContent?.trim());
+const cellTexts = () => [...container.querySelectorAll("tbody tr[data-row-id] td:not([aria-hidden])")].map((td) => td.textContent?.trim());
 
 beforeEach(() => {
   const stored = new Map<string, string>();
