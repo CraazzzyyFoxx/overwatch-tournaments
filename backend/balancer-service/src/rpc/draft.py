@@ -323,7 +323,7 @@ def register(broker: Any, logger: Any) -> None:
             user = c.active_actor(data)
             session_id = c.require_id(data)
             ws_id = await _get_draft_session_workspace_id(session, session_id)
-            c.require_workspace_permission(data, user, ws_id, "team", "create")
+            c.require_workspace_permission(data, user, ws_id, "team", "read")
             draft = await _load_session(session, session_id)
             report = await feasibility_service.analyze_session(session, draft)
             return schemas.DraftFeasibilityResponse.model_validate(report)

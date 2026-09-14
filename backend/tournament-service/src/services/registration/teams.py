@@ -778,6 +778,7 @@ class RegistrationTeamService:
         session: AsyncSession,
         *,
         team_id: int,
+        tournament_id: int,
     ) -> RegistrationTeamInviteHistoryResponse:
         """Every invite the team ever issued, newest first, plus its cap standing.
 
@@ -792,9 +793,15 @@ class RegistrationTeamService:
         DECLINED offer simply vanished — the slot reopened and the captain could not
         tell whether they were refused or the link merely lapsed, which are different
         situations with different next moves.
+
+        ``tournament_id`` is the caller's already-authorized tournament (organizer
+        permission checked against it, or the captain's own tournament in the public
+        handler) — required and checked against the team's own, like
+        ``reset_invite_cap``, so a foreign ``team_id`` 404s instead of leaking another
+        tournament's invite history and target BattleTags.
         """
         team = await self.team_repo.get(session, team_id)
-        if team is None:
+        if team is None or team.tournament_id != tournament_id:
             raise _fail(404, "team_not_found", "Team not found")
 
         rows = list(await self.invite_repo.list_for_team(session, team_id))

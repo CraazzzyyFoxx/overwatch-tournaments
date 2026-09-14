@@ -3,9 +3,10 @@
 The gateway parses multipart uploads and base64-encodes the file into the RPC
 body (``content_b64`` + ``content_type``); the match-log read returns
 ``{content_b64, media_type, filename}`` which the gateway decodes back to raw
-bytes. Permission is enforced here (workspace.update for icons, superuser for
-assets); every side effect — S3, the workspace row, the audit row, the commit —
-belongs to ``services/workspace/binary.py``.
+bytes. Permission is enforced here (workspace.update for icons; asset.create/
+delete scoped to the workspace when one is given, else superuser for
+platform-wide catalog assets); every side effect — S3, the workspace row, the
+audit row, the commit — belongs to ``services/workspace/binary.py``.
 """
 
 from __future__ import annotations
@@ -82,14 +83,20 @@ def register(broker: Any, logger: Any) -> None:
     @broker.subscriber("rpc.app.assets.upload")
     async def _asset_upload(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
-            c.require_superuser(c.actor(data))
+            user = c.actor(data)
+            c.require_active(user)
+            workspace_id = c.q1(data, "workspace_id", int)
+            if workspace_id is None:
+                c.require_superuser(user)
+            else:
+                ensure_workspace_permission(user, workspace_id, "asset", "create")
             return await workspace_binary.store_asset(
                 session,
                 asset_type=_asset_type(data),
                 slug=data.get("slug"),
                 file_data=_decode(data),
                 content_type=_content_type(data),
-                workspace_id=c.q1(data, "workspace_id", int),
+                workspace_id=workspace_id,
             )
 
         return await c.envelope(logger, "assets.upload", op, session_factory=_SF)
@@ -97,12 +104,18 @@ def register(broker: Any, logger: Any) -> None:
     @broker.subscriber("rpc.app.assets.delete")
     async def _asset_delete(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
-            c.require_superuser(c.actor(data))
+            user = c.actor(data)
+            c.require_active(user)
+            workspace_id = c.q1(data, "workspace_id", int)
+            if workspace_id is None:
+                c.require_superuser(user)
+            else:
+                ensure_workspace_permission(user, workspace_id, "asset", "delete")
             deleted = await workspace_binary.remove_asset(
                 session,
                 asset_type=_asset_type(data),
                 slug=data.get("slug"),
-                workspace_id=c.q1(data, "workspace_id", int),
+                workspace_id=workspace_id,
             )
             return {"deleted": deleted}
 
@@ -111,7 +124,10 @@ def register(broker: Any, logger: Any) -> None:
     @broker.subscriber("rpc.app.matches.log")
     async def _match_log(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
-            filename, data_bytes = await workspace_binary.match_log(session, c.require_id(data))
+            match_id = c.require_id(data)
+            filename, tournament_id = await workspace_binary.resolve_match_log_ref(session, match_id)
+            await c.gate_tournament(session, data, tournament_id)
+            data_bytes = await workspace_binary.fetch_log_bytes(tournament_id, filename)
             return {
                 "content_b64": base64.b64encode(data_bytes).decode("ascii"),
                 "media_type": "application/octet-stream",
