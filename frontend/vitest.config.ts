@@ -206,7 +206,7 @@ export default defineConfig({
       "src/components/DivisionIcon.behavior.test.tsx",
       "src/components/HoverPrefetchLink.behavior.test.tsx",
       "src/components/EncounterRostersModal.behavior.test.tsx",
-      "src/components/BracketView.behavior.test.tsx",
+      "src/components/bracket/BracketView.behavior.test.tsx",
       "src/components/FavoriteStarButton.behavior.test.tsx",
       "src/components/UserSearch.behavior.test.tsx",
       "src/components/StandingsTable.advance.behavior.test.tsx",

@@ -427,6 +427,25 @@ export interface StageItemInputUpdateInput {
   source_position?: number | null;
 }
 
+/** `POST /admin/encounters/{id}/swap-slot`: exchange the teams in two bracket slots. */
+export interface EncounterSwapSlotInput {
+  slot: "home" | "away";
+  target_encounter_id: number;
+  target_slot: "home" | "away";
+}
+
+export interface EncounterSlotState {
+  id: number;
+  home_team_id: number | null;
+  away_team_id: number | null;
+  name: string;
+}
+
+export interface EncounterSlotSwapRead {
+  source: EncounterSlotState;
+  target: EncounterSlotState;
+}
+
 export interface StageMergeGroupStagesInput {
   source_stage_ids: number[];
   target_name?: string | null;

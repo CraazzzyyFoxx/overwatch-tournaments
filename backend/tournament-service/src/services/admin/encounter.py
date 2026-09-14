@@ -14,6 +14,7 @@ from shared.repository import (
     TeamRepository,
     TournamentRepository,
 )
+from shared.services.encounter_naming import build_encounter_name
 from src import models, schemas
 from src.core import enums
 from src.services.encounter.pick_ban_session import pick_ban_session_service
@@ -78,6 +79,34 @@ def _reject_settled_result_edits(encounter: models.Encounter, update_data: dict)
             "encounter's status or teams"
         ),
     )
+
+
+def _reject_swapping_a_busy_encounter(encounter: models.Encounter) -> None:
+    """A slot swap rewires team slots -- the edit ``_reject_settled_result_edits``
+    already sends to the reopen endpoint, and the one a running series must not
+    see under it.
+
+    ``result_status`` alone is enough to refuse: a disputed or
+    pending-confirmation encounter is not ``COMPLETED`` yet its reports are
+    already keyed by the current team pair, so swapping a slot would orphan
+    them.
+    """
+    if encounter.status == enums.EncounterStatus.COMPLETED or (
+        encounter.result_status != enums.EncounterResultStatus.NONE
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "use_reopen_endpoint: reopen the result via POST "
+                "/api/v1/admin/encounters/{encounter_id}/result/reopen before swapping a settled "
+                "encounter's team slots"
+            ),
+        )
+    if encounter.started_at is not None and encounter.ended_at is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="encounter_in_progress: the encounter is live; end it before swapping its team slots",
+        )
 
 
 class AdminEncounterService:
@@ -296,6 +325,89 @@ class AdminEncounterService:
         await session.refresh(encounter)
 
         return encounter
+
+    async def _team_name(self, session: AsyncSession, team_id: int | None) -> str | None:
+        """``None`` for an empty slot -- ``build_encounter_name`` renders it as TBD."""
+        if not team_id:
+            return None
+        team = await self.team_repo.get(session, team_id)
+        return team.name if team else None
+
+    async def swap_slots(
+        self, session: AsyncSession, encounter_id: int, data: schemas.EncounterSwapSlotInput
+    ) -> tuple[models.Encounter, models.Encounter]:
+        """Exchange the team ids two bracket slots hold, in one transaction.
+
+        The bracket's drag-and-drop: either slot may be empty (that is how a team
+        is moved into a TBD slot), and naming the same encounter with the other
+        slot flips home/away. Seeding only -- a settled or running encounter is
+        refused rather than silently re-teamed under its result.
+        """
+        if data.target_encounter_id == encounter_id and data.target_slot == data.slot:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot swap a slot with itself",
+            )
+
+        # Ascending id order: two admins dragging the same pair in opposite
+        # directions would otherwise take the two row locks in opposite orders
+        # and deadlock.
+        locked: dict[int, models.Encounter] = {}
+        for locked_id in sorted({encounter_id, data.target_encounter_id}):
+            row = await self.encounter_repo.get_for_update(
+                session,
+                locked_id,
+                options=[
+                    selectinload(models.Encounter.home_team),
+                    selectinload(models.Encounter.away_team),
+                ],
+            )
+            if not row:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Encounter not found")
+            locked[locked_id] = row
+
+        source = locked[encounter_id]
+        target = locked[data.target_encounter_id]
+
+        if target.tournament_id != source.tournament_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Target encounter does not belong to this tournament",
+            )
+        if target.stage_id != source.stage_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Target encounter does not belong to the same stage",
+            )
+
+        touched = [source] if source is target else [source, target]
+        for encounter in touched:
+            _reject_swapping_a_busy_encounter(encounter)
+
+        previous = {encounter.id: (encounter.home_team_id, encounter.away_team_id) for encounter in touched}
+        source_field = f"{data.slot}_team_id"
+        target_field = f"{data.target_slot}_team_id"
+        # Both reads before either write -- on a home/away flip the two slots
+        # live on the same row. ``or None`` so a 0 left by an older writer and a
+        # NULL both land as the empty slot the column actually stores.
+        source_team_id = getattr(source, source_field) or None
+        target_team_id = getattr(target, target_field) or None
+        setattr(source, source_field, target_team_id)
+        setattr(target, target_field, source_team_id)
+
+        for encounter in touched:
+            if (encounter.home_team_id, encounter.away_team_id) == previous[encounter.id]:
+                continue
+            encounter.name = build_encounter_name(
+                await self._team_name(session, encounter.home_team_id),
+                await self._team_name(session, encounter.away_team_id),
+            )
+            await pick_ban_session_service.sync_all_pick_ban_sessions_after_team_change(session, encounter)
+
+        await enqueue_tournament_recalculation(session, source.tournament_id)
+        await session.commit()
+
+        return source, target
 
     async def update_match(
         self,

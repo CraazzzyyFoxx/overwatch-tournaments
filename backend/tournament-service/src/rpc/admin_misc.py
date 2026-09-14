@@ -13,9 +13,9 @@ The gateway passes path params as ``data["<name>"]`` (and the primary id as
 ``data["query"][key] = [values]``, and the JSON body as ``data["payload"]``.
 
 Commit semantics: every write service called here commits internally
-(update_match, set_encounter_result, toggle_finished, transition_status,
-recalculate_standings, upsert_report_form), so the handlers add no extra
-commit. job_get/job_list, report_form_get and the encounter-reports /
+(update_match, swap_slots, set_encounter_result, toggle_finished,
+transition_status, recalculate_standings, upsert_report_form), so the handlers
+add no extra commit. job_get/job_list, report_form_get and the encounter-reports /
 parsed-matches reads are read-only.
 """
 
@@ -70,6 +70,16 @@ def _serialize_result(encounter: models.Encounter) -> dict:
         closeness=encounter.closeness,
         confirmed_at=encounter.confirmed_at,
     ).model_dump(mode="json")
+
+
+def _slot_state(encounter: models.Encounter) -> dict:
+    """One side of a slot swap, as the bracket re-renders it."""
+    return {
+        "id": encounter.id,
+        "home_team_id": encounter.home_team_id,
+        "away_team_id": encounter.away_team_id,
+        "name": encounter.name,
+    }
 
 
 _user_repo = UserRepository()
@@ -160,6 +170,34 @@ def register(broker: Any, logger: Any) -> None:
                 adopt_report_team_id=body.adopt_report_team_id,
             )
             return _serialize_result(encounter)
+
+        return await _run(logger, op)
+
+    @broker.subscriber("rpc.tournament.encounter_swap_slot")
+    async def _encounter_swap_slot(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            user = _identity(data)
+            encounter_id = _require_id(data)
+            ws_id = await auth.get_encounter_workspace_id(session, encounter_id)
+            ensure_workspace_permission(user, ws_id, "match", "update")
+            body = schemas.EncounterSwapSlotInput.model_validate(_payload(data))
+            await record_admin_audit(
+                session,
+                action="encounter.swap_slot",
+                actor=user,
+                data=data,
+                workspace_id=ws_id,
+                entity_type="encounter",
+                entity_id=encounter_id,
+                after=body.model_dump(mode="json"),
+            )
+            # swap_slots commits internally; both sides come back so the bracket
+            # re-renders the pair without a refetch.
+            source, target = await enc_service.encounter_service.swap_slots(session, encounter_id, body)
+            return schemas.EncounterSlotSwapRead(
+                source=_slot_state(source),
+                target=_slot_state(target),
+            ).model_dump(mode="json")
 
         return await _run(logger, op)
 

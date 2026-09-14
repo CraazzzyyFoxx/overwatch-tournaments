@@ -1,6 +1,6 @@
 "use client";
 
-import { BracketView } from "@/components/BracketView";
+import { BracketView, type BracketSlotRef } from "@/components/bracket/BracketView";
 import { useIsMobile } from "@/hooks/use-mobile";
 import type { Encounter } from "@/types/encounter.types";
 import type { StreamEntry } from "@/types/stream.types";
@@ -15,6 +15,10 @@ type ResponsiveBracketProps = {
   onReport?: (encounter: Encounter) => void;
   canEdit?: (encounter: Encounter) => boolean;
   canReport?: (encounter: Encounter) => boolean;
+  onSwapSlots?: (
+    source: BracketSlotRef<Encounter>,
+    target: BracketSlotRef<Encounter>
+  ) => Promise<unknown> | void;
   liveTeamStreams?: ReadonlyMap<number, StreamEntry>;
   highlightMatchId?: number | null;
 };
@@ -32,6 +36,10 @@ export function ResponsiveBracket(props: Readonly<ResponsiveBracketProps>) {
         encounters={props.encounters}
         type={props.type}
         highlightMatchId={props.highlightMatchId}
+        onEdit={props.onEdit}
+        onReport={props.onReport}
+        canEdit={props.canEdit}
+        canReport={props.canReport}
       />
     );
   }

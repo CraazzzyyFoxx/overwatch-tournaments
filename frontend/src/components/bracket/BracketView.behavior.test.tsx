@@ -1,10 +1,9 @@
 // @vitest-environment happy-dom
 //
-// Covers only what the live-stream indicator adds to the bracket slot row: that
-// the admin call site (no `liveTeamStreams` at all) still renders exactly what it
-// did, that a team with someone on air gets a NAMED indicator rather than a bare
-// dot, and that the indicator is not a navigation target. The layout maths itself
-// is covered by `bracket-view.helpers.test.ts`.
+// Behaviour of the assembled tree as a viewer sees it: the live-stream indicator
+// on a slot row, the opening scroll position, round headers clear of cards, and
+// which connectors are drawn. The layout maths itself is covered by
+// `layout.test.ts` and `bracket-view.helpers.test.ts`.
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { NextIntlClientProvider } from "next-intl";
 import { act } from "react";
@@ -309,11 +308,22 @@ describe("BracketView round headers", () => {
       />
     );
 
+    // Keyed by header id, not DOM order: the top row of headers is a sticky
+    // layer drawn before the lower bracket's, so document order is not play order.
     expect(
-      [...container.querySelectorAll("[data-round-header]")].map((header) =>
-        header.textContent?.trim()
+      Object.fromEntries(
+        [...container.querySelectorAll("[data-round-header]")].map((header) => [
+          header.getAttribute("data-round-header"),
+          header.textContent?.trim()
+        ])
       )
-    ).toEqual(["Semifinal", "Final", "LB Round 1", "LB Final", "Grand Final"]);
+    ).toEqual({
+      "upper-header-1": "Semifinal",
+      "upper-header-2": "Final",
+      "lower-header--1": "LB Round 1",
+      "lower-header--2": "LB Final",
+      "final-header-3": "Grand Final"
+    });
   });
 });
 
@@ -375,5 +385,51 @@ describe("BracketView connectors", () => {
       path.getAttribute("data-edge")
     );
     expect(drawn).toEqual(["edge-1-3"]);
+  });
+});
+
+// Rearrange mode: offered only to a caller that can swap slots, and even then
+// only the rows of matches nothing has happened to yet can be picked up — the
+// server refuses settled and live matches, so the view never offers them.
+describe("BracketView rearrange mode", () => {
+  const toggle = () => container.querySelector<HTMLButtonElement>("[data-bracket-rearrange]");
+
+  it("offers no rearrange control to a viewer that cannot swap", () => {
+    render(<BracketView encounters={[encounter()]} type="single_elimination" />);
+    expect(toggle()).toBeNull();
+  });
+
+  it("unlocks only the untouched matches' team rows when switched on", () => {
+    render(
+      <BracketView
+        type="single_elimination"
+        encounters={[
+          encounter({ id: 1, round: 1, status: "completed" }),
+          encounter({ id: 2, round: 1, status: "open", result_status: "none", home_team_id: 9, away_team_id: 10 }),
+          encounter({
+            id: 3,
+            round: 1,
+            status: "open",
+            result_status: "none",
+            started_at: "2026-01-01T10:00:00Z",
+            home_team_id: 11,
+            away_team_id: 12
+          }),
+          encounter({ id: 4, round: 2, status: "open", result_status: "none", home_team_id: 0, away_team_id: 0 })
+        ]}
+        onSwapSlots={() => undefined}
+      />
+    );
+
+    expect(container.querySelector("[data-slot-draggable]")).toBeNull();
+    act(() => toggle()!.click());
+
+    expect(toggle()!.getAttribute("aria-pressed")).toBe("true");
+    expect(container.querySelector("[data-bracket-rearrange-hint]")).not.toBeNull();
+    const draggable = [...container.querySelectorAll("[data-slot-draggable]")].map((row) =>
+      row.closest("[data-match-id]")?.getAttribute("data-match-id")
+    );
+    // Match 1 is played, match 3 is live, match 4 has no team to pick up.
+    expect(draggable).toEqual(["2", "2"]);
   });
 });

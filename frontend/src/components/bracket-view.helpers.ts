@@ -176,8 +176,25 @@ export function orderEliminationRounds(
   };
 }
 
-/** Encounter statuses the platform treats as settled. Mirrors `BracketView`. */
-const SETTLED_STATUSES = new Set(["completed", "finished", "closed"]);
+/** Encounter statuses the platform treats as settled — the bracket's one list. */
+const SETTLED_STATUS: Record<string, true> = { completed: true, finished: true, closed: true };
+
+export function isSettled(match: Pick<BracketMatch, "status">): boolean {
+  return SETTLED_STATUS[match.status] === true;
+}
+
+/**
+ * Whether an admin may still move a team in or out of this match: nothing has
+ * been played, decided or reported. Mirrors the server's `swap-slot` guards so
+ * a drop the server would refuse is never offered.
+ */
+export function isSlotRearrangeable(
+  match: Pick<BracketMatch, "status" | "result_status" | "started_at" | "ended_at">
+): boolean {
+  if (isSettled(match)) return false;
+  if (match.result_status && match.result_status !== "none") return false;
+  return !(match.started_at && !match.ended_at);
+}
 
 /**
  * The round a bracket is currently on: the first, in the given play order, that
@@ -190,9 +207,7 @@ const SETTLED_STATUSES = new Set(["completed", "finished", "closed"]);
  * final reads as "before" a grand final it follows.
  */
 export function activeRoundNumber(groups: RoundGroup[]): number | null {
-  const inPlay = groups.find((group) =>
-    group.matches.some((match) => !SETTLED_STATUSES.has(match.status))
-  );
+  const inPlay = groups.find((group) => group.matches.some((match) => !isSettled(match)));
   return (inPlay ?? groups[groups.length - 1])?.round ?? null;
 }
 
