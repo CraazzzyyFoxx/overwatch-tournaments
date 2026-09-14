@@ -273,56 +273,55 @@ export const MatchCard = memo(function MatchCard({
           className="flex items-center justify-between gap-1.5 border-t border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.015)] px-2"
           style={{ height: footerHeight }}
         >
-          {interactive ? (
-            <div className="flex items-center gap-1">
-              <HoverPrefetchLink
-                href={`/encounters/${encounter.id}`}
-                className={FOOTER_BUTTON}
-                aria-label={t("bracket.viewMatch")}
-                onClick={(e) => e.stopPropagation()}
-              >
-                <Search className="size-3.5" aria-hidden />
-              </HoverPrefetchLink>
-              {/* The roster peek stays on the bracket: a scroll position built up
-                  over a 32-team tree survives looking at who is playing. The
-                  pre-game link leaves, because the room is where a captain acts. */}
-              <EncounterRostersModal
-                encounterId={encounter.id}
-                homeTeamName={encounter.home_team?.name ?? t("common.tbd")}
-                awayTeamName={encounter.away_team?.name ?? t("common.tbd")}
-              />
-              <HoverPrefetchLink
-                href={withReturnTo(`/tournaments/${encounter.tournament_id}/pregame/${encounter.id}`, returnTo)}
-                className={FOOTER_BUTTON}
-                aria-label={t("bracket.pregameRoom")}
-                onClick={(e) => e.stopPropagation()}
-              >
-                <ListChecks className="size-3.5" aria-hidden />
-              </HoverPrefetchLink>
-            </div>
-          ) : (
-            <span />
-          )}
-          {/* Who may act sits beside what the match is: edit/report, then Bo3 / LIVE / date. */}
-          <div className="flex shrink-0 items-center gap-1">
+          {/* Look (view, rosters, pre-game) then act (edit, report), one hairline
+              between; Bo3 / LIVE / date keeps the right edge to itself. */}
+          <div className="flex min-w-0 items-center gap-1">
+            {interactive && (
+              <>
+                <HoverPrefetchLink
+                  href={`/encounters/${encounter.id}`}
+                  className={FOOTER_BUTTON}
+                  aria-label={t("bracket.viewMatch")}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <Search className="size-3.5" aria-hidden />
+                </HoverPrefetchLink>
+                {/* The roster peek stays on the bracket: a scroll position built up
+                    over a 32-team tree survives looking at who is playing. The
+                    pre-game link leaves, because the room is where a captain acts. */}
+                <EncounterRostersModal
+                  encounterId={encounter.id}
+                  homeTeamName={encounter.home_team?.name ?? t("common.tbd")}
+                  awayTeamName={encounter.away_team?.name ?? t("common.tbd")}
+                />
+                <HoverPrefetchLink
+                  href={withReturnTo(`/tournaments/${encounter.tournament_id}/pregame/${encounter.id}`, returnTo)}
+                  className={FOOTER_BUTTON}
+                  aria-label={t("bracket.pregameRoom")}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <ListChecks className="size-3.5" aria-hidden />
+                </HoverPrefetchLink>
+              </>
+            )}
+            {interactive && actions && (
+              <span aria-hidden className="mx-0.5 h-3 w-px shrink-0 bg-[color:var(--aqt-border-2)]" />
+            )}
             {actions}
-            {actions && meta.timeLabel && (
-              <span aria-hidden className="mx-0.5 h-3 w-px bg-[color:var(--aqt-border-2)]" />
-            )}
-            {meta.timeLabel && (
-              <span
-                className={cn(
-                  "flex items-center gap-1 text-label font-semibold uppercase tracking-wide",
-                  meta.isLive ? "text-[color:var(--aqt-rose)]" : "text-[color:var(--aqt-fg-muted)]"
-                )}
-              >
-                {meta.isLive && (
-                  <span className="h-1.5 w-1.5 animate-pulse rounded-full" style={{ background: "var(--aqt-rose)" }} />
-                )}
-                {meta.timeLabel}
-              </span>
-            )}
           </div>
+          {meta.timeLabel && (
+            <span
+              className={cn(
+                "flex shrink-0 items-center gap-1 text-label font-semibold uppercase tracking-wide",
+                meta.isLive ? "text-[color:var(--aqt-rose)]" : "text-[color:var(--aqt-fg-muted)]"
+              )}
+            >
+              {meta.isLive && (
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full" style={{ background: "var(--aqt-rose)" }} />
+              )}
+              {meta.timeLabel}
+            </span>
+          )}
         </div>
       </div>
     </div>
