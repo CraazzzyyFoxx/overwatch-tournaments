@@ -3795,14 +3795,9 @@ tbody tr[data-selected] > .admin-sticky-col {
   background-color: color-mix(in srgb, hsl(var(--accent)) 30%, var(--admin-sticky-bg));
 }
 
-/* Right edge of the pinned block — the only cue that the rest scrolls under.
-   A hairline plus a short soft shadow: the shadow is what makes a column
-   sliding underneath read as depth rather than as clipped text. */
+/* Right edge of the pinned block — the only cue that the rest scrolls under. */
 .admin-sticky-col-edge {
-  box-shadow:
-    inset -1px 0 0 hsl(var(--border)),
-    6px 0 8px -6px color-mix(in srgb, hsl(var(--foreground)) 35%, transparent);
-  clip-path: inset(0 -14px 0 0);
+  box-shadow: inset -1px 0 0 hsl(var(--border));
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
