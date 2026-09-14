@@ -20,6 +20,9 @@ import { CARD_HEIGHT, CARD_ROW_HEIGHT, GUTTER_WIDTH, type LayoutNode, type Side 
 export const FOOTER_BUTTON =
   "flex items-center justify-center rounded p-0.5 text-[color:var(--aqt-fg-muted)] transition-colors hover:bg-[color:var(--aqt-overlay-3)] hover:text-[color:var(--aqt-fg)]";
 
+/** The footer's one divider: look | act on the left, when | format on the right. */
+const HAIRLINE = <span aria-hidden className="mx-0.5 h-3 w-px shrink-0 bg-[color:var(--aqt-border-2)]" />;
+
 /** dnd-kit id of one team slot; the same string names its draggable and its droppable. */
 export function slotDragId(encounterId: number, side: Side) {
   return `slot-${encounterId}-${side}`;
@@ -206,15 +209,14 @@ export const MatchCard = memo(function MatchCard({
   const format = useFormatter();
   const { data, encounter } = node;
   const isLive = !data.isCompleted && Boolean(encounter.started_at) && !encounter.ended_at;
-  const bestOf = encounter.best_of ?? 0;
-  const timeLabel = isLive
+  // Where the match stands in time; nothing once it is decided.
+  const stateLabel = isLive
     ? t("common.live")
     : !data.isCompleted && encounter.scheduled_at
       ? format.dateTime(new Date(encounter.scheduled_at), { month: "short", day: "numeric" })
-      : bestOf > 0
-        ? `Bo${bestOf}`
-        : "";
-  const meta = { isLive, timeLabel };
+      : null;
+  // The series format is always worth reading next to the score.
+  const bestOfLabel = encounter.best_of ? `Bo${encounter.best_of}` : null;
   const footerHeight = CARD_HEIGHT - CARD_ROW_HEIGHT * 2;
   const actions = renderActions(encounter);
 
@@ -240,7 +242,7 @@ export const MatchCard = memo(function MatchCard({
     <div
       className={cn(
         "relative flex h-full overflow-hidden rounded-[10px] border bg-[color:var(--aqt-card)] shadow-[0_10px_24px_rgba(0,0,0,0.28)]",
-        meta.isLive
+        isLive
           ? "border-[color:color-mix(in_srgb,var(--aqt-rose)_45%,transparent)]"
           : data.winner
             ? "border-[color:var(--aqt-border-2)]"
@@ -270,12 +272,12 @@ export const MatchCard = memo(function MatchCard({
         <SlotRow {...rowProps} side="away" highlighted={awayHighlighted} />
 
         <div
-          className="flex items-center justify-between gap-1.5 border-t border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.015)] px-2"
+          className="flex items-center justify-between gap-1.5 border-t border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.015)] px-1.5"
           style={{ height: footerHeight }}
         >
           {/* Look (view, rosters, pre-game) then act (edit, report), one hairline
-              between; Bo3 / LIVE / date keeps the right edge to itself. */}
-          <div className="flex min-w-0 items-center gap-1">
+              between; LIVE / date and the series format keep the right edge. */}
+          <div className="flex min-w-0 items-center gap-0.5">
             {interactive && (
               <>
                 <HoverPrefetchLink
@@ -304,23 +306,22 @@ export const MatchCard = memo(function MatchCard({
                 </HoverPrefetchLink>
               </>
             )}
-            {interactive && actions && (
-              <span aria-hidden className="mx-0.5 h-3 w-px shrink-0 bg-[color:var(--aqt-border-2)]" />
-            )}
+            {interactive && actions && HAIRLINE}
             {actions}
           </div>
-          {meta.timeLabel && (
-            <span
-              className={cn(
-                "flex shrink-0 items-center gap-1 text-label font-semibold uppercase tracking-wide",
-                meta.isLive ? "text-[color:var(--aqt-rose)]" : "text-[color:var(--aqt-fg-muted)]"
+          {(stateLabel || bestOfLabel) && (
+            <div className="flex shrink-0 items-center gap-1 text-label font-semibold uppercase tracking-wide text-[color:var(--aqt-fg-muted)]">
+              {stateLabel && (
+                <span className={cn("flex items-center gap-1", isLive && "text-[color:var(--aqt-rose)]")}>
+                  {isLive && (
+                    <span className="h-1.5 w-1.5 animate-pulse rounded-full" style={{ background: "var(--aqt-rose)" }} />
+                  )}
+                  {stateLabel}
+                </span>
               )}
-            >
-              {meta.isLive && (
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full" style={{ background: "var(--aqt-rose)" }} />
-              )}
-              {meta.timeLabel}
-            </span>
+              {stateLabel && bestOfLabel && HAIRLINE}
+              {bestOfLabel && <span>{bestOfLabel}</span>}
+            </div>
           )}
         </div>
       </div>
