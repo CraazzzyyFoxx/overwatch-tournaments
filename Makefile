@@ -4,7 +4,7 @@
 	app-logs identity-logs parser-logs frontend-logs discord-logs balancer-logs stream-logs \
 	app-restart identity-restart parser-restart frontend-restart \
 	monitoring-up monitoring-down monitoring-logs monitoring-ps \
-	backup-up backup-down backup-logs backup-run backup-ls \
+	backup-up backup-down backup-logs backup-run backup-ls cleanup-run \
 	app-rebuild identity-rebuild parser-rebuild frontend-rebuild \
 	loadtest loadtest-ui
 
@@ -72,6 +72,7 @@ help:
 	@echo "  make monitoring-logs- Follow monitoring logs"
 	@echo "  make monitoring-ps  - Show monitoring services"
 	@echo "  make backup-run     - Run a backup now (pg_dump -> Timeweb S3)"
+	@echo "  make cleanup-run    - Run disk cleanup now (see docs/disk-cleanup.md)"
 	@echo "  make backup-ls      - List objects in the backup bucket"
 	@echo "  make backup-up      - Start local rustfs (optional, unused on Moscow)"
 	@echo "  make backup-down    - Stop local rustfs"
@@ -272,3 +273,6 @@ backup-run:
 
 backup-ls:
 	@bash -c 'set -a; . $(BACKUP_ENV); set +a; docker run --rm --env-file $(BACKUP_ENV) rclone/rclone lsf "tw:$$BUCKET/pg/" -R'
+
+cleanup-run:
+	ops/cleanup/cleanup.sh
