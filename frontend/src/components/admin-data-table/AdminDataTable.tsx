@@ -3,6 +3,7 @@
 import React, { useCallback, useEffect, useId, useRef, useState } from "react";
 import {
   Cell,
+  Column,
   ColumnDef,
   ColumnFiltersState,
   ColumnOrderState,
@@ -69,6 +70,8 @@ const ADMIN_ACTION_COLUMN_ID = "actions";
 const ADMIN_ACTION_COLUMN_MIN_WIDTH = 80;
 /** Width of the select/expand column — keep in sync with its `w-10` class. */
 const ADMIN_LEADING_COLUMN_WIDTH = 40;
+/** Flexible (unsized, undragged) columns split this share of the table evenly, so they read as a grid instead of shrink-wrapping to content; the filler absorbs the rest. */
+const ADMIN_FLEXIBLE_FILL_PERCENT = 75;
 const DEFAULT_PAGE_SIZE_OPTIONS = [10, 15, 25, 50, 100];
 /**
  * Rows past which the body is virtualised. Below it every row is in the DOM,
@@ -678,7 +681,19 @@ export function AdminDataTable<TData>({
     previousUrlStateRef.current = { page: safeCurrentPage, search: debouncedSearchValue, pageSize: safePageSize, sortKey, filters: serializedFilters };
   }, [safeCurrentPage, debouncedSearchValue, initialPageSize, safePageSize, pathname, sorting, sortKey, filters, serializedFilters]);
 
-  const getColumnStyle = (column: { id: string; getSize: () => number; columnDef: { size?: number } }) => {
+  // react-table merges an internal `defaultColumn.size` (150) into every
+  // column's runtime `columnDef.size`, so that field can't tell "the caller
+  // set a size" from "no one did" — check the raw prop instead.
+  const explicitlySizedColumnIds = new Set(columns.filter((c) => typeof c.size === "number").map(columnDefId));
+
+  /** Excludes the actions column, dragged/explicitly sized columns, and sticky columns (which must declare a size; see the offset loop below). */
+  const isFlexibleColumn = (column: Column<TData, unknown>) =>
+    column.id !== ADMIN_ACTION_COLUMN_ID &&
+    columnSizing[column.id] === undefined &&
+    !explicitlySizedColumnIds.has(column.id) &&
+    !readAdminColumnMeta<TData>(column.columnDef.meta).sticky;
+
+  const getColumnStyle = (column: Column<TData, unknown>) => {
     if (column.id === ADMIN_ACTION_COLUMN_ID) {
       // Exactly as wide as its menu button, whatever a saved sizing says: the
       // column is not resizable now, but an earlier build let it be dragged.
@@ -686,13 +701,20 @@ export function AdminDataTable<TData>({
       return { width, minWidth: width, maxWidth: width };
     }
     const resized = columnSizing[column.id] !== undefined;
-    const configuredSize = resized || typeof column.columnDef.size === "number" ? column.getSize() : undefined;
-    if (!configuredSize) return undefined;
-    // Auto table layout treats `width` as a floor; a user-dragged width is a
-    // ceiling too, or shrinking a column would visibly do nothing.
-    return resized
-      ? { width: configuredSize, minWidth: configuredSize, maxWidth: configuredSize }
-      : { width: configuredSize, minWidth: configuredSize };
+    if (resized || explicitlySizedColumnIds.has(column.id)) {
+      const configuredSize = column.getSize();
+      // Auto table layout treats `width` as a floor; a user-dragged width is a
+      // ceiling too, or shrinking a column would visibly do nothing.
+      return resized
+        ? { width: configuredSize, minWidth: configuredSize, maxWidth: configuredSize }
+        : { width: configuredSize, minWidth: configuredSize };
+    }
+    if (!isFlexibleColumn(column)) return undefined;
+    // No explicit or dragged width: split an even share of the table so the
+    // grid fills the screen instead of shrink-wrapping to content with a
+    // dead gap on the right (the filler, below, absorbs what's left).
+    const flexibleCount = table.getVisibleLeafColumns().filter(isFlexibleColumn).length;
+    return flexibleCount > 0 ? { width: `${ADMIN_FLEXIBLE_FILL_PERCENT / flexibleCount}%` } : undefined;
   };
 
   const hasRowAction = Boolean(onRowClick || onRowDoubleClick);
@@ -755,7 +777,8 @@ export function AdminDataTable<TData>({
   for (const column of visibleColumns) {
     if (!readAdminColumnMeta<TData>(column.columnDef.meta).sticky) break;
     stickyLeft.set(column.id, stickyOffset);
-    stickyOffset += getColumnStyle(column)?.width ?? 0;
+    const width = getColumnStyle(column)?.width;
+    stickyOffset += typeof width === "number" ? width : 0;
   }
   const lastStickyId = [...stickyLeft.keys()].pop() ?? null;
   // The pinned block ends in a hard edge that scrolling content slides under;
@@ -963,12 +986,21 @@ export function AdminDataTable<TData>({
   };
 
   // Auto table layout hands leftover width to every column in proportion to
-  // its content, which reads as random gaps between columns. A `w-full` filler
-  // claims all of it instead, so data columns sit at their content width.
+  // its content, which reads as random gaps between columns. Flexible columns
+  // (see `getColumnStyle`) now claim an even `ADMIN_FLEXIBLE_FILL_PERCENT`
+  // share instead, so the grid fills the screen; the filler only mops up
+  // whatever's left over (all of it, if every column turned out sized/sticky).
+  const flexibleColumnCount = visibleColumns.filter(isFlexibleColumn).length;
+  const fillerStyle = flexibleColumnCount > 0 ? { width: `${100 - ADMIN_FLEXIBLE_FILL_PERCENT}%` } : undefined;
   const fillerHead = (
-    <TableHead key="filler" aria-hidden className={cn("w-full border-b border-border/40 p-0 admin-table-head", density === "compact" ? "h-8" : "h-9")} />
+    <TableHead
+      key="filler"
+      aria-hidden
+      className={cn("border-b border-border/40 p-0 admin-table-head", !fillerStyle && "w-full", density === "compact" ? "h-8" : "h-9")}
+      style={fillerStyle}
+    />
   );
-  const fillerCell = <TableCell key="filler" aria-hidden className="w-full p-0" />;
+  const fillerCell = <TableCell key="filler" aria-hidden className={cn("p-0", !fillerStyle && "w-full")} style={fillerStyle} />;
 
   const renderHead = (header: Header<TData, unknown>, index: number, count: number) => {
     const isActionColumn = header.column.id === ADMIN_ACTION_COLUMN_ID;
