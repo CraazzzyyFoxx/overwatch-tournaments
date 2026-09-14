@@ -2,9 +2,9 @@
 	email {$ACME_EMAIL}
 }
 
-# S3 API реплики. Host-заголовок Caddy проксирует как пришёл — это обязательно:
-# подпись SigV4 покрывает Host, а rustfs проверяет её по полученному значению.
-# Консоль (:9001) наружу не выносим: она не нужна ни репликации, ни mc.
+# Replica S3 API. Caddy forwards Host as received — required: SigV4 covers Host,
+# and rustfs verifies the signature against the Host it got.
+# Do not expose the console (:9001): neither replication nor mc needs it.
 {$HOME_S3_DOMAIN} {
 	reverse_proxy rustfs:9000
 }

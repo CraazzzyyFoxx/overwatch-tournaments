@@ -58,7 +58,7 @@ Procedures for an operator. Commands are meant to be run verbatim.
 
 | Runbook | When |
 | --- | --- |
-| [`backup-rustfs.md`](./backup-rustfs.md) | PostgreSQL dumps, two-site S3 replication, verification, restore |
+| [`backup-rustfs.md`](./backup-rustfs.md) | PostgreSQL dumps to Timeweb S3 (Moscow cron), restore |
 | [`dev-site.md`](./dev-site.md) | The dev deployment at `dev.owt.craazzzyyfoxx.me` — what differs from production, deploy, data refresh |
 | [`challonge_normalization_phase2_runbook.md`](./challonge_normalization_phase2_runbook.md) | Running the gated destructive migration — and the pattern for any future one |
 | [`superpowers/plans/2026-07-06-subdomains-ops-runbook.md`](./superpowers/plans/2026-07-06-subdomains-ops-runbook.md) | Workspace subdomains and custom domains: DNS, certificates, verification |

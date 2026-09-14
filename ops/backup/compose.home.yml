@@ -1,32 +1,32 @@
 name: owt-backup
 
 # ==============================================================================
-# Контур резервных копий, РЕПЛИКА (домашний сервер).
+# Backup contour, REPLICA (home server). Unused on Moscow — dumps go to Timeweb S3.
 #
-# rustfs здесь — цель bucket replication с dd-new. Caddy рядом только для того,
-# чтобы у публичного эндпоинта был валидный TLS: rustfs умеет TLS сам
-# (RUSTFS_TLS_PATH), но тогда сертификаты пришлось бы выпускать и продлевать
-# отдельным клиентом. Caddy делает ACME сам, конфиг — четыре строки.
+# rustfs here is the bucket-replication target from dd-new. Caddy sits next to
+# it only so the public endpoint has valid TLS: rustfs can do TLS itself
+# (RUSTFS_TLS_PATH), but then certs would need a separate ACME client.
+# Caddy does ACME; the config is four lines.
 #
 #   cd ops/backup
 #   docker compose -f compose.home.yml --env-file backup.env up -d
 #
-# Требования снаружи: A-запись $HOME_S3_DOMAIN на домашний IP, проброс 80 и 443.
-# 80 нужен только ACME (HTTP-01) и редиректу.
+# External requirements: A record for $HOME_S3_DOMAIN at the home IP, ports
+# 80 and 443 forwarded. 80 is only for ACME (HTTP-01) and the redirect.
 #
-# Файрвол: разрешать 443 стоит ТОЛЬКО с IP dd-new (плюс свой домашний адрес для
-# восстановления) — реплика не публичный сервис:
-#   ufw allow from <dd-new-ip> to any port 443 proto tcp
-# 80 придётся держать открытым для ACME до первого выпуска сертификата.
+# Firewall: allow 443 ONLY from the prod IP (plus your own address for
+# restores) — the replica is not a public service:
+#   ufw allow from <prod-ip> to any port 443 proto tcp
+# Keep 80 open for ACME until the first certificate is issued.
 # ==============================================================================
 
 services:
   rustfs:
     image: ${RUSTFS_IMAGE:?set RUSTFS_IMAGE in backup.env}
     restart: unless-stopped
-    # Наружу не публикуем ни один порт: снаружи ходят только через caddy.
-    # Консоль выключена (образ поднимает её с CORS `*`); для разбора — поднять
-    # RUSTFS_CONSOLE_ENABLE=true и пробросить 9001 через ssh.
+    # No published ports: outside traffic goes through caddy only.
+    # Console off (the image starts it with CORS `*`); for debugging set
+    # RUSTFS_CONSOLE_ENABLE=true and forward 9001 over ssh.
     expose:
       - "9000"
     environment:
@@ -35,12 +35,12 @@ services:
       RUSTFS_CONSOLE_ENABLE: "false"
       RUSTFS_ACCESS_KEY: ${HOME_RUSTFS_ROOT_USER:?}
       RUSTFS_SECRET_KEY: ${HOME_RUSTFS_ROOT_PASSWORD:?}
-      # См. комментарий в docker-compose.backup.yml: без второй переменной новый
-      # бакет создастся в relaxed-режиме и не будет fsync'ать метаданные.
+      # See docker-compose.backup.yml: without the second variable a new
+      # bucket is created in relaxed mode and does not fsync metadata.
       RUSTFS_DURABILITY_MODE: strict
       RUSTFS_NEW_BUCKET_DURABILITY_MODE: strict
     volumes:
-      # Владелец каталогов на хосте — 10001:10001 (см. docs/backup-rustfs.md).
+      # Host dirs owned by 10001:10001 (see docs/backup-rustfs.md).
       - ${HOME_RUSTFS_DATA_DIR:?}:/data
       - ${HOME_RUSTFS_LOG_DIR:?}:/logs
     healthcheck:
@@ -63,8 +63,8 @@ services:
       ACME_EMAIL: ${ACME_EMAIL:?}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      # Тома caddy держат аккаунт ACME и выпущенные сертификаты. Потеря = новый
-      # выпуск (и риск упереться в rate limit Let's Encrypt), поэтому не tmpfs.
+      # Caddy volumes hold the ACME account and issued certs. Losing them
+      # means a new issue (and a Let's Encrypt rate-limit risk), so not tmpfs.
       - ${HOME_CADDY_DATA_DIR:?}/data:/data
       - ${HOME_CADDY_DATA_DIR:?}/config:/config
     depends_on:

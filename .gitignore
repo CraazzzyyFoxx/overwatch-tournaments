@@ -30,9 +30,11 @@ debug/
 .env
 backend/env/*.env
 !backend/env/*.env.example
-# Секреты контура бэкапов (root-ключи rustfs обеих площадок, ключ реплики).
+# Timeweb S3 keys for ops/backup/backup.sh (copy of /root/pg-backup/s3.env).
+ops/backup/s3.env
 ops/backup/backup.env
-!ops/backup/backup.env.example
+ops/backup/tmp/
+!ops/backup/s3.env.example
 monitoring/secrets/*
 !monitoring/secrets/.gitkeep
 !monitoring/secrets/*.example
