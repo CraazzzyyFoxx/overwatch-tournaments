@@ -14,7 +14,6 @@ import {
   ShieldX,
   Trash2,
   Undo2,
-  Upload,
   UserPlus,
   X
 } from "lucide-react";
@@ -588,15 +587,6 @@ export default function RegistrationsTable({
     }
   });
 
-  const exportToUsersMutation = useMutation({
-    mutationFn: () => balancerAdminService.exportRegistrationsToUsers(tournamentId as number),
-    onSuccess: (result) => {
-      notify.success("Export complete", {
-        description: `${result.processed} processed, ${result.skipped} skipped (${result.total} total)`
-      });
-    }
-  });
-
   const pendingCount = registrations.filter(
     (registration) => registration.status === "pending"
   ).length;
@@ -797,27 +787,7 @@ export default function RegistrationsTable({
           inspectorId={openId}
           onRowClick={(row) => setParams({ id: String(row.original.id) })}
           groupRows={groupBy === "none" ? undefined : groupPageRows}
-          toolbar={
-            <AdminFilterBar
-              defs={filterDefs}
-              filters={filters}
-              trailing={
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={exportToUsersMutation.isPending}
-                  onClick={() => exportToUsersMutation.mutate()}
-                >
-                  {exportToUsersMutation.isPending ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
-                  ) : (
-                    <Upload className="mr-2 h-4 w-4" aria-hidden />
-                  )}
-                  Export to analytics
-                </Button>
-              }
-            />
-          }
+          toolbar={<AdminFilterBar defs={filterDefs} filters={filters} />}
           bulkActions={(selected, clearSelection) => (
             <BulkBar count={selected.length} unit="registrations" onClear={clearSelection}>
               <Button
