@@ -325,7 +325,18 @@ export function AdminDataTable<TData>({
   const prefsKey = columnsStorageKey ?? `admin-table:${pathname}`;
   const [density, setDensity] = useLocalStorageState<"comfortable" | "compact">("admin-table-density", "comfortable");
   const [columnSizing, setColumnSizing] = useLocalStorageState<ColumnSizingState>(`${prefsKey}:sizing`, {});
-  const [columnOrder, setColumnOrder] = useLocalStorageState<ColumnOrderState>(`${prefsKey}:order`, []);
+  const [savedColumnOrder, setColumnOrder] = useLocalStorageState<ColumnOrderState>(`${prefsKey}:order`, []);
+  // The saved order is a preference over the columns that existed when it was
+  // written. Columns added since (a conditional column, a custom field that
+  // arrived from a query) would otherwise be appended after the actions
+  // column, so the order handed to TanStack is rebuilt every render: known
+  // columns in saved order, new ones in definition order, actions last.
+  const definedColumnIds = columns.map(columnDefId).filter((id) => id && id !== ADMIN_ACTION_COLUMN_ID);
+  const columnOrder: ColumnOrderState = [
+    ...savedColumnOrder.filter((id) => definedColumnIds.includes(id)),
+    ...definedColumnIds.filter((id) => !savedColumnOrder.includes(id)),
+    ...(columns.some((column) => columnDefId(column) === ADMIN_ACTION_COLUMN_ID) ? [ADMIN_ACTION_COLUMN_ID] : [])
+  ];
   const [focusedRowId, setFocusedRowId] = useState<string | null>(null);
   /** Text of the cell under the last right-click, offered as "Copy" in the row menu. */
   const [contextCell, setContextCell] = useState("");
@@ -476,7 +487,6 @@ export function AdminDataTable<TData>({
     // One write per drag rather than one per pointer move: sizing is persisted.
     columnResizeMode: "onEnd",
     onColumnSizingChange: setColumnSizing,
-    onColumnOrderChange: setColumnOrder,
     onSortingChange: setSorting,
     onRowSelectionChange: setRowSelection,
     // Pagination is controlled by this component's own page state, so TanStack
@@ -741,11 +751,9 @@ export function AdminDataTable<TData>({
   // Column drag-to-reorder. Only the header row is sortable; the actions
   // column keeps its place at the right edge.
   const dndSensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
-  const leafColumnIds = table.getAllLeafColumns().map((column) => column.id);
   const handleColumnDragEnd = ({ active, over }: DragEndEvent) => {
     if (!over || active.id === over.id) return;
-    const order = columnOrder.length > 0 ? columnOrder : leafColumnIds;
-    setColumnOrder(arrayMove(order, order.indexOf(String(active.id)), order.indexOf(String(over.id))));
+    setColumnOrder(arrayMove(columnOrder, columnOrder.indexOf(String(active.id)), columnOrder.indexOf(String(over.id))));
   };
 
   /** Selected rows when there are any, else the whole current view (every filtered row in client mode). */
