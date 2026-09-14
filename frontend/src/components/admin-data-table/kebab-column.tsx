@@ -52,6 +52,7 @@ export function createKebabColumn<T>(
     id: "actions",
     header: () => <span className="sr-only">Actions</span>,
     enableSorting: false,
+    enableResizing: false,
     size: 56,
     meta: adminColumnMeta<T>({ align: "right", rowActions: items }),
     cell: ({ row }) => {

@@ -108,3 +108,19 @@ describe("AdminDataTable column order", () => {
     expect(headerTexts()).toEqual(["Team", "Name", "Actions"]);
   });
 });
+
+describe("AdminDataTable actions column width", () => {
+  it("ignores a saved sizing for the actions column and offers no resize handle on it", async () => {
+    localStorage.setItem("players:sizing", JSON.stringify({ actions: 339, name: 200 }));
+    await render([...base, actions]);
+
+    const heads = [...container.querySelectorAll<HTMLElement>("thead th:not([aria-hidden])")];
+    const actionsHead = heads.find((th) => th.textContent?.trim() === "Actions")!;
+    expect(actionsHead.style.maxWidth).toBe("80px");
+    expect(actionsHead.querySelector("[role='separator']")).toBeNull();
+    // Other columns keep their saved width and their handle.
+    const nameHead = heads.find((th) => th.textContent?.trim().startsWith("Name"))!;
+    expect(nameHead.style.width).toBe("200px");
+    expect(nameHead.querySelector("[role='separator']")).not.toBeNull();
+  });
+});

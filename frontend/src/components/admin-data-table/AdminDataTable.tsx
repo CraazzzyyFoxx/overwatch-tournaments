@@ -679,13 +679,20 @@ export function AdminDataTable<TData>({
   }, [safeCurrentPage, debouncedSearchValue, initialPageSize, safePageSize, pathname, sorting, sortKey, filters, serializedFilters]);
 
   const getColumnStyle = (column: { id: string; getSize: () => number; columnDef: { size?: number } }) => {
+    if (column.id === ADMIN_ACTION_COLUMN_ID) {
+      // Exactly as wide as its menu button, whatever a saved sizing says: the
+      // column is not resizable now, but an earlier build let it be dragged.
+      const width = Math.max(column.columnDef.size ?? 0, ADMIN_ACTION_COLUMN_MIN_WIDTH);
+      return { width, minWidth: width, maxWidth: width };
+    }
     const resized = columnSizing[column.id] !== undefined;
     const configuredSize = resized || typeof column.columnDef.size === "number" ? column.getSize() : undefined;
-    const width = column.id === ADMIN_ACTION_COLUMN_ID ? Math.max(configuredSize ?? 0, ADMIN_ACTION_COLUMN_MIN_WIDTH) : configuredSize;
-    if (!width) return undefined;
+    if (!configuredSize) return undefined;
     // Auto table layout treats `width` as a floor; a user-dragged width is a
     // ceiling too, or shrinking a column would visibly do nothing.
-    return resized ? { width, minWidth: width, maxWidth: width } : { width, minWidth: width };
+    return resized
+      ? { width: configuredSize, minWidth: configuredSize, maxWidth: configuredSize }
+      : { width: configuredSize, minWidth: configuredSize };
   };
 
   const hasRowAction = Boolean(onRowClick || onRowDoubleClick);
@@ -1470,20 +1477,22 @@ function SortableHead<TData>({
       style={{ ...style, transform: CSS.Translate.toString(transform), transition }}
     >
       {children}
-      <div
-        role="separator"
-        aria-orientation="vertical"
-        aria-label={`Resize ${header.column.id} column`}
-        title="Drag to resize, double-click to reset"
-        onPointerDown={(event) => event.stopPropagation()}
-        onMouseDown={resizeHandler}
-        onTouchStart={resizeHandler}
-        onDoubleClick={() => header.column.resetSize()}
-        className={cn(
-          "absolute right-0 top-0 h-full w-1.5 cursor-col-resize touch-none hover:bg-primary/40",
-          header.column.getIsResizing() && "bg-primary"
-        )}
-      />
+      {header.column.getCanResize() ? (
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          aria-label={`Resize ${header.column.id} column`}
+          title="Drag to resize, double-click to reset"
+          onPointerDown={(event) => event.stopPropagation()}
+          onMouseDown={resizeHandler}
+          onTouchStart={resizeHandler}
+          onDoubleClick={() => header.column.resetSize()}
+          className={cn(
+            "absolute right-0 top-0 h-full w-1.5 cursor-col-resize touch-none hover:bg-primary/40",
+            header.column.getIsResizing() && "bg-primary"
+          )}
+        />
+      ) : null}
     </TableHead>
   );
 }
