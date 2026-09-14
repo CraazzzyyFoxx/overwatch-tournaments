@@ -10,7 +10,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { AdminSavedViews } from "@/components/admin/AdminSavedViews";
+import { AdminSavedViews } from "./SavedViews";
 import en from "@/i18n/messages/en.json";
 
 declare global {

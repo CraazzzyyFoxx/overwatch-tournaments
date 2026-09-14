@@ -5,8 +5,7 @@ import Link from "next/link";
 import type { ColumnDef } from "@tanstack/react-table";
 import { useQuery } from "@tanstack/react-query";
 
-import { AdminDataTable } from "@/components/admin/AdminDataTable";
-import { adminColumnMeta } from "@/components/admin/admin-table-columns";
+import { AdminDataTable, adminColumnMeta } from "@/components/admin-data-table";
 import { Badge } from "@/components/ui/badge";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import userService from "@/services/user.service";

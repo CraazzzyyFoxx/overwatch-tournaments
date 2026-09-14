@@ -118,6 +118,8 @@ export default defineConfig({
       "src/components/balancer/feed/**/*.test.tsx",
       "src/components/admin/**/*.test.tsx",
       "src/components/admin/**/*.test.ts",
+      "src/components/admin-data-table/*.test.ts",
+      "src/components/admin-data-table/*.test.tsx",
       // `include` is an allow-list, so a test under a directory absent from it
       // never runs and the suite still reports green.
       "src/components/discord/**/*.test.tsx",

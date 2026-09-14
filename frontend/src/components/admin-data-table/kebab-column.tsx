@@ -2,7 +2,7 @@
 
 import type { ColumnDef } from "@tanstack/react-table";
 import { MoreHorizontal, type LucideIcon } from "lucide-react";
-import Link from "next/link";
+import { Link } from "./host";
 
 import {
   DropdownMenu,
@@ -10,8 +10,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
-import { adminColumnMeta } from "@/components/admin/admin-table-columns";
-import { cn } from "@/lib/utils";
+import { adminColumnMeta } from "./columns";
+import { cn } from "./host";
 
 export interface KebabAction {
   label: string;

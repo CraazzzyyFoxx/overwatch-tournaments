@@ -7,14 +7,12 @@ import { CheckCircle, Clock, Trash2, UserCog } from "lucide-react";
 import { useFormatter } from "next-intl";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { AdminDataTable } from "@/components/admin/AdminDataTable";
-import { adminColumnMeta } from "@/components/admin/admin-table-columns";
+import { AdminDataTable, adminColumnMeta, createKebabColumn } from "@/components/admin-data-table";
 import { StatusIcon } from "@/components/admin/StatusIcon";
 import { PROVIDER_META, ProviderBadge } from "@/components/admin/OAuthProviderBadge";
 import { AdminFilterBar } from "@/components/admin/kit/AdminFilterBar";
 import { AdminInspector } from "@/components/admin/kit/AdminInspector";
 import { ConfirmDialog } from "@/components/admin/kit/ConfirmDialog";
-import { createKebabColumn } from "@/components/admin/kit/kebab-column";
 import { useAdminFilters, type FilterDef } from "@/components/admin/kit/useAdminFilters";
 import { EYEBROW_CLASS } from "@/components/admin/tone";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";

@@ -16,7 +16,7 @@ import { getCoreRowModel, useReactTable } from "@tanstack/react-table";
 import { Pencil, Trash2 } from "lucide-react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { createKebabColumn } from "@/components/admin/kit/kebab-column";
+import { createKebabColumn } from "./kebab-column";
 
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean;

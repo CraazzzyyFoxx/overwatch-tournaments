@@ -5,12 +5,11 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Pencil, RefreshCw, Trash2, Trophy } from "lucide-react";
 
-import { AdminDataTable } from "@/components/admin/AdminDataTable";
+import { AdminDataTable, createKebabColumn } from "@/components/admin-data-table";
 import { EntityFormDialog } from "@/components/admin/EntityFormDialog";
 import { StandingsTiesPanel } from "@/components/admin/StandingsTiesPanel";
 import { AdminFilterBar } from "@/components/admin/kit/AdminFilterBar";
 import { ConfirmDialog } from "@/components/admin/kit/ConfirmDialog";
-import { createKebabColumn } from "@/components/admin/kit/kebab-column";
 import { useAdminFilters, type FilterDef } from "@/components/admin/kit/useAdminFilters";
 import {
   TOURNAMENT_QUERY_PARAM,

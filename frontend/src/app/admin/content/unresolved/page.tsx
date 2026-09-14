@@ -6,7 +6,7 @@ import { ColumnDef } from "@tanstack/react-table";
 import { Check, CheckCircle, EyeOff, LoaderCircle } from "lucide-react";
 import { useMutation, useQueries, useQueryClient } from "@tanstack/react-query";
 
-import { AdminDataTable } from "@/components/admin/AdminDataTable";
+import { AdminDataTable } from "@/components/admin-data-table";
 import { StatusIcon } from "@/components/admin/StatusIcon";
 import { AdminFilterBar } from "@/components/admin/kit/AdminFilterBar";
 import { useAdminFilters, type FilterDef } from "@/components/admin/kit/useAdminFilters";

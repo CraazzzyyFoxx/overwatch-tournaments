@@ -9,7 +9,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useFormatter } from "next-intl";
 
-import { AdminDataTable } from "@/components/admin/AdminDataTable";
+import { AdminDataTable } from "@/components/admin-data-table";
 import { ConfirmDialog } from "@/components/admin/kit/ConfirmDialog";
 import { EmptyNote } from "@/components/admin/kit/EmptyNote";
 import { StatusPill } from "@/components/admin/kit/StatusPill";

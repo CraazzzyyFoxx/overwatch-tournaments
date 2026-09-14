@@ -20,14 +20,12 @@ import {
 import { useFormatter, useTranslations } from "next-intl";
 
 import { AdminCombobox, AdminComboboxCheck } from "@/components/admin/AdminCombobox";
-import { AdminDataTable } from "@/components/admin/AdminDataTable";
+import { AdminDataTable, adminColumnMeta, createKebabColumn, type KebabAction } from "@/components/admin-data-table";
 import { BulkBar } from "@/components/admin/BulkBar";
 import { EntityFormDialog } from "@/components/admin/EntityFormDialog";
-import { adminColumnMeta } from "@/components/admin/admin-table-columns";
 import { AdminFilterBar } from "@/components/admin/kit/AdminFilterBar";
 import { AdminInspector } from "@/components/admin/kit/AdminInspector";
 import { ConfirmDialog, type ConfirmIntent } from "@/components/admin/kit/ConfirmDialog";
-import { createKebabColumn, type KebabAction } from "@/components/admin/kit/kebab-column";
 import { StatusPill } from "@/components/admin/kit/StatusPill";
 import { useAdminFilters, type FilterDef } from "@/components/admin/kit/useAdminFilters";
 import { type Tone } from "@/components/admin/tone";

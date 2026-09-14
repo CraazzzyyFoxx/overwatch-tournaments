@@ -11,7 +11,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { AdminDataTable } from "@/components/admin/AdminDataTable";
+import { AdminDataTable } from "./AdminDataTable";
 
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean;

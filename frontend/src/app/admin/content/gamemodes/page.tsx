@@ -4,12 +4,11 @@ import { useId } from "react";
 import { ColumnDef } from "@tanstack/react-table";
 import { Pencil, Trash2 } from "lucide-react";
 
-import { AdminDataTable } from "@/components/admin/AdminDataTable";
+import { AdminDataTable, createKebabColumn } from "@/components/admin-data-table";
 import { CatalogAliasesField, CatalogNameField } from "@/components/admin/CatalogFormFields";
 import { CatalogToolbarActions, entityFormError, onEntityDialogClose } from "@/components/admin/CatalogToolbarActions";
 import { EntityFormDialog } from "@/components/admin/EntityFormDialog";
 import { createAliasesColumn } from "@/components/admin/catalog-table-columns";
-import { createKebabColumn } from "@/components/admin/kit/kebab-column";
 import { ConfirmDialog } from "@/components/admin/kit/ConfirmDialog";
 
 import adminService from "@/services/admin.service";

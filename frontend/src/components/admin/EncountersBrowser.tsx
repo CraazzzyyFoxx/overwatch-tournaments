@@ -19,7 +19,7 @@ import {
   Upload
 } from "lucide-react";
 
-import { AdminDataTable } from "@/components/admin/AdminDataTable";
+import { AdminDataTable, adminColumnMeta, createKebabColumn } from "@/components/admin-data-table";
 import { AuditTrailButton } from "@/components/admin/AuditTrailSheet";
 import {
   EncounterForm,
@@ -32,12 +32,10 @@ import {
   type EncounterFormState
 } from "@/components/admin/EncounterForm";
 import { EntityFormDialog } from "@/components/admin/EntityFormDialog";
-import { adminColumnMeta } from "@/components/admin/admin-table-columns";
 import { StatusIcon } from "@/components/admin/StatusIcon";
 import { AdminFilterBar } from "@/components/admin/kit/AdminFilterBar";
 import { AdminInspector } from "@/components/admin/kit/AdminInspector";
 import { ConfirmDialog } from "@/components/admin/kit/ConfirmDialog";
-import { createKebabColumn } from "@/components/admin/kit/kebab-column";
 import { useAdminFilters, type FilterDef } from "@/components/admin/kit/useAdminFilters";
 import { StatusPill } from "@/components/admin/kit/StatusPill";
 import { EYEBROW_CLASS } from "@/components/admin/tone";

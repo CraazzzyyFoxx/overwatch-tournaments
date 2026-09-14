@@ -35,9 +35,8 @@ import {
 } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { AdminDataTable } from "@/components/admin/AdminDataTable";
+import { AdminDataTable, adminColumnMeta } from "@/components/admin-data-table";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
-import { adminColumnMeta } from "@/components/admin/admin-table-columns";
 import { StatusIcon } from "@/components/admin/StatusIcon";
 import { EntityFormDialog } from "@/components/admin/EntityFormDialog";
 import { ConfirmDialog } from "@/components/admin/kit/ConfirmDialog";

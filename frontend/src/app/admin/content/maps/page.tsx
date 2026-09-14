@@ -5,15 +5,13 @@ import { ColumnDef } from "@tanstack/react-table";
 import { useQuery } from "@tanstack/react-query";
 import { Gamepad2, Pencil, Swords, Trash2 } from "lucide-react";
 
-import { AdminDataTable } from "@/components/admin/AdminDataTable";
+import { AdminDataTable, adminColumnMeta, createKebabColumn } from "@/components/admin-data-table";
 import { AssetPreview } from "@/components/admin/AssetPreview";
 import { CatalogAliasesField, CatalogNameField } from "@/components/admin/CatalogFormFields";
 import { CatalogToolbarActions, entityFormError, onEntityDialogClose } from "@/components/admin/CatalogToolbarActions";
 import { EntityFormDialog } from "@/components/admin/EntityFormDialog";
-import { adminColumnMeta } from "@/components/admin/admin-table-columns";
 import { createAliasesColumn } from "@/components/admin/catalog-table-columns";
 import { StatusIcon } from "@/components/admin/StatusIcon";
-import { createKebabColumn } from "@/components/admin/kit/kebab-column";
 import { ConfirmDialog } from "@/components/admin/kit/ConfirmDialog";
 import { AdminFilterBar } from "@/components/admin/kit/AdminFilterBar";
 import { useAdminFilters, type FilterDef } from "@/components/admin/kit/useAdminFilters";

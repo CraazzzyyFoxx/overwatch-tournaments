@@ -5,7 +5,7 @@ import {
   serializeFilters,
   writeFiltersToParams,
   type AdminColumnFilterSpec
-} from "@/components/admin/admin-table-filters";
+} from "./filters";
 
 const statusSpec: AdminColumnFilterSpec = {
   param: "status",

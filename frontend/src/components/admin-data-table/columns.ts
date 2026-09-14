@@ -1,7 +1,7 @@
 import type { ColumnMeta } from "@tanstack/react-table";
 
-import type { AdminColumnFilterSpec } from "@/components/admin/admin-table-filters";
-import type { KebabAction } from "@/components/admin/kit/kebab-column";
+import type { AdminColumnFilterSpec } from "./filters";
+import type { KebabAction } from "./kebab-column";
 
 /** Breakpoint below which a column is hidden entirely. */
 export type AdminColumnResponsive = "always" | "sm" | "md" | "lg";

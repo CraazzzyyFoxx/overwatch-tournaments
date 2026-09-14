@@ -15,7 +15,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { AdminDataTable } from "@/components/admin/AdminDataTable";
+import { AdminDataTable } from "./AdminDataTable";
 
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean;
@@ -113,6 +113,34 @@ describe("AdminDataTable row actions and inspector", () => {
     expect(current).toHaveLength(1);
     expect(current[0].textContent).toContain("8812");
     expect(container.querySelector("tbody tr[aria-selected]")).toBeNull();
+  });
+
+  it("offers the right-clicked cell's text and the whole row in the context menu", async () => {
+    const writeText = vi.fn(() => Promise.resolve());
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    await render();
+
+    const cell = [...container.querySelectorAll("tbody tr[data-row-id='8812'] td")].find((td) => td.textContent === "Groups · R3")!;
+    await act(async () => {
+      cell.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 10, clientY: 10 }));
+    });
+    const items = [...document.querySelectorAll("[role='menuitem']")];
+    const copyCell = items.find((item) => item.textContent?.includes("Groups · R3"));
+    expect(copyCell).toBeDefined();
+
+    await act(async () => {
+      copyCell!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(writeText).toHaveBeenCalledWith("Groups · R3");
+
+    await act(async () => {
+      cell.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 10, clientY: 10 }));
+    });
+    const copyRow = [...document.querySelectorAll("[role='menuitem']")].find((item) => item.textContent === "Copy row")!;
+    await act(async () => {
+      copyRow.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(writeText).toHaveBeenLastCalledWith("8812\tGroups · R3\t—\tpending");
   });
 
   it("hands the search over to a toolbar that owns it", async () => {

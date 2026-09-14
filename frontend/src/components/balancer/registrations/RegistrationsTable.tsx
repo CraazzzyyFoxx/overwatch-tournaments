@@ -28,15 +28,13 @@ import {
   groupRegistrations,
   normalizeRegistrationGroupingMode
 } from "@/components/balancer/registrations/_components/registrationGrouping";
-import { AdminDataTable, type AdminDataTableGroup } from "@/components/admin/AdminDataTable";
+import { AdminDataTable, type AdminDataTableGroup, type AdminTableFilters, createKebabColumn, type KebabAction } from "@/components/admin-data-table";
 import { useAuditTrail } from "@/components/admin/AuditTrailSheet";
 import { BulkBar } from "@/components/admin/BulkBar";
-import type { AdminTableFilters } from "@/components/admin/admin-table-filters";
 import { EYEBROW_CLASS } from "@/components/admin/tone";
 import { AdminFilterBar } from "@/components/admin/kit/AdminFilterBar";
 import { AdminInspector } from "@/components/admin/kit/AdminInspector";
 import { ConfirmDialog } from "@/components/admin/kit/ConfirmDialog";
-import { createKebabColumn, type KebabAction } from "@/components/admin/kit/kebab-column";
 import {
   useAdminFilters,
   type FilterDef,

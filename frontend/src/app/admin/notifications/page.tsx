@@ -6,7 +6,7 @@ import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-q
 import { Archive } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
 
-import { AdminDataTable } from "@/components/admin/AdminDataTable";
+import { AdminDataTable } from "@/components/admin-data-table";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { AdminTabs } from "@/components/admin/kit/AdminTabs";
 import { ConfirmDialog, type ConfirmIntent } from "@/components/admin/kit/ConfirmDialog";

@@ -7,13 +7,11 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { CheckCircle, Eye, EyeOff, Pencil, Plus, Trash2, XCircle } from "lucide-react";
 
 import { CreateWorkspaceDialog } from "@/components/CreateWorkspaceDialog";
-import { AdminDataTable } from "@/components/admin/AdminDataTable";
+import { AdminDataTable, adminColumnMeta, createKebabColumn } from "@/components/admin-data-table";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
-import { adminColumnMeta } from "@/components/admin/admin-table-columns";
 import { StatusIcon } from "@/components/admin/StatusIcon";
 import { AdminInspector } from "@/components/admin/kit/AdminInspector";
 import { ConfirmDialog } from "@/components/admin/kit/ConfirmDialog";
-import { createKebabColumn } from "@/components/admin/kit/kebab-column";
 import { EYEBROW_CLASS } from "@/components/admin/tone";
 import { WorkspaceOwnerValue } from "@/components/admin/workspace-owner";
 import { WorkspaceVerificationIcon } from "@/components/admin/workspace-verification";

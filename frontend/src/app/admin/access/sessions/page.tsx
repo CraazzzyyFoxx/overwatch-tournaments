@@ -5,10 +5,9 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { Globe, MonitorSmartphone, UserCog } from "lucide-react";
 import { useFormatter } from "next-intl";
 
-import { AdminDataTable } from "@/components/admin/AdminDataTable";
+import { AdminDataTable, createKebabColumn } from "@/components/admin-data-table";
 import { AdminFilterBar } from "@/components/admin/kit/AdminFilterBar";
 import { AdminInspector } from "@/components/admin/kit/AdminInspector";
-import { createKebabColumn } from "@/components/admin/kit/kebab-column";
 import { useAdminFilters, type FilterDef } from "@/components/admin/kit/useAdminFilters";
 import { EYEBROW_CLASS, TONE_TEXT, type Tone } from "@/components/admin/tone";
 import type { AdminDateFormatter } from "@/components/admin/format-time";

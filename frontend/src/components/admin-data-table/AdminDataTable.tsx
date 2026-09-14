@@ -1,6 +1,6 @@
 "use client";
 
-import React, { Fragment, useCallback, useEffect, useId, useRef, useState } from "react";
+import React, { useCallback, useEffect, useId, useRef, useState } from "react";
 import {
   Cell,
   ColumnDef,
@@ -23,9 +23,7 @@ import { useVirtualizer, type VirtualItem } from "@tanstack/react-virtual";
 import { closestCenter, DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { arrayMove, horizontalListSortingStrategy, SortableContext, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import Link from "next/link";
-import { ArrowDown, ArrowUp, ArrowUpDown, ChevronDown, ChevronLeft, ChevronRight, CircleMinus, Download, LoaderCircle, Rows3, Rows4, Search } from "lucide-react";
-import { usePathname } from "next/navigation";
+import { ArrowDown, ArrowUp, ArrowUpDown, ChevronDown, ChevronLeft, ChevronRight, CircleMinus, Copy, Download, LoaderCircle, Rows3, Rows4, Search } from "lucide-react";
 import { useDebounce } from "use-debounce";
 import {
   Table,
@@ -35,13 +33,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { PaginatedResponse } from "@/types/pagination.types";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ariaSortValue, cn } from "@/lib/utils";
+import { cn, EYEBROW_CLASS, Link, useIsMobile, useLocalStorageState, usePathname } from "./host";
+import { ariaSortValue, type PaginatedResponse, type SortDir } from "./types";
 import {
   collectFilterSpecs,
   parseFiltersFromParams,
@@ -49,26 +47,23 @@ import {
   serializeFilters,
   writeFiltersToParams,
   type AdminTableFilters
-} from "@/components/admin/admin-table-filters";
+} from "./filters";
 import {
   ALIGN_CLASS,
   ALIGN_FLEX_CLASS,
   RESPONSIVE_CLASS,
   readAdminColumnMeta,
   type AdminColumnCategory
-} from "@/components/admin/admin-table-columns";
+} from "./columns";
 import { CategorizedColumnPicker } from "@/components/ui/categorized-column-picker";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu";
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { InfiniteScrollFooter } from "@/components/ui/infinite-scroll";
-import { useColumnVisibility } from "@/hooks/useColumnVisibility";
-import { useIsMobile } from "@/hooks/use-mobile";
-import { useLocalStorageState } from "@/hooks/useLocalStorageState";
-import { isInteractiveRowTarget, useRowSelectionGestures } from "@/components/admin/useRowSelectionGestures";
-import { AdminSavedViews } from "@/components/admin/AdminSavedViews";
-import { AdminTableSearchContext, HighlightMatch } from "@/components/admin/HighlightMatch";
-import { downloadCsv } from "@/lib/csv";
-import { EYEBROW_CLASS } from "@/components/admin/tone";
+import { useColumnVisibility } from "./useColumnVisibility";
+import { isInteractiveRowTarget, useRowSelectionGestures } from "./useRowSelectionGestures";
+import { AdminSavedViews } from "./SavedViews";
+import { AdminTableSearchContext, HighlightMatch } from "./HighlightMatch";
+import { downloadCsv } from "./csv";
 
 const ADMIN_ACTION_COLUMN_ID = "actions";
 const ADMIN_ACTION_COLUMN_MIN_WIDTH = 80;
@@ -124,8 +119,6 @@ function columnDefId<TData>(column: ColumnDef<TData>): string {
   if (column.id) return column.id;
   return "accessorKey" in column && typeof column.accessorKey === "string" ? column.accessorKey : "";
 }
-
-export type SortDir = "asc" | "desc";
 
 export interface AdminDataTableGroup<TData> {
   key: string;
@@ -334,6 +327,8 @@ export function AdminDataTable<TData>({
   const [columnSizing, setColumnSizing] = useLocalStorageState<ColumnSizingState>(`${prefsKey}:sizing`, {});
   const [columnOrder, setColumnOrder] = useLocalStorageState<ColumnOrderState>(`${prefsKey}:order`, []);
   const [focusedRowId, setFocusedRowId] = useState<string | null>(null);
+  /** Text of the cell under the last right-click, offered as "Copy" in the row menu. */
+  const [contextCell, setContextCell] = useState("");
   const [scrollElement, setScrollElement] = useState<HTMLElement | null>(null);
   // The shadcn `Table` wraps the `<table>` in the element that actually scrolls.
   const tableRef = useCallback((table: HTMLTableElement | null) => setScrollElement(table?.parentElement ?? null), []);
@@ -969,6 +964,10 @@ export function AdminDataTable<TData>({
         onPointerDown={gestures.rowPointerDown(row)}
         onClick={(event) => handleRowClick(event, row)}
         onDoubleClick={(event) => handleRowDoubleClick(event, row)}
+        onContextMenu={(event) => {
+          const td = (event.target as HTMLElement).closest("td");
+          setContextCell(td ? td.textContent.trim() : "");
+        }}
         aria-describedby={rowHintId}
       >
         {hasLeadingColumn ? renderLeadingCell(row) : null}
@@ -976,11 +975,29 @@ export function AdminDataTable<TData>({
       </TableRow>
     );
     const actions = rowActions?.(row.original).filter((action) => !action.hidden) ?? [];
-    if (actions.length === 0) return <Fragment key={row.id}>{tr}</Fragment>;
     return (
       <ContextMenu key={row.id}>
         <ContextMenuTrigger asChild>{tr}</ContextMenuTrigger>
-        <ContextMenuContent className="w-48">
+        <ContextMenuContent className="w-56">
+          {contextCell ? (
+            <ContextMenuItem className="gap-2" onSelect={() => void navigator.clipboard.writeText(contextCell)}>
+              <Copy aria-hidden className="size-3.5" />
+              <span className="truncate">Copy “{contextCell}”</span>
+            </ContextMenuItem>
+          ) : null}
+          <ContextMenuItem
+            className="gap-2"
+            onSelect={() =>
+              // Tab-separated in the visible column order, so it pastes into a spreadsheet as one row.
+              void navigator.clipboard.writeText(
+                cells.filter((cell) => cell.column.id !== ADMIN_ACTION_COLUMN_ID).map((cell) => String(cell.getValue() ?? "")).join("\t")
+              )
+            }
+          >
+            <Rows3 aria-hidden className="size-3.5" />
+            Copy row
+          </ContextMenuItem>
+          {actions.length > 0 ? <ContextMenuSeparator /> : null}
           {actions.map((action) => {
             const Icon = action.icon;
             const content = (

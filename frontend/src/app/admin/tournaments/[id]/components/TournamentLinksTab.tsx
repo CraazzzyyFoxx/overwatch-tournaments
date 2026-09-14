@@ -15,10 +15,8 @@ import {
   Trash2
 } from "lucide-react";
 
-import { AdminDataTable } from "@/components/admin/AdminDataTable";
+import { AdminDataTable, adminColumnMeta, createKebabColumn } from "@/components/admin-data-table";
 import { StatusIcon } from "@/components/admin/StatusIcon";
-import { adminColumnMeta } from "@/components/admin/admin-table-columns";
-import { createKebabColumn } from "@/components/admin/kit/kebab-column";
 import {
   entityFormError,
   onEntityDialogClose

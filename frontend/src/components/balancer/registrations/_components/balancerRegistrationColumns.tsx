@@ -3,7 +3,7 @@
 import type { ColumnDef, Row, SortingFn } from "@tanstack/react-table";
 import { useFormatter, useTranslations, type DateTimeFormatOptions } from "next-intl";
 
-import { adminColumnMeta } from "@/components/admin/admin-table-columns";
+import { adminColumnMeta } from "@/components/admin-data-table";
 import { InlineEditText } from "@/components/admin/InlineEditText";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { StatusPill } from "@/components/admin/kit/StatusPill";

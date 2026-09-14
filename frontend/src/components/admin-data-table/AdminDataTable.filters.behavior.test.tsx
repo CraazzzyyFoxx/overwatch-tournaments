@@ -19,9 +19,9 @@ import { act, StrictMode, useEffect, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { AdminDataTable } from "@/components/admin/AdminDataTable";
-import { adminColumnMeta } from "@/components/admin/admin-table-columns";
-import type { AdminTableFilters } from "@/components/admin/admin-table-filters";
+import { AdminDataTable } from "./AdminDataTable";
+import { adminColumnMeta } from "./columns";
+import type { AdminTableFilters } from "./filters";
 
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean;
