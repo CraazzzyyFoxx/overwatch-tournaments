@@ -1,10 +1,11 @@
 "use client";
 
-import { memo } from "react";
+import { memo, type ReactNode } from "react";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { ListChecks, Search } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
 
+import type { BracketMatch } from "@/components/bracket-view.helpers";
 import { EncounterRostersModal } from "@/components/EncounterRostersModal";
 import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 import TeamName from "@/components/TeamName";
@@ -13,7 +14,11 @@ import { STREAM_STATUS_META } from "@/lib/stream-platform";
 import { cn } from "@/lib/utils";
 import type { StreamEntry } from "@/types/stream.types";
 
-import { CARD_HEIGHT, CARD_ROW_HEIGHT, type LayoutNode, type Side } from "./layout";
+import { CARD_HEIGHT, CARD_ROW_HEIGHT, GUTTER_WIDTH, type LayoutNode, type Side } from "./layout";
+
+/** One footer control: the three viewer links and the admin's edit share it. */
+export const FOOTER_BUTTON =
+  "flex items-center justify-center rounded p-0.5 text-[color:var(--aqt-fg-muted)] transition-colors hover:bg-[color:var(--aqt-overlay-3)] hover:text-[color:var(--aqt-fg)]";
 
 /** dnd-kit id of one team slot; the same string names its draggable and its droppable. */
 export function slotDragId(encounterId: number, side: Side) {
@@ -174,6 +179,11 @@ export interface MatchCardProps {
   rearranging: boolean;
   /** `rearranging` AND this match's teams may still be moved. */
   draggable: boolean;
+  /**
+   * Edit/report controls for the footer; `null` for a viewer. A function, not
+   * a node: a node is rebuilt on every hover and would defeat the memo below.
+   */
+  renderActions: (encounter: BracketMatch) => ReactNode;
 }
 
 /**
@@ -189,7 +199,8 @@ export const MatchCard = memo(function MatchCard({
   liveTeamStreams,
   interactive,
   rearranging,
-  draggable
+  draggable,
+  renderActions
 }: Readonly<MatchCardProps>) {
   const t = useTranslations();
   const format = useFormatter();
@@ -205,13 +216,30 @@ export const MatchCard = memo(function MatchCard({
         : "";
   const meta = { isLive, timeLabel };
   const footerHeight = CARD_HEIGHT - CARD_ROW_HEIGHT * 2;
+  const actions = renderActions(encounter);
 
-  const rowProps = { node, onHoverTeam, liveTeamStreams, draggable, rearranging };
+  // A result awaiting confirmation or under dispute tints the gutter; the text
+  // stays for the tooltip and the screen reader.
+  const attention =
+    encounter.result_status === "pending_confirmation"
+      ? t("bracket.pending")
+      : encounter.result_status === "disputed"
+        ? t("bracket.disputed")
+        : null;
+
+  // "Streaming now" on a decided match says nothing about that match.
+  const rowProps = {
+    node,
+    onHoverTeam,
+    liveTeamStreams: data.isCompleted ? undefined : liveTeamStreams,
+    draggable,
+    rearranging
+  };
 
   return (
     <div
       className={cn(
-        "relative flex h-full flex-col overflow-hidden rounded-[10px] border bg-[color:var(--aqt-card)] shadow-[0_10px_24px_rgba(0,0,0,0.28)]",
+        "relative flex h-full overflow-hidden rounded-[10px] border bg-[color:var(--aqt-card)] shadow-[0_10px_24px_rgba(0,0,0,0.28)]",
         meta.isLive
           ? "border-[color:color-mix(in_srgb,var(--aqt-rose)_45%,transparent)]"
           : data.winner
@@ -219,56 +247,83 @@ export const MatchCard = memo(function MatchCard({
             : "border-[color:var(--aqt-border)]"
       )}
     >
-      <SlotRow {...rowProps} side="home" highlighted={homeHighlighted} />
-      <SlotRow {...rowProps} side="away" highlighted={awayHighlighted} />
-
       <div
-        className="flex items-center justify-between gap-2 border-t border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.015)] px-2.5"
-        style={{ height: footerHeight }}
+        className={cn(
+          "flex shrink-0 flex-col items-center justify-center gap-0.5 border-r leading-none",
+          encounter.result_status === "pending_confirmation"
+            ? "border-[color:color-mix(in_srgb,var(--aqt-amber)_35%,transparent)] bg-[color:color-mix(in_srgb,var(--aqt-amber)_18%,var(--aqt-bg-2))] text-[color:var(--aqt-amber)]"
+            : encounter.result_status === "disputed"
+              ? "border-[color:color-mix(in_srgb,var(--aqt-rose)_35%,transparent)] bg-[color:color-mix(in_srgb,var(--aqt-rose)_18%,var(--aqt-bg-2))] text-[color:var(--aqt-rose)]"
+              : "border-[color:var(--aqt-border)] bg-[color:var(--aqt-bg-2)] text-[color:var(--aqt-fg-muted)]"
+        )}
+        style={{ width: GUTTER_WIDTH }}
+        title={attention ?? undefined}
+        data-result-status={attention === null ? undefined : encounter.result_status}
       >
-        {interactive ? (
-          <div className="flex items-center gap-2">
-            <HoverPrefetchLink
-              href={`/encounters/${encounter.id}`}
-              className="flex items-center justify-center rounded p-0.5 text-[color:var(--aqt-fg-muted)] transition-colors hover:bg-[color:var(--aqt-overlay-3)] hover:text-[color:var(--aqt-fg)]"
-              aria-label={t("bracket.viewMatch")}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <Search className="size-3.5" aria-hidden />
-            </HoverPrefetchLink>
-            {/* The roster peek stays on the bracket: a scroll position built up
-                over a 32-team tree survives looking at who is playing. The
-                pre-game link leaves, because the room is where a captain acts. */}
-            <EncounterRostersModal
-              encounterId={encounter.id}
-              homeTeamName={encounter.home_team?.name ?? t("common.tbd")}
-              awayTeamName={encounter.away_team?.name ?? t("common.tbd")}
-            />
-            <HoverPrefetchLink
-              href={withReturnTo(`/tournaments/${encounter.tournament_id}/pregame/${encounter.id}`, returnTo)}
-              className="flex items-center justify-center rounded p-0.5 text-[color:var(--aqt-fg-muted)] transition-colors hover:bg-[color:var(--aqt-overlay-3)] hover:text-[color:var(--aqt-fg)]"
-              aria-label={t("bracket.pregameRoom")}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <ListChecks className="size-3.5" aria-hidden />
-            </HoverPrefetchLink>
+        <span className="text-[9px] font-semibold tracking-label opacity-70">M</span>
+        <span className="text-caption font-bold tabular-nums">{data.matchNumber}</span>
+        {attention !== null && <span className="sr-only">{attention}</span>}
+      </div>
+
+      <div className="flex min-w-0 flex-1 flex-col">
+        <SlotRow {...rowProps} side="home" highlighted={homeHighlighted} />
+        <SlotRow {...rowProps} side="away" highlighted={awayHighlighted} />
+
+        <div
+          className="flex items-center justify-between gap-1.5 border-t border-[color:var(--aqt-border)] bg-[hsl(0_0%_100%/0.015)] px-2"
+          style={{ height: footerHeight }}
+        >
+          {interactive ? (
+            <div className="flex items-center gap-1">
+              <HoverPrefetchLink
+                href={`/encounters/${encounter.id}`}
+                className={FOOTER_BUTTON}
+                aria-label={t("bracket.viewMatch")}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <Search className="size-3.5" aria-hidden />
+              </HoverPrefetchLink>
+              {/* The roster peek stays on the bracket: a scroll position built up
+                  over a 32-team tree survives looking at who is playing. The
+                  pre-game link leaves, because the room is where a captain acts. */}
+              <EncounterRostersModal
+                encounterId={encounter.id}
+                homeTeamName={encounter.home_team?.name ?? t("common.tbd")}
+                awayTeamName={encounter.away_team?.name ?? t("common.tbd")}
+              />
+              <HoverPrefetchLink
+                href={withReturnTo(`/tournaments/${encounter.tournament_id}/pregame/${encounter.id}`, returnTo)}
+                className={FOOTER_BUTTON}
+                aria-label={t("bracket.pregameRoom")}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <ListChecks className="size-3.5" aria-hidden />
+              </HoverPrefetchLink>
+            </div>
+          ) : (
+            <span />
+          )}
+          {/* Who may act sits beside what the match is: edit/report, then Bo3 / LIVE / date. */}
+          <div className="flex shrink-0 items-center gap-1">
+            {actions}
+            {actions && meta.timeLabel && (
+              <span aria-hidden className="mx-0.5 h-3 w-px bg-[color:var(--aqt-border-2)]" />
+            )}
+            {meta.timeLabel && (
+              <span
+                className={cn(
+                  "flex items-center gap-1 text-label font-semibold uppercase tracking-wide",
+                  meta.isLive ? "text-[color:var(--aqt-rose)]" : "text-[color:var(--aqt-fg-muted)]"
+                )}
+              >
+                {meta.isLive && (
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full" style={{ background: "var(--aqt-rose)" }} />
+                )}
+                {meta.timeLabel}
+              </span>
+            )}
           </div>
-        ) : (
-          <span />
-        )}
-        {meta.timeLabel && (
-          <span
-            className={cn(
-              "flex items-center gap-1 text-label font-semibold uppercase tracking-wide",
-              meta.isLive ? "text-[color:var(--aqt-rose)]" : "text-[color:var(--aqt-fg-muted)]"
-            )}
-          >
-            {meta.isLive && (
-              <span className="h-1.5 w-1.5 animate-pulse rounded-full" style={{ background: "var(--aqt-rose)" }} />
-            )}
-            {meta.timeLabel}
-          </span>
-        )}
+        </div>
       </div>
     </div>
   );

@@ -21,25 +21,8 @@ interface BracketCanvasProps extends Pick<BracketViewport, "scale" | "isGrabbing
   interactive: boolean;
   highlightMatchId: number | null;
   rearranging: boolean;
-  /** Hover/focus-revealed controls for one card (edit, report); `null` for none. */
+  /** Footer controls for one card (edit, report); `null` for none. */
   renderActions: (encounter: BracketMatch) => ReactNode;
-}
-
-function ResultStatusBadge({ encounter }: Readonly<{ encounter: BracketMatch }>) {
-  const t = useTranslations();
-  const status = encounter.result_status;
-  if (status !== "pending_confirmation" && status !== "disputed") return null;
-  return (
-    <span
-      className="absolute left-1 top-1 rounded px-1 text-label font-semibold uppercase"
-      style={{
-        background: status === "disputed" ? "var(--aqt-rose)" : "var(--aqt-amber)",
-        color: "var(--aqt-bg)"
-      }}
-    >
-      {status === "disputed" ? t("bracket.disputed") : t("bracket.pending")}
-    </span>
-  );
 }
 
 function RoundHeader({ header, scale, sticky }: Readonly<{ header: LayoutHeader; scale: number; sticky: boolean }>) {
@@ -224,7 +207,6 @@ export function BracketCanvas({
           {layout.nodes.map((node) => {
             const match = node.encounter;
             const highlighted = highlightMatchId !== null && match.id === highlightMatchId;
-            const actions = renderActions(match);
             return (
               <div
                 key={node.id}
@@ -240,7 +222,7 @@ export function BracketCanvas({
                 onFocus={() => setFocusedId(match.id)}
                 onKeyDown={(event) => onCardKeyDown(event, match.id)}
                 className={cn(
-                  "group absolute rounded-[10px] outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-blue)] focus-visible:ring-offset-2 focus-visible:ring-offset-[color:var(--aqt-bg-2)]",
+                  "absolute rounded-[10px] outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-blue)] focus-visible:ring-offset-2 focus-visible:ring-offset-[color:var(--aqt-bg-2)]",
                   highlighted &&
                     "ring-2 ring-[color:var(--aqt-teal)] ring-offset-2 ring-offset-[color:var(--aqt-card)]"
                 )}
@@ -256,22 +238,8 @@ export function BracketCanvas({
                   interactive={interactive}
                   rearranging={rearranging}
                   draggable={rearranging && isSlotRearrangeable(match)}
+                  renderActions={renderActions}
                 />
-                {/* Sits on the connector leaving the card, so it carries the
-                    canvas colour behind it instead of being struck through. */}
-                <div className="pointer-events-none absolute top-1/2 -translate-y-1/2" style={{ left: CARD_WIDTH + 4 }}>
-                  <span className="rounded bg-[color:var(--aqt-bg-2)] px-1 text-label font-semibold tabular-nums text-[color:var(--aqt-fg-muted)]">
-                    {node.data.matchLabel}
-                  </span>
-                </div>
-                <ResultStatusBadge encounter={match} />
-                {actions ? (
-                  // Revealed on focus as well as hover: `opacity-0` alone leaves
-                  // these focusable but invisible, so keyboard focus vanished here.
-                  <div className="absolute right-1 top-1 flex gap-1 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100">
-                    {actions}
-                  </div>
-                ) : null}
               </div>
             );
           })}

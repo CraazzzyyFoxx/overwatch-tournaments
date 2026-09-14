@@ -31,7 +31,7 @@ import type { StreamEntry } from "@/types/stream.types";
 import type { StageType } from "@/types/tournament.types";
 
 import { BracketCanvas } from "./BracketCanvas";
-import type { SlotDragData } from "./MatchCard";
+import { FOOTER_BUTTON, type SlotDragData } from "./MatchCard";
 import { buildLayout, type Side } from "./layout";
 import { MAX_SCALE, MIN_SCALE, useBracketViewport } from "./useBracketViewport";
 
@@ -213,6 +213,48 @@ export function BracketView<M extends BracketMatch>({
     [byId, onSwapSlots]
   );
 
+  // Stable across a hover: `MatchCard` is memoised on it (see its prop doc).
+  const renderActions = useCallback(
+    (encounter: BracketMatch) => {
+      // Every node was built from `encounters: M[]`, so its row IS an `M`.
+      const match = encounter as M;
+      const editable = onEdit && (canEdit?.(match) ?? true);
+      const reportable = onReport && (canReport?.(match) ?? false);
+      if (!editable && !reportable) return null;
+      return (
+        <>
+          {editable && (
+            <button
+              type="button"
+              className={FOOTER_BUTTON}
+              aria-label={t("bracket.editMatch")}
+              onClick={(e) => {
+                e.stopPropagation();
+                onEdit?.(match);
+              }}
+            >
+              <Pencil className="size-3.5" aria-hidden />
+            </button>
+          )}
+          {reportable && (
+            <button
+              type="button"
+              className="flex items-center justify-center rounded-[5px] border border-[color:color-mix(in_srgb,var(--aqt-teal)_30%,transparent)] bg-[color:color-mix(in_srgb,var(--aqt-teal)_16%,transparent)] p-0.5 text-[color:var(--aqt-teal)] transition-colors hover:bg-[color:color-mix(in_srgb,var(--aqt-teal)_24%,transparent)]"
+              aria-label={t("bracket.reportMatch")}
+              onClick={(e) => {
+                e.stopPropagation();
+                onReport?.(match);
+              }}
+            >
+              <FileEdit className="size-3" aria-hidden />
+            </button>
+          )}
+        </>
+      );
+    },
+    [t, onEdit, onReport, canEdit, canReport]
+  );
+
   if (layout.nodes.length === 0) {
     return <div className="py-8 text-center text-muted-foreground">{t("common.noBracketMatches")}</div>;
   }
@@ -223,44 +265,6 @@ export function BracketView<M extends BracketMatch>({
       : type === "single_elimination"
         ? t("bracket.singleElimination")
         : t("common.bracket");
-
-  const renderActions = (encounter: BracketMatch) => {
-    // Every node was built from `encounters: M[]`, so its row IS an `M`.
-    const match = encounter as M;
-    const editable = onEdit && (canEdit?.(match) ?? true);
-    const reportable = onReport && (canReport?.(match) ?? false);
-    if (!editable && !reportable) return null;
-    return (
-      <>
-        {editable && (
-          <button
-            type="button"
-            className="rounded-md border border-[color:var(--aqt-border-2)] bg-[hsl(0_0%_0%/0.6)] p-1 text-[color:var(--aqt-fg-muted)] hover:text-[color:var(--aqt-fg)]"
-            aria-label={t("bracket.editMatch")}
-            onClick={(e) => {
-              e.stopPropagation();
-              onEdit?.(match);
-            }}
-          >
-            <Pencil className="h-3 w-3" aria-hidden />
-          </button>
-        )}
-        {reportable && (
-          <button
-            type="button"
-            className="rounded-md border border-[color:color-mix(in_srgb,var(--aqt-teal)_30%,transparent)] bg-[color:color-mix(in_srgb,var(--aqt-teal)_16%,transparent)] p-1 text-[color:var(--aqt-teal)] hover:bg-[color:color-mix(in_srgb,var(--aqt-teal)_24%,transparent)]"
-            aria-label={t("bracket.reportMatch")}
-            onClick={(e) => {
-              e.stopPropagation();
-              onReport?.(match);
-            }}
-          >
-            <FileEdit className="h-3 w-3" aria-hidden />
-          </button>
-        )}
-      </>
-    );
-  };
 
   const toolbar = (fullscreen: boolean) => (
     <div className="flex items-center gap-1.5" role="toolbar" aria-label={t("bracket.toolbar")}>

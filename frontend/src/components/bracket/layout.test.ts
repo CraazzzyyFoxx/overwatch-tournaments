@@ -98,7 +98,7 @@ describe("buildLayout", () => {
     // Main columns = max(upper 2, lower 1); the finals take the two after.
     expect(nodeOf(layout, 5).x).toBe(columnX(2));
     expect(nodeOf(layout, 6).x).toBe(columnX(3));
-    expect(layout.width).toBe(PADDING_X * 2 + 4 * CARD_WIDTH + 3 * ROUND_GAP_X + 44);
+    expect(layout.width).toBe(PADDING_X * 2 + 4 * CARD_WIDTH + 3 * ROUND_GAP_X);
 
     const edgeIds = new Set(layout.edges.map((edge) => edge.id));
     expect(edgeIds).toEqual(

@@ -119,6 +119,9 @@ afterEach(() => {
 });
 
 describe("BracketView live-stream indicator", () => {
+  /** The dot is about a match still to be decided; the default fixture is settled. */
+  const inPlay = () => encounter({ status: "open", score: { home: 1, away: 0 }, started_at: "2026-01-01T10:00:00Z" });
+
   // The admin bracket passes no stream map. A required prop would have broken it,
   // so this is the regression guard for that call site.
   it("renders the slot rows unchanged when no stream map is given", () => {
@@ -133,7 +136,7 @@ describe("BracketView live-stream indicator", () => {
   it("marks only the side whose team is on air", () => {
     render(
       <BracketView
-        encounters={[encounter()]}
+        encounters={[inPlay()]}
         type="single_elimination"
         liveTeamStreams={new Map([[7, stream({ channel: "aria", viewer_count: 412 })]])}
       />
@@ -147,7 +150,7 @@ describe("BracketView live-stream indicator", () => {
   it("names the streamer and the audience for assistive tech and for the mouse", () => {
     render(
       <BracketView
-        encounters={[encounter()]}
+        encounters={[inPlay()]}
         type="single_elimination"
         liveTeamStreams={new Map([[7, stream({ channel: "aria", viewer_count: 412 })]])}
       />
@@ -164,7 +167,7 @@ describe("BracketView live-stream indicator", () => {
   it("drops the audience from the label when the platform reports no count", () => {
     render(
       <BracketView
-        encounters={[encounter()]}
+        encounters={[inPlay()]}
         type="single_elimination"
         liveTeamStreams={new Map([[7, stream({ channel: "aria", viewer_count: null })]])}
       />
@@ -179,7 +182,7 @@ describe("BracketView live-stream indicator", () => {
   it("carries the animated dot without becoming a link or a tab stop", () => {
     render(
       <BracketView
-        encounters={[encounter()]}
+        encounters={[inPlay()]}
         type="single_elimination"
         liveTeamStreams={new Map([[7, stream({ channel: "aria", viewer_count: 412 })]])}
       />
@@ -202,6 +205,19 @@ describe("BracketView live-stream indicator", () => {
     render(
       <BracketView
         encounters={[encounter({ name: "TBD vs Void", status: "open", score: { home: 0, away: 0 } })]}
+        type="single_elimination"
+        liveTeamStreams={new Map([[7, stream({ channel: "aria", viewer_count: 412 })]])}
+      />
+    );
+
+    expect(container.querySelector("[data-live-team-stream]")).toBeNull();
+  });
+
+  // A team on air is news for the match it is playing, not for one it already won.
+  it("drops the indicator once the match is settled", () => {
+    render(
+      <BracketView
+        encounters={[encounter()]}
         type="single_elimination"
         liveTeamStreams={new Map([[7, stream({ channel: "aria", viewer_count: 412 })]])}
       />

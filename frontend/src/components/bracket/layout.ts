@@ -19,7 +19,9 @@ import {
   type SlotHint
 } from "@/components/bracket-view.helpers";
 
-export const CARD_WIDTH = 210;
+/** The match-number strip down a card's left edge; part of `CARD_WIDTH`. */
+export const GUTTER_WIDTH = 26;
+export const CARD_WIDTH = 210 + GUTTER_WIDTH;
 export const CARD_HEIGHT = 84;
 export const CARD_ROW_HEIGHT = 30;
 export const ROUND_GAP_X = 48;
@@ -30,11 +32,12 @@ export const HEADER_GAP_Y = 14;
 export const SECTION_GAP_Y = 52;
 export const PADDING_X = 16;
 export const PADDING_Y = 14;
-export const BADGE_RIGHT = 44;
 
 export type Side = "home" | "away";
 
 export interface MatchNodeData {
+  matchNumber: number;
+  /** `M<matchNumber>`: the key a TBD slot's "W M3" hint points at. */
   matchLabel: string;
   homeName: string;
   awayName: string;
@@ -175,6 +178,7 @@ function createNode(
     x,
     y,
     data: {
+      matchNumber,
       matchLabel: `M${matchNumber}`,
       homeName: names.homeName,
       awayName: names.awayName,
@@ -303,7 +307,7 @@ export function buildLayout(
   const mainColumns = Math.max(upperRounds.length, lowerRounds.length, 1);
   const totalColumns = mainColumns + finalRounds.length;
   const contentWidth = totalColumns * CARD_WIDTH + Math.max(totalColumns - 1, 0) * ROUND_GAP_X;
-  const width = PADDING_X * 2 + contentWidth + BADGE_RIGHT;
+  const width = PADDING_X * 2 + contentWidth;
 
   const nodes: LayoutNode[] = [];
   const edges: LayoutEdge[] = [];
