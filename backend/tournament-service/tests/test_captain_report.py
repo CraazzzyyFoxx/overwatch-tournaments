@@ -297,7 +297,7 @@ class CaptainReportFlow(IsolatedAsyncioTestCase):
             patch.object(captain_service.captain_service, "_enqueue_tournament_recalculation", AsyncMock()) as recalc,
         ):
             await captain_service.captain_service.submit_captain_report(
-                session, _mk_user(), 10, home_score=3, away_score=0, closeness=4
+                session, _mk_user(), 10, home_score=0, away_score=2, closeness=4
             )
         fin.assert_not_awaited()
         recalc.assert_awaited_once_with(session, encounter.tournament_id)

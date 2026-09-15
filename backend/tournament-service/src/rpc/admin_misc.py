@@ -50,6 +50,7 @@ from src.services.admin import encounter as enc_service
 from src.services.admin import encounter_reports as reports_service
 from src.services.admin import preview_access as preview_access
 from src.services.admin.matches import matches_service
+from src.services.admin.stage import stage_service as admin_stage_service
 from src.services.admin.standing import standing_service
 from src.services.admin.tournament import tournament_service
 from src.services.computation import jobs as computation_jobs
@@ -70,6 +71,19 @@ def _serialize_result(encounter: models.Encounter) -> dict:
         closeness=encounter.closeness,
         confirmed_at=encounter.confirmed_at,
     ).model_dump(mode="json")
+
+
+async def _assert_source_correction_allowed(session: Any, encounter_id: int) -> None:
+    """Refuse a result correction whose downstream qualification is already live.
+
+    Both result endpoints rewrite a result that a later stage may have been
+    seeded from; the stage service owns that rule (it is the one that would have
+    to re-resolve the frozen seeds). A missing encounter is left to the service
+    below to 404 on.
+    """
+    encounter = await enc_service.encounter_service.encounter_repo.get(session, encounter_id)
+    if encounter is not None:
+        await admin_stage_service.assert_source_correction_allowed(session, encounter)
 
 
 def _slot_state(encounter: models.Encounter) -> dict:
@@ -159,6 +173,7 @@ def register(broker: Any, logger: Any) -> None:
                 entity_id=encounter_id,
                 after=body.model_dump(mode="json", exclude_none=True),
             )
+            await _assert_source_correction_allowed(session, encounter_id)
             # set_encounter_result commits internally; route returns the settled state.
             encounter = await captain_service.set_encounter_result(
                 session,
@@ -217,6 +232,7 @@ def register(broker: Any, logger: Any) -> None:
                 entity_type="encounter",
                 entity_id=encounter_id,
             )
+            await _assert_source_correction_allowed(session, encounter_id)
             encounter = await captain_service.reopen_encounter_result(
                 session, encounter_id, actor_user_id=await _actor_player_id(session, user)
             )

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import TestCase
 
 backend_root = Path(__file__).resolve().parents[2]
@@ -17,7 +18,7 @@ sys.path.insert(0, str(backend_root))
 sys.path.insert(0, str(backend_root / "tournament-service"))
 
 
-from shared.core.enums import StageType  # noqa: E402
+from shared.core.enums import StageItemInputType, StageType  # noqa: E402
 from shared.services.bracket import (  # noqa: E402
     double_elimination,
     round_robin,
@@ -29,6 +30,7 @@ from shared.services.bracket.engine import (  # noqa: E402
     placeholder_bracket,
     placeholder_seeds,
 )
+from src.domain.stage.seeds import bracket_seeds  # noqa: E402
 
 
 def _local_ids(skeleton) -> set[int]:
@@ -141,12 +143,54 @@ class DoubleEliminationInvariants(TestCase):
         self.assertEqual(1, len(gf))
         self.assertNotIn("Reset", gf[0].name)
 
-    def test_reset_only_when_requested(self) -> None:
-        without_reset = double_elimination.generate([1, 2, 3, 4], include_reset=False)
-        with_reset = double_elimination.generate([1, 2, 3, 4], include_reset=True)
-        self.assertEqual(len(without_reset.pairings) + 1, len(with_reset.pairings))
-        reset_match = [p for p in with_reset.pairings if "Reset" in p.name]
-        self.assertEqual(1, len(reset_match))
+    def test_reset_is_never_materialised(self) -> None:
+        # The Grand Final Reset is created on demand by the advancement engine,
+        # never by the generator.
+        s = double_elimination.generate([1, 2, 3, 4])
+        self.assertEqual([], [p for p in s.pairings if "Reset" in p.name])
+
+    def test_uneven_lower_split_keeps_every_team(self) -> None:
+        # 2 upper, 3 lower: the odd lower survivor used to have no onward match
+        # and silently vanished from the bracket.
+        s = double_elimination.generate([1, 2], lower_bracket_team_ids=[3, 4, 5])
+
+        seeded = {tid for p in s.pairings for tid in (p.home_team_id, p.away_team_id) if tid is not None}
+        self.assertEqual({1, 2, 3, 4, 5}, seeded)
+
+        # Acyclic: every edge points from an earlier-created match to a later
+        # one, and exactly one match is terminal.
+        for edge in s.advancement_edges:
+            self.assertLess(edge.source_local_id, edge.target_local_id)
+        sources = {e.source_local_id for e in s.advancement_edges}
+        terminal = [p for p in s.pairings if p.local_id not in sources]
+        self.assertEqual(1, len(terminal))
+        self.assertEqual("Grand Final", terminal[0].name)
+
+    def test_upper_4_lower_6_gives_every_match_an_onward_path(self) -> None:
+        s = double_elimination.generate([1, 2, 3, 4], lower_bracket_team_ids=[5, 6, 7, 8, 9, 10])
+
+        seeded = {tid for p in s.pairings for tid in (p.home_team_id, p.away_team_id) if tid is not None}
+        self.assertEqual(set(range(1, 11)), seeded)
+
+        gf = [p for p in s.pairings if p.name == "Grand Final"][0]
+        winner_sources = {e.source_local_id for e in s.advancement_edges if e.role == "winner"}
+        for pairing in s.pairings:
+            if pairing.local_id == gf.local_id:
+                continue
+            self.assertIn(pairing.local_id, winner_sources, f"{pairing.name} has no onward winner edge")
+
+    def test_uneven_lower_splits_never_drop_a_team(self) -> None:
+        for upper in range(2, 33):
+            for lower in (upper + 1, upper + 2, 2 * upper):
+                upper_ids = list(range(1, upper + 1))
+                lower_ids = list(range(upper + 1, upper + lower + 1))
+                s = double_elimination.generate(upper_ids, lower_bracket_team_ids=lower_ids)
+                seeded = {tid for p in s.pairings for tid in (p.home_team_id, p.away_team_id) if tid is not None}
+                self.assertEqual(
+                    set(upper_ids) | set(lower_ids),
+                    seeded,
+                    f"upper={upper} lower={lower} dropped teams",
+                )
 
     def test_all_local_ids_unique(self) -> None:
         s = double_elimination.generate(list(range(1, 9)))
@@ -483,6 +527,12 @@ class EngineDispatchInvariants(TestCase):
         )
         self.assertEqual(2, len(s.pairings))
 
+    def test_double_elimination_stops_at_the_grand_final(self) -> None:
+        s = generate_bracket(StageType.DOUBLE_ELIMINATION, [1, 2, 3, 4])
+        self.assertEqual([], [p for p in s.pairings if "Reset" in p.name])
+        gf_round = max(p.round_number for p in s.pairings)
+        self.assertEqual(gf_round, s.total_rounds)
+
 
 class PlaceholderBracketInvariants(TestCase):
     """`placeholder_bracket` must never drift from what `generate_bracket`
@@ -554,3 +604,29 @@ class PlaceholderBracketInvariants(TestCase):
             [(p.round_number, p.name) for p in predicted.pairings],
         )
         self.assertEqual(actual.advancement_edges, predicted.advancement_edges)
+
+
+class BracketSeedSplitInvariants(TestCase):
+    """`bracket_seeds` splitting one bracket item into upper/lower halves."""
+
+    STAGE = SimpleNamespace(stage_type=StageType.DOUBLE_ELIMINATION, split_lower_bracket=True)
+
+    @staticmethod
+    def _item(*inputs) -> SimpleNamespace:
+        return SimpleNamespace(inputs=list(inputs))
+
+    @staticmethod
+    def _input(slot: int, team_id: int | None, input_type=StageItemInputType.FINAL) -> SimpleNamespace:
+        return SimpleNamespace(slot=slot, team_id=team_id, input_type=input_type)
+
+    def test_odd_seed_count_gives_the_extra_team_to_the_upper_bracket(self) -> None:
+        item = self._item(*(self._input(slot, slot) for slot in range(1, 6)))
+        self.assertEqual(([1, 2, 3], [4, 5]), bracket_seeds(self.STAGE, [item], None))
+
+    def test_empty_inputs_never_reach_the_bracket(self) -> None:
+        item = self._item(
+            self._input(1, 1),
+            self._input(2, 2, StageItemInputType.EMPTY),
+            self._input(3, 3),
+        )
+        self.assertEqual(([1], [3]), bracket_seeds(self.STAGE, [item], None))

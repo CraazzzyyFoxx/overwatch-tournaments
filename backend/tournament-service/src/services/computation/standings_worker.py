@@ -8,6 +8,7 @@ from loguru import logger
 
 from src import models
 from src.core import db
+from src.services.admin.stage import stage_service as admin_stage_service
 from src.services.computation.jobs import jobs_service
 from src.services.standings.service import standings_service
 from src.services.standings.swiss_auto_round import swiss_rounds_service
@@ -39,6 +40,10 @@ async def process_standings_job(job_id: int) -> None:
                 commit=False,
             )
             state = await jobs_service.complete_standings_generation(session, current.tournament_id, generation)
+            # The standings that just moved are what a frozen playoff seed was
+            # resolved FROM: re-resolve the ones an untouched downstream stage
+            # item still holds, in this transaction, before anything publishes.
+            await admin_stage_service.requalify_downstream_inputs(session, current.tournament_id)
             generated = await swiss_rounds_service.generate_ready_rounds(session, current.tournament_id)
             # A generated round is a new bracket section, not just new numbers.
             resources = STRUCTURE_RESOURCES if generated else RESULT_RESOURCES

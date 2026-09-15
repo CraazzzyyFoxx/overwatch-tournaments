@@ -1,6 +1,6 @@
 import typing
 
-from sqlalchemy import JSON, Boolean, Enum, ForeignKey, Integer, String
+from sqlalchemy import JSON, Boolean, Enum, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from shared.core import db, enums
@@ -107,7 +107,10 @@ class StageItem(db.TimeStampIntegerMixin):
 
 class StageItemInput(db.TimeStampIntegerMixin):
     __tablename__ = "stage_item_input"
-    __table_args__ = ({"schema": "tournament"},)
+    __table_args__ = (
+        UniqueConstraint("stage_item_id", "slot", name="uq_stage_item_input_item_slot"),
+        {"schema": "tournament"},
+    )
 
     stage_item_id: Mapped[int] = mapped_column(ForeignKey(StageItem.id, ondelete="CASCADE"), index=True)
     slot: Mapped[int] = mapped_column(Integer())

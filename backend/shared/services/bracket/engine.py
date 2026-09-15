@@ -12,7 +12,6 @@ def generate_bracket(
     swiss_played_pairs: set[frozenset[int]] | None = None,
     swiss_round_number: int = 1,
     swiss_bye_history: set[int] | None = None,
-    de_include_reset: bool = False,
     lower_bracket_team_ids: list[int] | None = None,
 ) -> BracketSkeleton:
     """Dispatch bracket generation to the appropriate algorithm.
@@ -24,7 +23,6 @@ def generate_bracket(
         swiss_played_pairs: Required for SWISS — set of already-played pairs.
         swiss_round_number: For SWISS — which round to generate.
         swiss_bye_history: For SWISS — set of team_ids that already received a bye.
-        de_include_reset: For DE — whether to pre-materialise Grand Final Reset.
 
     Returns:
         :class:`BracketSkeleton` with all generated pairings and advancement edges.
@@ -42,11 +40,7 @@ def generate_bracket(
         return single_elimination.generate(team_ids)
 
     if stage_type == StageType.DOUBLE_ELIMINATION:
-        return double_elimination.generate(
-            team_ids,
-            lower_bracket_team_ids=lower_bracket_team_ids,
-            include_reset=de_include_reset,
-        )
+        return double_elimination.generate(team_ids, lower_bracket_team_ids=lower_bracket_team_ids)
 
     if stage_type == StageType.SWISS:
         if swiss_standings is None:

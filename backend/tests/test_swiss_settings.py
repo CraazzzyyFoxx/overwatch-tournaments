@@ -14,9 +14,9 @@ from shared.services.bracket.swiss_settings import (
 def test_swiss_runtime_settings_are_scoped_by_stage_item() -> None:
     stage = SimpleNamespace(settings_json=None)
 
-    record_swiss_bye(stage, 10, 101)
-    record_swiss_bye(stage, 10, 102)
-    record_swiss_bye(stage, 20, 201)
+    record_swiss_bye(stage, 10, 101, round_number=1)
+    record_swiss_bye(stage, 10, 102, round_number=2)
+    record_swiss_bye(stage, 20, 201, round_number=1)
     mark_swiss_scope_stopped(stage, 10)
 
     assert swiss_bye_team_ids(stage, 10) == [101, 102]

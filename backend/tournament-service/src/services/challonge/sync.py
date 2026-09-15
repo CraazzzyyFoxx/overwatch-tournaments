@@ -219,10 +219,21 @@ def _encounter_status_from_challonge(state: str) -> enums.EncounterStatus:
 
 
 def _parse_scores(scores_csv: str | None) -> tuple[int, int]:
-    match = _SCORE_RE.search(scores_csv or "")
-    if not match:
+    """Series score from a Challonge ``scores_csv``.
+
+    Challonge sends one pair per set ("0-1,1-0,2-1"), so a single pair is the
+    series score itself while several pairs are per-set results that have to be
+    reduced to sets won. Drawn sets and pairs carrying a negative number
+    (Challonge's forfeit encoding) count for neither side.
+    """
+    pairs = [(int(m.group(1)), int(m.group(2))) for m in _SCORE_RE.finditer(scores_csv or "")]
+    if not pairs:
         return 0, 0
-    return int(match.group(1)), int(match.group(2))
+    if len(pairs) == 1:
+        return pairs[0]
+    home = sum(1 for a, b in pairs if a >= 0 and b >= 0 and a > b)
+    away = sum(1 for a, b in pairs if a >= 0 and b >= 0 and b > a)
+    return home, away
 
 
 def _default_stage_item_id(
@@ -2208,21 +2219,28 @@ class ChallongeSyncService:
         if source is None or challonge_match_id is None:
             return False
 
-        winner_team = encounter.home_team if encounter.home_score > encounter.away_score else encounter.away_team
-        if not winner_team:
-            raise ValueError(f"Encounter {encounter.id} has no winner team")
+        winner_challonge_id: int | str
+        if encounter.home_score == encounter.away_score:
+            # Challonge's documented draw encoding (RR/Swiss). The old `else`
+            # branch handed the win to the away team on an equal score.
+            winner_challonge_id = "tie"
+        else:
+            winner_team = encounter.home_team if encounter.home_score > encounter.away_score else encounter.away_team
+            if not winner_team:
+                raise ValueError(f"Encounter {encounter.id} has no winner team")
 
-        winner_challonge_id = await self._resolve_winner_challonge_id(
-            session,
-            source,
-            winner_team.id,
-            encounter,
-            participant_mappings=participant_mappings,
-        )
-        if winner_challonge_id is None:
-            raise ValueError(
-                f"Winner team {winner_team.id} has no Challonge participant mapping for source {source.challonge_id}"
+            resolved = await self._resolve_winner_challonge_id(
+                session,
+                source,
+                winner_team.id,
+                encounter,
+                participant_mappings=participant_mappings,
             )
+            if resolved is None:
+                raise ValueError(
+                    f"Winner team {winner_team.id} has no Challonge participant mapping for source {source.challonge_id}"
+                )
+            winner_challonge_id = resolved
 
         scores_csv = f"{encounter.home_score}-{encounter.away_score}"
 

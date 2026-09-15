@@ -1,5 +1,6 @@
 """Admin service layer for encounter CRUD operations"""
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -14,6 +15,8 @@ from shared.repository import (
     TeamRepository,
     TournamentRepository,
 )
+from shared.services.bracket.advancement import reset_encounter_result
+from shared.services.bracket.swiss_settings import remove_swiss_bye_round
 from shared.services.encounter_naming import build_encounter_name
 from src import models, schemas
 from src.core import enums
@@ -284,6 +287,13 @@ class AdminEncounterService:
                     detail=f"Invalid status. Must be one of: {', '.join([s.value for s in enums.EncounterStatus])}",
                 )
         _reject_settled_result_edits(encounter, update_data)
+        # A score/status/team write on this encounter is a result correction, so
+        # it may only land while the qualifications it already fed are still
+        # untouched; a pure rename or reschedule is not a correction.
+        if any(
+            field in update_data for field in ("home_score", "away_score", "status", "home_team_id", "away_team_id")
+        ):
+            await self._assert_source_correction_allowed(session, encounter)
 
         if "home_team_id" in update_data and update_data["home_team_id"] is not None:
             await self._require_team_in_tournament(
@@ -326,6 +336,16 @@ class AdminEncounterService:
 
         return encounter
 
+    @staticmethod
+    async def _assert_source_correction_allowed(session: AsyncSession, encounter: models.Encounter) -> None:
+        """409 unless the downstream qualifications this result fed can still be
+        re-resolved. Imported lazily -- ``admin.stage`` pulls in the whole
+        bracket generation stack, which imports this module's siblings.
+        """
+        from src.services.admin.stage import stage_service as admin_stage_service
+
+        await admin_stage_service.assert_source_correction_allowed(session, encounter)
+
     async def _team_name(self, session: AsyncSession, team_id: int | None) -> str | None:
         """``None`` for an empty slot -- ``build_encounter_name`` renders it as TBD."""
         if not team_id:
@@ -342,6 +362,13 @@ class AdminEncounterService:
         is moved into a TBD slot), and naming the same encounter with the other
         slot flips home/away. Seeding only -- a settled or running encounter is
         refused rather than silently re-teamed under its result.
+
+        Both an initial seed and a derived slot may be swapped, so the origin
+        travels with the team: the ``EncounterLink`` feeding a derived slot is
+        re-pointed at the slot its team moved into. Otherwise the next
+        advancement would overwrite the manual move, and -- since the Grand
+        Final and its reset are identified by those links -- a home/away flip
+        would hide the Grand Final from the reset rule.
         """
         if data.target_encounter_id == encounter_id and data.target_slot == data.slot:
             raise HTTPException(
@@ -396,6 +423,15 @@ class AdminEncounterService:
         setattr(target, target_field, source_team_id)
 
         for encounter in touched:
+            if encounter.home_team_id is not None and encounter.home_team_id == encounter.away_team_id:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="A team cannot occupy both slots of one encounter",
+                )
+
+        await self._move_slot_links(session, source, target, data)
+
+        for encounter in touched:
             if (encounter.home_team_id, encounter.away_team_id) == previous[encounter.id]:
                 continue
             encounter.name = build_encounter_name(
@@ -408,6 +444,42 @@ class AdminEncounterService:
         await session.commit()
 
         return source, target
+
+    @staticmethod
+    async def _move_slot_links(
+        session: AsyncSession,
+        source: models.Encounter,
+        target: models.Encounter,
+        data: schemas.EncounterSwapSlotInput,
+    ) -> None:
+        """Re-point the advancement edges that fed the two swapped slots.
+
+        A derived slot is owned by the ``EncounterLink`` targeting it; moving
+        only the team would leave the next advancement writing the old team
+        back into it. One query for both sides, both reads before either write
+        -- on a home/away flip the two links sit on the same encounter.
+        """
+        rows = await session.execute(
+            select(models.EncounterLink).where(models.EncounterLink.target_encounter_id.in_({source.id, target.id}))
+        )
+        links = list(rows.scalars().all())
+        source_slot = enums.EncounterLinkSlot(data.slot)
+        target_slot = enums.EncounterLinkSlot(data.target_slot)
+
+        def _link_for(encounter_id: int, slot: enums.EncounterLinkSlot) -> models.EncounterLink | None:
+            return next(
+                (link for link in links if link.target_encounter_id == encounter_id and link.target_slot == slot),
+                None,
+            )
+
+        source_link = _link_for(source.id, source_slot)
+        target_link = _link_for(target.id, target_slot)
+        if source_link is not None:
+            source_link.target_encounter_id = target.id
+            source_link.target_slot = target_slot
+        if target_link is not None:
+            target_link.target_encounter_id = source.id
+            target_link.target_slot = source_slot
 
     async def update_match(
         self,
@@ -459,18 +531,53 @@ class AdminEncounterService:
         return match
 
     async def delete_encounter(self, session: AsyncSession, encounter_id: int) -> None:
-        """Delete encounter (cascade deletes matches)"""
+        """Delete encounter (cascade deletes matches).
+
+        The FK cascade removes this encounter's ``EncounterLink`` rows, but the
+        teams and results it already advanced into later matches would outlive
+        it as an orphaned bracket -- so the result is voided through the same
+        cascade an admin correction uses before the row goes.
+        """
         encounter = await self.encounter_repo.get(session, encounter_id)
 
         if not encounter:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Encounter not found")
 
         tournament_id = encounter.tournament_id
-        # Not ``repo.delete``: that flushes, and the enqueue below must stay the
-        # first write of this transaction (same ordering contract as create).
+        stage = await session.get(models.Stage, encounter.stage_id) if encounter.stage_id else None
+        # A Swiss bye is bookkeeping for a round that existed; when the round's
+        # last encounter goes, so does the bye recorded for it.
+        drop_bye_round = (
+            stage is not None
+            and stage.stage_type == enums.StageType.SWISS
+            and not await self._round_has_other_encounters(session, encounter)
+        )
+        await self._assert_source_correction_allowed(session, encounter)
+        # ``reset_encounter_result`` mutates ORM state and leaves flushing to its
+        # caller, and ``session.delete`` does not flush either: the enqueue below
+        # is still the first write of this transaction (same ordering contract as
+        # create).
+        await reset_encounter_result(session, encounter)
         await session.delete(encounter)
+        if drop_bye_round:
+            remove_swiss_bye_round(stage, encounter.stage_item_id, encounter.round)
         await enqueue_tournament_recalculation(session, tournament_id)
         await session.commit()
+
+    @staticmethod
+    async def _round_has_other_encounters(session: AsyncSession, encounter: models.Encounter) -> bool:
+        """Any sibling left in this encounter's ``(stage, item, round)``."""
+        rows = await session.execute(
+            select(models.Encounter.id)
+            .where(
+                models.Encounter.stage_id == encounter.stage_id,
+                models.Encounter.stage_item_id == encounter.stage_item_id,
+                models.Encounter.round == encounter.round,
+                models.Encounter.id != encounter.id,
+            )
+            .limit(1)
+        )
+        return rows.first() is not None
 
 
 encounter_service = AdminEncounterService()

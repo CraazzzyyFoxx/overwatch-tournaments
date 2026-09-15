@@ -12,21 +12,11 @@ def swiss_scope_key(stage_item_id: int | None) -> str:
 
 
 def swiss_bye_team_ids(stage: Any, stage_item_id: int | None) -> list[int]:
-    settings = _settings(stage)
-    raw_byes = settings.get(SWISS_BYES_KEY)
-    if not isinstance(raw_byes, dict):
-        return []
-
-    raw_team_ids = raw_byes.get(swiss_scope_key(stage_item_id))
-    if not isinstance(raw_team_ids, list):
-        return []
-
     team_ids: list[int] = []
-    for team_id in raw_team_ids:
-        try:
-            team_ids.append(int(team_id))
-        except (TypeError, ValueError):
-            continue
+    for entry in _scope_byes(stage, stage_item_id):
+        team_id = _entry_team_id(entry)
+        if team_id is not None:
+            team_ids.append(team_id)
     return team_ids
 
 
@@ -34,14 +24,40 @@ def swiss_bye_counts(stage: Any, stage_item_id: int | None) -> dict[int, int]:
     return dict(Counter(swiss_bye_team_ids(stage, stage_item_id)))
 
 
-def record_swiss_bye(stage: Any, stage_item_id: int | None, team_id: int) -> None:
+def record_swiss_bye(stage: Any, stage_item_id: int | None, team_id: int, *, round_number: int) -> None:
     settings = dict(_settings(stage))
     raw_byes = settings.get(SWISS_BYES_KEY)
     byes = dict(raw_byes) if isinstance(raw_byes, dict) else {}
     scope_key = swiss_scope_key(stage_item_id)
     scope_byes = list(byes.get(scope_key, []))
-    scope_byes.append(int(team_id))
+    scope_byes.append({"round": int(round_number), "team_id": int(team_id)})
     byes[scope_key] = scope_byes
+    settings[SWISS_BYES_KEY] = byes
+    stage.settings_json = settings
+
+
+def remove_swiss_bye_round(stage: Any, stage_item_id: int | None, round_number: int) -> None:
+    """Revoke the byes recorded for one round, e.g. when that round is deleted.
+
+    Legacy entries stored as a bare team id carry no round, so they are kept:
+    there is no way to tell which round they belonged to.
+    """
+    settings = dict(_settings(stage))
+    raw_byes = settings.get(SWISS_BYES_KEY)
+    if not isinstance(raw_byes, dict):
+        return
+
+    scope_key = swiss_scope_key(stage_item_id)
+    scope_byes = raw_byes.get(scope_key)
+    if not isinstance(scope_byes, list):
+        return
+
+    kept = [entry for entry in scope_byes if _entry_round(entry) != int(round_number)]
+    if len(kept) == len(scope_byes):
+        return
+
+    byes = dict(raw_byes)
+    byes[scope_key] = kept
     settings[SWISS_BYES_KEY] = byes
     stage.settings_json = settings
 
@@ -90,6 +106,32 @@ def clear_swiss_scope_stopped(stage: Any, stage_item_id: int | None) -> None:
     else:
         settings.pop(SWISS_STOPPED_SCOPES_KEY, None)
     stage.settings_json = settings
+
+
+def _scope_byes(stage: Any, stage_item_id: int | None) -> list[Any]:
+    raw_byes = _settings(stage).get(SWISS_BYES_KEY)
+    if not isinstance(raw_byes, dict):
+        return []
+
+    scope_byes = raw_byes.get(swiss_scope_key(stage_item_id))
+    return scope_byes if isinstance(scope_byes, list) else []
+
+
+def _entry_team_id(entry: Any) -> int | None:
+    """Team id of one stored bye; a bare int is the legacy round-less form."""
+    try:
+        return int(entry["team_id"] if isinstance(entry, dict) else entry)
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+def _entry_round(entry: Any) -> int | None:
+    if not isinstance(entry, dict):
+        return None
+    try:
+        return int(entry["round"])
+    except (KeyError, TypeError, ValueError):
+        return None
 
 
 def _settings(stage: Any) -> dict[str, Any]:

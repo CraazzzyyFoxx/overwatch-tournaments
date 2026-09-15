@@ -65,7 +65,7 @@ class BracketAdvancementNameTests(IsolatedAsyncioTestCase):
             patch.object(
                 advancement,
                 "_maybe_create_grand_final_reset",
-                AsyncMock(return_value=None),
+                AsyncMock(return_value=(None, [])),
             ),
             patch.object(
                 advancement,

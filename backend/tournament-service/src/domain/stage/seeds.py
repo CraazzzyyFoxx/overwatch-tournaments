@@ -154,7 +154,11 @@ def lower_bracket_item(stage: Any, sorted_items: list) -> Any | None:
 
 
 def collect_item_team_ids(item: Any) -> list[int]:
-    return [inp.team_id for inp in sorted(item.inputs, key=lambda value: value.slot) if inp.team_id is not None]
+    return [
+        inp.team_id
+        for inp in sorted(item.inputs, key=lambda value: value.slot)
+        if inp.team_id is not None and getattr(inp, "input_type", None) != enums.StageItemInputType.EMPTY
+    ]
 
 
 def bracket_seeds(
@@ -170,7 +174,7 @@ def bracket_seeds(
             upper = [tid for item in sorted_items if item is not lb_item for tid in collect(item)]
             return upper, collect(lb_item)
         all_ids = [tid for item in sorted_items for tid in collect(item)]
-        half = len(all_ids) // 2
+        half = (len(all_ids) + 1) // 2
         return all_ids[:half], all_ids[half:]
     return [tid for item in sorted_items for tid in collect(item)], []
 

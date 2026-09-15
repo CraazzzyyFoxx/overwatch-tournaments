@@ -3,7 +3,7 @@
 from collections.abc import Sequence
 
 from loguru import logger
-from sqlalchemy import case, func, select, update
+from sqlalchemy import case, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -26,6 +26,8 @@ from shared.services.bracket.engine import generate_bracket, placeholder_bracket
 from shared.services.bracket.persist import persist_skeleton
 from shared.services.bracket.swiss import SwissPairingImpossibleError, SwissStanding
 from shared.services.bracket.swiss_settings import (
+    SWISS_BYES_KEY,
+    SWISS_STOPPED_SCOPES_KEY,
     clear_swiss_byes,
     clear_swiss_scope_stopped,
     mark_swiss_scope_stopped,
@@ -69,11 +71,48 @@ from src.services.admin.stage_common import (
     _bracket_seeds,
     _pick_ban_config_signature,
 )
+from src.services.encounter.pick_ban_session import pick_ban_session_service
 from src.services.tournament.events import (
     STRUCTURE_RESOURCES,
     enqueue_tournament_recalculation,
     publish_tournament_invalidation,
 )
+
+
+def _boundary_tie_unresolved(standings: Sequence[models.Standing], position: int) -> bool:
+    """Is the team at 1-based ``position`` still tied with the one right below it?
+
+    ``tie_group`` is the standings' own statement that every configured
+    tiebreaker failed to separate these teams; what orders them past that point
+    is ``team_id``, which is not a sporting result. Fine for rendering a stable
+    table, not for deciding who qualifies -- so the boundary between a
+    qualifying position and the next one has to be tie-free before a seed is
+    frozen off it. ``standings`` must be ordered by ``position``.
+    """
+    if position >= len(standings):
+        return False
+    standing = standings[position - 1]
+    return standing.tie_group is not None and standings[position].tie_group == standing.tie_group
+
+
+def _merge_stage_settings(stored: dict | None, incoming: dict | None) -> dict | None:
+    """Lay ``incoming`` over ``stored``, keeping the engine's own bookkeeping.
+
+    ``settings_json`` holds two different things: the admin's regulation, and
+    the Swiss state the generator writes back into it (which team has already
+    had a BYE, which scopes ran out of pairings). The second is not the client's
+    to send, and a form that round-trips the whole blob would drop it -- so
+    those keys are always taken from what is stored.
+    """
+    if incoming is None:
+        return stored
+    merged = {**(stored or {}), **incoming}
+    for key in (SWISS_BYES_KEY, SWISS_STOPPED_SCOPES_KEY):
+        if key in (stored or {}):
+            merged[key] = stored[key]
+        else:
+            merged.pop(key, None)
+    return merged
 
 
 class AdminStageService:
@@ -185,10 +224,6 @@ class AdminStageService:
         upper_ids, lower_ids = _bracket_seeds(stage, sorted_items, _lower_bracket_item(stage, sorted_items))
         upper_ids = await self._rank_seed_ids(session, stage, upper_ids)
         lower_ids = await self._rank_seed_ids(session, stage, lower_ids)
-        de_include_reset = (
-            stage.stage_type == enums.StageType.DOUBLE_ELIMINATION
-            and (stage.settings_json or {}).get("de_grand_final_type") == "with_reset"
-        )
 
         if len(upper_ids) + len(lower_ids) < 2:
             upper_count, lower_count = await self._projected_bracket_seed_counts(session, stage)
@@ -201,7 +236,6 @@ class AdminStageService:
             generate_bracket(
                 stage.stage_type,
                 upper_ids,
-                de_include_reset=de_include_reset,
                 lower_bracket_team_ids=lower_ids,
             ),
             {},
@@ -278,7 +312,7 @@ class AdminStageService:
         if stage.stage_type == enums.StageType.DOUBLE_ELIMINATION and getattr(stage, "split_lower_bracket", False):
             # One bracket item holds both halves — ``_bracket_seeds`` splits the
             # seed list down the middle instead of wiring a separate item.
-            return upper // 2, upper - upper // 2
+            return upper - upper // 2, upper // 2
         return upper, 0
 
     async def get_stage_item(self, session: AsyncSession, stage_item_id: int) -> models.StageItem:
@@ -393,9 +427,36 @@ class AdminStageService:
         return await self.get_stage(session, stage.id)
 
     async def update_stage(self, session: AsyncSession, stage_id: int, data: schemas.StageUpdate) -> models.Stage:
+        """Edit a stage's regulation.
+
+        Two things are not plain field writes. ``stage_type`` decides the shape
+        of the matches that were already generated, so it cannot be flipped
+        under them -- a published Swiss silently becoming a single elimination
+        leaves the bracket it already produced meaning nothing. And
+        ``settings_json`` is merged rather than replaced, because it is not only
+        the admin's settings: the engine keeps the Swiss BYE ledger and the
+        stopped-scope list in there, and a client PUTting the form's view of the
+        blob would erase that history.
+        """
         stage = await self.get_stage(session, stage_id)
         tournament_id = stage.tournament_id
         update_data = data.model_dump(exclude_unset=True)
+
+        next_type = update_data.get("stage_type", stage.stage_type)
+        if next_type != stage.stage_type:
+            existing = await self.encounter_repo.count(session, filters=[models.Encounter.stage_id == stage_id])
+            if existing:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=(
+                        f"Cannot change the format of a stage that already has {existing} generated "
+                        "matches; delete them first"
+                    ),
+                )
+
+        if "settings_json" in update_data:
+            update_data["settings_json"] = _merge_stage_settings(stage.settings_json, update_data["settings_json"])
+
         for field, value in update_data.items():
             setattr(stage, field, value)
         await self._publish_structure_changed(session, tournament_id)
@@ -687,6 +748,69 @@ class AdminStageService:
         await session.commit()
         return await self.get_stage_item(session, stage_item_id)
 
+    async def _assert_input_assignable(
+        self,
+        session: AsyncSession,
+        *,
+        stage_id: int,
+        stage_item_id: int,
+        tournament_id: int,
+        team_id: int | None,
+        slot: int | None,
+        exclude_input_id: int | None = None,
+    ) -> models.StageItemInput | None:
+        """The invariants every seed slot has to satisfy, whoever writes it.
+
+        Creation used to check none of these while editing checked most of them,
+        so an input the update endpoint refuses could be created outright: a
+        second input on one slot, or a team from a different tournament (the FK
+        only proves the team exists).
+
+        Returns the OTHER input of this stage that already holds ``team_id``, if
+        there is one -- editing swaps the two teams, creating has nothing to swap
+        with and refuses.
+        """
+        if slot is not None:
+            slot_filters = [
+                models.StageItemInput.stage_item_id == stage_item_id,
+                models.StageItemInput.slot == slot,
+            ]
+            if exclude_input_id is not None:
+                slot_filters.append(models.StageItemInput.id != exclude_input_id)
+            taken = await session.scalar(self.stage_item_input_repo.select().where(*slot_filters).limit(1))
+            if taken is not None:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=f"Slot {slot} is already used in this stage item",
+                )
+
+        if team_id is None:
+            return None
+
+        team = await self.team_repo.get(session, team_id)
+        if team is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Team not found")
+        if team.tournament_id != tournament_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Team does not belong to this tournament",
+            )
+
+        # Analytical: joins StageItem to scope the duplicate-team check to the
+        # whole stage rather than the one item the input belongs to.
+        duplicate_filters = [
+            models.StageItem.stage_id == stage_id,
+            models.StageItemInput.team_id == team_id,
+        ]
+        if exclude_input_id is not None:
+            duplicate_filters.append(models.StageItemInput.id != exclude_input_id)
+        return await session.scalar(
+            self.stage_item_input_repo.select()
+            .join(models.StageItem, models.StageItemInput.stage_item_id == models.StageItem.id)
+            .where(*duplicate_filters)
+            .limit(1)
+        )
+
     async def create_stage_item_input(
         self,
         session: AsyncSession,
@@ -699,6 +823,19 @@ class AdminStageService:
         if not stage_item:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Stage item not found")
         tournament_id = stage_item.stage.tournament_id
+        duplicate = await self._assert_input_assignable(
+            session,
+            stage_id=stage_item.stage_id,
+            stage_item_id=stage_item_id,
+            tournament_id=tournament_id,
+            team_id=data.team_id,
+            slot=data.slot,
+        )
+        if duplicate is not None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Selected team is already assigned in this stage; replace a populated slot to swap teams",
+            )
         inp = models.StageItemInput(stage_item_id=stage_item_id, **data.model_dump())
         await self.stage_item_input_repo.create(session, inp)
         await enqueue_tournament_recalculation(session, tournament_id)
@@ -733,30 +870,15 @@ class AdminStageService:
         next_source_position = update_data.get("source_position", inp.source_position)
 
         if "team_id" in update_data and next_team_id is not None:
-            team = await self.team_repo.get(session, next_team_id)
-            if team is None:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="Team not found",
-                )
-            if team.tournament_id != tournament_id:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Team does not belong to this tournament",
-                )
-
-            # Analytical: joins StageItem to scope the duplicate-team check to the
-            # whole stage rather than the one item the input belongs to.
-            existing_result = await session.execute(
-                self.stage_item_input_repo.select()
-                .join(models.StageItem, models.StageItemInput.stage_item_id == models.StageItem.id)
-                .where(
-                    models.StageItem.stage_id == stage_id,
-                    models.StageItemInput.id != input_id,
-                    models.StageItemInput.team_id == next_team_id,
-                )
+            existing_input = await self._assert_input_assignable(
+                session,
+                stage_id=stage_id,
+                stage_item_id=inp.stage_item_id,
+                tournament_id=tournament_id,
+                team_id=next_team_id,
+                slot=None,
+                exclude_input_id=input_id,
             )
-            existing_input = existing_result.scalar_one_or_none()
             if existing_input is not None:
                 if inp.team_id is None:
                     raise HTTPException(
@@ -883,6 +1005,15 @@ class AdminStageService:
                     continue
                 standings = standings_by_item.get(inp.source_stage_item_id, [])
                 if inp.source_position <= len(standings):
+                    if _boundary_tie_unresolved(standings, inp.source_position):
+                        raise HTTPException(
+                            status_code=status.HTTP_409_CONFLICT,
+                            detail=(
+                                "unresolved tie at qualification boundary; set a manual override "
+                                f"(source stage item {inp.source_stage_item_id}, "
+                                f"position {inp.source_position})"
+                            ),
+                        )
                     inp.team_id = standings[inp.source_position - 1].team_id
                     inp.input_type = enums.StageItemInputType.FINAL
 
@@ -1058,15 +1189,14 @@ class AdminStageService:
             # A Swiss allowed as many rounds as a full circle IS a round robin.
             # Pairing it one round at a time only invites corners where no
             # rematch-free round is left, and no ordering of the schedule can
-            # matter when every team meets every other anyway.
-            if swiss_standings is None and stage_max_rounds(stage) >= len(team_ids) - 1:
+            # matter when every team meets every other anyway. An odd field
+            # needs ``n`` rounds for that full circle, not ``n - 1``: one team
+            # sits out each round, so the shortcut must not fire a round early
+            # and hand out a schedule longer than the configured limit.
+            rr_rounds = len(team_ids) if len(team_ids) % 2 else len(team_ids) - 1
+            if swiss_standings is None and stage_max_rounds(stage) >= rr_rounds:
                 clear_swiss_scope_stopped(stage, stage_item_id)
                 return round_robin.generate(team_ids)
-
-        de_include_reset = (
-            stage.stage_type == enums.StageType.DOUBLE_ELIMINATION
-            and (stage.settings_json or {}).get("de_grand_final_type") == "with_reset"
-        )
 
         try:
             skeleton = generate_bracket(
@@ -1076,7 +1206,6 @@ class AdminStageService:
                 swiss_played_pairs=swiss_played_pairs,
                 swiss_round_number=swiss_round,
                 swiss_bye_history=set(swiss_bye_team_ids(stage, stage_item_id)),
-                de_include_reset=de_include_reset,
                 lower_bracket_team_ids=lower_bracket_team_ids,
             )
         except SwissPairingImpossibleError:
@@ -1092,7 +1221,7 @@ class AdminStageService:
         if stage.stage_type == enums.StageType.SWISS:
             clear_swiss_scope_stopped(stage, stage_item_id)
             if skeleton.bye_team_id is not None:
-                record_swiss_bye(stage, stage_item_id, skeleton.bye_team_id)
+                record_swiss_bye(stage, stage_item_id, skeleton.bye_team_id, round_number=swiss_round)
         return skeleton
 
     async def _create_encounters_from_skeleton(
@@ -1263,24 +1392,31 @@ class AdminStageService:
             for inp in list(item.inputs):
                 if inp.input_type == enums.StageItemInputType.FINAL:
                     await session.delete(inp)
+        # Flushed before the new rows go in: the reseed hands out the same slot
+        # numbers the wiped inputs held, and the unit of work emits inserts
+        # before deletes -- which uq_stage_item_input_item_slot would refuse.
+        await session.flush()
 
-        # Track next free slot per stage_item so we don't collide with preserved
-        # TENTATIVE inputs.
-        next_slot: dict[int, int] = {}
-        for item in stage_items:
-            used_slots = {inp.slot for inp in item.inputs if inp.input_type != enums.StageItemInputType.FINAL}
-            candidate = 1
-            while candidate in used_slots:
-                candidate += 1
-            next_slot[item.id] = candidate
+        # The occupied slots of each stage_item, which the preserved TENTATIVE
+        # inputs already hold. Re-scanned per assignment rather than counted up
+        # from the first gap: a preserved TENTATIVE at slot 2 makes the free
+        # slots 1 and 3, and a running counter would hand out 1 and 2 -- two
+        # inputs on one slot.
+        used_slots: dict[int, set[int]] = {
+            item.id: {inp.slot for inp in item.inputs if inp.input_type != enums.StageItemInputType.FINAL}
+            for item in stage_items
+        }
 
         snake = mode != "random"
 
         for team_idx, team in enumerate(teams_sorted):
             group_idx = group_for_index(team_idx, num_groups, snake=snake)
             target_item = stage_items[group_idx]
-            slot = next_slot[target_item.id]
-            next_slot[target_item.id] = slot + 1
+            taken = used_slots[target_item.id]
+            slot = 1
+            while slot in taken:
+                slot += 1
+            taken.add(slot)
 
             session.add(
                 models.StageItemInput(
@@ -1454,6 +1590,176 @@ class AdminStageService:
 
         stages = await self.stage_repo.bulk_get(session, sorted(source_stage_ids))
         return [s.id for s in stages if not s.is_completed]
+
+    async def _untouched_stage_items(self, session: AsyncSession, stage_item_ids: Sequence[int]) -> set[int]:
+        """Of ``stage_item_ids``, the ones nothing has happened in yet.
+
+        "Untouched" is deliberately stricter than "not COMPLETED": a seed may
+        still be rewritten only while every encounter of the item is OPEN, has a
+        0:0 score, carries no ``result_status`` and has no captain report --
+        i.e. while no participant has acted on the assignment. An item with no
+        encounters at all is untouched.
+        """
+        ids = set(stage_item_ids)
+        if not ids:
+            return set()
+        touched = await session.execute(
+            select(models.Encounter.stage_item_id)
+            .outerjoin(
+                models.EncounterCaptainReport,
+                models.EncounterCaptainReport.encounter_id == models.Encounter.id,
+            )
+            .where(
+                models.Encounter.stage_item_id.in_(ids),
+                or_(
+                    models.Encounter.status != enums.EncounterStatus.OPEN,
+                    models.Encounter.home_score != 0,
+                    models.Encounter.away_score != 0,
+                    models.Encounter.result_status != enums.EncounterResultStatus.NONE,
+                    models.EncounterCaptainReport.id.is_not(None),
+                ),
+            )
+            .distinct()
+        )
+        return ids - set(touched.scalars())
+
+    async def _downstream_item_ids(self, session: AsyncSession, source_stage_item_id: int) -> set[int]:
+        """Stage items whose qualification is already frozen (FINAL) off
+        ``source_stage_item_id``'s standings."""
+        result = await session.execute(
+            select(models.StageItemInput.stage_item_id).where(
+                models.StageItemInput.source_stage_item_id == source_stage_item_id,
+                models.StageItemInput.input_type == enums.StageItemInputType.FINAL,
+            )
+        )
+        return set(result.scalars())
+
+    async def assert_source_correction_allowed(self, session: AsyncSession, encounter: models.Encounter) -> None:
+        """Refuse a result correction whose qualification fallout cannot be applied.
+
+        ``requalify_downstream_inputs`` re-resolves a frozen seed only while the
+        stage item it feeds is still untouched. Once that playoff has started,
+        correcting the group result here would leave it playing with a team that
+        no longer qualified and no way to take that back -- so the correction is
+        refused at the entry point rather than allowed to diverge silently.
+        """
+        if encounter.stage_item_id is None:
+            return
+        downstream_item_ids = await self._downstream_item_ids(session, encounter.stage_item_id)
+        if not downstream_item_ids:
+            return
+        untouched = await self._untouched_stage_items(session, sorted(downstream_item_ids))
+        blocked = sorted(downstream_item_ids - untouched)
+        if blocked:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "downstream stage already in progress; correct it there or deactivate it first "
+                    f"(stage items {blocked})"
+                ),
+            )
+
+    async def requalify_downstream_inputs(self, session: AsyncSession, tournament_id: int) -> int:
+        """Re-resolve frozen qualification seeds that recomputed standings moved.
+
+        Activation turns a TENTATIVE input into a FINAL one, which is what makes
+        the playoff's participants stable -- and, until now, also what made a
+        later correction of the group result invisible to it. This re-reads every
+        FINAL input that still remembers where it came from and rewrites it, plus
+        the encounter slot and name holding the old team, when the source
+        standings now name somebody else.
+
+        Only while the downstream item is untouched: past that point the seed is
+        genuinely frozen and ``assert_source_correction_allowed`` refuses the
+        correction instead. Returns how many seeds moved.
+        """
+        stages = await self.get_stages_by_tournament(session, tournament_id)
+        candidates = [
+            inp
+            for stage in stages
+            for item in stage.items
+            for inp in item.inputs
+            if inp.input_type == enums.StageItemInputType.FINAL
+            and inp.source_stage_item_id is not None
+            and inp.source_position is not None
+        ]
+        if not candidates:
+            return 0
+
+        standings_result = await session.execute(
+            self.standing_repo.select()
+            .where(models.Standing.stage_item_id.in_({inp.source_stage_item_id for inp in candidates}))
+            .order_by(models.Standing.stage_item_id, models.Standing.position)
+        )
+        standings_by_item: dict[int, list[models.Standing]] = {}
+        for standing in standings_result.scalars():
+            standings_by_item.setdefault(standing.stage_item_id, []).append(standing)
+
+        moved: list[tuple[models.StageItemInput, int, int]] = []
+        for inp in candidates:
+            standings = standings_by_item.get(inp.source_stage_item_id, [])
+            if inp.source_position > len(standings):
+                continue
+            if _boundary_tie_unresolved(standings, inp.source_position):
+                continue
+            expected = standings[inp.source_position - 1].team_id
+            if expected is None or expected == inp.team_id:
+                continue
+            moved.append((inp, inp.team_id, expected))
+
+        if not moved:
+            return 0
+
+        untouched = await self._untouched_stage_items(session, sorted({inp.stage_item_id for inp, _, _ in moved}))
+        # One mapping per item, applied in a single pass: two seeds that swapped
+        # places (A->B, B->A) would otherwise chase each other slot by slot.
+        replacements: dict[int, dict[int, int]] = {}
+        applied = 0
+        for inp, old_team_id, new_team_id in moved:
+            if inp.stage_item_id not in untouched:
+                continue
+            inp.team_id = new_team_id
+            if old_team_id is not None:
+                replacements.setdefault(inp.stage_item_id, {})[old_team_id] = new_team_id
+            applied += 1
+        for stage_item_id, mapping in replacements.items():
+            await self._replace_teams_in_stage_item(session, stage_item_id=stage_item_id, mapping=mapping)
+        return applied
+
+    async def _replace_teams_in_stage_item(
+        self,
+        session: AsyncSession,
+        *,
+        stage_item_id: int,
+        mapping: dict[int, int],
+    ) -> None:
+        """Move every ``old -> new`` slot of an untouched stage item at once,
+        renaming the encounters and resetting their pick-ban."""
+        result = await session.execute(
+            self.encounter_repo.select().where(
+                models.Encounter.stage_item_id == stage_item_id,
+                or_(
+                    models.Encounter.home_team_id.in_(mapping),
+                    models.Encounter.away_team_id.in_(mapping),
+                ),
+            )
+        )
+        encounters = list(result.scalars())
+        if not encounters:
+            return
+        team_ids = set(mapping.values())
+        for encounter in encounters:
+            team_ids.update({encounter.home_team_id, encounter.away_team_id} - {None})
+        names = await self._load_team_names(session, sorted(team_ids))
+        for encounter in encounters:
+            encounter.home_team_id = mapping.get(encounter.home_team_id, encounter.home_team_id)
+            encounter.away_team_id = mapping.get(encounter.away_team_id, encounter.away_team_id)
+            encounter.name = build_encounter_name_from_ids(
+                encounter.home_team_id,
+                encounter.away_team_id,
+                names,
+            )
+            await pick_ban_session_service.sync_all_pick_ban_sessions_after_team_change(session, encounter)
 
     async def _preceding_phase_group_stages(self, session: AsyncSession, stage: models.Stage) -> list[models.Stage]:
         result = await session.execute(

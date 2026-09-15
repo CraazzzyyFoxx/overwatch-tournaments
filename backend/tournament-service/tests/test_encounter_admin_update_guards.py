@@ -164,6 +164,9 @@ class UpdateEncounterGuards(IsolatedAsyncioTestCase):
         with (
             patch.object(enc_service, "enqueue_tournament_recalculation", AsyncMock()),
             patch.object(enc_service.encounter_service, "_resolve_stage_refs", AsyncMock(return_value=(5, 6))),
+            # ``status`` in the payload marks this a result correction; its
+            # downstream-qualification guard queries a DB this fake has not.
+            patch.object(enc_service.AdminEncounterService, "_assert_source_correction_allowed", AsyncMock()),
         ):
             await enc_service.encounter_service.update_encounter(
                 session,

@@ -1164,9 +1164,16 @@ export default function TournamentOverviewPage({
     if (first && second) podium = { first, second, third };
   } else if (podiumNeedsStandings) {
     // Group-only: third by standings (plan §5).
-    const ranked = [...standings].sort(
-      (left, right) => left.overall_position - right.overall_position
-    );
+    // One row per team: across consecutive group stages a team owns several
+    // standings, and unranked rows sit at overall_position 0.
+    const seenTeams = new Set<number>();
+    const ranked = [...standings]
+      .sort((left, right) => left.overall_position - right.overall_position)
+      .filter((row) => {
+        if (row.overall_position <= 0 || seenTeams.has(row.team_id)) return false;
+        seenTeams.add(row.team_id);
+        return true;
+      });
     const note = (row: Standings | undefined, roster: boolean) => {
       if (!row) return null;
       if (roster) {

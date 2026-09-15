@@ -412,7 +412,6 @@ class DoubleEliminationPlayoffTournament72Tests(TestCase):
             StageType.DOUBLE_ELIMINATION,
             PLAYOFF_UB_SEEDS,
             lower_bracket_team_ids=PLAYOFF_LB_SEEDS,
-            de_include_reset=False,  # de_grand_final_type == "no_reset"
         )
 
     def test_skeleton_shape_matches_production_bracket(self) -> None:
@@ -581,7 +580,10 @@ def _gf_encounter() -> SimpleNamespace:
         status=enums.EncounterStatus.OPEN,
         home_score=0,
         away_score=0,
-        best_of=3,
+        # Bo5: the 0:3 these tests report is only a legal FINAL series score in a
+        # Bo5 (captain.submit_captain_report rejects a score that cannot end the
+        # configured best-of).
+        best_of=5,
         closeness=None,
         confirmed_at=None,
         captain_reports=[],
@@ -707,7 +709,7 @@ class ConcurrentResultEditingTournament72Tests(IsolatedAsyncioTestCase):
             session,
             SimpleNamespace(id=LITNIK_CAPTAIN),
             encounter_id=GF_ENCOUNTER_ID,
-            home_score=2,
+            home_score=3,
             away_score=0,
             closeness=5,
         )
@@ -736,7 +738,7 @@ class ConcurrentResultEditingTournament72Tests(IsolatedAsyncioTestCase):
         self.assertEqual(1, self.completed.await_count)
 
     async def test_mismatching_reports_dispute(self) -> None:
-        await self._report(LITNIK_CAPTAIN, 2, 0)
+        await self._report(LITNIK_CAPTAIN, 3, 1)
         await self._report(AVERET_CAPTAIN, 0, 3)
         self.assertEqual(enums.EncounterResultStatus.DISPUTED, self.encounter.result_status)
         self.assertIsNone(self.encounter.closeness)
@@ -755,7 +757,7 @@ class ConcurrentResultEditingTournament72Tests(IsolatedAsyncioTestCase):
         self.assertEqual(enums.EncounterResultStatus.CONFIRMED, self.encounter.result_status)
 
     async def test_admin_confirm_resolves_dispute(self) -> None:
-        await self._report(LITNIK_CAPTAIN, 2, 0)
+        await self._report(LITNIK_CAPTAIN, 3, 1)
         await self._report(AVERET_CAPTAIN, 0, 3)
         self.assertEqual(enums.EncounterResultStatus.DISPUTED, self.encounter.result_status)
 
@@ -1154,7 +1156,9 @@ class BracketAutoAdvancementTournament72Tests(IsolatedAsyncioTestCase):
         self.assertIsNone(self.grand_final.home_team_id)
 
         # The captain path hits the same guard when a second matching report
-        # would auto-confirm a drawn elimination match.
+        # would auto-confirm a drawn elimination match. Bo2, because that is the
+        # only format where a 1:1 even passes the Bo-N gate on the captain path.
+        self.ub_final.best_of = 2
         await captain_service.captain_service.submit_captain_report(
             self._session(),
             SimpleNamespace(id=AVERET_CAPTAIN),
