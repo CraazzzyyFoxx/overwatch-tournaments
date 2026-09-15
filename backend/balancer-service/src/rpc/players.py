@@ -18,6 +18,7 @@ from faststream.rabbit import RabbitMessage
 
 from shared.core import http_status as status
 from shared.core import pagination
+from shared.core.errors import BaseAPIException as HTTPException
 from shared.rpc.identity import ensure_workspace_permission
 from shared.services import workspace_roster
 from shared.services.member_rank import member_rank_service
