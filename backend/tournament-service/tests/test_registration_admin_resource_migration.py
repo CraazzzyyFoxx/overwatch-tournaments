@@ -64,12 +64,8 @@ class DedicatedActionTests(TestCase):
 
 class RegistrationFormResourceTests(TestCase):
     def test_form_get_and_upsert_use_the_registration_form_resource(self) -> None:
-        self.assertIn(
-            'resource="registration_form"', _handler_source("rpc.tournament.reg_form_get")
-        )
-        self.assertIn(
-            'resource="registration_form"', _handler_source("rpc.tournament.reg_form_upsert")
-        )
+        self.assertIn('resource="registration_form"', _handler_source("rpc.tournament.reg_form_get"))
+        self.assertIn('resource="registration_form"', _handler_source("rpc.tournament.reg_form_upsert"))
 
 
 class RegistrationStatusResourceTests(TestCase):
