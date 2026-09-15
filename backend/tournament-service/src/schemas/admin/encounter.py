@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -11,6 +12,9 @@ __all__ = (
     "EncounterSetResultInput",
     "EncounterResultRead",
     "EncounterResultAuditRead",
+    "EncounterSwapSlotInput",
+    "EncounterSlotRead",
+    "EncounterSlotSwapRead",
 )
 
 
@@ -79,6 +83,36 @@ class EncounterSetResultInput(BaseModel):
     away_score: int | None = Field(default=None, ge=0)
     closeness: int | None = Field(default=None, ge=1, le=10)
     adopt_report_team_id: int | None = None
+
+
+class EncounterSwapSlotInput(BaseModel):
+    """Body of the bracket slot swap: which slot here, which slot there.
+
+    Both sides are named explicitly so one endpoint covers the two moves the
+    bracket offers -- dragging a team onto another encounter's slot, and
+    flipping home/away inside one encounter (same ``target_encounter_id``,
+    the other ``target_slot``).
+    """
+
+    slot: Literal["home", "away"]
+    target_encounter_id: int
+    target_slot: Literal["home", "away"]
+
+
+class EncounterSlotRead(BaseModel):
+    """One side of a swap: the slots it now holds, and the rebuilt name."""
+
+    id: int
+    home_team_id: int | None
+    away_team_id: int | None
+    name: str
+
+
+class EncounterSlotSwapRead(BaseModel):
+    """Both encounters the swap touched (the same one twice on a home/away flip)."""
+
+    source: EncounterSlotRead
+    target: EncounterSlotRead
 
 
 class EncounterResultRead(BaseModel):

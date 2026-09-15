@@ -3,7 +3,8 @@
 import type { ColumnDef, Row, SortingFn } from "@tanstack/react-table";
 import { useFormatter, useTranslations, type DateTimeFormatOptions } from "next-intl";
 
-import { adminColumnMeta } from "@/components/admin/admin-table-columns";
+import { adminColumnMeta } from "@/components/admin-data-table";
+import { InlineEditText } from "@/components/admin/InlineEditText";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { StatusPill } from "@/components/admin/kit/StatusPill";
 import { TONE_CLASS, TONE_TEXT } from "@/components/admin/tone";
@@ -312,6 +313,12 @@ export function buildBalancerRegistrationColumns(
   customFields: CustomFieldDefinition[] = [],
   /** Values offered by the `status` header filter, as the endpoint reports them. */
   statusOptions: readonly { value: string; label: string }[] = [],
+  /** Inline editing of the Admin Notes cell. Omitted, that column stays read-only;
+   *  `canEdit` lives with the caller because it owns the row's edit permission. */
+  adminNotesEdit?: {
+    save: (registration: AdminRegistration, next: string) => Promise<unknown>;
+    canEdit: (registration: AdminRegistration) => boolean;
+  },
 ): ColumnDef<AdminRegistration>[] {
   // Built apart from the list below only to keep its old place between check-in
   // and admission instead of being appended after the admin columns.
@@ -615,7 +622,17 @@ export function buildBalancerRegistrationColumns(
       header: "Admin Notes",
       accessorFn: (registration) => registration.admin_notes || "",
       sortingFn: localeTextSort,
-      cell: ({ row }) => <TextBlockCell value={row.original.admin_notes} />,
+      cell: ({ row }) =>
+        adminNotesEdit ? (
+          <InlineEditText
+            value={row.original.admin_notes ?? ""}
+            label="Admin notes"
+            canEdit={adminNotesEdit.canEdit(row.original)}
+            onSave={(next) => adminNotesEdit.save(row.original, next)}
+          />
+        ) : (
+          <TextBlockCell value={row.original.admin_notes} />
+        ),
       meta: adminColumnMeta<AdminRegistration>({
         category: "admin",
         defaultHidden: true,

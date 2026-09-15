@@ -6,9 +6,8 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowRightLeft, Pencil, Plus, Trash2, UserCog } from "lucide-react";
 
-import { AdminDataTable } from "@/components/admin/AdminDataTable";
+import { AdminDataTable, adminColumnMeta, createKebabColumn } from "@/components/admin-data-table";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
-import { adminColumnMeta } from "@/components/admin/admin-table-columns";
 import { AuthUserSearchCombobox } from "@/components/admin/AuthUserSearchCombobox";
 import { EntityFormDialog } from "@/components/admin/EntityFormDialog";
 import { PlayerProfileDialog } from "@/components/admin/PlayerProfileDialog";
@@ -16,7 +15,6 @@ import { UserMergeDialog } from "@/components/admin/UserMergeDialog";
 import { AdminFilterBar } from "@/components/admin/kit/AdminFilterBar";
 import { AdminInspector } from "@/components/admin/kit/AdminInspector";
 import { ConfirmDialog } from "@/components/admin/kit/ConfirmDialog";
-import { createKebabColumn } from "@/components/admin/kit/kebab-column";
 import { useAdminFilters, type FilterDef } from "@/components/admin/kit/useAdminFilters";
 import { EYEBROW_CLASS } from "@/components/admin/tone";
 import { TOURNAMENT_QUERY_PARAM } from "@/components/admin/tournament-filter";

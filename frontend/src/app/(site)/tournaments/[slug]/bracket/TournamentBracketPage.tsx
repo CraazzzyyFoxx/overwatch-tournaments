@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { ResponsiveBracket } from "./ResponsiveBracket";
 import { ConnectionIndicator } from "@/components/realtime/ConnectionIndicator";
@@ -13,13 +13,17 @@ import { SegmentedLinks, type SegmentedLinkItem } from "@/components/ui/segmente
 import { toggleVariants, segmentedFrame } from "@/components/ui/toggle";
 import { EncounterEditDialog } from "@/components/tournaments/EncounterEditDialog";
 import { MatchReportDialog } from "@/components/tournaments/MatchReportDialog";
+import { refreshEncounterViews } from "@/components/tournaments/refreshEncounterViews";
+import type { BracketSlotRef } from "@/components/bracket/BracketView";
 import { notify } from "@/lib/notify";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useRealtimeStore } from "@/stores/realtime.store";
+import adminService from "@/services/admin.service";
 import captainService from "@/services/captain.service";
 import encounterService from "@/services/encounter.service";
 import type { Encounter } from "@/types/encounter.types";
+import type { PaginatedResponse } from "@/types/pagination.types";
 import type { StreamEntry } from "@/types/stream.types";
 import type { Standings, Tournament, Stage, StageItem } from "@/types/tournament.types";
 
@@ -38,7 +42,8 @@ import {
   createBracketQueryPlan,
   deriveBracketLoadState,
   isStageReportable,
-  isStageVisibleToViewer
+  isStageVisibleToViewer,
+  swapSlotTeams
 } from "./bracketData";
 import { buildLiveTeamStreams } from "./bracketLiveStreams";
 // Re-exported purely so TournamentBracketPage.test.ts's dynamic-import probe
@@ -90,6 +95,7 @@ function GroupStagePanel({
   onReport,
   canEdit,
   canReport,
+  onSwapSlots,
   bracketTabs,
   liveTeamStreams,
   defaultView = "matches",
@@ -104,6 +110,7 @@ function GroupStagePanel({
   onReport?: (encounter: Encounter) => void;
   canEdit?: (encounter: Encounter) => boolean;
   canReport?: (encounter: Encounter) => boolean;
+  onSwapSlots?: (source: BracketSlotRef<Encounter>, target: BracketSlotRef<Encounter>) => Promise<unknown>;
   bracketTabs?: readonly SegmentedLinkItem[];
   liveTeamStreams?: ReadonlyMap<number, StreamEntry>;
   /** `?view=standings` opens the table first; anything else opens the matches. */
@@ -183,6 +190,7 @@ function GroupStagePanel({
             onReport={onReport}
             canEdit={canEdit}
             canReport={canReport}
+            onSwapSlots={onSwapSlots}
             liveTeamStreams={liveTeamStreams}
             highlightMatchId={highlightMatchId}
           />
@@ -290,6 +298,38 @@ function TournamentBracketView({ tournament }: Readonly<TournamentBracketViewPro
         } catch {
           notify.error(t("common.error"), { description: t("common.roleVerificationFailed") });
         }
+      }
+    : undefined;
+  // Rearrange mode (admins): one server call swaps two slots; the cache takes
+  // the swap first so the dropped team stays put, and is restored if the server
+  // refuses (a match went live between poll and drop).
+  const queryClient = useQueryClient();
+  const handleSwapSlots = isAdmin
+    ? async (source: BracketSlotRef<Encounter>, target: BracketSlotRef<Encounter>) => {
+        const key = queryPlan.encounters.queryKey;
+        const previous = queryClient.getQueryData<PaginatedResponse<Encounter>>(key);
+        if (previous) {
+          queryClient.setQueryData<PaginatedResponse<Encounter>>(key, {
+            ...previous,
+            results: swapSlotTeams(
+              previous.results,
+              { encounterId: source.encounter.id, slot: source.slot },
+              { encounterId: target.encounter.id, slot: target.slot }
+            )
+          });
+        }
+        try {
+          await adminService.swapEncounterSlot(source.encounter.id, {
+            slot: source.slot,
+            target_encounter_id: target.encounter.id,
+            target_slot: target.slot
+          });
+          notify.success(t("bracket.rearrangeDone"));
+        } catch (error) {
+          if (previous) queryClient.setQueryData(key, previous);
+          notify.apiError(error, { title: t("bracket.rearrangeFailed") });
+        }
+        await refreshEncounterViews(queryClient, tournament.id);
       }
     : undefined;
 
@@ -519,6 +559,7 @@ function TournamentBracketView({ tournament }: Readonly<TournamentBracketViewPro
                     onReport={handleReport}
                     canEdit={canEdit}
                     canReport={canReport}
+                    onSwapSlots={handleSwapSlots}
                     bracketTabs={index === 0 ? bracketTabs : undefined}
                     liveTeamStreams={liveTeamStreams}
                     defaultView={viewParam === "standings" ? "standings" : "matches"}
@@ -613,6 +654,7 @@ function TournamentBracketView({ tournament }: Readonly<TournamentBracketViewPro
                               onReport={handleReport}
                               canEdit={canEdit}
                               canReport={canReport}
+                              onSwapSlots={handleSwapSlots}
                               liveTeamStreams={liveTeamStreams}
                               highlightMatchId={highlightMatchId}
                             />

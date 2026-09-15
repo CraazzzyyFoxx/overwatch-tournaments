@@ -835,11 +835,15 @@ def register(broker: Any, logger: Any) -> None:
         Authenticated but not captain-gated. Everything returned is already on the
         public participants list, so a gate here would be theatre; the account
         requirement exists because the only use of this list is to act on it.
+        Visibility-gated like that list (and every sibling public read in this
+        file) so a hidden/preview-only tournament's registrant BattleTags stay
+        behind the same wall as the rest of it.
         """
 
         async def op(session: Any) -> Any:
-            _identity(data)
+            user = _identity(data)
             tournament_id = _path_int(data, "tournament_id")
+            await assert_tournament_viewable(session, user, tournament_id)
             items = await team_service.teams_service.list_free_agents(session, tournament_id)
             return _dump(RegistrationFreeAgentListResponse(items=items, total=len(items)))
 
@@ -879,8 +883,12 @@ def register(broker: Any, logger: Any) -> None:
         async def op(session: Any) -> Any:
             user = _identity(data)
             team_id = _path_int(data, "team_id")
-            await team_service.teams_service.assert_staff_of_team(session, team_id=team_id, auth_user=user)
-            return _dump(await team_service.teams_service.list_invite_history(session, team_id=team_id))
+            team = await team_service.teams_service.assert_staff_of_team(session, team_id=team_id, auth_user=user)
+            return _dump(
+                await team_service.teams_service.list_invite_history(
+                    session, team_id=team_id, tournament_id=team.tournament_id
+                )
+            )
 
         return await _run(logger, op)
 

@@ -1,6 +1,7 @@
 import type { ColumnMeta } from "@tanstack/react-table";
 
-import type { AdminColumnFilterSpec } from "@/components/admin/admin-table-filters";
+import type { AdminColumnFilterSpec } from "./filters";
+import type { KebabAction } from "./kebab-column";
 
 /** Breakpoint below which a column is hidden entirely. */
 export type AdminColumnResponsive = "always" | "sm" | "md" | "lg";
@@ -36,6 +37,11 @@ export interface AdminColumnMeta<TData = unknown> {
   searchValue?: (row: TData) => string | null | undefined;
   /** Numeric cells: `tabular-nums` so digits stop jittering between renders. */
   numeric?: boolean;
+  /**
+   * Row actions, set by `createKebabColumn`. The table mirrors them into a
+   * right-click / long-press context menu on the row.
+   */
+  rowActions?: (row: TData) => KebabAction[];
 }
 
 /**

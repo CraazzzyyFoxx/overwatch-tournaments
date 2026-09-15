@@ -6,7 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Globe, Lock } from "lucide-react";
 import { useFormatter } from "next-intl";
 
-import { AdminDataTable } from "@/components/admin/AdminDataTable";
+import { AdminDataTable } from "@/components/admin-data-table";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { AuditFieldDiff } from "@/components/admin/AuditTrail";
 import {

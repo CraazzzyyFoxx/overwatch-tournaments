@@ -1,9 +1,13 @@
 """The workspace roster and its rank layers, over typed RPC.
 
 ``rpc.balancer.players.{list, upsert, set_ranks, summary, authors}``.
-Reads and writes require workspace membership. ``set_ranks`` picks the layer from
-the body's ``scope``; the *author* layer is always the caller's own, because a
-foreign book is readable by every member but writable by nobody else.
+Reads require workspace membership. Writes additionally require a grant:
+``upsert`` (creating a roster member) needs workspace ``team.create``; the
+``workspace`` (canon) layer of ``set_ranks`` needs ``team.update`` -- the same
+grants the sibling roster-shaping writes in ``admin.py``/``binary.py`` require.
+The ``author`` layer is the exception: it is always the caller's own private
+book, so membership alone is enough to write it -- a foreign book is readable
+by every member but writable by nobody else regardless of grant.
 """
 
 from __future__ import annotations
@@ -15,6 +19,7 @@ from faststream.rabbit import RabbitMessage
 from shared.core import http_status as status
 from shared.core import pagination
 from shared.core.errors import BaseAPIException as HTTPException
+from shared.rpc.identity import ensure_workspace_permission
 from shared.services import workspace_roster
 from shared.services.member_rank import member_rank_service
 from src.core import db
@@ -216,6 +221,7 @@ def register(broker: Any, logger: Any) -> None:
             user = c.active_actor(data)
             workspace_id = c.path_int(data, "workspace_id")
             c.require_member(user, workspace_id)
+            ensure_workspace_permission(user, workspace_id, "team", "create")
             body = c.payload(data)
             battle_tag = body.get("battle_tag", data.get("battle_tag"))
             if not isinstance(battle_tag, str) or not battle_tag.strip():
@@ -252,7 +258,14 @@ def register(broker: Any, logger: Any) -> None:
             c.require_member(user, workspace_id)
             # ``author`` is the caller's own layer, full stop: accepting an
             # author id here would let one member rewrite another's private book.
-            author_user_id = user.id if _scope(data) == "author" else None
+            # Membership alone is enough to write it -- it is self-service. The
+            # ``workspace`` (canon) layer is everyone's shared book, so writing it
+            # additionally needs the same team.update grant admin.py/binary.py
+            # require for the other roster-shaping writes.
+            is_author_scope = _scope(data) == "author"
+            if not is_author_scope:
+                ensure_workspace_permission(user, workspace_id, "team", "update")
+            author_user_id = user.id if is_author_scope else None
             # ``set_ranks`` runs ``member_in_workspace`` itself, so a member from
             # another workspace 404s before any row is written.
             ranks = await member_rank_service.set_ranks(

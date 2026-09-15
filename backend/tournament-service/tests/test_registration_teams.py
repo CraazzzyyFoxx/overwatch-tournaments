@@ -933,6 +933,19 @@ class InviteHistoryTests(TestCase):
         self.assertIn("count_invites_against_cap", source)
         self.assertIn("cap_limit=TEAM_INVITE_TOTAL_CAP", source)
 
+    def test_it_is_scoped_to_the_tournament_it_was_authorized_for(self) -> None:
+        """A team id is global while both callers' permission is not: the admin
+        handler authorizes `team.read` on one tournament, the public handler
+        authorizes captaincy of one team. Either way, a foreign `team_id` from a
+        different tournament must 404 instead of leaking its invite history and
+        target BattleTags -- the same property `revoke_invite_as_organizer`
+        already has to hold for the same reason."""
+        source = self._source()
+
+        self.assertIn("team.tournament_id != tournament_id", source)
+        self.assertIn("_fail(404, ", source)
+        self.assertIn("team_not_found", source)
+
 
 class CaptainReadGateTests(TestCase):
     """Reading is not editing."""

@@ -1,8 +1,7 @@
 import type { FilterFn, Row } from "@tanstack/react-table";
 import { describe, expect, it } from "vitest";
 
-import { readAdminColumnMeta } from "@/components/admin/admin-table-columns";
-import { readAdminColumnFilter } from "@/components/admin/admin-table-filters";
+import { readAdminColumnMeta, readAdminColumnFilter } from "@/components/admin-data-table";
 import type { AdminRegistration } from "@/types/balancer-admin.types";
 import type { CustomFieldDefinition, StatusMeta } from "@/types/registration.types";
 

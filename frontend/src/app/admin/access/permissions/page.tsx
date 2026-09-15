@@ -4,8 +4,7 @@ import { useMemo } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { useQuery } from "@tanstack/react-query";
 
-import { AdminDataTable } from "@/components/admin/AdminDataTable";
-import { adminColumnMeta } from "@/components/admin/admin-table-columns";
+import { AdminDataTable, adminColumnMeta } from "@/components/admin-data-table";
 import { AdminFilterBar } from "@/components/admin/kit/AdminFilterBar";
 import { AdminInspector } from "@/components/admin/kit/AdminInspector";
 import { useAdminFilters, type FilterDef } from "@/components/admin/kit/useAdminFilters";

@@ -144,7 +144,7 @@ Tear down with `make prod-down` (in `~/owt-dev`); the database survives it.
 The database is a restore of the production dump, not a live replica.
 
 ```bash
-# on home; dumps arrive here through the backup contour (docs/backup-rustfs.md)
+# dump from S3 (docs/backup-rustfs.md)
 docker run --rm --network host -e PGPASSWORD=<pw> postgres:18.1 \
     psql -h 127.0.0.1 -p 5432 -U system -d postgres \
     -c 'drop database anak_dev with (force)' -c 'create database anak_dev owner system'

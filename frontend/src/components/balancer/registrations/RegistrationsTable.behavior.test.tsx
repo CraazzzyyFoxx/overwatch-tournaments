@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AuditTrailProvider } from "@/components/admin/AuditTrailSheet";
 import type { AdminRegistration } from "@/types/balancer-admin.types";
+import { notify } from "@/lib/notify";
 import RegistrationsTable from "./RegistrationsTable";
 
 declare global {
@@ -19,6 +20,8 @@ const listRegistrations = vi.fn();
 const getRegistrationForm = vi.fn();
 const listStatusCatalog = vi.fn();
 const exportRegistrationsToUsers = vi.fn();
+const bulkApproveRegistrations = vi.fn();
+const updateRegistration = vi.fn();
 
 vi.mock("@/services/balancer-admin.service", () => ({
   default: {
@@ -27,13 +30,14 @@ vi.mock("@/services/balancer-admin.service", () => ({
     listStatusCatalog: (...args: unknown[]) => listStatusCatalog(...args),
     exportRegistrationsToUsers: (...args: unknown[]) => exportRegistrationsToUsers(...args),
     createManualRegistration: vi.fn(),
-    updateRegistration: vi.fn(),
+    updateRegistration: (...args: unknown[]) => updateRegistration(...args),
     approveRegistration: vi.fn(),
     rejectRegistration: vi.fn(),
     withdrawRegistration: vi.fn(),
     restoreRegistration: vi.fn(),
     deleteRegistration: vi.fn(),
-    bulkApproveRegistrations: vi.fn(),
+    bulkApproveRegistrations: (...args: unknown[]) => bulkApproveRegistrations(...args),
+    bulkSetBalancerStatus: vi.fn(),
     setBalancerStatus: vi.fn(),
     checkInRegistration: vi.fn(),
     bulkAddToBalancer: vi.fn()
@@ -223,6 +227,9 @@ beforeEach(() => {
   exportRegistrationsToUsers
     .mockReset()
     .mockResolvedValue({ processed: 25, skipped: 0, total: 25 });
+  bulkApproveRegistrations.mockReset().mockResolvedValue({ approved: 1, skipped: 0 });
+  updateRegistration.mockReset().mockResolvedValue(registration(1, { status: "pending" }));
+  vi.mocked(notify.success).mockClear();
 });
 
 describe("RegistrationsTable toolbar", () => {
@@ -258,7 +265,7 @@ describe("RegistrationsTable toolbar", () => {
     expect(listRegistrations).toHaveBeenCalledTimes(1);
     expect(new URLSearchParams(window.location.search).get("status")).toBe("pending");
     // 1 pending row of 25 — the other 24 are approved.
-    expect(scope.querySelectorAll("tbody tr").length).toBe(1);
+    expect(scope.querySelectorAll("tbody tr[data-row-id]").length).toBe(1);
   });
 
   it("lists withdrawn registrations alongside the rest", async () => {
@@ -268,7 +275,7 @@ describe("RegistrationsTable toolbar", () => {
     ]);
 
     const scope = await mount();
-    expect(scope.querySelectorAll("tbody tr").length).toBe(2);
+    expect(scope.querySelectorAll("tbody tr[data-row-id]").length).toBe(2);
   });
 
   it("keeps the pending row selectable and the approved rows not", async () => {
@@ -313,5 +320,33 @@ describe("RegistrationsTable toolbar", () => {
 
     // Both buckets: the pool has no checked-in rows, so one section holds all 25.
     expect(scope.textContent).toContain("25 registrations");
+  });
+});
+
+describe("RegistrationsTable bulk approve", () => {
+  it("undoes the batch from the toast action", async () => {
+    const scope = await mount();
+    await click(scope.querySelector("tbody [role='checkbox']"));
+    const approveButton = [...document.querySelectorAll("button")].find((node) =>
+      node.textContent?.includes("Approve 1")
+    );
+
+    await click(approveButton);
+
+    const toast = vi
+      .mocked(notify.success)
+      .mock.calls.find(([message]) => message.includes("approved"));
+    const action = toast?.[1]?.action as unknown as
+      | { label: string; onClick: () => void }
+      | undefined;
+    expect(action?.label).toBe("Undo");
+
+    await act(async () => {
+      action?.onClick();
+      await tick();
+    });
+
+    expect(updateRegistration).toHaveBeenCalledWith(1, { status: "pending" });
+    expect(vi.mocked(notify.success).mock.calls.at(-1)?.[0]).toBe("Approval undone");
   });
 });

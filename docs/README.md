@@ -11,6 +11,7 @@ linked below is either component-local or archive.
 | Understand how the pieces fit together | [`architecture.md`](./architecture.md) |
 | Get a change merged | [`../CONTRIBUTING.md`](../CONTRIBUTING.md) |
 | Look up a domain term | [`glossary.md`](./glossary.md) |
+| Look up a domain rule (phases, admission, pick-ban, …) | [`business-logic-inventory.md`](./business-logic-inventory.md) |
 | Report a vulnerability | [`../SECURITY.md`](../SECURITY.md) |
 
 ## Reference
@@ -24,6 +25,7 @@ The system as it is. These are updated in the same commit as the change they des
 | [`users-identity.md`](./users-identity.md) | Identity model: `auth.user` vs `players.user`, shadow and virtual players, workspace membership, account linking |
 | [`design-book.md`](./design-book.md) | Frontend design system — tokens, type scale, colour roles, layout patterns |
 | [`glossary.md`](./glossary.md) | Domain vocabulary used across code, API and UI |
+| [`business-logic-inventory.md`](./business-logic-inventory.md) | Domain rules and invariants: lifecycle, registration, admission, roster, balancer/draft, brackets, pick-ban, logs, achievements, analytics |
 
 ### Per component
 
@@ -58,7 +60,8 @@ Procedures for an operator. Commands are meant to be run verbatim.
 
 | Runbook | When |
 | --- | --- |
-| [`backup-rustfs.md`](./backup-rustfs.md) | PostgreSQL dumps, two-site S3 replication, verification, restore |
+| [`backup-rustfs.md`](./backup-rustfs.md) | PostgreSQL dumps to Timeweb S3 (Moscow cron), restore |
+| [`disk-cleanup.md`](./disk-cleanup.md) | Weekly Moscow disk cleanup: stale docker images, build cache, oversized container logs |
 | [`dev-site.md`](./dev-site.md) | The dev deployment at `dev.owt.craazzzyyfoxx.me` — what differs from production, deploy, data refresh |
 | [`challonge_normalization_phase2_runbook.md`](./challonge_normalization_phase2_runbook.md) | Running the gated destructive migration — and the pattern for any future one |
 | [`superpowers/plans/2026-07-06-subdomains-ops-runbook.md`](./superpowers/plans/2026-07-06-subdomains-ops-runbook.md) | Workspace subdomains and custom domains: DNS, certificates, verification |
@@ -70,6 +73,7 @@ Design and plan documents for work currently being implemented. They are point-i
 stop being maintained once the work ships.
 
 - [`tournament-redesign/`](./tournament-redesign/) — public tournament page redesign
+- [`plans/2026-09-13-decouple-stats-from-tournament.md`](./plans/2026-09-13-decouple-stats-from-tournament.md) — write-authority seam between series results and match logs
 
 ## Archive
 

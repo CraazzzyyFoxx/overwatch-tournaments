@@ -77,7 +77,10 @@ async def _require_actor(
     """Permission gate per ``kind`` (extracted from the decommissioned
     ``src/routes/v2.py``):
 
-    - ``compute``  → ``analytics.update`` in the workspace
+    - ``compute``  → ``analytics.update`` in the workspace; the global grant
+      when the job carries no ``workspace_id`` (never left ungated -- see
+      ``_require_verified_workspace``, which treats the unscoped case as
+      global-permission territory too)
     - ``train_ml`` → superuser
     """
     if body.kind == JOB_KIND_TRAIN_ML:
@@ -87,11 +90,16 @@ async def _require_actor(
                 detail="Training ML models is restricted to superusers.",
             )
         return
-    # compute: workspace-scoped permission
-    if workspace_id is not None and not user.has_workspace_permission(workspace_id, "analytics", "update"):
+    if workspace_id is not None:
+        if not user.has_workspace_permission(workspace_id, "analytics", "update"):
+            raise HTTPException(
+                status_code=403,
+                detail="analytics.update permission required for this workspace.",
+            )
+    elif not user.has_permission("analytics", "update"):
         raise HTTPException(
             status_code=403,
-            detail="analytics.update permission required for this workspace.",
+            detail="analytics.update permission required.",
         )
 
 

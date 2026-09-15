@@ -5,11 +5,10 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, ClipboardCheck, Clock3, Gavel, ScrollText } from "lucide-react";
 
-import { AdminDataTable } from "@/components/admin/AdminDataTable";
+import { AdminDataTable, adminColumnMeta } from "@/components/admin-data-table";
 import { AdminReportPairCell } from "@/components/admin/AdminReportPairCell";
 import { ResolveResultDialog } from "@/components/admin/ResolveResultDialog";
 import { StatTile, StatTileGrid } from "@/components/admin/StatTile";
-import { adminColumnMeta } from "@/components/admin/admin-table-columns";
 import { AdminFilterBar } from "@/components/admin/kit/AdminFilterBar";
 import { AdminInspector } from "@/components/admin/kit/AdminInspector";
 import { useAdminFilters, type FilterDef } from "@/components/admin/kit/useAdminFilters";

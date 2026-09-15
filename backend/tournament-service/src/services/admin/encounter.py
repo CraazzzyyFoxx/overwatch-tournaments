@@ -14,6 +14,7 @@ from shared.repository import (
     TeamRepository,
     TournamentRepository,
 )
+from shared.services.encounter_naming import build_encounter_name
 from src import models, schemas
 from src.core import enums
 from src.services.encounter.pick_ban_session import pick_ban_session_service
@@ -40,6 +41,71 @@ def _reject_completed_status(new_status: str | None) -> None:
             detail=(
                 "use_result_endpoint: complete an encounter via POST /api/v1/admin/encounters/{encounter_id}/result"
             ),
+        )
+
+
+def _reject_settled_result_edits(encounter: models.Encounter, update_data: dict) -> None:
+    """Completion is not a field edit -- in either direction.
+
+    Into ``COMPLETED``: the result endpoint owns it (``_reject_completed_status``).
+    Out of it -- or rewiring a settled encounter's team slots -- the reopen
+    endpoint owns it: that one clears ``result_status``/``confirmed_at``/score and
+    unwinds whatever the old result advanced downstream. The bare status write
+    this used to allow left ``result_status='confirmed'`` beside a non-COMPLETED
+    status, which the database refuses outright
+    (``ck_encounter_result_status_matches_status``), so the edit died on an
+    IntegrityError instead of on a message naming the endpoint that can do it.
+
+    Repeating the encounter's current status is not a transition: the admin form
+    posts every field, so renaming a completed encounter must not trip the
+    completion guard and push admins into flipping the status by hand.
+    """
+    new_status = update_data.get("status", encounter.status)
+    if new_status != encounter.status:
+        _reject_completed_status(new_status.value)
+    if encounter.status != enums.EncounterStatus.COMPLETED:
+        return
+    teams_changed = any(
+        field in update_data and update_data[field] != getattr(encounter, field)
+        for field in ("home_team_id", "away_team_id")
+    )
+    if new_status == encounter.status and not teams_changed:
+        return
+    raise HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail=(
+            "use_reopen_endpoint: reopen the result via POST "
+            "/api/v1/admin/encounters/{encounter_id}/result/reopen before changing a completed "
+            "encounter's status or teams"
+        ),
+    )
+
+
+def _reject_swapping_a_busy_encounter(encounter: models.Encounter) -> None:
+    """A slot swap rewires team slots -- the edit ``_reject_settled_result_edits``
+    already sends to the reopen endpoint, and the one a running series must not
+    see under it.
+
+    ``result_status`` alone is enough to refuse: a disputed or
+    pending-confirmation encounter is not ``COMPLETED`` yet its reports are
+    already keyed by the current team pair, so swapping a slot would orphan
+    them.
+    """
+    if encounter.status == enums.EncounterStatus.COMPLETED or (
+        encounter.result_status != enums.EncounterResultStatus.NONE
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "use_reopen_endpoint: reopen the result via POST "
+                "/api/v1/admin/encounters/{encounter_id}/result/reopen before swapping a settled "
+                "encounter's team slots"
+            ),
+        )
+    if encounter.started_at is not None and encounter.ended_at is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="encounter_in_progress: the encounter is live; end it before swapping its team slots",
         )
 
 
@@ -190,8 +256,6 @@ class AdminEncounterService:
         self, session: AsyncSession, encounter_id: int, data: schemas.EncounterUpdate
     ) -> models.Encounter:
         """Update encounter fields"""
-        _reject_completed_status(data.status)
-
         encounter = await self.encounter_repo.get_for_update(
             session,
             encounter_id,
@@ -208,6 +272,18 @@ class AdminEncounterService:
 
         # Update fields
         update_data = data.model_dump(exclude_unset=True)
+
+        # Status first: the completion guards must fire before any other
+        # validation or write this method does.
+        if "status" in update_data:
+            try:
+                update_data["status"] = enums.EncounterStatus(update_data["status"].lower())
+            except ValueError:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Invalid status. Must be one of: {', '.join([s.value for s in enums.EncounterStatus])}",
+                )
+        _reject_settled_result_edits(encounter, update_data)
 
         if "home_team_id" in update_data and update_data["home_team_id"] is not None:
             await self._require_team_in_tournament(
@@ -234,16 +310,6 @@ class AdminEncounterService:
         update_data["stage_id"] = resolved_stage_id
         update_data["stage_item_id"] = resolved_stage_item_id
 
-        # Handle status conversion
-        if "status" in update_data:
-            try:
-                update_data["status"] = enums.EncounterStatus(update_data["status"].lower())
-            except ValueError:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Invalid status. Must be one of: {', '.join([s.value for s in enums.EncounterStatus])}",
-                )
-
         tournament_id = encounter.tournament_id
         previous_teams = (encounter.home_team_id, encounter.away_team_id)
         for field, value in update_data.items():
@@ -259,6 +325,89 @@ class AdminEncounterService:
         await session.refresh(encounter)
 
         return encounter
+
+    async def _team_name(self, session: AsyncSession, team_id: int | None) -> str | None:
+        """``None`` for an empty slot -- ``build_encounter_name`` renders it as TBD."""
+        if not team_id:
+            return None
+        team = await self.team_repo.get(session, team_id)
+        return team.name if team else None
+
+    async def swap_slots(
+        self, session: AsyncSession, encounter_id: int, data: schemas.EncounterSwapSlotInput
+    ) -> tuple[models.Encounter, models.Encounter]:
+        """Exchange the team ids two bracket slots hold, in one transaction.
+
+        The bracket's drag-and-drop: either slot may be empty (that is how a team
+        is moved into a TBD slot), and naming the same encounter with the other
+        slot flips home/away. Seeding only -- a settled or running encounter is
+        refused rather than silently re-teamed under its result.
+        """
+        if data.target_encounter_id == encounter_id and data.target_slot == data.slot:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot swap a slot with itself",
+            )
+
+        # Ascending id order: two admins dragging the same pair in opposite
+        # directions would otherwise take the two row locks in opposite orders
+        # and deadlock.
+        locked: dict[int, models.Encounter] = {}
+        for locked_id in sorted({encounter_id, data.target_encounter_id}):
+            row = await self.encounter_repo.get_for_update(
+                session,
+                locked_id,
+                options=[
+                    selectinload(models.Encounter.home_team),
+                    selectinload(models.Encounter.away_team),
+                ],
+            )
+            if not row:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Encounter not found")
+            locked[locked_id] = row
+
+        source = locked[encounter_id]
+        target = locked[data.target_encounter_id]
+
+        if target.tournament_id != source.tournament_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Target encounter does not belong to this tournament",
+            )
+        if target.stage_id != source.stage_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Target encounter does not belong to the same stage",
+            )
+
+        touched = [source] if source is target else [source, target]
+        for encounter in touched:
+            _reject_swapping_a_busy_encounter(encounter)
+
+        previous = {encounter.id: (encounter.home_team_id, encounter.away_team_id) for encounter in touched}
+        source_field = f"{data.slot}_team_id"
+        target_field = f"{data.target_slot}_team_id"
+        # Both reads before either write -- on a home/away flip the two slots
+        # live on the same row. ``or None`` so a 0 left by an older writer and a
+        # NULL both land as the empty slot the column actually stores.
+        source_team_id = getattr(source, source_field) or None
+        target_team_id = getattr(target, target_field) or None
+        setattr(source, source_field, target_team_id)
+        setattr(target, target_field, source_team_id)
+
+        for encounter in touched:
+            if (encounter.home_team_id, encounter.away_team_id) == previous[encounter.id]:
+                continue
+            encounter.name = build_encounter_name(
+                await self._team_name(session, encounter.home_team_id),
+                await self._team_name(session, encounter.away_team_id),
+            )
+            await pick_ban_session_service.sync_all_pick_ban_sessions_after_team_change(session, encounter)
+
+        await enqueue_tournament_recalculation(session, source.tournament_id)
+        await session.commit()
+
+        return source, target
 
     async def update_match(
         self,

@@ -1,23 +1,21 @@
 // @vitest-environment happy-dom
 //
 // The P0-10 additions to the admin table. What is pinned here:
-//  1. row actions are ALWAYS rendered visible — the column used to be
-//     `opacity-0` until hover, which made every list screen's primary actions
-//     mouse-only;
-//  2. `inspectorId` marks the open row with `aria-current="true"` (NOT
+//  1. `inspectorId` marks the open row with `aria-current="true"` (NOT
 //     `aria-selected`, which `role=table` does not allow on a row);
-//  3. a `toolbar` without a `searchPlaceholder` suppresses the table's own
+//  2. a `toolbar` without a `searchPlaceholder` suppresses the table's own
 //     search box, so a screen never ships two search fields over one table;
-//  4. passing both keeps the built-in box, for a chips-only toolbar;
-//  5. below `md` the rows become cards, using `renderMobileCard` when given
+//  3. passing both keeps the built-in box, for a chips-only toolbar;
+//  4. below `md` the rows become cards, using `renderMobileCard` when given
 //     and the first three visible columns otherwise.
+// The kebab's own visibility rules live in `kit/kebab-column.behavior.test.tsx`.
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { AdminDataTable } from "@/components/admin/AdminDataTable";
+import { AdminDataTable } from "./AdminDataTable";
 
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean;
@@ -106,16 +104,6 @@ afterEach(async () => {
 });
 
 describe("AdminDataTable row actions and inspector", () => {
-  it("renders the actions column without a hover gate", async () => {
-    await render();
-
-    const cell = container
-      .querySelector('button[aria-label="Actions for 8812"]')
-      ?.closest("div");
-    expect(cell?.className).not.toContain("opacity-0");
-    expect(cell?.className).not.toContain("group-hover");
-  });
-
   it("marks the inspected row with aria-current, never aria-selected", async () => {
     await render({ inspectorId: "8812" });
 
@@ -125,6 +113,34 @@ describe("AdminDataTable row actions and inspector", () => {
     expect(current).toHaveLength(1);
     expect(current[0].textContent).toContain("8812");
     expect(container.querySelector("tbody tr[aria-selected]")).toBeNull();
+  });
+
+  it("offers the right-clicked cell's text and the whole row in the context menu", async () => {
+    const writeText = vi.fn(() => Promise.resolve());
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    await render();
+
+    const cell = [...container.querySelectorAll("tbody tr[data-row-id='8812'] td")].find((td) => td.textContent === "Groups · R3")!;
+    await act(async () => {
+      cell.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 10, clientY: 10 }));
+    });
+    const items = [...document.querySelectorAll("[role='menuitem']")];
+    const copyCell = items.find((item) => item.textContent?.includes("Groups · R3"));
+    expect(copyCell).toBeDefined();
+
+    await act(async () => {
+      copyCell!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(writeText).toHaveBeenCalledWith("Groups · R3");
+
+    await act(async () => {
+      cell.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 10, clientY: 10 }));
+    });
+    const copyRow = [...document.querySelectorAll("[role='menuitem']")].find((item) => item.textContent === "Copy row")!;
+    await act(async () => {
+      copyRow.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(writeText).toHaveBeenLastCalledWith("8812\tGroups · R3\t—\tpending");
   });
 
   it("hands the search over to a toolbar that owns it", async () => {

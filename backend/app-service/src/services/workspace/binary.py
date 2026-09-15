@@ -185,8 +185,13 @@ class WorkspaceBinaryService:
             .where(models.Match.id == match_id)
         )
 
-    async def match_log(self, session: AsyncSession, match_id: int) -> tuple[str, bytes]:
-        """Fetch a match's raw log from S3 as ``(filename, bytes)``."""
+    async def resolve_match_log_ref(self, session: AsyncSession, match_id: int) -> tuple[str, int]:
+        """The log filename and owning tournament id for one match, or a 404.
+
+        Split from the S3 fetch so a caller can gate tournament visibility
+        (hidden tournaments) on the resolved ``tournament_id`` before paying for
+        the S3 round trip.
+        """
         row = (await session.execute(self._match_log_ref_query(match_id))).first()
         if row is None:
             raise HTTPException(status_code=404, detail="Match not found")
@@ -194,10 +199,19 @@ class WorkspaceBinaryService:
         filename = (log_name or "").rsplit("/", 1)[-1]
         if not filename or ".." in filename:
             raise HTTPException(status_code=404, detail="No log available for this match")
+        return filename, tournament_id
+
+    async def fetch_log_bytes(self, tournament_id: int, filename: str) -> bytes:
+        """Fetch one already-resolved log's raw bytes from S3."""
         data_bytes = await s3_client.get_object(f"logs/{tournament_id}/{filename}")
         if data_bytes is None:
             raise HTTPException(status_code=404, detail="Log file not found")
-        return filename, data_bytes
+        return data_bytes
+
+    async def match_log(self, session: AsyncSession, match_id: int) -> tuple[str, bytes]:
+        """Fetch a match's raw log from S3 as ``(filename, bytes)``."""
+        filename, tournament_id = await self.resolve_match_log_ref(session, match_id)
+        return filename, await self.fetch_log_bytes(tournament_id, filename)
 
 
 workspace_binary = WorkspaceBinaryService()

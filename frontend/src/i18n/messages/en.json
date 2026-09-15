@@ -29,7 +29,7 @@
     "bracketPreview": "Preview",
     "rolesList": "Roles",
     "ranks": "Ranks",
-    "bracketInstructions": "Drag to pan the bracket / Press Esc to exit",
+    "bracketInstructions": "Drag to pan · Ctrl+scroll to zoom · Esc to exit",
     "bracketFullscreen": "Fullscreen",
     "bracketExitFullscreen": "Exit fullscreen (Esc)",
     "profile": "Profile",
@@ -2517,7 +2517,25 @@
     "editMatch": "Edit match",
     "reportMatch": "Report match",
     "doubleElimination": "Double Elimination",
-    "singleElimination": "Single Elimination"
+    "singleElimination": "Single Elimination",
+    "toolbar": "Bracket controls",
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out",
+    "zoomFit": "Fit to width",
+    "rearrange": "Rearrange teams",
+    "rearrangeHint": "Drag a team onto another slot to swap them. Played, reported and live matches are locked.",
+    "rearrangeDone": "Teams swapped",
+    "rearrangeFailed": "Could not swap teams",
+    "dragTeam": "Drag {team}",
+    "matchAria": "{label}: {home} vs {away}",
+    "dnd": {
+      "instructions": "Press Space or Enter to pick up a team, move it with the arrow keys onto another slot, then press Space or Enter to swap. Escape cancels.",
+      "pickedUp": "Picked up {team}",
+      "over": "{team} over {slot}",
+      "overNothing": "{team} is not over a slot",
+      "dropped": "Swapped {team} with {slot}",
+      "cancelled": "Cancelled moving {team}"
+    }
   },
   "rankHistory": {
     "title": "Rank history",

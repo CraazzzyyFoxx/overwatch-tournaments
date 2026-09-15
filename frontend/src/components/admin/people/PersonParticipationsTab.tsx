@@ -6,12 +6,10 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeftRight, Pencil, Plus, Sparkles, Trash2 } from "lucide-react";
 
-import { AdminDataTable } from "@/components/admin/AdminDataTable";
-import { adminColumnMeta } from "@/components/admin/admin-table-columns";
+import { AdminDataTable, adminColumnMeta, createKebabColumn } from "@/components/admin-data-table";
 import { EntityFormDialog } from "@/components/admin/EntityFormDialog";
 import { StatusIcon } from "@/components/admin/StatusIcon";
 import { ConfirmDialog } from "@/components/admin/kit/ConfirmDialog";
-import { createKebabColumn } from "@/components/admin/kit/kebab-column";
 import {
   PlayerForm,
   emptyPlayerForm,

@@ -272,7 +272,8 @@ function activeTab() {
 }
 
 function headerCells(container: HTMLElement) {
-  return Array.from(container.querySelectorAll("thead th"));
+  // The table's width filler is `aria-hidden`; only data columns are asserted on.
+  return Array.from(container.querySelectorAll("thead th:not([aria-hidden])"));
 }
 
 beforeEach(() => {

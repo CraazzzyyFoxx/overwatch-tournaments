@@ -19,9 +19,9 @@ import { act, StrictMode, useEffect, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { AdminDataTable } from "@/components/admin/AdminDataTable";
-import { adminColumnMeta } from "@/components/admin/admin-table-columns";
-import type { AdminTableFilters } from "@/components/admin/admin-table-filters";
+import { AdminDataTable } from "./AdminDataTable";
+import { adminColumnMeta } from "./columns";
+import type { AdminTableFilters } from "./filters";
 
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean;
@@ -245,7 +245,7 @@ describe("AdminDataTable column filters", () => {
       );
     });
 
-    expect(container.querySelectorAll("tbody tr").length).toBe(3);
+    expect(container.querySelectorAll("tbody tr[data-row-id]").length).toBe(3);
     expect(container.textContent).toContain("Showing 3 of 7 encounters");
     // No page numbers compete with the sentinel.
     expect(container.querySelector("button[aria-label='Next page']")).toBeNull();
@@ -254,10 +254,10 @@ describe("AdminDataTable column filters", () => {
       node.textContent?.includes("Load more encounters")
     );
     await click(loadMore);
-    expect(container.querySelectorAll("tbody tr").length).toBe(6);
+    expect(container.querySelectorAll("tbody tr[data-row-id]").length).toBe(6);
 
     await click(loadMore);
-    expect(container.querySelectorAll("tbody tr").length).toBe(7);
+    expect(container.querySelectorAll("tbody tr[data-row-id]").length).toBe(7);
     // Everything loaded: the button retires, the count stays.
     expect(container.textContent).toContain("Showing 7 of 7 encounters");
     expect(

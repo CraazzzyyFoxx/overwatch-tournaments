@@ -2,7 +2,7 @@
 
 import { useCallback } from "react";
 
-import type { AdminTableFilters } from "@/components/admin/admin-table-filters";
+import type { AdminTableFilters } from "@/components/admin-data-table";
 import { useQueryParams } from "@/hooks/useQueryParams";
 
 export interface FilterOption {

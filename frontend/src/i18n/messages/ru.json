@@ -29,7 +29,7 @@
     "bracketPreview": "Предпросмотр",
     "rolesList": "Роли",
     "ranks": "Ранги",
-    "bracketInstructions": "Перетаскивайте, чтобы перемещаться по сетке / Нажмите Esc, чтобы выйти",
+    "bracketInstructions": "Перетаскивайте, чтобы перемещаться · Ctrl+колесо — масштаб · Esc — выход",
     "bracketFullscreen": "Во весь экран",
     "bracketExitFullscreen": "Выйти из полноэкранного режима (Esc)",
     "profile": "Профиль",
@@ -2517,7 +2517,25 @@
     "editMatch": "Редактировать матч",
     "reportMatch": "Сообщить результат",
     "doubleElimination": "Двойное выбывание",
-    "singleElimination": "Одиночное выбывание"
+    "singleElimination": "Одиночное выбывание",
+    "toolbar": "Управление сеткой",
+    "zoomIn": "Приблизить",
+    "zoomOut": "Отдалить",
+    "zoomFit": "По ширине",
+    "rearrange": "Переставить команды",
+    "rearrangeHint": "Перетащите команду на другой слот, чтобы поменять их местами. Сыгранные, отправленные на подтверждение и идущие матчи заблокированы.",
+    "rearrangeDone": "Команды переставлены",
+    "rearrangeFailed": "Не удалось переставить команды",
+    "dragTeam": "Перетащить {team}",
+    "matchAria": "{label}: {home} — {away}",
+    "dnd": {
+      "instructions": "Нажмите Пробел или Enter, чтобы взять команду, стрелками переместите её на другой слот и нажмите Пробел или Enter, чтобы поменять местами. Escape отменяет.",
+      "pickedUp": "Взята команда {team}",
+      "over": "{team} над слотом {slot}",
+      "overNothing": "{team} не над слотом",
+      "dropped": "{team} поменяна местами с {slot}",
+      "cancelled": "Перемещение {team} отменено"
+    }
   },
   "rankHistory": {
     "title": "История рангов",

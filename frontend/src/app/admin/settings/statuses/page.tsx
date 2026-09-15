@@ -6,14 +6,9 @@ import type { ColumnDef, Row } from "@tanstack/react-table";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import StatusMetaBadge from "@/components/status/StatusMetaBadge";
-import {
-  AdminDataTable,
-  type AdminDataTableGroup
-} from "@/components/admin/AdminDataTable";
-import { adminColumnMeta } from "@/components/admin/admin-table-columns";
+import { AdminDataTable, type AdminDataTableGroup, adminColumnMeta, createKebabColumn } from "@/components/admin-data-table";
 import { AdminFilterBar } from "@/components/admin/kit/AdminFilterBar";
 import { ConfirmDialog, type ConfirmIntent } from "@/components/admin/kit/ConfirmDialog";
-import { createKebabColumn } from "@/components/admin/kit/kebab-column";
 import { useAdminFilters, type FilterDef } from "@/components/admin/kit/useAdminFilters";
 import {
   EMPTY_STATUS_FORM,

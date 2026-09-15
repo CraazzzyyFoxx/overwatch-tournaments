@@ -145,7 +145,7 @@ class _Ctx(NamedTuple):
     ws_id: int
 
 
-async def _registration_ctx(session: Any, data: dict[str, Any], action: str, resource: str = "team") -> _Ctx:
+async def _registration_ctx(session: Any, data: dict[str, Any], action: str, resource: str = "registration") -> _Ctx:
     """``require_registration_permission(resource, action)``: workspace resolved
     from the registration in ``data["id"]`` (404s on a missing row)."""
     user = _identity(data)
@@ -260,11 +260,11 @@ def register(broker: Any, logger: Any) -> None:
     # ══════════════════════════════════════════════════════════════════════
 
     # GET /balancer/tournaments/{tournament_id}/registration-form
-    #   dep: require_tournament_permission("team", "read")
+    #   require_tournament_permission("registration_form", "read")
     @broker.subscriber("rpc.tournament.reg_form_get")
     async def _reg_form_get(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
-            ctx = await _tournament_ctx(session, data, "read")
+            ctx = await _tournament_ctx(session, data, "read", resource="registration_form")
             form = await reg_common._common_service.get_registration_form(session, ctx.id)
             if form is None:
                 return None
@@ -278,11 +278,11 @@ def register(broker: Any, logger: Any) -> None:
         return await _run(logger, op)
 
     # PUT /balancer/tournaments/{tournament_id}/registration-form
-    #   dep: require_tournament_permission("team", "create")
+    #   require_tournament_permission("registration_form", "update")
     @broker.subscriber("rpc.tournament.reg_form_upsert")
     async def _reg_form_upsert(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
-            ctx = await _tournament_ctx(session, data, "create")
+            ctx = await _tournament_ctx(session, data, "update", resource="registration_form")
             body = RegistrationFormUpsert.model_validate(_payload(data))
             # _tournament_ctx already 404s on a missing tournament;
             # upsert_registration_form commits internally.
@@ -450,9 +450,11 @@ def register(broker: Any, logger: Any) -> None:
         """
 
         async def op(session: Any) -> Any:
-            await _tournament_ctx(session, data, "read")
+            ctx = await _tournament_ctx(session, data, "read")
             return _dump(
-                await team_service.teams_service.list_invite_history(session, team_id=_path_int(data, "team_id"))
+                await team_service.teams_service.list_invite_history(
+                    session, team_id=_path_int(data, "team_id"), tournament_id=ctx.id
+                )
             )
 
         return await _run(logger, op)
@@ -636,12 +638,12 @@ def register(broker: Any, logger: Any) -> None:
         return await _run(logger, op)
 
     # GET /balancer/tournaments/{tournament_id}/registrations
-    #   dep: require_tournament_permission("team", "read")
+    #   require_tournament_permission("registration", "read")
     #   FAT handler: list + status-meta map + per-registration OW-rank snapshot join.
     @broker.subscriber("rpc.tournament.reg_list")
     async def _reg_list(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
-            ctx = await _tournament_ctx(session, data, "read")
+            ctx = await _tournament_ctx(session, data, "read", resource="registration")
 
             status_filter = _q1(data, "status_filter")
             inclusion_filter = _q1(data, "inclusion_filter")
@@ -705,11 +707,11 @@ def register(broker: Any, logger: Any) -> None:
         return await _run(logger, op)
 
     # POST /balancer/tournaments/{tournament_id}/registrations  (201)
-    #   dep: require_tournament_permission("team", "create")
+    #   require_tournament_permission("registration", "create")
     @broker.subscriber("rpc.tournament.reg_create_manual")
     async def _reg_create_manual(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
-            ctx = await _tournament_ctx(session, data, "create")
+            ctx = await _tournament_ctx(session, data, "create", resource="registration")
             body = schemas.BalancerRegistrationCreateRequest.model_validate(_payload(data))
 
             await reg_common._common_service.ensure_tournament_exists(session, ctx.id)
@@ -759,7 +761,7 @@ def register(broker: Any, logger: Any) -> None:
         return await _run(logger, op)
 
     # PATCH /balancer/registrations/{registration_id}
-    #   dep: require_registration_permission("team", "update")
+    #   require_registration_permission("registration", "update")
     @broker.subscriber("rpc.tournament.reg_update")
     async def _reg_update(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
@@ -810,11 +812,11 @@ def register(broker: Any, logger: Any) -> None:
         return await _run(logger, op)
 
     # PATCH /balancer/registrations/{registration_id}/approve
-    #   dep: require_registration_permission("team", "create")
+    #   require_registration_permission("registration", "approve")
     @broker.subscriber("rpc.tournament.reg_approve")
     async def _reg_approve(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
-            ctx = await _registration_ctx(session, data, "create")
+            ctx = await _registration_ctx(session, data, "approve")
             await _stage_transition(session, data, ctx, action="registration.approve", after={"status": "approved"})
             registration = await lifecycle.lifecycle_service.approve_registration(
                 session,
@@ -826,11 +828,11 @@ def register(broker: Any, logger: Any) -> None:
         return await _run(logger, op)
 
     # PATCH /balancer/registrations/{registration_id}/reject
-    #   dep: require_registration_permission("team", "create")
+    #   require_registration_permission("registration", "reject")
     @broker.subscriber("rpc.tournament.reg_reject")
     async def _reg_reject(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
-            ctx = await _registration_ctx(session, data, "create")
+            ctx = await _registration_ctx(session, data, "reject")
             await _stage_transition(session, data, ctx, action="registration.reject", after={"status": "rejected"})
             registration = await lifecycle.lifecycle_service.reject_registration(
                 session,
@@ -842,7 +844,7 @@ def register(broker: Any, logger: Any) -> None:
         return await _run(logger, op)
 
     # POST /balancer/registrations/{registration_id}/include
-    #   dep: require_registration_permission("team", "update")
+    #   require_registration_permission("registration", "update")
     @broker.subscriber("rpc.tournament.reg_include_balancer")
     async def _reg_include_balancer(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
@@ -877,7 +879,7 @@ def register(broker: Any, logger: Any) -> None:
         return await _run(logger, op)
 
     # PATCH /balancer/registrations/{registration_id}/withdraw
-    #   dep: require_registration_permission("team", "update")
+    #   require_registration_permission("registration", "update")
     @broker.subscriber("rpc.tournament.reg_withdraw")
     async def _reg_withdraw(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
@@ -889,7 +891,7 @@ def register(broker: Any, logger: Any) -> None:
         return await _run(logger, op)
 
     # PATCH /balancer/registrations/{registration_id}/restore
-    #   dep: require_registration_permission("team", "update")
+    #   require_registration_permission("registration", "update")
     @broker.subscriber("rpc.tournament.reg_restore")
     async def _reg_restore(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
@@ -901,11 +903,11 @@ def register(broker: Any, logger: Any) -> None:
         return await _run(logger, op)
 
     # DELETE /balancer/registrations/{registration_id}  (204)
-    #   dep: require_registration_permission("team", "create")
+    #   require_registration_permission("registration", "delete")
     @broker.subscriber("rpc.tournament.reg_delete")
     async def _reg_delete(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
-            ctx = await _registration_ctx(session, data, "create")
+            ctx = await _registration_ctx(session, data, "delete")
             # One read instead of a tournament_id-only scalar select: the audit row
             # needs the name and status being removed anyway, and
             # soft_delete_registration 404s on a missing id either way.
@@ -933,11 +935,11 @@ def register(broker: Any, logger: Any) -> None:
         return await _run(logger, op)
 
     # POST /balancer/tournaments/{tournament_id}/registrations/bulk-approve
-    #   dep: require_tournament_permission("team", "create")
+    #   require_tournament_permission("registration", "approve")
     @broker.subscriber("rpc.tournament.reg_bulk_approve")
     async def _reg_bulk_approve(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
-            ctx = await _tournament_ctx(session, data, "create")
+            ctx = await _tournament_ctx(session, data, "approve", resource="registration")
             registration_ids = _bulk_ids(_payload(data))
             await _stage_bulk(
                 session,
@@ -960,7 +962,7 @@ def register(broker: Any, logger: Any) -> None:
         return await _run(logger, op)
 
     # PATCH /balancer/registrations/{registration_id}/balancer-status
-    #   dep: require_registration_permission("team", "update")
+    #   require_registration_permission("registration", "update")
     @broker.subscriber("rpc.tournament.reg_set_balancer_status")
     async def _reg_set_balancer_status(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
@@ -987,11 +989,11 @@ def register(broker: Any, logger: Any) -> None:
         return await _run(logger, op)
 
     # POST /balancer/tournaments/{tournament_id}/registrations/bulk-add-to-balancer
-    #   dep: require_tournament_permission("team", "create")
+    #   require_tournament_permission("registration", "update")
     @broker.subscriber("rpc.tournament.reg_bulk_add_balancer")
     async def _reg_bulk_add_balancer(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
-            ctx = await _tournament_ctx(session, data, "create")
+            ctx = await _tournament_ctx(session, data, "update", resource="registration")
             registration_ids = _bulk_ids(_payload(data))
             await _stage_bulk(
                 session,
@@ -1013,11 +1015,11 @@ def register(broker: Any, logger: Any) -> None:
         return await _run(logger, op)
 
     # POST /balancer/tournaments/{tournament_id}/registrations/bulk-set-balancer-status
-    #   dep: require_tournament_permission("team", "update")
+    #   require_tournament_permission("registration", "update")
     @broker.subscriber("rpc.tournament.reg_bulk_set_balancer_status")
     async def _reg_bulk_set_balancer_status(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
-            ctx = await _tournament_ctx(session, data, "update")
+            ctx = await _tournament_ctx(session, data, "update", resource="registration")
             body = schemas.BulkSetBalancerStatusRequest.model_validate(_payload(data))
             await _stage_bulk(
                 session,
@@ -1045,11 +1047,11 @@ def register(broker: Any, logger: Any) -> None:
         return await _run(logger, op)
 
     # POST /balancer/tournaments/{tournament_id}/registrations/rank-autofill/preview
-    #   dep: require_tournament_permission("team", "read")
+    #   require_tournament_permission("registration", "read")
     @broker.subscriber("rpc.tournament.reg_rank_autofill_preview")
     async def _reg_rank_autofill_preview(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
-            ctx = await _tournament_ctx(session, data, "read")
+            ctx = await _tournament_ctx(session, data, "read", resource="registration")
             body = schemas.BalancerRegistrationRankAutofillRequest.model_validate(_payload(data))
             result = await rank_autofill.rank_autofill_service.autofill_registration_ranks_from_parsed(
                 session,
@@ -1067,11 +1069,11 @@ def register(broker: Any, logger: Any) -> None:
         return await _run(logger, op)
 
     # POST /balancer/tournaments/{tournament_id}/registrations/rank-autofill/apply
-    #   dep: require_tournament_permission("team", "update")
+    #   require_tournament_permission("registration", "update")
     @broker.subscriber("rpc.tournament.reg_rank_autofill_apply")
     async def _reg_rank_autofill_apply(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
-            ctx = await _tournament_ctx(session, data, "update")
+            ctx = await _tournament_ctx(session, data, "update", resource="registration")
             body = schemas.BalancerRegistrationRankAutofillRequest.model_validate(_payload(data))
             # Rank autofill rewrites the numbers the balancer sorts on, across as
             # many registrations as the request names, so the parameters it ran
@@ -1108,7 +1110,7 @@ def register(broker: Any, logger: Any) -> None:
         return await _run(logger, op)
 
     # GET /balancer/users/{user_id}/registration-rank-history?workspace_id=
-    #   dep: require_workspace_permission("team", "read")  -> ws from query workspace_id
+    #   require_workspace_permission("registration", "read")  -> ws from query workspace_id
     @broker.subscriber("rpc.tournament.reg_user_rank_history")
     async def _reg_user_rank_history(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
@@ -1117,7 +1119,7 @@ def register(broker: Any, logger: Any) -> None:
             workspace_id = _q1(data, "workspace_id", int)
             if workspace_id is None:
                 raise HTTPException(status_code=422, detail="workspace_id is required")
-            ensure_workspace_permission(user, workspace_id, "team", "read")
+            ensure_workspace_permission(user, workspace_id, "registration", "read")
             entries = await rank_sources.rank_sources_service.load_user_balancer_rank_history(
                 session,
                 user_id=user_id,
@@ -1128,22 +1130,22 @@ def register(broker: Any, logger: Any) -> None:
         return await _run(logger, op)
 
     # POST /balancer/tournaments/{tournament_id}/registrations/export-users
-    #   dep: require_tournament_permission("team", "create")
+    #   require_tournament_permission("registration", "create")
     @broker.subscriber("rpc.tournament.reg_export_users")
     async def _reg_export_users(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
-            ctx = await _tournament_ctx(session, data, "create")
+            ctx = await _tournament_ctx(session, data, "create", resource="registration")
             result = await reg_export.export_service.export_registrations_to_users(session, ctx.id)
             return _dump(schemas.RegistrationUserExportResponse(**result))
 
         return await _run(logger, op)
 
     # PATCH /balancer/registrations/{registration_id}/check-in
-    #   dep: require_registration_permission("team", "update")
+    #   require_registration_permission("registration", "check_in")
     @broker.subscriber("rpc.tournament.reg_check_in")
     async def _reg_check_in(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
-            ctx = await _registration_ctx(session, data, "update")
+            ctx = await _registration_ctx(session, data, "check_in")
             body = schemas.CheckInRequest.model_validate(_payload(data))
             await _stage_transition(
                 session,
@@ -1170,33 +1172,33 @@ def register(broker: Any, logger: Any) -> None:
     # ══════════════════════════════════════════════════════════════════════
 
     # GET /ws/{workspace_id}/balancer-statuses/catalog
-    #   dep: require_workspace_permission("team", "read")
+    #   require_workspace_permission("registration_status", "read")
     @broker.subscriber("rpc.tournament.regstatus_catalog")
     async def _regstatus_catalog(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
-            ctx = _workspace_ctx(data, "read")
+            ctx = _workspace_ctx(data, "read", resource="registration_status")
             statuses = await status_catalog.status_catalog_service.list_status_catalog(session, ctx.ws_id)
             return [_dump(serialize_status(status_row)) for status_row in statuses]
 
         return await _run(logger, op)
 
     # GET /ws/{workspace_id}/balancer-statuses
-    #   dep: require_workspace_permission("team", "read")
+    #   require_workspace_permission("registration_status", "read")
     @broker.subscriber("rpc.tournament.regstatus_list")
     async def _regstatus_list(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
-            ctx = _workspace_ctx(data, "read")
+            ctx = _workspace_ctx(data, "read", resource="registration_status")
             statuses = await status_catalog.status_catalog_service.list_custom_statuses(session, ctx.ws_id)
             return [_dump(serialize_status(status_row)) for status_row in statuses]
 
         return await _run(logger, op)
 
     # POST /ws/{workspace_id}/balancer-statuses/custom  (201)
-    #   dep: require_workspace_permission("team", "update")
+    #   require_workspace_permission("registration_status", "create")
     @broker.subscriber("rpc.tournament.regstatus_create")
     async def _regstatus_create(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
-            ctx = _workspace_ctx(data, "update")
+            ctx = _workspace_ctx(data, "create", resource="registration_status")
             body = schemas.BalancerRegistrationStatusCreate.model_validate(_payload(data))
             # Staged before the service, like every other write here: the service
             # owns its commit, so the row rides that transaction. The trade-off is
@@ -1234,11 +1236,11 @@ def register(broker: Any, logger: Any) -> None:
         return await _run(logger, op)
 
     # PATCH /ws/{workspace_id}/balancer-statuses/custom/{status_id}
-    #   dep: require_workspace_permission("team", "update")
+    #   require_workspace_permission("registration_status", "update")
     @broker.subscriber("rpc.tournament.regstatus_update")
     async def _regstatus_update(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
-            ctx = _workspace_ctx(data, "update")
+            ctx = _workspace_ctx(data, "update", resource="registration_status")
             status_id = _path_int(data, "status_id")
             body = schemas.BalancerRegistrationStatusUpdate.model_validate(_payload(data))
             # `exclude_none` is the change set, not a shortcut: the service treats a
@@ -1270,11 +1272,11 @@ def register(broker: Any, logger: Any) -> None:
         return await _run(logger, op)
 
     # DELETE /ws/{workspace_id}/balancer-statuses/custom/{status_id}  (204)
-    #   dep: require_workspace_permission("team", "update")
+    #   require_workspace_permission("registration_status", "delete")
     @broker.subscriber("rpc.tournament.regstatus_delete")
     async def _regstatus_delete(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
-            ctx = _workspace_ctx(data, "update")
+            ctx = _workspace_ctx(data, "delete", resource="registration_status")
             status_id = _path_int(data, "status_id")
             await reg_audit.audit_service.stage(
                 session,
@@ -1295,11 +1297,11 @@ def register(broker: Any, logger: Any) -> None:
         return await _run(logger, op)
 
     # PUT /ws/{workspace_id}/balancer-statuses/system/{scope}/{slug}
-    #   dep: require_workspace_permission("team", "update")
+    #   require_workspace_permission("registration_status", "update")
     @broker.subscriber("rpc.tournament.regstatus_builtin_upsert")
     async def _regstatus_builtin_upsert(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
-            ctx = _workspace_ctx(data, "update")
+            ctx = _workspace_ctx(data, "update", resource="registration_status")
             scope = _require_scope(data)
             slug = _require_slug(data)
             body = schemas.BalancerRegistrationStatusUpdate.model_validate(_payload(data))
@@ -1331,11 +1333,11 @@ def register(broker: Any, logger: Any) -> None:
         return await _run(logger, op)
 
     # DELETE /ws/{workspace_id}/balancer-statuses/system/{scope}/{slug}  (204)
-    #   dep: require_workspace_permission("team", "update")
+    #   require_workspace_permission("registration_status", "update")
     @broker.subscriber("rpc.tournament.regstatus_builtin_reset")
     async def _regstatus_builtin_reset(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
-            ctx = _workspace_ctx(data, "update")
+            ctx = _workspace_ctx(data, "update", resource="registration_status")
             scope = _require_scope(data)
             slug = _require_slug(data)
             await reg_audit.audit_service.stage(
@@ -1360,11 +1362,11 @@ def register(broker: Any, logger: Any) -> None:
         return await _run(logger, op)
 
     # GET /balancer/workspaces/{workspace_id}/subscription-providers
-    #   dep: require_workspace_permission("team", "read")
+    #   require_workspace_permission("subscription", "read")
     @broker.subscriber("rpc.tournament.sub_config_list")
     async def _sub_config_list(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
-            ctx = _workspace_ctx(data, "read")
+            ctx = _workspace_ctx(data, "read", resource="subscription")
             return _dump(
                 await subscription_config.subscription_config_service.list_provider_configs(session, ctx.ws_id)
             )
@@ -1372,7 +1374,7 @@ def register(broker: Any, logger: Any) -> None:
         return await _run(logger, op)
 
     # PUT /balancer/workspaces/{workspace_id}/subscription-providers
-    #   dep: require_workspace_permission("team", "update")
+    #   require_workspace_permission("subscription", "update")
     @broker.subscriber("rpc.tournament.sub_config_upsert")
     async def _sub_config_upsert(data: dict, msg: RabbitMessage) -> dict:
         """Create or update one provider's config.
@@ -1382,7 +1384,7 @@ def register(broker: Any, logger: Any) -> None:
         """
 
         async def op(session: Any) -> Any:
-            ctx = _workspace_ctx(data, "update")
+            ctx = _workspace_ctx(data, "update", resource="subscription")
             body = SubscriptionProviderConfigUpsert.model_validate(_payload(data))
             # Named fields only, and deliberately NOT the codes: they are hashed in
             # the service and a digest is still brute-forcible offline, so the trail
@@ -1411,11 +1413,11 @@ def register(broker: Any, logger: Any) -> None:
         return await _run(logger, op)
 
     # GET /balancer/workspaces/{workspace_id}/subscription-requirement
-    #   dep: require_workspace_permission("team", "read")
+    #   require_workspace_permission("subscription", "read")
     @broker.subscriber("rpc.tournament.sub_requirement_get")
     async def _sub_requirement_get(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
-            ctx = _workspace_ctx(data, "read")
+            ctx = _workspace_ctx(data, "read", resource="subscription")
             return _dump(
                 await subscription_config.subscription_config_service.get_workspace_requirement(session, ctx.ws_id)
             )
@@ -1423,7 +1425,7 @@ def register(broker: Any, logger: Any) -> None:
         return await _run(logger, op)
 
     # PUT /balancer/workspaces/{workspace_id}/subscription-requirement
-    #   dep: require_workspace_permission("team", "update")
+    #   require_workspace_permission("subscription", "update")
     @broker.subscriber("rpc.tournament.sub_requirement_upsert")
     async def _sub_requirement_upsert(data: dict, msg: RabbitMessage) -> dict:
         """Replace the workspace's subscription rule.
@@ -1434,7 +1436,7 @@ def register(broker: Any, logger: Any) -> None:
         """
 
         async def op(session: Any) -> Any:
-            ctx = _workspace_ctx(data, "update")
+            ctx = _workspace_ctx(data, "update", resource="subscription")
             body = WorkspaceSubscriptionRequirementUpsert.model_validate(_payload(data))
             # The rule itself is the domain field worth journaling: it is what changed,
             # it is already validated, and an empty blob is the "gate disarmed" event.

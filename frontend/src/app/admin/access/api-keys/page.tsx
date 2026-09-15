@@ -5,7 +5,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { Check, Clipboard, KeyRound, Plus, Trash2, X } from "lucide-react";
 import { useFormatter } from "next-intl";
 
-import { AdminDataTable } from "@/components/admin/AdminDataTable";
+import { AdminDataTable, createKebabColumn } from "@/components/admin-data-table";
 import { InlineEditText } from "@/components/admin/InlineEditText";
 import { StatTile, StatTileGrid } from "@/components/admin/StatTile";
 import {
@@ -14,7 +14,6 @@ import {
 } from "@/components/admin/access/PermissionPicker";
 import { AdminFilterBar } from "@/components/admin/kit/AdminFilterBar";
 import { ConfirmDialog } from "@/components/admin/kit/ConfirmDialog";
-import { createKebabColumn } from "@/components/admin/kit/kebab-column";
 import { useAdminFilters, type FilterDef } from "@/components/admin/kit/useAdminFilters";
 import { EntityFormDialog } from "@/components/admin/EntityFormDialog";
 import { TONE_CLASS, TONE_TEXT, type Tone } from "@/components/admin/tone";

@@ -3,7 +3,48 @@ import { queryOptions } from "@tanstack/react-query";
 import { tournamentQueryKeys } from "@/lib/tournament-query-keys";
 import encounterService from "@/services/encounter.service";
 import tournamentService from "@/services/tournament.service";
+import type { Encounter } from "@/types/encounter.types";
 import type { Stage, StageSummary, Tournament, TournamentStatus } from "@/types/tournament.types";
+
+/** One team slot of one cached encounter, as the optimistic swap names it. */
+export interface SlotAddress {
+  encounterId: number;
+  slot: "home" | "away";
+}
+
+/**
+ * The cached encounter list after two slots exchange teams — what the server's
+ * `swap-slot` will return, applied ahead of it so the dropped team lands where
+ * it was dropped instead of snapping back for a round trip. Handles the
+ * same-encounter flip (home ↔ away) and leaves every other row untouched.
+ */
+export function swapSlotTeams(
+  encounters: readonly Encounter[],
+  source: SlotAddress,
+  target: SlotAddress
+): Encounter[] {
+  const read = (encounter: Encounter, slot: "home" | "away") =>
+    slot === "home"
+      ? { id: encounter.home_team_id, team: encounter.home_team }
+      : { id: encounter.away_team_id, team: encounter.away_team };
+  const write = (encounter: Encounter, slot: "home" | "away", value: { id: number; team: Encounter["home_team"] }) =>
+    slot === "home"
+      ? { ...encounter, home_team_id: value.id, home_team: value.team }
+      : { ...encounter, away_team_id: value.id, away_team: value.team };
+
+  const sourceRow = encounters.find((encounter) => encounter.id === source.encounterId);
+  const targetRow = encounters.find((encounter) => encounter.id === target.encounterId);
+  if (!sourceRow || !targetRow) return [...encounters];
+  const fromSource = read(sourceRow, source.slot);
+  const fromTarget = read(targetRow, target.slot);
+
+  return encounters.map((encounter) => {
+    let next = encounter;
+    if (encounter.id === source.encounterId) next = write(next, source.slot, fromTarget);
+    if (encounter.id === target.encounterId) next = write(next, target.slot, fromSource);
+    return next;
+  });
+}
 
 export function getBracketRefetchInterval(status: TournamentStatus): number | false {
   return status === "live" || status === "playoffs" ? 15_000 : false;

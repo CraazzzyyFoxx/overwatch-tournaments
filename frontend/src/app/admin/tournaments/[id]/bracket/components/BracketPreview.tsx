@@ -1,11 +1,12 @@
 "use client";
 
-import { useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useCallback, useMemo } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { EYEBROW_CLASS, TONE_TEXT } from "@/components/admin/tone";
-import { BracketView } from "@/components/BracketView";
+import { BracketView, type BracketSlotRef } from "@/components/bracket/BracketView";
 import type { BracketMatch } from "@/components/bracket-view.helpers";
+import { notify } from "@/lib/notify";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import adminService from "@/services/admin.service";
@@ -13,6 +14,7 @@ import type { StageBracketPreviewMatch } from "@/types/admin.types";
 import type { Team } from "@/types/team.types";
 import type { Stage } from "@/types/tournament.types";
 
+import { invalidateTournamentWorkspace } from "../../components/tournamentWorkspace.queryKeys";
 import { useHubEncountersQuery } from "../../hubQueries";
 import { BRACKET_STAGE_TYPES, type BracketTeamCountSource, type StageProjection } from "../projection";
 
@@ -110,6 +112,27 @@ export function BracketPreview({
 
   const matches: BracketMatch[] = generated.length > 0 ? generated : projected;
   const isLoading = encountersQuery.isPending || (previewQuery.isPending && previewQuery.isFetching);
+
+  // Generated matches are real rows, so their slots can be rearranged from
+  // here as well as from the public bracket; a projection has nothing to write.
+  const queryClient = useQueryClient();
+  const swapSlots = useCallback(
+    async (source: BracketSlotRef, target: BracketSlotRef) => {
+      try {
+        await adminService.swapEncounterSlot(source.encounter.id, {
+          slot: source.slot,
+          target_encounter_id: target.encounter.id,
+          target_slot: target.slot
+        });
+        notify.success("Teams swapped");
+      } catch (error) {
+        notify.apiError(error, { title: "Could not swap teams" });
+      }
+      invalidateTournamentWorkspace(queryClient, stage.tournament_id);
+    },
+    [queryClient, stage.tournament_id]
+  );
+  const onSwapSlots = generated.length > 0 ? swapSlots : undefined;
 
   // A group stage's matches otherwise land in one flat "Round 1" column:
   // `BracketView` draws rounds, not groups, so Group A and Group B interleave
@@ -211,6 +234,7 @@ export function BracketPreview({
                   encounters={section.matches}
                   type={stage.stage_type}
                   interactive={generated.length > 0}
+                  onSwapSlots={onSwapSlots}
                 />
               </div>
             ))}
@@ -220,6 +244,7 @@ export function BracketPreview({
             encounters={matches}
             type={stage.stage_type}
             interactive={generated.length > 0}
+            onSwapSlots={onSwapSlots}
           />
         ) : (
           <p className="text-xs text-muted-foreground">

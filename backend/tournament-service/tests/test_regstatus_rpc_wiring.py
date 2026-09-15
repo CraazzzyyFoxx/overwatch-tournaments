@@ -34,13 +34,17 @@ helpers = importlib.import_module("src.rpc._helpers")
 
 CREATED_AT = datetime(2026, 5, 1, 12, 30, tzinfo=UTC)
 
-#: Grants exactly the "team update" gate the two subjects check on workspace 1.
+#: Grants the "registration_status" create/update gates the two subjects check
+#: on workspace 1 (moved off the legacy blanket "team" resource).
 IDENTITY = make_identity(
     workspaces=[
         {
             "workspace_id": 1,
             "rbac_roles": [],
-            "rbac_permissions": [{"resource": "team", "action": "update"}],
+            "rbac_permissions": [
+                {"resource": "registration_status", "action": "create"},
+                {"resource": "registration_status", "action": "update"},
+            ],
         }
     ],
 )

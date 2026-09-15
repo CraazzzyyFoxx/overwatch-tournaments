@@ -38,7 +38,9 @@ helpers = importlib.import_module("src.rpc._helpers")
 WORKSPACE_ID = 1
 REGISTRATION_ID = 55
 
-#: Grants the "team create"/"team update" gates the handlers check on workspace 1.
+#: Grants the "registration" gates the handlers check on workspace 1 (moved off
+#: the legacy blanket "team" resource these handlers used to share with the
+#: regteam_* endpoints).
 IDENTITY = make_identity(
     username="organizer",
     workspaces=[
@@ -46,8 +48,9 @@ IDENTITY = make_identity(
             "workspace_id": WORKSPACE_ID,
             "rbac_roles": [],
             "rbac_permissions": [
-                {"resource": "team", "action": "create"},
-                {"resource": "team", "action": "update"},
+                {"resource": "registration", "action": "update"},
+                {"resource": "registration", "action": "approve"},
+                {"resource": "registration", "action": "check_in"},
             ],
         }
     ],

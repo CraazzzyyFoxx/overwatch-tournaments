@@ -46,6 +46,8 @@ import {
   PlayerUpdateInput,
   EncounterCreateInput,
   EncounterUpdateInput,
+  EncounterSwapSlotInput,
+  EncounterSlotSwapRead,
   MatchUpdateInput,
   StandingUpdateInput,
   UserCreateInput,
@@ -540,6 +542,22 @@ class AdminService {
   async updateEncounter(id: number, data: EncounterUpdateInput): Promise<Encounter> {
     const response = await apiFetch(`/api/v1/admin/encounters/${id}`, {
       method: "PATCH",
+      body: data
+    });
+    return response.json();
+  }
+
+  /**
+   * Exchange the teams held by two bracket slots in one transaction — the
+   * bracket's drag-and-drop rearrange. Two PATCHes would leave a team in two
+   * matches if the second failed. The server refuses settled and live matches.
+   */
+  async swapEncounterSlot(
+    encounterId: number,
+    data: EncounterSwapSlotInput
+  ): Promise<EncounterSlotSwapRead> {
+    const response = await apiFetch(`/api/v1/admin/encounters/${encounterId}/swap-slot`, {
+      method: "POST",
       body: data
     });
     return response.json();

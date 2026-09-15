@@ -1,61 +1,49 @@
 name: owt-backup
 
 # ==============================================================================
-# Контур резервных копий, ИСТОЧНИК (хост dd-new).
+# Optional local rustfs. Production dumps go to Timeweb S3
+# (ops/backup/backup.sh, docs/backup-rustfs.md) — this compose is not required.
 #
-# Отдельный compose-проект, а не сервис в docker-compose.production.yml:
-# `make prod-down`, пересборка стека или неудачный релиз не должны трогать
-# хранилище бэкапов, а `docker compose up` контура не должен ждать rabbitmq.
+# Separate project, not a service in docker-compose.production.yml: `make prod-down`
+# must not take down the store if it is still used as an endpoint.
 #
-# Сеть тоже своя: подключаться к внешнему owt_app-network значило бы, что без
-# поднятого прода бэкапы не стартуют. Метрики отдаёт не rustfs, а джоба
-# (ops/backup/backup.sh -> textfile collector, см. monitoring/README).
-#
-# Порты биндятся в loopback: опубликованные Docker'ом порты не проходят через
-# filter-цепочки ufw на этом хосте (docs/superpowers/specs/
-# 2026-08-06-nginx-dos-hardening-design.md §8.2). Снаружи S3 источника не нужен —
-# в него пишет только локальная джоба, а вычитывает его сам rustfs при
-# репликации на home.
+# Ports on loopback: Docker-published ports bypass ufw on this host.
+# This S3 is not needed from outside.
 #
 #   docker compose -f docker-compose.backup.yml --env-file ops/backup/backup.env up -d
-#
-# Первый запуск — через ops/backup/setup.sh (создаёт каталоги с владельцем
-# 10001:10001, бакеты, версионирование, ILM и правило репликации).
 # ==============================================================================
 
 services:
   rustfs:
     image: ${RUSTFS_IMAGE:?set RUSTFS_IMAGE in ops/backup/backup.env}
     restart: unless-stopped
-    # Консоль выключена: всё управление идёт через mc (ops/backup/*.sh), а образ
-    # по умолчанию поднимает её с RUSTFS_CONSOLE_CORS_ALLOWED_ORIGINS=*.
-    # Включить на время разбора: RUSTFS_CONSOLE_ENABLE=true + ssh -L 9001.
+    # Console off: management goes through mc (ops/backup/*.sh), and the image
+    # starts the console with RUSTFS_CONSOLE_CORS_ALLOWED_ORIGINS=*.
+    # Enable for debugging: RUSTFS_CONSOLE_ENABLE=true + ssh -L 9001.
     ports:
       - "127.0.0.1:9000:9000"
     environment:
-      # Один каталог = одиночный диск, паритет НУЛЕВОЙ (rustfs: 1 диск -> 0
-      # parity). Битрот при этом детектируется, но не лечится — единственный
-      # путь восстановления — копия на home. Локальный EC на одном физическом
-      # диске от смерти хоста всё равно не спасает.
+      # One directory = a single disk, ZERO parity (rustfs: 1 disk -> 0 parity).
+      # Bitrot is detected but not repaired — the only recovery path is another
+      # copy. Local EC on one physical disk does not survive host loss either.
       RUSTFS_VOLUMES: /data
       RUSTFS_ADDRESS: 0.0.0.0:9000
       RUSTFS_CONSOLE_ENABLE: "false"
       RUSTFS_ACCESS_KEY: ${RUSTFS_ROOT_USER:?}
       RUSTFS_SECRET_KEY: ${RUSTFS_ROOT_PASSWORD:?}
-      # Обязательно оба: процессный дефолт strict, но НОВЫЕ бакеты создаются в
-      # relaxed, где xl.meta и inline-объекты не fsync'ается — при потере питания
-      # подтверждённая запись может остаться без метаданных.
+      # Both required: process default is strict, but NEW buckets are created
+      # in relaxed mode, where xl.meta and inline objects are not fsynced —
+      # on power loss an acknowledged write can end up without metadata.
       RUSTFS_DURABILITY_MODE: strict
       RUSTFS_NEW_BUCKET_DURABILITY_MODE: strict
     volumes:
-      # Bind-mount, а не named volume: каталог с бэкапами должен лежать на
-      # выбранном (большом) разделе, а не в /var/lib/docker. Цена — ручной
-      # chown: контейнер работает под uid:gid 10001:10001 (делает setup, см.
-      # docs/backup-rustfs.md).
+      # Bind-mount, not a named volume: backups should sit on a chosen (large)
+      # partition, not in /var/lib/docker. Cost is a manual chown: the container
+      # runs as uid:gid 10001:10001 (see docs/backup-rustfs.md).
       - ${RUSTFS_DATA_DIR:?}:/data
       - ${RUSTFS_LOG_DIR:?}:/logs
     healthcheck:
-      # /health не требует подписи и включён по умолчанию; curl есть в образе.
+      # /health needs no signature and is on by default; curl is in the image.
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:9000/health"]
       interval: 30s
       timeout: 10s

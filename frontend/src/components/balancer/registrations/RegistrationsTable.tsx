@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ColumnDef, Row } from "@tanstack/react-table";
 import { useTranslations } from "next-intl";
@@ -14,7 +14,6 @@ import {
   ShieldX,
   Trash2,
   Undo2,
-  Upload,
   UserPlus,
   X
 } from "lucide-react";
@@ -28,15 +27,13 @@ import {
   groupRegistrations,
   normalizeRegistrationGroupingMode
 } from "@/components/balancer/registrations/_components/registrationGrouping";
-import { AdminDataTable, type AdminDataTableGroup } from "@/components/admin/AdminDataTable";
+import { AdminDataTable, type AdminDataTableGroup, type AdminTableFilters, createKebabColumn, type KebabAction } from "@/components/admin-data-table";
 import { useAuditTrail } from "@/components/admin/AuditTrailSheet";
 import { BulkBar } from "@/components/admin/BulkBar";
-import type { AdminTableFilters } from "@/components/admin/admin-table-filters";
 import { EYEBROW_CLASS } from "@/components/admin/tone";
 import { AdminFilterBar } from "@/components/admin/kit/AdminFilterBar";
 import { AdminInspector } from "@/components/admin/kit/AdminInspector";
 import { ConfirmDialog } from "@/components/admin/kit/ConfirmDialog";
-import { createKebabColumn, type KebabAction } from "@/components/admin/kit/kebab-column";
 import {
   useAdminFilters,
   type FilterDef,
@@ -247,21 +244,51 @@ export default function RegistrationsTable({
 
   // Options are read off the pool rather than hard-coded: a workspace's roles
   // are configuration, and a chip offering a value no row has is a dead end.
+  // The same pass counts every facet, each one exactly the way its filter
+  // narrows the pool, so the chip counts cannot disagree with the result.
   //
   // No Division chip (F4 lists one): `AdminRegistrationRole` carries a rank,
   // not a division, and turning one into the other needs the workspace division
   // grid — a query the hub deliberately does not run on every page load.
-  const roleOptions = useMemo(() => {
-    const codes = new Set<string>();
+  const facets = useMemo(() => {
+    const role = new Map<string, number>();
+    const status = new Map<string, number>();
+    const subscription = new Map<string, number>();
+    const source = new Map<string, number>();
+    let included = 0;
     for (const registration of registrations) {
-      for (const role of registration.roles) {
-        if (role.is_active) codes.add(role.role);
+      // Per registration, not per role entry: the Role chip asks whether a row
+      // has that role, so a row must count once for it.
+      const codes = new Set<string>();
+      for (const entry of registration.roles) {
+        if (entry.is_active) codes.add(entry.role);
       }
+      for (const code of codes) role.set(code, (role.get(code) ?? 0) + 1);
+      status.set(registration.status, (status.get(registration.status) ?? 0) + 1);
+      const outcome = registration.subscription_outcome ?? "undetermined";
+      subscription.set(outcome, (subscription.get(outcome) ?? 0) + 1);
+      source.set(registration.source, (source.get(registration.source) ?? 0) + 1);
+      // Mirrors the inclusion column's own filter, which reads the meta flag
+      // rather than comparing the status slug.
+      if (!registration.balancer_status_meta.excludes_from_balancer) included += 1;
     }
-    return [...codes]
-      .sort((left, right) => left.localeCompare(right))
-      .map((code) => ({ value: code, label: ROLE_LABELS[code] ?? code }));
+    return {
+      role,
+      status,
+      subscription,
+      source,
+      included,
+      excluded: registrations.length - included
+    };
   }, [registrations]);
+
+  const roleOptions = useMemo(
+    () =>
+      [...facets.role.entries()]
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([code, count]) => ({ value: code, label: ROLE_LABELS[code] ?? code, count })),
+    [facets]
+  );
 
   const admissionOptions = useMemo(() => {
     const counts = new Map<AdmissionDecision, number>();
@@ -288,18 +315,30 @@ export default function RegistrationsTable({
               kind: "single" as const,
               options: (
                 Object.keys(SUBSCRIPTION_LABELS) as (keyof typeof SUBSCRIPTION_LABELS)[]
-              ).map((value) => ({ value, label: SUBSCRIPTION_LABELS[value] }))
+              ).map((value) => ({
+                value,
+                label: SUBSCRIPTION_LABELS[value],
+                count: facets.subscription.get(value) ?? 0
+              }))
             }
           ]
         : []),
-      { key: "status", label: "Status", kind: "multi", options: statusFilterOptions },
+      {
+        key: "status",
+        label: "Status",
+        kind: "multi",
+        options: statusFilterOptions.map((option) => ({
+          ...option,
+          count: facets.status.get(option.value) ?? 0
+        }))
+      },
       {
         key: "inclusion",
         label: "Participation",
         kind: "single",
         options: [
-          { value: "included", label: "Included" },
-          { value: "excluded", label: "Excluded" }
+          { value: "included", label: "Included", count: facets.included },
+          { value: "excluded", label: "Excluded", count: facets.excluded }
         ]
       },
       {
@@ -307,12 +346,16 @@ export default function RegistrationsTable({
         label: "Source",
         kind: "single",
         options: [
-          { value: "manual", label: "Manual" },
-          { value: "google_sheets", label: "Google Sheets" }
+          { value: "manual", label: "Manual", count: facets.source.get("manual") ?? 0 },
+          {
+            value: "google_sheets",
+            label: "Google Sheets",
+            count: facets.source.get("google_sheets") ?? 0
+          }
         ]
       }
     ],
-    [admissionOptions, roleOptions, requireSubscription, statusFilterOptions]
+    [admissionOptions, roleOptions, requireSubscription, statusFilterOptions, facets]
   );
 
   const filters = useAdminFilters(filterDefs);
@@ -364,12 +407,15 @@ export default function RegistrationsTable({
   // Patch a single row across every cached filter variant. The PATCH endpoints
   // already return the fully-serialized registration, so we never need to
   // re-fetch the whole pool just to reflect one edit.
-  const patchRegistrationInCache = (row: AdminRegistration) => {
-    queryClient.setQueriesData<AdminRegistration[]>(
-      { queryKey: ["balancer-admin", "registrations", tournamentId] },
-      (old) => (old ? old.map((r) => (r.id === row.id ? row : r)) : old)
-    );
-  };
+  const patchRegistrationInCache = useCallback(
+    (row: AdminRegistration) => {
+      queryClient.setQueriesData<AdminRegistration[]>(
+        { queryKey: ["balancer-admin", "registrations", tournamentId] },
+        (old) => (old ? old.map((r) => (r.id === row.id ? row : r)) : old)
+      );
+    },
+    [queryClient, tournamentId]
+  );
 
   const removeRegistrationFromCache = (registrationId: number) => {
     queryClient.setQueriesData<AdminRegistration[]>(
@@ -463,8 +509,27 @@ export default function RegistrationsTable({
   const bulkApproveMutation = useMutation({
     mutationFn: (registrationIds: number[]) =>
       balancerAdminService.bulkApproveRegistrations(tournamentId as number, registrationIds),
-    onSuccess: (result) => {
-      notify.success(`${result.approved} approved, ${result.skipped} skipped`);
+    onSuccess: (result, registrationIds) => {
+      notify.success(`${result.approved} approved, ${result.skipped} skipped`, {
+        duration: 8000,
+        action: {
+          label: "Undo",
+          onClick: () => {
+            // Only pending rows are selectable, so `pending` is the prior
+            // status of every id in the batch.
+            void Promise.all(
+              registrationIds.map((id) =>
+                balancerAdminService.updateRegistration(id, { status: "pending" })
+              )
+            )
+              .then(() => {
+                revalidateRegistrations();
+                notify.success("Approval undone");
+              })
+              .catch((error: unknown) => notify.apiError(error));
+          }
+        }
+      });
       revalidateRegistrations();
     }
   });
@@ -492,20 +557,33 @@ export default function RegistrationsTable({
   });
 
   const bulkAddToBalancerMutation = useMutation({
-    mutationFn: (registrationIds: number[]) =>
-      balancerAdminService.bulkAddToBalancer(tournamentId as number, registrationIds),
-    onSuccess: (result) => {
-      notify.success(`${result.updated} added to balancer, ${result.skipped} skipped`);
-      revalidateRegistrations();
-    }
-  });
-
-  const exportToUsersMutation = useMutation({
-    mutationFn: () => balancerAdminService.exportRegistrationsToUsers(tournamentId as number),
-    onSuccess: (result) => {
-      notify.success("Export complete", {
-        description: `${result.processed} processed, ${result.skipped} skipped (${result.total} total)`
+    // `previouslyExcluded` travels with the call because the undo needs the
+    // pre-mutation inclusion state, which the refetched rows no longer carry.
+    mutationFn: ({ ids }: { ids: number[]; previouslyExcluded: number[] }) =>
+      balancerAdminService.bulkAddToBalancer(tournamentId as number, ids),
+    onSuccess: (result, { previouslyExcluded }) => {
+      notify.success(`${result.updated} added to balancer, ${result.skipped} skipped`, {
+        duration: 8000,
+        action: {
+          label: "Undo",
+          onClick: () => {
+            void (previouslyExcluded.length > 0
+              ? balancerAdminService.bulkSetBalancerStatus(tournamentId as number, {
+                  registration_ids: previouslyExcluded,
+                  balancer_status: "excluded",
+                  exclude_reason: "manual_exclusion"
+                })
+              : Promise.resolve()
+            )
+              .then(() => {
+                revalidateRegistrations();
+                notify.success("Balancer change undone");
+              })
+              .catch((error: unknown) => notify.apiError(error));
+          }
+        }
       });
+      revalidateRegistrations();
     }
   });
 
@@ -525,6 +603,19 @@ export default function RegistrationsTable({
   const restore = restoreMutation.mutate;
   const setBalancerInclusion = balancerInclusionMutation.mutate;
   const setCheckIn = checkInMutation.mutate;
+
+  const adminNotesEdit = useMemo(
+    () => ({
+      save: async (registration: AdminRegistration, next: string) => {
+        patchRegistrationInCache(
+          await balancerAdminService.updateRegistration(registration.id, { admin_notes: next })
+        );
+      },
+      // Same gate as the row's Edit action: a withdrawn row is read-only.
+      canEdit: (registration: AdminRegistration) => registration.status !== "withdrawn"
+    }),
+    [patchRegistrationInCache]
+  );
 
   const columns: ColumnDef<AdminRegistration>[] = useMemo(() => {
     const rowActions = (registration: AdminRegistration): KebabAction[] => {
@@ -603,7 +694,8 @@ export default function RegistrationsTable({
         subroleCatalog,
         requireSubscription,
         customFields,
-        statusFilterOptions
+        statusFilterOptions,
+        adminNotesEdit
       ),
       createKebabColumn<AdminRegistration>(rowActions, {
         rowLabel: (registration) =>
@@ -615,6 +707,7 @@ export default function RegistrationsTable({
     requireSubscription,
     customFields,
     statusFilterOptions,
+    adminNotesEdit,
     approve,
     reject,
     withdraw,
@@ -694,27 +787,7 @@ export default function RegistrationsTable({
           inspectorId={openId}
           onRowClick={(row) => setParams({ id: String(row.original.id) })}
           groupRows={groupBy === "none" ? undefined : groupPageRows}
-          toolbar={
-            <AdminFilterBar
-              defs={filterDefs}
-              filters={filters}
-              trailing={
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={exportToUsersMutation.isPending}
-                  onClick={() => exportToUsersMutation.mutate()}
-                >
-                  {exportToUsersMutation.isPending ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
-                  ) : (
-                    <Upload className="mr-2 h-4 w-4" aria-hidden />
-                  )}
-                  Export to analytics
-                </Button>
-              }
-            />
-          }
+          toolbar={<AdminFilterBar defs={filterDefs} filters={filters} />}
           bulkActions={(selected, clearSelection) => (
             <BulkBar count={selected.length} unit="registrations" onClear={clearSelection}>
               <Button
@@ -739,7 +812,12 @@ export default function RegistrationsTable({
                 variant="outline"
                 onClick={() => {
                   bulkAddToBalancerMutation.mutate(
-                    selected.map((registration) => registration.id),
+                    {
+                      ids: selected.map((registration) => registration.id),
+                      previouslyExcluded: selected
+                        .filter((registration) => registration.balancer_status_meta.excludes_from_balancer)
+                        .map((registration) => registration.id)
+                    },
                     { onSuccess: clearSelection }
                   );
                 }}

@@ -1,9 +1,9 @@
 // @vitest-environment happy-dom
 //
 // The single row-actions convention. What is pinned here:
-//  1. the trigger is ALWAYS in the DOM and visible — the column it replaces
-//     was `opacity-0` until hover, which hid every list screen's primary
-//     actions from anyone not using a mouse;
+//  1. the trigger is always in the DOM and reachable without a mouse: quiet
+//     until the row is hovered, but revealed whenever the row holds focus and
+//     on touch devices, which have neither hover nor focus-within;
 //  2. its accessible name names the row, so nine identical "Actions" buttons
 //     are distinguishable;
 //  3. a `hidden` action is absent, not disabled — permission gating must not
@@ -16,7 +16,7 @@ import { getCoreRowModel, useReactTable } from "@tanstack/react-table";
 import { Pencil, Trash2 } from "lucide-react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { createKebabColumn } from "@/components/admin/kit/kebab-column";
+import { createKebabColumn } from "./kebab-column";
 
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean;
@@ -118,11 +118,11 @@ describe("createKebabColumn", () => {
     expect(trigger()?.getAttribute("aria-label")).toBe("Actions for row 8812");
   });
 
-  it("keeps the trigger visible without hover", async () => {
+  it("is reachable without hover: revealed on row focus and on touch", async () => {
     await render(createKebabColumn<Row>(() => [{ label: "Edit", onSelect: onEdit }]));
 
-    expect(trigger()?.className).not.toContain("opacity-0");
-    expect(trigger()?.className).not.toContain("group-hover");
+    expect(trigger()?.className).toContain("group-focus-within:opacity-100");
+    expect(trigger()?.className).toContain("[@media(hover:none)]:opacity-100");
   });
 
   it("omits hidden actions instead of disabling them", async () => {

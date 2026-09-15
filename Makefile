@@ -4,7 +4,7 @@
 	app-logs identity-logs parser-logs frontend-logs discord-logs balancer-logs stream-logs \
 	app-restart identity-restart parser-restart frontend-restart \
 	monitoring-up monitoring-down monitoring-logs monitoring-ps \
-	backup-up backup-down backup-logs backup-setup backup-run backup-ls \
+	backup-up backup-down backup-logs backup-run backup-ls cleanup-run \
 	app-rebuild identity-rebuild parser-rebuild frontend-rebuild \
 	loadtest loadtest-ui
 
@@ -15,9 +15,8 @@ PROD_COMPOSE = docker compose -f docker-compose.production.yml
 #   make monitoring-up MONITORING_PROFILES="logs traces"
 MONITORING_PROFILES ?=
 MONITORING_COMPOSE = docker compose -f docker-compose.monitoring.yml $(foreach p,$(MONITORING_PROFILES),--profile $(p))
-# Контур бэкапов: свой проект (owt-backup) и свой env-файл, чтобы жизненный цикл
-# не зависел от прода. См. docs/backup-rustfs.md.
-BACKUP_ENV = ops/backup/backup.env
+# Backups: rclone → Timeweb S3. Moscow cron 04:30 UTC, see docs/backup-rustfs.md.
+BACKUP_ENV = ops/backup/s3.env
 BACKUP_COMPOSE = docker compose -f docker-compose.backup.yml --env-file $(BACKUP_ENV)
 
 # Workers safe to replicate: RabbitMQ competing-consumers spread RPC calls + jobs
@@ -72,12 +71,12 @@ help:
 	@echo "  make monitoring-down- Stop monitoring stack"
 	@echo "  make monitoring-logs- Follow monitoring logs"
 	@echo "  make monitoring-ps  - Show monitoring services"
-	@echo "  make backup-up      - Start backup rustfs (source, dd-new)"
-	@echo "  make backup-setup   - (Re)configure buckets + replication to home"
-	@echo "  make backup-run     - Run a backup now (dump -> rustfs -> replica check)"
-	@echo "  make backup-ls      - List what is stored in the replica (home)"
-	@echo "  make backup-down    - Stop backup rustfs"
-	@echo "  make backup-logs    - Follow backup rustfs logs"
+	@echo "  make backup-run     - Run a backup now (pg_dump -> Timeweb S3)"
+	@echo "  make cleanup-run    - Run disk cleanup now (see docs/disk-cleanup.md)"
+	@echo "  make backup-ls      - List objects in the backup bucket"
+	@echo "  make backup-up      - Start local rustfs (optional, unused on Moscow)"
+	@echo "  make backup-down    - Stop local rustfs"
+	@echo "  make backup-logs    - Follow local rustfs logs"
 	@echo ""
 	@echo "  make migrate        - Run backend migrations"
 	@echo "  make test           - Run backend tests"
@@ -258,8 +257,7 @@ monitoring-ps:
 	$(MONITORING_COMPOSE) ps
 
 # ==============================================================================
-# Контур резервных копий (отдельный проект owt-backup, хост dd-new).
-# Полная процедура установки и восстановления — docs/backup-rustfs.md.
+# Backups: same as Moscow — pg_dump + rclone to Timeweb S3.
 # ==============================================================================
 backup-up:
 	$(BACKUP_COMPOSE) up -d --wait
@@ -270,16 +268,11 @@ backup-down:
 backup-logs:
 	$(BACKUP_COMPOSE) logs -f
 
-# Идемпотентно: бакеты, версионирование, ILM, ключ реплики, правило репликации
-# и проверка round-trip.
-backup-setup:
-	ops/backup/setup.sh $(BACKUP_ENV)
-
-# Прогон вне расписания (то же, что делает таймер systemd).
 backup-run:
-	ops/backup/backup.sh $(BACKUP_ENV)
+	ENVFILE=$(BACKUP_ENV) ops/backup/backup.sh
 
-# Что реально лежит на home. Единственный ответ на вопрос «есть ли бэкап».
-# Через bash -c: рецепты make исполняет /bin/sh, а lib.sh — bash-скрипт.
 backup-ls:
-	@bash -c 'source ops/backup/lib.sh; load_env $(BACKUP_ENV); mc ls --recursive "replica/$$BACKUP_BUCKET/"'
+	@bash -c 'set -a; . $(BACKUP_ENV); set +a; docker run --rm --env-file $(BACKUP_ENV) rclone/rclone lsf "tw:$$BUCKET/pg/" -R'
+
+cleanup-run:
+	ops/cleanup/cleanup.sh
