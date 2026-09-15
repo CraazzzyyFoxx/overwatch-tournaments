@@ -41379,6 +41379,7 @@
           "default": "empty"
         },
         "slot": {
+          "minimum": 1,
           "title": "Slot",
           "type": "integer"
         },
