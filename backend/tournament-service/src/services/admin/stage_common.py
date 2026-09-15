@@ -54,7 +54,13 @@ def _pick_ban_config_signature(
 
 
 def _apply_seeding(session, seeding: list[tuple[int, int]], target_item) -> None:
-    """Write TENTATIVE inputs from ``seeding`` into ``target_item``."""
+    """Replace ``target_item``'s TENTATIVE inputs with ``seeding``.
+
+    A replacement, not a merge: cutting the advance from top-2 to top-1 has to
+    drop the second-place slots too, or the bracket keeps playing the teams the
+    new configuration no longer qualifies. FINAL (manually assigned) inputs are
+    never touched, at either end.
+    """
     existing_inputs = {inp.slot: inp for inp in target_item.inputs}
     for idx, (source_item_id, source_position) in enumerate(seeding, start=1):
         existing = existing_inputs.get(idx)
@@ -76,3 +82,10 @@ def _apply_seeding(session, seeding: list[tuple[int, int]], target_item) -> None
             )
             session.add(new_input)
             target_item.inputs.append(new_input)
+
+    # ``StageItem.inputs`` is delete-orphan: dropping the row from the collection
+    # is the delete, and unlike ``session.delete`` it needs no await -- this
+    # helper is deliberately synchronous.
+    for existing in list(target_item.inputs):
+        if existing.input_type == enums.StageItemInputType.TENTATIVE and existing.slot > len(seeding):
+            target_item.inputs.remove(existing)

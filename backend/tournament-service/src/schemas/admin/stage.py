@@ -1,12 +1,13 @@
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, model_validator
 
 from shared.core.enums import StageItemInputType, StageItemType, StageType
 
 __all__ = (
     "StageCreate",
     "StageUpdate",
+    "StageSettings",
     "StageItemCreate",
     "StageItemUpdate",
     "StageItemInputCreate",
@@ -17,6 +18,49 @@ __all__ = (
 )
 
 
+class StageScoring(BaseModel):
+    """Points per result. Numeric because the standings adder is."""
+
+    model_config = ConfigDict(extra="allow")
+
+    win: float = 3
+    draw: float = 1
+    loss: float = 0
+
+
+class StageSettings(BaseModel):
+    """The known keys of ``Stage.settings_json``.
+
+    Validated, not exhaustive: ``extra="allow"`` keeps best-of config, Challonge
+    hints and the Swiss bookkeeping the engine writes back (``swiss_byes``,
+    ``swiss_stopped_scopes``) passing through untouched. The point is that the
+    keys the regulation actually runs on cannot arrive in a shape that only
+    explodes later, mid-tournament, inside the points adder.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    scoring: StageScoring | None = None
+    de_grand_final_type: Literal["single", "with_reset"] | None = None
+    tiebreak_order: list[str] | None = None
+
+
+def _validate_settings_json(value: dict | None) -> dict | None:
+    """Check the known regulation keys; store the blob verbatim.
+
+    Parsing into ``StageSettings`` and dumping it back would rewrite the blob --
+    inventing defaults for keys the stage never set and dropping ``None``s the
+    readers distinguish from absent. So the model is used as a validator and the
+    caller's dict is what gets stored.
+    """
+    if value is not None:
+        StageSettings.model_validate(value)
+    return value
+
+
+SettingsJson = Annotated[dict | None, AfterValidator(_validate_settings_json)]
+
+
 class StageCreate(BaseModel):
     name: str
     description: str | None = None
@@ -25,7 +69,7 @@ class StageCreate(BaseModel):
     advance_count: int | None = Field(default=None, ge=1)
     split_lower_bracket: bool = False
     order: int = 0
-    settings_json: dict | None = None
+    settings_json: SettingsJson = None
     challonge_id: int | None = None
     challonge_slug: str | None = None
 
@@ -38,7 +82,7 @@ class StageUpdate(BaseModel):
     advance_count: int | None = Field(default=None, ge=1)
     split_lower_bracket: bool | None = None
     order: int | None = None
-    settings_json: dict | None = None
+    settings_json: SettingsJson = None
 
 
 class StageItemCreate(BaseModel):
@@ -57,7 +101,7 @@ class StageItemUpdate(BaseModel):
 
 
 class StageItemInputCreate(BaseModel):
-    slot: int
+    slot: int = Field(ge=1)
     input_type: StageItemInputType = StageItemInputType.EMPTY
     team_id: int | None = None
     source_stage_item_id: int | None = None
@@ -67,6 +111,8 @@ class StageItemInputCreate(BaseModel):
     def _validate_input_shape(self) -> StageItemInputCreate:
         if self.input_type == StageItemInputType.FINAL and self.team_id is None:
             raise ValueError("FINAL inputs require team_id")
+        if self.input_type == StageItemInputType.EMPTY and self.team_id is not None:
+            raise ValueError("EMPTY inputs must not have team_id")
         if self.input_type == StageItemInputType.TENTATIVE:
             if self.source_stage_item_id is None or self.source_position is None:
                 raise ValueError("TENTATIVE inputs require source_stage_item_id and source_position")

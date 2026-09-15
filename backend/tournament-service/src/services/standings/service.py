@@ -19,7 +19,7 @@ from shared.services.tournament.utils import (
 from shared.services.tournament.utils import (
     completed_encounters_in_finished_rounds as _shared_completed_encounters_in_finished_rounds,
 )
-from shared.services.tournament.utils import sort_bracket_matches
+from shared.services.tournament.utils import is_completed_encounter, sort_bracket_matches
 from src import models, schemas
 from src.core import utils
 from src.services.encounter.service import encounter_service
@@ -126,6 +126,35 @@ def _completed_encounters_in_finished_rounds(
 ) -> list[models.Encounter]:
     """Ignore partially completed playable rounds for standings purposes."""
     return _shared_completed_encounters_in_finished_rounds(encounters)
+
+
+def _assign_final_round_placements(
+    encounters: typing.Sequence[models.Encounter],
+    data: dict[int, dict[str, float | int]],
+) -> None:
+    """Hand out 1st/2nd from the bracket's structural final round.
+
+    The final is the highest positive round that *exists*, not the highest one
+    already played: the latter hands out two firsts and two seconds the moment
+    both semi-finals are done while the final is still open. Placements are
+    assigned only once every encounter of that round is completed. For double
+    elimination the lazily created Grand Final Reset lands in GF+1 and so
+    becomes the final as soon as it exists.
+    """
+    positive = [encounter for encounter in encounters if encounter.round > 0]
+    if not positive:
+        return
+    final_round = max(encounter.round for encounter in positive)
+    final_matches = [encounter for encounter in positive if encounter.round == final_round]
+    if not all(is_completed_encounter(encounter) for encounter in final_matches):
+        return
+    for match in final_matches:
+        if match.home_score > match.away_score:
+            winner, loser = match.home_team_id, match.away_team_id
+        else:
+            winner, loser = match.away_team_id, match.home_team_id
+        data[typing.cast(int, winner)]["placement"] = 1
+        data[typing.cast(int, loser)]["placement"] = 2
 
 
 def _stage_settings(stage: models.Stage | None) -> dict:
@@ -414,19 +443,7 @@ def prepare_teams_for_playoffs_double_elimination(
         typing.cast(int, participant): {"win": 0, "lose": 0, "placement": 0} for participant in participants
     }
 
-    upper_bracket = sorted(
-        [encounter for encounter in completed_encounters if encounter.round > 0],
-        key=lambda encounter: encounter.round,
-        reverse=True,
-    )
-    if upper_bracket:
-        last_game = upper_bracket[0]
-        if last_game.home_score > last_game.away_score:
-            data[typing.cast(int, last_game.home_team_id)]["placement"] = 1
-            data[typing.cast(int, last_game.away_team_id)]["placement"] = 2
-        else:
-            data[typing.cast(int, last_game.away_team_id)]["placement"] = 1
-            data[typing.cast(int, last_game.home_team_id)]["placement"] = 2
+    _assign_final_round_placements(encounters, data)
 
     for encounter in completed_encounters:
         if encounter.home_score > encounter.away_score:
@@ -516,15 +533,7 @@ def prepare_teams_for_playoffs_single_elimination(
             for team_id in data
         ]
 
-    final_round = max(valid_rounds)
-    final_matches = [encounter for encounter in completed_encounters if encounter.round == final_round]
-    for final_match in final_matches:
-        if final_match.home_score > final_match.away_score:
-            data[typing.cast(int, final_match.home_team_id)]["placement"] = 1
-            data[typing.cast(int, final_match.away_team_id)]["placement"] = 2
-        else:
-            data[typing.cast(int, final_match.away_team_id)]["placement"] = 1
-            data[typing.cast(int, final_match.home_team_id)]["placement"] = 2
+    _assign_final_round_placements(encounters, data)
 
     round_losers: dict[int, list[int]] = defaultdict(list)
     for team_id, match_round in round_of_loss.items():
@@ -739,14 +748,21 @@ def _build_elimination_stage_standings(
 
 
 def _sort_for_overall(standings: list[models.Standing], stage_order: dict[int, int]) -> list[models.Standing]:
+    """Order rows for the overall table, honouring each stage's own ranking.
+
+    ``position`` was already computed with the stage's configured
+    ``tiebreak_order``, so it — not a second, hard-coded points/tb/buchholz
+    cascade — decides who is ahead inside a stage. Points/tb/buchholz only
+    break ties between equal positions in *different* groups.
+    """
     return sorted(
         standings,
         key=lambda standing: (
             stage_order.get(standing.stage_id or 0, 0),
+            -standing.position,
             standing.points,
             standing.tb or 0,
             standing.buchholz or 0,
-            -standing.position,
         ),
         reverse=True,
     )
@@ -793,7 +809,21 @@ def calculate_overall_positions(
             next_position += 1
         return standings
 
-    remaining = _sort_for_overall(rankable, stage_order)
+    # Rank teams, not participation rows: across consecutive group stages one
+    # team owns several standings, and numbering all of them lets a single team
+    # occupy two podium places. Only its latest stage row represents its final
+    # achievement; the earlier ones stay unranked.
+    def stage_rank(standing: models.Standing) -> tuple[int, int]:
+        return stage_order.get(standing.stage_id or 0, 0), standing.stage_id or 0
+
+    latest_by_team: dict[int, models.Standing] = {}
+    for standing in rankable:
+        standing.overall_position = 0
+        current = latest_by_team.get(standing.team_id)
+        if current is None or stage_rank(standing) > stage_rank(current):
+            latest_by_team[standing.team_id] = standing
+
+    remaining = _sort_for_overall(list(latest_by_team.values()), stage_order)
     # Best team (first after sort) gets position 1
     for position, standing in enumerate(remaining, start=1):
         standing.overall_position = position

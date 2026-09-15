@@ -105,7 +105,7 @@ class ChallongeClient:
         match_id: int,
         *,
         scores_csv: str,
-        winner_id: int,
+        winner_id: int | str,
     ) -> dict:
         """Push match result to Challonge.
 
@@ -113,7 +113,7 @@ class ChallongeClient:
             tournament_id: Challonge tournament ID.
             match_id: Challonge match ID.
             scores_csv: Score string, e.g. "2-1".
-            winner_id: Challonge participant ID of the winner.
+            winner_id: Challonge participant ID of the winner, or "tie" for a draw.
         """
         tournament_id = int(tournament_id)
         match_id = int(match_id)

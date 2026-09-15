@@ -58,7 +58,10 @@ def _encounter(encounter_id: int, home: int | None, away: int | None, **override
 
 
 def _session() -> SimpleNamespace:
-    return SimpleNamespace(execute=AsyncMock(), commit=AsyncMock(), add=lambda _obj: None)
+    # The only query swap_slots issues itself is the EncounterLink lookup; these
+    # brackets have no links, so it answers with an empty result.
+    no_rows = SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: []))
+    return SimpleNamespace(execute=AsyncMock(return_value=no_rows), commit=AsyncMock(), add=lambda _obj: None)
 
 
 @contextmanager

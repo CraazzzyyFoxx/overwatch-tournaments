@@ -117,10 +117,19 @@ class AdminEncounterOutboxTests(IsolatedAsyncioTestCase):
         )
         payload = schemas.EncounterUpdate(home_score=2, away_score=1)
 
-        with patch.object(
-            admin_encounter_service,
-            "enqueue_tournament_recalculation",
-            AsyncMock(side_effect=fake_enqueue),
+        with (
+            patch.object(
+                admin_encounter_service,
+                "enqueue_tournament_recalculation",
+                AsyncMock(side_effect=fake_enqueue),
+            ),
+            # A score write is a result correction; its downstream-qualification
+            # guard runs its own queries, which this ordering test does not stub.
+            patch.object(
+                admin_encounter_service.AdminEncounterService,
+                "_assert_source_correction_allowed",
+                AsyncMock(),
+            ),
         ):
             updated = await admin_encounter_service.encounter_service.update_encounter(session, encounter.id, payload)
 

@@ -48,6 +48,7 @@ from shared.services.bracket import advancement
 from shared.services.bracket.usability import is_encounter_live
 from shared.services.challonge_refs import resolve_encounter_challonge
 from shared.services.encounter.result_audit import record_result_transition
+from shared.services.pick_ban_engine import series_decided
 from shared.services.scrim_scope import is_scrim_container
 from src import models, schemas
 from src.services.challonge.sync import sync_service
@@ -507,6 +508,21 @@ class CaptainService:
             )
 
         _side, captain_user_id, team_id = await self._resolve_captain_identity(session, auth_user, encounter)
+
+        # A captain report is the FINAL series score, so it must actually end the
+        # series: a Bo3 cannot finish 1:0, and no side can win more maps than the
+        # format has to give (review §6, "Завершение BoN"). Checked after the
+        # captain is identified so a stranger still gets 403, not a hint about the
+        # format. Admin paths stay advisory — a historical or technical result is
+        # the organizer's call.
+        if (
+            not series_decided(home_score, away_score, encounter.best_of)
+            or max(home_score, away_score) > encounter.best_of // 2 + 1
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"{home_score}:{away_score} is not a valid final score for a best-of-{encounter.best_of} series",
+            )
 
         form = await self.report_forms.resolve_report_form(session, encounter.tournament_id)
         # Resolved before validation, not just before persisting the codes: a required

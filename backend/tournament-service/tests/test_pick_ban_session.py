@@ -686,10 +686,13 @@ class SyncPickBanSessionAfterTeamChangeTests(IsolatedAsyncioTestCase):
     async def test_an_existing_session_with_a_played_entry_is_left_alone(self) -> None:
         existing = SimpleNamespace(id=900)
         session = _FakeSession(existing=existing, pool_count=1)
+        # A LIVE series: the played map already scored. (A cascade reset zeroes the
+        # score first, and then the stale session must go — see
+        # test_cascade_reset_reports.)
+        encounter = _encounter(best_of=3)
+        encounter.home_score = 1
 
-        await pick_ban_session_service.sync_pick_ban_session_after_team_change(
-            session, _encounter(best_of=3), PickBanKind.MAP
-        )
+        await pick_ban_session_service.sync_pick_ban_session_after_team_change(session, encounter, PickBanKind.MAP)
 
         self.assertEqual([], session.deleted_tables())
 

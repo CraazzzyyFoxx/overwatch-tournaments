@@ -23,10 +23,9 @@ Returns a :class:`BracketSkeleton` with complete advancement edges:
 - LB reduction rounds produce winner-edges to the next LB round.
 - UB final and LB final both feed the Grand Final.
 
-The Grand Final Reset is NOT materialised on generation — it must be created
-on demand if the LB champion wins the first Grand Final. Skeleton includes a
-stub Grand Final Reset pairing only if the caller explicitly sets
-``include_reset=True``.
+The Grand Final Reset is NEVER materialised on generation — it is created on
+demand, by the advancement engine, if the LB champion wins the first Grand
+Final.
 """
 
 from __future__ import annotations
@@ -51,7 +50,6 @@ def generate(
     team_ids: list[int],
     *,
     lower_bracket_team_ids: list[int] | None = None,
-    include_reset: bool = False,
 ) -> BracketSkeleton:
     """Generate a double-elimination skeleton.
 
@@ -170,6 +168,15 @@ def generate(
         # Cross-drop: reverse so the loser of UB match k does not immediately
         # play the loser of the UB match that received k's winner.
         dropouts = list(reversed(ub_losers[round_num - 1]))
+
+        # An uneven split (more lower-bracket seeds than the upper bracket
+        # drops) leaves more survivors than there are dropouts to meet: reduce
+        # them first, otherwise the tail of ``carry`` has no onward match and
+        # its teams vanish from the bracket.
+        while len(carry) > len(dropouts):
+            carry, _ = pair_up(carry, -lb_round, _lb_label(lb_round))
+            lb_round += 1
+
         label = _lb_label(lb_round)
         dropout_round: list[Origin | None] = []
         match_index = 0
@@ -198,24 +205,13 @@ def generate(
         force=True,
     )
 
-    # Grand Final Reset — only if explicitly requested. Engine consumers are
-    # expected to materialise it on demand when LB champion wins GF #1.
-    if include_reset:
-        pairings.append(
-            Pairing(
-                home_team_id=None,
-                away_team_id=None,
-                round_number=gf_round + 1,
-                name="Grand Final Reset",
-                local_id=next_local_id,
-            )
-        )
-        next_local_id += 1
-        # Reset is fed by the winner of GF if that winner is the LB champion;
-        # this rule can't be expressed as a pure winner/loser edge so we leave
-        # it to consumer logic.
+    total_rounds = gf_round
 
-    total_rounds = gf_round + (1 if include_reset else 0)
+    seeded = {tid for pairing in pairings for tid in (pairing.home_team_id, pairing.away_team_id)}
+    dropped = [tid for tid in (*team_ids, *lb_seeds) if tid not in seeded]
+    if dropped:
+        raise ValueError(f"double elimination dropped teams: {dropped}")
+
     return BracketSkeleton(pairings=pairings, total_rounds=total_rounds, advancement_edges=edges)
 
 

@@ -273,8 +273,23 @@ class MapReportService:
                 # never downgrade a real parsed log back to a captain claim, but do
                 # let the captains' agreement correct a captain-report row.
                 if match.source == MatchSource.CAPTAIN_REPORT.value:
+                    old_home, old_away = match.home_score or 0, match.away_score or 0
                     match.home_score = resolved_home
                     match.away_score = resolved_away
+                    # The row is rewritten, so the series score it already moved has
+                    # to move with it: drop the old map win, add the corrected one.
+                    # A parsed-log row is left alone above, and so is the series
+                    # score -- nothing was rewritten to correct.
+                    # ponytail: assumes the old row's win was counted into the
+                    # encounter when it was recorded. Deliberately not clamped at 0 --
+                    # a negative would mean it never was, and flooring it silently
+                    # would hide that instead of surfacing it.
+                    encounter.home_score = (
+                        (encounter.home_score or 0) + int(resolved_home > resolved_away) - int(old_home > old_away)
+                    )
+                    encounter.away_score = (
+                        (encounter.away_score or 0) + int(resolved_away > resolved_home) - int(old_away > old_home)
+                    )
 
         played_round: int | None = None
         if entry is not None:

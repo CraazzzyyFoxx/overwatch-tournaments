@@ -25,10 +25,29 @@ _NON_CANONICAL_DISTANCE = 10_000
 # Monrad order puts the good pairings first, so the cap only bounds a field that
 # is nearly played out; the fallback keeps such a round valid, just not vetted.
 _LOOKAHEAD_BUDGET = 200
+# Hard ceiling on search nodes visited by one generate_round call, shared by the
+# candidate enumeration and the next-round matching probe. _LOOKAHEAD_BUDGET caps
+# how many finished rounds are weighed; this caps the work spent looking for them,
+# so a played-out field cannot stall the worker on an exponential tree.
+_SEARCH_NODE_BUDGET = 50_000
 
 
 class SwissPairingImpossibleError(ValueError):
     """Raised when no complete Swiss round can be built without a rematch."""
+
+
+class _NodeBudget:
+    """Shared countdown of search nodes; raises once the field costs too much."""
+
+    __slots__ = ("remaining",)
+
+    def __init__(self, limit: int) -> None:
+        self.remaining = limit
+
+    def spend(self) -> None:
+        self.remaining -= 1
+        if self.remaining < 0:
+            raise SwissPairingImpossibleError("Swiss pairing search node budget exhausted for this field")
 
 
 @dataclass(frozen=True)
@@ -144,10 +163,11 @@ def _pair_priority(
     )
 
 
-def _has_perfect_matching(team_ids: list[int], played_pairs: set[frozenset[int]]) -> bool:
+def _has_perfect_matching(team_ids: list[int], played_pairs: set[frozenset[int]], budget: _NodeBudget) -> bool:
     """Can every team still be given an unplayed opponent?"""
 
     def _search(remaining: tuple[int, ...]) -> bool:
+        budget.spend()
         if not remaining:
             return True
         anchor = remaining[0]
@@ -165,6 +185,7 @@ def _keeps_next_round_pairable(
     team_ids: list[int],
     played_pairs: set[frozenset[int]],
     pair_order: list[tuple[int, int]],
+    budget: _NodeBudget,
 ) -> bool:
     """Would another rematch-free round still exist after playing this one?
 
@@ -178,7 +199,7 @@ def _keeps_next_round_pairable(
     after = played_pairs | {frozenset(pair) for pair in pair_order}
     if len(after) >= len(team_ids) * (len(team_ids) - 1) // 2:
         return True
-    return _has_perfect_matching(team_ids, after)
+    return _has_perfect_matching(team_ids, after, budget)
 
 
 def _iter_pairings(
@@ -186,6 +207,7 @@ def _iter_pairings(
     *,
     metadata: dict[int, _TeamMeta],
     played_pairs: set[frozenset[int]],
+    budget: _NodeBudget,
     allow_rematches: bool = False,
 ) -> Iterator[list[tuple[int, int]]]:
     """Rounds for this field, best Monrad pairing first.
@@ -200,6 +222,7 @@ def _iter_pairings(
         return (rematch, *_pair_priority(anchor_team_id, candidate_team_id, metadata=metadata))
 
     def _search(remaining: tuple[int, ...]) -> Iterator[tuple[tuple[int, int], ...]]:
+        budget.spend()
         if not remaining:
             yield ()
             return
@@ -236,6 +259,7 @@ def generate_round(
     sorted_teams = sorted(standings, key=lambda standing: (standing.points, standing.buchholz), reverse=True)
     team_ids = [standing.team_id for standing in sorted_teams]
     bye_history = bye_history or set()
+    budget = _NodeBudget(_SEARCH_NODE_BUDGET)
 
     def _pick(allow_rematches: bool) -> tuple[int | None, list[tuple[int, int]]] | None:
         first: tuple[int | None, list[tuple[int, int]]] | None = None
@@ -248,13 +272,14 @@ def generate_round(
                     pairing_team_ids,
                     metadata=metadata,
                     played_pairs=played_pairs,
+                    budget=budget,
                     allow_rematches=allow_rematches,
                 ),
                 _LOOKAHEAD_BUDGET,
             ):
                 if first is None:
                     first = (candidate, option)
-                if _keeps_next_round_pairable(team_ids, played_pairs, option):
+                if _keeps_next_round_pairable(team_ids, played_pairs, option, budget):
                     return candidate, option
         return first
 

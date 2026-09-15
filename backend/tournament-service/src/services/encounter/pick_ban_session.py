@@ -571,9 +571,9 @@ class PickBanSessionService:
 
         Called after an encounter's home/away team ids changed. Both teams now
         set with no session -> ensure one. Session already exists -> the snapshot
-        is stale, reset it -- UNLESS an entry is already ``played`` (the map is
-        underway; an admin resets manually). Runs inside the caller's
-        transaction (no commit).
+        is stale, reset it -- UNLESS an entry is already ``played`` while the
+        series still carries a score (the map is underway; an admin resets
+        manually). Runs inside the caller's transaction (no commit).
         """
         pick_ban = await self.get_pick_ban_session(session, encounter.id, kind)
         if pick_ban is None:
@@ -587,7 +587,14 @@ class PickBanSessionService:
             .select_from(PickBanEntry)
             .where(PickBanEntry.session_id == pick_ban.id, PickBanEntry.status == MapPoolEntryStatus.PLAYED)
         )
-        if played_count:
+        # A cascade reset (advancement.reset_encounter_result) zeroes the series
+        # score before this hook runs, so a PLAYED entry there belongs to the
+        # REPLACED pairing -- exactly the state that must go. Only a series that
+        # still carries a score keeps its "a map is underway, admin resets
+        # manually" protection.
+        # ponytail: a first map that ended in a draw leaves 0:0 with a genuinely
+        # played entry, so a team change there resets the session too.
+        if played_count and (encounter.home_score or encounter.away_score):
             return
         await self.reset_pick_ban_session(session, encounter, kind, commit=False)
 

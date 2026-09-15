@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from shared.core import enums
 from shared.models.tournament.encounter import Encounter
 from shared.models.tournament.encounter_link import EncounterLink
+from shared.models.tournament.encounter_report import EncounterCaptainReport
 from shared.models.tournament.stage import Stage
 from shared.models.tournament.team import Team
 from shared.services.bracket.types import AdvancementEdge
@@ -184,7 +185,12 @@ async def advance_winner(
         # that result had advanced further down the bracket — is stale now.
         updated.extend(await reset_encounter_result(session, target))
 
-    reset_match = await _maybe_create_grand_final_reset(session, encounter, winner_id)
+    reset_match, dropped = await _maybe_create_grand_final_reset(session, encounter, winner_id)
+    if dropped:
+        # The link loop above filled the leftover Reset's slots before it was
+        # dropped; a deleted row must not reach the caller's post-advance hooks.
+        dropped_ids = {id(encounter) for encounter in dropped}
+        updated = [target for target in updated if id(target) not in dropped_ids]
     if reset_match is not None:
         updated.append(reset_match)
 
@@ -235,6 +241,16 @@ async def reset_encounter_result(
     # tournament closeness averages this column, so a stale value would leak
     # the previous pairing into the tournament's numbers.
     encounter.closeness = None
+    if action == enums.EncounterResultAuditAction.CASCADE_RESET:
+        # A cascade means the MATCHUP changed, not just the score: every artefact
+        # of the old pairing is void. Captain reports above all — a surviving
+        # report from the replaced opponent would pair with the new team's report
+        # and auto-confirm a series that was never played (review item 7).
+        await session.execute(
+            sa.delete(EncounterCaptainReport).where(EncounterCaptainReport.encounter_id == encounter.id)
+        )
+        encounter.ended_at = None
+        encounter.current_map_index = None
     record_result_transition(
         session,
         encounter,
@@ -292,54 +308,77 @@ async def _maybe_create_grand_final_reset(
     session: AsyncSession,
     gf_encounter: Encounter,
     gf_winner_id: int,
-) -> Encounter | None:
+) -> tuple[Encounter | None, list[Encounter]]:
     """Lazily create a Grand Final Reset match when the LB champion wins GF.
 
     Rules:
     - Stage is double-elimination AND configured ``de_grand_final_type ==
       "with_reset"``; a ``no_reset`` stage ends at the Grand Final.
-    - Encounter is the highest currently materialised positive round in its
-      bracket item (the original Grand Final, not UB Final / Reset).
-    - The GF winner must be the team that reached GF via the
-      LB-final → GF winner-edge (target_slot = AWAY in our generator).
-    - No Reset match exists yet for this stage_item_id.
+    - The encounter is a Grand Final iff it has an incoming WINNER
+      ``EncounterLink`` whose SOURCE sits in a negative (lower-bracket) round.
+      That link's ``target_slot`` is where the LB champion plays. Round numbers
+      cannot say this: the Reset itself and the UB Final are positive rounds too,
+      and a materialised Reset is the highest of them (review items 2, 3).
+    - The Reset is fed by two links from the GF (WINNER -> the LB champion's
+      slot, LOSER -> the other), so it is a normal advancement target: it fills
+      itself and ``reset_encounter_result(GF)`` un-plays it again. Its own
+      incoming links all come from a positive round, so completing it never
+      spawns a second Reset.
+    - The GF winner must be the team in the LB champion's slot; a home/away swap
+      moves the link with the team, so the answer survives it (review item 4).
+
+    Returns ``(created_reset, dropped_leftovers)``.
     """
     if gf_encounter.stage_id is None or gf_encounter.round <= 0:
-        return None
+        return None, []
 
     stage = await session.get(Stage, gf_encounter.stage_id)
     if stage is None or stage.stage_type != enums.StageType.DOUBLE_ELIMINATION:
-        return None
+        return None, []
     if (stage.settings_json or {}).get("de_grand_final_type") != "with_reset":
-        return None
+        return None, []
 
-    max_round_result = await session.execute(
-        sa.select(sa.func.max(Encounter.round)).where(
-            Encounter.tournament_id == gf_encounter.tournament_id,
-            Encounter.stage_id == gf_encounter.stage_id,
-            Encounter.stage_item_id == gf_encounter.stage_item_id,
-            Encounter.round > 0,
-        )
-    )
-    max_positive_round = max_round_result.scalar_one()
-    if max_positive_round != gf_encounter.round:
-        return None
-    if gf_encounter.away_team_id != gf_winner_id:
-        # UB champion won — tournament ends, no reset.
-        return None
-
-    existing_reset = await session.execute(
-        sa.select(Encounter)
+    lb_slot = await session.scalar(
+        sa.select(EncounterLink.target_slot)
+        .join(Encounter, Encounter.id == EncounterLink.source_encounter_id)
         .where(
-            Encounter.tournament_id == gf_encounter.tournament_id,
-            Encounter.stage_id == gf_encounter.stage_id,
-            Encounter.stage_item_id == gf_encounter.stage_item_id,
-            Encounter.round == gf_encounter.round + 1,
+            EncounterLink.target_encounter_id == gf_encounter.id,
+            EncounterLink.role == enums.EncounterLinkRole.WINNER,
+            Encounter.round < 0,
         )
-        .with_for_update()
     )
-    if existing_reset.scalar_one_or_none() is not None:
-        return None
+    if lb_slot is None:
+        return None, []
+
+    outgoing = (
+        (await session.execute(sa.select(EncounterLink).where(EncounterLink.source_encounter_id == gf_encounter.id)))
+        .scalars()
+        .all()
+    )
+
+    lb_champion_id = gf_encounter.home_team_id if lb_slot == enums.EncounterLinkSlot.HOME else gf_encounter.away_team_id
+    if lb_champion_id != gf_winner_id:
+        # UB champion won — the tournament ends at the Grand Final. Drop an
+        # untouched Reset left over from an earlier LB-champion result (or from a
+        # generator that pre-created one); a played one is an admin's problem.
+        dropped: list[Encounter] = []
+        for reset_id in {link.target_encounter_id for link in outgoing}:
+            leftover = await session.get(Encounter, reset_id, with_for_update=True)
+            if (
+                leftover is not None
+                and leftover.status == enums.EncounterStatus.OPEN
+                and leftover.home_score == 0
+                and leftover.away_score == 0
+                and leftover.result_status == enums.EncounterResultStatus.NONE
+            ):
+                await session.delete(leftover)
+                dropped.append(leftover)
+        return None, dropped
+
+    if outgoing:
+        # The Reset already exists and ``advance_winner``'s link loop just filled
+        # its slots from these very links.
+        return None, []
 
     reset = Encounter(
         name=await _build_encounter_name_for_ids(
@@ -364,12 +403,28 @@ async def _maybe_create_grand_final_reset(
     )
     session.add(reset)
     await session.flush()
+    other_slot = (
+        enums.EncounterLinkSlot.AWAY if lb_slot == enums.EncounterLinkSlot.HOME else enums.EncounterLinkSlot.HOME
+    )
+    for role, slot in (
+        (enums.EncounterLinkRole.WINNER, lb_slot),
+        (enums.EncounterLinkRole.LOSER, other_slot),
+    ):
+        session.add(
+            EncounterLink(
+                source_encounter_id=gf_encounter.id,
+                target_encounter_id=reset.id,
+                role=role,
+                target_slot=slot,
+            )
+        )
+    await session.flush()
     logger.info(
         "Created Grand Final Reset for tournament=%s stage=%s (LB champion won GF)",
         gf_encounter.tournament_id,
         gf_encounter.stage_id,
     )
-    return reset
+    return reset, []
 
 
 async def _build_encounter_name_for_ids(

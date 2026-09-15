@@ -540,10 +540,11 @@ class PregameLoopTests(IsolatedAsyncioTestCase):
         self.assertEqual((1, 0), (self.encounter.home_score, self.encounter.away_score))
 
         # Both captains agree again on a corrected score. The map is already
-        # `played`: its result may change, but the series score counts it once.
+        # `played`: the series counts it once, but with the corrected result --
+        # the old map win is withdrawn and the new one credited.
         await self.report(map_one, 1, 2)
 
-        self.assertEqual((1, 0), (self.encounter.home_score, self.encounter.away_score))
+        self.assertEqual((0, 1), (self.encounter.home_score, self.encounter.away_score))
         match = self.store.all_of(Match)[0]
         self.assertEqual((1, 2), (match.home_score, match.away_score))
 
