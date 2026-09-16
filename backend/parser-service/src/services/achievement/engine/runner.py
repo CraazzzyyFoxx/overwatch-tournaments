@@ -10,7 +10,6 @@ from loguru import logger
 from sqlalchemy import exc as sa_exc
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from shared.core import errors
 from shared.messaging.config import ACHIEVEMENT_EVALUATE_DEFERRED_QUEUE
 from shared.models.achievements.achievement import (
     AchievementGrain,
@@ -213,6 +212,7 @@ class AchievementEvaluationRunnerService:
             rules_ok = 0
             failed_messages: list[str] = []
             normalizer: DivisionGridNormalizer | None = None
+            normalizer_error: DivisionGridNormalizationError | None = None
             grid = await _resolve_grid(session, workspace_id, tournament)
             # ``user``-grain rules evaluate across the whole workspace even on a
             # tournament-triggered run, so they resolve ranks against the
@@ -262,21 +262,18 @@ class AchievementEvaluationRunnerService:
                     rule.condition_tree
                 )
                 if rule_needs_normalized_divisions and normalizer is None:
-                    try:
-                        normalizer = await build_workspace_division_grid_normalizer(
-                            session,
-                            workspace_id,
-                        )
-                    except DivisionGridNormalizationError as exc:
-                        raise errors.ApiHTTPException(
-                            status_code=409,
-                            detail=[
-                                errors.ApiExc(
-                                    code="division_grid_mapping_required",
-                                    msg=str(exc),
-                                )
-                            ],
-                        ) from exc
+                    if normalizer_error is None:
+                        try:
+                            normalizer = await build_workspace_division_grid_normalizer(session, workspace_id)
+                        except DivisionGridNormalizationError as exc:
+                            normalizer_error = exc
+                    if normalizer is None:
+                        # Incomplete division grid mappings block only the rules
+                        # that read divisions across grid versions. Skip them
+                        # (stored results untouched), report them on the run.
+                        logger.warning(f"Skipping rule '{rule.slug}': {normalizer_error}")
+                        failed_messages.append(f"{rule.slug}: {normalizer_error}")
+                        continue
 
                 try:
                     async with session.begin_nested():

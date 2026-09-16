@@ -34,6 +34,7 @@ from shared.models.achievements.achievement import (  # noqa: E402
     EvaluationRunStatus,
     EvaluationRunTrigger,
 )
+from shared.services.division_grid.normalization import DivisionGridNormalizationError  # noqa: E402
 from src.services.achievement.engine.differ import DiffResult, EvaluationSlice  # noqa: E402
 
 evaluator = _scrim.evaluator
@@ -217,3 +218,37 @@ class RunnerSliceAndStatusTests(_EngineTestCase):
         context = seen["context"]
         self.assertIsNone(context.tournament)
         self.assertIs(sentinel, context.normalizer)
+
+    async def test_missing_grid_mapping_fails_only_the_division_rules(self) -> None:
+        # An incomplete division-grid mapping must not abort the run: the other
+        # rules are evaluated, the division rules are reported once each, and the
+        # normalizer is attempted once, not per rule.
+        self.db.rule(1, "captain", IS_CAPTAIN_RULE, [])
+        self.db.rule(2, "climb", DIV_SPAN_RULE, [], grain="user", scope="global", category="division")
+        self.db.rule(3, "climb-more", DIV_SPAN_RULE, [], grain="user", scope="global", category="division")
+        self.db.session.commit()
+        attempts = 0
+
+        async def build_normalizer(session, workspace_id):  # noqa: ANN001
+            nonlocal attempts
+            attempts += 1
+            raise DivisionGridNormalizationError("Missing division grid mappings to normalized base version 19: [20]")
+
+        capture = _CaptureDiffer()
+        with (
+            patch.object(runner, "diff_and_apply", capture),
+            patch.object(runner, "build_workspace_division_grid_normalizer", build_normalizer),
+        ):
+            run = await runner.run_evaluation(
+                self.db.shim,
+                WORKSPACE_ID,
+                EvaluationRunTrigger.parse_complete,
+                tournament_id=REAL_TOURNAMENT_ID,
+            )
+
+        self.assertEqual(EvaluationRunStatus.partial, run.status)
+        self.assertEqual(1, run.rules_evaluated)
+        self.assertEqual(1, attempts)
+        self.assertEqual(["captain"], [slug for slug, _results, _slice in capture.calls])
+        self.assertIn("climb: Missing division grid mappings", run.error_message)
+        self.assertIn("climb-more: Missing division grid mappings", run.error_message)
