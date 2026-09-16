@@ -54,30 +54,22 @@ async def _execute_encounter_field(
     value,
     context: EvalContext,
 ) -> ResultSet:
-    """Encounter-level field (e.g. closeness). One result per user per encounter.
+    """Encounter-level field (e.g. closeness).
 
-    Returns (user_id, tournament_id, encounter_id) — but since grain is user_match,
-    we pick the first match_id of the encounter as representative.
+    Grain is ``user_match``, so every match of a qualifying encounter is
+    projected. ``AND`` with a map-level leaf can then hit any map of the series.
     """
     column = ENCOUNTER_FIELD_MAP[field]
-
-    # Get first match per encounter as representative match_id
-    first_match = (
-        sa.select(
-            models.Match.encounter_id,
-            sa.func.min(models.Match.id).label("match_id"),
-        ).group_by(models.Match.encounter_id)
-    ).subquery("first_match")
 
     query = (
         sa.select(
             models.WorkspaceMember.player_id,
             models.Encounter.tournament_id,
-            first_match.c.match_id,
+            models.Match.id.label("match_id"),
         )
         .select_from(models.Encounter)
         .join(models.Tournament, models.Tournament.id == models.Encounter.tournament_id)
-        .join(first_match, first_match.c.encounter_id == models.Encounter.id)
+        .join(models.Match, models.Match.encounter_id == models.Encounter.id)
         .join(
             models.Team,
             sa.or_(

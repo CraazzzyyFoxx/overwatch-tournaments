@@ -31,8 +31,12 @@ def _build_player_filter(
         or_groups = []
         for child in condition["OR"]:
             child_clauses = _build_player_filter(child)
+            if not child_clauses:
+                # A SQL-inexpressible child (player_div) must not drop that
+                # branch; force the Python path for the whole OR.
+                return []
             or_groups.append(sa.and_(*child_clauses) if len(child_clauses) > 1 else child_clauses[0])
-        return [sa.or_(*or_groups)]
+        return [sa.or_(*or_groups)] if or_groups else []
 
     ctype = condition.get("type")
     params = condition.get("params", {})
@@ -190,8 +194,11 @@ async def execute_team_players_match(
         )
     else:  # count
         op_fn = OPERATORS[count_op]
-        team_query = sa.select(matching_sq.c.team_id, matching_sq.c.tournament_id).where(
-            op_fn(matching_sq.c.matching_count, count_value)
+        team_query = (
+            sa.select(total_sq.c.team_id, total_sq.c.tournament_id)
+            .select_from(total_sq)
+            .outerjoin(matching_sq, join_cond)
+            .where(op_fn(sa.func.coalesce(matching_sq.c.matching_count, 0), count_value))
         )
 
     # Get all players on qualifying teams

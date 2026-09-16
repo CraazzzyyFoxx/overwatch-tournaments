@@ -10,9 +10,9 @@ from loguru import logger
 from sqlalchemy import exc as sa_exc
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from shared.core import errors
 from shared.messaging.config import ACHIEVEMENT_EVALUATE_DEFERRED_QUEUE
 from shared.models.achievements.achievement import (
+    AchievementGrain,
     AchievementRule,
     EvaluationRun,
     EvaluationRunStatus,
@@ -35,14 +35,17 @@ from shared.services.workspace_tier import is_verified_or_trusted
 from src import models
 from src.core.broker import require_broker
 from src.domain.achievement_eval_context import EvalContext
+from src.domain.achievement_validation import GRAIN_ARITY
 
-from .differ import EvaluationSlice, diff_and_apply
-from .evaluator import evaluate
+from .differ import diff_and_apply, persist_slice_for_grain
+from .evaluator import GrainMismatchError, evaluate
 
 # A full recompute an operator asked for, on a workspace nobody has vouched for.
 # ``parse_complete`` is absent on purpose: it is the bounded, already-paid-for
 # follow-up to a parse and stays inline for every tier.
 _DEFERRABLE_TRIGGERS = (EvaluationRunTrigger.manual, EvaluationRunTrigger.rule_version_bump)
+
+_FINISHED_RUN_STATUSES = (EvaluationRunStatus.done, EvaluationRunStatus.partial)
 
 
 class AchievementEvaluationRunnerService:
@@ -123,7 +126,7 @@ class AchievementEvaluationRunnerService:
         if run is None:
             logger.warning(f"Deferred evaluation for a missing run {event.run_id}; dropping")
             return None
-        if run.status == EvaluationRunStatus.done:
+        if run.status in _FINISHED_RUN_STATUSES:
             # Redelivery after the results were already applied.
             return run
 
@@ -203,15 +206,34 @@ class AchievementEvaluationRunnerService:
             tournament = None
             if tournament_id:
                 tournament = await self.tournaments_repo.get(session, tournament_id)
-            evaluation_slice = EvaluationSlice(tournament_id=tournament_id, match_id=match_id)
-            has_slice = tournament_id is not None or match_id is not None
 
             total_created = 0
             total_removed = 0
+            rules_ok = 0
+            # Keyed by reason, not by rule: one grid-mapping gap fails dozens of
+            # rules with the identical sentence, and one entry per rule pushed
+            # the real tail of the list past ``error_message``'s 1000 chars.
+            failures: dict[str, list[str]] = {}
             normalizer: DivisionGridNormalizer | None = None
+            normalizer_error: DivisionGridNormalizationError | None = None
             grid = await _resolve_grid(session, workspace_id, tournament)
+            # ``user``-grain rules evaluate across the whole workspace even on a
+            # tournament-triggered run, so they resolve ranks against the
+            # workspace grid, not the triggering tournament's.
+            workspace_grid = grid if tournament is None else await _resolve_grid(session, workspace_id, None)
 
             for rule in rules:
+                persist_slice = persist_slice_for_grain(
+                    rule.grain,
+                    tournament_id=tournament_id,
+                    match_id=match_id,
+                )
+                # The trigger tournament narrows tournament/match-grain rules only.
+                # A ``user``-grain rule is evaluated workspace-wide: no tournament
+                # in its context, no ``min_tournament_id`` short-circuit, and the
+                # division normalizer whenever its tree needs one.
+                eval_tournament = None if AchievementGrain(rule.grain) is AchievementGrain.user else tournament
+
                 if not rule.enabled or not rule.condition_tree:
                     # Disabled or empty rule — remove all existing results
                     diff = await diff_and_apply(
@@ -219,65 +241,70 @@ class AchievementEvaluationRunnerService:
                         rule,
                         set(),
                         run_id,
-                        evaluation_slice=evaluation_slice if has_slice else None,
+                        evaluation_slice=persist_slice,
                     )
                     total_removed += len(diff.to_delete)
                     if diff.to_delete:
                         logger.info(f"Rule '{rule.slug}' disabled/empty: removed {len(diff.to_delete)} results")
+                    rules_ok += 1
                     continue
 
-                if rule.min_tournament_id and tournament and tournament.id < rule.min_tournament_id:
+                if rule.min_tournament_id and eval_tournament and eval_tournament.id < rule.min_tournament_id:
                     diff = await diff_and_apply(
                         session,
                         rule,
                         set(),
                         run_id,
-                        evaluation_slice=evaluation_slice if has_slice else None,
+                        evaluation_slice=persist_slice,
                     )
                     total_removed += len(diff.to_delete)
+                    rules_ok += 1
                     continue
 
-                rule_needs_normalized_divisions = tournament is None and _rule_requires_normalized_divisions(
+                rule_needs_normalized_divisions = eval_tournament is None and _rule_requires_normalized_divisions(
                     rule.condition_tree
                 )
                 if rule_needs_normalized_divisions and normalizer is None:
-                    try:
-                        normalizer = await build_workspace_division_grid_normalizer(
-                            session,
-                            workspace_id,
-                        )
-                    except DivisionGridNormalizationError as exc:
-                        raise errors.ApiHTTPException(
-                            status_code=409,
-                            detail=[
-                                errors.ApiExc(
-                                    code="division_grid_mapping_required",
-                                    msg=str(exc),
-                                )
-                            ],
-                        ) from exc
+                    if normalizer_error is None:
+                        try:
+                            normalizer = await build_workspace_division_grid_normalizer(session, workspace_id)
+                        except DivisionGridNormalizationError as exc:
+                            normalizer_error = exc
+                    if normalizer is None:
+                        # Incomplete division grid mappings block only the rules
+                        # that read divisions across grid versions. Skip them
+                        # (stored results untouched), report them on the run.
+                        logger.warning(f"Skipping rule '{rule.slug}': {normalizer_error}")
+                        failures.setdefault(str(normalizer_error), []).append(rule.slug)
+                        continue
 
                 try:
                     async with session.begin_nested():
                         context = EvalContext(
                             workspace_id=workspace_id,
-                            tournament=tournament,
-                            grid=grid,
+                            tournament=eval_tournament,
+                            grid=workspace_grid if eval_tournament is None else grid,
                             normalizer=normalizer if rule_needs_normalized_divisions else None,
                         )
 
                         logger.info(f"Evaluating rule '{rule.slug}' (id={rule.id})")
 
                         results = await evaluate(session, rule.condition_tree, context)
+                        expected_arity = GRAIN_ARITY[AchievementGrain(rule.grain)]
+                        if any(len(key) != expected_arity for key in results):
+                            raise GrainMismatchError(
+                                f"rule '{rule.slug}' grain {rule.grain} expected keys of length {expected_arity}"
+                            )
                         diff = await diff_and_apply(
                             session,
                             rule,
                             results,
                             run_id,
-                            evaluation_slice=evaluation_slice if has_slice else None,
+                            evaluation_slice=persist_slice,
                         )
                         total_created += len(diff.to_insert)
                         total_removed += len(diff.to_delete)
+                        rules_ok += 1
 
                         logger.info(f"Rule '{rule.slug}': +{len(diff.to_insert)} -{len(diff.to_delete)}")
                 except Exception as exc:
@@ -295,12 +322,24 @@ class AchievementEvaluationRunnerService:
                         )
                         raise
                     logger.exception(f"Failed to evaluate rule '{rule.slug}'")
+                    # An exception with an empty ``str`` would otherwise write a
+                    # slug with no reason at all.
+                    failures.setdefault(str(exc) or type(exc).__name__, []).append(rule.slug)
                     continue
 
-            run.rules_evaluated = len(rules)
+            run.rules_evaluated = rules_ok
             run.results_created = total_created
             run.results_removed = total_removed
-            run.status = EvaluationRunStatus.done
+            if failures:
+                run.status = EvaluationRunStatus.partial
+                # ``slug[, slug]: reason``, joined with "; " — the shape the
+                # admin banner parses back into one panel per reason.
+                run.error_message = "; ".join(f"{', '.join(slugs)}: {reason}" for reason, slugs in failures.items())[
+                    :1000
+                ]
+            else:
+                run.status = EvaluationRunStatus.done
+                run.error_message = None
             run.finished_at = datetime.now(UTC)
 
             await session.commit()
@@ -311,7 +350,8 @@ class AchievementEvaluationRunnerService:
             raise
 
         logger.info(
-            f"Evaluation run {run_id} done: {run.rules_evaluated} rules, +{run.results_created} -{run.results_removed}"
+            f"Evaluation run {run_id} {run.status}: {run.rules_evaluated} rules, "
+            f"+{run.results_created} -{run.results_removed}"
         )
         return run
 
@@ -410,6 +450,8 @@ def _rule_requires_normalized_divisions(condition: dict) -> bool:
     if condition_type in {"div_level", "div_change"}:
         return True
     if condition_type == "stable_streak" and "division" in params.get("fields", []):
+        return True
+    if condition_type == "div_span":
         return True
     if condition_type == "team_players_match":
         return _rule_requires_normalized_divisions(params.get("condition", {}))

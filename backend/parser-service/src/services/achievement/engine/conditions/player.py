@@ -52,17 +52,19 @@ async def execute_is_newcomer(
     params: dict[str, Any],
     context: EvalContext,
 ) -> ResultSet:
-    """Check newcomer status. Grain: user_tournament.
+    """Check newcomer status.
 
-    Without params or with empty params: simple boolean check (is_newcomer=True).
-    With op/value: count tournaments where user was newcomer, compare with threshold.
+    Without params or with empty params: simple boolean check (is_newcomer=True),
+    grain ``user_tournament``.
+    With op/value: count tournaments where the user was a newcomer, grain ``user``.
       e.g. {"op": ">=", "value": 2} — was newcomer in 2+ tournaments.
     """
     op = params.get("op")
     value = params.get("value")
 
     if op and value is not None:
-        # Count-based: how many tournaments user was a newcomer in
+        # Count-based: how many tournaments user was a newcomer in. This mode is
+        # user-grain — never narrow to the triggering tournament.
         op_fn = OPERATORS[op]
         query = (
             sa.select(models.WorkspaceMember.player_id)
@@ -80,8 +82,6 @@ async def execute_is_newcomer(
             .group_by(models.WorkspaceMember.player_id)
             .having(op_fn(sa.func.count(models.Player.tournament_id.distinct()), value))
         )
-        if context.tournament:
-            query = query.where(models.Player.tournament_id == context.tournament.id)
 
         result = await session.execute(query)
         return {(row[0],) for row in result}

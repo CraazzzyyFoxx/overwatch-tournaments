@@ -67,6 +67,14 @@ GRAIN_ORDER = {
     AchievementGrain.user_match: 2,
 }
 
+GRAIN_ARITY = {
+    AchievementGrain.user: 1,
+    AchievementGrain.user_tournament: 2,
+    AchievementGrain.user_match: 3,
+}
+
+STANDING_RECORD_FIELDS = frozenset({"wins", "losses", "draws", "points", "buchholz", "matches"})
+
 # Structural limits on a condition tree, enforced at validation time (before a
 # rule is ever saved). A pathologically deep or huge tree would otherwise blow
 # the recursion limit in the evaluator on every evaluation run (review L13);
@@ -97,12 +105,30 @@ def validate_rule_definition(
     return errors, inferred_grain
 
 
+def leaf_grain(ctype: str, params: dict[str, Any] | None = None) -> AchievementGrain | None:
+    """Grain of one leaf, including parametric types whose grain depends on params."""
+    params = params or {}
+    if ctype == "distinct_count" and params.get("scope") == "tournament":
+        return AchievementGrain.user_tournament
+    if ctype == "reached_playoffs" and params.get("scope") == "global":
+        return AchievementGrain.user
+    if ctype == "is_newcomer" and params.get("op") is not None and params.get("value") is not None:
+        return AchievementGrain.user
+    return LEAF_GRAINS.get(ctype)
+
+
 def infer_grain(condition: dict[str, Any]) -> AchievementGrain:
-    """Infer the resulting grain of a condition tree."""
+    """Infer the resulting grain of a condition tree.
+
+    Mixed grains are a validation error; this still returns the finest grain so
+    callers that run after a failed validate have a stable fallback.
+    """
     grains = _collect_grains(condition)
     if not grains:
         return AchievementGrain.user
-    # Return the finest (most specific) grain
+    unique = set(grains)
+    if len(unique) == 1:
+        return next(iter(unique))
     return max(grains, key=lambda g: GRAIN_ORDER[g])
 
 
@@ -153,6 +179,8 @@ def _validate_node(
                     depth=depth + 1,
                     budget=budget,
                 )
+            if not in_player_subcondition:
+                _reject_mixed_grains(node, errors, path)
             return
 
     if "NOT" in node:
@@ -160,6 +188,7 @@ def _validate_node(
             errors.append(f"{path}.NOT: NOT is not supported inside player sub-conditions")
             return
         _validate_node(node["NOT"], errors, f"{path}.NOT", depth=depth + 1, budget=budget)
+        _reject_mixed_grains(node, errors, path)
         return
 
     # Leaf node
@@ -216,6 +245,10 @@ def _validate_leaf_params(
         _require_keys(params, ["op", "value"], errors, path)
     elif ctype == "standing_record":
         _require_keys(params, ["field", "op", "value"], errors, path)
+        field = params.get("field")
+        if field is not None and field not in STANDING_RECORD_FIELDS:
+            allowed = ", ".join(sorted(STANDING_RECORD_FIELDS))
+            errors.append(f"{path}.params.field: must be one of {allowed}")
     elif ctype == "div_change":
         _require_keys(params, ["direction", "min_shift"], errors, path)
         if params.get("direction") not in ("up", "down"):
@@ -269,6 +302,7 @@ def _validate_leaf_params(
         pass  # flexible params
     elif ctype == "tournament_count":
         _require_keys(params, ["op", "value"], errors, path)
+
     elif ctype == "distinct_count":
         _require_keys(params, ["field", "op", "value"], errors, path)
     elif ctype == "consecutive":
@@ -322,6 +356,13 @@ def _validate_stat_param(
         errors.append(f"{path}.params.stat: {stat_error}")
 
 
+def _reject_mixed_grains(node: dict[str, Any], errors: list[str], path: str) -> None:
+    grains = {grain.value for grain in _collect_grains(node)}
+    if len(grains) > 1:
+        names = ", ".join(sorted(grains))
+        errors.append(f"{path}: mixed result grains ({names}) are not supported; every leaf must share one grain")
+
+
 def _collect_grains(node: dict[str, Any]) -> list[AchievementGrain]:
     """Recursively collect grain levels from all leaf nodes."""
     grains = []
@@ -336,13 +377,11 @@ def _collect_grains(node: dict[str, Any]) -> list[AchievementGrain]:
         return _collect_grains(node["NOT"])
 
     ctype = node.get("type")
-    if ctype and ctype in LEAF_GRAINS:
-        scope = node.get("params", {}).get("scope")
-        if ctype == "distinct_count" and scope == "tournament":
-            grains.append(AchievementGrain.user_tournament)
-        elif ctype == "reached_playoffs" and scope == "global":
-            grains.append(AchievementGrain.user)
-        else:
-            grains.append(LEAF_GRAINS[ctype])
+    if not ctype:
+        return grains
+    params = node.get("params") if isinstance(node.get("params"), dict) else None
+    grain = leaf_grain(ctype, params)
+    if grain is not None:
+        grains.append(grain)
 
     return grains

@@ -435,6 +435,82 @@ class ExecuteJobTests(IsolatedAsyncioTestCase):
         self.assertIsNone(seen["role_mask"])
 
 
+class BalanceInlineTests(IsolatedAsyncioTestCase):
+    """The synchronous endpoint: job gates, no job store, clamped budget."""
+
+    @staticmethod
+    def _call(**overrides):
+        kwargs = {
+            "player_data": {"players": {"1": {"name": "One"}}},
+            "role_mask": {"tank": 1, "flex": 4},
+            "config_overrides": None,
+            "workspace_id": 77,
+            "user": _api_key_user(scopes=["team.create"]),
+        }
+        kwargs.update(overrides)
+        return jobs.balance_inline(**kwargs)
+
+    @staticmethod
+    def _patches(limiter, run_balance):
+        return (
+            patch(f"{JOBS}.get_api_key_limiter", return_value=limiter),
+            patch(f"{JOBS}._access_policy", SimpleNamespace(ensure_workspace_access=lambda *a, **k: None)),
+            patch(f"{JOBS}.run_balance", run_balance),
+        )
+
+    async def test_caller_cannot_exceed_the_synchronous_solver_budget(self) -> None:
+        seen: dict = {}
+
+        async def fake_run_balance(input_data, config_overrides, progress_callback, role_mask=None):
+            seen.update(config=config_overrides, role_mask=role_mask, callback=progress_callback)
+            return {"variants": [dict(_VARIANT)]}
+
+        limiter = _noop_limiter()
+        session_user = SimpleNamespace(id=5, _credential_type="access_token")
+        patches = self._patches(limiter, fake_run_balance)
+        with patches[0], patches[1], patches[2]:
+            result = await self._call(
+                user=session_user,
+                config_overrides={"time_limit_ms": 600000, "population_size": 50},
+            )
+
+        # The 600s job ceiling would outlive the HTTP request that is waiting on it.
+        self.assertEqual(seen["config"]["time_limit_ms"], jobs.SYNC_TIME_LIMIT_MS)
+        self.assertEqual(seen["config"]["population_size"], 50)
+        self.assertEqual(seen["role_mask"], {"tank": 1, "flex": 4})
+        # No progress transport on this path, so nothing to emit into.
+        self.assertIsNone(seen["callback"])
+        self.assertEqual(result["variants"][0]["statistics"]["players_per_team"], 5)
+        limiter.reserve_job.assert_awaited_once()
+        limiter.release_job.assert_awaited_once()
+
+    async def test_injected_budget_is_not_charged_to_the_api_key_config_policy(self) -> None:
+        """``time_limit_ms`` is not an API-key-allowed field, and the key never sent it."""
+        seen: dict = {}
+
+        async def fake_run_balance(input_data, config_overrides, progress_callback, role_mask=None):
+            seen.update(config=config_overrides)
+            return {"variants": [dict(_VARIANT)]}
+
+        limiter = _noop_limiter()
+        patches = self._patches(limiter, fake_run_balance)
+        with patches[0], patches[1], patches[2]:
+            await self._call(config_overrides={"population_size": 50})
+
+        self.assertEqual(seen["config"]["time_limit_ms"], jobs.SYNC_TIME_LIMIT_MS)
+
+    async def test_releases_the_concurrency_slot_when_the_solve_fails(self) -> None:
+        async def failing_run_balance(*args, **kwargs):
+            raise HTTPException(status_code=422, detail="No valid players found")
+
+        limiter = _noop_limiter()
+        patches = self._patches(limiter, failing_run_balance)
+        with patches[0], patches[1], patches[2], self.assertRaises(HTTPException):
+            await self._call()
+
+        limiter.release_job.assert_awaited_once_with("api_key", 42, limiter.reserve_job.await_args.args[1])
+
+
 class SolverTests(IsolatedAsyncioTestCase):
     async def test_run_balance_preserves_variants_shape(self) -> None:
         variants = [

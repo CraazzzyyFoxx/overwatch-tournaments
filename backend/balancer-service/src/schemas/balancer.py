@@ -197,9 +197,27 @@ class ConfigOverrides(BaseModel):
 
 
 class BalanceRequest(BaseModel):
-    """Request schema for direct team balancing."""
+    """Request schema for the synchronous, stateless balance (``rpc.balancer.balance``).
+
+    Everything the solver needs travels in this payload: the pool, the per-team
+    roster shape and the knobs. Nothing is read from the workspace, so the same
+    body balanced twice yields the same teams regardless of tournament state.
+    ``extra="forbid"`` so a misspelled field is a 422, not a silently ignored
+    knob on a request whose whole point is being self-describing.
+    """
+
+    model_config = ConfigDict(extra="forbid")
 
     player_data: dict = Field(..., description="Player data in the tournament format")
+    role_mask: dict[str, Annotated[int, Field(ge=0, le=20)]] | None = Field(
+        None,
+        description=(
+            'Per-team slot counts keyed by roster slot code, e.g. {"tank": 1, "dps": 2, "support": 2} '
+            "-- the default when omitted. Team count is derived from it: floor(players / sum(slots)); "
+            "the remainder is benched. Input role names are matched case-insensitively against these "
+            'keys, so a pool written with "Damage" fills a "dps" slot.'
+        ),
+    )
     config_overrides: ConfigOverrides | None = Field(None, description="Optional configuration overrides")
 
 

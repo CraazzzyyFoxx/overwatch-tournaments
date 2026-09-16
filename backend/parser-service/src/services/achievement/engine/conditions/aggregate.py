@@ -10,6 +10,7 @@ from typing import Any
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.core.enums import EncounterStatus
 from src import models
 
 from ..context import EvalContext
@@ -106,6 +107,7 @@ async def execute_global_winrate(
         .where(
             models.Player.is_substitution.is_(False),
             models.Tournament.workspace_id == context.workspace_id,
+            models.Encounter.status == EncounterStatus.COMPLETED,
             *([] if include_league else [models.Tournament.is_league.is_(False)]),
         )
         .group_by(models.WorkspaceMember.player_id)

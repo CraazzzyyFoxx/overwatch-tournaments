@@ -1167,7 +1167,7 @@ export interface EvaluationRunRead {
   results_removed: number;
   started_at: string;
   finished_at: string | null;
-  status: "running" | "done" | "failed" | "cancelled";
+  status: "queued" | "running" | "done" | "partial" | "failed" | "cancelled";
   error_message: string | null;
 }
 

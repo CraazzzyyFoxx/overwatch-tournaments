@@ -1,10 +1,11 @@
-"""div_span — total division climb across all tournaments.
+"""div_span — division climb across tournaments in one role.
 
 Grain: user (global).
 
 Ports the legacy ``my-drill-will-pierce-the-sky`` query: within a single role,
-``max(division) - min(division)`` across the user's tournaments must meet a
-threshold. Division resolution happens in Python (needs the grid/normalizer).
+the last tournament's division minus the first (chronological) must meet a
+threshold. A drop does not count as a climb. Division resolution happens in
+Python (needs the grid/normalizer).
 """
 
 from __future__ import annotations
@@ -28,11 +29,11 @@ async def execute_div_span(
     params: dict[str, Any],
     context: EvalContext,
 ) -> ResultSet:
-    """max(div) - min(div) per role across tournaments meets threshold. Grain: user.
+    """Chronological last−first division per role meets threshold. Grain: user.
 
     params:
         op: comparison operator (e.g. ">=")
-        value: minimum division span
+        value: minimum division climb
     """
     op = params["op"]
     value = params["value"]
@@ -48,6 +49,8 @@ async def execute_div_span(
             models.Player.role,
             models.Player.rank,
             models.Tournament.division_grid_version_id,
+            models.Tournament.start_date,
+            models.Tournament.id,
         )
         .select_from(models.Player)
         .join(
@@ -63,15 +66,18 @@ async def execute_div_span(
 
     result = await session.execute(query)
 
-    # Division numbers per (user, role).
-    spans: dict[tuple[int, str], list[int]] = defaultdict(list)
-    for user_id, role, rank, source_version_id in result:
+    series: dict[tuple[int, str], list[tuple]] = defaultdict(list)
+    for user_id, role, rank, source_version_id, start_date, tournament_id in result:
         division = context.resolve_division(rank, source_version_id=source_version_id)
         if division is not None:
-            spans[(user_id, str(role))].append(division.number)
+            series[(user_id, str(role))].append((start_date, tournament_id, division.number))
 
     qualifying: ResultSet = set()
-    for (user_id, _role), numbers in spans.items():
-        if len(numbers) >= 2 and op_fn(max(numbers) - min(numbers), value):
+    for (user_id, _role), points in series.items():
+        if len(points) < 2:
+            continue
+        points.sort(key=lambda item: (item[0] is None, item[0] or 0, item[1]))
+        climb = points[-1][2] - points[0][2]
+        if op_fn(climb, value):
             qualifying.add((user_id,))
     return qualifying

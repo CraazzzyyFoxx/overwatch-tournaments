@@ -29,6 +29,7 @@ from src.domain.achievement_catalog import (  # noqa: E402
 from src.domain.achievement_validation import (  # noqa: E402
     LEAF_GRAINS,
     infer_grain,
+    leaf_grain,
     validate_condition_tree,
 )
 from src.services.achievement.engine import differ as differ_module  # noqa: E402
@@ -39,7 +40,11 @@ from src.services.achievement.engine.conditions import (  # noqa: E402
 from src.services.achievement.engine.conditions.tournament_format import (  # noqa: E402
     matches_tournament_format,
 )
-from src.services.achievement.engine.differ import EvaluationSlice, diff_and_apply  # noqa: E402
+from src.services.achievement.engine.differ import (  # noqa: E402
+    EvaluationSlice,
+    diff_and_apply,
+    persist_slice_for_grain,
+)
 
 
 def _legacy_rule_catalog() -> dict[str, tuple[str, str, str]]:
@@ -87,6 +92,19 @@ class DiffScopeTests(IsolatedAsyncioTestCase):
         )
 
         self.assertEqual([], diff.to_delete)
+
+    def test_persist_slice_omits_scope_for_user_grain(self) -> None:
+        self.assertIsNone(persist_slice_for_grain(AchievementGrain.user, tournament_id=10, match_id=3))
+
+    def test_persist_slice_keeps_tournament_for_tournament_grain(self) -> None:
+        slice_ = persist_slice_for_grain(AchievementGrain.user_tournament, tournament_id=10, match_id=3)
+        self.assertEqual(10, slice_.tournament_id)
+        self.assertIsNone(slice_.match_id)
+
+    def test_persist_slice_keeps_match_for_match_grain(self) -> None:
+        slice_ = persist_slice_for_grain(AchievementGrain.user_match, tournament_id=10, match_id=3)
+        self.assertEqual(10, slice_.tournament_id)
+        self.assertEqual(3, slice_.match_id)
 
 
 class DiffWorkspaceMemberResolutionTests(IsolatedAsyncioTestCase):
@@ -292,6 +310,34 @@ class ValidationTests(TestCase):
             infer_grain({"type": "reached_playoffs", "params": {"scope": "tournament"}}),
         )
 
+    def test_is_newcomer_count_mode_is_user_grain(self) -> None:
+        self.assertEqual(AchievementGrain.user_tournament, leaf_grain("is_newcomer", {}))
+        self.assertEqual(
+            AchievementGrain.user,
+            leaf_grain("is_newcomer", {"op": ">=", "value": 2}),
+        )
+        self.assertEqual(
+            AchievementGrain.user,
+            infer_grain({"type": "is_newcomer", "params": {"op": ">=", "value": 2}}),
+        )
+
+    def test_mixed_grains_are_rejected(self) -> None:
+        errors = validate_condition_tree(
+            {
+                "AND": [
+                    {"type": "is_captain"},
+                    {"type": "match_win"},
+                ]
+            }
+        )
+        self.assertTrue(any("mixed result grains" in error for error in errors))
+
+    def test_standing_record_rejects_unknown_field(self) -> None:
+        errors = validate_condition_tree(
+            {"type": "standing_record", "params": {"field": "not_a_field", "op": "==", "value": 0}}
+        )
+        self.assertTrue(any("params.field" in error for error in errors))
+
     def test_log_stat_rank_requires_stat(self) -> None:
         self.assertTrue(validate_condition_tree({"type": "log_stat_rank", "params": {}}))
         self.assertEqual([], validate_condition_tree({"type": "log_stat_rank", "params": {"stat": "Deaths"}}))
@@ -350,6 +396,11 @@ class TournamentFormatTests(TestCase):
         self.assertTrue(matches_tournament_format({StageType.DOUBLE_ELIMINATION}, "double_elim"))
         self.assertTrue(matches_tournament_format({StageType.DOUBLE_ELIMINATION}, "has_bracket"))
         self.assertFalse(matches_tournament_format({StageType.DOUBLE_ELIMINATION}, "single_elim"))
+
+    def test_swiss_only_is_not_round_robin(self) -> None:
+        self.assertFalse(matches_tournament_format({StageType.SWISS}, "round_robin"))
+        self.assertFalse(matches_tournament_format({StageType.SWISS}, "has_bracket"))
+        self.assertTrue(matches_tournament_format({StageType.ROUND_ROBIN, StageType.SINGLE_ELIMINATION}, "round_robin"))
 
 
 class DynamicHeroRuleTests(TestCase):

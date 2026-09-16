@@ -13,6 +13,7 @@ import sqlalchemy as sa
 from shared.core.enums import LogStatsName
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.models.achievements.achievement import AchievementGrain
 from src import models
 
 # PostgreSQL enum stores PascalCase names (e.g. 'Performance'),
@@ -104,6 +105,77 @@ async def get_all_eligible_users(
     )
     result = await session.execute(query)
     return {(row[0],) for row in result}
+
+
+async def get_eligible_keys(
+    session: AsyncSession,
+    context: EvalContext,
+    grain: AchievementGrain | str,
+) -> ResultSet:
+    """Universe for ``NOT``: keys of ``grain``, narrowed to ``context.tournament`` when set.
+
+    Roster-based grains exclude substitutes, matching ``match_win`` and the
+    team/streak nodes, so ``NOT match_win`` cannot award a bench player.
+    """
+    resolved = AchievementGrain(grain)
+    if resolved is AchievementGrain.user:
+        return await get_all_eligible_users(session, context)
+
+    if resolved is AchievementGrain.user_tournament:
+        query = (
+            sa.select(models.WorkspaceMember.player_id, models.Player.tournament_id)
+            .select_from(models.Player)
+            .join(
+                models.WorkspaceMember,
+                models.WorkspaceMember.id == models.Player.workspace_member_id,
+            )
+            .join(models.Tournament, models.Tournament.id == models.Player.tournament_id)
+            .where(
+                models.Tournament.workspace_id == context.workspace_id,
+                models.Player.is_substitution.is_(False),
+            )
+        )
+        if context.tournament:
+            query = query.where(models.Player.tournament_id == context.tournament.id)
+        result = await session.execute(query)
+        return {(row[0], row[1]) for row in result}
+
+    query = (
+        sa.select(
+            models.WorkspaceMember.player_id,
+            models.Encounter.tournament_id,
+            models.Match.id.label("match_id"),
+        )
+        .select_from(models.Match)
+        .join(models.Encounter, models.Encounter.id == models.Match.encounter_id)
+        .join(models.Tournament, models.Tournament.id == models.Encounter.tournament_id)
+        .join(
+            models.Team,
+            sa.or_(
+                models.Team.id == models.Match.home_team_id,
+                models.Team.id == models.Match.away_team_id,
+            ),
+        )
+        .join(
+            models.Player,
+            sa.and_(
+                models.Player.team_id == models.Team.id,
+                models.Player.tournament_id == models.Encounter.tournament_id,
+            ),
+        )
+        .join(
+            models.WorkspaceMember,
+            models.WorkspaceMember.id == models.Player.workspace_member_id,
+        )
+        .where(
+            models.Tournament.workspace_id == context.workspace_id,
+            models.Player.is_substitution.is_(False),
+        )
+    )
+    if context.tournament:
+        query = query.where(models.Encounter.tournament_id == context.tournament.id)
+    result = await session.execute(query)
+    return {(row[0], row[1], row[2]) for row in result}
 
 
 def get_registered_types() -> list[str]:

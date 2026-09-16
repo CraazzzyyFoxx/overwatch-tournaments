@@ -65,34 +65,38 @@ async def execute_consecutive(
         # Users who won (position == 1) in consecutive tournaments
         # Only bracket/final standings (buchholz IS NULL) and non-league tournaments
         qualifying = (
-            sa.select(
-                models.WorkspaceMember.player_id.label("user_id"),
-                tournament_seq.c.seq.label("seq"),
+            (
+                sa.select(
+                    models.WorkspaceMember.player_id.label("user_id"),
+                    tournament_seq.c.seq.label("seq"),
+                )
+                .select_from(models.Player)
+                .join(
+                    models.WorkspaceMember,
+                    models.WorkspaceMember.id == models.Player.workspace_member_id,
+                )
+                .join(models.Team, models.Team.id == models.Player.team_id)
+                .join(
+                    models.Standing,
+                    sa.and_(
+                        models.Standing.team_id == models.Team.id,
+                        models.Standing.tournament_id == models.Player.tournament_id,
+                    ),
+                )
+                .join(models.Tournament, models.Tournament.id == models.Player.tournament_id)
+                .outerjoin(models.Stage, models.Stage.id == models.Standing.stage_id)
+                .join(tournament_seq, tournament_seq.c.tournament_id == models.Tournament.id)
+                .where(
+                    models.Standing.overall_position == 1,
+                    standing_is_elimination(standing=models.Standing, stage=models.Stage),
+                    models.Tournament.is_league.is_(False),
+                    models.Tournament.workspace_id == context.workspace_id,
+                    models.Player.is_substitution.is_(False),
+                )
             )
-            .select_from(models.Player)
-            .join(
-                models.WorkspaceMember,
-                models.WorkspaceMember.id == models.Player.workspace_member_id,
-            )
-            .join(models.Team, models.Team.id == models.Player.team_id)
-            .join(
-                models.Standing,
-                sa.and_(
-                    models.Standing.team_id == models.Team.id,
-                    models.Standing.tournament_id == models.Player.tournament_id,
-                ),
-            )
-            .join(models.Tournament, models.Tournament.id == models.Player.tournament_id)
-            .outerjoin(models.Stage, models.Stage.id == models.Standing.stage_id)
-            .join(tournament_seq, tournament_seq.c.tournament_id == models.Tournament.id)
-            .where(
-                models.Standing.overall_position == 1,
-                standing_is_elimination(standing=models.Standing, stage=models.Stage),
-                models.Tournament.is_league.is_(False),
-                models.Tournament.workspace_id == context.workspace_id,
-                models.Player.is_substitution.is_(False),
-            )
-        ).subquery("qualifying")
+            .distinct()
+            .subquery("qualifying")
+        )
 
     elif metric == "day_two":
         position_op = params.get("position_op", "<")
@@ -102,66 +106,74 @@ async def execute_consecutive(
         op_fn = OPERATORS[position_op]
 
         qualifying = (
-            sa.select(
-                models.WorkspaceMember.player_id.label("user_id"),
-                tournament_seq.c.seq.label("seq"),
+            (
+                sa.select(
+                    models.WorkspaceMember.player_id.label("user_id"),
+                    tournament_seq.c.seq.label("seq"),
+                )
+                .select_from(models.Player)
+                .join(
+                    models.WorkspaceMember,
+                    models.WorkspaceMember.id == models.Player.workspace_member_id,
+                )
+                .join(models.Team, models.Team.id == models.Player.team_id)
+                .join(
+                    models.Standing,
+                    sa.and_(
+                        models.Standing.team_id == models.Team.id,
+                        models.Standing.tournament_id == models.Player.tournament_id,
+                    ),
+                )
+                .join(models.Tournament, models.Tournament.id == models.Player.tournament_id)
+                .outerjoin(models.Stage, models.Stage.id == models.Standing.stage_id)
+                .join(tournament_seq, tournament_seq.c.tournament_id == models.Tournament.id)
+                .where(
+                    op_fn(models.Standing.overall_position, position_value),
+                    standing_is_elimination(standing=models.Standing, stage=models.Stage),
+                    models.Tournament.is_league.is_(False),
+                    models.Tournament.workspace_id == context.workspace_id,
+                    models.Player.is_substitution.is_(False),
+                )
             )
-            .select_from(models.Player)
-            .join(
-                models.WorkspaceMember,
-                models.WorkspaceMember.id == models.Player.workspace_member_id,
-            )
-            .join(models.Team, models.Team.id == models.Player.team_id)
-            .join(
-                models.Standing,
-                sa.and_(
-                    models.Standing.team_id == models.Team.id,
-                    models.Standing.tournament_id == models.Player.tournament_id,
-                ),
-            )
-            .join(models.Tournament, models.Tournament.id == models.Player.tournament_id)
-            .outerjoin(models.Stage, models.Stage.id == models.Standing.stage_id)
-            .join(tournament_seq, tournament_seq.c.tournament_id == models.Tournament.id)
-            .where(
-                op_fn(models.Standing.overall_position, position_value),
-                standing_is_elimination(standing=models.Standing, stage=models.Stage),
-                models.Tournament.is_league.is_(False),
-                models.Tournament.workspace_id == context.workspace_id,
-                models.Player.is_substitution.is_(False),
-            )
-        ).subquery("qualifying")
+            .distinct()
+            .subquery("qualifying")
+        )
 
     elif metric == "playoffs":
         # Tournaments where the player reached the playoff/elimination bracket
         # (group→playoff transition visible via the stage system).
         qualifying = (
-            sa.select(
-                models.WorkspaceMember.player_id.label("user_id"),
-                tournament_seq.c.seq.label("seq"),
+            (
+                sa.select(
+                    models.WorkspaceMember.player_id.label("user_id"),
+                    tournament_seq.c.seq.label("seq"),
+                )
+                .select_from(models.Player)
+                .join(
+                    models.WorkspaceMember,
+                    models.WorkspaceMember.id == models.Player.workspace_member_id,
+                )
+                .join(models.Team, models.Team.id == models.Player.team_id)
+                .join(
+                    models.Standing,
+                    sa.and_(
+                        models.Standing.team_id == models.Team.id,
+                        models.Standing.tournament_id == models.Player.tournament_id,
+                    ),
+                )
+                .join(models.Tournament, models.Tournament.id == models.Player.tournament_id)
+                .outerjoin(models.Stage, models.Stage.id == models.Standing.stage_id)
+                .join(tournament_seq, tournament_seq.c.tournament_id == models.Tournament.id)
+                .where(
+                    standing_is_elimination(standing=models.Standing, stage=models.Stage),
+                    models.Tournament.is_league.is_(False),
+                    models.Tournament.workspace_id == context.workspace_id,
+                    models.Player.is_substitution.is_(False),
+                )
             )
-            .select_from(models.Player)
-            .join(
-                models.WorkspaceMember,
-                models.WorkspaceMember.id == models.Player.workspace_member_id,
-            )
-            .join(models.Team, models.Team.id == models.Player.team_id)
-            .join(
-                models.Standing,
-                sa.and_(
-                    models.Standing.team_id == models.Team.id,
-                    models.Standing.tournament_id == models.Player.tournament_id,
-                ),
-            )
-            .join(models.Tournament, models.Tournament.id == models.Player.tournament_id)
-            .outerjoin(models.Stage, models.Stage.id == models.Standing.stage_id)
-            .join(tournament_seq, tournament_seq.c.tournament_id == models.Tournament.id)
-            .where(
-                standing_is_elimination(standing=models.Standing, stage=models.Stage),
-                models.Tournament.is_league.is_(False),
-                models.Tournament.workspace_id == context.workspace_id,
-                models.Player.is_substitution.is_(False),
-            )
-        ).subquery("qualifying")
+            .distinct()
+            .subquery("qualifying")
+        )
     else:
         return set()
 
@@ -263,16 +275,19 @@ async def execute_stable_streak(
     qualifying_users: ResultSet = set()
     for user_id, entries in user_rows.items():
         # Rows arrive chronologically ordered per user (SQL ORDER BY above).
-        streak = 1
-        for i in range(1, len(entries)):
-            # Segment breaks when any tracked field changes (gaps are OK)
-            same = all(entries[i].get(f) == entries[i - 1].get(f) for f in fields)
-            if same:
+        streak = 0
+        prev: dict[str, Any] | None = None
+        for entry in entries:
+            if any(entry.get(field) is None for field in fields):
+                streak = 0
+                prev = None
+                continue
+            if prev is not None and all(entry.get(field) == prev.get(field) for field in fields):
                 streak += 1
-                if streak >= min_streak:
-                    qualifying_users.add((user_id,))
-                    break
             else:
                 streak = 1
-
+            prev = entry
+            if streak >= min_streak:
+                qualifying_users.add((user_id,))
+                break
     return qualifying_users

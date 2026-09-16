@@ -1,4 +1,4 @@
-"""Public balancer job API over typed RPC (rpc.balancer.jobs.*).
+"""Public balancer compute API over typed RPC (rpc.balancer.jobs.* + rpc.balancer.balance).
 
 Ports the job endpoints from ``src/routes/balancer.py``: create (multipart upload
 arrives base64-encoded from the gateway), status poll, and result. These accept
@@ -12,6 +12,11 @@ Redis-backed job-store reads.
 The SSE stream endpoint is intentionally NOT migrated: it's dead code (the
 frontend tracks progress via the tournament:{id}:balancer WS topic), and a
 long-lived stream does not fit the request/reply RPC model.
+
+``rpc.balancer.balance`` is the synchronous twin of that job trio: one request
+carrying the whole pool, one response carrying the teams. It lives here because
+it shares the job path's limiter, API-key policy and result schema — it differs
+only in transport and in a solver budget clamped to fit an HTTP round trip.
 """
 
 from __future__ import annotations
@@ -143,3 +148,32 @@ def register(broker: Any, logger: Any) -> None:
             return await jobs.get_job_result(job_id=str(data.get("id")), user=user)
 
         return await c.call(logger, "jobs.result", op)
+
+    @broker.subscriber("rpc.balancer.balance")
+    async def _balance(data: dict, msg: RabbitMessage) -> dict:
+        """Solve a payload and answer with the teams: no job id, no polling.
+
+        Session-less on purpose. Unlike both creators above, this one reads
+        nothing from the workspace — the pool and the roster shape arrive in the
+        body — so there is no transaction to open. ``workspace_id`` is still
+        required: it is what the API key is scoped against and what the
+        `team.create` permission is checked on.
+        """
+
+        async def op() -> Any:
+            user = await _resolve_user(data)
+            workspace_id = c.q1(data, "workspace_id", int)
+            if workspace_id is None:
+                raise HTTPException(status_code=422, detail="workspace_id is required")
+            body = schemas.BalanceRequest.model_validate(c.payload(data) or {})
+            return await jobs.balance_inline(
+                player_data=body.player_data,
+                role_mask=body.role_mask,
+                config_overrides=(
+                    body.config_overrides.model_dump(exclude_none=True) if body.config_overrides else None
+                ),
+                workspace_id=workspace_id,
+                user=user,
+            )
+
+        return await c.call(logger, "balance", op)

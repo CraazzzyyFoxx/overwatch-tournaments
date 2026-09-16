@@ -41,6 +41,7 @@ import { StatusIcon } from "@/components/admin/StatusIcon";
 import { EntityFormDialog } from "@/components/admin/EntityFormDialog";
 import { ConfirmDialog } from "@/components/admin/kit/ConfirmDialog";
 import { AchievementCombobox } from "@/components/admin/achievements/AchievementCombobox";
+import { EvaluationRunSummary } from "@/components/admin/achievements/EvaluationRunSummary";
 import { TournamentCombobox } from "@/components/admin/TournamentCombobox";
 import { UserSearchCombobox } from "@/components/admin/UserSearchCombobox";
 import { Button } from "@/components/ui/button";
@@ -727,40 +728,15 @@ export default function AchievementsPage() {
         }
       />
 
-      {/* Evaluation result banner */}
       {evaluationResult && (
-        <div className="rounded-lg border p-4 bg-muted/50 space-y-1">
-          <div className="flex items-center justify-between">
-            <p className="font-medium">
-              Evaluation run:{" "}
-              <Badge variant={evaluationResult.status === "done" ? "success" : "destructive"}>
-                {evaluationResult.status}
-              </Badge>
-              {evaluationResult.tournament_id && (
-                <span className="ml-2 text-sm text-muted-foreground tabular-nums">
-                  (tournament #{evaluationResult.tournament_id})
-                </span>
-              )}
-            </p>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setEvaluationResult(null)}
-              aria-label="Dismiss the evaluation summary"
-            >
-              <X className="h-4 w-4" aria-hidden />
-            </Button>
-          </div>
-          <p className="text-sm text-muted-foreground tabular-nums">
-            Evaluated {evaluationResult.rules_evaluated} · created +{evaluationResult.results_created} ·
-            removed −{evaluationResult.results_removed}
-          </p>
-          {evaluationResult.error_message && (
-            <p className="text-sm text-danger">
-              The run stopped early: {evaluationResult.error_message}
-            </p>
-          )}
-        </div>
+        <EvaluationRunSummary
+          run={evaluationResult}
+          onDismiss={() => setEvaluationResult(null)}
+          tournamentName={
+            tournaments?.results.find((tournament) => tournament.id === evaluationResult.tournament_id)
+              ?.name
+          }
+        />
       )}
 
       {importError && (

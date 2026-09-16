@@ -90,6 +90,7 @@ async def execute_encounter_score(
             _encounter_query_with_stage_context()
             .with_only_columns(
                 models.Encounter.tournament_id.label("tournament_id"),
+                stage_order.label("final_stage_order"),
                 sa.func.max(models.Encounter.round).label("final_round"),
             )
             .join(
@@ -104,7 +105,7 @@ async def execute_encounter_score(
                 models.Tournament.workspace_id == context.workspace_id,
                 bracket_clause,
             )
-            .group_by(models.Encounter.tournament_id)
+            .group_by(models.Encounter.tournament_id, stage_order)
             .subquery("final_round")
         )
 
@@ -118,6 +119,7 @@ async def execute_encounter_score(
                 final_round_sq,
                 sa.and_(
                     models.Encounter.tournament_id == final_round_sq.c.tournament_id,
+                    stage_order == final_round_sq.c.final_stage_order,
                     models.Encounter.round == final_round_sq.c.final_round,
                 ),
             )

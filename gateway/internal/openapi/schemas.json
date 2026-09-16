@@ -3729,6 +3729,18 @@
       },
       "summary": "Upsert workspace balancer config"
     },
+    "rpc.balancer.balance": {
+      "description": "Permission: workspace `team.create` on the given workspace_id; an API-key caller must also be scoped to that workspace and hold the `team.create` scope. Solves the posted pool and returns the ranked variants in the same response -- no job id, no polling, no realtime events. Everything the solver needs is in the body (`player_data`, optional per-team `role_mask`, optional `config_overrides`); nothing is read from the workspace. The solver budget is clamped to 60s, so a pool too large to settle in time answers 504 and belongs on the asynchronous job API instead. Rate limits, the per-key config policy and the concurrency slot are the job path's.",
+      "request": {
+        "array": false,
+        "ref": "balancer.BalanceRequest"
+      },
+      "response": {
+        "array": false,
+        "ref": "balancer.BalanceJobResult"
+      },
+      "summary": "Balance a pool synchronously"
+    },
     "rpc.balancer.config": {
       "description": "Permission: public; no authentication required. Returns the public balancer configuration (ranks, roles, defaults).",
       "response": {
@@ -19605,6 +19617,53 @@
         "saved_at"
       ],
       "title": "BalanceRead",
+      "type": "object"
+    },
+    "balancer.BalanceRequest": {
+      "additionalProperties": false,
+      "description": "Request schema for the synchronous, stateless balance (``rpc.balancer.balance``).\n\nEverything the solver needs travels in this payload: the pool, the per-team\nroster shape and the knobs. Nothing is read from the workspace, so the same\nbody balanced twice yields the same teams regardless of tournament state.\n``extra=\"forbid\"`` so a misspelled field is a 422, not a silently ignored\nknob on a request whose whole point is being self-describing.",
+      "properties": {
+        "config_overrides": {
+          "anyOf": [
+            {
+              "$ref": "#/components/schemas/balancer.ConfigOverrides"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional configuration overrides"
+        },
+        "player_data": {
+          "additionalProperties": true,
+          "description": "Player data in the tournament format",
+          "title": "Player Data",
+          "type": "object"
+        },
+        "role_mask": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "maximum": 20,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Per-team slot counts keyed by roster slot code, e.g. {\"tank\": 1, \"dps\": 2, \"support\": 2} -- the default when omitted. Team count is derived from it: floor(players / sum(slots)); the remainder is benched. Input role names are matched case-insensitively against these keys, so a pool written with \"Damage\" fills a \"dps\" slot.",
+          "title": "Role Mask"
+        }
+      },
+      "required": [
+        "player_data"
+      ],
+      "title": "BalanceRequest",
       "type": "object"
     },
     "balancer.BalanceResponse": {

@@ -11,7 +11,7 @@ from datetime import UTC, datetime
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from shared.models.achievements.achievement import AchievementEvaluationResult, AchievementRule
+from shared.models.achievements.achievement import AchievementEvaluationResult, AchievementGrain, AchievementRule
 from shared.models.tenancy.workspace import WorkspaceMember
 from shared.repository.support import AchievementEvaluationResultRepository
 from shared.repository.workspace import get_or_create_workspace_member
@@ -47,6 +47,29 @@ class EvaluationSlice:
         if self.match_id is not None and match_id != self.match_id:
             return False
         return True
+
+
+def persist_slice_for_grain(
+    grain: AchievementGrain | str,
+    *,
+    tournament_id: int | None,
+    match_id: int | None,
+) -> EvaluationSlice | None:
+    """Persist-scope for one rule. The trigger slice is not the result grain.
+
+    A tournament event may recompute a global (``user``) rule; those keys
+    normalize to ``tournament_id=0`` and would be dropped by a tournament
+    slice. Tournament- and match-grain rows stay sliced so a run for one
+    tournament cannot delete another tournament's stored results.
+    """
+    resolved = AchievementGrain(grain)
+    if resolved is AchievementGrain.user:
+        return None
+    if resolved is AchievementGrain.user_match and match_id is not None:
+        return EvaluationSlice(tournament_id=tournament_id, match_id=match_id)
+    if tournament_id is not None:
+        return EvaluationSlice(tournament_id=tournament_id)
+    return None
 
 
 class AchievementResultDifferService:

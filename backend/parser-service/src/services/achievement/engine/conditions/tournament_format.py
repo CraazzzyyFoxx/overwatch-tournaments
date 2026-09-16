@@ -27,7 +27,7 @@ def matches_tournament_format(stage_types: Iterable[StageType], fmt: str) -> boo
     if fmt == "single_elim":
         return has_single and not has_double
     if fmt == "round_robin":
-        return bool(stage_type_set) and not has_bracket
+        return StageType.ROUND_ROBIN in stage_type_set
     if fmt == "has_bracket":
         return has_bracket
     return False
@@ -41,10 +41,6 @@ async def execute(
 ) -> ResultSet:
     """Check tournament format. Grain: user_tournament."""
     fmt = params.get("format", "double_elim")
-
-    stage_tournaments = (sa.select(models.Stage.tournament_id).group_by(models.Stage.tournament_id)).subquery(
-        "stage_tournaments"
-    )
 
     stage_bracket_tournaments = (
         sa.select(models.Stage.tournament_id)
@@ -64,7 +60,11 @@ async def execute(
         .group_by(models.Stage.tournament_id)
     ).subquery("stage_double_tournaments")
 
-    has_stage_config = models.Tournament.id.in_(sa.select(stage_tournaments.c.tournament_id))
+    stage_round_robin_tournaments = (
+        sa.select(models.Stage.tournament_id)
+        .where(models.Stage.stage_type == StageType.ROUND_ROBIN)
+        .group_by(models.Stage.tournament_id)
+    ).subquery("stage_round_robin_tournaments")
 
     if fmt == "double_elim":
         tournament_filter = models.Tournament.id.in_(sa.select(stage_double_tournaments.c.tournament_id))
@@ -74,10 +74,7 @@ async def execute(
             ~models.Tournament.id.in_(sa.select(stage_double_tournaments.c.tournament_id)),
         )
     elif fmt == "round_robin":
-        tournament_filter = sa.and_(
-            has_stage_config,
-            ~models.Tournament.id.in_(sa.select(stage_bracket_tournaments.c.tournament_id)),
-        )
+        tournament_filter = models.Tournament.id.in_(sa.select(stage_round_robin_tournaments.c.tournament_id))
     elif fmt == "has_bracket":
         tournament_filter = models.Tournament.id.in_(sa.select(stage_bracket_tournaments.c.tournament_id))
     else:

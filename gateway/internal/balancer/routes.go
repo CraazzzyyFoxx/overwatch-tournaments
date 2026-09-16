@@ -22,6 +22,12 @@ import (
 // instead of pinning worker prefetch slots during an incident.
 const fastReadTimeout = 15 * time.Second
 
+// The synchronous balance answers inside the request, so its deadline must
+// outlast the worker's own 60s solver clamp (SYNC_TIME_LIMIT_MS) plus payload
+// serialization — and still fail before the blanket 120s edge default, so a
+// wedged solve releases the prefetch slot rather than holding it to the end.
+const syncBalanceTimeout = 90 * time.Second
+
 // PublicRoutes need no auth (mirrors GET /config in src/routes/balancer.py).
 var PublicRoutes = []edge.RouteSpec{
 	{Method: "GET", Pattern: "/api/balancer/config", Queue: "rpc.balancer.config", Auth: edge.AuthNone, Timeout: fastReadTimeout},
@@ -116,6 +122,11 @@ var JobRoutes = []edge.RouteSpec{
 	{Method: "GET", Pattern: "/api/balancer/jobs/{job_id}", Queue: "rpc.balancer.jobs.status", IDParam: "job_id", Auth: edge.AuthRequired, Timeout: fastReadTimeout},
 	{Method: "GET", Pattern: "/api/balancer/jobs/{job_id}/result", Queue: "rpc.balancer.jobs.result", IDParam: "job_id", Auth: edge.AuthRequired},
 	{Method: "POST", Pattern: "/api/balancer/tournaments/{tournament_id}/balance", Queue: "rpc.balancer.jobs.create_for_tournament", IDParam: "tournament_id", Body: true, Auth: edge.AuthRequired, Success: 202},
+	// Synchronous twin of the trio above, for API clients: the whole pool rides
+	// in the body, the teams come back in the response. No job id, no polling,
+	// no realtime topic — and no workspace read either, so `workspace_id` is
+	// here purely as the authorization scope.
+	{Method: "POST", Pattern: "/api/balancer/balance", Queue: "rpc.balancer.balance", Query: []string{"workspace_id"}, Body: true, Auth: edge.AuthRequired, Timeout: syncBalanceTimeout},
 }
 
 // DraftReadRoutes are the public draft spectating reads (no auth), from

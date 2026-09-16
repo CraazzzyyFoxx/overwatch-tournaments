@@ -100,6 +100,19 @@ DOCS: dict[str, dict] = {
             "by its uuid."
         ),
     },
+    "rpc.balancer.balance": {
+        "summary": "Balance a pool synchronously",
+        "description": (
+            "Permission: workspace `team.create` on the given workspace_id; an API-key caller must "
+            "also be scoped to that workspace and hold the `team.create` scope. "
+            "Solves the posted pool and returns the ranked variants in the same response -- no job "
+            "id, no polling, no realtime events. Everything the solver needs is in the body "
+            "(`player_data`, optional per-team `role_mask`, optional `config_overrides`); nothing is "
+            "read from the workspace. The solver budget is clamped to 60s, so a pool too large to "
+            "settle in time answers 504 and belongs on the asynchronous job API instead. Rate "
+            "limits, the per-key config policy and the concurrency slot are the job path's."
+        ),
+    },
     "rpc.balancer.draft.tournament_board": {
         "summary": "Get tournament draft board",
         "description": "Permission: public; no authentication required. Returns the live draft board snapshot for a tournament's active session, or null when no session is active.",

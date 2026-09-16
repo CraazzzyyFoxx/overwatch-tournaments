@@ -32,6 +32,7 @@ import {
 } from "lucide-react";
 
 import { ConditionFlowEditor } from "@/components/admin/achievements/ConditionFlowEditor";
+import { notifyEvaluationRun } from "@/components/admin/achievements/EvaluationRunSummary";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { StatusIcon } from "@/components/admin/StatusIcon";
 import { ConfirmDialog } from "@/components/admin/kit/ConfirmDialog";
@@ -339,9 +340,7 @@ export default function AchievementDetailPage() {
         rule_ids: [ruleId]
       }),
     onSuccess: (data) => {
-      notify.success(`Evaluate: ${data.status}`, {
-        description: `+${data.results_created} / -${data.results_removed}`
-      });
+      notifyEvaluationRun(data);
       queryClient.invalidateQueries({
         queryKey: ["admin", "achievement-rule-users", workspaceId, ruleId]
       });

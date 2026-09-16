@@ -247,7 +247,9 @@ class _Fixture:
         )
         return team_id
 
-    def player(self, tournament_id: int, team_id: int, member_id: int, *, name: str) -> int:
+    def player(
+        self, tournament_id: int, team_id: int, member_id: int, *, name: str, is_substitution: bool = False
+    ) -> int:
         player_id = self._id()
         self.insert(
             models.Player.__table__,
@@ -258,7 +260,7 @@ class _Fixture:
             name=name,
             role=enums.HeroClass.damage,
             rank=3000,
-            is_substitution=False,
+            is_substitution=is_substitution,
             is_newcomer=False,
             is_newcomer_role=False,
         )
@@ -353,7 +355,19 @@ class _Fixture:
         self.match(encounter, home, away)
         return {"stage": stage_id, "home": home, "away": away, "encounter": encounter}
 
-    def rule(self, rule_id: int, slug: str, condition_tree: dict, depends_on: list[str]) -> None:
+    def rule(
+        self,
+        rule_id: int,
+        slug: str,
+        condition_tree: dict,
+        depends_on: list[str],
+        *,
+        grain: str = "user_tournament",
+        scope: str = "tournament",
+        category: str = "tournament",
+        enabled: bool = True,
+        min_tournament_id: int | None = None,
+    ) -> None:
         self.insert(
             achievement.AchievementRule.__table__,
             id=rule_id,
@@ -362,13 +376,14 @@ class _Fixture:
             name=slug,
             description_ru=slug,
             description_en=slug,
-            category="tournament",
-            scope="tournament",
-            grain="user_tournament",
-            enabled=True,
+            category=category,
+            scope=scope,
+            grain=grain,
+            enabled=enabled,
             condition_tree=condition_tree,
             depends_on=depends_on,
             rule_version=1,
+            min_tournament_id=min_tournament_id,
         )
 
 
@@ -417,8 +432,9 @@ class ScrimCaptainAchievementTests(_EngineTestCase):
 
         Rules whose scope is global legitimately ignore ``context.tournament`` and
         so still return the *rostered* users — that is correct behaviour, not a
-        leak, and the differ drops those user-grain keys against a
-        tournament-scoped slice (see ``ScrimEvaluationRunTests``).
+        leak. Persist for ``user`` grain is unsliced; a scrim event must not
+        publish an evaluation (see tournament-service) rather than relying on
+        the old tournament-slice drop.
         """
         context = await self.context(CONTAINER_ID)
         produced: set[int] = set()
