@@ -221,8 +221,8 @@ class RunnerSliceAndStatusTests(_EngineTestCase):
 
     async def test_missing_grid_mapping_fails_only_the_division_rules(self) -> None:
         # An incomplete division-grid mapping must not abort the run: the other
-        # rules are evaluated, the division rules are reported once each, and the
-        # normalizer is attempted once, not per rule.
+        # rules are evaluated, the division rules are named once under the single
+        # reason they share, and the normalizer is attempted once, not per rule.
         self.db.rule(1, "captain", IS_CAPTAIN_RULE, [])
         self.db.rule(2, "climb", DIV_SPAN_RULE, [], grain="user", scope="global", category="division")
         self.db.rule(3, "climb-more", DIV_SPAN_RULE, [], grain="user", scope="global", category="division")
@@ -250,5 +250,9 @@ class RunnerSliceAndStatusTests(_EngineTestCase):
         self.assertEqual(1, run.rules_evaluated)
         self.assertEqual(1, attempts)
         self.assertEqual(["captain"], [slug for slug, _results, _slice in capture.calls])
-        self.assertIn("climb: Missing division grid mappings", run.error_message)
-        self.assertIn("climb-more: Missing division grid mappings", run.error_message)
+        # One entry, both slugs: repeating the sentence per rule is what pushed
+        # the real tail of a 100-rule run past the 1000-char column.
+        self.assertEqual(
+            "climb, climb-more: Missing division grid mappings to normalized base version 19: [20]",
+            run.error_message,
+        )

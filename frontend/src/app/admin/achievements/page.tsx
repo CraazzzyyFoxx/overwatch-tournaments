@@ -41,13 +41,13 @@ import { StatusIcon } from "@/components/admin/StatusIcon";
 import { EntityFormDialog } from "@/components/admin/EntityFormDialog";
 import { ConfirmDialog } from "@/components/admin/kit/ConfirmDialog";
 import { AchievementCombobox } from "@/components/admin/achievements/AchievementCombobox";
+import { EvaluationRunSummary } from "@/components/admin/achievements/EvaluationRunSummary";
 import { TournamentCombobox } from "@/components/admin/TournamentCombobox";
 import { UserSearchCombobox } from "@/components/admin/UserSearchCombobox";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import type { Tone } from "@/components/ui/tone";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -120,11 +120,6 @@ const SCOPE_ICONS: Record<string, LucideIcon> = {
 };
 const GRAIN_ICONS: Record<string, LucideIcon> = {
   user: User, user_tournament: Target, user_match: Crosshair,
-};
-// `partial` is a closed run where some rules raised; `error_message` lists them.
-const RUN_STATUS_TONE: Record<EvaluationRunRead["status"], Tone> = {
-  queued: "info", running: "info", done: "success",
-  partial: "warning", failed: "danger", cancelled: "neutral",
 };
 
 function IconLabel({ icon: Icon, label }: Readonly<{ icon: LucideIcon; label: string }>) {
@@ -733,42 +728,15 @@ export default function AchievementsPage() {
         }
       />
 
-      {/* Evaluation result banner */}
       {evaluationResult && (
-        <div className="rounded-lg border p-4 bg-muted/50 space-y-1">
-          <div className="flex items-center justify-between">
-            <p className="font-medium">
-              Evaluation run:{" "}
-              <Badge tone={RUN_STATUS_TONE[evaluationResult.status]}>
-                {evaluationResult.status}
-              </Badge>
-              {evaluationResult.tournament_id && (
-                <span className="ml-2 text-sm text-muted-foreground tabular-nums">
-                  (tournament #{evaluationResult.tournament_id})
-                </span>
-              )}
-            </p>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setEvaluationResult(null)}
-              aria-label="Dismiss the evaluation summary"
-            >
-              <X className="h-4 w-4" aria-hidden />
-            </Button>
-          </div>
-          <p className="text-sm text-muted-foreground tabular-nums">
-            Evaluated {evaluationResult.rules_evaluated} · created +{evaluationResult.results_created} ·
-            removed −{evaluationResult.results_removed}
-          </p>
-          {evaluationResult.error_message && (
-            <p className="text-sm text-danger">
-              {evaluationResult.status === "partial"
-                ? `Failed rules: ${evaluationResult.error_message}`
-                : `The run stopped early: ${evaluationResult.error_message}`}
-            </p>
-          )}
-        </div>
+        <EvaluationRunSummary
+          run={evaluationResult}
+          onDismiss={() => setEvaluationResult(null)}
+          tournamentName={
+            tournaments?.results.find((tournament) => tournament.id === evaluationResult.tournament_id)
+              ?.name
+          }
+        />
       )}
 
       {importError && (

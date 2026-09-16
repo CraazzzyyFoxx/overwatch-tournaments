@@ -210,7 +210,10 @@ class AchievementEvaluationRunnerService:
             total_created = 0
             total_removed = 0
             rules_ok = 0
-            failed_messages: list[str] = []
+            # Keyed by reason, not by rule: one grid-mapping gap fails dozens of
+            # rules with the identical sentence, and one entry per rule pushed
+            # the real tail of the list past ``error_message``'s 1000 chars.
+            failures: dict[str, list[str]] = {}
             normalizer: DivisionGridNormalizer | None = None
             normalizer_error: DivisionGridNormalizationError | None = None
             grid = await _resolve_grid(session, workspace_id, tournament)
@@ -272,7 +275,7 @@ class AchievementEvaluationRunnerService:
                         # that read divisions across grid versions. Skip them
                         # (stored results untouched), report them on the run.
                         logger.warning(f"Skipping rule '{rule.slug}': {normalizer_error}")
-                        failed_messages.append(f"{rule.slug}: {normalizer_error}")
+                        failures.setdefault(str(normalizer_error), []).append(rule.slug)
                         continue
 
                 try:
@@ -319,15 +322,21 @@ class AchievementEvaluationRunnerService:
                         )
                         raise
                     logger.exception(f"Failed to evaluate rule '{rule.slug}'")
-                    failed_messages.append(f"{rule.slug}: {exc}")
+                    # An exception with an empty ``str`` would otherwise write a
+                    # slug with no reason at all.
+                    failures.setdefault(str(exc) or type(exc).__name__, []).append(rule.slug)
                     continue
 
             run.rules_evaluated = rules_ok
             run.results_created = total_created
             run.results_removed = total_removed
-            if failed_messages:
+            if failures:
                 run.status = EvaluationRunStatus.partial
-                run.error_message = "; ".join(failed_messages)[:1000]
+                # ``slug[, slug]: reason``, joined with "; " — the shape the
+                # admin banner parses back into one panel per reason.
+                run.error_message = "; ".join(
+                    f"{', '.join(slugs)}: {reason}" for reason, slugs in failures.items()
+                )[:1000]
             else:
                 run.status = EvaluationRunStatus.done
                 run.error_message = None
