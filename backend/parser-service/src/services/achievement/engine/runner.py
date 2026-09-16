@@ -334,9 +334,9 @@ class AchievementEvaluationRunnerService:
                 run.status = EvaluationRunStatus.partial
                 # ``slug[, slug]: reason``, joined with "; " — the shape the
                 # admin banner parses back into one panel per reason.
-                run.error_message = "; ".join(
-                    f"{', '.join(slugs)}: {reason}" for reason, slugs in failures.items()
-                )[:1000]
+                run.error_message = "; ".join(f"{', '.join(slugs)}: {reason}" for reason, slugs in failures.items())[
+                    :1000
+                ]
             else:
                 run.status = EvaluationRunStatus.done
                 run.error_message = None
