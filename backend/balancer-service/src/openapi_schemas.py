@@ -35,6 +35,9 @@ OPERATIONS: dict[str, Op] = {
     "rpc.balancer.jobs.create_for_tournament": Op(
         request=schemas.TournamentBalanceRequest, response=schemas.CreateJobResponse
     ),
+    # Synchronous, stateless twin: the pool and the roster shape ride in the
+    # request, the teams come back in the response (same shape as jobs.result).
+    "rpc.balancer.balance": Op(request=schemas.BalanceRequest, response=schemas.BalanceJobResult),
     # ── draft: public reads ────────────────────────────────────────────────
     "rpc.balancer.draft.tournament_board": Op(response=schemas.DraftBoardSnapshot),
     "rpc.balancer.draft.session_get": Op(response=schemas.DraftSessionRead),

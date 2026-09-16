@@ -37,7 +37,10 @@ from src.core.security.api_key_policy import validate_api_key_config_policy
 from src.core.security.workspace_access import WorkspaceAccessPolicy
 from src.schemas.balancer import CreateJobResponse, JobStatusResponse
 from src.services.balancer.config.provider import get_balancer_config_payload
-from src.services.balancer.config.public_contract import normalize_balance_job_result_payload
+from src.services.balancer.config.public_contract import (
+    normalize_balance_job_result_payload,
+    normalize_persisted_config_payload,
+)
 from src.services.balancer.progress import (
     TERMINAL_STATUSES,
     ProgressEventThrottler,
@@ -59,6 +62,12 @@ _payload_parser = BalancerRequestParser()
 # solver hang or ignore its budget. Sized above the max native budget plus room
 # for polishing/serialization.
 _SOLVER_WATCHDOG_SECONDS = 660.0
+
+# The synchronous endpoint answers inside one HTTP request, so the solver's own
+# budget is clamped well below the gateway's route deadline instead of the job
+# path's 600s ceiling. A caller who wants the full budget queues a job.
+SYNC_TIME_LIMIT_MS = 60_000
+_SYNC_WATCHDOG_SECONDS = 70.0
 
 
 def _count_variant_players(variant: dict[str, Any]) -> int:
@@ -321,6 +330,62 @@ async def create_tournament_job(
         actor_user_id=user.id,
     )
     return CreateJobResponse(job_id=job_id, status="queued", **_build_job_urls(job_id))
+
+
+async def balance_inline(
+    *,
+    player_data: dict[str, Any],
+    role_mask: dict[str, int] | None,
+    config_overrides: dict[str, Any] | None,
+    workspace_id: int,
+    user,
+) -> dict[str, Any]:
+    """Solve one payload and return the teams in the same response.
+
+    The job API exists because a 600s solve cannot ride an HTTP request; an API
+    client that already holds its pool should not have to implement
+    create/poll/fetch to get teams out of it. Same limits, same API-key policy
+    and the same ``BalanceJobResult`` shape as ``get_job_result`` -- only the
+    transport and the time budget differ. Nothing here touches Postgres, Redis
+    (beyond the rate limiter) or the realtime topics: the pool AND the roster
+    shape both arrive in the payload, so the run is reproducible from the
+    request alone.
+    """
+    api_key_limiter = get_api_key_limiter()
+
+    await api_key_limiter.check_request(user)
+    _access_policy.ensure_workspace_access(user, workspace_id)
+
+    overrides = normalize_persisted_config_payload(config_overrides)
+    # Policy before clamp: ``time_limit_ms`` is not an API-key-allowed field, so
+    # clamping first would reject the caller over a value they never sent.
+    validate_api_key_config_policy(user, overrides)
+    _enforce_player_limit(user, player_data)
+    overrides["time_limit_ms"] = min(int(overrides.get("time_limit_ms") or SYNC_TIME_LIMIT_MS), SYNC_TIME_LIMIT_MS)
+
+    # A synchronous run occupies a solver thread for up to a minute, so it takes
+    # a concurrency slot exactly like a queued job does.
+    run_id = uuid.uuid4().hex
+    principal = get_principal(user)
+    await api_key_limiter.reserve_job(user, run_id)
+
+    started_at = time.perf_counter()
+    try:
+        result = await asyncio.wait_for(
+            run_balance(player_data, overrides, None, role_mask),
+            timeout=_SYNC_WATCHDOG_SECONDS,
+        )
+    except TimeoutError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail="Balance did not finish within the synchronous budget; queue a job instead",
+        ) from exc
+    finally:
+        BALANCER_SOLVER_SECONDS.labels(algorithm="tournament_balancer").observe(time.perf_counter() - started_at)
+        if principal is not None:
+            await api_key_limiter.release_job(principal[0], principal[1], run_id)
+
+    return normalize_balance_job_result_payload(result)
 
 
 async def get_job_status(*, job_id: str, user) -> JobStatusResponse:
