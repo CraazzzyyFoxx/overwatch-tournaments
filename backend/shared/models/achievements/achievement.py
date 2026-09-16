@@ -81,6 +81,10 @@ class EvaluationRunStatus(StrEnum):
     queued = "queued"
     running = "running"
     done = "done"
+    # Some rules in the run succeeded and others raised. The run is closed; the
+    # failed slugs are in ``error_message``. Distinct from ``failed``, which is
+    # an aborted run (lost connection, outer exception).
+    partial = "partial"
     failed = "failed"
     cancelled = "cancelled"
 

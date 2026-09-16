@@ -47,6 +47,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import type { Tone } from "@/components/ui/tone";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -119,6 +120,11 @@ const SCOPE_ICONS: Record<string, LucideIcon> = {
 };
 const GRAIN_ICONS: Record<string, LucideIcon> = {
   user: User, user_tournament: Target, user_match: Crosshair,
+};
+// `partial` is a closed run where some rules raised; `error_message` lists them.
+const RUN_STATUS_TONE: Record<EvaluationRunRead["status"], Tone> = {
+  queued: "info", running: "info", done: "success",
+  partial: "warning", failed: "danger", cancelled: "neutral",
 };
 
 function IconLabel({ icon: Icon, label }: Readonly<{ icon: LucideIcon; label: string }>) {
@@ -733,7 +739,7 @@ export default function AchievementsPage() {
           <div className="flex items-center justify-between">
             <p className="font-medium">
               Evaluation run:{" "}
-              <Badge variant={evaluationResult.status === "done" ? "success" : "destructive"}>
+              <Badge tone={RUN_STATUS_TONE[evaluationResult.status]}>
                 {evaluationResult.status}
               </Badge>
               {evaluationResult.tournament_id && (
@@ -757,7 +763,9 @@ export default function AchievementsPage() {
           </p>
           {evaluationResult.error_message && (
             <p className="text-sm text-danger">
-              The run stopped early: {evaluationResult.error_message}
+              {evaluationResult.status === "partial"
+                ? `Failed rules: ${evaluationResult.error_message}`
+                : `The run stopped early: ${evaluationResult.error_message}`}
             </p>
           )}
         </div>

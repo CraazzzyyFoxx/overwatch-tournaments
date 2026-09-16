@@ -87,6 +87,7 @@ def _rule() -> SimpleNamespace:
         condition_tree={"type": "is_captain"},
         depends_on=["tournament.encounter"],
         min_tournament_id=None,
+        grain="user_tournament",
     )
 
 

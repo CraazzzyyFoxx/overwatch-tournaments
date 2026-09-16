@@ -15,6 +15,7 @@ from typing import Any
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.core.enums import EncounterStatus
 from src import models
 
 from ..context import EvalContext
@@ -69,6 +70,7 @@ async def execute_tournament_winrate(
         .where(
             models.Player.is_substitution.is_(False),
             models.Tournament.workspace_id == context.workspace_id,
+            models.Encounter.status == EncounterStatus.COMPLETED,
         )
         .group_by(models.WorkspaceMember.player_id, models.Player.tournament_id)
         .having(op_fn(winrate, value))

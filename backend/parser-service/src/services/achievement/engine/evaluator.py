@@ -17,10 +17,16 @@ from typing import Any
 from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.domain.achievement_validation import GRAIN_ARITY, infer_grain, leaf_grain
+
 from .context import EvalContext
 
 # Type alias for result sets — tuples of ints with variable length.
 ResultSet = set[tuple[int, ...]]
+
+
+class GrainMismatchError(ValueError):
+    """AND/OR/NOT or a leaf produced keys of mixed or unexpected grain."""
 
 
 async def evaluate(
@@ -35,6 +41,7 @@ async def evaluate(
         if not children:
             return set()
         sets = [await evaluate(session, child, context) for child in children]
+        _require_uniform_arity(sets, "AND")
         return reduce(set.intersection, sets)
 
     if "OR" in condition:
@@ -42,16 +49,17 @@ async def evaluate(
         if not children:
             return set()
         sets = [await evaluate(session, child, context) for child in children]
+        _require_uniform_arity(sets, "OR")
         return reduce(set.union, sets)
 
     if "NOT" in condition:
-        from .conditions import get_all_eligible_users
+        from .conditions import get_eligible_keys
 
-        all_eligible = await get_all_eligible_users(session, context)
         matching = await evaluate(session, condition["NOT"], context)
-        # Align tuple lengths: keep only the user_id component for complement
-        matching_user_ids = {t[0] for t in matching}
-        return {t for t in all_eligible if t[0] not in matching_user_ids}
+        grain = infer_grain(condition["NOT"])
+        universe = await get_eligible_keys(session, context, grain)
+        _require_uniform_arity([matching, universe], "NOT")
+        return universe - matching
 
     # Leaf condition
     condition_type = condition.get("type")
@@ -62,4 +70,18 @@ async def evaluate(
     from .conditions import execute_leaf
 
     params = condition.get("params", {})
-    return await execute_leaf(session, condition_type, params, context)
+    results = await execute_leaf(session, condition_type, params, context)
+    expected = leaf_grain(condition_type, params if isinstance(params, dict) else None)
+    if expected is not None:
+        arity = GRAIN_ARITY[expected]
+        if any(len(key) != arity for key in results):
+            raise GrainMismatchError(f"{condition_type} must return {expected.value} keys of length {arity}")
+    return results
+
+
+def _require_uniform_arity(sets: list[ResultSet], op: str) -> None:
+    arities = {len(key) for result in sets for key in result}
+    if len(arities) > 1:
+        raise GrainMismatchError(
+            f"{op} cannot combine result keys of different grain (tuple lengths {sorted(arities)})"
+        )
