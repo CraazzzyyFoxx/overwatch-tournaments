@@ -81,9 +81,25 @@ class ConfigPresets:
     }
 
     # Long, deep search — best quality, highest runtime.
+    #
+    # Значения подобраны абляцией `quality_harness` на шести профилях пула
+    # (uniform / role_skew / narrow / wide_tank / one_trick / flex_heavy,
+    # 8-40 команд, 3 сида): средние по ролям и глубина флекс-пула меняют
+    # отклик на кнобы сильнее размера турнира, поэтому решение принималось
+    # по геометрическому среднему отношений операционных метрик к baseline.
+    #
+    # Что дало выигрыш: convergence_patience 60 → 200 (comp 0.94 на всех
+    # трёх этапах, +50% времени: 40 команд 21 c → 27 c); 1000 генераций
+    # против 400 (mmr_std 4.66 → 2.23, total_gap 79 → 40 на 40 командах).
+    # Что отвергнуто замерами: island_count 16 (0.98 при +50% времени),
+    # population 320 (та же comp при +60% времени), generation_count 2000
+    # (хуже 1000), convergence_epsilon 0.001, polish 60 (регресс 1.05-1.17
+    # на крупных пулах — polish там ещё работает), polish 400 (плато),
+    # mutation/crossover-кнобы (±2%, знак зависит от профиля пула).
+    # Хард-стоп time_limit_ms (10 мин) в силе, прогоны в него влезают.
     HIGH_QUALITY: dict[str, Any] = {
         "population_size": 200,
-        "generation_count": 400,
+        "generation_count": 1000,
         "mutation_rate": 0.45,
         "mutation_strength": 3,
         "mutation_rate_min": 0.2,
@@ -91,5 +107,6 @@ class ConfigPresets:
         "polish_max_passes": 150,
         "island_count": 8,
         "stagnation_kick_patience": 25,
-        "convergence_patience": 60,
+        "convergence_patience": 200,
+        "max_result_variants": 30,
     }

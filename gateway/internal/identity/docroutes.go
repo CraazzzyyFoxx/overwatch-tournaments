@@ -52,6 +52,12 @@ var PublicDocRoutes = []edge.RouteSpec{
 	{Method: "POST", Pattern: "/api/auth/api-keys", Queue: "rpc.identity.create_api_key", Body: true, Auth: edge.AuthRequired, Success: 201},
 	{Method: "PATCH", Pattern: "/api/auth/api-keys/{id}", Queue: "rpc.identity.update_api_key", Body: true, Auth: edge.AuthRequired},
 	{Method: "DELETE", Pattern: "/api/auth/api-keys/{id}", Queue: "rpc.identity.revoke_api_key", Auth: edge.AuthRequired, Success: 204},
+	// Quota: the key's budget at both scopes it is subject to (its own and its
+	// workspace's), and the override write. ``self/quota`` is the keyed
+	// client's own view, gated the same way ``self`` is.
+	{Method: "GET", Pattern: "/api/auth/api-keys/self/quota", Queue: "rpc.identity.api_key.self_quota", Auth: edge.AuthRequired},
+	{Method: "GET", Pattern: "/api/auth/api-keys/{id}/quota", Queue: "rpc.identity.api_key.quota_usage", Auth: edge.AuthRequired},
+	{Method: "PUT", Pattern: "/api/auth/api-keys/{id}/quota", Queue: "rpc.identity.api_key.quota_set", Body: true, Auth: edge.AuthRequired},
 	// player linking
 	{Method: "POST", Pattern: "/api/auth/player/link", Queue: "rpc.identity.player.link", Body: true, Auth: edge.AuthRequired},
 	{Method: "DELETE", Pattern: "/api/auth/player/unlink/{player_id}", Queue: "rpc.identity.player.unlink", Auth: edge.AuthRequired, Success: 204},

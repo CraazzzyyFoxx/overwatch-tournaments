@@ -18,8 +18,18 @@ pub(crate) fn archive_capacity_limit(ctx: &Context) -> usize {
 /// тай-брейки (в продакшене это проявлялось как composite_score=1.0 у
 /// показанного варианта).
 pub(crate) fn knee_scores(objectives: &[Objectives], w_balance: f64, w_comfort: f64) -> Vec<f64> {
-    let normed = normalize_objectives(objectives);
-    normed
+    knee_scores_within(objectives, objectives, w_balance, w_comfort)
+}
+
+/// Тот же скор, но в системе координат чужого набора — для точек, которых нет
+/// в референсе (см. `normalize_objectives_within`).
+pub(crate) fn knee_scores_within(
+    objectives: &[Objectives],
+    reference: &[Objectives],
+    w_balance: f64,
+    w_comfort: f64,
+) -> Vec<f64> {
+    normalize_objectives_within(objectives, reference)
         .iter()
         .map(|o| (w_balance * o.balance * o.balance + w_comfort * o.comfort * o.comfort).sqrt())
         .collect()

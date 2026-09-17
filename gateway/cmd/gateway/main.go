@@ -232,6 +232,12 @@ func run() error {
 	mux.HandleFunc("POST /api/auth/api-keys", identityHandler.CreateApiKey)
 	mux.HandleFunc("PATCH /api/auth/api-keys/{id}", identityHandler.UpdateApiKey)
 	mux.HandleFunc("DELETE /api/auth/api-keys/{id}", identityHandler.RevokeApiKey)
+	// Quota: usage is a read of both applicable buckets, the PUT writes the
+	// per-key override. ``self/quota`` is the keyed client's own budget, and
+	// wins over /{id}/quota by the same ServeMux specificity as "self" above.
+	mux.HandleFunc("GET /api/auth/api-keys/self/quota", identityHandler.SelfApiKeyQuota)
+	mux.HandleFunc("GET /api/auth/api-keys/{id}/quota", identityHandler.ApiKeyQuota)
+	mux.HandleFunc("PUT /api/auth/api-keys/{id}/quota", identityHandler.SetApiKeyQuota)
 	// RBAC admin (typed RPC into identity-svc; permission checks + cache
 	// invalidation enforced in the worker's rbac_admin services).
 	mux.HandleFunc("GET /api/auth/rbac/permissions", identityHandler.RbacListPermissions)
@@ -340,6 +346,7 @@ func run() error {
 	appEdge.Register(mux, app.MetadataAdminRoutes)
 	appEdge.Register(mux, app.UsersAdminRoutes)
 	appEdge.Register(mux, app.TournamentAdminRoutes)
+	appEdge.Register(mux, app.QuotaAdminRoutes)
 	appEdge.Register(mux, app.NotificationRoutes)
 	appEdge.Register(mux, app.AnnouncementPublicRoutes)
 	appEdge.Register(mux, app.AnnouncementAdminRoutes)

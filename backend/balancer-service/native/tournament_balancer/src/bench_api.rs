@@ -171,6 +171,167 @@ pub fn synthetic_wide_tank_context(num_teams: usize, seed: u64) -> BenchContext 
     BenchContext(Context::from_request(request).expect("wide-tank fixture must be valid"))
 }
 
+/// Профиль фикстуры: структура пула, а не размер. Средние по ролям,
+/// глубина флекс-пула и разброс внутри роли меняют задачу сильнее, чем
+/// число команд, поэтому тюнинг параметров поиска должен проверяться на
+/// нескольких профилях — то, что помогает на плотном пуле, часто вредит
+/// на перекошенном.
+#[derive(Debug, Clone, Copy)]
+pub struct FixtureProfile {
+    pub name: &'static str,
+    /// Полосы рейтинга в порядке Tank / Damage / Support.
+    pub bands: [(i32, i32); 3],
+    /// Танки равномерной сеткой по полосе вместо случайных значений:
+    /// структурно неустранимый разрыв танк-линии при capacity 1.
+    pub tank_grid: bool,
+    /// Вероятность, что игрок вообще умеет вторую роль.
+    pub secondary_chance: f64,
+    /// Насколько вторая роль слабее основной.
+    pub secondary_ratio: f64,
+    pub flex_chance: f64,
+    pub subclass_chance: f64,
+}
+
+pub const PROFILES: [FixtureProfile; 6] = [
+    // Базовый: широкие равные полосы, половина игроков умеет вторую роль.
+    FixtureProfile {
+        name: "uniform",
+        bands: [(100, 2000), (100, 2000), (100, 2000)],
+        tank_grid: false,
+        secondary_chance: 0.5,
+        secondary_ratio: 0.85,
+        flex_chance: 0.08,
+        subclass_chance: 0.4,
+    },
+    // Перекошенные средние по ролям: сильные танки, слабые сапорты.
+    FixtureProfile {
+        name: "role_skew",
+        bands: [(1200, 2300), (500, 1600), (250, 1200)],
+        tank_grid: false,
+        secondary_chance: 0.45,
+        secondary_ratio: 0.8,
+        flex_chance: 0.1,
+        subclass_chance: 0.35,
+    },
+    // Плотный пул: игроки почти равны, баланс дешёв, всё решает comfort.
+    FixtureProfile {
+        name: "narrow",
+        bands: [(900, 1300), (900, 1300), (900, 1300)],
+        tank_grid: false,
+        secondary_chance: 0.6,
+        secondary_ratio: 0.95,
+        flex_chance: 0.15,
+        subclass_chance: 0.5,
+    },
+    // Широкий пул танков при capacity 1.
+    FixtureProfile {
+        name: "wide_tank",
+        bands: [(40, 1700), (300, 1500), (300, 1500)],
+        tank_grid: true,
+        secondary_chance: 0.4,
+        secondary_ratio: 0.8,
+        flex_chance: 0.05,
+        subclass_chance: 0.0,
+    },
+    // Почти никто не умеет вторую роль: ролевые назначения зажаты.
+    FixtureProfile {
+        name: "one_trick",
+        bands: [(150, 2100), (150, 2100), (150, 2100)],
+        tank_grid: false,
+        secondary_chance: 0.12,
+        secondary_ratio: 0.7,
+        flex_chance: 0.02,
+        subclass_chance: 0.3,
+    },
+    // Флекс-пул почти полный: у поиска максимум степеней свободы.
+    FixtureProfile {
+        name: "flex_heavy",
+        bands: [(200, 1800), (200, 1800), (200, 1800)],
+        tank_grid: false,
+        secondary_chance: 0.9,
+        secondary_ratio: 0.95,
+        flex_chance: 0.35,
+        subclass_chance: 0.45,
+    },
+];
+
+pub fn synthetic_profiled_context(
+    profile: &FixtureProfile,
+    num_teams: usize,
+    seed: u64,
+) -> BenchContext {
+    let mut rng = MooRng::seed_from_u64(seed);
+    let roles = ["Tank", "Damage", "Support"];
+    let caps = [1usize, 2, 2];
+    let mask: HashMap<String, usize> = roles
+        .iter()
+        .zip(caps)
+        .map(|(role, cap)| (role.to_string(), cap))
+        .collect();
+    let subclass_pool = ["hitscan", "projectile", "main_heal", "light_heal"];
+
+    let mut players: Vec<PlayerSpec> = Vec::new();
+    let mut index = 0usize;
+    for (role_idx, (role, cap)) in roles.iter().zip(caps).enumerate() {
+        let (low, high) = profile.bands[role_idx];
+        let line_count = cap * num_teams;
+        for line_pos in 0..line_count {
+            let rating = if profile.tank_grid && *role == "Tank" {
+                low + ((high - low) * line_pos as i32) / line_count.max(1) as i32
+            } else {
+                rng.random_range(low..high)
+            };
+            let mut ratings = HashMap::new();
+            ratings.insert(role.to_string(), rating);
+            for (other_idx, other) in roles.iter().enumerate() {
+                if other == role || !rng.random_bool(profile.secondary_chance) {
+                    continue;
+                }
+                // Вторая роль не выпадает из полосы своей роли: иначе профиль
+                // с перекошенными средними терял бы перекос через флекс.
+                let (other_low, other_high) = profile.bands[other_idx];
+                let scaled = (rating as f64 * profile.secondary_ratio) as i32;
+                ratings.insert(
+                    other.to_string(),
+                    scaled.clamp(other_low, other_high.max(other_low + 1)),
+                );
+            }
+            // Порядок ключей HashMap недетерминирован — сортируем перед
+            // shuffle, чтобы фикстура зависела только от seed.
+            let mut preferences: Vec<String> = ratings.keys().cloned().collect();
+            preferences.sort();
+            preferences.shuffle(&mut rng);
+            let mut subclasses = HashMap::new();
+            if rng.random_bool(profile.subclass_chance) {
+                subclasses.insert(
+                    role.to_string(),
+                    subclass_pool[rng.random_range(0..subclass_pool.len())].to_string(),
+                );
+            }
+            players.push(PlayerSpec {
+                uuid: format!("p{index}"),
+                name: format!("p{index}"),
+                ratings,
+                preferences,
+                subclasses,
+                is_captain: false,
+                is_flex: rng.random_bool(profile.flex_chance),
+                seed_role: Some(role.to_string()),
+            });
+            index += 1;
+        }
+    }
+
+    let request = NativeRequest {
+        players,
+        num_teams,
+        seed,
+        mask,
+        config: bench_config(),
+    };
+    BenchContext(Context::from_request(request).expect("profiled fixture must be valid"))
+}
+
 /// Копия контекста с другим seed оптимизатора (фикстура та же).
 pub fn with_optimizer_seed(ctx: &BenchContext, seed: u64) -> BenchContext {
     let mut copy = ctx.0.clone();

@@ -303,11 +303,14 @@ fn optimizer_output_snapshot_guard() {
     );
 }
 
-// Re-baseline 2026-07-29: добавлено поле avg_low_rank_pairs в сериализуемый
-// ObjectiveBreakdown (low_rank_threshold=0 в фикстуре — поиск не менялся,
-// изменился только wire-формат ответа).
-// Предыдущие re-baseline: 2026-06-11 rand 0.8→0.9, Фаза 3 (поиск), Фаза 2 (objective).
-const SNAPSHOT_FINGERPRINT: u64 = 1273610128389254711;
+// Re-baseline 2026-09-17: добивка вариантов до max_result_variants из
+// отброшенных доминированием ростеров (фикстура запрашивает 7, фронт отдавал
+// 1 вариант, теперь 2 — больше различных ростеров пул не содержит).
+// Показанный (первый) вариант при этом байт-в-байт тот же: его хэш
+// 16198780372269999697 совпал с базовым до изменения.
+// Предыдущие re-baseline: 2026-07-29 avg_low_rank_pairs в ObjectiveBreakdown,
+// 2026-06-11 rand 0.8→0.9, Фаза 3 (поиск), Фаза 2 (objective).
+const SNAPSHOT_FINGERPRINT: u64 = 13297480584333309383;
 
 // --- Валидация входа -------------------------------------------------
 
@@ -1246,4 +1249,54 @@ fn best_variant_regression_fixture_metrics() {
         "top variant mmr stddev regressed: got {}",
         best.mmr_std_dev
     );
+}
+
+/// Контракт числа вариантов: запрошенное `max_result_variants` набирается,
+/// даже когда строгий Парето-фронт тоньше запроса (после polish решения
+/// сходятся к колену и вытесняют друг друга — 12 команд отдавали 12-21
+/// вариант при запрошенных 30). Ростеры при этом обязаны быть разными.
+#[test]
+fn requested_variant_count_is_met_from_a_thin_front() {
+    let base = bench_api::synthetic_context(12, 2002);
+    let mut ctx = base.0.clone();
+    ctx.config.max_result_variants = 30;
+
+    let response = run_optimizer(&ctx, None).expect("optimizer should return variants");
+
+    assert_eq!(
+        response.variants.len(),
+        30,
+        "requested 30 variants, got {}",
+        response.variants.len()
+    );
+    let unique: HashSet<u64> = response
+        .variants
+        .iter()
+        .map(|variant| signature(&crate::quality_harness::rebuild_solution(&ctx, variant)))
+        .collect();
+    assert_eq!(
+        unique.len(),
+        response.variants.len(),
+        "variants must be distinct rosters"
+    );
+}
+
+/// Добивка вариантов не смещает показанный (первый) вариант: её objectives
+/// нормируются по границам самого фронта, иначе расширение max'ов сдвинуло бы
+/// выбор колена, и один и тот же прогон показывал бы разный лучший ростер в
+/// зависимости от запрошенного числа альтернатив.
+#[test]
+fn primary_variant_does_not_depend_on_requested_variant_count() {
+    let base = bench_api::synthetic_context(12, 2002);
+    let mut few = base.0.clone();
+    few.config.max_result_variants = 3;
+    let mut many = base.0.clone();
+    many.config.max_result_variants = 30;
+
+    let primary_of = |ctx: &Context| {
+        let response = run_optimizer(ctx, None).expect("optimizer should return variants");
+        signature(&crate::quality_harness::rebuild_solution(ctx, &response.variants[0]))
+    };
+
+    assert_eq!(primary_of(&few), primary_of(&many));
 }

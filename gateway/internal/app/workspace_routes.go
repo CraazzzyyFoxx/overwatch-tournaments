@@ -49,4 +49,12 @@ var WorkspaceWriteRoutes = []edge.RouteSpec{
 	// current owner as well as superusers -- the person on the hook is the one
 	// entitled to get off it. Enforced in app-service, not here.
 	{Method: "POST", Pattern: "/api/v1/workspaces/{workspace_id}/owner/transfer", Queue: "rpc.app.workspaces.owner_transfer", Path: []string{"workspace_id"}, Body: true, Auth: edge.AuthRequired},
+	// --- quota (rate-limit design §4.7): the tenant's own budget and the
+	// ceiling it sets for its keys, plus a read of what has been spent. The
+	// write is one scope at a time, because each scope is its own override row:
+	// one request writing three would leave the first stored when the second is
+	// refused. app-service enforces the authority -- a superuser may raise a
+	// value, a workspace admin may only lower it.
+	{Method: "GET", Pattern: "/api/v1/workspaces/{workspace_id}/quota/usage", Queue: "rpc.app.quota.workspace_usage", Path: []string{"workspace_id"}, Auth: edge.AuthRequired},
+	{Method: "POST", Pattern: "/api/v1/workspaces/{workspace_id}/quota", Queue: "rpc.app.workspaces.quota_set", Path: []string{"workspace_id"}, Body: true, Auth: edge.AuthRequired},
 }
