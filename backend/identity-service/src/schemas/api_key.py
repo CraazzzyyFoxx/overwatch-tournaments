@@ -44,7 +44,6 @@ class ApiKeyRead(BaseModel):
     owner_username: str
     scopes: list[str] = Field(default_factory=list)
     limits: dict[str, Any] = Field(default_factory=dict)
-    config_policy: dict[str, Any] = Field(default_factory=dict)
     expires_at: datetime | None = None
     revoked_at: datetime | None = None
     last_used_at: datetime | None = None
@@ -63,7 +62,6 @@ class ApiKeyTokenInfo(BaseModel):
     workspace_id: int
     scopes: list[str] = Field(default_factory=list)
     limits: dict[str, Any] = Field(default_factory=dict)
-    config_policy: dict[str, Any] = Field(default_factory=dict)
 
 
 _API_KEY_SORT = Literal["created_at", "name", "last_used_at", "expires_at"]

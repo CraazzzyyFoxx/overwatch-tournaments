@@ -306,7 +306,6 @@ def make_api_key_row(
         name="Balancer API",
         scopes=[models.ApiKeyScope(scope=name) for name in scope_names],
         limits_json={},
-        config_policy_json={},
         expires_at=expires_at,
         revoked_at=revoked_at,
         last_used_at=None,

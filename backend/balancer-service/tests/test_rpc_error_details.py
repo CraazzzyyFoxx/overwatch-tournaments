@@ -1,7 +1,7 @@
 """The balancer's dict-detail errors reach clients as structure, not as a string.
 
-``api_key_policy`` rejections carry the cap that was hit (``max``) and the field
-that hit it. Those used to be ``json.dumps``-ed into ``error.message``, so a
+A limit rejection carries the cap that was hit (``max_players``) and the code
+that named it. Those used to be ``json.dumps``-ed into ``error.message``, so a
 client had to parse JSON back out of a human-readable field to act on them.
 """
 
@@ -10,8 +10,6 @@ from __future__ import annotations
 import os
 import sys
 from pathlib import Path
-
-import pytest
 
 from shared.core.errors import ApiExc, ApiHTTPException
 from shared.core.errors import BaseAPIException as HTTPException
@@ -25,7 +23,6 @@ for candidate in (str(REPO_BACKEND_ROOT), str(BALANCER_SERVICE_ROOT)):
 
 os.environ["DEBUG"] = "false"
 
-from src.core.security.api_key_policy import validate_api_key_config_policy  # noqa: E402
 from src.rpc import _common as rpc_common  # noqa: E402
 
 
@@ -38,48 +35,34 @@ def _map(exc: Exception) -> dict:
     return rpc_common._map_error(_Logger(), "test", exc)["error"]
 
 
-def _api_key_user():
-    class _User:
-        _credential_type = "api_key"
-        _api_key_config_policy = None
-
-    return _User()
-
-
 def test_module_no_longer_stringifies_details() -> None:
     # The old dict branch did a local ``import json`` purely to dump the detail
     # into the message; nothing here should need a JSON encoder any more.
     assert not hasattr(rpc_common, "json")
 
 
-def test_policy_rejection_reaches_the_client_as_structure() -> None:
-    with pytest.raises(HTTPException) as exc_info:
-        validate_api_key_config_policy(_api_key_user(), {"population_size": 10_000})
+def test_dict_detail_keeps_the_keys_the_client_acts_on() -> None:
+    # The shape ``_enforce_player_limit`` raises in services/balancer/jobs.py.
+    exc = HTTPException(
+        status_code=400,
+        detail={"code": "balancer_player_limit_exceeded", "max_players": 500},
+    )
 
-    error = _map(exc_info.value)
+    error = _map(exc)
     assert error["code"] == "bad_request"
     # The specific code and the cap the request blew past survive as a fields
     # entry. NOT merged at the top of details: the gateway lets the envelope's
     # own `code` win there, so a merged specific code would be dropped.
     assert error["details"]["fields"] == [
         {
-            "field": "population_size",
-            "msg": "api key config value too high",
-            "code": "api_key_config_value_too_high",
-            "max": 150,
+            "field": None,
+            "msg": "balancer player limit exceeded",
+            "code": "balancer_player_limit_exceeded",
+            "max_players": 500,
         }
     ]
-    assert error["message"] == "api key config value too high"
+    assert error["message"] == "balancer player limit exceeded"
     assert "{" not in error["message"]
-
-
-def test_disallowed_field_rejection_keeps_its_allowed_list() -> None:
-    with pytest.raises(HTTPException) as exc_info:
-        validate_api_key_config_policy(_api_key_user(), {"solver": "brute-force"})
-
-    entry = _map(exc_info.value)["details"]["fields"][0]
-    assert entry["code"] == "api_key_config_field_not_allowed"
-    assert "population_size" in entry["allowed_fields"]
 
 
 def test_item_shaped_dict_detail_becomes_a_fields_entry() -> None:

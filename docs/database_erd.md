@@ -12,7 +12,7 @@ schema name — `ranks/` writes to `overwatch_rank`, `ingestion/` to `log_proces
 > `--check` and fails on drift, so the diagrams cannot fall behind the models again.
 
 <!-- ERD:auto _alembic_head -->
-Alembic head: **`inpslot01`** (64 revisions in `backend/migrations/versions/`).
+Alembic head: **`apikeycfg1`** (65 revisions in `backend/migrations/versions/`).
 <!-- /ERD:auto -->
 
 **Reading the diagrams**
@@ -211,7 +211,6 @@ erDiagram
         varchar(128) secret_hash
         varchar(100) name
         json limits_json
-        json config_policy_json
         timestamptz expires_at "nullable"
         timestamptz revoked_at "nullable"
         timestamptz last_used_at "nullable"

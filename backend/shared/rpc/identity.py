@@ -128,8 +128,8 @@ def _stamp_credential(user: AuthUser, identity: dict[str, Any]) -> None:
     api_key = identity.get("api_key")
     if not isinstance(api_key, dict):
         return
-    # Deliberately not ``limits``/``config_policy``: those are balancer's own
-    # quota inputs, and it stamps them itself from the same payload.
+    # Deliberately not ``limits``: that is balancer's own quota input, and it
+    # stamps it itself from the same payload.
     object.__setattr__(user, "_api_key_id", api_key.get("id"))
     object.__setattr__(user, "_api_key_public_id", api_key.get("public_id"))
     object.__setattr__(user, "_api_key_workspace_id", api_key.get("workspace_id"))

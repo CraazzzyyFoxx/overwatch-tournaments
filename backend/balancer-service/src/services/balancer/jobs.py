@@ -33,7 +33,6 @@ from src.core.security.api_key_limiter import (
     get_principal,
     is_api_key_principal,
 )
-from src.core.security.api_key_policy import validate_api_key_config_policy
 from src.core.security.workspace_access import WorkspaceAccessPolicy
 from src.schemas.balancer import CreateJobResponse, JobStatusResponse
 from src.services.balancer.config.provider import get_balancer_config_payload
@@ -181,7 +180,6 @@ async def create_job(
 
     player_data = await _payload_parser.parse_player_data(uploaded_file)
     config_overrides = _payload_parser.parse_config_overrides(raw_config)
-    validate_api_key_config_policy(user, config_overrides)
     _enforce_player_limit(user, player_data)
 
     # Per-team slot counts are the tournament's, not the request's: resolved
@@ -275,7 +273,6 @@ async def create_tournament_job(
             detail="No pool registration has a ranked role; set ranks in the balancer first",
         )
     config_overrides = _payload_parser.parse_config_overrides(raw_config)
-    validate_api_key_config_policy(user, config_overrides)
     _enforce_player_limit(user, player_data)
 
     roster_shape = await get_effective_roster_shape(
@@ -357,9 +354,6 @@ async def balance_inline(
     _access_policy.ensure_workspace_access(user, workspace_id)
 
     overrides = normalize_persisted_config_payload(config_overrides)
-    # Policy before clamp: ``time_limit_ms`` is not an API-key-allowed field, so
-    # clamping first would reject the caller over a value they never sent.
-    validate_api_key_config_policy(user, overrides)
     _enforce_player_limit(user, player_data)
     overrides["time_limit_ms"] = min(int(overrides.get("time_limit_ms") or SYNC_TIME_LIMIT_MS), SYNC_TIME_LIMIT_MS)
 

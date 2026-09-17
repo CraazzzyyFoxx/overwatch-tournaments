@@ -24,7 +24,6 @@ from src.core.security.api_key_limiter import (  # noqa: E402
     RESERVE_JOB_SCRIPT,
     ApiKeyUsageLimiter,
 )
-from src.core.security.api_key_policy import validate_api_key_config_policy  # noqa: E402
 from src.core.security.workspace_access import WorkspaceAccessPolicy  # noqa: E402
 from src.rpc import _common as rpc_common  # noqa: E402
 
@@ -86,7 +85,6 @@ def _api_key_user(**overrides):
             "max_upload_bytes": 10 * 1024 * 1024,
             "max_players": 500,
         },
-        "_api_key_config_policy": {},
     }
     values.update(overrides)
     return SimpleNamespace(
@@ -105,54 +103,6 @@ def _limiter(fake_redis: FakeRedis) -> ApiKeyUsageLimiter:
     limiter._request_script = fake_redis.register_script(REQUEST_SCRIPT)
     limiter._reserve_job_script = fake_redis.register_script(RESERVE_JOB_SCRIPT)
     return limiter
-
-
-def test_config_policy_rejects_disallowed_field() -> None:
-    with pytest.raises(HTTPException) as exc_info:
-        validate_api_key_config_policy(_api_key_user(), {"solver": "expensive"})
-
-    assert exc_info.value.status_code == 400
-    assert exc_info.value.detail["code"] == "api_key_config_field_not_allowed"
-    assert exc_info.value.detail["field"] == "solver"
-
-
-def test_config_policy_rejects_expensive_caps() -> None:
-    with pytest.raises(HTTPException) as exc_info:
-        validate_api_key_config_policy(_api_key_user(), {"population_size": 151})
-
-    assert exc_info.value.status_code == 400
-    assert exc_info.value.detail == {
-        "code": "api_key_config_value_too_high",
-        "field": "population_size",
-        "max": 150,
-    }
-
-
-def test_config_policy_rejects_nan_cap_bypass() -> None:
-    with pytest.raises(HTTPException) as exc_info:
-        validate_api_key_config_policy(_api_key_user(), {"population_size": float("nan")})
-
-    assert exc_info.value.status_code == 400
-    assert exc_info.value.detail["code"] == "api_key_config_value_too_high"
-    assert exc_info.value.detail["field"] == "population_size"
-
-
-def test_config_policy_rejects_non_numeric_cap_value() -> None:
-    with pytest.raises(HTTPException) as exc_info:
-        validate_api_key_config_policy(_api_key_user(), {"population_size": {"a": 1}})
-
-    assert exc_info.value.status_code == 400
-    assert exc_info.value.detail["code"] == "api_key_config_value_invalid"
-    assert exc_info.value.detail["field"] == "population_size"
-
-
-def test_config_policy_rejects_algorithm_override_field() -> None:
-    with pytest.raises(HTTPException) as exc_info:
-        validate_api_key_config_policy(_api_key_user(), {"algorithm": "moo"})
-
-    assert exc_info.value.status_code == 400
-    assert exc_info.value.detail["code"] == "api_key_config_field_not_allowed"
-    assert exc_info.value.detail["field"] == "algorithm"
 
 
 def test_limiter_returns_429_with_retry_after_for_request_limit() -> None:

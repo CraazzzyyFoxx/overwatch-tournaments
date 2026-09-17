@@ -414,7 +414,6 @@ CREATE TABLE auth.api_key (
 	secret_hash VARCHAR(128) NOT NULL, 
 	name VARCHAR(100) NOT NULL, 
 	limits_json JSON DEFAULT '{}' NOT NULL, 
-	config_policy_json JSON DEFAULT '{}' NOT NULL, 
 	expires_at TIMESTAMP WITH TIME ZONE, 
 	revoked_at TIMESTAMP WITH TIME ZONE, 
 	last_used_at TIMESTAMP WITH TIME ZONE, 
@@ -2789,6 +2788,7 @@ CREATE TABLE tournament.stage_item_input (
 	source_stage_item_id BIGINT, 
 	source_position INTEGER, 
 	PRIMARY KEY (id), 
+	CONSTRAINT uq_stage_item_input_item_slot UNIQUE (stage_item_id, slot), 
 	FOREIGN KEY(stage_item_id) REFERENCES tournament.stage_item (id) ON DELETE CASCADE, 
 	FOREIGN KEY(team_id) REFERENCES tournament.team (id) ON DELETE SET NULL, 
 	FOREIGN KEY(source_stage_item_id) REFERENCES tournament.stage_item (id) ON DELETE SET NULL

@@ -27,7 +27,6 @@ export interface AccountApiKey {
   owner_username: string;
   scopes: string[];
   limits: Record<string, unknown>;
-  config_policy: Record<string, unknown>;
   expires_at?: string | null;
   revoked_at?: string | null;
   last_used_at?: string | null;

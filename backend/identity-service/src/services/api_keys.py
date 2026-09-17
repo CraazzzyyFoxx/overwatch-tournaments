@@ -117,7 +117,6 @@ class ApiKeyService:
             owner_username=_owner_username(row, owner),
             scopes=_scope_names(row),
             limits=dict(row.limits_json or {}),
-            config_policy=dict(row.config_policy_json or {}),
             expires_at=row.expires_at,
             revoked_at=row.revoked_at,
             last_used_at=row.last_used_at,
@@ -331,7 +330,6 @@ class ApiKeyService:
             name=self._clean_name(payload.name),
             scopes=[models.ApiKeyScope(scope=name) for name in scopes],
             limits_json={},
-            config_policy_json={},
             expires_at=payload.expires_at,
         )
         await self.keys.create(session, row)
@@ -511,7 +509,6 @@ class ApiKeyService:
                 workspace_id=api_key.workspace_id,
                 scopes=list(scopes),
                 limits=dict(api_key.limits_json or {}),
-                config_policy=dict(api_key.config_policy_json or {}),
             ),
         )
 

@@ -556,7 +556,6 @@ Table auth.api_key {
   secret_hash VARCHAR(128) [not null]
   name VARCHAR(100) [not null]
   limits_json json [not null, default: `{}`]
-  config_policy_json json [not null, default: `{}`]
   expires_at timestamptz
   revoked_at timestamptz
   last_used_at timestamptz
@@ -1028,8 +1027,8 @@ Table balancer.registration_google_sheet_binding {
   row_hash VARCHAR(128)
   last_seen_at timestamptz
   indexes {
-    (feed_id, source_record_key) [unique, name: "uq_balancer_registration_google_sheet_binding_key"]
     (registration_id) [unique, name: "uq_balancer_registration_google_sheet_binding_registration"]
+    (feed_id, source_record_key) [unique, name: "uq_balancer_registration_google_sheet_binding_key"]
     (feed_id) [name: "ix_balancer_registration_google_sheet_binding_feed_id"]
   }
 }
@@ -1836,8 +1835,8 @@ Table division_grid_tier {
   ow_rank_min bigint
   ow_rank_max bigint
   indexes {
-    (version_id, sort_order) [unique]
     (version_id, slug) [unique]
+    (version_id, sort_order) [unique]
     (version_id) [name: "ix_division_grid_tier_version_id"]
   }
 }
@@ -2624,6 +2623,7 @@ Table tournament.stage_item_input {
   source_stage_item_id bigint
   source_position int
   indexes {
+    (stage_item_id, slot) [unique, name: "uq_stage_item_input_item_slot"]
     (stage_item_id) [name: "ix_tournament_stage_item_input_stage_item_id"]
     (team_id) [name: "ix_tournament_stage_item_input_team_id"]
   }
