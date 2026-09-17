@@ -7,6 +7,7 @@ from typing import Any
 
 from loguru import logger
 
+from shared import quota
 from shared.core import http_status as status
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.jobs import JobService, JobSpec, RedisMetaStore, Unlimited
@@ -20,18 +21,12 @@ from shared.services.balancer_realtime import (
 from shared.services.roster import roster_engine
 from shared.services.roster_shape_access import get_effective_roster_shape
 from src.core import db
+from src.core.config import config
 from src.core.job_store import get_job_store
 from src.core.metrics import (
     BALANCER_JOB_QUEUE_WAIT_SECONDS,
     BALANCER_JOB_TOTAL_SECONDS,
     BALANCER_SOLVER_SECONDS,
-)
-from src.core.security.api_key_limiter import (
-    get_api_key_id,
-    get_api_key_limiter,
-    get_effective_limits,
-    get_principal,
-    is_api_key_principal,
 )
 from src.core.security.workspace_access import WorkspaceAccessPolicy
 from src.schemas.balancer import CreateJobResponse, JobStatusResponse
@@ -54,6 +49,10 @@ from src.services.balancer.solver import run_balance
 
 _access_policy = WorkspaceAccessPolicy()
 _payload_parser = BalancerRequestParser()
+
+# The metered operation every balancer job is priced and counted under; its
+# cost lives in ``quota.operation``, not here.
+_JOB_OPERATION = "balancer.job"
 
 # Outer wall-clock safety net for a single solver run (review H5). The native
 # optimizer already honours ``time_limit_ms`` (max 600s); this watchdog is a
@@ -89,38 +88,20 @@ def _count_input_players(player_data: dict[str, Any]) -> int:
     return 0
 
 
-def _enforce_upload_limit(user, uploaded_file) -> None:
-    # Applies to every principal (review H5): API keys use their per-key cap,
-    # session users the generous ``SESSION_LIMITS`` ceiling.
-    upload_size = getattr(uploaded_file, "size", None)
-    if upload_size is None:
-        return
-    max_upload_bytes = get_effective_limits(user)["max_upload_bytes"]
+def _upload_size(uploaded_file) -> int | None:
     try:
-        upload_size_int = int(upload_size)
+        return int(getattr(uploaded_file, "size", None))
     except (TypeError, ValueError):
-        return
-    if upload_size_int > max_upload_bytes:
-        raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail={
-                "code": "balancer_upload_too_large",
-                "max_upload_bytes": max_upload_bytes,
-            },
-        )
+        return None
 
 
-def _enforce_player_limit(user, player_data: dict[str, Any]) -> None:
-    player_count = _count_input_players(player_data)
-    max_players = get_effective_limits(user)["max_players"]
-    if player_count > max_players:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={
-                "code": "balancer_player_limit_exceeded",
-                "max_players": max_players,
-            },
-        )
+def _api_key_id_of(user) -> int | None:
+    """The key id a queued job records, so its slot is released against the
+    same bucket it was reserved in."""
+    principal = quota.principal_of(user)
+    if principal is None or principal[0] != "api_key":
+        return None
+    return principal[1]
 
 
 def _build_job_urls(job_id: str) -> dict[str, str]:
@@ -172,15 +153,14 @@ async def create_job(
     tournament_id: int | None = None,
 ) -> CreateJobResponse:
     job_store = get_job_store()
-    api_key_limiter = get_api_key_limiter()
 
-    await api_key_limiter.check_request(user)
+    # Settled before the upload is parsed: a file over the cap is refused
+    # without paying to decode it, and without burning the request token.
+    await quota.check_payload(user, _JOB_OPERATION, workspace_id=workspace_id, size_bytes=_upload_size(uploaded_file))
     _access_policy.ensure_workspace_access(user, workspace_id)
-    _enforce_upload_limit(user, uploaded_file)
 
     player_data = await _payload_parser.parse_player_data(uploaded_file)
     config_overrides = _payload_parser.parse_config_overrides(raw_config)
-    _enforce_player_limit(user, player_data)
 
     # Per-team slot counts are the tournament's, not the request's: resolved
     # here so a broken roster shape fails the call instead of the job, and so
@@ -192,9 +172,19 @@ async def create_job(
     )
 
     job_id = uuid.uuid4().hex
-    api_key_id = get_api_key_id(user) if is_api_key_principal(user) else None
-    principal = get_principal(user)
-    await api_key_limiter.reserve_job(user, job_id)
+    # One accounting call for the whole request: the per-minute token, the daily
+    # budget, the roster-size cap, and the concurrency slot the job holds until
+    # it terminates. The lease id IS the job id, so whichever worker finishes
+    # the job releases the slot from its metadata alone.
+    lease = await quota.lease(
+        user,
+        _JOB_OPERATION,
+        workspace_id=workspace_id,
+        lease_id=job_id,
+        ttl_seconds=config.balancer_job_ttl_seconds,
+        item_count=_count_input_players(player_data),
+    )
+    api_key_id = _api_key_id_of(user)
 
     try:
         meta = await _runtime(job_store).create(
@@ -216,8 +206,7 @@ async def create_job(
         )
         job_id = str(meta.get("job_id") or job_id)
     except Exception:
-        if principal is not None:
-            await api_key_limiter.release_job(principal[0], principal[1], job_id)
+        await quota.release(lease)
         raise
 
     try:
@@ -260,9 +249,7 @@ async def create_tournament_job(
     draft reads (``shared.services.roster``), so the two cannot diverge again.
     """
     job_store = get_job_store()
-    api_key_limiter = get_api_key_limiter()
 
-    await api_key_limiter.check_request(user)
     _access_policy.ensure_workspace_access(user, workspace_id)
 
     rosters = await roster_engine.for_tournament(session, tournament_id, pool_only=True)
@@ -273,7 +260,6 @@ async def create_tournament_job(
             detail="No pool registration has a ranked role; set ranks in the balancer first",
         )
     config_overrides = _payload_parser.parse_config_overrides(raw_config)
-    _enforce_player_limit(user, player_data)
 
     roster_shape = await get_effective_roster_shape(
         session,
@@ -282,9 +268,15 @@ async def create_tournament_job(
     )
 
     job_id = uuid.uuid4().hex
-    api_key_id = get_api_key_id(user) if is_api_key_principal(user) else None
-    principal = get_principal(user)
-    await api_key_limiter.reserve_job(user, job_id)
+    lease = await quota.lease(
+        user,
+        _JOB_OPERATION,
+        workspace_id=workspace_id,
+        lease_id=job_id,
+        ttl_seconds=config.balancer_job_ttl_seconds,
+        item_count=_count_input_players(player_data),
+    )
+    api_key_id = _api_key_id_of(user)
 
     try:
         meta = await _runtime(job_store).create(
@@ -306,8 +298,7 @@ async def create_tournament_job(
         )
         job_id = str(meta.get("job_id") or job_id)
     except Exception:
-        if principal is not None:
-            await api_key_limiter.release_job(principal[0], principal[1], job_id)
+        await quota.release(lease)
         raise
 
     try:
@@ -341,27 +332,28 @@ async def balance_inline(
 
     The job API exists because a 600s solve cannot ride an HTTP request; an API
     client that already holds its pool should not have to implement
-    create/poll/fetch to get teams out of it. Same limits, same API-key policy
-    and the same ``BalanceJobResult`` shape as ``get_job_result`` -- only the
-    transport and the time budget differ. Nothing here touches Postgres, Redis
-    (beyond the rate limiter) or the realtime topics: the pool AND the roster
-    shape both arrive in the payload, so the run is reproducible from the
-    request alone.
+    create/poll/fetch to get teams out of it. Same quotas and the same
+    ``BalanceJobResult`` shape as ``get_job_result`` -- only the transport and
+    the time budget differ. Nothing here touches Postgres of its own or the
+    realtime topics: the pool AND the roster shape both arrive in the payload,
+    so the run is reproducible from the request alone.
     """
-    api_key_limiter = get_api_key_limiter()
-
-    await api_key_limiter.check_request(user)
     _access_policy.ensure_workspace_access(user, workspace_id)
 
     overrides = normalize_persisted_config_payload(config_overrides)
-    _enforce_player_limit(user, player_data)
     overrides["time_limit_ms"] = min(int(overrides.get("time_limit_ms") or SYNC_TIME_LIMIT_MS), SYNC_TIME_LIMIT_MS)
 
     # A synchronous run occupies a solver thread for up to a minute, so it takes
     # a concurrency slot exactly like a queued job does.
     run_id = uuid.uuid4().hex
-    principal = get_principal(user)
-    await api_key_limiter.reserve_job(user, run_id)
+    lease = await quota.lease(
+        user,
+        _JOB_OPERATION,
+        workspace_id=workspace_id,
+        lease_id=run_id,
+        ttl_seconds=config.balancer_job_ttl_seconds,
+        item_count=_count_input_players(player_data),
+    )
 
     started_at = time.perf_counter()
     try:
@@ -376,15 +368,17 @@ async def balance_inline(
         ) from exc
     finally:
         BALANCER_SOLVER_SECONDS.labels(algorithm="tournament_balancer").observe(time.perf_counter() - started_at)
-        if principal is not None:
-            await api_key_limiter.release_job(principal[0], principal[1], run_id)
+        await quota.release(lease)
 
     return normalize_balance_job_result_payload(result)
 
 
 async def get_job_status(*, job_id: str, user) -> JobStatusResponse:
     job_store = get_job_store()
-    await get_api_key_limiter().check_request(user)
+    # Polling costs a request token and nothing else -- no operation cost, so no
+    # daily budget. The tenant scope still applies for an API key: its
+    # workspace comes off the credential, not off this call.
+    await quota.charge(user, "balancer.jobs.read")
     meta = await job_store.get_job_meta(job_id)
     if meta is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Balancer job not found")
@@ -399,7 +393,7 @@ async def get_job_status(*, job_id: str, user) -> JobStatusResponse:
 
 async def get_job_result(*, job_id: str, user) -> dict[str, Any]:
     job_store = get_job_store()
-    await get_api_key_limiter().check_request(user)
+    await quota.charge(user, "balancer.jobs.read")
     meta = await job_store.get_job_meta(job_id)
     if meta is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Balancer job not found")

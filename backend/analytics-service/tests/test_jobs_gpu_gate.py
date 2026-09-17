@@ -25,7 +25,7 @@ from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import TestCase
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 # Ensure the analytics-service ``src`` package resolves regardless of pytest
 # collection order / invocation cwd (matches how the suite is run).
@@ -123,6 +123,10 @@ class AnalyticsGpuGateTests(TestCase):
             patch.object(jobs_control, "_workspaces", _FakeWorkspaces()),
             patch.object(jobs_control, "create_analytics_job", _fake_create),
             patch.object(config.settings, "rabbitmq_url", "amqp://test"),
+            # The gate is a process-global configured at service startup, which
+            # these tests never run; the slug/workspace pairing it is handed is
+            # covered where quota itself is tested.
+            patch.object(jobs_control, "quota", SimpleNamespace(charge=AsyncMock())),
         ]
         for p in self._patches:
             p.start()

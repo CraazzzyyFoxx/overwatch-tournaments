@@ -20,6 +20,7 @@ from .ingestion import *
 from .matches import *
 from .platform import *
 from .preferences import *
+from .quota import *
 from .ranks import *
 from .registration import *
 from .subscriptions import *

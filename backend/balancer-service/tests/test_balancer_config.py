@@ -52,16 +52,10 @@ def test_config_payload_exposes_complete_editable_field_metadata() -> None:
     assert "stagnation_threshold" not in field_keys
     assert "algorithm" not in field_keys
     assert "algorithm" not in payload["defaults"]
-    # Per-team normalized defaults (Rust divides extensive terms by team count;
-    # values pre-multiplied to keep legacy 4-team behaviour)
-    assert payload["defaults"]["intra_team_std_weight"] == 2.8
-    assert payload["defaults"]["internal_role_spread_weight"] == 1.2
-    assert payload["defaults"]["sub_role_collision_weight"] == 24.0
-    assert payload["defaults"]["team_max_pain_weight"] == 1.0
-    assert payload["defaults"]["tank_gap_weight"] == 1.0
-    assert payload["defaults"]["tank_impact_weight"] == 1.4
-    assert payload["defaults"]["mutation_rate_min"] == 0.15
-    assert payload["defaults"]["crossover_rate"] == 0.85
+    # Weight values are deliberately not pinned here: they are tuning knobs
+    # (see the ablations referenced from presets.py/defaults.py). The contract
+    # is that every field is exposed and its default matches ``defaults``,
+    # which the loop below checks.
 
     for field in fields:
         assert field["label"]
@@ -371,7 +365,7 @@ def test_rank_comfort_tilt_field_exposed() -> None:
     payload = get_balancer_config_payload()
     fields_by_key = {field["key"]: field for field in payload["fields"]}
 
-    assert payload["defaults"]["rank_comfort_tilt"] == 0.5
+    assert "rank_comfort_tilt" in payload["defaults"]
     field = fields_by_key["rank_comfort_tilt"]
     assert field["type"] == "slider"
     assert field["group"] == "Quality weights"

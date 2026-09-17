@@ -150,6 +150,13 @@ from .custom_game import (
     CustomGameTeamNameRepository,
 )
 from .member_rank import MemberRankRepository
+from .quota import (
+    QuotaApiKeyLimitRepository,
+    QuotaOperationRepository,
+    QuotaPlanLimitRepository,
+    QuotaPlanRepository,
+    QuotaWorkspaceLimitRepository,
+)
 
 __all__ = (
     "TOURNAMENT_SOURCE_TYPE",
@@ -228,6 +235,11 @@ __all__ = (
     "PickBanSessionRepository",
     "PlayerRepository",
     "PlayerSubRoleRepository",
+    "QuotaApiKeyLimitRepository",
+    "QuotaOperationRepository",
+    "QuotaPlanLimitRepository",
+    "QuotaPlanRepository",
+    "QuotaWorkspaceLimitRepository",
     "RankFetchLogRepository",
     "RankSnapshotRepository",
     "RefreshTokenRepository",

@@ -24,6 +24,11 @@ import type {
   DiscordGuildInfo,
   DiscordRolesResponse
 } from "@/types/discord.types";
+import type {
+  QuotaLimitsPayload,
+  QuotaScope,
+  QuotaUsage
+} from "@/types/auth.types";
 
 type DivisionGridTierInput = {
   id?: number;
@@ -254,6 +259,30 @@ export default class workspaceService {
     return apiFetch(`/api/v1/workspaces/${workspaceId}/verification`, {
       method: "POST",
       body: { verification_status: status }
+    }).then((r) => r.json());
+  }
+
+  /**
+   * Effective ceilings and current spend for the workspace pool — the budget
+   * every key and every signed-in member of the tenant draws from.
+   */
+  static async getQuotaUsage(workspaceId: number): Promise<QuotaUsage> {
+    return apiFetch(`/api/v1/workspaces/${workspaceId}/quota/usage`).then((r) => r.json());
+  }
+
+  /**
+   * Write one scope's override row. A `null` dimension inherits from the plan;
+   * an all-`null` payload deletes the row. A workspace admin may only lower a
+   * value — raising one answers 422 `quota_above_inherited`.
+   */
+  static async setQuota(
+    workspaceId: number,
+    scope: QuotaScope,
+    limits: QuotaLimitsPayload
+  ): Promise<QuotaLimitsPayload> {
+    return apiFetch(`/api/v1/workspaces/${workspaceId}/quota`, {
+      method: "POST",
+      body: { scope, limits }
     }).then((r) => r.json());
   }
 

@@ -112,7 +112,7 @@ describe("WorkspaceSettingsShell", () => {
     expect(container.querySelector("nav")).toBeNull();
   });
 
-  it("rails all nine sections of the workspace hub", async () => {
+  it("rails all ten sections of the workspace hub", async () => {
     await render(
       <WorkspaceSettingsShell basePath="/admin/settings">
         <p />
@@ -128,7 +128,8 @@ describe("WorkspaceSettingsShell", () => {
       "/admin/settings/divisions",
       "/admin/settings/statuses",
       "/admin/settings/sub-roles",
-      "/admin/settings/subscriptions"
+      "/admin/settings/subscriptions",
+      "/admin/settings/quota"
     ]);
   });
 

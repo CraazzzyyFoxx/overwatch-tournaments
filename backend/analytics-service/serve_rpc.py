@@ -18,6 +18,7 @@ from shared.observability import (
     setup_tracing,
     start_worker_metrics_server,
 )
+from shared.quota import configure as configure_quota
 from shared.services.realtime import configure_realtime
 from src.core import config, db
 from src.rpc import jobs_control, mutations
@@ -38,6 +39,16 @@ app = FastStream(broker)
 # Separate process from the heavy worker, so it configures the realtime rail
 # independently -- job-control mutations stage events on their own sessions.
 configure_realtime(redis_url=str(config.settings.redis_url))
+
+# Quota policy lives in the ``quota`` schema, consumption in Redis; the gate needs
+# both before the first metered RPC (train/infer/recalculate all land here). Same
+# Redis as the realtime rail -- separate logical key namespaces, one connection
+# pool per process.
+configure_quota(
+    session_factory=db.async_session_maker,
+    redis_url=str(config.settings.redis_url),
+    enabled=config.settings.quota_enabled,
+)
 
 # Typed read + mutation + job-control RPC methods served by the gateway
 # (rpc.analytics.*). The heavy job queues are NOT registered here.

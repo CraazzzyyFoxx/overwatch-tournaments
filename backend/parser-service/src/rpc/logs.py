@@ -22,6 +22,7 @@ from typing import Any
 from faststream.rabbit import RabbitMessage
 from sqlalchemy import desc, func, select
 
+from shared import quota
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.messaging.config import PROCESS_MATCH_LOG_QUEUE, PROCESS_TOURNAMENT_LOGS_QUEUE
 from shared.models.ingestion.log_processing import LogProcessingSource, LogProcessingStatus
@@ -263,6 +264,15 @@ def register(broker: Any, logger: Any) -> None:
             attached_encounter = await _validate_attached_encounter(
                 session, tournament_id=tournament.id, encounter_id=encounter_id
             )
+            # Each file costs an S3 write plus its own parse job on the match-log
+            # queue, so the call is priced by both byte volume and file count.
+            await quota.charge(
+                user,
+                "parser.logs.upload",
+                workspace_id=tournament.workspace_id,
+                size_bytes=sum(len(f.get("content_b64") or "") for f in files),
+                item_count=len(files),
+            )
             uploader_id = await upload_service.resolve_auth_uploader_id(session, user)
 
             uploaded: list[schemas.LogUploadItem] = []
@@ -338,6 +348,9 @@ def register(broker: Any, logger: Any) -> None:
                 session, user, tournament_id=tournament_id, resource="log", action="update"
             )
             tournament = await tournament_flows.get(session, tournament_id, [])
+            # Fans out one parse job per stored log of the tournament — the cost is
+            # the whole fan-out, not this ack.
+            await quota.charge(user, "parser.logs.process_tournament", workspace_id=tournament.workspace_id)
             await record_admin_audit(
                 session,
                 action="match_log.process_tournament",

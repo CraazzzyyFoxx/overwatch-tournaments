@@ -532,22 +532,34 @@ pub(crate) fn crowding_distance(front: &[usize], objectives: &[Objectives]) -> V
 }
 
 pub(crate) fn normalize_objectives(objectives: &[Objectives]) -> Vec<Objectives> {
-    if objectives.is_empty() {
+    normalize_objectives_within(objectives, objectives)
+}
+
+/// Normalization against another set's bounds. Needed when some points are not
+/// part of the reference: variants used to top a thin Pareto front up to the
+/// requested max_result_variants must live in the front's own coordinate
+/// system, or their worse objectives would widen the maxima and shift the
+/// primary variant. Values outside the reference normalize above 1 by design.
+pub(crate) fn normalize_objectives_within(
+    objectives: &[Objectives],
+    reference: &[Objectives],
+) -> Vec<Objectives> {
+    if objectives.is_empty() || reference.is_empty() {
         return vec![];
     }
-    let b_min = objectives
+    let b_min = reference
         .iter()
         .map(|o| o.balance)
         .fold(f64::INFINITY, f64::min);
-    let b_max = objectives
+    let b_max = reference
         .iter()
         .map(|o| o.balance)
         .fold(f64::NEG_INFINITY, f64::max);
-    let c_min = objectives
+    let c_min = reference
         .iter()
         .map(|o| o.comfort)
         .fold(f64::INFINITY, f64::min);
-    let c_max = objectives
+    let c_max = reference
         .iter()
         .map(|o| o.comfort)
         .fold(f64::NEG_INFINITY, f64::max);

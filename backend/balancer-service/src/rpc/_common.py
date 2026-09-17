@@ -23,14 +23,12 @@ from shared.models.identity.auth_user import AuthUser
 from shared.rpc.common import (
     actor,
     dump,
-    field_entry,
     http_error,
     payload,
     q,
     q1,
     require_active,
     require_id,
-    retry_after_seconds,
     validation_error,
 )
 from shared.rpc.common import (
@@ -101,45 +99,11 @@ def require_admin_panel(user: AuthUser) -> None:
         )
 
 
-def _http_error(exc: HTTPException) -> tuple[str, dict[str, Any]]:
-    """Balancer-local ``http_error``: also splits dict details.
-
-    The job API raises ``detail={"code": ..., "field": ..., "max": ...}`` (see
-    ``core/security/api_key_policy.py``). That used to be ``json.dumps``-ed into
-    the message, so a client had to parse JSON back out of a human string to read
-    which cap it hit. The keys ride ``details`` instead, where the gateway passes
-    anything it does not recognise through verbatim.
-    """
-    detail = exc.detail
-    if not isinstance(detail, dict):
-        return http_error(exc)
-    if detail.get("msg"):
-        # Item-shaped: one validation entry, same shape as the list branch.
-        message, details = str(detail["msg"]), {"fields": [field_entry(detail)]}
-    else:
-        # Attribute bag: a ``code`` plus the field and the cap it blew past. It
-        # becomes ONE ``fields`` entry rather than being merged at the top level:
-        # ``details["code"]`` would be silently dropped there, because the gateway
-        # writes the envelope's status-derived code last and deliberately lets it
-        # win (a worker must not be able to rewrite the key clients branch on --
-        # see gateway/internal/apierr). The extra attributes ride the entry, where
-        # they describe the field they belong to.
-        code = str(detail.get("code") or "error")
-        message = code.replace("_", " ")
-        entry: dict[str, Any] = {"field": detail.get("field"), "msg": message, "code": code}
-        entry.update({k: v for k, v in detail.items() if k not in ("code", "field", "msg")})
-        details = {"fields": [entry]}
-    retry_after = retry_after_seconds(exc)
-    if retry_after is not None:
-        details["retry_after"] = retry_after
-    return message, details
-
-
 def _map_error(logger: Any, label: str, exc: Exception) -> dict[str, Any]:
     if isinstance(exc, MissingIdentityError):
         return rpc_error("unauthorized", str(exc) or "Not authenticated")
     if isinstance(exc, HTTPException):
-        message, details = _http_error(exc)
+        message, details = http_error(exc)
         return rpc_error(status_to_code(exc.status_code), message, details)
     if isinstance(exc, ValidationError):
         message, details = validation_error(exc)

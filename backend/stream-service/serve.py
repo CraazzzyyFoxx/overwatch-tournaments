@@ -22,6 +22,7 @@ from shared.observability import (
     setup_tracing,
     start_worker_metrics_server,
 )
+from shared.quota import configure as configure_quota
 from shared.services.realtime import configure_realtime
 from src.core import config, db
 from src.core.broker import set_worker_broker
@@ -49,6 +50,16 @@ set_worker_broker(broker)
 # The poll tick stages its stream.updated / tournament.streams events through
 # shared/services/realtime, which has no settings of its own.
 configure_realtime(redis_url=str(config.settings.redis_url))
+
+# The admin re-poll is metered, so the gate needs its policy source (the ``quota``
+# schema) and its counters (Redis) before the first RPC. The service owns no
+# schema of its own but reads Postgres, so the handler's session factory is the
+# right one to hand over.
+configure_quota(
+    session_factory=db.async_session_maker,
+    redis_url=str(config.settings.redis_url),
+    enabled=config.settings.quota_enabled,
+)
 
 rpc_reads.register(broker, logger)
 rpc_admin.register(broker, logger)

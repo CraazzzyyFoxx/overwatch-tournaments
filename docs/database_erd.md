@@ -12,7 +12,7 @@ schema name — `ranks/` writes to `overwatch_rank`, `ingestion/` to `log_proces
 > `--check` and fails on drift, so the diagrams cannot fall behind the models again.
 
 <!-- ERD:auto _alembic_head -->
-Alembic head: **`apikeycfg1`** (65 revisions in `backend/migrations/versions/`).
+Alembic head: **`quota0002`** (67 revisions in `backend/migrations/versions/`).
 <!-- /ERD:auto -->
 
 **Reading the diagrams**
@@ -63,6 +63,7 @@ Alembic head: **`apikeycfg1`** (65 revisions in `backend/migrations/versions/`).
 | `log_processing` | Match-log upload and parse records | parser-service / discord-service |
 | `realtime` | Realtime event journal used for WebSocket replay | gateway (Go) |
 | `subscriptions` | Subscription providers, requirements and entitlements | tournament-service / parser-service |
+| `quota` | Per-principal quota plans, operation costs and overrides | every service, via `shared.quota` |
 
 The hubs almost every domain converges on:
 
@@ -210,7 +211,6 @@ erDiagram
         varchar(32) public_id UK
         varchar(128) secret_hash
         varchar(100) name
-        json limits_json
         timestamptz expires_at "nullable"
         timestamptz revoked_at "nullable"
         timestamptz last_used_at "nullable"
@@ -442,6 +442,7 @@ erDiagram
         bigint owner_id FK "nullable"
         varchar(16) verification_status
         bigint default_division_grid_version_id FK "nullable"
+        bigint quota_plan_id FK "nullable"
         jsonb default_roster_slots_json "nullable"
         varchar(16) newcomer_scope
     }
@@ -460,6 +461,7 @@ erDiagram
     PLAYERS_USER ||--o{ PUBLIC_WORKSPACE_MEMBER : "player_id"
     PUBLIC_DIVISION_GRID_VERSION |o--o{ PUBLIC_WORKSPACE : "default_division_grid_version_id"
     PUBLIC_WORKSPACE ||--o{ PUBLIC_WORKSPACE_MEMBER : "workspace_id"
+    QUOTA_PLAN |o--o{ PUBLIC_WORKSPACE : "quota_plan_id"
 ```
 
 Composite unique keys:
@@ -2654,6 +2656,80 @@ erDiagram
         jsonb payload
         timestamptz occurred_at
     }
+```
+<!-- /ERD:auto -->
+
+## quota — `quota`
+
+Per-principal quotas, enforced by `shared.quota` from whichever service is about to spend the
+resource. A plan holds one limit row per scope — `workspace`, `key`, `session` — and a workspace
+either points at a plan explicitly or inherits the one named after its `verification_status`.
+`operation` is the metered set: a row is what gives an operation a cost, and no row means it
+costs nothing beyond its request token. The two override tables are per-tenant and per-key
+exceptions; `NULL` in a limit column means "inherit" there, and "unlimited" in a plan row.
+
+Consumption itself is not here: per-minute and per-day counters and the lease sets live in Redis
+under `q:{ws,key,user}:{id}:…`, because they are worthless in 60 seconds and would be pure write
+amplification in Postgres.
+
+<!-- ERD:auto quota -->
+```mermaid
+erDiagram
+    QUOTA_API_KEY_LIMIT {
+        bigint api_key_id PK,FK
+        int requests_per_minute "nullable"
+        int heavy_per_day "nullable"
+        int concurrent_heavy "nullable"
+        bigint max_upload_bytes "nullable"
+        int max_items_per_request "nullable"
+        bigint updated_by FK "nullable"
+        timestamptz created_at
+        timestamptz updated_at "nullable"
+    }
+    QUOTA_OPERATION {
+        bigint id PK
+        timestamptz created_at
+        timestamptz updated_at "nullable"
+        varchar(64) slug UK
+        int cost
+        boolean enabled
+        text description "nullable"
+    }
+    QUOTA_PLAN {
+        bigint id PK
+        timestamptz created_at
+        timestamptz updated_at "nullable"
+        varchar(32) slug UK
+        varchar(64) title
+        text description "nullable"
+    }
+    QUOTA_PLAN_LIMIT {
+        bigint plan_id PK,FK
+        varchar(16) scope PK
+        int requests_per_minute "nullable"
+        int heavy_per_day "nullable"
+        int concurrent_heavy "nullable"
+        bigint max_upload_bytes "nullable"
+        int max_items_per_request "nullable"
+    }
+    QUOTA_WORKSPACE_LIMIT {
+        bigint workspace_id PK,FK
+        varchar(16) scope PK
+        int requests_per_minute "nullable"
+        int heavy_per_day "nullable"
+        int concurrent_heavy "nullable"
+        bigint max_upload_bytes "nullable"
+        int max_items_per_request "nullable"
+        bigint updated_by FK "nullable"
+        timestamptz created_at
+        timestamptz updated_at "nullable"
+    }
+
+    AUTH_API_KEY ||--o| QUOTA_API_KEY_LIMIT : "api_key_id"
+    AUTH_USER |o--o{ QUOTA_API_KEY_LIMIT : "updated_by"
+    AUTH_USER |o--o{ QUOTA_WORKSPACE_LIMIT : "updated_by"
+    PUBLIC_WORKSPACE ||--o| QUOTA_WORKSPACE_LIMIT : "workspace_id"
+    QUOTA_PLAN ||--o| QUOTA_PLAN_LIMIT : "plan_id"
 ```
 <!-- /ERD:auto -->
 

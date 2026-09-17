@@ -47,11 +47,14 @@ const (
 	queueSsoExchange      = "rpc.identity.sso_exchange"
 	queueLinkComplete     = "rpc.identity.link_complete"
 
-	queueListApiKeys  = "rpc.identity.list_api_keys"
-	queueCreateApiKey = "rpc.identity.create_api_key"
-	queueUpdateApiKey = "rpc.identity.update_api_key"
-	queueRevokeApiKey = "rpc.identity.revoke_api_key"
-	queueSelfApiKey   = "rpc.identity.api_key.self"
+	queueListApiKeys     = "rpc.identity.list_api_keys"
+	queueCreateApiKey    = "rpc.identity.create_api_key"
+	queueUpdateApiKey    = "rpc.identity.update_api_key"
+	queueRevokeApiKey    = "rpc.identity.revoke_api_key"
+	queueSelfApiKey      = "rpc.identity.api_key.self"
+	queueApiKeyQuota     = "rpc.identity.api_key.quota_usage"
+	queueSetApiKeyQuota  = "rpc.identity.api_key.quota_set"
+	queueSelfApiKeyQuota = "rpc.identity.api_key.self_quota"
 
 	queueRbacListPermissions    = "rpc.identity.rbac.list_permissions"
 	queueRbacCreatePermission   = "rpc.identity.rbac.create_permission"
@@ -451,6 +454,47 @@ func (h *Handler) RevokeApiKey(w http.ResponseWriter, r *http.Request) {
 // namespace.
 func (h *Handler) SelfApiKey(w http.ResponseWriter, r *http.Request) {
 	h.authedNoBody(w, r, queueSelfApiKey, http.StatusOK)
+}
+
+// ApiKeyQuota mirrors GET /api-keys/{id}/quota: the key's effective ceilings
+// next to what has been spent, at both scopes it is subject to -- its own and
+// its workspace's. Management credential, like the other admin-side key reads.
+func (h *Handler) ApiKeyQuota(w http.ResponseWriter, r *http.Request) {
+	token := bearerToken(r)
+	if token == "" {
+		writeDetail(w, http.StatusUnauthorized, "Not authenticated")
+		return
+	}
+	body, _ := json.Marshal(map[string]any{"access_token": token, "api_key_id": r.PathValue("id")})
+	h.callIdentity(w, r, queueApiKeyQuota, body, http.StatusOK)
+}
+
+// SetApiKeyQuota mirrors PUT /api-keys/{id}/quota. The body is one `limits`
+// object whose five dimensions ride at the top of the RPC payload; an
+// all-null one deletes the override rather than pinning five nulls.
+//
+// identity-svc decides the authority: a superuser may raise a dimension, a
+// workspace manager may only lower it below what the plan grants, and the
+// refusal is a 422 the client renders on the offending field.
+func (h *Handler) SetApiKeyQuota(w http.ResponseWriter, r *http.Request) {
+	token := bearerToken(r)
+	if token == "" {
+		writeDetail(w, http.StatusUnauthorized, "Not authenticated")
+		return
+	}
+	body, ok := mergeBody(w, r, map[string]any{"access_token": token, "api_key_id": r.PathValue("id")})
+	if !ok {
+		return
+	}
+	h.callIdentity(w, r, queueSetApiKeyQuota, body, http.StatusOK)
+}
+
+// SelfApiKeyQuota mirrors GET /api-keys/self/quota: the budget of the key the
+// CALLER is presenting, so a scripted client can pace itself without an admin
+// token. Same credential-agnostic stance as SelfApiKey above -- identity-svc
+// answers 403 for a browser session, which holds no key.
+func (h *Handler) SelfApiKeyQuota(w http.ResponseWriter, r *http.Request) {
+	h.authedNoBody(w, r, queueSelfApiKeyQuota, http.StatusOK)
 }
 
 // --- RBAC admin (authenticated; permission checks enforced in identity-svc) ---

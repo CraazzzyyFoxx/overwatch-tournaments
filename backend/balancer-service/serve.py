@@ -17,13 +17,14 @@ from shared.observability import (
     setup_tracing,
     start_worker_metrics_server,
 )
+from shared.quota import close as close_quota
+from shared.quota import configure as configure_quota
 from shared.schemas.events import BalancerJobEvent
 from shared.services.realtime import configure_realtime
 from src.core import db
 from src.core.caching import configure_cache
 from src.core.config import config
 from src.core.job_store import close_job_store
-from src.core.security.api_key_limiter import close_api_key_limiter
 from src.rpc import admin as rpc_admin
 from src.rpc import binary as rpc_binary
 from src.rpc import config as rpc_config
@@ -54,6 +55,14 @@ configure_cache()
 # `cache_invalidator` — balancer-service keeps no cashews table of its own, so
 # there is nothing local to drop before the publish.
 configure_realtime(redis_url=config.redis_url)
+# Quota policy lives in the ``quota`` schema and consumption in Redis; the gate
+# needs both before the first metered RPC. Its own session factory, not the
+# handler's: ``balance_inline`` deliberately touches no Postgres of its own.
+configure_quota(
+    session_factory=db.async_session_maker,
+    redis_url=config.redis_url,
+    enabled=config.quota_enabled,
+)
 
 # Typed-RPC subscribers replacing the HTTP balancer-service behind the Go gateway.
 # Phase 1 — public config read + admin balance/config writes + teams import.
@@ -142,11 +151,11 @@ async def close_rpc_clients() -> None:
     # Gracefully close the draft realtime Redis client (worker-lifetime singleton).
     await rpc_draft.close()
 
-    # Job-store and API-key-limiter Redis clients are process-global singletons
-    # (see get_job_store/get_api_key_limiter); close them explicitly or every
+    # Job-store and quota Redis clients are process-global singletons (see
+    # get_job_store/shared.quota.configure); close them explicitly or every
     # worker restart leaks a connection.
     await close_job_store()
-    await close_api_key_limiter()
+    await close_quota()
 
     # Stop the clock BEFORE the engine goes: cancelling it lets its session unwind
     # on a live loop instead of being torn down after the loop is gone.

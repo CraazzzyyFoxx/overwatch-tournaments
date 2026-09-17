@@ -23,6 +23,7 @@ from typing import Any
 
 from faststream.rabbit.annotations import RabbitMessage
 
+from shared import quota
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.jobs import JobConflict
 from shared.messaging.config import (
@@ -115,11 +116,25 @@ def register(broker: Any, logger: Any) -> None:
             logger.exception("Failed to publish analytics job to RabbitMQ")
             raise HTTPException(status_code=502, detail=failed)
 
-    async def _dispatch(session: Any, body: AnalyticsJobCreate, workspace_id: int | None, user: Any) -> Any:
+    async def _dispatch(
+        session: Any,
+        body: AnalyticsJobCreate,
+        workspace_id: int | None,
+        user: Any,
+        *,
+        operation: str | None = None,
+    ) -> Any:
         """Create + enqueue a job, mirroring routes.v2.create_analytics_job."""
         await _require_actor(body, workspace_id, user)
         if body.kind == JOB_KIND_COMPUTE:
             await _require_verified_workspace(session, workspace_id)
+        # Metered only for the callers that have their own quota operation slug;
+        # create_job/points enqueue the same compute work but are not metered
+        # subjects, so charging here unconditionally would bill a slug they do not
+        # own. After both gates: an unauthorized or unverified caller must not
+        # spend quota on a job that never runs.
+        if operation is not None:
+            await quota.charge(user, operation, workspace_id=workspace_id)
         try:
             job = await create_analytics_job(
                 session,
@@ -192,7 +207,13 @@ def register(broker: Any, logger: Any) -> None:
                 kind=JOB_KIND_COMPUTE,
                 algorithms=algorithm_names,
             )
-            job = await _dispatch(session, body, c.q1(data, "workspace_id", int), user)
+            job = await _dispatch(
+                session,
+                body,
+                c.q1(data, "workspace_id", int),
+                user,
+                operation="analytics.recalculate",
+            )
             return AnalyticsJobRow.model_validate(job, from_attributes=True)
 
         return await c.envelope(logger, "recalculate", op, session_factory=sf)
@@ -216,9 +237,17 @@ def register(broker: Any, logger: Any) -> None:
     @broker.subscriber("rpc.analytics.train")
     async def _train(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
-            c.require_permission(c.actor(data), "analytics", "update")
+            user = c.actor(data)
+            c.require_permission(user, "analytics", "update")
             body = TrainRequestBody.model_validate(c.payload(data))
             await _require_verified_workspace(session, body.workspace_id)
+            # The costliest operation on the platform: a full model retrain over
+            # every workspace in scope. Charged rather than leased because this
+            # handler only publishes to ANALYTICS_TRAIN_QUEUE and returns -- the
+            # compute lives in another process (``serve.py``), which is where a
+            # lease would have to be released, so a lease taken here would cover
+            # the publish and nothing else.
+            await quota.charge(user, "analytics.train", workspace_id=body.workspace_id)
             event = AnalyticsTrainRequest(
                 cutoff_tournament_id=body.cutoff_tournament_id,
                 model_kinds=body.model_kinds,
@@ -239,9 +268,11 @@ def register(broker: Any, logger: Any) -> None:
     @broker.subscriber("rpc.analytics.infer")
     async def _infer(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
-            c.require_permission(c.actor(data), "analytics", "update")
+            user = c.actor(data)
+            c.require_permission(user, "analytics", "update")
             body = InferRequestBody.model_validate(c.payload(data))
             await _require_verified_workspace(session, body.workspace_id)
+            await quota.charge(user, "analytics.infer", workspace_id=body.workspace_id)
             event = AnalyticsInferRequest(
                 tournament_id=body.tournament_id,
                 model_kinds=body.model_kinds,

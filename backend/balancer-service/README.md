@@ -189,8 +189,9 @@ Entity diagrams: [`../../docs/database_erd.md`](../../docs/database_erd.md) —
 
 - **PostgreSQL** — everything durable listed above.
 - **RabbitMQ** — the `rpc.balancer.*` request/reply surface and the `balancer_jobs` work queue.
-- **Redis** — three distinct roles: job store (metadata, payload, event log, result), draft clock
-  locks and control pub/sub, and realtime event fan-out.
+- **Redis** — four distinct roles: job store (metadata, payload, event log, result), draft clock
+  locks and control pub/sub, realtime event fan-out, and the shared quota gate's counters and
+  lease sets (`backend/shared/quota/`, its own client off the same `REDIS_URL`).
 - **Identity** — not called. The gateway injects the resolved identity into the RPC message and the
   worker rehydrates an `AuthUser` from it; permission checks are local.
 
@@ -201,8 +202,10 @@ No external APIs, no S3, no outbound `proxy` egress.
 `backend/env/balancer.env`, layered on `backend/env/common.env`. What actually changes behaviour:
 
 - `BALANCER_JOB_TTL_SECONDS` (default 86400, clamped to 900…604800) — lifetime of every
-  `balancer:job:*` key. It also arms the active-jobs set used for per-principal concurrency, so it
-  must stay well above the longest possible job.
+  `balancer:job:*` key. It is also the TTL of the quota lease a job holds (`quota.lease(...,
+  ttl_seconds=...)` in `services/balancer/jobs.py`), so it must stay well above the longest
+  possible job: a lease that expires early hands the concurrency slot to someone else while the
+  job is still solving.
 - `RPC_PREFETCH_COUNT` (default 16) — QoS on the RPC channel. The job channel is fixed at 2.
 - `WORKER_METRICS_PORT` — Prometheus scrape port.
 - `REDIS_URL`, `RABBITMQ_URL`, `POSTGRES_*` — inherited from `common.env`.
@@ -236,8 +239,15 @@ mix balancing falls back, tournament balancing fails, and the tests that need `t
 - **Two solver deadlines.** The native optimizer honours its own `time_limit_ms` (max 600 s);
   `_SOLVER_WATCHDOG_SECONDS` (660 s) is a coarse outer `asyncio.wait_for` that fails the job rather
   than waiting forever should the solver ignore its budget. `BALANCER_JOB_TTL_SECONDS` must exceed
-  both — its floor of 900 s exists for exactly this reason, because the active-jobs set is only
-  re-armed on new reservations and would otherwise expire out from under a running job.
+  both — its floor of 900 s exists for exactly this reason: it is the quota lease's TTL, and an
+  expired lease releases a slot the job is still using.
+- **Quotas are not this service's.** Jobs, exports and imports call the shared gate
+  (`backend/shared/quota/`) — a `lease` around a solve, a `charge` on the admin export and binary
+  import paths — and it owns every number: the workspace and key/session budgets, the per-operation
+  cost, the upload and player-count caps, the 429 and its `Retry-After`. A dead worker's lease is
+  pruned by the next reservation rather than held until a set expires. The published client
+  contract, including the seeded limits, is
+  [`../../docs/api-rate-limits.md`](../../docs/api-rate-limits.md).
 - **Job redelivery is safe.** `execute_balance_job` returns immediately if the payload is gone or the
   job already reached a terminal status, so a redelivered message is a no-op rather than a second
   solve. A genuinely failed job re-raises, so the message is not acked and RabbitMQ applies the

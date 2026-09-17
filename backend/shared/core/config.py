@@ -66,6 +66,13 @@ class BaseServiceSettings(BaseSettings):
     # consumer buffer. Env: RPC_PREFETCH_COUNT.
     rpc_prefetch_count: int = 16
 
+    # Emergency off switch for the shared quota gate (``shared.quota``). Every
+    # verdict becomes "allow" without touching policy rows, for the case where
+    # the quota tables or Redis are the incident rather than the protection.
+    # Per-operation disabling is a data change (``quota.operation.enabled``);
+    # this one is the blunt instrument. Env: QUOTA_ENABLED.
+    quota_enabled: bool = True
+
     # Database pool
     db_pool_size: int = 10
     db_max_overflow: int = 20

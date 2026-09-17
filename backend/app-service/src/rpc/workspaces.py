@@ -28,13 +28,18 @@ from typing import Any
 
 from faststream.rabbit import RabbitMessage
 from redis.asyncio import Redis
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared import quota
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.core.pagination import Paginated
+from shared.models import QuotaWorkspaceLimit
+from shared.quota import admin as quota_admin
 from shared.rbac import RBAC_USER_KEY_PREFIX
 from shared.repository import AuthUserRepository
 from shared.rpc.identity import ensure_workspace_permission, rehydrate_user_optional
+from shared.schemas.quota import QuotaPlanLimitRead
 from shared.services.audit import record_admin_audit
 from shared.services.discord_client import DiscordClient
 from shared.services.subscriptions.providers.discord_role import DiscordError
@@ -57,6 +62,31 @@ def _path_int(data: dict[str, Any], key: str) -> int:
         return int(data[key])
     except (KeyError, TypeError, ValueError) as exc:
         raise HTTPException(status_code=422, detail=f"{key} is required") from exc
+
+
+def _quota_values(row: Any, scope: str) -> dict[str, Any] | None:
+    """One override row as plain numbers, ``None`` when there is no row.
+
+    The two states the journal has to tell apart: "this workspace runs on its
+    plan" is what a deleted override restores, and five explicit nulls would
+    read as the same thing while meaning something else.
+    """
+    if row is None:
+        return None
+    return {"scope": scope, **{name: getattr(row, name) for name in quota_admin.DIMENSIONS}}
+
+
+async def _quota_override(session: AsyncSession, workspace_id: int, scope: str) -> dict[str, Any] | None:
+    """The stored override before a write, for the audit row's before side."""
+    row = (
+        await session.execute(
+            select(QuotaWorkspaceLimit).where(
+                QuotaWorkspaceLimit.workspace_id == workspace_id,
+                QuotaWorkspaceLimit.scope == scope,
+            )
+        )
+    ).scalar_one_or_none()
+    return _quota_values(row, scope)
 
 
 async def _invalidate_auth_rbac_cache(auth_user_id: int, logger: Any) -> None:
@@ -579,6 +609,61 @@ def register(broker: Any, logger: Any) -> None:
             return schemas.WorkspaceRead.model_validate(workspace, from_attributes=True)
 
         return await c.envelope(logger, "workspaces.verification_set", op, session_factory=_SF)
+
+    # --- quota override (admin may lower, superuser may raise) --------------
+    @broker.subscriber("rpc.app.workspaces.quota_set")
+    async def _quota_set(data: dict, msg: RabbitMessage) -> dict:
+        """One scope's ceilings for this workspace.
+
+        ``workspace.update`` like the tenant-owned settings around it — the gate
+        that actually matters here is the authority rule inside
+        ``apply_workspace_limits``: an admin may only tighten what the plan
+        grants (422 ``quota_above_inherited`` otherwise), while a superuser may
+        raise, which is how a partner integration is served without moving the
+        workspace's whole tier.
+
+        The answer is the EFFECTIVE ceiling (plan merged with the stored row),
+        not the row that was written: an override that leaves a dimension null
+        inherits it, and an operator screen must show what will actually be
+        enforced.
+        """
+
+        async def op(session: Any) -> Any:
+            workspace_id = _path_int(data, "workspace_id")
+            user = c.actor(data)
+            c.require_active(user)
+            ensure_workspace_permission(user, workspace_id, "workspace", "update")
+            workspace = await workspace_service.get_by_id(session, workspace_id)
+            if not workspace:
+                raise HTTPException(status_code=404, detail="Workspace not found")
+            body = schemas.WorkspaceQuotaSet.model_validate(c.payload(data))
+            before = await _quota_override(session, workspace_id, body.scope)
+            row = await quota_admin.apply_workspace_limits(
+                session,
+                workspace_id=workspace_id,
+                scope=body.scope,
+                values=body.limits.as_dict(),
+                updated_by=user.id,
+                allow_raise=user.is_superuser,
+            )
+            await record_admin_audit(
+                session,
+                action="workspace.quota_update",
+                actor=user,
+                data=data,
+                workspace_id=workspace_id,
+                entity_type="workspace",
+                entity_id=workspace_id,
+                entity_label=workspace.name,
+                before=before,
+                after=_quota_values(row, body.scope),
+            )
+            await session.commit()
+            quota.invalidate_policy()
+            effective = await quota_admin.inherited_limits(session, workspace_id=workspace_id, scope=body.scope)
+            return QuotaPlanLimitRead(scope=body.scope, **effective)
+
+        return await c.envelope(logger, "workspaces.quota_set", op, session_factory=_SF)
 
     # --- owner (accountability) ---------------------------------------------
     @broker.subscriber("rpc.app.workspaces.owner_get")

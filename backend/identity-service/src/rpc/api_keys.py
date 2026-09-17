@@ -103,3 +103,53 @@ def register(broker: Any, logger: Any) -> None:
             return result.model_dump(mode="json")
 
         return await c.with_active_principal(logger, data.get("access_token"), op)
+
+    @broker.subscriber("rpc.identity.api_key.quota_set")
+    async def _api_key_quota_set(data: dict, msg: RabbitMessage) -> dict:
+        data = data or {}
+
+        async def op(session: AsyncSession, user: Any) -> dict:
+            payload = schemas.ApiKeyQuotaWrite.model_validate(data)
+            result = await api_keys.set_quota(
+                session,
+                user=user,
+                api_key_id=c.require_int(data, "api_key_id"),
+                limits=payload.limits,
+                ip_address=data.get("ip_address"),
+                user_agent=data.get("user_agent"),
+            )
+            return result.model_dump(mode="json")
+
+        return await c.with_active_user(logger, data.get("access_token"), op)
+
+    @broker.subscriber("rpc.identity.api_key.quota_usage")
+    async def _api_key_quota_usage(data: dict, msg: RabbitMessage) -> dict:
+        data = data or {}
+
+        async def op(session: AsyncSession, user: Any) -> dict:
+            result = await api_keys.quota_usage(
+                session,
+                user=user,
+                api_key_id=c.require_int(data, "api_key_id"),
+            )
+            return result.model_dump(mode="json")
+
+        return await c.with_active_user(logger, data.get("access_token"), op)
+
+    @broker.subscriber("rpc.identity.api_key.self_quota")
+    async def _api_key_self_quota(data: dict, msg: RabbitMessage) -> dict:
+        data = data or {}
+
+        # Sibling of ``api_key.self`` rather than a field on it: the descriptor
+        # is a cheap row read, this one talks to Redis, and a client polling its
+        # budget must not drag the whole descriptor along.
+        async def op(session: AsyncSession, _user: Any, api_key: Any) -> dict:
+            if api_key is None:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="API key credential required",
+                )
+            result = await api_keys.self_quota_usage(session, api_key_id=api_key.id)
+            return result.model_dump(mode="json")
+
+        return await c.with_active_principal(logger, data.get("access_token"), op)

@@ -6,13 +6,23 @@ export interface ApiErrorDetail {
 export class ApiError extends Error {
   readonly status: number;
   readonly details: ApiErrorDetail[];
+  /**
+   * The parsed error body, verbatim.
+   *
+   * `details` is the flattened, human-facing view; the gateway also relays a
+   * worker's structured detail keys (`fields`, `retry_after`) next to
+   * `detail`/`code`, and only the caller that raised them knows their shape —
+   * the quota gate reports `limit_name`/`limit`/`requested` that way.
+   */
+  readonly body: unknown;
 
-  constructor(status: number, details: ApiErrorDetail[]) {
+  constructor(status: number, details: ApiErrorDetail[], body?: unknown) {
     const message = details.map((d) => d.msg).join("\n");
     super(message);
     this.name = "ApiError";
     this.status = status;
     this.details = details;
+    this.body = body;
   }
 }
 
@@ -109,9 +119,11 @@ function normalizeDetailItem(item: unknown): ApiErrorDetail[] {
  */
 export async function parseApiError(response: Response): Promise<ApiError> {
   let details: ApiErrorDetail[];
+  let parsed: unknown;
 
   try {
     const body = await response.json();
+    parsed = body;
     const raw = body?.detail ?? body?.message;
 
     if (Array.isArray(raw)) {
@@ -129,7 +141,7 @@ export async function parseApiError(response: Response): Promise<ApiError> {
     details = [{ msg: "An error occurred", code: "unknown" }];
   }
 
-  return new ApiError(response.status, details);
+  return new ApiError(response.status, details, parsed);
 }
 
 // ─── Presentation helpers ──────────────────────────────────────────────────────

@@ -126,17 +126,29 @@ def make_workspace(*, active: bool = True) -> models.Workspace:
 
 
 class FakeExecuteResult:
-    """A ``session.execute(...)`` result: ``scalar_one_or_none()`` or ``scalars().all()``."""
+    """A ``session.execute(...)`` result.
 
-    def __init__(self, scalar: object = None, scalars: list | None = None) -> None:
+    Covers both dialects the code under test uses: the direct
+    ``scalar_one_or_none()``/``first()`` reads, and ``BaseRepository``'s
+    ``unique().scalars().first()``.
+    """
+
+    def __init__(self, scalar: object = None, scalars: object = (), first: object = None) -> None:
         self._scalar = scalar
-        self._scalars = list(scalars or [])
+        self._scalars = scalars
+        self._first = first
 
     def scalar_one_or_none(self) -> object:
         return self._scalar
 
+    def first(self) -> object:
+        return self._first
+
+    def unique(self) -> FakeExecuteResult:
+        return self
+
     def scalars(self) -> SimpleNamespace:
-        return SimpleNamespace(all=lambda: list(self._scalars))
+        return SimpleNamespace(all=lambda: list(self._scalars), first=lambda: self._scalar)
 
 
 class FakeSessionMaker:
@@ -305,7 +317,6 @@ def make_api_key_row(
         secret_hash=secret_hash if secret_hash is not None else api_keys._hash_secret(secret),
         name="Balancer API",
         scopes=[models.ApiKeyScope(scope=name) for name in scope_names],
-        limits_json={},
         expires_at=expires_at,
         revoked_at=revoked_at,
         last_used_at=None,

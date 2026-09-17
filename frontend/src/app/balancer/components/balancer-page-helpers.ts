@@ -97,10 +97,8 @@ export function formatSmurfCount(count: number): string {
 export const PRESET_LABELS: Record<string, string> = {
   CUSTOM: "Custom",
   DEFAULT: "Standard",
-  COMPETITIVE: "Competitive",
-  CASUAL: "Casual",
-  QUICK: "Quick",
   PREFERENCE_FOCUSED: "Preference Focused",
+  COMBINED: "Combined",
   HIGH_QUALITY: "High Quality"
 };
 

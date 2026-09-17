@@ -26,7 +26,11 @@ DOCS: dict[str, dict] = {
         "description": (
             "Permission: workspace `stream.update` on the workspace that owns the tournament. "
             "Clears the live-status poll cursor so the next scheduler heartbeat polls immediately "
-            "(202 Accepted — no poll runs inline). The call is recorded in the audit log."
+            "(202 Accepted — no poll runs inline). The call is recorded in the audit log. "
+            "Metered: it consumes quota against the caller's workspace/API-key limits and "
+            "answers 429 `quota_exceeded` with a `Retry-After` header once they are spent, "
+            "because the extra Helix traffic it triggers comes out of the 800-points/min app "
+            "bucket shared with OAuth sign-ins."
         ),
     },
     "rpc.stream.health": {

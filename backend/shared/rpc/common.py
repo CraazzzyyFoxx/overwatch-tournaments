@@ -209,10 +209,24 @@ def retry_after_seconds(exc: HTTPException) -> int | None:
 def http_error(exc: HTTPException) -> tuple[str, dict[str, Any]]:
     """Split an HTTPException into a human ``message`` and machine ``details``.
 
+    Three detail dialects reach here:
+
     ``ApiHTTPException`` (the v1 read flows) carries ``detail`` as a
     ``list[{msg, code}]``. Joining the ``msg`` fields is what a human reads, but
     the per-item ``code`` is the only thing a client can branch on -- it used to
     be dropped here, so it now rides ``details["fields"]`` instead.
+
+    A ``dict`` detail is either one item (``msg``/``code``) or an attribute bag:
+    a ``code`` plus whatever the refusal is about (``limit_name``, ``scope``,
+    ``limit``). Either way it becomes ONE ``fields`` entry rather than being
+    merged at the top of ``details``: ``details["code"]`` would be silently
+    dropped there, because the gateway writes the envelope's status-derived code
+    last and deliberately lets it win (a worker must not be able to rewrite the
+    key clients branch on). Without this branch the dict reached clients as a
+    Python repr in ``message`` and every attribute was lost -- which is what
+    ``shared.quota``'s refusals depend on not happening.
+
+    Anything else is a plain string.
     """
     detail = exc.detail
     details: dict[str, Any] = {}
@@ -222,6 +236,16 @@ def http_error(exc: HTTPException) -> tuple[str, dict[str, Any]]:
             details["fields"] = [field_entry(d) for d in items]
         msgs = [str(d.get("msg")) for d in items if d.get("msg")]
         message = "; ".join(msgs) if msgs else "error"
+    elif isinstance(detail, dict):
+        if detail.get("msg"):
+            message = str(detail["msg"])
+            details["fields"] = [field_entry(detail)]
+        else:
+            code = str(detail.get("code") or "error")
+            message = code.replace("_", " ")
+            entry: dict[str, Any] = {"field": detail.get("field"), "msg": message, "code": code}
+            entry.update({k: v for k, v in detail.items() if k not in ("code", "field", "msg")})
+            details["fields"] = [entry]
     else:
         message = str(detail)
     retry_after = retry_after_seconds(exc)

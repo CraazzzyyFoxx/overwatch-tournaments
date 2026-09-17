@@ -4,14 +4,17 @@
 // workspace-scoped API keys against their own per-key requests_per_minute
 // budget (WrapAPIKey).
 //
-// Every variant shares one deliberate limitation: the buckets live in THIS
-// process only. Nothing is shared across replicas, so with N gateway pods a
-// caller's effective budget is up to N x the configured limit. That is fine for
-// the anti-brute-force and anti-abuse jobs here — nginx limit_req is the coarse
-// outer layer, and the balancer worker enforces the same API-key quotas in Redis
-// where the exact number matters — but it means these limits are a guardrail,
-// not an accounting boundary. Making them exact needs a shared store (Redis),
-// which this package deliberately does not depend on.
+// The in-process variants here share one deliberate limitation: their buckets
+// live in THIS process only. Nothing is shared across replicas, so with N
+// gateway pods a caller's effective budget is up to N x the configured limit.
+// That is fine for the anti-brute-force (auth) and anti-abuse (anonymous)
+// jobs — nginx limit_req is the coarse outer layer — but it means those limits
+// are a guardrail, not an accounting boundary.
+//
+// The API-key bucket is the one place where the exact number is the product
+// contract, so WrapAPIKey has a Redis-backed variant (redis.go) that spends the
+// SAME per-minute key the Python enforcer does. It degrades to the in-process
+// bucket when no Redis client is configured.
 package ratelimit
 
 import (
@@ -28,6 +31,15 @@ import (
 // maxKeys bounds memory: past this many tracked buckets, stale ones are purged.
 const maxKeys = 8192
 
+// Layer names reported to the reject hook, one per wrapper. They are what lets
+// an operator tell "someone is scanning us" (anon) from "a client outgrew its
+// key" (api_key) apart in one Prometheus counter.
+const (
+	layerAuth   = "auth"
+	layerAnon   = "anon"
+	layerAPIKey = "api_key"
+)
+
 type bucket struct {
 	tokens float64
 	last   time.Time
@@ -40,6 +52,7 @@ type Limiter struct {
 	burst  float64 // bucket capacity
 	window time.Duration
 	now    func() time.Time
+	reject func(layer string)
 
 	mu      sync.Mutex
 	buckets map[string]*bucket
@@ -63,6 +76,21 @@ func New(limit int, window time.Duration) *Limiter {
 // Enabled reports whether the limiter is active.
 func (l *Limiter) Enabled() bool { return l.rate > 0 }
 
+// OnReject registers a hook invoked once per refused request, labelled with the
+// layer that refused it. main wires it to a Prometheus counter. Set once at
+// startup, before the limiter serves traffic; it returns l so it chains onto New.
+func (l *Limiter) OnReject(hook func(layer string)) *Limiter {
+	l.reject = hook
+	return l
+}
+
+// rejected fires the reject hook, if one is registered.
+func (l *Limiter) rejected(layer string) {
+	if l.reject != nil {
+		l.reject(layer)
+	}
+}
+
 // Allow reports whether the next request for key may proceed, consuming a
 // token if so. It is exported (in addition to Wrap) for callers that need to
 // gate a single unit of work inside a larger handler rather than reject an
@@ -81,14 +109,18 @@ func (l *Limiter) Allow(key string) bool {
 }
 
 // allow consumes one token for key against the limiter's configured budget.
-func (l *Limiter) allow(key string) bool { return l.allowQuota(key, l.burst) }
+func (l *Limiter) allow(key string) bool {
+	ok, _ := l.allowQuota(key, l.burst)
+	return ok
+}
 
 // allowQuota consumes one token for key against an explicit budget of `limit`
-// requests per window, returning false when the bucket is empty. It is the same
+// requests per window, returning false when the bucket is empty plus the whole
+// tokens left afterwards (what RateLimit-Remaining reports). It is the same
 // bucket machinery allow uses, with the rate supplied per call: an API key's
 // requests_per_minute is a property of the key, not of the process config, so
 // one Limiter has to serve many different budgets at once.
-func (l *Limiter) allowQuota(key string, limit float64) bool {
+func (l *Limiter) allowQuota(key string, limit float64) (bool, int) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	now := l.now()
@@ -107,10 +139,10 @@ func (l *Limiter) allowQuota(key string, limit float64) bool {
 	}
 	b.last = now
 	if b.tokens < 1 {
-		return false
+		return false, 0
 	}
 	b.tokens--
-	return true
+	return true, int(b.tokens)
 }
 
 // purge drops buckets idle longer than the window (fully refilled). Caller holds l.mu.
@@ -134,6 +166,7 @@ func (l *Limiter) Wrap(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		key := clientip.From(r) + "|" + r.URL.Path
 		if !l.allow(key) {
+			l.rejected(layerAuth)
 			tooManyRequests(w, l.window)
 			return
 		}
@@ -158,6 +191,7 @@ func (l *Limiter) WrapFailures(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		key := clientip.From(r) + "|" + r.URL.Path
 		if !l.hasTokens(key) {
+			l.rejected(layerAuth)
 			tooManyRequests(w, l.window)
 			return
 		}
@@ -220,6 +254,7 @@ func (l *Limiter) WrapAnon(next http.Handler) http.Handler {
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if isAnonymous(r) && !l.allow(clientip.From(r)) {
+			l.rejected(layerAnon)
 			tooManyRequests(w, l.window)
 			return
 		}
@@ -246,7 +281,12 @@ type KeyQuota func(r *http.Request) (key string, perMinute int, ok bool)
 // GATEWAY_API_KEY_RATE_LIMIT disables per-key throttling entirely.
 //
 // Rejection uses the shared 429 body + Retry-After, so an API client sees the
-// same contract here as it does from the balancer worker's Redis-backed quota.
+// same contract here as it does from the balancer worker's Redis-backed quota,
+// and every metered response carries the RateLimit-* triple a client needs to
+// pace itself instead of discovering the wall.
+//
+// This is the per-replica variant; RedisLimiter.WrapAPIKey (redis.go) is the
+// shared-bucket one main prefers when Redis is configured.
 func (l *Limiter) WrapAPIKey(next http.Handler, quota KeyQuota) http.Handler {
 	if !l.Enabled() || quota == nil {
 		return next
@@ -257,13 +297,33 @@ func (l *Limiter) WrapAPIKey(next http.Handler, quota KeyQuota) http.Handler {
 			if limit <= 0 {
 				limit = l.burst
 			}
-			if !l.allowQuota(key, limit) {
+			allowed, remaining := l.allowQuota(key, limit)
+			writeRateLimitHeaders(w, int(limit), remaining, int(l.window.Seconds()))
+			if !allowed {
+				l.rejected(layerAPIKey)
 				tooManyRequests(w, l.window)
 				return
 			}
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// writeRateLimitHeaders reports the budget, what is left of it and when it
+// resets (seconds), on every metered response — refused or not. Names follow
+// the IETF RateLimit header fields draft, which is what API clients and SDK
+// retry middlewares already look for.
+func writeRateLimitHeaders(w http.ResponseWriter, limit, remaining, resetSeconds int) {
+	if remaining < 0 {
+		remaining = 0
+	}
+	if resetSeconds < 1 {
+		resetSeconds = 1
+	}
+	h := w.Header()
+	h.Set("RateLimit-Limit", strconv.Itoa(limit))
+	h.Set("RateLimit-Remaining", strconv.Itoa(remaining))
+	h.Set("RateLimit-Reset", strconv.Itoa(resetSeconds))
 }
 
 // tooManyRequests writes the shared 429: Retry-After plus the same

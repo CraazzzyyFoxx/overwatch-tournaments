@@ -165,6 +165,31 @@ class RouteSubjectParityTests(TestCase):
         self.assertEqual(set(), expected - routed, "team subjects with no gateway route")
         self.assertEqual(set(), expected - consumed, "team subjects with no worker subscriber")
 
+    def test_the_quota_subjects_are_wired_end_to_end(self) -> None:
+        """Named explicitly, like the team family above, and for a sharper reason.
+
+        The sweep above only walks routes -> consumers. A subject with no route at
+        all is invisible in the other direction: nothing fails, nothing logs, and
+        the first signal is a client getting a 404 from a screen that was shipped
+        against it. That is exactly how the api-key quota panel first reached the
+        dev environment, so these nine are pinned by name.
+        """
+        expected = {
+            "rpc.identity.api_key.quota_usage",
+            "rpc.identity.api_key.quota_set",
+            "rpc.identity.api_key.self_quota",
+            "rpc.app.workspaces.quota_set",
+            "rpc.app.quota.workspace_usage",
+            "rpc.app.quota.plans",
+            "rpc.app.quota.plan_upsert",
+            "rpc.app.quota.operations",
+            "rpc.app.quota.operation_upsert",
+        }
+        routed = set(_routed_subjects())
+        consumed = _consumed_subjects()
+        self.assertEqual(set(), expected - routed, "quota subjects with no gateway route")
+        self.assertEqual(set(), expected - consumed, "quota subjects with no worker subscriber")
+
     def test_no_team_subject_is_routed_twice(self) -> None:
         """Scoped to the subjects this feature added, not the whole repo.
 

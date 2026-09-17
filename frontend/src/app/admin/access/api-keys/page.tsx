@@ -2,12 +2,13 @@
 
 import { useEffect, useId, useMemo, useState, type FormEvent } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
-import { Check, Clipboard, KeyRound, Plus, Trash2, X } from "lucide-react";
-import { useFormatter } from "next-intl";
+import { Check, Clipboard, Gauge, KeyRound, Plus, Trash2, X } from "lucide-react";
+import { useFormatter, useTranslations } from "next-intl";
 
 import { AdminDataTable, createKebabColumn } from "@/components/admin-data-table";
 import { InlineEditText } from "@/components/admin/InlineEditText";
 import { StatTile, StatTileGrid } from "@/components/admin/StatTile";
+import { ApiKeyQuotaDialog } from "@/components/admin/quota/ApiKeyQuotaDialog";
 import {
   PermissionPicker,
   type PermissionCatalogEntry
@@ -149,14 +150,16 @@ function ScopesCell({ scopes }: Readonly<{ scopes: readonly string[] }>) {
 /**
  * Workspace API keys (T2, F15).
  *
- * The three dialogs this screen used to mount are down to two: renaming is
- * inline in the row (`InlineEditText`), revoking is the screen's single
- * `ConfirmDialog`, and creating is an `EntityFormDialog` whose scope list is
- * the shared `PermissionPicker` rather than a fourth private implementation of
- * a checkbox tree.
+ * Renaming is inline in the row (`InlineEditText`), revoking is the screen's
+ * single `ConfirmDialog`, and creating is an `EntityFormDialog` whose scope
+ * list is the shared `PermissionPicker` rather than a private implementation
+ * of a checkbox tree. Quotas are the one screen-local concern that earns a
+ * dialog of its own: they are a read (two budgets, live counters) and a write
+ * in the same breath, which no row control can hold.
  */
 export default function AccessAdminApiKeysPage() {
   const format = useFormatter();
+  const tQuota = useTranslations("quota");
   const workspaces = useWorkspaceStore((state) => state.workspaces);
   const currentWorkspaceId = useWorkspaceStore((state) => state.currentWorkspaceId);
   const fetchWorkspaces = useWorkspaceStore((state) => state.fetchWorkspaces);
@@ -169,6 +172,7 @@ export default function AccessAdminApiKeysPage() {
   const [oneTimeKey, setOneTimeKey] = useState<string | null>(null);
   const [copiedSecret, setCopiedSecret] = useState(false);
   const [pendingRevoke, setPendingRevoke] = useState<AccountApiKey | null>(null);
+  const [pendingQuota, setPendingQuota] = useState<AccountApiKey | null>(null);
   const [counts, setCounts] = useState<AccountApiKeyStatusCounts>(EMPTY_COUNTS);
   const [availableScopes, setAvailableScopes] = useState<string[]>([]);
   const createNameId = useId();
@@ -315,6 +319,11 @@ export default function AccessAdminApiKeysPage() {
       createKebabColumn<AccountApiKey>(
         (row) => [
           {
+            label: tQuota("apiKey.menuItem"),
+            icon: Gauge,
+            onSelect: () => setPendingQuota(row)
+          },
+          {
             label: "Revoke key",
             icon: Trash2,
             destructive: true,
@@ -325,7 +334,7 @@ export default function AccessAdminApiKeysPage() {
         { rowLabel: (row) => `API key ${row.name}` }
       )
     ],
-    [format, renameMutation]
+    [format, renameMutation, tQuota]
   );
 
   if (manageableWorkspaces.length === 0) {
@@ -600,6 +609,15 @@ export default function AccessAdminApiKeysPage() {
             }
           });
         }}
+      />
+
+      {/* Keyed by the key's id: a fresh instance per open means the override
+          draft can never carry a previous key's numbers into this one. */}
+      <ApiKeyQuotaDialog
+        key={pendingQuota?.id ?? "none"}
+        apiKey={pendingQuota}
+        workspaceId={workspaceId}
+        onClose={() => setPendingQuota(null)}
       />
     </div>
   );

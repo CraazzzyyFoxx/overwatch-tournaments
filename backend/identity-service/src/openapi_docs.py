@@ -149,9 +149,45 @@ DOCS: dict[str, dict] = {
         "summary": "Describe the calling API key",
         "description": (
             "Permission: an API-key credential; no further grant is checked. "
-            "Returns the descriptor -- name, scopes, limits, config policy, expiry -- of the API key "
-            "presented on this request, so a scripted client can discover its own authority and budget. "
+            "Returns the descriptor -- name, scopes, config policy, expiry -- of the API key "
+            "presented on this request, so a scripted client can discover its own authority. "
             "A session bearer gets 403."
+        ),
+    },
+    "rpc.identity.api_key.quota_set": {
+        "summary": "Set API-key rate limits",
+        "description": (
+            "Permission: workspace `team.create` on the key's own workspace, which must be active"
+            " (a global `team.create` grant or superuser also passes). Overrides the five limit"
+            " dimensions -- requests_per_minute, heavy_per_day, concurrent_heavy, max_upload_bytes,"
+            " max_items_per_request -- for one API key; a body whose values are all null deletes the"
+            " override and puts the key back on what its workspace and plan hand down. A superuser"
+            " may raise or lower; anyone else may only lower, and a value above what the key would"
+            " inherit is refused with 422, envelope `code: unprocessable` and"
+            " `details.fields[0] = {code: quota_above_inherited, limit_name, limit, requested}`."
+            " Journalled as `api_key.quota_update` with the previous and new dimension maps."
+        ),
+    },
+    "rpc.identity.api_key.quota_usage": {
+        "summary": "Read API-key rate-limit usage",
+        "description": (
+            "Permission: workspace `team.create` on the key's own workspace, which must be active"
+            " (a global `team.create` grant or superuser also passes). Returns the plan slug and one"
+            " entry per applicable scope (workspace, then key), each pairing the effective ceiling"
+            " with what has been spent against it; a null ceiling means unlimited. Redis being"
+            " unreachable reports zero consumption rather than failing the read."
+        ),
+    },
+    "rpc.identity.api_key.self_quota": {
+        "summary": "Read the calling API key's own budget",
+        "description": (
+            "Permission: an API-key credential; no further grant is checked, and a session bearer"
+            " gets 403. The same per-scope ceiling-and-consumption report as"
+            " rpc.identity.api_key.quota_usage, for the key presented on this request, so a scripted"
+            " client can pace itself instead of discovering its ceiling by hitting it. Once a"
+            " ceiling is hit, the metered endpoint answers 429 with envelope `code: rate_limited`,"
+            " `details.fields[0] = {code: quota_exceeded, limit_name, scope, limit}` and"
+            " `details.retry_after` seconds, which the gateway also writes as a Retry-After header."
         ),
     },
     # ── RBAC: permissions ──────────────────────────────────────────────────

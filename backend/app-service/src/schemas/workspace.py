@@ -4,6 +4,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from shared.schemas.quota import QuotaLimitsPayload, QuotaScope
 from shared.schemas.roster_slots import RosterSlotsField
 from shared.tenancy.hostnames import validate_subdomain_label
 from src.schemas.base import BaseRead
@@ -31,6 +32,7 @@ __all__ = (
     "WorkspaceDiscordGuildOption",
     "WorkspaceDiscordGuildsRead",
     "WorkspaceVerificationSet",
+    "WorkspaceQuotaSet",
     "WorkspaceOwnerRead",
     "WorkspaceOwnerSet",
     "WorkspaceOwnerTransfer",
@@ -215,6 +217,19 @@ class WorkspaceVerificationSet(BaseModel):
     Literal is where the convention is actually enforced."""
 
     verification_status: Literal["unverified", "verified", "trusted"]
+
+
+class WorkspaceQuotaSet(BaseModel):
+    """Body for ``quota_set``: one scope's override, or its removal.
+
+    ``limits`` is the shared wire payload every quota writer speaks, so the
+    five dimensions are declared once; an all-null payload deletes the override
+    row rather than pinning five nulls, which is how a tenant gets back onto
+    its plan.
+    """
+
+    scope: QuotaScope
+    limits: QuotaLimitsPayload = Field(default_factory=QuotaLimitsPayload)
 
 
 class WorkspaceOwnerRead(BaseModel):

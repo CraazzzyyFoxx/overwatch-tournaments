@@ -28,6 +28,7 @@ from typing import Any
 from faststream.rabbit.annotations import RabbitMessage
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared import quota
 from shared.core import http_status as status
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.repository import TournamentRepository
@@ -96,6 +97,16 @@ async def repoll(session: AsyncSession, data: dict[str, Any]) -> StreamRepollRea
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Tournament does not belong to this workspace",
         )
+
+    # Metered before anything durable happens. A re-poll clears a GLOBAL cursor,
+    # so each call costs one extra Helix round of ≤5 requests per ACTIVE
+    # tournament (see the cursor note below) — against the 800 points/min app
+    # bucket that is SHARED with identity-service's OAuth sign-ins. Draining it
+    # from here does not just stall stream badges, it breaks logins, which is why
+    # this is rate-limited rather than left to the tick's own
+    # `ratelimit_remaining` gate. After the authorization and ownership checks: a
+    # rejected call must not spend quota.
+    await quota.charge(user, "stream.repoll", workspace_id=workspace_id)
 
     await record_audit(
         session,

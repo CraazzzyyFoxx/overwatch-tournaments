@@ -39,6 +39,7 @@ from typing import Any
 import sqlalchemy as sa
 from faststream.rabbit.annotations import RabbitMessage
 
+from shared import quota
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.domain.roster import flex_role_mode
 from shared.repository import WorkspaceRepository
@@ -217,6 +218,13 @@ def register(broker: Any, logger: Any) -> None:
                 session, user, tournament_id=tournament_id, resource="challonge", action="update"
             )
             dry_run = _q1(data, "dry_run", _bool, default=False)
+            ws_id = await auth.get_tournament_workspace_id(session, tournament_id)
+            # An import spends CHALLONGE's rate limit, not ours: the bracket, the
+            # participants and every match come over their API on one budget shared
+            # by every workspace we host, and no amount of our own capacity buys
+            # more of it. A dry run costs exactly the same — it fetches everything
+            # and only skips the writes.
+            await quota.charge(user, "tournament.challonge_import", workspace_id=ws_id)
             # import_tournament commits internally, so the row is staged on that
             # session first; the workspace is the one the check above resolved.
             await record_admin_audit(
@@ -224,7 +232,7 @@ def register(broker: Any, logger: Any) -> None:
                 action="challonge.import",
                 actor=user,
                 data=data,
-                workspace_id=await auth.get_tournament_workspace_id(session, tournament_id),
+                workspace_id=ws_id,
                 entity_type="tournament",
                 entity_id=tournament_id,
                 after={"dry_run": dry_run},
@@ -242,13 +250,17 @@ def register(broker: Any, logger: Any) -> None:
             await auth.require_tournament_id_permission(
                 session, user, tournament_id=tournament_id, resource="challonge", action="update"
             )
+            ws_id = await auth.get_tournament_workspace_id(session, tournament_id)
+            # Same third-party budget as the import, spent in the other direction:
+            # one write per participant and per match against Challonge's limit.
+            await quota.charge(user, "tournament.challonge_export", workspace_id=ws_id)
             # export_tournament commits internally — stage the row first.
             await record_admin_audit(
                 session,
                 action="challonge.export",
                 actor=user,
                 data=data,
-                workspace_id=await auth.get_tournament_workspace_id(session, tournament_id),
+                workspace_id=ws_id,
                 entity_type="tournament",
                 entity_id=tournament_id,
                 source="challonge",
@@ -475,6 +487,11 @@ def register(broker: Any, logger: Any) -> None:
             await auth.require_tournament_id_permission(
                 session, user, tournament_id=tournament_id, resource="team", action="create"
             )
+            ws_id = await auth.get_tournament_workspace_id(session, tournament_id)
+            # A sync spends GOOGLE's per-project Sheets read quota, which every
+            # workspace's feed draws from and which our own headroom cannot
+            # replace: exhaust it and nobody's sheet syncs until the window rolls.
+            await quota.charge(user, "tournament.sheet_sync", workspace_id=ws_id)
             # sync_google_sheet_feed commits internally (including on its error
             # paths), so the row is staged before it — which is also why it carries
             # no counts: those only exist once that commit has already happened.
@@ -483,7 +500,7 @@ def register(broker: Any, logger: Any) -> None:
                 action="registration.sheet_sync",
                 actor=user,
                 data=data,
-                workspace_id=await auth.get_tournament_workspace_id(session, tournament_id),
+                workspace_id=ws_id,
                 entity_type="tournament",
                 entity_id=tournament_id,
             )
@@ -578,6 +595,13 @@ def register(broker: Any, logger: Any) -> None:
                     status_code=422,
                     detail=f"Unknown export format {export_format!r}; expected one of {', '.join(PLAYER_EXPORT_FORMATS)}",
                 )
+            ws_id = await auth.get_tournament_workspace_id(session, tournament_id)
+            # The one metered subject here whose cost is ours, not a third party's:
+            # it materializes the WHOLE pool — every roster, and under ``owt-1``
+            # every player's rank sources, divisions and top heroes — so a polling
+            # client replays the balancer job's heaviest read on every call.
+            # Charged after the format check so a malformed request costs nothing.
+            await quota.charge(user, "tournament.sheet_players_export", workspace_id=ws_id)
             # One payload, one source: the same rosters the balance job and the
             # draft read, serialized by the engine rather than re-derived here.
             rosters = await roster_engine.for_tournament(session, tournament_id, pool_only=True)

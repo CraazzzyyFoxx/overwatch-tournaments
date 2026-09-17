@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from shared.core.pagination import Paginated
 from shared.rpc.openapi import Op, QueryParam
+from shared.schemas.quota import QuotaLimitsPayload, QuotaUsageRead
 from src import schemas
 
 OPERATIONS: dict[str, Op] = {
@@ -45,6 +46,9 @@ OPERATIONS: dict[str, Op] = {
     "rpc.identity.create_api_key": Op(request=schemas.ApiKeyCreate, response=schemas.ApiKeyCreateResponse),
     "rpc.identity.update_api_key": Op(request=schemas.ApiKeyUpdate, response=schemas.ApiKeyRead),
     "rpc.identity.api_key.self": Op(response=schemas.ApiKeyRead),
+    "rpc.identity.api_key.quota_set": Op(request=schemas.ApiKeyQuotaWrite, response=QuotaLimitsPayload),
+    "rpc.identity.api_key.quota_usage": Op(response=QuotaUsageRead),
+    "rpc.identity.api_key.self_quota": Op(response=QuotaUsageRead),
     # ── RBAC: permissions ──────────────────────────────────────────────────
     "rpc.identity.rbac.list_permissions": Op(
         response=Paginated[schemas.PermissionRead], query=schemas.PermissionListQueryParams
