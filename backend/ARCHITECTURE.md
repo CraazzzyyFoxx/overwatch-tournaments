@@ -392,9 +392,9 @@ An API key's payload is its **owner's RBAC, narrowed**
   holds there. The intersection is the whole security model: a key cannot outrank its owner, and
   revoking the owner's grant revokes the key's.
 - `credential_type="api_key"` plus an `api_key` block (`id`, `public_id`, `workspace_id`,
-  `scopes`, `limits`, `config_policy`) for the consumers that legitimately need the credential
-  itself — per-key usage limits and config policy in `balancer-service`
-  (`core/security/api_key_limiter.py`, `core/security/api_key_policy.py`).
+  `scopes`, `limits`) for the consumers that legitimately need the credential itself —
+  per-key usage limits in `balancer-service` (`core/security/api_key_limiter.py`). There is no
+  per-key config policy: an API client passes the same solver arguments a browser does.
 
 Because the intersection is already written into `rbac_permissions`, an API key is authorized by
 the ordinary path: `AuthUser.has_workspace_permission`, the single source of truth for

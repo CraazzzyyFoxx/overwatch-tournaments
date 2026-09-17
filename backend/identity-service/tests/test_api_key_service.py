@@ -129,7 +129,6 @@ def test_create_api_key_returns_secret_once_and_stores_only_hash(monkeypatch: py
     # Balancer quotas are not an identity concern; empty JSON lets each
     # consumer apply its own defaults (gateway rate, balancer job caps).
     assert stored.limits_json == {}
-    assert stored.config_policy_json == {}
     assert session.flush_calls == 1
     assert session.commit_calls == 1
     assert session.refresh_calls == 1

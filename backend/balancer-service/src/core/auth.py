@@ -145,7 +145,6 @@ async def _resolve_user_from_token(user_id: int, payload: dict[str, Any]) -> Aut
         object.__setattr__(user, "_api_key_workspace_id", api_key_payload.get("workspace_id"))
         object.__setattr__(user, "_api_key_scopes", api_key_payload.get("scopes") or [])
         object.__setattr__(user, "_api_key_limits", api_key_payload.get("limits") or {})
-        object.__setattr__(user, "_api_key_config_policy", api_key_payload.get("config_policy") or {})
     return user
 
 

@@ -101,9 +101,9 @@ class WorkspaceMembership(BaseModel):
 class TokenApiKeyInfo(BaseModel):
     """API key metadata returned by token validation for downstream services.
 
-    ``limits`` / ``config_policy`` are optional snapshots. Empty means the
-    consumer applies its own defaults (gateway rate, balancer job caps).
-    New keys are issued empty; older keys may still carry a frozen copy.
+    ``limits`` is an optional snapshot. Empty means the consumer applies its own
+    defaults (gateway rate, balancer job caps). New keys are issued empty;
+    older keys may still carry a frozen copy.
     """
 
     id: int
@@ -111,7 +111,6 @@ class TokenApiKeyInfo(BaseModel):
     workspace_id: int
     scopes: list[str] = Field(default_factory=list)
     limits: dict = Field(default_factory=dict)
-    config_policy: dict = Field(default_factory=dict)
 
 
 class TokenPayload(BaseModel):

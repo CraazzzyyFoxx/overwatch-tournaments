@@ -248,7 +248,6 @@ class CreateJobTests(IsolatedAsyncioTestCase):
             patch(
                 f"{JOBS}.get_effective_limits", return_value={"max_upload_bytes": 10 * 1024 * 1024, "max_players": 500}
             ),
-            patch(f"{JOBS}.validate_api_key_config_policy"),
             patch(f"{JOBS}.BalancerJobPublisher", FakePublisher),
             patch(f"{JOBS}.get_effective_roster_shape", _shape_resolver()),
         ):
@@ -484,8 +483,8 @@ class BalanceInlineTests(IsolatedAsyncioTestCase):
         limiter.reserve_job.assert_awaited_once()
         limiter.release_job.assert_awaited_once()
 
-    async def test_injected_budget_is_not_charged_to_the_api_key_config_policy(self) -> None:
-        """``time_limit_ms`` is not an API-key-allowed field, and the key never sent it."""
+    async def test_the_synchronous_budget_is_injected_not_taken_from_the_caller(self) -> None:
+        """The caller never sent ``time_limit_ms``; the inline path sets its own."""
         seen: dict = {}
 
         async def fake_run_balance(input_data, config_overrides, progress_callback, role_mask=None):

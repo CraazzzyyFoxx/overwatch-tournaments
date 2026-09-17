@@ -30,7 +30,6 @@ class ApiKey(db.TimeStampIntegerMixin):
     secret_hash: Mapped[str] = mapped_column(String(128), nullable=False)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     limits_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict, server_default="{}")
-    config_policy_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict, server_default="{}")
     expires_at: Mapped[db.DateTime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     revoked_at: Mapped[db.DateTime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_used_at: Mapped[db.DateTime | None] = mapped_column(DateTime(timezone=True), nullable=True)
