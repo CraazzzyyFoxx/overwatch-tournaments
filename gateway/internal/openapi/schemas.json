@@ -23429,11 +23429,6 @@
     },
     "identity.ApiKeyRead": {
       "properties": {
-        "config_policy": {
-          "additionalProperties": true,
-          "title": "Config Policy",
-          "type": "object"
-        },
         "created_at": {
           "format": "date-time",
           "title": "Created At",
@@ -25546,13 +25541,8 @@
       "type": "object"
     },
     "identity.TokenApiKeyInfo": {
-      "description": "API key metadata returned by token validation for downstream services.\n\n``limits`` / ``config_policy`` are optional snapshots. Empty means the\nconsumer applies its own defaults (gateway rate, balancer job caps).\nNew keys are issued empty; older keys may still carry a frozen copy.",
+      "description": "API key metadata returned by token validation for downstream services.\n\n``limits`` is an optional snapshot. Empty means the consumer applies its own\ndefaults (gateway rate, balancer job caps). New keys are issued empty;\nolder keys may still carry a frozen copy.",
       "properties": {
-        "config_policy": {
-          "additionalProperties": true,
-          "title": "Config Policy",
-          "type": "object"
-        },
         "id": {
           "title": "Id",
           "type": "integer"
