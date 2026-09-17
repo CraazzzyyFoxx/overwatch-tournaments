@@ -21,8 +21,8 @@ pub(crate) fn knee_scores(objectives: &[Objectives], w_balance: f64, w_comfort: 
     knee_scores_within(objectives, objectives, w_balance, w_comfort)
 }
 
-/// Тот же скор, но в системе координат чужого набора — для точек, которых нет
-/// в референсе (см. `normalize_objectives_within`).
+/// Same score in another set's coordinate system, for points outside the
+/// reference (see `normalize_objectives_within`).
 pub(crate) fn knee_scores_within(
     objectives: &[Objectives],
     reference: &[Objectives],

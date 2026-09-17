@@ -29,23 +29,31 @@ class AlgorithmConfig(BaseSettings):
         description="Per-team slot counts the solver fills; a projection of the tournament roster shape",
     )
 
-    # Shared optimizer parameters
-    population_size: int = Field(default=60, ge=10, le=1000)
-    generation_count: int = Field(default=120, ge=10, le=5000)
+    # Shared optimizer parameters. Budget picked by the ``quality_harness``
+    # ablation (six pool profiles x 12/24 teams x 3 seeds): the previous
+    # 60/120/4-island setup with no early stop scores bal 1.65 / com 1.27
+    # against this one, which costs 1.8s instead of 0.3s per run and stays a
+    # cheap fallback (5x lighter than ``HIGH_QUALITY``) within the API-key
+    # caps (population <= 150, generations <= 500).
+    population_size: int = Field(default=100, ge=10, le=1000)
+    generation_count: int = Field(default=400, ge=10, le=5000)
     mutation_rate: float = Field(default=0.35, ge=0.0, le=1.0)
     mutation_strength: int = Field(default=2, ge=1, le=10)
 
-    # Cost function weights
-    average_mmr_balance_weight: float = Field(default=0.8, ge=0.0)
+    # Cost function weights. Only the composition inside an axis matters:
+    # scaling a whole axis uniformly is a no-op, because NSGA-II dominance and
+    # the min-max knee normalization are both scale invariant. These are the
+    # middle weights, the same composition ``COMBINED`` uses.
+    average_mmr_balance_weight: float = Field(default=2.0, ge=0.0)
     team_total_balance_weight: float = Field(default=1.0, ge=0.0)
     max_team_gap_weight: float = Field(default=1.5, ge=0.0)
-    role_discomfort_weight: float = Field(default=1.0, ge=0.0)
-    max_role_discomfort_weight: float = Field(default=2.0, ge=0.0)
+    role_discomfort_weight: float = Field(default=2.0, ge=0.0)
+    max_role_discomfort_weight: float = Field(default=1.0, ge=0.0)
     role_line_balance_weight: float = Field(default=1.0, ge=0.0)
     # Per-team normalized terms (Rust divides by team count): defaults are
     # pre-multiplied so behaviour matches the legacy sums at 4 teams.
-    intra_team_std_weight: float = Field(default=2.8, ge=0.0)
-    internal_role_spread_weight: float = Field(default=1.2, ge=0.0)
+    intra_team_std_weight: float = Field(default=1.8, ge=0.0)
+    internal_role_spread_weight: float = Field(default=0.8, ge=0.0)
     sub_role_collision_weight: float = Field(
         default=24.0,
         ge=0.0,
@@ -75,7 +83,7 @@ class AlgorithmConfig(BaseSettings):
         ),
     )
     team_max_pain_weight: float = Field(
-        default=1.0,
+        default=0.6,
         ge=0.0,
         description=(
             "Weight for the per-team maximum role discomfort averaged over "
@@ -84,7 +92,7 @@ class AlgorithmConfig(BaseSettings):
         ),
     )
     rank_comfort_tilt: float = Field(
-        default=0.5,
+        default=0.45,
         ge=0.0,
         le=1.0,
         description=(
@@ -101,17 +109,17 @@ class AlgorithmConfig(BaseSettings):
     support_impact_weight: float = Field(default=1.1, ge=0.0)
     # Penalizes the largest hole between adjacent (sorted) tank lines instead
     # of the structurally irreducible max-min pool spread.
-    tank_gap_weight: float = Field(default=1.0, ge=0.0)
+    tank_gap_weight: float = Field(default=0.8, ge=0.0)
     tank_std_weight: float = Field(default=1.5, ge=0.0)
     effective_total_std_weight: float = Field(default=1.2, ge=0.0)
 
     # Strategy configuration
     use_captains: bool = Field(default=True)
-    convergence_patience: int = Field(default=0, ge=0, le=5000)
+    convergence_patience: int = Field(default=100, ge=0, le=5000)
     convergence_epsilon: float = Field(default=0.005, ge=0.0, le=1.0)
     mutation_rate_min: float = Field(default=0.15, ge=0.0, le=1.0)
     mutation_rate_max: float = Field(default=0.65, ge=0.0, le=1.0)
-    island_count: int = Field(default=4, ge=1, le=64)
+    island_count: int = Field(default=6, ge=1, le=64)
     polish_max_passes: int = Field(default=50, ge=0, le=1000)
     greedy_seed_count: int = Field(default=3, ge=0, le=1000)
     stagnation_kick_patience: int = Field(default=15, ge=0, le=5000)

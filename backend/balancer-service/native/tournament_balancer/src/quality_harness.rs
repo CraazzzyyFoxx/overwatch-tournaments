@@ -237,7 +237,7 @@ fn harness_crossover_share_ablation() {
     }
 }
 
-/// Продакшен-бюджет HIGH_QUALITY — точка отсчёта для абляции.
+/// Production HIGH_QUALITY budget — the reference point for ablations.
 fn hq_baseline(cfg: &mut ConfigSpec) {
     cfg.population_size = 200;
     cfg.generation_count = 1000;
@@ -253,9 +253,9 @@ fn hq_baseline(cfg: &mut ConfigSpec) {
     cfg.time_limit_ms = Some(600_000);
 }
 
-/// Дешёвый бюджет для скрина направления весов: состав объектива —
-/// структурный эффект, он виден и на коротком поиске, а прогон профиля
-/// занимает доли секунды вместо десятка секунд.
+/// Cheap budget for screening weight directions: the composition of an axis is
+/// a structural effect, visible on a short search too, and one profile run
+/// takes a fraction of a second instead of ten.
 fn fast_baseline(cfg: &mut ConfigSpec) {
     hq_baseline(cfg);
     cfg.population_size = 80;
@@ -266,10 +266,81 @@ fn fast_baseline(cfg: &mut ConfigSpec) {
     cfg.max_result_variants = 10;
 }
 
+/// Production `AlgorithmConfig` defaults (a.k.a. the DEFAULT preset).
+fn default_baseline(cfg: &mut ConfigSpec) {
+    hq_baseline(cfg);
+    mid_weights(cfg);
+    cfg.population_size = 100;
+    cfg.generation_count = 400;
+    cfg.mutation_rate = 0.35;
+    cfg.mutation_strength = 2;
+    cfg.mutation_rate_min = 0.15;
+    cfg.mutation_rate_max = 0.65;
+    cfg.island_count = 6;
+    cfg.polish_max_passes = 50;
+    cfg.stagnation_kick_patience = 15;
+    cfg.convergence_patience = 100;
+    cfg.max_result_variants = 10;
+}
+
+/// Middle of both axes — the composition DEFAULT and COMBINED use.
+fn mid_weights(cfg: &mut ConfigSpec) {
+    cfg.average_mmr_balance_weight = 2.0;
+    cfg.intra_team_std_weight = 1.8;
+    cfg.internal_role_spread_weight = 0.8;
+    cfg.tank_gap_weight = 0.8;
+    cfg.role_discomfort_weight = 2.0;
+    cfg.max_role_discomfort_weight = 1.0;
+    cfg.team_max_pain_weight = 0.6;
+    cfg.rank_comfort_tilt = 0.45;
+}
+
+/// DEFAULT against the previous defaults and the next budget steps. Measured
+/// on 6 profiles x 12/24 teams x 3 seeds: legacy (60/120, 4 islands, canonical
+/// weights, no early stop) scores bal 1.64 / com 1.27 against the current one
+/// at 0.3s versus 1.7s; 300 generations and population 100 land in between.
+const DEFAULT_KNOBS: &[Knob] = &[
+    ("baseline", |_| {}),
+    ("legacy_defaults", |c| {
+        c.population_size = 60;
+        c.generation_count = 120;
+        c.island_count = 4;
+        c.convergence_patience = 0;
+        c.average_mmr_balance_weight = 0.8;
+        c.intra_team_std_weight = 2.8;
+        c.internal_role_spread_weight = 1.2;
+        c.tank_gap_weight = 1.0;
+        c.role_discomfort_weight = 1.0;
+        c.max_role_discomfort_weight = 2.0;
+        c.team_max_pain_weight = 1.0;
+        c.rank_comfort_tilt = 0.5;
+    }),
+    ("pop150_gens600", |c| {
+        c.population_size = 150;
+        c.generation_count = 600;
+    }),
+    ("islands8_conv200", |c| {
+        c.island_count = 8;
+        c.convergence_patience = 200;
+    }),
+];
+
+#[test]
+#[ignore = "DEFAULT tuning — manual run only"]
+fn harness_default_budget_ablation() {
+    run_ablation(
+        DEFAULT_KNOBS,
+        &[11, 22, 33],
+        &[12, 24],
+        &bench_api::PROFILES,
+        default_baseline,
+    );
+}
+
 type Knob = (&'static str, fn(&mut ConfigSpec));
 
-/// По одному изменению от baseline: пересечения знобов проверяются отдельно,
-/// иначе матрица не читается.
+/// One change per row from the baseline: knob interactions are checked
+/// separately, otherwise the matrix is unreadable.
 const ABLATIONS: &[Knob] = &[
     ("baseline", |_| {}),
     ("islands_4", |c| c.island_count = 4),
@@ -327,10 +398,10 @@ fn summarize(results: &[VariantQuality], secs: f64) -> AblationSummary {
     }
 }
 
-/// Геометрическое среднее отношений к baseline (<1 — лучше baseline).
-/// Метрики разной размерности, поэтому аддитивное среднее утащило бы вес в
-/// самую крупную (tank_adj_gap); +1 к каждой снимает деление на ноль на
-/// плотных пулах, где метрика вырождается в 0.
+/// Geometric mean of the ratios to the baseline (<1 is better than baseline).
+/// The metrics have different magnitudes, so an arithmetic mean would let the
+/// largest one (tank_adj_gap) dominate; the +1 offsets avoid dividing by zero
+/// on dense pools where a metric degenerates to 0.
 fn ratio_geomean(terms: &[(f64, f64)]) -> f64 {
     let sum: f64 = terms
         .iter()
@@ -339,7 +410,7 @@ fn ratio_geomean(terms: &[(f64, f64)]) -> f64 {
     (sum / terms.len() as f64).exp()
 }
 
-/// Ось баланса: разброс силы команд. Именно её минимизирует HIGH_QUALITY.
+/// Balance axis: spread of team strength. This is what HIGH_QUALITY minimizes.
 fn balance_score(base: &AblationSummary, cur: &AblationSummary) -> f64 {
     ratio_geomean(&[
         (base.mmr_std, cur.mmr_std),
@@ -348,8 +419,8 @@ fn balance_score(base: &AblationSummary, cur: &AblationSummary) -> f64 {
     ])
 }
 
-/// Ось комфорта: игра не на своей роли и боль. Её минимизирует
-/// PREFERENCE_FOCUSED.
+/// Comfort axis: off-role play and pain. This is what PREFERENCE_FOCUSED
+/// minimizes.
 fn comfort_score(base: &AblationSummary, cur: &AblationSummary) -> f64 {
     ratio_geomean(&[
         (base.off_role, cur.off_role),
@@ -362,9 +433,9 @@ fn composite(base: &AblationSummary, cur: &AblationSummary) -> f64 {
     (balance_score(base, cur) * comfort_score(base, cur)).sqrt()
 }
 
-/// Прогон набора кнобов по всем профилям пула: на разных средних по ролям и
-/// разной глубине флекс-пула один и тот же кноб ведёт себя по-разному,
-/// поэтому решение принимается по сводке, а не по одной фикстуре.
+/// Runs a knob set over every pool profile: with different per-role averages
+/// and flex depth the same knob behaves differently, so the decision is made
+/// on the summary rather than on a single fixture.
 fn run_ablation(
     knobs: &[Knob],
     seeds: &[u64],
@@ -431,28 +502,30 @@ fn run_ablation(
     }
 }
 
-/// Сводка последнего тюнинга (2026-09-17, geo-среднее по профилям):
-/// 8-16 команд — conv_200 0.943 лучший из 20 кнобов; 24-40 команд —
-/// conv_200 0.938 при +50% времени, conv_400 не лучше, islands_16 0.976,
-/// polish_60 регресс 1.05; 40 команд — conv200+pop320 и conv200+gens2000
-/// не обошли conv_200. Веса objective (x2 по каждому) дали ±3% со знаком,
-/// зависящим от профиля — не менялись. Размеры/профили/сиды правятся здесь.
+/// Summary of the last tuning pass (2026-09-17, geometric mean over profiles):
+/// at 8-16 teams conv_200 was the best of 20 knobs (0.943); at 24-40 teams
+/// conv_200 scored 0.938 for +50% runtime, conv_400 was no better,
+/// islands_16 0.976 and polish_60 regressed to 1.05; at 40 teams neither
+/// conv200+pop320 nor conv200+gens2000 beat conv_200. Doubling any single
+/// objective weight moved the composite by +-3% with a profile-dependent sign,
+/// so those were left alone. Sizes, profiles and seeds are edited here.
 #[test]
-#[ignore = "абляция параметров поиска — только ручной запуск"]
+#[ignore = "search parameter ablation — manual run only"]
 fn harness_search_param_ablation() {
     run_ablation(ABLATIONS, &[11, 22, 33], &[8, 16], &bench_api::PROFILES, hq_baseline);
 }
 
-/// Кандидаты профилей пресетов. balance = total_rating_std·w_team_total +
-/// gap·w_max_gap + **mmr_std·w_avg_mmr** + role_line + intra_std +
+/// Preset weight candidates. balance = total_rating_std*w_team_total +
+/// gap*w_max_gap + **mmr_std*w_avg_mmr** + role_line + intra_std +
 /// role_spread + tank_gap + tank_std + eff_total; comfort =
-/// **avg_discomfort·w_discomfort** + global_max_pain + team_max_pain +
-/// collisions. Поэтому «HQ по mmr_std» — это поднять w_avg_mmr и опустить
-/// конкурирующие внутри той же оси члены (intra_std, role_spread, tank_gap),
-/// а «preference по off_role» — поднять w_discomfort (сумма боли ≈ число
-/// не-первых предпочтений) и опустить хвостовые max/pain-члены.
-/// Однородное масштабирование всей оси — no-op: доминирование и нормировка
-/// к нему инвариантны (проверяется кнобом `comfort_uniform_x2`).
+/// **avg_discomfort*w_discomfort** + global_max_pain + team_max_pain +
+/// collisions. So "HQ on mmr_std" means raising w_avg_mmr and lowering the
+/// terms competing inside the same axis (intra_std, role_spread, tank_gap),
+/// and "preference on off_role" means raising w_discomfort (total pain is
+/// roughly the count of non-first preferences) and lowering the tail
+/// max/pain terms. Scaling a whole axis uniformly is a no-op: dominance and
+/// normalization are invariant to it (checked by the `comfort_uniform_x2`
+/// knob).
 const PRESET_KNOBS: &[Knob] = &[
     ("baseline", |_| {}),
     ("comfort_uniform_x2", |c| {
@@ -461,7 +534,7 @@ const PRESET_KNOBS: &[Knob] = &[
         c.team_max_pain_weight = 2.0;
         c.sub_role_collision_weight = 48.0;
     }),
-    // --- HQ: целимся в mmr_std ---
+    // --- HQ: aiming at mmr_std ---
     ("hq_mmr_focus", |c| {
         c.average_mmr_balance_weight = 3.0;
         c.intra_team_std_weight = 1.0;
@@ -471,7 +544,7 @@ const PRESET_KNOBS: &[Knob] = &[
         c.effective_total_std_weight = 1.0;
         c.rank_comfort_tilt = 0.25;
     }),
-    ("hq_mmr_focus_hard", |c| {
+    ("preset_HIGH_QUALITY", |c| {
         c.average_mmr_balance_weight = 4.0;
         c.intra_team_std_weight = 0.5;
         c.internal_role_spread_weight = 0.2;
@@ -480,8 +553,8 @@ const PRESET_KNOBS: &[Knob] = &[
         c.effective_total_std_weight = 0.75;
         c.rank_comfort_tilt = 0.1;
     }),
-    // --- PREFERENCE: целимся в off_role ---
-    ("pref_offrole_focus", |c| {
+    // --- PREFERENCE: aiming at off_role ---
+    ("preset_PREFERENCE_FOCUSED", |c| {
         c.role_discomfort_weight = 4.0;
         c.max_role_discomfort_weight = 0.5;
         c.team_max_pain_weight = 0.25;
@@ -494,8 +567,8 @@ const PRESET_KNOBS: &[Knob] = &[
         c.sub_role_collision_weight = 12.0;
         c.rank_comfort_tilt = 0.95;
     }),
-    // --- COMBINED: середина по обеим осям ---
-    ("combined", |c| {
+    // --- COMBINED: middle of both axes ---
+    ("preset_COMBINED", |c| {
         c.average_mmr_balance_weight = 2.0;
         c.intra_team_std_weight = 1.8;
         c.internal_role_spread_weight = 0.8;
@@ -508,14 +581,33 @@ const PRESET_KNOBS: &[Knob] = &[
 ];
 
 #[test]
-#[ignore = "абляция профилей пресетов — только ручной запуск"]
+#[ignore = "preset weight ablation — manual run only"]
 fn harness_preset_profile_ablation() {
     run_ablation(PRESET_KNOBS, &[11, 22, 33, 44, 55], &[12, 24], &bench_api::PROFILES, fast_baseline);
 }
 
-/// Постоянный отчёт по всем профилям пула: перекошенные средние по ролям,
-/// плотный пул и зажатый флекс ведут себя по-разному, и регресс objective
-/// часто виден только на одном из них.
+/// The same three weight sets on the production deep budget: the screen ran on
+/// the cheap one (axis composition is a structural effect) while the presets
+/// ship with the deep budget.
+#[test]
+#[ignore = "preset confirmation on the production budget — manual run only"]
+fn harness_preset_confirm_deep() {
+    let shipped: Vec<Knob> = PRESET_KNOBS
+        .iter()
+        .copied()
+        .filter(|(name, _)| name == &"baseline" || name.starts_with("preset_"))
+        .collect();
+    let profiles: Vec<bench_api::FixtureProfile> = bench_api::PROFILES
+        .iter()
+        .copied()
+        .filter(|p| p.name == "uniform" || p.name == "role_skew" || p.name == "wide_tank")
+        .collect();
+    run_ablation(&shipped, &[11, 22, 33], &[16], &profiles, hq_baseline);
+}
+
+/// Permanent report over every pool profile: skewed per-role averages, a dense
+/// pool and a boxed-in flex pool behave differently, and an objective
+/// regression is often visible on only one of them.
 #[test]
 fn harness_profiles_12_teams() {
     for profile in bench_api::PROFILES.iter() {

@@ -535,11 +535,11 @@ pub(crate) fn normalize_objectives(objectives: &[Objectives]) -> Vec<Objectives>
     normalize_objectives_within(objectives, objectives)
 }
 
-/// Нормировка по границам чужого набора. Нужна, когда часть точек не входит
-/// в референс: варианты-добивки (дополнение тонкого Парето-фронта до
-/// запрошенного max_result_variants) обязаны жить в системе координат самого
-/// фронта — иначе их худшие objectives раздвинули бы max'ы и сдвинули выбор
-/// primary-варианта. Значения вне референса дают norm > 1, это ожидаемо.
+/// Normalization against another set's bounds. Needed when some points are not
+/// part of the reference: variants used to top a thin Pareto front up to the
+/// requested max_result_variants must live in the front's own coordinate
+/// system, or their worse objectives would widen the maxima and shift the
+/// primary variant. Values outside the reference normalize above 1 by design.
 pub(crate) fn normalize_objectives_within(
     objectives: &[Objectives],
     reference: &[Objectives],

@@ -210,10 +210,10 @@ pub(crate) fn run_optimizer(
         repair_diagnostics.merge(&state.repair_diagnostics);
     }
 
-    // Сливаем архивы в один глобальный. Плоский пул островных решений при
-    // этом сохраняется: вытесненные доминированием ростеры — валидные
-    // альтернативы и единственный источник, из которого добирается
-    // запрошенное max_result_variants, когда фронт тоньше запроса.
+    // Merge the island archives into one global archive, keeping the flat pool
+    // of island solutions: rosters evicted by dominance are still valid
+    // alternatives and the only source the requested max_result_variants is
+    // topped up from when the front is thinner than the request.
     let island_pool: Vec<ArchiveEntry> = island_results.into_iter().flatten().collect();
     let mut global_archive: Vec<ArchiveEntry> = Vec::new();
     let mut global_sigs: HashSet<u64> = HashSet::new();
@@ -258,10 +258,10 @@ pub(crate) fn run_optimizer(
         polished.extend(chunk_polished);
     }
 
-    // Строгий Парето-фронт после polish обычно тоньше запрошенного
-    // max_result_variants: решения сходятся к колену и вытесняют друг друга
-    // доминированием (на 40 командах архив отдавал 5-17 вариантов при
-    // запрошенных 30, и даже дефолтные 10 не всегда набирались).
+    // After polish the strict Pareto front is usually thinner than the
+    // requested max_result_variants: solutions converge on the knee and evict
+    // each other by dominance (at 40 teams the archive returned 5-17 variants
+    // when 30 were asked for, and even the default 10 were not always met).
     let candidates: Vec<ArchiveEntry> = global_archive.drain(..).chain(polished).collect();
     let mut final_archive: Vec<ArchiveEntry> = Vec::new();
     let mut final_sigs: HashSet<u64> = HashSet::new();
@@ -269,9 +269,9 @@ pub(crate) fn run_optimizer(
         archive_update(&mut final_archive, &mut final_sigs, item.clone(), ctx);
     }
 
-    // Границы нормировки и primary-вариант считаются по самому фронту:
-    // добивки заведомо доминируемы, их objectives раздвинули бы max'ы и
-    // сдвинули бы выбор показанного варианта.
+    // Normalization bounds and the primary variant come from the front alone:
+    // the top-ups are dominated by construction, so their objectives would
+    // widen the maxima and shift which variant is shown.
     let front_objs: Vec<Objectives> = final_archive.iter().map(|entry| entry.obj).collect();
     let wanted = ctx.config.max_result_variants.max(1);
     let tilt = ctx.config.rank_comfort_tilt;
@@ -309,7 +309,7 @@ pub(crate) fn run_optimizer(
     let signatures: Vec<u64> = final_archive.iter().map(|entry| entry.sig).collect();
     let scores = knee_scores_within(&objs, &front_objs, 1.0 - tilt, tilt);
     let score_order = knee_order(&objs, &signatures, &scores);
-    // primary — из фронта: добивки в конце archive, их индексы >= front_objs.len()
+    // Primary comes from the front: top-ups sit at the tail, index >= front len
     let primary_idx = knee_order(
         &front_objs,
         &signatures[..front_objs.len()],

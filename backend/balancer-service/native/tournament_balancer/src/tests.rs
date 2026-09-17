@@ -303,13 +303,13 @@ fn optimizer_output_snapshot_guard() {
     );
 }
 
-// Re-baseline 2026-09-17: добивка вариантов до max_result_variants из
-// отброшенных доминированием ростеров (фикстура запрашивает 7, фронт отдавал
-// 1 вариант, теперь 2 — больше различных ростеров пул не содержит).
-// Показанный (первый) вариант при этом байт-в-байт тот же: его хэш
-// 16198780372269999697 совпал с базовым до изменения.
-// Предыдущие re-baseline: 2026-07-29 avg_low_rank_pairs в ObjectiveBreakdown,
-// 2026-06-11 rand 0.8→0.9, Фаза 3 (поиск), Фаза 2 (objective).
+// Re-baseline 2026-09-17: variants are topped up to max_result_variants from
+// rosters the Pareto filter dropped (the fixture asks for 7, the front used to
+// return 1 variant and now returns 2 — the pool holds no more distinct
+// rosters). The shown (first) variant is byte-identical: its hash
+// 16198780372269999697 matched the pre-change baseline.
+// Earlier re-baselines: 2026-07-29 avg_low_rank_pairs in ObjectiveBreakdown,
+// 2026-06-11 rand 0.8->0.9, phase 3 (search), phase 2 (objective).
 const SNAPSHOT_FINGERPRINT: u64 = 13297480584333309383;
 
 // --- Валидация входа -------------------------------------------------
@@ -1251,10 +1251,10 @@ fn best_variant_regression_fixture_metrics() {
     );
 }
 
-/// Контракт числа вариантов: запрошенное `max_result_variants` набирается,
-/// даже когда строгий Парето-фронт тоньше запроса (после polish решения
-/// сходятся к колену и вытесняют друг друга — 12 команд отдавали 12-21
-/// вариант при запрошенных 30). Ростеры при этом обязаны быть разными.
+/// Variant-count contract: the requested `max_result_variants` is met even
+/// when the strict Pareto front is thinner than the request (after polish,
+/// solutions converge on the knee and evict each other — 12 teams returned
+/// 12-21 variants when 30 were asked for). The rosters must all differ.
 #[test]
 fn requested_variant_count_is_met_from_a_thin_front() {
     let base = bench_api::synthetic_context(12, 2002);
@@ -1281,10 +1281,10 @@ fn requested_variant_count_is_met_from_a_thin_front() {
     );
 }
 
-/// Добивка вариантов не смещает показанный (первый) вариант: её objectives
-/// нормируются по границам самого фронта, иначе расширение max'ов сдвинуло бы
-/// выбор колена, и один и тот же прогон показывал бы разный лучший ростер в
-/// зависимости от запрошенного числа альтернатив.
+/// Topping variants up must not move the shown (first) variant: their
+/// objectives are normalized against the front's own bounds, otherwise the
+/// widened maxima would shift the knee and one run would show a different best
+/// roster depending on how many alternatives were requested.
 #[test]
 fn primary_variant_does_not_depend_on_requested_variant_count() {
     let base = bench_api::synthetic_context(12, 2002);

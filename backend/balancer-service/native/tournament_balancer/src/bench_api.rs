@@ -171,29 +171,28 @@ pub fn synthetic_wide_tank_context(num_teams: usize, seed: u64) -> BenchContext 
     BenchContext(Context::from_request(request).expect("wide-tank fixture must be valid"))
 }
 
-/// Профиль фикстуры: структура пула, а не размер. Средние по ролям,
-/// глубина флекс-пула и разброс внутри роли меняют задачу сильнее, чем
-/// число команд, поэтому тюнинг параметров поиска должен проверяться на
-/// нескольких профилях — то, что помогает на плотном пуле, часто вредит
-/// на перекошенном.
+/// Fixture profile: pool structure, not pool size. Per-role averages, flex
+/// depth and the spread inside a role change the problem more than the team
+/// count does, so search-parameter tuning has to be checked on several
+/// profiles — what helps on a dense pool often hurts on a skewed one.
 #[derive(Debug, Clone, Copy)]
 pub struct FixtureProfile {
     pub name: &'static str,
-    /// Полосы рейтинга в порядке Tank / Damage / Support.
+    /// Rating bands in Tank / Damage / Support order.
     pub bands: [(i32, i32); 3],
-    /// Танки равномерной сеткой по полосе вместо случайных значений:
-    /// структурно неустранимый разрыв танк-линии при capacity 1.
+    /// Tanks on an even grid across the band instead of random values: a
+    /// structurally irreducible tank-line gap at capacity 1.
     pub tank_grid: bool,
-    /// Вероятность, что игрок вообще умеет вторую роль.
+    /// Probability that a player can play a second role at all.
     pub secondary_chance: f64,
-    /// Насколько вторая роль слабее основной.
+    /// How much weaker the second role is than the main one.
     pub secondary_ratio: f64,
     pub flex_chance: f64,
     pub subclass_chance: f64,
 }
 
 pub const PROFILES: [FixtureProfile; 6] = [
-    // Базовый: широкие равные полосы, половина игроков умеет вторую роль.
+    // Baseline: wide equal bands, half the players know a second role.
     FixtureProfile {
         name: "uniform",
         bands: [(100, 2000), (100, 2000), (100, 2000)],
@@ -203,7 +202,7 @@ pub const PROFILES: [FixtureProfile; 6] = [
         flex_chance: 0.08,
         subclass_chance: 0.4,
     },
-    // Перекошенные средние по ролям: сильные танки, слабые сапорты.
+    // Skewed per-role averages: strong tanks, weak supports.
     FixtureProfile {
         name: "role_skew",
         bands: [(1200, 2300), (500, 1600), (250, 1200)],
@@ -213,7 +212,7 @@ pub const PROFILES: [FixtureProfile; 6] = [
         flex_chance: 0.1,
         subclass_chance: 0.35,
     },
-    // Плотный пул: игроки почти равны, баланс дешёв, всё решает comfort.
+    // Dense pool: players are nearly equal, balance is cheap, comfort decides.
     FixtureProfile {
         name: "narrow",
         bands: [(900, 1300), (900, 1300), (900, 1300)],
@@ -223,7 +222,7 @@ pub const PROFILES: [FixtureProfile; 6] = [
         flex_chance: 0.15,
         subclass_chance: 0.5,
     },
-    // Широкий пул танков при capacity 1.
+    // Wide tank pool at capacity 1.
     FixtureProfile {
         name: "wide_tank",
         bands: [(40, 1700), (300, 1500), (300, 1500)],
@@ -233,7 +232,7 @@ pub const PROFILES: [FixtureProfile; 6] = [
         flex_chance: 0.05,
         subclass_chance: 0.0,
     },
-    // Почти никто не умеет вторую роль: ролевые назначения зажаты.
+    // Almost nobody plays a second role: role assignment is tightly boxed in.
     FixtureProfile {
         name: "one_trick",
         bands: [(150, 2100), (150, 2100), (150, 2100)],
@@ -243,7 +242,7 @@ pub const PROFILES: [FixtureProfile; 6] = [
         flex_chance: 0.02,
         subclass_chance: 0.3,
     },
-    // Флекс-пул почти полный: у поиска максимум степеней свободы.
+    // Nearly full flex pool: the search has the most freedom here.
     FixtureProfile {
         name: "flex_heavy",
         bands: [(200, 1800), (200, 1800), (200, 1800)],
@@ -287,8 +286,8 @@ pub fn synthetic_profiled_context(
                 if other == role || !rng.random_bool(profile.secondary_chance) {
                     continue;
                 }
-                // Вторая роль не выпадает из полосы своей роли: иначе профиль
-                // с перекошенными средними терял бы перекос через флекс.
+                // A second role stays inside its own role's band, otherwise a
+                // skewed-average profile would leak its skew through flex.
                 let (other_low, other_high) = profile.bands[other_idx];
                 let scaled = (rating as f64 * profile.secondary_ratio) as i32;
                 ratings.insert(
@@ -296,8 +295,8 @@ pub fn synthetic_profiled_context(
                     scaled.clamp(other_low, other_high.max(other_low + 1)),
                 );
             }
-            // Порядок ключей HashMap недетерминирован — сортируем перед
-            // shuffle, чтобы фикстура зависела только от seed.
+            // HashMap key order is not deterministic — sort before the shuffle
+            // so the fixture depends on the seed alone.
             let mut preferences: Vec<String> = ratings.keys().cloned().collect();
             preferences.sort();
             preferences.shuffle(&mut rng);
