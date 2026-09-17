@@ -469,7 +469,7 @@ func (h *Handler) ApiKeyQuota(w http.ResponseWriter, r *http.Request) {
 	h.callIdentity(w, r, queueApiKeyQuota, body, http.StatusOK)
 }
 
-// SetApiKeyQuota mirrors PUT /api-keys/{id}/quota. The body is one ``limits``
+// SetApiKeyQuota mirrors PUT /api-keys/{id}/quota. The body is one `limits`
 // object whose five dimensions ride at the top of the RPC payload; an
 // all-null one deletes the override rather than pinning five nulls.
 //
