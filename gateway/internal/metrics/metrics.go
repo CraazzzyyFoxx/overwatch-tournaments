@@ -18,12 +18,14 @@ import (
 
 // Metrics owns a private registry and the gateway's metric collectors.
 type Metrics struct {
-	reg         *prometheus.Registry
-	requests    *prometheus.CounterVec
-	duration    *prometheus.HistogramVec
-	activeUsers *prometheus.GaugeVec
-	wsConns     *prometheus.GaugeVec
-	rpcShed     *prometheus.CounterVec
+	reg           *prometheus.Registry
+	requests      *prometheus.CounterVec
+	duration      *prometheus.HistogramVec
+	activeUsers   *prometheus.GaugeVec
+	wsConns       *prometheus.GaugeVec
+	rpcShed       *prometheus.CounterVec
+	rateLimited   *prometheus.CounterVec
+	quotaFallback prometheus.Counter
 }
 
 // New builds the collectors and registers them (plus Go/process runtime
@@ -59,8 +61,16 @@ func New() *Metrics {
 			Name: "gateway_rpc_shed_total",
 			Help: "RPC requests rejected by the per-queue in-flight cap (bulkhead), by queue.",
 		}, []string{"queue"}),
+		rateLimited: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "gateway_rate_limit_rejected_total",
+			Help: "Requests refused with 429 by a gateway rate limiter, by layer (anon|api_key|auth).",
+		}, []string{"layer"}),
+		quotaFallback: prometheus.NewCounter(prometheus.CounterOpts{
+			Name: "gateway_rate_limit_redis_fallback_total",
+			Help: "API-key requests left unmetered because the shared Redis counter was unreachable (fail-open).",
+		}),
 	}
-	reg.MustRegister(m.requests, m.duration, m.activeUsers, m.wsConns, m.rpcShed)
+	reg.MustRegister(m.requests, m.duration, m.activeUsers, m.wsConns, m.rpcShed, m.rateLimited, m.quotaFallback)
 	return m
 }
 
@@ -71,6 +81,15 @@ func (m *Metrics) Handler() http.Handler {
 
 // RPCShed records one RPC request rejected by the per-queue in-flight cap.
 func (m *Metrics) RPCShed(queue string) { m.rpcShed.WithLabelValues(queue).Inc() }
+
+// RateLimited records one request refused by the rate limiter at the given
+// layer (ratelimit passes anon|api_key|auth).
+func (m *Metrics) RateLimited(layer string) { m.rateLimited.WithLabelValues(layer).Inc() }
+
+// RateLimitRedisFallback records one API-key request the shared Redis counter
+// could not judge. A non-zero rate means the per-key limits are currently
+// advisory, which is exactly the thing an operator must be paged about.
+func (m *Metrics) RateLimitRedisFallback() { m.quotaFallback.Inc() }
 
 // Serve runs a dedicated metrics HTTP server until ctx is cancelled. It blocks,
 // so run it in a goroutine.

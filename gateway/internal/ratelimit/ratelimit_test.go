@@ -432,7 +432,7 @@ func TestLimiter_AllowQuotaMatchesConfiguredAllow(t *testing.T) {
 	configured, explicit := New(limit, 1000*time.Second), New(limit, 1000*time.Second)
 	for i := range limit + 1 {
 		want := configured.allow("k")
-		if got := explicit.allowQuota("k", limit); got != want {
+		if got, _ := explicit.allowQuota("k", limit); got != want {
 			t.Fatalf("call %d: allowQuota=%v, allow=%v", i, got, want)
 		}
 	}

@@ -24,6 +24,7 @@ from typing import Any
 import sqlalchemy as sa
 from faststream.rabbit import RabbitMessage
 
+from shared import quota
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.core.pagination import PaginationParams, paginated_dict, paginated_dump
 from shared.models.achievements.achievement import (
@@ -131,6 +132,9 @@ def register(broker: Any, logger: Any) -> None:  # noqa: C901 - one subscriber p
                     status_code=400, detail="workspace_id is required for global achievement calculation"
                 )
             ensure_workspace_permission(user, payload.workspace_id, "achievement", "update")
+            # A full-workspace engine run: every enabled rule's condition tree
+            # evaluated over the whole history, all of it CPU on this worker.
+            await quota.charge(user, "parser.ach.calculate", workspace_id=payload.workspace_id)
             executed = await _run_calculate(
                 session, workspace_id=payload.workspace_id, tournament_id=None, payload=payload
             )
@@ -154,6 +158,9 @@ def register(broker: Any, logger: Any) -> None:  # noqa: C901 - one subscriber p
             if payload.workspace_id is not None and payload.workspace_id != tournament.workspace_id:
                 raise HTTPException(status_code=400, detail="workspace_id does not match tournament workspace")
             ensure_workspace_permission(user, workspace_id, "achievement", "update")
+            # Same engine, one tournament's slice of history — still a CPU-bound
+            # sweep over every rule.
+            await quota.charge(user, "parser.ach.calculate_tournament", workspace_id=workspace_id)
             executed = await _run_calculate(
                 session, workspace_id=workspace_id, tournament_id=tournament_id, payload=payload
             )
@@ -237,7 +244,10 @@ def register(broker: Any, logger: Any) -> None:  # noqa: C901 - one subscriber p
     @broker.subscriber("rpc.parser.ach.export")
     async def _export(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
-            _user, workspace_id = _require_ws(data, "read")
+            user, workspace_id = _require_ws(data, "read")
+            # Dumps every rule of the workspace, condition trees and all — an
+            # unbounded read whose size grows with the rule set.
+            await quota.charge(user, "parser.ach.export", workspace_id=workspace_id)
             workspace = await _get_workspace_or_404(session, workspace_id)
             rules = await load_rules_for_workspace(session, workspace_id)
             return build_export_payload(workspace, rules)
@@ -249,6 +259,9 @@ def register(broker: Any, logger: Any) -> None:  # noqa: C901 - one subscriber p
         async def op(session: Any) -> Any:
             user, workspace_id = _require_ws(data, "create")
             body = schemas.AchievementRuleExportEnvelope.model_validate(c.payload(data))
+            # Each imported rule copies its image through S3 and writes a rule row,
+            # so the batch is priced by how many rules it carries.
+            await quota.charge(user, "parser.ach.import", workspace_id=workspace_id, item_count=len(body.rules))
             target_workspace = await _get_workspace_or_404(session, workspace_id)
             source_workspace = None
             if body.source_workspace is not None:
@@ -540,6 +553,9 @@ def register(broker: Any, logger: Any) -> None:  # noqa: C901 - one subscriber p
         async def op(session: Any) -> Any:
             user, workspace_id = _require_ws(data, "create")
             body = schemas.AchievementLibraryImportRequest.model_validate(c.payload(data))
+            # Copies rules across workspaces: an S3 image copy and a rule write per
+            # slug pulled out of the source library.
+            await quota.charge(user, "parser.ach.lib_import", workspace_id=workspace_id)
             target_workspace = await _get_workspace_or_404(session, workspace_id)
             source_workspace = await _get_source_workspace_or_404(
                 session,

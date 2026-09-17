@@ -1,6 +1,6 @@
 -- Anak Tournaments — PostgreSQL DDL compiled from SQLAlchemy metadata.
 -- Open in any SQL editor (DataGrip, DBeaver, VS Code).
--- Tables: 126
+-- Tables: 131
 -- Source of truth is backend/shared/models. Regenerate: python scripts/export_db_schema.py
 
 CREATE SCHEMA IF NOT EXISTS achievements;
@@ -13,6 +13,7 @@ CREATE SCHEMA IF NOT EXISTS matches;
 CREATE SCHEMA IF NOT EXISTS overwatch;
 CREATE SCHEMA IF NOT EXISTS overwatch_rank;
 CREATE SCHEMA IF NOT EXISTS players;
+CREATE SCHEMA IF NOT EXISTS quota;
 CREATE SCHEMA IF NOT EXISTS realtime;
 CREATE SCHEMA IF NOT EXISTS subscriptions;
 CREATE SCHEMA IF NOT EXISTS tournament;
@@ -413,7 +414,6 @@ CREATE TABLE auth.api_key (
 	public_id VARCHAR(32) NOT NULL, 
 	secret_hash VARCHAR(128) NOT NULL, 
 	name VARCHAR(100) NOT NULL, 
-	limits_json JSON DEFAULT '{}' NOT NULL, 
 	expires_at TIMESTAMP WITH TIME ZONE, 
 	revoked_at TIMESTAMP WITH TIME ZONE, 
 	last_used_at TIMESTAMP WITH TIME ZONE, 
@@ -2003,13 +2003,15 @@ CREATE TABLE workspace (
 	owner_id BIGINT, 
 	verification_status VARCHAR(16) DEFAULT 'unverified' NOT NULL, 
 	default_division_grid_version_id BIGINT, 
+	quota_plan_id BIGINT, 
 	default_roster_slots_json JSONB, 
 	newcomer_scope VARCHAR(16) DEFAULT 'global' NOT NULL, 
 	PRIMARY KEY (id), 
 	UNIQUE (discord_guild_id), 
 	FOREIGN KEY(discord_guild_verified_by_auth_user_id) REFERENCES auth."user" (id) ON DELETE SET NULL, 
 	FOREIGN KEY(owner_id) REFERENCES auth."user" (id) ON DELETE SET NULL, 
-	FOREIGN KEY(default_division_grid_version_id) REFERENCES division_grid_version (id) ON DELETE SET NULL
+	FOREIGN KEY(default_division_grid_version_id) REFERENCES division_grid_version (id) ON DELETE SET NULL, 
+	FOREIGN KEY(quota_plan_id) REFERENCES quota.plan (id) ON DELETE SET NULL
 );
 
 CREATE UNIQUE INDEX ix_workspace_custom_domain ON workspace (custom_domain);
@@ -2017,6 +2019,8 @@ CREATE UNIQUE INDEX ix_workspace_custom_domain ON workspace (custom_domain);
 CREATE INDEX ix_workspace_default_division_grid_version_id ON workspace (default_division_grid_version_id);
 
 CREATE INDEX ix_workspace_owner_id ON workspace (owner_id);
+
+CREATE INDEX ix_workspace_quota_plan_id ON workspace (quota_plan_id);
 
 CREATE UNIQUE INDEX ix_workspace_slug ON workspace (slug);
 
@@ -2039,6 +2043,76 @@ CREATE TABLE workspace_member (
 CREATE INDEX ix_workspace_member_player_id ON workspace_member (player_id);
 
 CREATE INDEX ix_workspace_member_workspace_id ON workspace_member (workspace_id);
+
+CREATE TABLE quota.api_key_limit (
+	api_key_id BIGINT NOT NULL, 
+	requests_per_minute INTEGER, 
+	heavy_per_day INTEGER, 
+	concurrent_heavy INTEGER, 
+	max_upload_bytes BIGINT, 
+	max_items_per_request INTEGER, 
+	updated_by BIGINT, 
+	created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
+	updated_at TIMESTAMP WITH TIME ZONE, 
+	PRIMARY KEY (api_key_id), 
+	FOREIGN KEY(api_key_id) REFERENCES auth.api_key (id) ON DELETE CASCADE, 
+	FOREIGN KEY(updated_by) REFERENCES auth."user" (id) ON DELETE SET NULL
+);
+
+CREATE TABLE quota.operation (
+	id BIGSERIAL NOT NULL, 
+	created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
+	updated_at TIMESTAMP WITH TIME ZONE, 
+	slug VARCHAR(64) NOT NULL, 
+	cost INTEGER DEFAULT '1' NOT NULL, 
+	enabled BOOLEAN DEFAULT 'true' NOT NULL, 
+	description TEXT, 
+	PRIMARY KEY (id), 
+	CONSTRAINT ck_quota_operation_cost CHECK (cost >= 0)
+);
+
+CREATE UNIQUE INDEX ix_quota_operation_slug ON quota.operation (slug);
+
+CREATE TABLE quota.plan (
+	id BIGSERIAL NOT NULL, 
+	created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
+	updated_at TIMESTAMP WITH TIME ZONE, 
+	slug VARCHAR(32) NOT NULL, 
+	title VARCHAR(64) NOT NULL, 
+	description TEXT, 
+	PRIMARY KEY (id)
+);
+
+CREATE UNIQUE INDEX ix_quota_plan_slug ON quota.plan (slug);
+
+CREATE TABLE quota.plan_limit (
+	plan_id BIGINT NOT NULL, 
+	scope VARCHAR(16) NOT NULL, 
+	requests_per_minute INTEGER, 
+	heavy_per_day INTEGER, 
+	concurrent_heavy INTEGER, 
+	max_upload_bytes BIGINT, 
+	max_items_per_request INTEGER, 
+	PRIMARY KEY (plan_id, scope), 
+	CONSTRAINT ck_quota_plan_limit_nonneg CHECK (COALESCE(requests_per_minute, 0) >= 0 AND COALESCE(heavy_per_day, 0) >= 0 AND COALESCE(concurrent_heavy, 0) >= 0 AND COALESCE(max_upload_bytes, 0) >= 0 AND COALESCE(max_items_per_request, 0) >= 0), 
+	FOREIGN KEY(plan_id) REFERENCES quota.plan (id) ON DELETE CASCADE
+);
+
+CREATE TABLE quota.workspace_limit (
+	workspace_id BIGINT NOT NULL, 
+	scope VARCHAR(16) NOT NULL, 
+	requests_per_minute INTEGER, 
+	heavy_per_day INTEGER, 
+	concurrent_heavy INTEGER, 
+	max_upload_bytes BIGINT, 
+	max_items_per_request INTEGER, 
+	updated_by BIGINT, 
+	created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
+	updated_at TIMESTAMP WITH TIME ZONE, 
+	PRIMARY KEY (workspace_id, scope), 
+	FOREIGN KEY(workspace_id) REFERENCES workspace (id) ON DELETE CASCADE, 
+	FOREIGN KEY(updated_by) REFERENCES auth."user" (id) ON DELETE SET NULL
+);
 
 CREATE TABLE realtime.workspace_event (
 	id BIGSERIAL NOT NULL, 

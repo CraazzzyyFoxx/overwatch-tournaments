@@ -392,9 +392,14 @@ An API key's payload is its **owner's RBAC, narrowed**
   holds there. The intersection is the whole security model: a key cannot outrank its owner, and
   revoking the owner's grant revokes the key's.
 - `credential_type="api_key"` plus an `api_key` block (`id`, `public_id`, `workspace_id`,
-  `scopes`, `limits`) for the consumers that legitimately need the credential itself —
-  per-key usage limits in `balancer-service` (`core/security/api_key_limiter.py`). There is no
-  per-key config policy: an API client passes the same solver arguments a browser does.
+  `scopes`) for the consumers that legitimately need the credential itself. It carries no
+  numbers: quotas live in the `quota` schema and are enforced by `shared/quota/`, which every
+  service calls at the operations that cost something (`quota.charge` / `quota.lease`). Two
+  scopes are checked on every metered call — the workspace's shared budget and the
+  key's/session's own — and the tighter one refuses. The client-side contract, the seeded
+  numbers and the refusal shapes are published in
+  [`../docs/api-rate-limits.md`](../docs/api-rate-limits.md). There is no per-key config policy:
+  an API client passes the same solver arguments a browser does.
 
 Because the intersection is already written into `rbac_permissions`, an API key is authorized by
 the ordinary path: `AuthUser.has_workspace_permission`, the single source of truth for

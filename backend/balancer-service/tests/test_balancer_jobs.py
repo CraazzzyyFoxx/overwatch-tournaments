@@ -18,6 +18,7 @@ os.environ["DEBUG"] = "false"
 
 from shared.core.errors import BaseAPIException as HTTPException  # noqa: E402
 from shared.domain.roster_shape import parse_roster_slots  # noqa: E402
+from shared.quota import QuotaLease  # noqa: E402
 from src.services.balancer import jobs  # noqa: E402
 from src.services.balancer import solver as solver_module  # noqa: E402
 from src.services.balancer.config.provider import get_balancer_config_payload  # noqa: E402
@@ -31,12 +32,28 @@ def _shape_resolver(shape=FLEX_SHAPE) -> AsyncMock:
     return AsyncMock(return_value=shape)
 
 
-def _noop_limiter() -> SimpleNamespace:
-    return SimpleNamespace(
-        check_request=AsyncMock(),
-        reserve_job=AsyncMock(),
-        release_job=AsyncMock(),
+def _noop_quota(**overrides) -> SimpleNamespace:
+    """The quota gate as a pass-through, recording what the handler asked for."""
+    fake = SimpleNamespace(
+        check_payload=AsyncMock(),
+        charge=AsyncMock(),
+        lease=AsyncMock(),
+        release=AsyncMock(),
+        principal_of=lambda user: (
+            ("api_key", int(user._api_key_id))
+            if getattr(user, "_credential_type", "access_token") == "api_key"
+            else ("user", int(user.id))
+        ),
     )
+    fake.lease.side_effect = lambda user, operation, **kwargs: QuotaLease(
+        lease_id=kwargs.get("lease_id") or "lease",
+        principal_kind="api_key" if getattr(user, "_credential_type", "") == "api_key" else "user",
+        principal_id=42,
+        workspace_id=kwargs.get("workspace_id"),
+    )
+    for name, value in overrides.items():
+        setattr(fake, name, value)
+    return fake
 
 
 def _api_key_user(*, scopes: list[str], workspace_id: int = 77) -> SimpleNamespace:
@@ -114,10 +131,9 @@ class CreateJobTests(IsolatedAsyncioTestCase):
 
         with (
             patch(f"{JOBS}.get_job_store", return_value=FakeStore()),
-            patch(f"{JOBS}.get_api_key_limiter", return_value=_noop_limiter()),
+            patch(f"{JOBS}.quota", _noop_quota()),
             patch(f"{JOBS}._access_policy", access_policy),
             patch(f"{JOBS}._payload_parser", FakeParser()),
-            patch(f"{JOBS}.is_api_key_principal", return_value=False),
             patch(f"{JOBS}.BalancerJobPublisher", FakePublisher),
             patch(f"{JOBS}.get_effective_roster_shape", _shape_resolver()),
         ):
@@ -169,10 +185,9 @@ class CreateJobTests(IsolatedAsyncioTestCase):
 
         with (
             patch(f"{JOBS}.get_job_store", return_value=FakeStore()),
-            patch(f"{JOBS}.get_api_key_limiter", return_value=_noop_limiter()),
+            patch(f"{JOBS}.quota", _noop_quota()),
             patch(f"{JOBS}._access_policy", access_policy),
             patch(f"{JOBS}._payload_parser", FakeParser()),
-            patch(f"{JOBS}.is_api_key_principal", return_value=False),
             patch(f"{JOBS}.BalancerJobPublisher", FakePublisher),
             patch(f"{JOBS}._emit_job", emit),
             patch(f"{JOBS}.get_effective_roster_shape", _shape_resolver()),
@@ -229,11 +244,7 @@ class CreateJobTests(IsolatedAsyncioTestCase):
             async def publish_job_requested(self, job_id: str) -> None:
                 created["published_job_id"] = job_id
 
-        limiter = SimpleNamespace(
-            check_request=AsyncMock(side_effect=lambda user: created.update(checked=user._api_key_id)),
-            reserve_job=AsyncMock(side_effect=lambda user, job_id: created.update(reserved=(user._api_key_id, job_id))),
-            release_job=AsyncMock(),
-        )
+        gate = _noop_quota()
         # Deliberately NOT stubbing ``_access_policy``: the real
         # WorkspaceAccessPolicy must admit a correctly scoped key, which is the
         # whole point of dropping the old blanket api-key rejection.
@@ -241,13 +252,8 @@ class CreateJobTests(IsolatedAsyncioTestCase):
 
         with (
             patch(f"{JOBS}.get_job_store", return_value=FakeStore()),
-            patch(f"{JOBS}.get_api_key_limiter", return_value=limiter),
+            patch(f"{JOBS}.quota", gate),
             patch(f"{JOBS}._payload_parser", FakeParser()),
-            patch(f"{JOBS}.is_api_key_principal", return_value=True),
-            patch(f"{JOBS}.get_api_key_id", return_value=42),
-            patch(
-                f"{JOBS}.get_effective_limits", return_value={"max_upload_bytes": 10 * 1024 * 1024, "max_players": 500}
-            ),
             patch(f"{JOBS}.BalancerJobPublisher", FakePublisher),
             patch(f"{JOBS}.get_effective_roster_shape", _shape_resolver()),
         ):
@@ -261,29 +267,30 @@ class CreateJobTests(IsolatedAsyncioTestCase):
             )
 
         self.assertEqual(response.job_id, created["job_id"])
-        self.assertEqual(created["reserved"], (42, created["job_id"]))
-        self.assertEqual(created["checked"], 42)
         self.assertEqual(created["credential_type"], "api_key")
         self.assertEqual(created["api_key_id"], 42)
-        limiter.release_job.assert_not_awaited()
+        # The lease id IS the job id, so the worker that finishes the job can
+        # release the slot from its metadata alone.
+        self.assertEqual(gate.lease.await_args.kwargs["lease_id"], created["job_id"])
+        self.assertEqual(gate.lease.await_args.kwargs["workspace_id"], 77)
+        self.assertEqual(gate.lease.await_args.args[1], "balancer.job")
+        # The upload cap is settled before the payload is parsed.
+        self.assertEqual(gate.check_payload.await_args.kwargs["size_bytes"], 1024)
+        gate.release.assert_not_awaited()
 
     async def test_api_key_create_job_rejected_without_team_create_scope(self) -> None:
         """The real scope gate stops an under-scoped key before any work is done.
 
-        ``ensure_workspace_access`` runs ahead of payload parsing and job
-        reservation, so a rejected request must not consume a job slot -- the
-        per-minute request check is the only quota it is allowed to touch.
+        ``ensure_workspace_access`` runs ahead of payload parsing and the quota
+        lease, so a rejected request must not consume a job slot -- the payload
+        cap is the only gate it is allowed to touch.
         """
-        limiter = SimpleNamespace(
-            check_request=AsyncMock(),
-            reserve_job=AsyncMock(),
-            release_job=AsyncMock(),
-        )
+        gate = _noop_quota()
         user = _api_key_user(scopes=["registration.approve"])
 
         with (
             patch(f"{JOBS}.get_job_store", return_value=SimpleNamespace()),
-            patch(f"{JOBS}.get_api_key_limiter", return_value=limiter),
+            patch(f"{JOBS}.quota", gate),
             self.assertRaises(HTTPException) as exc_info,
         ):
             await jobs.create_job(
@@ -297,7 +304,7 @@ class CreateJobTests(IsolatedAsyncioTestCase):
 
         self.assertEqual(exc_info.exception.status_code, 403)
         self.assertEqual(exc_info.exception.detail, "API key scope required: team.create")
-        limiter.reserve_job.assert_not_awaited()
+        gate.lease.assert_not_awaited()
 
 
 def _make_fake_store(payload: dict, *, fail_marks: bool = False, optimizing_messages: list | None = None):
@@ -450,9 +457,9 @@ class BalanceInlineTests(IsolatedAsyncioTestCase):
         return jobs.balance_inline(**kwargs)
 
     @staticmethod
-    def _patches(limiter, run_balance):
+    def _patches(gate, run_balance):
         return (
-            patch(f"{JOBS}.get_api_key_limiter", return_value=limiter),
+            patch(f"{JOBS}.quota", gate),
             patch(f"{JOBS}._access_policy", SimpleNamespace(ensure_workspace_access=lambda *a, **k: None)),
             patch(f"{JOBS}.run_balance", run_balance),
         )
@@ -464,9 +471,9 @@ class BalanceInlineTests(IsolatedAsyncioTestCase):
             seen.update(config=config_overrides, role_mask=role_mask, callback=progress_callback)
             return {"variants": [dict(_VARIANT)]}
 
-        limiter = _noop_limiter()
+        gate = _noop_quota()
         session_user = SimpleNamespace(id=5, _credential_type="access_token")
-        patches = self._patches(limiter, fake_run_balance)
+        patches = self._patches(gate, fake_run_balance)
         with patches[0], patches[1], patches[2]:
             result = await self._call(
                 user=session_user,
@@ -480,8 +487,8 @@ class BalanceInlineTests(IsolatedAsyncioTestCase):
         # No progress transport on this path, so nothing to emit into.
         self.assertIsNone(seen["callback"])
         self.assertEqual(result["variants"][0]["statistics"]["players_per_team"], 5)
-        limiter.reserve_job.assert_awaited_once()
-        limiter.release_job.assert_awaited_once()
+        gate.lease.assert_awaited_once()
+        gate.release.assert_awaited_once()
 
     async def test_the_synchronous_budget_is_injected_not_taken_from_the_caller(self) -> None:
         """The caller never sent ``time_limit_ms``; the inline path sets its own."""
@@ -491,8 +498,8 @@ class BalanceInlineTests(IsolatedAsyncioTestCase):
             seen.update(config=config_overrides)
             return {"variants": [dict(_VARIANT)]}
 
-        limiter = _noop_limiter()
-        patches = self._patches(limiter, fake_run_balance)
+        gate = _noop_quota()
+        patches = self._patches(gate, fake_run_balance)
         with patches[0], patches[1], patches[2]:
             await self._call(config_overrides={"population_size": 50})
 
@@ -502,12 +509,18 @@ class BalanceInlineTests(IsolatedAsyncioTestCase):
         async def failing_run_balance(*args, **kwargs):
             raise HTTPException(status_code=422, detail="No valid players found")
 
-        limiter = _noop_limiter()
-        patches = self._patches(limiter, failing_run_balance)
+        gate = _noop_quota()
+        patches = self._patches(gate, failing_run_balance)
         with patches[0], patches[1], patches[2], self.assertRaises(HTTPException):
             await self._call()
 
-        limiter.release_job.assert_awaited_once_with("api_key", 42, limiter.reserve_job.await_args.args[1])
+        # A failed solve must give the slot back, or a client that always times
+        # out would exhaust its concurrency for the lease TTL.
+        gate.release.assert_awaited_once()
+        self.assertEqual(
+            gate.release.await_args.args[0].lease_id,
+            gate.lease.await_args.kwargs["lease_id"],
+        )
 
 
 class SolverTests(IsolatedAsyncioTestCase):

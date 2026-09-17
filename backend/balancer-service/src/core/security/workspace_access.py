@@ -1,7 +1,7 @@
 from shared.core import http_status as status
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.rbac import scope_grants
-from src.core.security.api_key_limiter import is_api_key_principal
+from shared.rpc.identity import credential_type
 
 
 class WorkspaceAccessPolicy:
@@ -20,7 +20,7 @@ class WorkspaceAccessPolicy:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="workspace_id is required",
             )
-        if is_api_key_principal(user):
+        if credential_type(user) == "api_key":
             user_workspace_id = getattr(user, "_api_key_workspace_id", None)
             user_api_key_id = getattr(user, "_api_key_id", None)
             try:

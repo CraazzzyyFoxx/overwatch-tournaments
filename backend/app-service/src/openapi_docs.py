@@ -274,6 +274,31 @@ DOCS: dict[str, dict] = {
         "summary": "Transfer workspace ownership",
         "description": "Permission: the workspace's current `owner_id` or a superuser — `workspace.update` alone is not enough, a co-administrator may not give away a workspace they do not answer for. Hands the workspace over: stamps `Workspace.owner_id` with the recipient AND moves the RBAC `owner` role to them, adding them to the workspace if they are not a member yet. The outgoing owner keeps their membership and every other role (`member` steps in if `owner` was their only one); the recipient is granted `owner` before the outgoing owner loses it, so the workspace is never ownerless. The recipient's `max_owned_per_user` cap is enforced unless the actor is a superuser (403 `workspace_owner_limit_reached`), because create-then-transfer would otherwise loop past it. Audited, busts both accounts' RBAC cache, 404 if the workspace or the recipient is missing, 403 for anyone but the owner or a superuser.",
     },
+    # ── quota policy + usage ────────────────────────────────────────────────────────
+    "rpc.app.workspaces.quota_set": {
+        "summary": "Set a workspace quota override",
+        "description": "Permission: workspace `workspace.update`, but authority is asymmetric: a workspace admin may only LOWER a dimension below what the workspace's plan grants, and a superuser may raise it. Writes one scope's override (`workspace`, `key` or `session`) over the five dimensions — `requests_per_minute`, `heavy_per_day`, `concurrent_heavy`, `max_upload_bytes`, `max_items_per_request`. A null dimension inherits the plan's value; an all-null body deletes the override row and puts the workspace back on its plan. Returns the EFFECTIVE limits after the write (plan merged with the stored override), not the row. Audited as `workspace.quota_update`; the policy cache is dropped immediately. 422 `quota_above_inherited` (carrying `limit_name`, `limit` and `requested`) when a non-superuser raises a value, 404 if the workspace is missing. A metered call later refused by these numbers answers 429 `code=rate_limited` with `Retry-After`; the dimension that refused and the bucket it refused at ride the structured details as `details.limit_name` and `details.scope` (the gateway relays them inside `fields[0]`).",
+    },
+    "rpc.app.quota.plans": {
+        "summary": "List quota plans",
+        "description": "Permission: superuser only — a plan is a platform-wide tier, not tenant data. Returns every plan with its per-scope limit rows (`workspace`/`key`/`session`); a null dimension means unlimited at that scope. These are the numbers a refusal reports: a metered call over budget answers 429 `code=rate_limited` with `Retry-After`, naming the dimension and the bucket as `details.limit_name` and `details.scope` (relayed by the gateway inside `fields[0]`).",
+    },
+    "rpc.app.quota.plan_upsert": {
+        "summary": "Create or replace a quota plan",
+        "description": "Permission: superuser only. Creates the plan named by `slug` or replaces it, INCLUDING its scope rows wholesale — a plan is read as a complete statement of its tier, so a scope omitted from the body is deleted rather than kept. Audited as `quota.plan_upsert` with the previous and new limit rows; the policy cache is dropped immediately, so the next metered call on every affected workspace enforces the new numbers. A call these limits refuse answers 429 `code=rate_limited` with `Retry-After`, naming the dimension and the bucket as `details.limit_name` and `details.scope` (relayed by the gateway inside `fields[0]`).",
+    },
+    "rpc.app.quota.operations": {
+        "summary": "List metered operations",
+        "description": "Permission: superuser only. Returns the `quota.operation` catalogue — the slugs that cost heavy budget, their cost and their enabled flag. A slug with no row here costs no heavy budget; it still spends one per-minute request token. A call refused once that budget is spent answers 429 `code=rate_limited` with `Retry-After`, naming the dimension and the bucket as `details.limit_name` and `details.scope` (relayed by the gateway inside `fields[0]`).",
+    },
+    "rpc.app.quota.operation_upsert": {
+        "summary": "Create or update a metered operation",
+        "description": "Permission: superuser only. Sets one operation's heavy cost and its enabled flag — `enabled=false` is the per-operation kill switch, and it takes effect on the next call rather than at the end of a cache TTL. Audited as `quota.operation_upsert`. A call refused by the daily heavy budget answers 429 `code=rate_limited` with `Retry-After`, naming the dimension (`details.limit_name`, here `heavy_per_day`) and the bucket (`details.scope`), which the gateway relays inside `fields[0]`.",
+    },
+    "rpc.app.quota.workspace_usage": {
+        "summary": "Read workspace quota usage",
+        "description": "Permission: workspace `team.create` (i.e. a workspace admin) or superuser. Returns the workspace's plan slug and its shared pool's effective ceilings next to what has been spent — requests this minute, heavy units today, concurrent heavy slots held, and the two payload caps — with the seconds until each window resets. Per-key usage is not reported here (identity-service answers for an API key). 404 if the workspace is missing. A metered call refused against these numbers answers 429 `code=rate_limited` with `Retry-After`, naming the dimension and the bucket as `details.limit_name` and `details.scope` (relayed by the gateway inside `fields[0]`).",
+    },
     # ── workspace discord entities ──────────────────────────────────────────────────
     "rpc.app.workspaces.discord_roles": {
         "summary": "List workspace Discord roles",

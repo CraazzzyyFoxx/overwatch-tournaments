@@ -14,7 +14,7 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import IsolatedAsyncioTestCase
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 SERVICE_ROOT = Path(__file__).resolve().parents[1]
 BACKEND_ROOT = SERVICE_ROOT.parent
@@ -81,6 +81,9 @@ class PlayersExportFormatsTests(IsolatedAsyncioTestCase):
         async def fake_grid(*_args, **_kwargs):
             return GRID
 
+        async def fake_ws_id(_session, _tournament_id):
+            return 3
+
         session = SimpleNamespace(
             get=self._fake_get,
             scalar=self._fake_scalar,
@@ -92,6 +95,8 @@ class PlayersExportFormatsTests(IsolatedAsyncioTestCase):
             patch.object(integrations.roster_engine, "for_tournament", fake_for_tournament),
             patch.object(integrations, "get_effective_roster_shape", fake_shape),
             patch.object(integrations, "get_effective_division_grid", fake_grid),
+            patch.object(integrations.auth, "get_tournament_workspace_id", fake_ws_id),
+            patch.object(integrations, "quota", SimpleNamespace(charge=AsyncMock())),
         ):
             return await broker.handlers[SUBJECT](
                 {"id": TOURNAMENT_ID, "identity": make_identity(), "query": query or {}},

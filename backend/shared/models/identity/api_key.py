@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Index, String
+from sqlalchemy import DateTime, ForeignKey, Index, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from shared.core import db
@@ -29,7 +29,6 @@ class ApiKey(db.TimeStampIntegerMixin):
     public_id: Mapped[str] = mapped_column(String(32), unique=True, index=True, nullable=False)
     secret_hash: Mapped[str] = mapped_column(String(128), nullable=False)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
-    limits_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict, server_default="{}")
     expires_at: Mapped[db.DateTime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     revoked_at: Mapped[db.DateTime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_used_at: Mapped[db.DateTime | None] = mapped_column(DateTime(timezone=True), nullable=True)

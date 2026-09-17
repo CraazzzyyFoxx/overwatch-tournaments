@@ -25,6 +25,8 @@ from shared.observability import (
     setup_tracing,
     start_worker_metrics_server,
 )
+from shared.quota import close as close_quota
+from shared.quota import configure as configure_quota
 from shared.services.scheduler import IntervalScheduler
 from src.core import db
 from src.core.config import settings
@@ -61,6 +63,18 @@ _install_uvloop()
 
 broker = make_rabbit_broker(settings.rabbitmq_url, logger=logger, prefetch_count=settings.rpc_prefetch_count)
 app = FastStream(broker)
+
+# The enforcer is a process-global with its own Redis client and session
+# factory -- deliberately not ``src.core.redis``'s singleton, which the startup
+# hook creates later than the first handler import. identity-service meters
+# nothing itself; it configures the gate because it *administers* it: the
+# per-key limit writes and usage reads below need the same resolver every
+# metering service runs.
+configure_quota(
+    session_factory=db.async_session_maker,
+    redis_url=settings.REDIS_URL,
+    enabled=settings.quota_enabled,
+)
 
 for _module in (tokens, auth, oauth, api_keys, rbac, players, avatars):
     _module.register(broker, logger)
@@ -115,3 +129,5 @@ async def teardown_worker() -> None:
     await s3_client.close()
     await close_http_client()
     await close_redis()
+    # Its own connection pool, so ``close_redis`` above leaves it open.
+    await close_quota()

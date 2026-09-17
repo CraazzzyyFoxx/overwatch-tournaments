@@ -7,6 +7,10 @@ dev-dependencies = [
     "types-passlib<2.0.0.0,>=1.7.7.20240106",
     "coverage<8.0.0,>=7.4.3",
     "import-linter>=2.0",
+    # Runs the quota gate's Lua for real in unit tests: the all-or-nothing
+    # two-scope charge is the one piece of this codebase that only a Redis
+    # script interpreter can verify.
+    "fakeredis[lua]>=2.38",
 ]
 
 [tool.uv.workspace]

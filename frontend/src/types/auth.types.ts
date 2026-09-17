@@ -26,7 +26,6 @@ export interface AccountApiKey {
   owner_id: number;
   owner_username: string;
   scopes: string[];
-  limits: Record<string, unknown>;
   expires_at?: string | null;
   revoked_at?: string | null;
   last_used_at?: string | null;
@@ -52,6 +51,63 @@ export interface AccountApiKeyCreateInput {
 export interface AccountApiKeyCreateResponse {
   api_key: AccountApiKey;
   key: string;
+}
+
+/**
+ * The three enforcement scopes a metered call is subject to. A principal is
+ * charged against its own scope (`key` for an API key, `session` for a signed-in
+ * member) *and* against the workspace pool the whole tenant shares, so a 429
+ * always names which of the two refused.
+ */
+export type QuotaScope = "workspace" | "key" | "session";
+
+/** The five dimensions, in the order every quota table declares them. */
+export const QUOTA_DIMENSIONS = [
+  "requests_per_minute",
+  "heavy_per_day",
+  "concurrent_heavy",
+  "max_upload_bytes",
+  "max_items_per_request"
+] as const;
+
+export type QuotaDimension = (typeof QUOTA_DIMENSIONS)[number];
+
+/**
+ * One scope's effective ceilings next to what is already spent. A `null` limit
+ * is unlimited, not zero; `*_reset_in` is seconds until the counter's window
+ * rolls over, and is `null` when nothing is counted yet.
+ */
+export interface QuotaScopeUsage {
+  scope: QuotaScope;
+  requests_per_minute: number | null;
+  requests_used: number;
+  requests_reset_in: number | null;
+  heavy_per_day: number | null;
+  heavy_used: number;
+  heavy_reset_in: number | null;
+  concurrent_heavy: number | null;
+  concurrent_used: number;
+  max_upload_bytes: number | null;
+  max_items_per_request: number | null;
+}
+
+export interface QuotaUsage {
+  plan_slug: string | null;
+  workspace_id: number | null;
+  scopes: QuotaScopeUsage[];
+}
+
+/**
+ * An override write. An absent or `null` dimension means *inherit* — from the
+ * workspace override, then from the plan — never zero, which would block the
+ * operation outright. An all-`null` payload deletes the override row.
+ */
+export interface QuotaLimitsPayload {
+  requests_per_minute?: number | null;
+  heavy_per_day?: number | null;
+  concurrent_heavy?: number | null;
+  max_upload_bytes?: number | null;
+  max_items_per_request?: number | null;
 }
 
 export interface AuthUser {

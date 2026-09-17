@@ -5891,5 +5891,74 @@
       "allTime": "Show all time",
       "loading": "Loading player results..."
     }
+  },
+  "quota": {
+    "scopes": {
+      "workspace": {
+        "label": "Workspace budget",
+        "hint": "Shared by every API key and every signed-in member of this workspace."
+      },
+      "key": {
+        "label": "This API key",
+        "hint": "What one key may take out of the workspace budget on its own."
+      },
+      "session": {
+        "label": "One session",
+        "hint": "What one signed-in member's session may take out of the workspace budget."
+      }
+    },
+    "dimensions": {
+      "requests_per_minute": {
+        "label": "Requests per minute",
+        "hint": "Every metered call spends one, whatever it costs."
+      },
+      "heavy_per_day": {
+        "label": "Heavy units per day",
+        "hint": "Expensive operations spend their own cost. The window rolls over at 00:00 UTC."
+      },
+      "concurrent_heavy": {
+        "label": "Concurrent heavy jobs",
+        "hint": "Held at once. A finished or crashed job frees its slot."
+      },
+      "max_upload_bytes": {
+        "label": "Max upload size",
+        "hint": "Largest payload one metered request may carry, in bytes."
+      },
+      "max_items_per_request": {
+        "label": "Max items per request",
+        "hint": "Largest batch one metered request may carry."
+      }
+    },
+    "unlimited": "Unlimited",
+    "spent": "{used} of {limit}",
+    "spentUnlimited": "{used} spent, no ceiling",
+    "resetsIn": "Resets {relative}",
+    "megabytes": "{value} MB",
+    "plan": "Plan: {slug}",
+    "planUnknown": "Plan not resolved",
+    "loadFailed": "Could not load the current usage.",
+    "usageEmpty": "No quota scope applies here yet.",
+    "usageHeading": "Spent against each budget",
+    "overrideHeading": "Overrides",
+    "overrideHint": "An empty field inherits, from the workspace and then from the plan. A 0 does not inherit: it stores zero and blocks the operation. Saving replaces the whole override, so keep the numbers you still want.",
+    "inheritPlaceholder": "Inherit",
+    "effectiveNow": "In force now: {value}.",
+    "save": "Save limits",
+    "saving": "Saving…",
+    "saved": "Limits saved",
+    "clearOverride": "Stop overriding",
+    "errors": {
+      "aboveInherited": "{dimension} can only be lowered here. The inherited ceiling is {limit}; you asked for {requested}. A superuser can raise it.",
+      "aboveInheritedUnlimited": "{dimension} can only be lowered here, and the inherited value is already unlimited, so any number raises it. A superuser can set it.",
+      "saveFailed": "Could not save the limits"
+    },
+    "apiKey": {
+      "menuItem": "Rate limits",
+      "dialogTitle": "Rate limits for {name}",
+      "dialogDescription": "Both budgets this key spends from, and the override written on the key itself. A refusal names one of the two, so read the bars before lowering anything."
+    },
+    "workspace": {
+      "description": "The tenant pool every key and member of this workspace draws from, as it stands right now."
+    }
   }
 }

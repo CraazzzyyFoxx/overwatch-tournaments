@@ -626,11 +626,11 @@ DOCS: dict[str, dict] = {
     },
     "rpc.tournament.challonge_import": {
         "summary": "Import from Challonge",
-        "description": "Permission: workspace `challonge.update` on the tournament's workspace. Imports a tournament's bracket from Challonge, optionally as a dry run.",
+        "description": "Permission: workspace `challonge.update` on the tournament's workspace. Imports a tournament's bracket from Challonge, optionally as a dry run. Metered: a 429 reports `code=rate_limited` with the exceeded limit in `details.limit_name`.",
     },
     "rpc.tournament.challonge_export": {
         "summary": "Export to Challonge",
-        "description": "Permission: workspace `challonge.update` on the tournament's workspace. Exports a tournament's bracket to Challonge.",
+        "description": "Permission: workspace `challonge.update` on the tournament's workspace. Exports a tournament's bracket to Challonge. Metered: a 429 reports `code=rate_limited` with the exceeded limit in `details.limit_name`.",
     },
     "rpc.tournament.challonge_push_result": {
         "summary": "Push result to Challonge",
@@ -664,7 +664,7 @@ DOCS: dict[str, dict] = {
     },
     "rpc.tournament.sheet_sync": {
         "summary": "Sync Google Sheet feed",
-        "description": "Permission: workspace `team.create` on the tournament's workspace. Syncs registrations from the configured Google Sheet and returns created/updated/withdrawn/skipped counts plus errors.",
+        "description": "Permission: workspace `team.create` on the tournament's workspace. Syncs registrations from the configured Google Sheet and returns created/updated/withdrawn/skipped counts plus errors. Metered: a 429 reports `code=rate_limited` with the exceeded limit in `details.limit_name`.",
     },
     "rpc.tournament.sheet_mapping_catalog": {
         "summary": "Get sheet mapping catalog",
@@ -687,7 +687,8 @@ DOCS: dict[str, dict] = {
             "nodes plus per-player `owt` "
             "metadata (identity ids, every declared role with its rank source, division and top heroes, workflow "
             "status) and the tournament's roster shape including flex slots. `include_private=1` adds the "
-            "organizer-only block (notes, admin notes, custom-field answers, contacts, smurf tags)."
+            "organizer-only block (notes, admin notes, custom-field answers, contacts, smurf tags). Metered: a 429 "
+            "reports `code=rate_limited` with the exceeded limit in `details.limit_name`."
         ),
     },
     # ── registration admin ─────────────────────────────────────────────────

@@ -109,6 +109,17 @@ class Workspace(db.TimeStampIntegerMixin):
         nullable=True,
         index=True,
     )
+    # Explicit plan assignment, overriding the tier axis above. NULL means
+    # "use the plan whose slug is ``verification_status``", which is how every
+    # workspace runs by default; a non-NULL value is how one tenant gets a
+    # partner plan without inventing a fourth verification tier. ``SET NULL``
+    # on plan deletion drops the workspace back to its tier's plan rather than
+    # leaving it pointing at nothing.
+    quota_plan_id: Mapped[int | None] = mapped_column(
+        ForeignKey("quota.plan.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     # Workspace-wide default per-team roster shape, e.g.
     # ``{"tank": 1, "dps": 2, "support": 2}``. NULL means "inherit the built-in
     # 5v5 default", NOT "an empty roster" — the resolution chain lives in

@@ -326,6 +326,14 @@ class WorkspaceIconAuditTests(_AuditCase):
 
     module = binary_rpc
 
+    def setUp(self) -> None:
+        super().setUp()
+        # The upload is metered, and ``shared.quota`` is unconfigured in this
+        # process; the gate's own behaviour belongs to test_quota_admin.py.
+        patcher = patch.object(binary_rpc, "quota", MagicMock(charge=AsyncMock()))
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     async def test_icon_upload_records_one_branding_row_inside_the_mutation(self) -> None:
         session = _RecordingSession()
         handler = _handler(binary_rpc, "rpc.app.workspaces.icon_upload")

@@ -35,7 +35,8 @@ sys.path.insert(0, str(backend_root))
 sys.path.insert(0, str(backend_root / "stream-service"))
 
 
-from unittest.mock import patch  # noqa: E402
+from types import SimpleNamespace  # noqa: E402
+from unittest.mock import AsyncMock, patch  # noqa: E402
 
 from shared.core.errors import BaseAPIException as HTTPException  # noqa: E402
 from shared.models.platform.audit import AuditLog  # noqa: E402
@@ -164,6 +165,14 @@ class _RepollCase(IsolatedAsyncioTestCase):
         redis_patcher.start()
         self.addCleanup(redis_patcher.stop)
 
+        #: The gate is a process-global configured at service startup, which these
+        #: tests never run. Kept as a handle so the rejection cases can assert the
+        #: call was refused before any quota was spent.
+        self.charge = AsyncMock()
+        quota_patcher = patch.object(admin, "quota", SimpleNamespace(charge=self.charge))
+        quota_patcher.start()
+        self.addCleanup(quota_patcher.stop)
+
     @property
     def rows(self) -> list[AuditLog]:
         return [row for row in self.session.added if isinstance(row, AuditLog)]
@@ -214,12 +223,14 @@ class RepollSuccessTests(_RepollCase):
 
 
 class RepollRejectionTests(_RepollCase):
-    """No row, no commit, no cleared cursor on any rejected path."""
+    """No row, no commit, no cleared cursor, no quota spent on any rejected path."""
 
     def _assert_nothing_happened(self) -> None:
         self.assertEqual(self.rows, [])
         self.assertEqual(self.session.log, [])
         self.assertEqual(self.redis.deleted, [])
+        # Metering a call that was refused would bill the caller for nothing.
+        self.charge.assert_not_awaited()
 
     async def test_permission_denied_writes_nothing(self) -> None:
         with self.assertRaises(HTTPException) as ctx:

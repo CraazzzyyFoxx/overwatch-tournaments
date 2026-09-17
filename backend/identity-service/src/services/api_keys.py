@@ -13,14 +13,19 @@ import secrets
 from datetime import UTC, datetime
 from typing import Any
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared import quota
 from shared.core import http_status as status
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.core.pagination import paginated_dict
+from shared.models import QuotaApiKeyLimit
+from shared.quota import admin as quota_admin
 from shared.rbac import SCOPE_PAIRS, normalize_scopes, scope_pairs, unknown_scopes
 from shared.repository import ApiKeyRepository, RoleRepository, WorkspaceMemberRepository, WorkspaceRepository
 from shared.rpc.identity import rehydrate_user
+from shared.schemas.quota import QuotaLimitsPayload, QuotaUsageRead
 from shared.services.audit import record_audit
 from src import models, schemas
 from src.core import key_derivation
@@ -116,7 +121,6 @@ class ApiKeyService:
             owner_id=row.auth_user_id,
             owner_username=_owner_username(row, owner),
             scopes=_scope_names(row),
-            limits=dict(row.limits_json or {}),
             expires_at=row.expires_at,
             revoked_at=row.revoked_at,
             last_used_at=row.last_used_at,
@@ -329,7 +333,6 @@ class ApiKeyService:
             secret_hash=self._hash_secret(secret),
             name=self._clean_name(payload.name),
             scopes=[models.ApiKeyScope(scope=name) for name in scopes],
-            limits_json={},
             expires_at=payload.expires_at,
         )
         await self.keys.create(session, row)
@@ -426,6 +429,115 @@ class ApiKeyService:
             )
             await session.commit()
 
+    # -- quota -------------------------------------------------------------
+
+    async def _manageable_key(
+        self,
+        session: AsyncSession,
+        *,
+        user: models.AuthUser,
+        api_key_id: int,
+    ) -> models.ApiKey:
+        """The key row, once the caller has proved they may administer it.
+
+        Always resolved against the key's OWN workspace and never a caller-supplied
+        one: the same gate as rename and revoke, so a quota write cannot reach a
+        key the caller could not already rename.
+        """
+        row = await self.keys.get_with_owner(session, api_key_id)
+        if row is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="API key not found")
+        await self.ensure_can_manage(session, user=user, workspace_id=row.workspace_id)
+        return row
+
+    @staticmethod
+    async def _quota_override(session: AsyncSession, api_key_id: int) -> dict[str, int | None]:
+        """The override row as a flat dimension map, all-``None`` when absent."""
+        row = (
+            await session.execute(select(QuotaApiKeyLimit).where(QuotaApiKeyLimit.api_key_id == api_key_id))
+        ).scalar_one_or_none()
+        return {name: (getattr(row, name) if row is not None else None) for name in quota_admin.DIMENSIONS}
+
+    @staticmethod
+    async def _quota_usage(session: AsyncSession, row: models.ApiKey) -> QuotaUsageRead:
+        report = await quota.usage(
+            principal_kind="api_key",
+            principal_id=row.id,
+            workspace_id=row.workspace_id,
+        )
+        return QuotaUsageRead(
+            plan_slug=await quota_admin.plan_slug_for_workspace(session, row.workspace_id),
+            **report,
+        )
+
+    async def set_quota(
+        self,
+        session: AsyncSession,
+        *,
+        user: models.AuthUser,
+        api_key_id: int,
+        limits: QuotaLimitsPayload,
+        ip_address: str | None = None,
+        user_agent: str | None = None,
+    ) -> QuotaLimitsPayload:
+        """Override one key's limits; an all-null payload drops the override."""
+        row = await self._manageable_key(session, user=user, api_key_id=api_key_id)
+        before = await self._quota_override(session, api_key_id)
+        values = limits.as_dict()
+        await quota_admin.apply_api_key_limits(
+            session,
+            api_key_id=api_key_id,
+            workspace_id=row.workspace_id,
+            values=values,
+            updated_by=user.id,
+            # A superuser retunes in either direction; a workspace manager may
+            # only tighten, since raising past the plan would be self-service
+            # capacity.
+            allow_raise=user.is_superuser,
+        )
+        await record_audit(
+            session,
+            action="api_key.quota_update",
+            source="admin",
+            actor=user,
+            actor_label=user.username or user.email,
+            workspace_id=row.workspace_id,
+            entity_type="api_key",
+            entity_id=row.id,
+            entity_label=row.name,
+            before=before,
+            after=values,
+            ip_address=ip_address,
+            user_agent=user_agent,
+        )
+        await session.commit()
+        # Resolved policy is cached per process; without this the write is
+        # invisible here until the TTL lapses. Other workers still wait it out.
+        quota.invalidate_policy()
+        return limits
+
+    async def quota_usage(
+        self,
+        session: AsyncSession,
+        *,
+        user: models.AuthUser,
+        api_key_id: int,
+    ) -> QuotaUsageRead:
+        """An administrator's view of one key's budget."""
+        row = await self._manageable_key(session, user=user, api_key_id=api_key_id)
+        return await self._quota_usage(session, row)
+
+    async def self_quota_usage(self, session: AsyncSession, *, api_key_id: int) -> QuotaUsageRead:
+        """The calling key's own budget.
+
+        No ownership check, for the reason ``describe_self`` has none: the id
+        came off a credential this service already verified.
+        """
+        row = await self.keys.get_with_owner(session, api_key_id)
+        if row is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="API key not found")
+        return await self._quota_usage(session, row)
+
     # -- validation --------------------------------------------------------
 
     async def validate(self, session: AsyncSession, raw_key: str) -> schemas.TokenPayload | None:
@@ -508,7 +620,6 @@ class ApiKeyService:
                 public_id=api_key.public_id,
                 workspace_id=api_key.workspace_id,
                 scopes=list(scopes),
-                limits=dict(api_key.limits_json or {}),
             ),
         )
 

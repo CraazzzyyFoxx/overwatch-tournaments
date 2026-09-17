@@ -14,6 +14,7 @@ from typing import Any
 
 from faststream.rabbit import RabbitMessage
 
+from shared import quota
 from shared.core import http_status as status
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.services.balancer_realtime import BALANCER_TEAMS_CHANGED
@@ -54,6 +55,16 @@ def register(broker: Any, logger: Any) -> None:
             payload_format = data.get("payload_format") or "auto"
             if payload_format not in _PAYLOAD_FORMATS:
                 raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="invalid payload_format")
+
+            # Same reasoning as the admin exports: a multi-MB import that
+            # rewrites a tournament's roster was reachable without any quota.
+            raw_content = data.get("content_b64")
+            await quota.charge(
+                user,
+                "balancer.teams_import",
+                workspace_id=ws_id,
+                size_bytes=len(raw_content) if isinstance(raw_content, str) else None,
+            )
 
             # Imports can be multi-MB; base64-decode + parse off the event loop.
             payload = await asyncio.to_thread(_decode_and_parse, data)
@@ -100,6 +111,7 @@ def register(broker: Any, logger: Any) -> None:
             tournament_id = c.require_id(data)
             ws_id = await _get_tournament_workspace_id(session, tournament_id)
             c.require_workspace_permission(data, user, ws_id, "team", "create")
+            await quota.charge(user, "balancer.teams_export", workspace_id=ws_id)
 
             # ``c.payload`` normalizes a missing/non-dict body to {}, so an empty
             # POST means "export every complete team".

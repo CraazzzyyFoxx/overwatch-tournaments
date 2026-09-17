@@ -8,6 +8,7 @@ from typing import Any, Literal
 
 import redis.asyncio as redis
 
+from shared import quota
 from src.core.config import config
 from src.core.metrics import record_balancer_redis_writes
 
@@ -40,14 +41,6 @@ class BalancerJobStore:
     @staticmethod
     def _event_sequence_key(job_id: str) -> str:
         return f"balancer:job:{job_id}:event_seq"
-
-    @staticmethod
-    def _api_key_active_jobs_key(api_key_id: int) -> str:
-        return f"balancer:api_key:{api_key_id}:active_jobs"
-
-    @staticmethod
-    def _session_active_jobs_key(user_id: int) -> str:
-        return f"balancer:user:{user_id}:active_jobs"
 
     async def _save_meta(self, job_id: str, meta: dict[str, Any]) -> None:
         await self._redis.set(self._meta_key(job_id), json.dumps(meta), ex=self._ttl_seconds)
@@ -319,20 +312,26 @@ class BalancerJobStore:
         return meta_snapshot
 
     async def _release_active_job(self, job_id: str, meta: dict[str, Any]) -> None:
-        """Release the concurrency slot reserved at creation for either principal
-        kind (review H5): API-key jobs by their key id, session jobs by the
-        creating user id. Mirrors ``ApiKeyUsageLimiter.active_jobs_key``."""
-        if meta.get("credential_type") == "api_key":
-            raw_id = meta.get("api_key_id")
-            key_builder = self._api_key_active_jobs_key
-        else:
-            raw_id = meta.get("created_by")
-            key_builder = self._session_active_jobs_key
+        """Release the concurrency slot the job took at creation.
+
+        The job id IS the quota lease id, so the metadata alone is enough: the
+        worker that finishes a job need not be the one that reserved it. Both
+        scopes are released -- the tenant's shared budget and the principal's
+        own -- because both were charged.
+        """
+        is_api_key = meta.get("credential_type") == "api_key"
+        raw_id = meta.get("api_key_id") if is_api_key else meta.get("created_by")
         try:
             principal_id = int(raw_id)
         except (TypeError, ValueError):
             return
-        await self._redis.srem(key_builder(principal_id), job_id)
+        raw_workspace_id = meta.get("workspace_id")
+        await quota.release_ids(
+            lease_id=job_id,
+            principal_kind="api_key" if is_api_key else "user",
+            principal_id=principal_id,
+            workspace_id=int(raw_workspace_id) if raw_workspace_id is not None else None,
+        )
         record_balancer_redis_writes("release_active_job", 1)
 
     async def close(self) -> None:

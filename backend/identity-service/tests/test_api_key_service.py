@@ -126,9 +126,6 @@ def test_create_api_key_returns_secret_once_and_stores_only_hash(monkeypatch: py
     assert "secret" not in response.api_key.model_dump()
     # No implicit grant: a key nobody scoped authenticates and authorizes nothing.
     assert [item.scope for item in stored.scopes] == []
-    # Balancer quotas are not an identity concern; empty JSON lets each
-    # consumer apply its own defaults (gateway rate, balancer job caps).
-    assert stored.limits_json == {}
     assert session.flush_calls == 1
     assert session.commit_calls == 1
     assert session.refresh_calls == 1

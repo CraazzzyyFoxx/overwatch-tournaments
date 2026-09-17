@@ -19,6 +19,14 @@ from shared.core.pagination import (
     PaginationSortSearchQueryParams,
 )
 from shared.rpc.openapi import Op, QueryParam
+from shared.schemas.quota import (
+    QuotaOperationRead,
+    QuotaOperationWrite,
+    QuotaPlanLimitRead,
+    QuotaPlanRead,
+    QuotaPlanWrite,
+    QuotaUsageRead,
+)
 from src import schemas
 
 # Sort-field whitelists mirror the read handlers' Literal constraints (used to
@@ -171,6 +179,13 @@ OPERATIONS: dict[str, Op] = {
     "rpc.app.workspaces.owner_transfer": Op(
         request=schemas.WorkspaceOwnerTransfer, response=schemas.WorkspaceOwnerRead
     ),
+    "rpc.app.workspaces.quota_set": Op(request=schemas.WorkspaceQuotaSet, response=QuotaPlanLimitRead),
+    # ── quota policy (superuser) + the workspace's own usage ────────────────
+    "rpc.app.quota.plans": Op(response=QuotaPlanRead, response_array=True),
+    "rpc.app.quota.plan_upsert": Op(request=QuotaPlanWrite, response=QuotaPlanRead),
+    "rpc.app.quota.operations": Op(response=QuotaOperationRead, response_array=True),
+    "rpc.app.quota.operation_upsert": Op(request=QuotaOperationWrite, response=QuotaOperationRead),
+    "rpc.app.quota.workspace_usage": Op(response=QuotaUsageRead, query_params=(_WS,)),
     # ── metadata admin (hero/map/gamemode) ─────────────────────────────────
     "rpc.app.heroes.admin_create": Op(request=schemas.HeroCreate, response=schemas.HeroRead),
     "rpc.app.heroes.admin_update": Op(request=schemas.HeroUpdate, response=schemas.HeroRead),

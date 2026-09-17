@@ -25,6 +25,8 @@ from shared.observability import (
     setup_tracing,
     start_worker_metrics_server,
 )
+from shared.quota import close as close_quota
+from shared.quota import configure as configure_quota
 from shared.schemas.events import CacheInvalidatedEvent
 from shared.services.realtime import Resource, configure_realtime
 from shared.services.realtime.consumer import register_invalidation_consumer
@@ -43,6 +45,7 @@ from src.rpc import (
     metadata_admin,
     notifications,
     notifications_admin,
+    quota,
     reads_generic,
     statistics,
     users,
@@ -72,6 +75,15 @@ configure_cache()
 # Same reason, for the realtime rail: cache_invalidator is what makes an
 # invalidation this process emits drop its own keys before anything publishes.
 configure_realtime(redis_url=str(config.settings.redis_url), cache_invalidator=invalidate_local)
+
+# Third process-global with the same rule: the quota gate needs its policy
+# session factory and its Redis before the first metered upload, and the admin
+# subjects need it before the first ``invalidate_policy()``.
+configure_quota(
+    session_factory=db.async_session_maker,
+    redis_url=str(config.settings.redis_url),
+    enabled=config.settings.quota_enabled,
+)
 
 # Isolated channel: cache-invalidation bursts must not compete with RPC QoS.
 _INVALIDATION_CHANNEL = Channel(prefetch_count=4)
@@ -136,6 +148,10 @@ notifications_admin.register(broker, logger)
 # Phase 3 — binary/multipart endpoints (icons, assets, match-log) over base64.
 binary.register(broker, logger)
 
+# Quota policy: the superuser-only plan/operation catalogue every metered
+# service reads, plus a workspace's own usage report.
+quota.register(broker, logger)
+
 
 @app.on_startup
 async def start_worker() -> None:
@@ -181,3 +197,5 @@ async def start_worker() -> None:
 @app.on_shutdown
 async def stop_worker() -> None:
     await clients.s3_client.close()
+    # Process-global redis client behind the quota gate (see configure_quota).
+    await close_quota()

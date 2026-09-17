@@ -2,15 +2,17 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Literal
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
 from shared.core import pagination
+from shared.schemas.quota import QuotaLimitsPayload
 
 __all__ = (
     "ApiKeyCreate",
     "ApiKeyCreateResponse",
+    "ApiKeyQuotaWrite",
     "ApiKeyRead",
     "ApiKeyTokenInfo",
     "ApiKeyUpdate",
@@ -35,6 +37,16 @@ class ApiKeyUpdate(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
 
 
+class ApiKeyQuotaWrite(BaseModel):
+    """Per-key limit override. The key id travels beside this body, not in it.
+
+    An all-null ``limits`` is not five explicit nulls but "drop the override",
+    putting the key back on whatever its workspace and plan hand down.
+    """
+
+    limits: QuotaLimitsPayload
+
+
 class ApiKeyRead(BaseModel):
     id: int
     name: str
@@ -43,7 +55,6 @@ class ApiKeyRead(BaseModel):
     owner_id: int
     owner_username: str
     scopes: list[str] = Field(default_factory=list)
-    limits: dict[str, Any] = Field(default_factory=dict)
     expires_at: datetime | None = None
     revoked_at: datetime | None = None
     last_used_at: datetime | None = None
@@ -61,7 +72,6 @@ class ApiKeyTokenInfo(BaseModel):
     public_id: str
     workspace_id: int
     scopes: list[str] = Field(default_factory=list)
-    limits: dict[str, Any] = Field(default_factory=dict)
 
 
 _API_KEY_SORT = Literal["created_at", "name", "last_used_at", "expires_at"]

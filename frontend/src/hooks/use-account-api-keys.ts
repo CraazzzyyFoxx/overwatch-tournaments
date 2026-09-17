@@ -1,11 +1,14 @@
 "use client";
 
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
+import { parseApiError } from "@/lib/api-error";
 import type {
   AccountApiKey,
   AccountApiKeyCreateInput,
-  AccountApiKeyCreateResponse
+  AccountApiKeyCreateResponse,
+  QuotaLimitsPayload,
+  QuotaUsage
 } from "@/types/auth.types";
 import type { PaginatedResponse } from "@/types/pagination.types";
 
@@ -143,6 +146,63 @@ export function useRevokeAccountApiKey(workspaceId: number | null) {
     mutationFn: revokeApiKey,
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: [...ACCOUNT_API_KEYS_QUERY_KEY, workspaceId] });
+    },
+  });
+}
+
+/**
+ * Spent-versus-ceiling for one key, in every scope it is charged against: its
+ * own (`key`) and the workspace pool it shares with every other principal in
+ * the tenant. Both are needed to read a 429, which names exactly one of them.
+ *
+ * `parseApiError` rather than the local `parseError` above: the quota answers
+ * carry machine detail (`limit_name`, `limit`, `requested`) that a plain
+ * `Error` would throw away.
+ */
+export async function fetchApiKeyQuota(apiKeyId: number): Promise<QuotaUsage> {
+  const response = await fetch(`/api/account/api-keys/${apiKeyId}/quota`, {
+    method: "GET",
+    cache: "no-store",
+  });
+  if (!response.ok) {
+    throw await parseApiError(response);
+  }
+  return response.json();
+}
+
+export function useApiKeyQuota(apiKeyId: number | null) {
+  return useQuery({
+    queryKey: [...ACCOUNT_API_KEYS_QUERY_KEY, "quota", apiKeyId],
+    queryFn: () => fetchApiKeyQuota(apiKeyId as number),
+    enabled: apiKeyId !== null,
+    // Counters move every minute; a cached panel would show a key as throttled
+    // long after its window rolled over.
+    staleTime: 0,
+  });
+}
+
+export function useSetApiKeyQuota(workspaceId: number | null) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (input: { id: number; limits: QuotaLimitsPayload }) => {
+      const response = await fetch(`/api/account/api-keys/${input.id}/quota`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ limits: input.limits }),
+      });
+      if (!response.ok) {
+        throw await parseApiError(response);
+      }
+      return (await response.json()) as QuotaLimitsPayload;
+    },
+    onSuccess: async (_data, variables) => {
+      await queryClient.invalidateQueries({
+        queryKey: [...ACCOUNT_API_KEYS_QUERY_KEY, "quota", variables.id],
+      });
+      await queryClient.invalidateQueries({
+        queryKey: [...ACCOUNT_API_KEYS_QUERY_KEY, workspaceId],
+      });
     },
   });
 }

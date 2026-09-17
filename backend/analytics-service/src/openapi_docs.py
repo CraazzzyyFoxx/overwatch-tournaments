@@ -79,7 +79,7 @@ DOCS: dict[str, dict] = {
     },
     "rpc.analytics.recalculate": {
         "summary": "Recalculate analytics",
-        "description": "Permission: workspace `analytics.update` when `workspace_id` is supplied (that workspace must also be verified or trusted), else global `analytics.update`. Creates a 202 async compute job for a tournament (optionally scoped to given algorithm_ids), replacing the legacy synchronous recompute.",
+        "description": "Permission: workspace `analytics.update` when `workspace_id` is supplied (that workspace must also be verified or trusted), else global `analytics.update`. Creates a 202 async compute job for a tournament (optionally scoped to given algorithm_ids), replacing the legacy synchronous recompute. Metered as `analytics.recalculate`: the call consumes quota against the caller's workspace/API-key limits and answers 429 `quota_exceeded` with a `Retry-After` header once they are spent.",
     },
     "rpc.analytics.points": {
         "summary": "Recompute points",
@@ -87,10 +87,10 @@ DOCS: dict[str, dict] = {
     },
     "rpc.analytics.train": {
         "summary": "Train model",
-        "description": "Permission: global `analytics.update`, and a verified or trusted workspace when the body carries a workspace_id. Dispatches a 202 ML training job to the worker queue; requires configured RabbitMQ (503 otherwise).",
+        "description": "Permission: global `analytics.update`, and a verified or trusted workspace when the body carries a workspace_id. Dispatches a 202 ML training job to the worker queue; requires configured RabbitMQ (503 otherwise). Metered as `analytics.train` — the most expensive operation on the platform, so its quota cost is the highest: the call answers 429 `quota_exceeded` with a `Retry-After` header once the caller's limits are spent.",
     },
     "rpc.analytics.infer": {
         "summary": "Run inference",
-        "description": "Permission: global `analytics.update`, and a verified or trusted workspace when the body carries a workspace_id. Dispatches a 202 ML inference job for a tournament to the worker queue; requires configured RabbitMQ (503 otherwise).",
+        "description": "Permission: global `analytics.update`, and a verified or trusted workspace when the body carries a workspace_id. Dispatches a 202 ML inference job for a tournament to the worker queue; requires configured RabbitMQ (503 otherwise). Metered as `analytics.infer`: the call consumes quota against the caller's workspace/API-key limits and answers 429 `quota_exceeded` with a `Retry-After` header once they are spent.",
     },
 }

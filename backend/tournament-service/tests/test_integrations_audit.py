@@ -73,6 +73,15 @@ class _FakeSession:
         self.trace.append("commit")
 
 
+def _quota_gate(trace: list[str]) -> SimpleNamespace:
+    """The quota gate as a pass-through that records its slug and its turn."""
+
+    async def charge(_user: Any, operation: str, **_kwargs: Any) -> None:
+        trace.append(f"quota:{operation}")
+
+    return SimpleNamespace(charge=charge)
+
+
 class IntegrationsAuditTests(IsolatedAsyncioTestCase):
     def _handler(self, subject: str):
         broker = CapturingBroker()
@@ -100,11 +109,13 @@ class IntegrationsAuditTests(IsolatedAsyncioTestCase):
             patch.object(integrations.auth, "require_tournament_id_permission", fake_permission),
             patch.object(integrations.auth, "get_tournament_workspace_id", fake_ws_id),
             patch.object(integrations.challonge_sync.sync_service, "import_tournament", fake_import),
+            patch.object(integrations, "quota", _quota_gate(trace)),
         ):
             envelope = await handler({"identity": IDENTITY, "id": TOURNAMENT_ID}, None)
 
         self.assertTrue(envelope["ok"], envelope)
-        self.assertEqual(["audit", "service"], trace)
+        # The third-party spend is metered before Challonge is touched at all.
+        self.assertEqual(["quota:tournament.challonge_import", "audit", "service"], trace)
         (row,) = session.rows
         self.assertEqual("challonge.import", row.action)
         self.assertEqual("challonge", row.source)

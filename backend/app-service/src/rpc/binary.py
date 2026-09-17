@@ -7,6 +7,11 @@ bytes. Permission is enforced here (workspace.update for icons; asset.create/
 delete scoped to the workspace when one is given, else superuser for
 platform-wide catalog assets); every side effect — S3, the workspace row, the
 audit row, the commit — belongs to ``services/workspace/binary.py``.
+
+The two uploads are metered (``shared.quota``) between the permission check and
+the storage write: charging an unauthorized caller would let an outsider drain
+a tenant's budget, and charging after the write would bill for bytes already
+stored.
 """
 
 from __future__ import annotations
@@ -16,6 +21,7 @@ from typing import Any
 
 from faststream.rabbit import RabbitMessage
 
+from shared import quota
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.rpc.identity import ensure_workspace_permission
 from src import schemas
@@ -57,11 +63,13 @@ def register(broker: Any, logger: Any) -> None:
             user = c.actor(data)
             c.require_active(user)
             ensure_workspace_permission(user, workspace_id, "workspace", "update")
+            file_data = _decode(data)
+            await quota.charge(user, "app.workspace_icon_upload", workspace_id=workspace_id, size_bytes=len(file_data))
             workspace = await workspace_binary.set_icon(
                 session,
                 workspace_id=workspace_id,
                 actor=user,
-                file_data=_decode(data),
+                file_data=file_data,
                 content_type=_content_type(data),
             )
             return schemas.WorkspaceRead.model_validate(workspace, from_attributes=True)
@@ -90,11 +98,13 @@ def register(broker: Any, logger: Any) -> None:
                 c.require_superuser(user)
             else:
                 ensure_workspace_permission(user, workspace_id, "asset", "create")
+            file_data = _decode(data)
+            await quota.charge(user, "app.assets.upload", workspace_id=workspace_id, size_bytes=len(file_data))
             return await workspace_binary.store_asset(
                 session,
                 asset_type=_asset_type(data),
                 slug=data.get("slug"),
-                file_data=_decode(data),
+                file_data=file_data,
                 content_type=_content_type(data),
                 workspace_id=workspace_id,
             )

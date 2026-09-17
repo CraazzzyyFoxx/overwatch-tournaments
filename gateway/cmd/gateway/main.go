@@ -142,7 +142,7 @@ func run() error {
 	wsAuthn := authn.WithAPIKeys(ws.APIKeyAuth(resolver.PrincipalToken))
 	// Anti-brute-force throttle for the auth endpoints (per client IP + path).
 	// Disabled (pass-through) when GATEWAY_AUTH_RATE_LIMIT <= 0.
-	authLimiter := ratelimit.New(cfg.AuthRateLimit, cfg.AuthRateWindow)
+	authLimiter := ratelimit.New(cfg.AuthRateLimit, cfg.AuthRateWindow).OnReject(mtr.RateLimited)
 	// Separate limiter bounding ws.Handler's pre-handshake custom-domain
 	// lookup per client IP: /ws itself carries no auth and no rate limit, so
 	// without this an unauthenticated flood of distinct fake Origin headers
@@ -492,7 +492,7 @@ func run() error {
 	// including the limiter's own 429s — leaves with an explicit Cache-Control
 	// when no upstream set one (an absent header invites heuristic caching of
 	// viewer-dependent payloads by intermediaries).
-	anonLimiter := ratelimit.New(cfg.AnonRateLimit, cfg.AnonRateWindow)
+	anonLimiter := ratelimit.New(cfg.AnonRateLimit, cfg.AnonRateWindow).OnReject(mtr.RateLimited)
 	// Per-key throttle for workspace-scoped API keys, wrapping the same mux one
 	// layer further in. It sits INSIDE WrapAnon because the two are mutually
 	// exclusive (anonymous means no bearer at all) and both 429s must still be
@@ -501,8 +501,14 @@ func run() error {
 	// cfg.APIKeyRateLimit's default applies to a key that carries none.
 	// resolver.APIKeyQuota short-circuits on the aqt_sk_ prefix, so session and
 	// anonymous traffic reach the mux without any added identity lookup.
-	apiKeyLimiter := ratelimit.New(cfg.APIKeyRateLimit, time.Minute)
-	apiSurface := apiver.Middleware(cachecontrol.Middleware(anonLimiter.WrapAnon(apiKeyLimiter.WrapAPIKey(mux, resolver.APIKeyQuota))))
+	//
+	// Metered in Redis over the realtime bus's client (no second pool), on the
+	// same q:key:{id}:rpm counter the Python enforcers charge: a key's published
+	// requests_per_minute is a contract, so it cannot be multiplied by the
+	// replica count the way the local anon/auth guardrails are. Fails open.
+	apiKeyLimiter := ratelimit.New(cfg.APIKeyRateLimit, time.Minute).OnReject(mtr.RateLimited)
+	apiKeyShared := ratelimit.NewRedis(rdb, apiKeyLimiter, logger, mtr.RateLimitRedisFallback)
+	apiSurface := apiver.Middleware(cachecontrol.Middleware(anonLimiter.WrapAnon(apiKeyShared.WrapAPIKey(mux, resolver.APIKeyQuota))))
 	instrumented := httplog.Middleware(mtr.Middleware(apiSurface, authn, activeUsers), logger, authn)
 	traced := tracing.Middleware(instrumented)
 	tracedMux := sentryhttp.New(sentryhttp.Options{Repanic: true}).Handle(traced)

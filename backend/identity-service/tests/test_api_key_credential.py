@@ -397,7 +397,12 @@ _KEY_CRUD_SUBJECTS = (
     "rpc.identity.create_api_key",
     "rpc.identity.update_api_key",
     "rpc.identity.revoke_api_key",
+    "rpc.identity.api_key.quota_set",
+    "rpc.identity.api_key.quota_usage",
 )
+
+#: Reachable *with* a key, and read-only: what am I, and what budget do I have.
+_KEY_SELF_SUBJECTS = ("rpc.identity.api_key.self", "rpc.identity.api_key.self_quota")
 
 
 def test_api_key_management_stays_jwt_only(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -406,7 +411,7 @@ def test_api_key_management_stays_jwt_only(monkeypatch: pytest.MonkeyPatch) -> N
     broker = _CapturingBroker()
     api_keys_rpc.register(broker, _SilentLogger())
 
-    assert set(broker.handlers) == {*_KEY_CRUD_SUBJECTS, "rpc.identity.api_key.self"}
+    assert set(broker.handlers) == {*_KEY_CRUD_SUBJECTS, *_KEY_SELF_SUBJECTS}
 
     resolved: list[str] = []
 

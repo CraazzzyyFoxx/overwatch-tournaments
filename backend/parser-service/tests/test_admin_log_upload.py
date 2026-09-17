@@ -102,6 +102,7 @@ class AdminLogUploadRpcTests(IsolatedAsyncioTestCase):
                 "store_uploaded_log_bytes",
                 AsyncMock(side_effect=store_uploaded_log_bytes),
             ) as store_mock,
+            patch.object(rpc_logs, "quota", SimpleNamespace(charge=AsyncMock())) as quota_mock,
             patch.object(rpc_logs, "publish_message", AsyncMock()) as publish_mock,
         ):
             envelope = await self.broker.handlers["rpc.parser.logs.upload"](
@@ -142,6 +143,15 @@ class AdminLogUploadRpcTests(IsolatedAsyncioTestCase):
         self.assertEqual("tournament", row.entity_type)
         self.assertEqual(42, row.entity_id)
         self.assertEqual({"filenames": ["one.log", "two.log"]}, row.after_json)
+
+        # One charge for the whole batch, carrying both dimensions the per-request
+        # caps are compared against — not one charge per file.
+        quota_mock.charge.assert_awaited_once()
+        charge = quota_mock.charge.await_args
+        self.assertEqual("parser.logs.upload", charge.args[1])
+        self.assertEqual(5, charge.kwargs["workspace_id"])
+        self.assertEqual(2, charge.kwargs["item_count"])
+        self.assertEqual(0, charge.kwargs["size_bytes"])
 
     async def test_history_query_filters_by_attached_encounter(self) -> None:
         self._recording_session()

@@ -39,6 +39,8 @@ from shared.observability import (
     setup_tracing,
     start_worker_metrics_server,
 )
+from shared.quota import close as close_quota
+from shared.quota import configure as configure_quota
 from shared.schemas.events import (
     AchievementEvaluateEvent,
     EncounterCompletedEvent,
@@ -142,6 +144,13 @@ configure_cache()
 # Same reason and same place as configure_cache: shared/services/realtime has no
 # settings of its own, and every emit() in this process publishes through it.
 configure_realtime(redis_url=str(config.settings.redis_url))
+# Quota policy lives in the ``quota`` schema and consumption in Redis; the gate
+# needs both before the first metered RPC. Same Redis as the realtime rail.
+configure_quota(
+    session_factory=db.async_session_maker,
+    redis_url=str(config.settings.redis_url),
+    enabled=config.settings.quota_enabled,
+)
 
 # Typed-RPC subscribers for parser-unique domains served behind the gateway.
 rpc_logs.register(broker, logger)
@@ -205,6 +214,9 @@ async def stop_worker() -> None:
     await rank_tasks.rank_client.close()
     await rank_tasks.close_redis()
     await realtime_redis.aclose()
+    # The quota gate holds its own process-global Redis client (see
+    # shared.quota.configure); every worker restart leaks a connection without this.
+    await close_quota()
 
 
 @broker.subscriber(UPLOAD_MATCH_LOG_QUEUE, channel=_JOBS_CHANNEL)

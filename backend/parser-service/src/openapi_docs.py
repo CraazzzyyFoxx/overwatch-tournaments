@@ -24,11 +24,11 @@ DOCS: dict[str, dict] = {
     },
     "rpc.parser.logs.upload": {
         "summary": "Upload match logs",
-        "description": "Permission: workspace `log.create` in the tournament's workspace. Multipart (base64) upload of one or more log files for a tournament, storing each to S3 and enqueueing processing, with per-file errors collected.",
+        "description": "Permission: workspace `log.create` in the tournament's workspace. Multipart (base64) upload of one or more log files for a tournament, storing each to S3 and enqueueing processing, with per-file errors collected. Metered: over quota the call answers 429 with `code=rate_limited` and the exceeded limit in `details.limit_name`.",
     },
     "rpc.parser.logs.process_tournament": {
         "summary": "Process tournament logs",
-        "description": "Permission: workspace `log.update` in the tournament's workspace. Enqueues reprocessing of all stored match logs for a tournament and returns an ack message — the work itself runs asynchronously on the log queue — 404ing on an unknown tournament.",
+        "description": "Permission: workspace `log.update` in the tournament's workspace. Enqueues reprocessing of all stored match logs for a tournament and returns an ack message — the work itself runs asynchronously on the log queue — 404ing on an unknown tournament. Metered: over quota the call answers 429 with `code=rate_limited` and the exceeded limit in `details.limit_name`.",
     },
     # ── impact baselines ──────────────────────────────────────────────────────
     "rpc.parser.impact.recompute_baselines": {
@@ -88,11 +88,11 @@ DOCS: dict[str, dict] = {
     # ── achievement calculate ─────────────────────────────────────────────────
     "rpc.parser.ach.calculate": {
         "summary": "Run achievement calculation",
-        "description": "Permission: workspace `achievement.update` in the payload's `workspace_id`. Runs the achievement condition-tree engine across a workspace (optionally seeding the built-in rules first and scoping the run to given slugs) and returns the slugs actually evaluated, rejecting unknown slugs and a missing workspace_id with 400.",
+        "description": "Permission: workspace `achievement.update` in the payload's `workspace_id`. Runs the achievement condition-tree engine across a workspace (optionally seeding the built-in rules first and scoping the run to given slugs) and returns the slugs actually evaluated, rejecting unknown slugs and a missing workspace_id with 400. Metered: over quota the call answers 429 with `code=rate_limited` and the exceeded limit in `details.limit_name`.",
     },
     "rpc.parser.ach.calculate_tournament": {
         "summary": "Calculate tournament achievements",
-        "description": "Permission: workspace `achievement.update` in the tournament's workspace. Runs the achievement engine for a single tournament — the workspace is taken from the tournament unless an explicitly matching workspace_id is supplied — and returns the tournament id plus the slugs evaluated, 404ing on an unknown tournament.",
+        "description": "Permission: workspace `achievement.update` in the tournament's workspace. Runs the achievement engine for a single tournament — the workspace is taken from the tournament unless an explicitly matching workspace_id is supplied — and returns the tournament id plus the slugs evaluated, 404ing on an unknown tournament. Metered: over quota the call answers 429 with `code=rate_limited` and the exceeded limit in `details.limit_name`.",
     },
     # ── achievement rules admin (workspace-scoped) ────────────────────────────
     "rpc.parser.ach.condition_types": {
@@ -133,11 +133,11 @@ DOCS: dict[str, dict] = {
     },
     "rpc.parser.ach.export": {
         "summary": "Export achievement rules",
-        "description": "Permission: workspace `achievement.read`. Returns a portable JSON export payload of all of a workspace's achievement rules.",
+        "description": "Permission: workspace `achievement.read`. Returns a portable JSON export payload of all of a workspace's achievement rules. Metered: over quota the call answers 429 with `code=rate_limited` and the exceeded limit in `details.limit_name`.",
     },
     "rpc.parser.ach.import": {
         "summary": "Import achievement rules",
-        "description": "Permission: workspace `achievement.create` in the target workspace, plus membership of (or superuser over) the source workspace when one is named. Imports portable achievement rules into a workspace and returns the import result.",
+        "description": "Permission: workspace `achievement.create` in the target workspace, plus membership of (or superuser over) the source workspace when one is named. Imports portable achievement rules into a workspace and returns the import result. Metered: over quota the call answers 429 with `code=rate_limited` and the exceeded limit in `details.limit_name`.",
     },
     "rpc.parser.ach.evaluate": {
         "summary": "Evaluate achievement rules",
@@ -165,7 +165,7 @@ DOCS: dict[str, dict] = {
     },
     "rpc.parser.ach.lib_import": {
         "summary": "Import library rules",
-        "description": "Permission: workspace `achievement.create` in the target workspace, plus membership of (or superuser over) the source workspace. Imports selected achievement rules from a source workspace's library into the target workspace, warning on missing slugs.",
+        "description": "Permission: workspace `achievement.create` in the target workspace, plus membership of (or superuser over) the source workspace. Imports selected achievement rules from a source workspace's library into the target workspace, warning on missing slugs. Metered: over quota the call answers 429 with `code=rate_limited` and the exceeded limit in `details.limit_name`.",
     },
     "rpc.parser.ach.overrides_list": {
         "summary": "List achievement overrides",

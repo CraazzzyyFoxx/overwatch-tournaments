@@ -18,7 +18,8 @@ export const WORKSPACE_SETTINGS_SECTIONS = [
   "divisions",
   "statuses",
   "sub-roles",
-  "subscriptions"
+  "subscriptions",
+  "quota"
 ] as const;
 
 export type WorkspaceSettingsSectionKey = (typeof WORKSPACE_SETTINGS_SECTIONS)[number];
@@ -32,7 +33,8 @@ export const WORKSPACE_SETTINGS_SECTION_LABELS: Record<WorkspaceSettingsSectionK
   divisions: "Divisions",
   statuses: "Player statuses",
   "sub-roles": "Sub-roles",
-  subscriptions: "Subscriptions"
+  subscriptions: "Subscriptions",
+  quota: "Rate limits"
 };
 
 /** One sentence under the hub heading, so a section says what it decides
@@ -49,14 +51,15 @@ export const WORKSPACE_SETTINGS_SECTION_DESCRIPTIONS: Record<
   divisions: "Rank bands players are sorted into, and the version tournaments read.",
   statuses: "Player statuses the balancer takes into account.",
   "sub-roles": "Hero sub-roles used by rosters and reports.",
-  subscriptions: "Subscription providers that grant entitlements here."
+  subscriptions: "Subscription providers that grant entitlements here.",
+  quota: "How much this workspace, one key and one session may spend."
 };
 
 /**
  * The five sections that are a form over the workspace record itself, and so
  * exist under both shells: `/admin/settings/*` for the workspace an admin is
  * currently in, and `/admin/workspaces/[id]/*` for a superuser looking at
- * someone else's. The remaining four are workspace-scoped screens of their
+ * someone else's. The remaining five are workspace-scoped screens of their
  * own and only ever mount under `/admin/settings`.
  */
 export const WORKSPACE_RECORD_SECTIONS = [
@@ -72,7 +75,7 @@ export type WorkspaceRecordSectionKey = (typeof WORKSPACE_RECORD_SECTIONS)[numbe
 const GROUPS: ReadonlyArray<{ label: string; sections: readonly WorkspaceSettingsSectionKey[] }> = [
   { label: "Workspace", sections: ["general", "branding", "visibility", "domain", "discord"] },
   { label: "Competitive", sections: ["divisions", "statuses", "sub-roles"] },
-  { label: "Entitlements", sections: ["subscriptions"] }
+  { label: "Entitlements", sections: ["subscriptions", "quota"] }
 ];
 
 /**

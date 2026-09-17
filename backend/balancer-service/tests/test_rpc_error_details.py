@@ -1,8 +1,9 @@
 """The balancer's dict-detail errors reach clients as structure, not as a string.
 
-A limit rejection carries the cap that was hit (``max_players``) and the code
-that named it. Those used to be ``json.dumps``-ed into ``error.message``, so a
-client had to parse JSON back out of a human-readable field to act on them.
+A quota rejection carries the dimension that refused, the scope it refused at
+and the cap that was hit. Those used to be ``json.dumps``-ed into
+``error.message``, so a client had to parse JSON back out of a human-readable
+field to act on them.
 """
 
 from __future__ import annotations
@@ -42,10 +43,15 @@ def test_module_no_longer_stringifies_details() -> None:
 
 
 def test_dict_detail_keeps_the_keys_the_client_acts_on() -> None:
-    # The shape ``_enforce_player_limit`` raises in services/balancer/jobs.py.
+    # The shape ``shared.quota`` raises when a payload cap refuses a call.
     exc = HTTPException(
         status_code=400,
-        detail={"code": "balancer_player_limit_exceeded", "max_players": 500},
+        detail={
+            "code": "quota_items_too_many",
+            "limit_name": "max_items_per_request",
+            "scope": "key",
+            "limit": 500,
+        },
     )
 
     error = _map(exc)
@@ -56,12 +62,14 @@ def test_dict_detail_keeps_the_keys_the_client_acts_on() -> None:
     assert error["details"]["fields"] == [
         {
             "field": None,
-            "msg": "balancer player limit exceeded",
-            "code": "balancer_player_limit_exceeded",
-            "max_players": 500,
+            "msg": "quota items too many",
+            "code": "quota_items_too_many",
+            "limit_name": "max_items_per_request",
+            "scope": "key",
+            "limit": 500,
         }
     ]
-    assert error["message"] == "balancer player limit exceeded"
+    assert error["message"] == "quota items too many"
     assert "{" not in error["message"]
 
 

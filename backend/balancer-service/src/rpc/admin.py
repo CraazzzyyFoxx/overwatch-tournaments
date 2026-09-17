@@ -13,6 +13,7 @@ from typing import Any
 
 from faststream.rabbit import RabbitMessage
 
+from shared import quota
 from shared.services.balancer_realtime import BALANCER_TEAMS_CHANGED
 from shared.services.realtime import Scope, emit, enqueue_invalidation_outbox
 from src import models, schemas
@@ -143,6 +144,10 @@ def register(broker: Any, logger: Any) -> None:
             balance_id = c.require_id(data)
             ws_id = await _get_balance_workspace_id(session, balance_id)
             c.require_workspace_permission(data, user, ws_id, "team", "create")
+            # Materialization rewrites tournament.team/player/standing wholesale.
+            # It used to be the one expensive balancer path with no quota at all,
+            # because the limiter lived in the job service this never calls.
+            await quota.charge(user, "balancer.balance_export", workspace_id=ws_id)
             balance, removed_teams, imported_teams = await balancer_admin_service.export_balance(session, balance_id)
             await emit_balancer_data(session, balance.tournament_id, BALANCER_TEAMS_CHANGED, actor_user_id=user.id)
             # The balancer topic reaches only the admin tool. Materialization
@@ -175,6 +180,7 @@ def register(broker: Any, logger: Any) -> None:
             balance_id = c.require_id(data)
             ws_id = await _get_balance_workspace_id(session, balance_id)
             c.require_workspace_permission(data, user, ws_id, "team", "create")
+            await quota.charge(user, "balancer.balance_ranks_export", workspace_id=ws_id)
             balance, updated = await balancer_admin_service.export_balance_ranks(session, balance_id)
             await emit_balancer_data(session, balance.tournament_id, BALANCER_TEAMS_CHANGED, actor_user_id=user.id)
             # Rank export rewrites tournament.player rows the public reads join.

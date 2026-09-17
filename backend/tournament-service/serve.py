@@ -28,6 +28,8 @@ from shared.observability import (
     setup_tracing,
     start_worker_metrics_server,
 )
+from shared.quota import close as close_quota
+from shared.quota import configure as configure_quota
 from shared.schemas.events import TournamentComputationJobEvent
 from shared.services.realtime import configure_realtime
 from shared.services.realtime.consumer import register_invalidation_consumer
@@ -88,6 +90,17 @@ configure_cache()
 configure_realtime(
     redis_url=str(config.settings.redis_url),
     cache_invalidator=invalidate_tournament_resources,
+)
+
+# Quota policy lives in the ``quota`` schema, consumption in Redis; the gate needs
+# both before the first metered RPC. Its own client rather than
+# ``core.redis.get_realtime_redis``: the realtime client decodes responses and is
+# documented as realtime-only, and a limiter that must fail closed should not
+# share a pool with a publisher that must fail open.
+configure_quota(
+    session_factory=db.async_session_maker,
+    redis_url=str(config.settings.redis_url),
+    enabled=config.settings.quota_enabled,
 )
 
 # Cross-service half: resources another service stales that this one caches.
@@ -259,6 +272,8 @@ async def stop_scheduler() -> None:
     # — that fix was never applied to challonge.sync itself; it is now).
     await close_realtime_redis()
     await challonge_sync.close_redis()
+    # Third pooled client, same leak: the quota gate opened its own above.
+    await close_quota()
 
 
 @broker.subscriber(TOURNAMENT_BRACKET_JOBS_QUEUE, exchange=TOURNAMENT_COMPUTE_EXCHANGE, channel=_JOBS_CHANNEL)
