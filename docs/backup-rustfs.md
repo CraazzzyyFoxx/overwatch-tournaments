@@ -6,8 +6,11 @@ What actually runs on production (Moscow, `msk-1-vm-15za`):
 30 4 * * * /root/pg-backup/backup.sh >> /var/log/pg-backup.log 2>&1
 ```
 
-The same script lives in the repo as `ops/backup/backup.sh`. Durability is Timeweb's
-own S3 replication — the job does not wait on a second site.
+The same script lives in the repo as `ops/backup/backup.sh`. Nothing deploys it:
+the host copy is updated by hand (`scp ops/backup/backup.sh Moscow:/root/pg-backup/`),
+so after editing it here, copy it there — a stale host copy is invisible until an
+alert it was supposed to feed never fires. Durability is Timeweb's own S3
+replication — the job does not wait on a second site.
 
 Not PITR. Granularity is one day.
 
