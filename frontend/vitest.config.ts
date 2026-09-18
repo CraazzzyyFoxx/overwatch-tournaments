@@ -102,6 +102,7 @@ export default defineConfig({
       "src/app/(site)/tournaments/[slug]/_views/TournamentMapsPage.behavior.test.tsx",
       "src/app/(site)/tournaments/[slug]/_views/TournamentOverviewPage.behavior.test.tsx",
       "src/app/(site)/tournaments/[slug]/_views/TournamentParticipantsPage.behavior.test.tsx",
+      "src/app/(site)/tournaments/[slug]/_views/TournamentRulesPage.behavior.test.tsx",
       "src/app/(site)/tournaments/[slug]/_views/TournamentStatsPage.behavior.test.tsx",
       "src/app/(site)/tournaments/[slug]/_views/TournamentTeamsPage.behavior.test.tsx",
       "src/app/(site)/tournaments/[slug]/_views/_components/ParticipantsPool.behavior.test.tsx",
@@ -207,6 +208,7 @@ export default defineConfig({
       // File-level: `src/components` holds both runners' tests, so a directory
       // glob here would drag the `bun:test` files into vitest.
       "src/components/TeamName.behavior.test.tsx",
+      "src/components/Markdown.behavior.test.tsx",
       "src/components/DivisionIcon.behavior.test.tsx",
       "src/components/HoverPrefetchLink.behavior.test.tsx",
       "src/components/EncounterRostersModal.behavior.test.tsx",

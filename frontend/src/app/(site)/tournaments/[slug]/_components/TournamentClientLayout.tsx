@@ -289,6 +289,7 @@ export default function TournamentClientLayout({
         stages={stages}
         hasTeams={teamsCount > 0}
         hasStreams={(streams?.official.length ?? 0) > 0 || (streams?.participants.length ?? 0) > 0}
+        hasRules={Boolean(tournament.rules?.trim())}
         collapsed={heroScrolledPast}
         collapsedTitle={<span title={tournament.name}>{tournament.name}</span>}
         collapsedActions={

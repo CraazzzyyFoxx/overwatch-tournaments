@@ -135,7 +135,10 @@ class AdminRegistryService:
         # tab read back `challonge_slug: null` right after linking a bracket -- the field
         # looked blank, the badge read "Not linked" and every sync control stayed disabled
         # even though the link was persisted.
-        entities = ["stages", "roster_shape", "division_grid_version"]
+        # `rules` is opt-in too (it is the row's largest field): the Settings tab
+        # edits the published regulations, so an update response that omitted it
+        # would read back as `null` and blank the editor right after a save.
+        entities = ["stages", "roster_shape", "division_grid_version", "rules"]
         return _dump(await self.tournament_flows.tournament_read(session, m, entities))
 
     async def _ser_team(self, session: AsyncSession, m: Any) -> Any:

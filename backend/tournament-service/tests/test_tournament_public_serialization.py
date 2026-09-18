@@ -48,6 +48,7 @@ def _tournament() -> models.Tournament:
         # Serialized as plain columns: an unset attribute on a detached
         # instance would trigger a refresh instead of reading NULL.
         roster_slots_json=None,
+        rules=None,
         cover_image_url=None,
         logo_url=None,
     )
@@ -62,6 +63,26 @@ class TournamentSerializationTests(IsolatedAsyncioTestCase):
 
         self.assertEqual(5, read.division_grid_version_id)
         self.assertIsNone(read.division_grid_version)
+
+    async def test_rules_document_stays_out_of_an_unrequested_read(self) -> None:
+        # The nested callsites (an encounter list carries one TournamentRead per
+        # row) pass no entities; a multi-page document must not ride along.
+        tournament = _tournament()
+        tournament.rules = "## Format\n\nBest of 3."
+        make_transient_to_detached(tournament)
+
+        read = await flows.flows_service.to_pydantic(cast(AsyncSession, object()), tournament, [])
+
+        self.assertIsNone(read.rules)
+
+    async def test_requested_rules_document_is_serialized_verbatim(self) -> None:
+        tournament = _tournament()
+        tournament.rules = "## Format\n\nBest of 3.\n"
+        make_transient_to_detached(tournament)
+
+        read = await flows.flows_service.to_pydantic(cast(AsyncSession, object()), tournament, ["rules"])
+
+        self.assertEqual("## Format\n\nBest of 3.\n", read.rules)
 
     async def test_to_pydantic_round_trips_flags_and_phase_schedule(self) -> None:
         tournament = _tournament()

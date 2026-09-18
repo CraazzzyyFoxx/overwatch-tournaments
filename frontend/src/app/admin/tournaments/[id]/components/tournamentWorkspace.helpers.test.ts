@@ -14,6 +14,7 @@ function form(partial: Partial<TournamentFormState> = {}): TournamentFormState {
   return {
     name: "OWT 64",
     description: "",
+    rules: "",
     challonge_slug: "owt-64",
     slug: "owt-64",
     is_league: false,
@@ -89,5 +90,17 @@ describe("getTournamentUpdatePayload", () => {
       win_points: 1,
       is_hidden: true
     });
+  });
+
+  it("treats a blanked rules document as an explicit unpublish", () => {
+    const initial = form({ rules: "## Format\n\nBest of 3." });
+
+    // `null`, not `""`: the column is nullable and the public Rules tab keys
+    // its own existence off that, so an empty string would publish a document
+    // with nothing in it.
+    expect(getTournamentUpdatePayload(form({ rules: "   " }), initial)).toEqual({ rules: null });
+    expect(getTournamentUpdatePayload(form({ rules: "## Format\n\nBest of 3." }), initial)).toEqual(
+      {}
+    );
   });
 });

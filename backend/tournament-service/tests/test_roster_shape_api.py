@@ -75,6 +75,7 @@ def _tournament(
         # Plain columns the serializer reads: unset on a detached instance means
         # a refresh attempt, not NULL.
         cover_image_url=None,
+        rules=None,
         logo_url=None,
     )
     # Detached, so `_loaded_relationship` reports unloaded relationships instead

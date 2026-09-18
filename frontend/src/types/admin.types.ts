@@ -296,6 +296,8 @@ export interface TournamentCreateInput {
 export interface TournamentUpdateInput {
   name?: string;
   description?: string | null;
+  /** Published regulations, Markdown; `null` unpublishes them. */
+  rules?: string | null;
   challonge_slug?: string | null;
   /** Renames the public-URL slug; the retired value keeps resolving via a redirect. */
   slug?: string | null;

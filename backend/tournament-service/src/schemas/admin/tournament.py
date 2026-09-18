@@ -1,6 +1,6 @@
 from datetime import date, datetime
 
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, Field, model_validator
 
 from shared.core import tournament_state
 from shared.core.enums import TournamentStatus
@@ -13,6 +13,13 @@ __all__ = (
     "TournamentScheduleEntryInput",
     "TournamentScheduleSet",
 )
+
+#: Upper bound on the published regulations. Not a storage limit (the column is
+#: ``Text``) but a trust boundary: the document rides in the public tournament
+#: read that every section of the page shell already fetches, so an unbounded
+#: field would let one organizer inflate every request for their tournament.
+#: ~32k characters is several pages of rules.
+RULES_MAX_LENGTH = 32_000
 
 
 class TournamentCreate(BaseModel):
@@ -46,6 +53,7 @@ class TournamentUpdate(BaseModel):
 
     name: str | None = None
     description: str | None = None
+    rules: str | None = Field(default=None, max_length=RULES_MAX_LENGTH)
     challonge_slug: str | None = None
     # Explicit rename of the public-URL slug (frozen otherwise). Slugified
     # server-side; the retired value keeps resolving via a slug_redirect row.

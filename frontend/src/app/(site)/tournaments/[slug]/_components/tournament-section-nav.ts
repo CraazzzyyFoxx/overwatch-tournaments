@@ -2,7 +2,7 @@ import { reachedAtLeast } from "@/lib/tournament-lifecycle";
 import type { StageSummary, TournamentStatus } from "@/types/tournament.types";
 
 export type TournamentSectionId =
-  | "overview" | "bracket" | "teams" | "matches" | "maps" | "stats" | "stream" | "participants";
+  | "overview" | "rules" | "bracket" | "teams" | "matches" | "maps" | "stats" | "stream" | "participants";
 
 type TournamentNavReasonKey =
   | "tournamentDetail.nav.reasons.competitionNotStarted"
@@ -39,6 +39,12 @@ type BuildTournamentSectionNavInput = {
    * promise forever, because most of them never have a stream.
    */
   hasStreams?: boolean;
+  /**
+   * Whether the organizer published a rules document. Absent-or-present like
+   * Stream and for the same reason: an empty Rules tab would promise a
+   * regulation nobody wrote, and most tournaments publish none.
+   */
+  hasRules?: boolean;
   pathname: string;
 };
 
@@ -52,6 +58,9 @@ const competitionOnlySections = new Set<TournamentSectionId>(["bracket", "matche
  */
 const preCompetitionOrder: TournamentSectionId[] = [
   "overview",
+  // The regulations are what a player reads BEFORE deciding to sign up, so
+  // before the phase starts they sit directly under the overview.
+  "rules",
   "participants",
   // Which maps the tournament plays is reference data a registering player
   // reads before anything about the bracket, so it sits ahead of it.
@@ -68,6 +77,9 @@ const competitionOrder: TournamentSectionId[] = [
   "teams",
   "matches",
   "maps",
+  // Reference material, next to the map pool: mid-tournament the rules are
+  // opened for a tiebreaker, not as the first thing anybody wants.
+  "rules",
   "stats",
   "stream",
   "participants"
@@ -120,15 +132,16 @@ export function buildTournamentSectionNav({
   stages,
   hasTeams = false,
   hasStreams = false,
+  hasRules = false,
   pathname
 }: BuildTournamentSectionNavInput): TournamentSectionNavItem[] {
   const competitionStarted = reachedAtLeast(status, "live");
   const currentPath = normalizePathname(pathname);
-  // `stream` is present-or-absent rather than open-or-locked, because a locked
-  // tab claims the content exists somewhere. It is filtered from its display
-  // position so the rail keeps one order in every case.
+  // `stream` and `rules` are present-or-absent rather than open-or-locked,
+  // because a locked tab claims the content exists somewhere. Both are filtered
+  // from their display position so the rail keeps one order in every case.
   const sections = (competitionStarted ? competitionOrder : preCompetitionOrder).filter(
-    (id) => id !== "stream" || hasStreams
+    (id) => (id !== "stream" || hasStreams) && (id !== "rules" || hasRules)
   );
 
   return sections.map((id) => {

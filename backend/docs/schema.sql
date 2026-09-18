@@ -2937,6 +2937,7 @@ CREATE TABLE tournament.tournament (
 	name VARCHAR NOT NULL, 
 	slug VARCHAR NOT NULL, 
 	description VARCHAR, 
+	rules TEXT, 
 	is_league BOOLEAN DEFAULT 'false' NOT NULL, 
 	is_finished BOOLEAN DEFAULT 'false' NOT NULL, 
 	is_hidden BOOLEAN DEFAULT 'false' NOT NULL, 

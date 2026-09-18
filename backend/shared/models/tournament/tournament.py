@@ -1,7 +1,7 @@
 import typing
 from datetime import datetime
 
-from sqlalchemy import Boolean, CheckConstraint, Enum, Float, ForeignKey, String, UniqueConstraint
+from sqlalchemy import Boolean, CheckConstraint, Enum, Float, ForeignKey, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -44,6 +44,16 @@ class Tournament(db.TimeStampIntegerMixin):
     # ``TournamentSlugRedirect`` so links already shared keep resolving.
     slug: Mapped[str] = mapped_column(String(), unique=True, index=True)
     description: Mapped[str | None] = mapped_column(String(), nullable=True)
+    # Organizer-published regulations (format, code of conduct, tiebreakers) in
+    # Markdown. Distinct from ``description``, which is the one-paragraph "what
+    # is this tournament" line: this is a document, hence ``Text`` rather than
+    # ``String``, and it is rendered on a public page of its own.
+    #
+    # Markdown is stored verbatim -- never HTML. The renderer
+    # (``frontend/src/components/Markdown.tsx``) produces React elements and
+    # ignores raw HTML, so there is nothing to sanitize on the way in and no
+    # stored-XSS surface on the way out.
+    rules: Mapped[str | None] = mapped_column(Text(), nullable=True)
     is_league: Mapped[bool] = mapped_column(Boolean(), default=False, server_default="false", nullable=False)
     is_finished: Mapped[bool] = mapped_column(Boolean(), default=False, server_default="false", nullable=False)
     # Hidden (preview) mode — orthogonal to ``status``. When true the tournament

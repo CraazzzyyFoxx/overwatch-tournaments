@@ -122,6 +122,7 @@ def _tournament(tournament_id: int = 91_001) -> models.Tournament:
         # Plain columns the serializer reads: unset on a detached instance means
         # a refresh attempt, not NULL.
         roster_slots_json=None,
+        rules=None,
         cover_image_url=None,
         logo_url=None,
     )

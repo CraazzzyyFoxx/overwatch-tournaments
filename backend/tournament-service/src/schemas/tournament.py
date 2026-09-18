@@ -40,6 +40,12 @@ class TournamentRead(BaseRead):
     # Public-URL identity (`/tournaments/{slug}`); see Tournament.slug.
     slug: str
     description: str | None
+    # Organizer-published regulations, Markdown. Opt-in like the entities below
+    # and for a different reason: it costs no query, but a multi-page document
+    # in every nested TournamentRead would multiply itself across an encounter
+    # list. `None` therefore means "not requested" OR "none published" -- ask
+    # for the `rules` entity to tell the two apart.
+    rules: str | None = None
     challonge_id: int | None
     challonge_slug: str | None
     is_league: bool

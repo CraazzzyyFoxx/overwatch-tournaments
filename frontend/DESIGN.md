@@ -117,6 +117,8 @@ before writing markup:
 | Hero avatar / stack         | `components/hero/HeroImage.tsx` (`HeroStrip` for the collapsing stack)                                                                                                   |
 | Platform totals             | `components/stats/PlatformStatsGrid.tsx`                                                                                                                                 |
 | Filter/sort/page in the URL | `hooks/useQueryParams.ts`                                                                                                                                                |
+| Author-written Markdown     | `components/Markdown.tsx` — renders to React elements, so raw HTML is inert and no sanitizer is involved; `MARKDOWN_REMARK_PLUGINS` is the one plugin set (GFM)                     |
+| Markdown editing            | `components/admin/MarkdownEditor.tsx` — `@uiw/react-md-editor`, loaded client-side on demand, its preview pane wired to `Markdown` so it cannot disagree with the published page    |
 
 ### Tabs, Button, and other primitives
 

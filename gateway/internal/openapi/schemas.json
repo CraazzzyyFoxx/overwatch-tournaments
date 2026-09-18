@@ -45190,6 +45190,18 @@
           "default": null,
           "title": "Roster Slots Json"
         },
+        "rules": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rules"
+        },
         "slug": {
           "title": "Slug",
           "type": "string"
@@ -45539,6 +45551,19 @@
           ],
           "default": null,
           "title": "Roster Slots Json"
+        },
+        "rules": {
+          "anyOf": [
+            {
+              "maxLength": 32000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rules"
         },
         "slug": {
           "anyOf": [

@@ -33,6 +33,11 @@ import { invalidateTournamentWorkspace } from "../components/tournamentWorkspace
 export const SETTINGS_SECTION_FIELDS = {
   general: ["name", "slug", "description"],
   rules: [
+    // The published regulations live with the competitive rules rather than
+    // with `description`: both answer "what are the rules of this event", and
+    // the field map means editing the scoring never rewrites the document in
+    // the audit trail (nor the other way round).
+    "rules",
     "team_formation",
     "division_grid_version_id",
     "is_league",

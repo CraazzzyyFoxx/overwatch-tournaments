@@ -192,6 +192,27 @@ describe("buildTournamentSectionNav", () => {
     expect(model("live").some((item) => item.id === "stream")).toBe(false);
   });
 
+  it("shows Rules only when the organizer published a document", () => {
+    const withRules = buildTournamentSectionNav({
+      tournamentId,
+      status: "registration",
+      stages: [stage()],
+      hasRules: true,
+      pathname: `/tournaments/${tournamentId}/rules`
+    });
+    expect(withRules.find((item) => item.id === "rules")).toMatchObject({
+      active: true,
+      // Never gated: the regulations are what a player reads before signing up.
+      available: true,
+      labelKey: "common.rules",
+      href: `/tournaments/${tournamentId}/rules`
+    });
+    // Absent, not locked — an empty Rules tab would promise a document nobody
+    // wrote, in either phase order.
+    expect(model("registration").some((item) => item.id === "rules")).toBe(false);
+    expect(model("live").some((item) => item.id === "rules")).toBe(false);
+  });
+
   it("links Overview to the tournament root and marks exactly the canonical route active", () => {
     const root = model("playoffs", `/tournaments/${tournamentId}/`);
     expect(root.filter((item) => item.active).map((item) => item.id)).toEqual(["overview"]);

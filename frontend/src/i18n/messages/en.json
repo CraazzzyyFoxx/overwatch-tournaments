@@ -25,6 +25,7 @@
     "standings": "Standings",
     "bracket": "Bracket",
     "stream": "Streams",
+    "rules": "Rules",
     "stats": "Statistics",
     "bracketPreview": "Preview",
     "rolesList": "Roles",
@@ -2180,6 +2181,10 @@
     "maps": {
       "emptyTitle": "No map pool published",
       "emptyDescription": "Maps will appear here once the organizer configures the tournament's pick-and-ban pool."
+    },
+    "rules": {
+      "emptyTitle": "No rules published",
+      "emptyDescription": "The organizer has not published a rules document for this tournament yet."
     },
     "stats": {
       "title": "Statistics",

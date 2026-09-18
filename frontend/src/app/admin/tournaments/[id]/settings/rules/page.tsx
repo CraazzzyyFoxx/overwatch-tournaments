@@ -13,16 +13,25 @@ import {
 } from "@/components/ui/select";
 import { EYEBROW_CLASS } from "@/components/admin/tone";
 import { SaveBar } from "@/components/admin/kit/SaveBar";
+import { MarkdownEditor } from "@/components/admin/MarkdownEditor";
 import type { Tournament } from "@/types/tournament.types";
 import { flattenDivisionGridVersions, useHubDivisionGridsQuery } from "../../hubQueries";
 import { SettingsSectionPage } from "../SettingsSection";
 import { useTournamentSettingsForm } from "../useTournamentSettingsForm";
 
+/**
+ * Mirrors `RULES_MAX_LENGTH` in
+ * `backend/tournament-service/src/schemas/admin/tournament.py`: the backend
+ * rejects a longer document with a 422, so the counter below has to name the
+ * same number the save is judged against.
+ */
+const RULES_MAX_LENGTH = 32_000;
+
 export default function RulesSettingsPage() {
   return (
     <SettingsSectionPage
       section="rules"
-      description="Team formation, the division grid it reads, and the points a result is worth."
+      description="The published regulations, plus team formation, the division grid and the points a result is worth."
     >
       {({ tournament, tournamentId, workspaceId, canUpdateTournament }) => (
         <RulesForm
@@ -59,6 +68,32 @@ function RulesForm({
 
   return (
     <>
+      <Card>
+        <CardContent className="flex flex-col gap-3 pt-6">
+          <div className="flex flex-col gap-1">
+            <h2 className={EYEBROW_CLASS}>Published rules</h2>
+            <p className="text-caption text-muted-foreground">
+              Markdown, shown to everyone on the tournament&apos;s Rules tab. The tab appears only
+              once this is not empty — clearing it unpublishes the document.
+            </p>
+          </div>
+          <MarkdownEditor
+            label="Tournament rules, Markdown"
+            placeholder={"## Format\n\n- Best of 3, grand final best of 5\n\n## Tiebreakers\n\n1. Head-to-head\n2. Map difference"}
+            value={form.rules}
+            onChange={(rules) => patch({ rules })}
+            readOnly={disabled}
+            maxLength={RULES_MAX_LENGTH}
+          />
+          {/* Unformatted on purpose: this component also renders in the server
+              pass, and a locale-grouped number there can disagree with the
+              browser's and trip hydration. */}
+          <p className="text-caption text-muted-foreground tabular-nums">
+            {form.rules.length} / {RULES_MAX_LENGTH} characters
+          </p>
+        </CardContent>
+      </Card>
+
       <Card>
         <CardContent className="flex flex-col gap-5 pt-6">
           <div className="grid gap-4 sm:grid-cols-2">
