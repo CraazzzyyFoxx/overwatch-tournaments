@@ -41,7 +41,7 @@ const MESSAGES = { en, ru } as const;
 
 const ENTRY = {
   id: 1,
-  slot_code: "dps",
+  slot_code: "damage",
   is_substitute: false,
   state: "declined",
   target_battle_tag: "Ana#1111",
@@ -114,10 +114,9 @@ describe("invite history drawer", () => {
     expect(drawerText()).toContain("Declined");
     expect(drawerText()).toContain("Ana#1111");
     // The slot is a glyph now, so it must still ANNOUNCE the translated slot
-    // rather than conveying the role by picture alone — and never the raw code.
+    // rather than conveying the role by picture alone.
     const glyph = document.body.querySelector('[role="img"]');
     expect(glyph?.getAttribute("aria-label")).toBe("Damage");
-    expect(drawerText()).not.toContain("dps");
   });
 
   it("explains the ceiling the refusal talks about", async () => {

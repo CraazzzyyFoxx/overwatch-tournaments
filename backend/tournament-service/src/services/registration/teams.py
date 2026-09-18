@@ -14,7 +14,7 @@ rather than writing rows themselves.
 **The slot check and the slot write are one transaction.** Every mutating flow
 takes ``SELECT … FOR UPDATE`` on the team row *before* reading occupancy, and the
 write lands before that lock is released. Without it two invitees accept the last
-``dps`` slot and the roster silently overflows the shape, which the export would
+``damage`` slot and the roster silently overflows the shape, which the export would
 then materialize as an over-sized team. Most flows lock exactly one team row. Organizer placement of a player who
 already sits on another team is the exception: both teams are locked in id order
 so two concurrent moves cannot deadlock.

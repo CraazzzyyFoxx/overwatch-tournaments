@@ -16,15 +16,15 @@ import {
 } from "./setup-model";
 
 const CAPTAIN_ROWS: DraftCaptainRow[] = [
-  { id: 1, label: "Baida#21855", roles: ["tank", "dps", "support"], rank: null },
+  { id: 1, label: "Baida#21855", roles: ["tank", "damage", "support"], rank: null },
   { id: 2, label: "agoNy4#2362", roles: ["support", "tank"], rank: 2600 },
   { id: 3, label: "sleepdarya#2298", roles: ["support"], rank: 3800 },
-  { id: 4, label: "Zish#2101", roles: ["dps"], rank: 3100 }
+  { id: 4, label: "Zish#2101", roles: ["damage"], rank: 3100 }
 ];
 
 /** A `roster_shape` payload as the server sends it, for a 3-slot roster. */
 const SHAPE: RosterShape = {
-  slots: { tank: 1, dps: 2 },
+  slots: { tank: 1, damage: 2 },
   team_size: 3,
   flex_slots: 0,
   has_role_slots: true,
@@ -61,7 +61,7 @@ describe("draft setup model", () => {
     const readiness = derivePoolReadiness(
       [
         { id: 1, roles: ["tank"], rank: 3000, hasAccount: true, excluded: false },
-        { id: 2, roles: ["dps"], rank: null, hasAccount: true, excluded: false },
+        { id: 2, roles: ["damage"], rank: null, hasAccount: true, excluded: false },
         { id: 3, roles: ["support"], rank: 2800, hasAccount: false, excluded: false },
         { id: 4, roles: ["support"], rank: 2700, hasAccount: true, excluded: true }
       ],
@@ -168,12 +168,12 @@ describe("draft setup model", () => {
 
   it("ORs the role filter and treats an empty selection as every role", () => {
     expect(
-      filterCaptainRows(CAPTAIN_ROWS, { query: "", roles: ["dps"], sort: "rank_desc" }).map(
+      filterCaptainRows(CAPTAIN_ROWS, { query: "", roles: ["damage"], sort: "rank_desc" }).map(
         (r) => r.id
       )
     ).toEqual([4, 1]);
     expect(
-      filterCaptainRows(CAPTAIN_ROWS, { query: "", roles: ["dps", "support"], sort: "rank_desc" })
+      filterCaptainRows(CAPTAIN_ROWS, { query: "", roles: ["damage", "support"], sort: "rank_desc" })
         .map((r) => r.id)
     ).toEqual([3, 4, 2, 1]);
     expect(filterCaptainRows(CAPTAIN_ROWS, { query: "", roles: [], sort: "rank_desc" })).toHaveLength(

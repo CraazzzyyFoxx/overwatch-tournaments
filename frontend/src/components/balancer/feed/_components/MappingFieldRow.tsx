@@ -46,7 +46,7 @@ interface MappingFieldRowProps {
 }
 
 function subroleRoleFromTarget(key: string): string | null {
-  const match = /^roles\.(dps|support)\.subrole$/.exec(key);
+  const match = /^roles\.(damage|support)\.subrole$/.exec(key);
   return match?.[1] ?? null;
 }
 

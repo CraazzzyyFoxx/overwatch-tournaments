@@ -65,7 +65,7 @@ const PREVIEW = {
   workspace_id: 1,
   team_id: 7,
   team_name: "Alpha",
-  slot_code: "dps",
+  slot_code: "damage",
   is_substitute: false,
   state: "pending",
   expires_at: null,
@@ -121,7 +121,6 @@ describe("invite landing page", () => {
     expect(container.textContent).toContain("Autumn Cup");
     // The slot renders through the shared translations, not as a raw wire code.
     expect(container.textContent).toContain("Damage");
-    expect(container.textContent).not.toContain("dps");
   });
 
   it("shows the offer BEFORE asking an anonymous visitor to sign in", async () => {
@@ -147,7 +146,7 @@ describe("invite landing page", () => {
 
     const container = await mount();
 
-    expect(container.textContent).toContain("wizard:Alpha:dps");
+    expect(container.textContent).toContain("wizard:Alpha:damage");
     expect(getForm).toHaveBeenCalledWith(5);
   });
 

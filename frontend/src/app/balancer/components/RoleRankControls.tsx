@@ -35,7 +35,7 @@ export const ROLE_RANK_ACCENTS: Record<string, RoleRankAccent> = {
     chip: "border-sky-300/30 bg-sky-500/12 text-sky-200",
     sliderColor: "var(--aqt-tank)",
   },
-  dps: {
+  damage: {
     row: "border-orange-400/40 bg-orange-500/[0.07] shadow-[0_0_0_1px_rgba(251,146,60,0.08)]",
     text: "text-orange-200",
     chip: "border-orange-300/30 bg-orange-500/12 text-orange-200",

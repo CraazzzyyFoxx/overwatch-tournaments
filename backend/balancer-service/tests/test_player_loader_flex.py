@@ -51,7 +51,7 @@ from src.services.balancer.config.provider import EDITABLE_CONFIG_FIELD_KEYS  # 
 from src.services.balancer.config.public_contract import PUBLIC_CONFIG_KEYS  # noqa: E402
 
 FLEX_ONLY_MASK = {FLEX_SLOT_CODE: 6}
-ROLE_MASK = {"tank": 1, "dps": 2, "support": 2}
+ROLE_MASK = {"tank": 1, "damage": 2, "support": 2}
 LEGACY_ROLE_MASK = {"Tank": 1, "Damage": 2, "Support": 2}
 
 
@@ -171,10 +171,10 @@ def test_mask_without_flex_is_unchanged() -> None:
     assert player is not None
     assert FLEX_SLOT_CODE not in player.ratings
     assert FLEX_SLOT_CODE not in player.discomfort_map
-    assert player.ratings == {"tank": 2600, "dps": 2900, "support": 3100}
-    assert player.preferences == ["dps", "tank", "support"]
-    assert player.subclasses == {"dps": "hitscan"}
-    assert player.discomfort_map == {"dps": 0, "tank": 100, "support": 200}
+    assert player.ratings == {"tank": 2600, "damage": 2900, "support": 3100}
+    assert player.preferences == ["damage", "tank", "support"]
+    assert player.subclasses == {"damage": "hitscan"}
+    assert player.discomfort_map == {"damage": 0, "tank": 100, "support": 200}
 
 
 # ---------------------------------------------------------------------------

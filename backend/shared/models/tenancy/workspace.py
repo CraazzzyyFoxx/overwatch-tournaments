@@ -121,7 +121,7 @@ class Workspace(db.TimeStampIntegerMixin):
         index=True,
     )
     # Workspace-wide default per-team roster shape, e.g.
-    # ``{"tank": 1, "dps": 2, "support": 2}``. NULL means "inherit the built-in
+    # ``{"tank": 1, "damage": 2, "support": 2}``. NULL means "inherit the built-in
     # 5v5 default", NOT "an empty roster" — the resolution chain lives in
     # ``shared.domain.roster_shape.resolve_roster_shape``.
     default_roster_slots_json: Mapped[dict[str, int] | None] = mapped_column(JSONB, nullable=True)

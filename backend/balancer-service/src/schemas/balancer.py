@@ -2,198 +2,28 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+# Generated from ``AlgorithmConfig`` -- one declaration per knob, see
+# ``services/balancer/config/public_contract.py``. Re-exported here because the
+# request schemas below are the public face of it.
+from src.services.balancer.config.public_contract import ConfigOverrides
 
-class ConfigOverrides(BaseModel):
-    """Optional public configuration overrides for the balancing algorithm."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    # Accepted for backwards compatibility and then dropped: ``role_mask`` left
-    # ``PUBLIC_CONFIG_KEYS`` when the mask became a projection of the tournament
-    # roster shape, but saved configs still carry it and ``extra="forbid"``
-    # would reject them outright.
-    role_mask: dict[str, int] | None = Field(
-        None,
-        description="Ignored legacy role mask, kept only so configs saved before roster shapes still validate",
-    )
-
-    population_size: int | None = Field(None, ge=10, le=1000, description="Population size for the moo solver")
-    generation_count: int | None = Field(None, ge=10, le=5000, description="Number of generations")
-    mutation_rate: float | None = Field(None, ge=0, le=1, description="Probability of mutation")
-    mutation_strength: int | None = Field(None, ge=1, le=10, description="Number of mutation operations per mutation")
-
-    average_mmr_balance_weight: float | None = Field(None, ge=0, description="Weight for MMR difference between teams")
-    team_total_balance_weight: float | None = Field(
-        None,
-        ge=0,
-        description="Weight for aligning total rating sums among all teams",
-    )
-    max_team_gap_weight: float | None = Field(
-        None,
-        ge=0,
-        description="Penalty weight for the rating gap between strongest and weakest team",
-    )
-    role_discomfort_weight: float | None = Field(None, ge=0, description="Weight for player role discomfort")
-    max_role_discomfort_weight: float | None = Field(None, ge=0, description="Weight for maximum discomfort penalty")
-    role_line_balance_weight: float | None = Field(None, ge=0, description="Weight for balancing roles between teams")
-    intra_team_std_weight: float | None = Field(
-        None,
-        ge=0,
-        description=(
-            "Weight for the standard deviation of ratings inside each team. "
-            "Higher values push the optimizer to spread top players across teams."
-        ),
-    )
-    internal_role_spread_weight: float | None = Field(
-        None,
-        ge=0,
-        description="Weight for uneven role-average strength inside the same team",
-    )
-    sub_role_collision_weight: float | None = Field(
-        None,
-        ge=0,
-        description=(
-            "Penalty weight per pair of players in the same team sharing the same role subclass. Use 0 to disable."
-        ),
-    )
-    low_rank_threshold: int | None = Field(
-        None,
-        ge=0,
-        le=10000,
-        description=(
-            "Rating threshold (canonical scale) at or below which a player's best "
-            "role rating marks them low-rank. 0 disables the low-rank pair penalty."
-        ),
-    )
-    low_rank_collision_weight: float | None = Field(
-        None,
-        ge=0,
-        description="Penalty weight per pair of low-rank players in the same team.",
-    )
-    team_max_pain_weight: float | None = Field(
-        None,
-        ge=0,
-        description=("Weight for the per-team maximum role discomfort averaged over teams."),
-    )
-    rank_comfort_tilt: float | None = Field(
-        None, ge=0, le=1, description="Ranking tilt between balance and comfort (0.5 = balanced)"
-    )
-    tank_impact_weight: float | None = Field(
-        None,
-        ge=0,
-        description="Importance multiplier for Tank role contribution in the effective team total.",
-    )
-    dps_impact_weight: float | None = Field(
-        None,
-        ge=0,
-        description="Importance multiplier for Damage role contribution in the effective team total.",
-    )
-    support_impact_weight: float | None = Field(
-        None,
-        ge=0,
-        description="Importance multiplier for Support role contribution in the effective team total.",
-    )
-    tank_gap_weight: float | None = Field(
-        None,
-        ge=0,
-        description="Penalty multiplier for the rating gap between the strongest and weakest Tank lines.",
-    )
-    tank_std_weight: float | None = Field(
-        None,
-        ge=0,
-        description="Penalty multiplier for Tank-line standard deviation across teams.",
-    )
-    effective_total_std_weight: float | None = Field(
-        None,
-        ge=0,
-        description="Penalty multiplier for the weighted effective team-total standard deviation.",
-    )
-
-    use_captains: bool | None = Field(None, description="Whether to use captain assignment")
-    convergence_patience: int | None = Field(
-        None,
-        ge=0,
-        le=5000,
-        description="Number of generations without meaningful Pareto improvement before early stop logic can trigger.",
-    )
-    convergence_epsilon: float | None = Field(
-        None,
-        ge=0.0,
-        le=1.0,
-        description="Minimum relative improvement required to continue once convergence patience is reached.",
-    )
-    mutation_rate_min: float | None = Field(
-        None,
-        ge=0.0,
-        le=1.0,
-        description="Lower bound for adaptive mutation rate during the Rust MOO search.",
-    )
-    mutation_rate_max: float | None = Field(
-        None,
-        ge=0.0,
-        le=1.0,
-        description="Upper bound for adaptive mutation rate during the Rust MOO search.",
-    )
-    island_count: int | None = Field(
-        None,
-        ge=1,
-        le=64,
-        description="Number of independent Rust MOO islands explored in parallel.",
-    )
-    polish_max_passes: int | None = Field(
-        None,
-        ge=0,
-        le=1000,
-        description="Maximum local-polishing passes applied to final archive solutions.",
-    )
-    greedy_seed_count: int | None = Field(
-        None,
-        ge=0,
-        le=1000,
-        description="How many initial individuals are built from greedy seeding before random fill.",
-    )
-    stagnation_kick_patience: int | None = Field(
-        None,
-        ge=0,
-        le=5000,
-        description="Generations without archive improvement before a stronger mutation kick is applied.",
-    )
-    crossover_rate: float | None = Field(
-        None,
-        ge=0.0,
-        le=1.0,
-        description="Probability of crossover when producing Rust MOO offspring.",
-    )
-    time_limit_ms: int | None = Field(
-        None,
-        ge=100,
-        le=600000,
-        description=(
-            "Hard wall-clock budget for the native optimizer in milliseconds; "
-            "the best result found so far is returned when exceeded."
-        ),
-    )
-    max_result_variants: int | None = Field(
-        None,
-        ge=1,
-        le=500,
-        description="Maximum number of result variants to return for the selected solver",
-    )
-    mix_comfort_tilt: float | None = Field(
-        None,
-        ge=0.0,
-        le=1.0,
-        description=(
-            "Mix-only trade-off between rank balance (0) and role comfort (1); "
-            "0.5 is the mix engine's own default weighting."
-        ),
-    )
-    mix_role_weights: dict[str, Annotated[float, Field(ge=0.0, le=100.0)]] | None = Field(
-        None,
-        description=(
-            "Mix-only per-role importance for role-line balance, keyed by roster slot code. Omitted roles weigh 1.0."
-        ),
-    )
+__all__ = [
+    "BalanceJobResult",
+    "BalanceRequest",
+    "BalanceResponse",
+    "BalancerConfigResponse",
+    "ConfigOverrides",
+    "CreateJobResponse",
+    "FeasibilityReport",
+    "JobEvent",
+    "JobProgress",
+    "JobStatusResponse",
+    "PlayerData",
+    "RoleFeasibility",
+    "Statistics",
+    "TeamData",
+    "TournamentBalanceRequest",
+]
 
 
 class BalanceRequest(BaseModel):
@@ -212,10 +42,10 @@ class BalanceRequest(BaseModel):
     role_mask: dict[str, Annotated[int, Field(ge=0, le=20)]] | None = Field(
         None,
         description=(
-            'Per-team slot counts keyed by roster slot code, e.g. {"tank": 1, "dps": 2, "support": 2} '
+            'Per-team slot counts keyed by roster slot code, e.g. {"tank": 1, "damage": 2, "support": 2} '
             "-- the default when omitted. Team count is derived from it: floor(players / sum(slots)); "
             "the remainder is benched. Input role names are matched case-insensitively against these "
-            'keys, so a pool written with "Damage" fills a "dps" slot.'
+            'keys, so a pool written with "Damage" fills the "damage" slots.'
         ),
     )
     config_overrides: ConfigOverrides | None = Field(None, description="Optional configuration overrides")

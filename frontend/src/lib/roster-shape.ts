@@ -18,7 +18,7 @@ export type RosterSlotCode = PlayerRoleSlotCode;
  * The server normalizes stored slot maps into this order; the frontend uses it
  * to render counters in a stable sequence regardless of JSON key order.
  */
-export const ROSTER_SLOT_CODES: readonly RosterSlotCode[] = ["tank", "dps", "support", "flex"];
+export const ROSTER_SLOT_CODES: readonly RosterSlotCode[] = ["tank", "damage", "support", "flex"];
 
 /**
  * A slot map. The server rejects any key outside `ROSTER_SLOT_CODES` and never
@@ -53,7 +53,7 @@ export type RosterPresetId = "ow5v5" | "flex6";
 
 /** The two shapes worth one click in the admin form; anything else is custom. */
 export const ROSTER_PRESETS: readonly { readonly id: RosterPresetId; readonly slots: RosterSlotMap }[] = [
-  { id: "ow5v5", slots: { tank: 1, dps: 2, support: 2 } },
+  { id: "ow5v5", slots: { tank: 1, damage: 2, support: 2 } },
   { id: "flex6", slots: { flex: 6 } }
 ];
 

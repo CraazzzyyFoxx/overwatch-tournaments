@@ -113,7 +113,7 @@ function team(overrides: Partial<RegistrationTeam> = {}): RegistrationTeam {
     invites: [
       {
         id: 5,
-        slot_code: "dps",
+        slot_code: "damage",
         is_substitute: false,
         state: "pending",
         target_battle_tag: null,
@@ -122,8 +122,8 @@ function team(overrides: Partial<RegistrationTeam> = {}): RegistrationTeam {
         invited_at: "2026-08-20T12:00:00Z"
       }
     ],
-    open_slots: { dps: 1, support: 2 },
-    shortfall: "1x dps, 2x support",
+    open_slots: { damage: 1, support: 2 },
+    shortfall: "1x damage, 2x support",
     is_complete: false,
     substitutes_used: 0,
     max_substitutes: 1,
@@ -321,7 +321,7 @@ describe("RegistrationTeamsBrowser", () => {
     // Rendered from `open_slots` through the shared role labels, NOT from the
     // server's English `shortfall` string.
     expect(scope.textContent).toContain("Still needed: 1× Damage, 2× Support");
-    expect(scope.textContent).not.toContain("1x dps");
+    expect(scope.textContent).not.toContain("1x damage");
     expect(scope.textContent).toContain("Roster complete");
     expect(row(scope, "Team Alpha")?.textContent).toContain("Nyx");
     expect(row(scope, "Team Alpha")?.textContent).toContain("Starters: 1 of 4");

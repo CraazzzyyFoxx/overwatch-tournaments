@@ -25,7 +25,7 @@ from shared.domain.roster_shape import parse_roster_slots  # noqa: E402
 from shared.services.team_export import registered  # noqa: E402
 from shared.services.team_export.registered import build_registered_export  # noqa: E402
 
-ROLE_SHAPE = parse_roster_slots({"tank": 1, "dps": 2, "support": 2})
+ROLE_SHAPE = parse_roster_slots({"tank": 1, "damage": 2, "support": 2})
 FLEX_SHAPE = parse_roster_slots({"flex": 6})
 MIXED_SHAPE = parse_roster_slots({"tank": 1, "flex": 4})
 

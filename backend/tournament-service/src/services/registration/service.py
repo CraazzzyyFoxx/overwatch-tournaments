@@ -105,10 +105,10 @@ def build_registration_roles(
 ) -> list[models.BalancerRegistrationRole]:
     """Build normalized role entries, mirroring the admin write path.
 
-    Filters to valid registration role codes (tank/dps/support), de-duplicates,
+    Filters to valid registration role codes (tank/damage/support), de-duplicates,
     normalizes the sub-role slug, and assigns sequential priority. Keeps the
     public and admin/Google-Sheets paths consistent so a sub-role like
-    ``main_dps`` is stored identically regardless of entry point.
+    ``main_damage`` is stored identically regardless of entry point.
 
     When ``hero_catalog`` is provided (the top-heroes field is enabled), the
     ordered ``top_heroes`` slugs on each role are attached as

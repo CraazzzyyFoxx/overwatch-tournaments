@@ -159,7 +159,7 @@ def build_mapping_catalog(
         ],
         "custom_fields": [field_def.model_dump() for field_def in custom_fields],
         "header_keys": header_keys or [],
-        "subrole_catalog": subrole_catalog or {code: [] for code in ("tank", "dps", "support")},
+        "subrole_catalog": subrole_catalog or {code: [] for code in ("tank", "damage", "support")},
     }
 
 

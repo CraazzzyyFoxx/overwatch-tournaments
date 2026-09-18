@@ -19,9 +19,8 @@ function normalizeApplicationRole(role: string | null | undefined): BalancerRole
   switch (role?.trim().toLowerCase()) {
     case "tank":
       return "tank";
-    case "dps":
     case "damage":
-      return "dps";
+      return "damage";
     case "support":
       return "support";
     default:

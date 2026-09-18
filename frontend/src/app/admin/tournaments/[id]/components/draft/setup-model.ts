@@ -102,7 +102,7 @@ export function derivePoolReadiness(
   shape: RosterShape
 ): DraftPoolReadiness {
   const included = candidates.filter((candidate) => !candidate.excluded);
-  const roleCoverage: Record<DraftRole, number> = { tank: 0, dps: 0, support: 0 };
+  const roleCoverage: Record<DraftRole, number> = { tank: 0, damage: 0, support: 0 };
   for (const candidate of included) {
     for (const role of new Set(candidate.roles)) {
       roleCoverage[role] += 1;
@@ -119,7 +119,7 @@ export function derivePoolReadiness(
   // The per-role targets ARE the server's roster shape. A code the shape does
   // not ask for has a target of 0 and can never be short; flex slots take any
   // role, so they never name one here.
-  for (const role of ["tank", "dps", "support"] as const) {
+  for (const role of ["tank", "damage", "support"] as const) {
     if (roleCoverage[role] < (shape.slots[role] ?? 0) * teamCount) {
       blockers.push(`role_shortage:${role}`);
     }

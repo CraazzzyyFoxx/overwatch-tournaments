@@ -89,7 +89,7 @@ class Tournament(db.TimeStampIntegerMixin):
         nullable=True,
         index=True,
     )
-    # Per-team roster shape override, e.g. ``{"tank": 1, "dps": 2, "support": 2}``.
+    # Per-team roster shape override, e.g. ``{"tank": 1, "damage": 2, "support": 2}``.
     # NULL means "inherit from the workspace default", NOT "an empty roster" — the
     # resolution chain lives in ``shared.domain.roster_shape.resolve_roster_shape``.
     roster_slots_json: Mapped[dict[str, int] | None] = mapped_column(JSONB, nullable=True)

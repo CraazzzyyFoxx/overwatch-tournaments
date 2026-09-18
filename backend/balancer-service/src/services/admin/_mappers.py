@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from src import models, schemas
-from src.services.balancer.config.provider import serialize_saved_config_payload
-from src.services.balancer.config.public_contract import normalize_balance_response_payload
+from src.services.balancer.config.public_contract import (
+    normalize_balance_response_payload,
+    normalize_config_payload,
+)
 
 
 def serialize_balance(
@@ -13,7 +15,7 @@ def serialize_balance(
     """Map a ``BalancerBalance`` row to its read schema.
 
     ``already_normalized=True`` skips the config/result normalization passes:
-    ``save_balance`` stores exactly ``serialize_saved_config_payload`` /
+    ``save_balance`` stores exactly ``normalize_config_payload`` /
     ``normalize_balance_response_payload`` output, so re-running them on the
     just-saved multi-MB result is pure waste. Reads from the DB (which may
     hold older-format rows) keep the default normalizing path.
@@ -21,7 +23,7 @@ def serialize_balance(
     return schemas.BalanceRead(
         id=balance.id,
         tournament_id=balance.tournament_id,
-        config_json=balance.config_json if already_normalized else serialize_saved_config_payload(balance.config_json),
+        config_json=balance.config_json if already_normalized else normalize_config_payload(balance.config_json),
         result_json=(
             balance.result_json if already_normalized else normalize_balance_response_payload(balance.result_json)
         ),
@@ -39,7 +41,7 @@ def serialize_tournament_config(
         id=tournament_config.id,
         tournament_id=tournament_config.tournament_id,
         workspace_id=tournament_config.workspace_id,
-        config_json=serialize_saved_config_payload(tournament_config.config_json),
+        config_json=normalize_config_payload(tournament_config.config_json),
         updated_by=tournament_config.updated_by,
         updated_at=tournament_config.updated_at,
     )

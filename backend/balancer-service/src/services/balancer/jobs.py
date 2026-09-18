@@ -33,7 +33,7 @@ from src.schemas.balancer import CreateJobResponse, JobStatusResponse
 from src.services.balancer.config.provider import get_balancer_config_payload
 from src.services.balancer.config.public_contract import (
     normalize_balance_job_result_payload,
-    normalize_persisted_config_payload,
+    normalize_config_payload,
 )
 from src.services.balancer.progress import (
     TERMINAL_STATUSES,
@@ -340,7 +340,7 @@ async def balance_inline(
     """
     _access_policy.ensure_workspace_access(user, workspace_id)
 
-    overrides = normalize_persisted_config_payload(config_overrides)
+    overrides = normalize_config_payload(config_overrides)
     overrides["time_limit_ms"] = min(int(overrides.get("time_limit_ms") or SYNC_TIME_LIMIT_MS), SYNC_TIME_LIMIT_MS)
 
     # A synchronous run occupies a solver thread for up to a minute, so it takes

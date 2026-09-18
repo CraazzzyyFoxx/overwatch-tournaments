@@ -103,7 +103,7 @@ def _balancer_addition(registration: SimpleNamespace, updates: list, **kwargs):
 
 def test_autofill_keeps_existing_rank_without_overwrite() -> None:
     row, updates = _plan(
-        _registration(_role("dps", 2500)),
+        _registration(_role("damage", 2500)),
         {"damage": _snapshot(2700)},
         battle_tag_linked=True,
         overwrite_existing=False,
@@ -135,10 +135,10 @@ def test_autofill_overwrites_existing_rank_when_allowed() -> None:
 
 def test_autofill_sets_missing_ranks_from_active_registered_roles() -> None:
     tank = _role("tank", priority=0)
-    dps = _role("dps", priority=1)
+    damage = _role("damage", priority=1)
 
     row, updates = _plan(
-        _registration(tank, dps),
+        _registration(tank, damage),
         {"tank": _snapshot(3100, role="tank"), "damage": _snapshot(3300)},
         battle_tag_linked=True,
         overwrite_existing=False,
@@ -151,7 +151,7 @@ def test_autofill_sets_missing_ranks_from_active_registered_roles() -> None:
 
 def test_autofill_skips_player_when_registered_role_has_no_parsed_rank() -> None:
     row, updates = _plan(
-        _registration(_role("dps", priority=0), _role("support", priority=1)),
+        _registration(_role("damage", priority=0), _role("support", priority=1)),
         {"damage": _snapshot(3300)},
         battle_tag_linked=True,
         overwrite_existing=False,
@@ -165,7 +165,7 @@ def test_autofill_skips_player_when_registered_role_has_no_parsed_rank() -> None
 
 def test_autofill_skips_unlinked_main_battle_tag() -> None:
     row, updates = _plan(
-        _registration(_role("dps")),
+        _registration(_role("damage")),
         {"damage": _snapshot(3300)},
         battle_tag_linked=False,
         overwrite_existing=False,
@@ -177,8 +177,8 @@ def test_autofill_skips_unlinked_main_battle_tag() -> None:
 
 
 def test_autofill_can_add_player_to_balancer_after_rank_update() -> None:
-    dps = _role("dps")
-    registration = _registration(dps)
+    damage = _role("damage")
+    registration = _registration(damage)
     row, updates = _plan(
         registration,
         {"damage": _snapshot(3300)},
@@ -413,10 +413,10 @@ def test_lookback_ids_returns_queried_id_set() -> None:
 
 def test_partial_applies_found_role_and_leaves_unparsed_role_untouched() -> None:
     tank = _role("tank", priority=0)  # no current rank, no parsed rank → would otherwise block
-    dps = _role("dps", priority=1)  # parsed rank found
+    damage = _role("damage", priority=1)  # parsed rank found
 
     row, updates = _plan(
-        _registration(tank, dps),
+        _registration(tank, damage),
         {"damage": _snapshot(3300)},
         battle_tag_linked=True,
         overwrite_existing=False,
@@ -426,19 +426,19 @@ def test_partial_applies_found_role_and_leaves_unparsed_role_untouched() -> None
     assert row["status"] == "will_update"
     assert row["partial"] is True
     assert len(updates) == 1
-    assert updates[0][0] is dps
+    assert updates[0][0] is damage
     assert tank.rank_value is None  # unfilled role left untouched
     actions = {role_row["role"]: role_row["action"] for role_row in row["roles"]}
-    assert actions == {"tank": "missing_rank", "dps": "set"}
+    assert actions == {"tank": "missing_rank", "damage": "set"}
 
 
 def test_partial_preserves_existing_rank_on_unparsed_role() -> None:
     # Unfound role already has a rank → reported as unverified (kept), never cleared.
     tank = _role("tank", rank_value=3100, priority=0)
-    dps = _role("dps", priority=1)  # parsed rank found
+    damage = _role("damage", priority=1)  # parsed rank found
 
     row, updates = _plan(
-        _registration(tank, dps),
+        _registration(tank, damage),
         {"damage": _snapshot(3300)},
         battle_tag_linked=True,
         overwrite_existing=False,
@@ -447,7 +447,7 @@ def test_partial_preserves_existing_rank_on_unparsed_role() -> None:
 
     assert row["status"] == "will_update"
     assert len(updates) == 1
-    assert updates[0][0] is dps
+    assert updates[0][0] is damage
     assert tank.rank_value == 3100  # existing rank untouched, never cleared
     actions = {role_row["role"]: role_row["action"] for role_row in row["roles"]}
     assert actions["tank"] == "unverified"
@@ -455,10 +455,10 @@ def test_partial_preserves_existing_rank_on_unparsed_role() -> None:
 
 def test_partial_disabled_skips_whole_registration() -> None:
     tank = _role("tank", priority=0)  # no current rank, no parsed rank
-    dps = _role("dps", priority=1)
+    damage = _role("damage", priority=1)
 
     row, updates = _plan(
-        _registration(tank, dps),
+        _registration(tank, damage),
         {"damage": _snapshot(3300)},
         battle_tag_linked=True,
         overwrite_existing=False,

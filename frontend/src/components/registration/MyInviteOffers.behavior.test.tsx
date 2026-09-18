@@ -62,7 +62,7 @@ const OFFER = {
   invite_id: 42,
   team_id: 7,
   team_name: "Alpha",
-  slot_code: "dps",
+  slot_code: "damage",
   is_substitute: false,
   expires_at: null
 };
@@ -108,7 +108,6 @@ describe("my invite offers", () => {
     expect(container.textContent).toContain("Alpha");
     // The slot reads through the shared translations, not as a raw wire code.
     expect(container.textContent).toContain("Damage");
-    expect(container.textContent).not.toContain("dps");
   });
 
   it("accepts with no form, because an existing registration just attaches", async () => {

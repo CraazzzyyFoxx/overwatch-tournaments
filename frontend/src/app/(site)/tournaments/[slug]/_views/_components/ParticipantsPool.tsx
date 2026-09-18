@@ -33,7 +33,7 @@ const VISIBLE_PER_COLUMN = 10;
 /** Icon names `PlayerRoleIcon` knows, keyed by the registration role code. */
 const ROLE_TO_ICON: Record<string, string> = {
   tank: "Tank",
-  dps: "Damage",
+  damage: "Damage",
   support: "Support",
   flex: "Flex"
 };
@@ -44,7 +44,7 @@ const ROLE_TO_ICON: Record<string, string> = {
  */
 const ROLE_COLOR: Record<string, string> = {
   tank: "var(--aqt-tank)",
-  dps: "var(--aqt-damage)",
+  damage: "var(--aqt-damage)",
   support: "var(--aqt-support)",
   flex: "var(--aqt-teal)"
 };

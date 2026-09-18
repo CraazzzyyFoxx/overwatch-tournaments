@@ -20,9 +20,10 @@ class HeroClass(StrEnum):
     so the DB sees ``flex`` while the Python value is ``"Flex"``.
 
     THE single role enum for the whole backend (frontend mirror:
-    ``PlayerRoleOption`` in ``lib/player-role.ts``). Draft/balancer/registration
-    code historically spelled ``damage`` as ``dps`` -- that spelling is a wire
-    format, not a second role vocabulary, and lives on as :attr:`slot_code`.
+    ``PlayerRoleOption`` in ``lib/player-role.ts``). One spelling per role, in
+    code, on the wire and in the database: :attr:`slot_code` is the lowercase
+    member name. This docstring is the public OpenAPI description of the enum,
+    so the retired spelling is documented on :attr:`slot_code` instead.
     """
 
     tank = "Tank"
@@ -32,27 +33,26 @@ class HeroClass(StrEnum):
 
     @property
     def slot_code(self) -> str:
-        """Draft/balancer/registration wire spelling: ``tank``/``dps``/``support``/``flex``.
+        """Draft/balancer/registration wire spelling: ``tank``/``damage``/``support``/``flex``.
 
-        Diverges from the canonical value only for ``damage`` -> ``dps``. This is
-        what ``DraftPlayerRole.role``, ``BalancerRegistrationRole.role``,
-        ``Tournament.roster_slots_json`` keys and the Rust ``tournament_balancer`` payload
-        already persist/expect -- unchanged by this being one enum instead of three.
+        Identical to the member name -- kept as a named boundary because it is
+        the wire/storage contract (``BalancerRegistrationRole.role``,
+        ``Tournament.roster_slots_json`` keys, the Rust ``tournament_balancer``
+        payload), not merely a Python detail. It used to diverge for ``damage``
+        -> ``dps``; migration ``roledps01`` retired that spelling.
         """
-        return "dps" if self is HeroClass.damage else self.name
+        return self.name
 
     @classmethod
     def from_slot_code(cls, code: str) -> HeroClass:
         """Inverse of :attr:`slot_code`. Raises ``ValueError`` for an unknown code."""
-        if code == "dps":
-            return cls.damage
         return cls(code.capitalize())
 
     @classmethod
     def parse(cls, value: object) -> HeroClass | None:
-        """Lenient parse: case-insensitive, accepts ``Enum`` members, the canonical
-        name/value, and the :attr:`slot_code` spelling. No other aliases --
-        this is the strict boundary for the single role vocabulary; a caller
+        """Lenient parse: case-insensitive, accepts ``Enum`` members and the
+        canonical name/value (which is also :attr:`slot_code`). No other aliases
+        -- this is the strict boundary for the single role vocabulary; a caller
         needing free-text synonyms (e.g. sheet-import value maps) owns that
         mapping itself instead of this parser silently widening it.
         ``None`` for missing/unrecognised input -- never raises.
@@ -61,16 +61,7 @@ class HeroClass(StrEnum):
             return None
         if isinstance(value, Enum):
             value = value.value
-        key = str(value).strip().lower()
-        if key in ("damage", "dps"):
-            return cls.damage
-        if key == "support":
-            return cls.support
-        if key == "tank":
-            return cls.tank
-        if key == "flex":
-            return cls.flex
-        return None
+        return cls.__members__.get(str(value).strip().lower())
 
 
 #: The classes a *hero* can have -- ``HeroClass`` minus ``flex``. Use these

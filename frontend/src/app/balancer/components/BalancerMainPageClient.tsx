@@ -34,7 +34,7 @@ import type {
   BalancerPlayerExportFormat,
   BalancerRoleCode
 } from "@/types/balancer-admin.types";
-import type { BalancerConfig } from "@/types/balancer.types";
+import type { BalancerConfig, BalancerConfigValue } from "@/types/balancer.types";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
@@ -480,7 +480,7 @@ export function BalancerMainPageClient() {
     [balancerConfigQuery.data]
   );
 
-  const handleConfigFieldChange = useCallback((key: keyof BalancerConfig, value: unknown) => {
+  const handleConfigFieldChange = useCallback((key: string, value: BalancerConfigValue) => {
     setSelectedPreset(CUSTOM_PRESET);
     setDraftConfig((current) => sanitizeBalancerConfig({ ...current, [key]: value }));
   }, []);

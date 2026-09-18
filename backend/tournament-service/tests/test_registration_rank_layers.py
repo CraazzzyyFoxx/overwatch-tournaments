@@ -164,13 +164,13 @@ class TestResolveRegistrationRanks(IsolatedAsyncioTestCase):
     async def test_no_member_anchor_answers_from_its_own_layer(self) -> None:
         """A manual registration with no identity keeps the number the organiser
         typed -- only the inherited layers need a member."""
-        registration = _registration(1, {"tank": 2500, "dps": None}, member_id=None)
+        registration = _registration(1, {"tank": 2500, "damage": None}, member_id=None)
         resolve = mock.AsyncMock()
         with mock.patch.object(roster_engine.ranks, "resolve", resolve):
             roster = await _resolve(_Session(), registration, workspace_id=1)
         resolve.assert_not_awaited()
         self.assertEqual(roster.rank_on("tank"), 2500)
-        self.assertEqual(roster.rank_on("dps"), None)
+        self.assertEqual(roster.rank_on("damage"), None)
         # One rated role out of two: draftable, but not "ready".
         self.assertTrue(roster.is_draftable)
         self.assertFalse(roster.is_ranked_complete)
@@ -194,30 +194,30 @@ class TestResolveRegistrationRanks(IsolatedAsyncioTestCase):
 
     async def test_every_declared_role_ranked_is_ready(self) -> None:
         """What the ``ready``/``incomplete`` verdict now reads, in one property."""
-        registration = _registration(1, {"tank": 2500, "dps": None}, member_id=9)
+        registration = _registration(1, {"tank": 2500, "damage": None}, member_id=9)
         resolve = mock.AsyncMock(
             return_value={
                 (9, "tank"): ResolvedRank(2500, "registration"),
-                (9, "dps"): ResolvedRank(3200, "workspace"),
+                (9, "damage"): ResolvedRank(3200, "workspace"),
             }
         )
         with mock.patch.object(roster_engine.ranks, "resolve", resolve):
             roster = await _resolve(_Session([(9, 77)]), registration, workspace_id=1)
         self.assertTrue(roster.is_ranked_complete)
-        self.assertEqual(roster.role_ranks, {"tank": 2500, "dps": 3200})
+        self.assertEqual(roster.role_ranks, {"tank": 2500, "damage": 3200})
 
     async def test_optional_mode_drops_a_row_the_registrant_did_not_declare(self) -> None:
         """The other half of the predicate: under ``optional`` an inactive row is
         not a role at all, even carrying a number. Reporting it would advertise a
         rating the balancer and the draft both refuse to pick on."""
-        registration = _registration(1, {"tank": 2500, "dps": 4000}, member_id=9, inactive=frozenset({"dps"}))
+        registration = _registration(1, {"tank": 2500, "damage": 4000}, member_id=9, inactive=frozenset({"damage"}))
         resolve = mock.AsyncMock(return_value={(9, "tank"): ResolvedRank(2500, "registration")})
         with mock.patch.object(roster_engine.ranks, "resolve", resolve):
             roster = await _resolve(_Session([(9, 77)]), registration, workspace_id=1)
         self.assertEqual([entry.role.slot_code for entry in roster.roles], ["tank"])
         self.assertEqual(roster.playable_roles, frozenset({HeroClass.tank}))
         self.assertEqual(roster.role_ranks, {"tank": 2500})
-        self.assertIsNone(roster.rank_on("dps"))
+        self.assertIsNone(roster.rank_on("damage"))
         # Judged over the declared roles only -- the undeclared one cannot make
         # the registration look incomplete.
         self.assertTrue(roster.is_ranked_complete)
@@ -236,13 +236,15 @@ class TestFlexModesAtTheEngineLevel(IsolatedAsyncioTestCase):
     async def test_every_role_is_playable_and_an_unrated_one_inherits_the_best(self) -> None:
         for mode in ("all_roles", "forced"):
             with self.subTest(mode=mode):
-                registration = _registration(1, {"tank": 2500, "dps": None}, member_id=9, inactive=frozenset({"dps"}))
+                registration = _registration(
+                    1, {"tank": 2500, "damage": None}, member_id=9, inactive=frozenset({"damage"})
+                )
                 roster = await self._resolve_all_roles(
                     mode,
                     registration,
                     {
                         (9, "tank"): ResolvedRank(2500, "registration"),
-                        (9, "dps"): ResolvedRank(None, "none"),
+                        (9, "damage"): ResolvedRank(None, "none"),
                         (9, "support"): ResolvedRank(None, "none"),
                     },
                 )
@@ -253,27 +255,27 @@ class TestFlexModesAtTheEngineLevel(IsolatedAsyncioTestCase):
                     frozenset({HeroClass.tank, HeroClass.damage, HeroClass.support}),
                 )
                 self.assertTrue(roster.is_ranked_complete)
-                self.assertEqual(roster.role_ranks, {"tank": 2500, "dps": 2500, "support": 2500})
+                self.assertEqual(roster.role_ranks, {"tank": 2500, "damage": 2500, "support": 2500})
 
     async def test_a_role_with_its_own_rating_keeps_it(self) -> None:
         """The "one number printed three times" bug: the max only fills the roles
         no layer rated, it never overwrites a real per-role rating."""
-        registration = _registration(1, {"tank": 2500, "dps": 4000}, member_id=9)
+        registration = _registration(1, {"tank": 2500, "damage": 4000}, member_id=9)
         roster = await self._resolve_all_roles(
             "all_roles",
             registration,
             {
                 (9, "tank"): ResolvedRank(2500, "registration"),
-                (9, "dps"): ResolvedRank(4000, "registration"),
+                (9, "damage"): ResolvedRank(4000, "registration"),
                 (9, "support"): ResolvedRank(None, "none"),
             },
         )
-        self.assertEqual(roster.role_ranks, {"tank": 2500, "dps": 4000, "support": 4000})
+        self.assertEqual(roster.role_ranks, {"tank": 2500, "damage": 4000, "support": 4000})
 
     async def test_a_disabled_flex_field_cannot_force_roles_it_never_showed(self) -> None:
         """``enabled: false`` bans flex outright, so the mode is ignored: no
         backfill, no inheritance, and the inactive row stays out."""
-        registration = _registration(1, {"tank": 2500, "dps": None}, member_id=9, inactive=frozenset({"dps"}))
+        registration = _registration(1, {"tank": 2500, "damage": None}, member_id=9, inactive=frozenset({"damage"}))
         resolve = mock.AsyncMock(return_value={(9, "tank"): ResolvedRank(2500, "registration")})
         with mock.patch.object(roster_engine.ranks, "resolve", resolve):
             roster = await _resolve(

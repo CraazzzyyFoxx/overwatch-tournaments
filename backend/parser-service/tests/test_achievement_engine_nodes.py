@@ -345,7 +345,7 @@ class TeamPlayersMatchTests(_NodeCase):
     async def test_count_zero_finds_team_with_no_supports(self) -> None:
         self.db.tournament(REAL_TOURNAMENT_ID, name="Roster", is_hidden=False, start=datetime(2026, 1, 1, tzinfo=UTC))
         with_support = self.db.team(REAL_TOURNAMENT_ID, "mixed", captain_id=REAL_HOME_USER)
-        no_support = self.db.team(REAL_TOURNAMENT_ID, "dps", captain_id=REAL_AWAY_USER)
+        no_support = self.db.team(REAL_TOURNAMENT_ID, "damage", captain_id=REAL_AWAY_USER)
         self.db.player(
             REAL_TOURNAMENT_ID,
             with_support,
@@ -353,11 +353,11 @@ class TeamPlayersMatchTests(_NodeCase):
             name="sup",
             role=HeroClass.support,
         )
-        self.db.player(REAL_TOURNAMENT_ID, with_support, self.db.member(USER_C), name="dps", role=HeroClass.damage)
+        self.db.player(REAL_TOURNAMENT_ID, with_support, self.db.member(USER_C), name="damage", role=HeroClass.damage)
         self.db.player(
-            REAL_TOURNAMENT_ID, no_support, self.db.member(REAL_AWAY_USER), name="dps2", role=HeroClass.damage
+            REAL_TOURNAMENT_ID, no_support, self.db.member(REAL_AWAY_USER), name="damage2", role=HeroClass.damage
         )
-        self.db.player(REAL_TOURNAMENT_ID, no_support, self.db.member(USER_D), name="dps3", role=HeroClass.damage)
+        self.db.player(REAL_TOURNAMENT_ID, no_support, self.db.member(USER_D), name="damage3", role=HeroClass.damage)
         self.db.session.commit()
         tree = {
             "type": "team_players_match",

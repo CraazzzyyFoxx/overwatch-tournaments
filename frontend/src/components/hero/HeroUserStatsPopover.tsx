@@ -11,10 +11,10 @@ import { formatPercent, formatSeconds } from "@/lib/format";
 import { getWinrateColor } from "@/utils/colors";
 import type { UserMapHeroStats } from "@/types/user.types";
 
-// Localized role name (reuses the shared role labels; damage → the dps entry).
+// Localized role name (reuses the shared role labels).
 const ROLE_LABEL_KEY: Record<AqtRoleKey, string> = {
   tank: "common.roles.tank",
-  damage: "common.roles.dps",
+  damage: "common.roles.damage",
   support: "common.roles.support"
 };
 

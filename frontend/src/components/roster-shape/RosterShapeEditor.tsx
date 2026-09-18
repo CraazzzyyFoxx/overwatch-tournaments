@@ -50,7 +50,7 @@ import {
  */
 const SLOT_CHIP: Record<RosterSlotCode, string> = {
   tank: "border-[color:var(--aqt-tank)]/35 bg-[color:var(--aqt-tank)]/12 text-[color:var(--aqt-tank)]",
-  dps: "border-[color:var(--aqt-damage)]/35 bg-[color:var(--aqt-damage)]/12 text-[color:var(--aqt-damage)]",
+  damage: "border-[color:var(--aqt-damage)]/35 bg-[color:var(--aqt-damage)]/12 text-[color:var(--aqt-damage)]",
   support:
     "border-[color:var(--aqt-support)]/35 bg-[color:var(--aqt-support)]/12 text-[color:var(--aqt-support)]",
   flex: "border-border/60 bg-muted/25 text-muted-foreground"

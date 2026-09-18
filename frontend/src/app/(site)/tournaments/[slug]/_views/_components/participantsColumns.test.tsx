@@ -111,7 +111,7 @@ describe("participant column model", () => {
     expect(withTeams?.defaultVisible).toBe(true);
     expect(
       withTeams?.searchValue?.({
-        team: { id: 3, name: "Ночные совы", status: "forming", slot_code: "dps", is_substitute: false, is_captain: true },
+        team: { id: 3, name: "Ночные совы", status: "forming", slot_code: "damage", is_substitute: false, is_captain: true },
       } as never),
     ).toBe("Ночные совы");
     expect(withTeams?.searchValue?.({} as never)).toBeNull();

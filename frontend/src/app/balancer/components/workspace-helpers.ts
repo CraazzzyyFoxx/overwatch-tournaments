@@ -20,10 +20,10 @@ import userService from "@/services/user.service";
 import balancerAdminService from "@/services/balancer-admin.service";
 import { DivisionGridNormalizer } from "@/lib/division-grid-normalizer";
 
-const ROLE_ORDER: BalancerRoleCode[] = ["tank", "dps", "support"];
+const ROLE_ORDER: BalancerRoleCode[] = ["tank", "damage", "support"];
 const API_ROLE_KEYS: Record<BalancerRoleCode, "Tank" | "Damage" | "Support"> = {
   tank: "Tank",
-  dps: "Damage",
+  damage: "Damage",
   support: "Support"
 };
 
@@ -93,7 +93,7 @@ export type PlayerRankHistoryPreview = {
 
 export const ROLE_LABELS: Record<BalancerRoleCode, string> = {
   tank: "Tank",
-  dps: "Damage",
+  damage: "Damage",
   support: "Support"
 };
 
@@ -128,8 +128,8 @@ function normalizeApplicationRole(role: string | null | undefined): BalancerRole
     return "tank";
   }
 
-  if (normalized === "dps" || normalized === "damage") {
-    return "dps";
+  if (normalized === "damage") {
+    return "damage";
   }
 
   if (normalized === "support") {
@@ -380,7 +380,7 @@ export function buildVariantFromSavedBalance(balance: SavedBalance): BalanceVari
  * Solver role spelling -> the editor's roster key.
  *
  * A balance response is keyed by the canonical roster slot codes of
- * `shared/domain/roster_shape.py` (`tank`/`dps`/`support`/`flex`), because the
+ * `shared/domain/roster_shape.py` (`tank`/`damage`/`support`/`flex`), because the
  * solver's role mask is a projection of the tournament roster shape. The editor
  * and every persisted `result_json` are keyed by the display names, so the
  * response is re-keyed on the way in. Both spellings are accepted: runs and
@@ -587,10 +587,10 @@ function resolveDivisionFromRankHelper(
 /**
  * A past tournament role -> the balancer registration role it seeds, or
  * `null` for `Flex`: a flex roster row carries ONE rank that stands for no
- * particular role (the player's maximum), so attributing it to tank, dps or
+ * particular role (the player's maximum), so attributing it to tank, damage or
  * support would invent per-role history the tournament never recorded — the
  * same call the backend makes in
- * `registration/rank_sources.py::HERO_CLASS_TO_REGISTRATION_ROLE`.
+ * `registration/rank_sources.py::canonical_to_registration_role`.
  */
 function toBalancerRoleCode(role: UserRoleType): BalancerRoleCode | null {
   const code = playerRoleSlotCode(role);

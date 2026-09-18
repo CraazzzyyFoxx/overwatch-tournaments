@@ -43,7 +43,7 @@ player-facing subset see [`../frontend/src/i18n/GLOSSARY.md`](../frontend/src/i1
 | **Registration** | A player's or team's application to a tournament, with roles, top heroes, and status. Optionally imported from Google Sheets. |
 | **Check-in** | Confirmation, inside a time window, that a registered participant will actually play. |
 | **Roster** | The players assigned to a team. Each roster entry points at a `workspace_member`, not at a bare player. |
-| **Roster shape** | How many slots a team has and which roles they ask for — e.g. `{tank: 1, dps: 2, support: 2}` or six flex slots. Resolved server-side in `backend/shared/domain/roster_shape.py` and sent to the client already resolved; `team_size` and `draft_rounds` are derived from it there and never recomputed on the client. |
+| **Roster shape** | How many slots a team has and which roles they ask for — e.g. `{tank: 1, damage: 2, support: 2}` or six flex slots. Resolved server-side in `backend/shared/domain/roster_shape.py` and sent to the client already resolved; `team_size` and `draft_rounds` are derived from it there and never recomputed on the client. |
 | **Slot** | One position in a roster shape (a role slot or a flex slot). In map veto, a slot is instead one map of a series. |
 | **Substitute** | A roster member who replaces another; substitution chains are rendered under the player they replace. |
 | **Balancer** | The team-building solver: a multi-objective genetic search implemented in the native Rust `tournament_balancer` crate and driven by `balancer-service`. |

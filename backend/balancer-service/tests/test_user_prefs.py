@@ -154,9 +154,9 @@ class UserMixPreferencesBoundsTests(TestCase):
             self._validate(mix_role_weights={"jungle": 2.0})
 
     def test_the_four_roster_slots_are_accepted(self) -> None:
-        body = self._validate(mix_role_weights={"tank": 2.0, "dps": 1.0, "support": 0.5, "flex": 1.0})
+        body = self._validate(mix_role_weights={"tank": 2.0, "damage": 1.0, "support": 0.5, "flex": 1.0})
 
-        self.assertEqual(set(body.mix_role_weights or {}), {"tank", "dps", "support", "flex"})
+        self.assertEqual(set(body.mix_role_weights or {}), {"tank", "damage", "support", "flex"})
 
     def test_points_above_the_ceiling_are_rejected(self) -> None:
         """A fat-fingered 10000 would wreck the host's whole rank book in one
@@ -189,5 +189,5 @@ class UserMixPreferencesReadTests(TestCase):
 
         self.assertIsNone(read.role_mask)
         self.assertIsNone(read.points_per_win)
-        self.assertEqual(read.roster_shape.slots, {"tank": 1, "dps": 2, "support": 2})
+        self.assertEqual(read.roster_shape.slots, {"tank": 1, "damage": 2, "support": 2})
         self.assertEqual(read.roster_shape.source, "default")

@@ -42,7 +42,7 @@ from shared.domain.roster_shape import FLEX_SLOT_CODE, parse_roster_slots  # noq
 from shared.services.roster import RosterEngine  # noqa: E402
 from src.domain.balancer.player_loader import load_players_from_dict  # noqa: E402
 
-ROLE_MASK = {"tank": 1, "dps": 2, "support": 2}
+ROLE_MASK = {"tank": 1, "damage": 2, "support": 2}
 FLEX_MASK = {"tank": 1, FLEX_SLOT_CODE: 4}
 
 GRID = DivisionGrid(
@@ -168,7 +168,7 @@ def test_unranked_declared_role_travels_but_is_inactive() -> None:
         "subtype": None,
     }
     # ...and the loader neither rates it nor chokes on the null rank.
-    assert dict(_loaded(_export(), ROLE_MASK)["2"][1]) == {"dps": 2800}
+    assert dict(_loaded(_export(), ROLE_MASK)["2"][1]) == {"damage": 2800}
 
 
 def test_undraftable_registration_is_exported_and_still_not_loaded() -> None:

@@ -74,6 +74,10 @@ export default defineConfig({
       "src/app/admin/workspaces/members/*.test.tsx",
       "src/app/admin/teams/*.test.tsx",
       "src/app/balancer/components/balance-import.test.ts",
+      // Guards the one rule the drawer now lives by: whatever knobs the server
+      // ships get rendered, no client-side allowlist to keep in step.
+      "src/services/balancer.service.test.ts",
+      "src/app/balancer/components/balancer-config-helpers.test.ts",
       "src/app/balancer/components/balancer-page-selectors.test.ts",
       "src/app/balancer/components/forced-flex-parity.test.ts",
       "src/app/balancer/components/BalancingPoolSidebar.behavior.test.tsx",

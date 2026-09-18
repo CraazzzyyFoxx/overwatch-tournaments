@@ -1445,7 +1445,7 @@
 :root {
   /* Values are the design-book palette (public/docs/design-book.html :root),
      converted hex→HSL. bg/surface/line ladder, text ramp, brand + role/result
-     hues all mirror the book. Note "Results ≠ roles": --aqt-damage (dps 337°)
+     hues all mirror the book. Note "Results ≠ roles": --aqt-damage (337°)
      is intentionally distinct from --aqt-rose (loss/live 349°). */
   --aqt-bg: hsl(220 21% 5%);
   --aqt-bg-2: hsl(220 22% 7%);
@@ -3645,7 +3645,7 @@
   background: hsl(210 78% 60% / 0.15);
   color: var(--aqt-tank);
 }
-.aqt-tn .role-chip.dps {
+.aqt-tn .role-chip.damage {
   background: hsl(340 78% 60% / 0.15);
   color: var(--aqt-damage);
 }
@@ -3722,7 +3722,7 @@
 .aqt-tn .hero-bar .fill.tank {
   background: linear-gradient(90deg, hsl(210 78% 56%), hsl(210 65% 44%));
 }
-.aqt-tn .hero-bar .fill.dps {
+.aqt-tn .hero-bar .fill.damage {
   background: linear-gradient(90deg, hsl(340 78% 58%), hsl(340 65% 42%));
 }
 .aqt-tn .hero-bar .fill.support {

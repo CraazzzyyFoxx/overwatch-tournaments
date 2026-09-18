@@ -53,7 +53,7 @@ function application(id: number, battleTag: string): BalancerApplication {
     discord_nick: null,
     stream_pov: false,
     last_tournament_text: null,
-    primary_role: "dps",
+    primary_role: "damage",
     additional_roles_json: [],
     notes: null,
     submitted_at: null,

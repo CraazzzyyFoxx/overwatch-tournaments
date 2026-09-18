@@ -63,7 +63,7 @@ export interface RegistrationTeam {
   /** Slots with nobody accepted yet. Empty object means the roster is complete.
    *  Zero-count entries are stripped server-side. */
   open_slots: Partial<Record<RosterSlotCode, number>>;
-  /** Server-rendered "what is still missing", e.g. "1x dps, 2x support". */
+  /** Server-rendered "what is still missing", e.g. "1x damage, 2x support". */
   shortfall: string;
   is_complete: boolean;
   substitutes_used: number;

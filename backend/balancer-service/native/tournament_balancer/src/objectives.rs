@@ -277,8 +277,8 @@ pub(crate) fn calculate_breakdown_with_scratch(
 
             let impact = if ctx.tank_role_idx == Some(r_idx) {
                 ctx.config.tank_impact_weight
-            } else if ctx.dps_role_idx == Some(r_idx) {
-                ctx.config.dps_impact_weight
+            } else if ctx.damage_role_idx == Some(r_idx) {
+                ctx.config.damage_impact_weight
             } else if ctx.support_role_idx == Some(r_idx) {
                 ctx.config.support_impact_weight
             } else {

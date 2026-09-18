@@ -55,8 +55,8 @@ def _uniq() -> int:
     return _UNIQUE
 
 
-#: tank 1 + dps 2 = a 3-person roster, so "complete" is reachable with few rows.
-_SHAPE = {"tank": 1, "dps": 2}
+#: tank 1 + damage 2 = a 3-person roster, so "complete" is reachable with few rows.
+_SHAPE = {"tank": 1, "damage": 2}
 
 
 class RegisteredExportIntegrationTests(IsolatedAsyncioTestCase):
@@ -178,9 +178,9 @@ class RegisteredExportIntegrationTests(IsolatedAsyncioTestCase):
                 status="complete",
                 roster=[
                     (0, "tank", 3000, False),
-                    (1, "dps", 2500, False),
-                    (2, "dps", 2000, False),
-                    (3, "dps", 1000, True),
+                    (1, "damage", 2500, False),
+                    (2, "damage", 2000, False),
+                    (3, "damage", 1000, True),
                 ],
             )
 

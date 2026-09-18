@@ -455,7 +455,7 @@ class BalancerJobStoreTests(IsolatedAsyncioTestCase):
 
 class SolverDomainServiceTests(TestCase):
     def setUp(self) -> None:
-        self.mask = {"tank": 1, "dps": 1}
+        self.mask = {"tank": 1, "damage": 1}
         self.players = [
             Player(
                 name="Tank Main",
@@ -466,8 +466,8 @@ class SolverDomainServiceTests(TestCase):
             ),
             Player(
                 name="Flex Carry",
-                ratings={"tank": 2500, "dps": 2700},
-                preferences=["dps", "tank"],
+                ratings={"tank": 2500, "damage": 2700},
+                preferences=["damage", "tank"],
                 uuid="flex-carry",
                 mask=self.mask,
                 is_flex=True,
@@ -482,7 +482,7 @@ class SolverDomainServiceTests(TestCase):
     def test_find_feasible_role_assignment_matches_existing_feasibility_rules(self) -> None:
         role_assignment = find_feasible_role_assignment(self.players, num_teams=1, mask=self.mask)
 
-        self.assertEqual(role_assignment, {"tank-main": "tank", "flex-carry": "dps"})
+        self.assertEqual(role_assignment, {"tank-main": "tank", "flex-carry": "damage"})
 
 
 class MooDeterminismTests(TestCase):

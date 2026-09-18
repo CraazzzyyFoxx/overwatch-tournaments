@@ -1022,7 +1022,7 @@ class CustomGameService:
     ) -> models.CustomGame:
         """Swap two seated players between teams, same role only.
 
-        A same-role swap can never break a team's role quota (1 tank / 2 dps /
+        A same-role swap can never break a team's role quota (1 tank / 2 damage /
         2 support stays exactly that on both sides), so it needs no eligibility
         check beyond "both seats exist and share a role" -- unlike a free move,
         which would need to know every role a player is *ranked* for, not just

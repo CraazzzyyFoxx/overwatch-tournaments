@@ -61,14 +61,14 @@ const BOOLEAN_OPTIONS = [
 
 const ROLE_OPTIONS = [
   { value: "tank", label: "Tank" },
-  { value: "dps", label: "DPS" },
+  { value: "damage", label: "DPS" },
   { value: "support", label: "Support" },
 ] as const;
 
 const ROLE_SUBROLE_ROLE_OPTIONS = [
   { value: "flex", label: "Flex (all roles)" },
   { value: "tank", label: "Tank" },
-  { value: "dps", label: "DPS" },
+  { value: "damage", label: "DPS" },
   { value: "support", label: "Support" },
 ] as const;
 

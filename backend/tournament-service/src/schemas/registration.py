@@ -112,7 +112,7 @@ class RegistrationFormRead(BaseModel):
     team_max_rank_spread: int | None = Field(default=None, ge=0)
     team_unique_identity: bool = False
     team_require_discord_guild: bool = False
-    # Workspace sub-role catalog keyed by registration role code (tank/dps/support).
+    # Workspace sub-role catalog keyed by registration role code (tank/damage/support).
     # The single source of truth for available sub-roles; per-tournament
     # built_in_fields[*].subroles selects which of these are offered.
     subrole_catalog: dict[str, list[SubroleOption]] = Field(default_factory=dict)

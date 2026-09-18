@@ -39,7 +39,7 @@ interface DraftCaptainsStepProps {
   divisionGrid: DivisionGrid;
 }
 
-const FILTER_ROLES: DraftRole[] = ["tank", "dps", "support"];
+const FILTER_ROLES: DraftRole[] = ["tank", "damage", "support"];
 const SORTS: DraftCaptainSort[] = ["rank_desc", "rank_asc", "name"];
 
 export function DraftCaptainsStep({

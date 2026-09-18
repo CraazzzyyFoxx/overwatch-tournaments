@@ -225,7 +225,7 @@ function Registration() {
       <h2>Ростер</h2>
       <p>
         Слот ростера указывает на <Api>workspace_member</Api>, не на голого игрока. Форма ростера —
-        сколько слотов и каких ролей, например <Api>{"{tank: 1, dps: 2, support: 2}"}</Api> или шесть
+        сколько слотов и каких ролей, например <Api>{"{tank: 1, damage: 2, support: 2}"}</Api> или шесть
         флексов. <Api>team_size</Api> и <Api>draft_rounds</Api> считаются из неё на сервере.
       </p>
     </>

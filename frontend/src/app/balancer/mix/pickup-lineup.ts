@@ -24,7 +24,7 @@ export type PickupRecordOutcomeInput = {
  * their rank override or role order, so a host can toggle a late arrival on and
  * off without rebuilding anything.
  *
- * Role vocabulary is `@/lib/roles` — the same `tank`/`dps`/`support` codes the
+ * Role vocabulary is `@/lib/roles` — the same `tank`/`damage`/`support` codes the
  * balancer and the registration form use.
  */
 
@@ -151,7 +151,7 @@ export function summarizeLineup(rows: CustomGamePlayer[]): LineupSummary {
  * because the pickup solver runs the same 1-2-2 shape for every mix; a
  * configurable lock would come from the host's own roster shape preference.
  */
-const ROLE_DEMAND: Record<RoleCode, number> = { tank: 2, dps: 4, support: 4 };
+const ROLE_DEMAND: Record<RoleCode, number> = { tank: 2, damage: 4, support: 4 };
 
 /**
  * Seats a balance can actually fill — the sum of the demand above.
@@ -337,7 +337,7 @@ function parseSeats(roster: Record<string, unknown>): PickupSeat[] {
   const seats: PickupSeat[] = [];
   for (const [name, group] of Object.entries(roster)) {
     // The solver keys buckets by its own role vocabulary (`Tank`/`Damage`/…
-    // for tournaments, `tank`/`dps`/… for pickup masks); both normalise here.
+    // for tournaments, `tank`/`damage`/… for pickup masks); both normalise here.
     const role = canonicalToRegistrationRole(name);
     if (role == null || !Array.isArray(group)) {
       continue;

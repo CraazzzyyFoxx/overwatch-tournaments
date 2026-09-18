@@ -4,7 +4,7 @@
 team rosters by the ``HeroClass`` display spelling (``Tank``/``Damage``/
 ``Support``/``Flex``), but callers have historically tolerated any case. This
 is the single place that bridges those roster keys to the canonical
-``tank``/``dps``/``support``/``flex`` slot code -- do not re-derive the
+``tank``/``damage``/``support``/``flex`` slot code -- do not re-derive the
 mapping locally.
 """
 

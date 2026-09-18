@@ -45,7 +45,7 @@ _LEGACY_DETAIL = (
     "Cannot change team formation while a draft session is active (status: live). Cancel or complete the draft first."
 )
 
-_STORED_ROLE_SHAPE = {"tank": 1, "dps": 2, "support": 2}
+_STORED_ROLE_SHAPE = {"tank": 1, "damage": 2, "support": 2}
 
 _INVALID_SLOTS = [
     ({"healer": 2}, "roster_slots_unknown_code"),
@@ -67,13 +67,13 @@ def test_update_normalizes_zero_counts_away() -> None:
     # A role-less roster arrives from the form as "every role zero, flex six".
     # Storing the zeros would make ``has_role_slots`` answer on key presence
     # instead of on real slots.
-    model = schemas.TournamentUpdate(roster_slots_json={"tank": 0, "dps": 0, "support": 0, "flex": 6})
+    model = schemas.TournamentUpdate(roster_slots_json={"tank": 0, "damage": 0, "support": 0, "flex": 6})
     assert model.roster_slots_json == {"flex": 6}
 
 
 def test_update_normalizes_key_order() -> None:
-    model = schemas.TournamentUpdate(roster_slots_json={"support": 2, "tank": 1, "dps": 2})
-    assert list(model.roster_slots_json) == ["tank", "dps", "support"]
+    model = schemas.TournamentUpdate(roster_slots_json={"support": 2, "tank": 1, "damage": 2})
+    assert list(model.roster_slots_json) == ["tank", "damage", "support"]
 
 
 @pytest.mark.parametrize(("raw", "code"), _INVALID_SLOTS)
@@ -283,7 +283,7 @@ def test_reordered_and_padded_resend_still_counts_as_unchanged(monkeypatch) -> N
     error, session, _, spy = _run_update(
         monkeypatch,
         draft_status="live",
-        update=schemas.TournamentUpdate(roster_slots_json={"support": 2, "dps": 2, "tank": 1, "flex": 0}),
+        update=schemas.TournamentUpdate(roster_slots_json={"support": 2, "damage": 2, "tank": 1, "flex": 0}),
         stored_slots=dict(_STORED_ROLE_SHAPE),
     )
     assert error is None

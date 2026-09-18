@@ -20,7 +20,7 @@ from tests.factories import roster  # noqa: E402
 
 # The two shapes the payload behaves differently under: role slots keep rank
 # role-specific, an all-flex roster has no role to key rank on.
-ROLE_SHAPE = parse_roster_slots({"tank": 1, "dps": 2, "support": 2})
+ROLE_SHAPE = parse_roster_slots({"tank": 1, "damage": 2, "support": 2})
 FLEX_SHAPE = parse_roster_slots({"flex": 5})
 
 
@@ -122,7 +122,7 @@ def test_payload_totals_and_members() -> None:
     assert team.avg_sr == 3500.0
     assert len(team.members) == 3
     roles = {m.name: m.role for m in team.members}
-    assert roles == {"Cap#1": "tank", "A#1": "dps", "B#1": "support"}
+    assert roles == {"Cap#1": "tank", "A#1": "damage", "B#1": "support"}
 
 
 def test_payload_empty_roster_team() -> None:
@@ -141,7 +141,7 @@ def test_payload_uses_drafted_off_role_and_its_rank() -> None:
     picks = {11: _pick(11, 1, role=HeroClass.support, rank=2800)}
     payload = _payload(teams, roster_by_team, ROLE_SHAPE, picks)
     member = next(m for m in payload[0].members if m.name == "Mate#1")
-    assert member.role == "support"  # drafted role, not lead "dps"
+    assert member.role == "support"  # drafted role, not lead "damage"
     assert member.rank == 2800  # off-role rank, not the lead 4000
 
 
@@ -180,7 +180,7 @@ def test_flex_shape_exports_the_flex_slot_code_and_the_best_rank() -> None:
     # rank. The slot code says "no fixed role" outright instead of guessing the
     # lead role -- bulk_create_from_balancer turns it into HeroClass.flex.
     teams = [_team(1, 1, "T")]
-    p = _player(11, bt="Mate#1", role=HeroClass.support, rank=2800, uid=11, role_ranks={"dps": 4000})
+    p = _player(11, bt="Mate#1", role=HeroClass.support, rank=2800, uid=11, role_ranks={"damage": 4000})
     roster_by_team = {1: [p]}
     picks = {11: _pick(11, 1, role=None, rank=2800)}
     payload = _payload(teams, roster_by_team, FLEX_SHAPE, picks)
@@ -191,7 +191,7 @@ def test_flex_shape_exports_the_flex_slot_code_and_the_best_rank() -> None:
 
 def test_flex_shape_exports_the_best_rank_for_a_captain() -> None:
     teams = [_team(1, 1, "T")]
-    cap = _player(10, captain=True, bt="Cap#1", role=HeroClass.tank, rank=3100, uid=10, role_ranks={"dps": 3700})
+    cap = _player(10, captain=True, bt="Cap#1", role=HeroClass.tank, rank=3100, uid=10, role_ranks={"damage": 3700})
     payload = _payload(teams, {1: [cap]}, FLEX_SHAPE, {})
     member = payload[0].members[0]
     assert member.role == "flex"

@@ -50,8 +50,8 @@ function team(overrides: Partial<RegistrationTeam>): RegistrationTeam {
     exported_team_id: null,
     members: [],
     invites: [],
-    open_slots: { dps: 1 },
-    shortfall: "1x dps",
+    open_slots: { damage: 1 },
+    shortfall: "1x damage",
     is_complete: false,
     substitutes_used: 0,
     max_substitutes: 0,
@@ -149,7 +149,7 @@ describe("registered teams list open slots", () => {
     authStatus = "unauthenticated";
     authUser = null;
     listPublic.mockResolvedValue({
-      items: [team({ id: 2, name: "Short", open_slots: { dps: 2, support: 1 } })],
+      items: [team({ id: 2, name: "Short", open_slots: { damage: 2, support: 1 } })],
       unassigned_players: 0
     });
 

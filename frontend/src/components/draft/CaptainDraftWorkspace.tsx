@@ -80,7 +80,7 @@ export function CaptainDraftWorkspace({
     [availablePlayers, viewParams]
   );
   const roleCounts = useMemo<Record<DraftRole, number>>(() => {
-    const counts: Record<DraftRole, number> = { tank: 0, dps: 0, support: 0 };
+    const counts: Record<DraftRole, number> = { tank: 0, damage: 0, support: 0 };
     for (const player of availablePlayers) {
       for (const role of playerRoles(player)) {
         counts[role] += 1;

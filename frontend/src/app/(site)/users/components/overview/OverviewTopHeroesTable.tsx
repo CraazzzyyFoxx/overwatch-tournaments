@@ -34,7 +34,7 @@ const ROLE_ICON_NAME: Record<AqtRoleKey, string> = {
 // Localized role name (icon-only in the table; name lives in title/aria-label).
 const ROLE_NAME_KEY: Record<AqtRoleKey, string> = {
   tank: "common.roles.tank",
-  damage: "common.roles.dps",
+  damage: "common.roles.damage",
   support: "common.roles.support"
 };
 

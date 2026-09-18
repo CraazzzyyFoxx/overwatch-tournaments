@@ -118,7 +118,7 @@ describe("moveBalancePlayer role validation", () => {
 
   it("rejects a swap when the displaced player cannot play the source role", () => {
     // dragged: Damage main being dropped onto an occupied Tank slot (can play Tank)
-    const draggedDps = makePlayer({
+    const draggedDamage = makePlayer({
       uuid: "20",
       role_preferences: ["Damage", "Tank"],
       all_ratings: { Damage: 2900, Tank: 2800 },
@@ -129,7 +129,7 @@ describe("moveBalancePlayer role validation", () => {
       role_preferences: ["Tank"],
       all_ratings: { Tank: 3100 },
     });
-    const payload = makePayload([{ Damage: [draggedDps] }, { Tank: [occupantTank] }]);
+    const payload = makePayload([{ Damage: [draggedDamage] }, { Tank: [occupantTank] }]);
     const target: BalanceDropTarget = {
       kind: "player-row",
       teamIndex: 1,
@@ -142,7 +142,7 @@ describe("moveBalancePlayer role validation", () => {
   });
 
   it("allows a swap when both players can play the swapped roles", () => {
-    const draggedDps = makePlayer({
+    const draggedDamage = makePlayer({
       uuid: "30",
       role_preferences: ["Damage", "Tank"],
       all_ratings: { Damage: 2900, Tank: 2800 },
@@ -152,7 +152,7 @@ describe("moveBalancePlayer role validation", () => {
       role_preferences: ["Tank", "Damage"],
       all_ratings: { Tank: 3100, Damage: 3000 },
     });
-    const payload = makePayload([{ Damage: [draggedDps] }, { Tank: [occupantFlex] }]);
+    const payload = makePayload([{ Damage: [draggedDamage] }, { Tank: [occupantFlex] }]);
     const target: BalanceDropTarget = {
       kind: "player-row",
       teamIndex: 1,
@@ -235,7 +235,7 @@ describe("deriveRoleDiscomfort", () => {
 
 describe("moveBalancePlayer rank + discomfort recompute", () => {
   it("re-rates the player for the new role and keeps original preference order", () => {
-    const dps = makePlayer({
+    const damage = makePlayer({
       uuid: "50",
       role_preferences: ["Damage", "Tank"],
       all_ratings: { Damage: 2900, Tank: 2800 },
@@ -243,7 +243,7 @@ describe("moveBalancePlayer rank + discomfort recompute", () => {
       assigned_rating: 2900,
       role_discomfort: 0,
     });
-    const payload = makePayload([{ Tank: [makePlayer({ uuid: "52" })], Damage: [dps] }, {}]);
+    const payload = makePayload([{ Tank: [makePlayer({ uuid: "52" })], Damage: [damage] }, {}]);
     const target: BalanceDropTarget = { kind: "role-container", teamIndex: 1, roleKey: "Tank" };
 
     const next = moveBalancePlayer(payload, "50", target);
@@ -258,14 +258,14 @@ describe("moveBalancePlayer rank + discomfort recompute", () => {
   });
 
   it("derives discomfort when all_discomforts is absent (legacy payload)", () => {
-    const dps = makePlayer({
+    const damage = makePlayer({
       uuid: "51",
       role_preferences: ["Damage"],
       all_ratings: { Damage: 2900, Tank: 2800 },
       all_discomforts: undefined,
       assigned_rating: 2900,
     });
-    const payload = makePayload([{ Tank: [makePlayer({ uuid: "53" })], Damage: [dps] }, {}]);
+    const payload = makePayload([{ Tank: [makePlayer({ uuid: "53" })], Damage: [damage] }, {}]);
     const target: BalanceDropTarget = { kind: "role-container", teamIndex: 1, roleKey: "Tank" };
 
     const next = moveBalancePlayer(payload, "51", target);

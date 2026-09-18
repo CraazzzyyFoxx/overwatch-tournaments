@@ -27,7 +27,7 @@ from src.domain.registration.utils import (
 )
 from src.schemas.registration import CustomFieldDefinition
 
-ROLE_CODES = ("tank", "dps", "support")
+ROLE_CODES = ("tank", "damage", "support")
 
 # Parser identifiers understood by ``parse_target_value`` in admin.py.
 PARSER_STRING = "string"
@@ -98,7 +98,7 @@ class MappingTargetSpec:
 
 
 def _role_label(role_code: str) -> str:
-    return {"tank": "Tank", "dps": "Damage", "support": "Support"}[role_code]
+    return {"tank": "Tank", "damage": "Damage", "support": "Support"}[role_code]
 
 
 def _build_builtin_specs() -> tuple[MappingTargetSpec, ...]:

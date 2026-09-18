@@ -77,7 +77,7 @@ const initialState: UnifiedFormState = {
   status: "approved",
   balancerStatus: "not_in_balancer",
   roleSelections: createRoleSelections(),
-  ranks: { tank: "", dps: "", support: "" },
+  ranks: { tank: "", damage: "", support: "" },
   customFieldsValues: {},
 };
 
@@ -261,7 +261,7 @@ export default function UnifiedRegistrationForm({
   const publicPrefillApplied = useRef(false);
   useEffect(() => {
     if (mode === "admin" && initialData) {
-      const initRanks: Record<string, string> = { tank: "", dps: "", support: "" };
+      const initRanks: Record<string, string> = { tank: "", damage: "", support: "" };
       const roleSelections = createRoleSelections();
 
       for (const role of [...(initialData.roles ?? [])].sort((a, b) => a.priority - b.priority)) {

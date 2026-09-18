@@ -71,7 +71,7 @@ function createApplication(overrides: Partial<BalancerApplication>): BalancerApp
     stream_pov: false,
     last_tournament_text: null,
     primary_role: "support",
-    additional_roles_json: ["dps"],
+    additional_roles_json: ["damage"],
     notes: null,
     submitted_at: null,
     synced_at: "2026-03-14T00:00:00Z",
@@ -133,7 +133,7 @@ function createRegistration(overrides: Partial<AdminRegistration> = {}): AdminRe
         is_declared_active: true,
       },
       {
-        role: "dps",
+        role: "damage",
         subrole: null,
         is_primary: false,
         priority: 1,
@@ -164,7 +164,7 @@ function createRegistration(overrides: Partial<AdminRegistration> = {}): AdminRe
 }
 
 describe("getPlayerValidationIssues", () => {
-  it("does not flag support main-heal plus dps as mismatch", () => {
+  it("does not flag support main-heal plus damage as mismatch", () => {
     const player = createPlayer({
       role_entries_json: [
         {
@@ -176,7 +176,7 @@ describe("getPlayerValidationIssues", () => {
           is_active: true,
         },
         {
-          role: "dps",
+          role: "damage",
           subtype: null,
           priority: 2,
           division_number: 14,
@@ -187,7 +187,7 @@ describe("getPlayerValidationIssues", () => {
     });
     const application = createApplication({
       primary_role: "support",
-      additional_roles_json: ["dps"],
+      additional_roles_json: ["damage"],
     });
 
     const issues = getPlayerValidationIssues(player, application);
@@ -199,7 +199,7 @@ describe("getPlayerValidationIssues", () => {
     const player = createPlayer({
       role_entries_json: [
         {
-          role: "dps",
+          role: "damage",
           subtype: "hitscan",
           priority: 1,
           division_number: 12,
@@ -209,7 +209,7 @@ describe("getPlayerValidationIssues", () => {
       ],
     });
     const application = createApplication({
-      primary_role: "dps",
+      primary_role: "damage",
       additional_roles_json: ["support"],
     });
 
@@ -230,7 +230,7 @@ describe("getPlayerValidationIssues", () => {
           is_active: true,
         },
         {
-          role: "dps",
+          role: "damage",
           subtype: null,
           priority: 2,
           division_number: 14,
@@ -242,7 +242,7 @@ describe("getPlayerValidationIssues", () => {
     });
     const application = createApplication({
       primary_role: "support",
-      additional_roles_json: ["dps"],
+      additional_roles_json: ["damage"],
     });
 
     const issues = getPlayerValidationIssues(player, application);
@@ -254,7 +254,7 @@ describe("getPlayerValidationIssues", () => {
     const player = createPlayer({
       role_entries_json: [
         { role: "support", subtype: null, priority: 0, division_number: null, rank_value: 900, is_active: true, ow_rank_value: 2000 },
-        { role: "dps", subtype: null, priority: 1, division_number: null, rank_value: 700, is_active: true, ow_rank_value: 1900 },
+        { role: "damage", subtype: null, priority: 1, division_number: null, rank_value: 700, is_active: true, ow_rank_value: 1900 },
       ],
     });
 
@@ -265,8 +265,8 @@ describe("getPlayerValidationIssues", () => {
     );
 
     expect(deltaIssues.length).toBe(2);
-    // Worst delta first: dps (Δ1200) before support (Δ1100).
-    expect(deltaIssues.map((issue) => issue.role).join(",")).toBe("dps,support");
+    // Worst delta first: damage (Δ1200) before support (Δ1100).
+    expect(deltaIssues.map((issue) => issue.role).join(",")).toBe("damage,support");
   });
 
   it("flags a player blocked by a status-level ready gate even with fully ranked roles", () => {
@@ -549,7 +549,7 @@ describe("synthetic registration helpers", () => {
 
 describe("registration role pass-through", () => {
   const role = (
-    roleCode: "tank" | "dps" | "support",
+    roleCode: "tank" | "damage" | "support",
     rank: number | null,
     ow: number | null = null,
     extra: {
@@ -576,9 +576,9 @@ describe("registration role pass-through", () => {
   // client copies the rows it was given instead of re-deriving them. A second
   // opinion here is exactly the drift this replaced.
   it("copies the API's resolved roles verbatim", () => {
-    const player = built([role("dps", 3900, 4100), role("support", 2400, 2000, { priority: 1 })]);
+    const player = built([role("damage", 3900, 4100), role("support", 2400, 2000, { priority: 1 })]);
 
-    expect(player.role_entries_json.map((entry) => entry.role)).toEqual(["dps", "support"]);
+    expect(player.role_entries_json.map((entry) => entry.role)).toEqual(["damage", "support"]);
     expect(player.role_entries_json.map((entry) => entry.rank_value)).toEqual([3900, 2400]);
     expect(player.role_entries_json.map((entry) => entry.ow_rank_value)).toEqual([4100, 2000]);
     expect(player.role_entries_json.map((entry) => entry.subtype)).toEqual([null, null]);
@@ -586,7 +586,7 @@ describe("registration role pass-through", () => {
 
   it("keeps each role's own specialization", () => {
     const player = built([
-      role("dps", 3900, null, { subrole: "hitscan" }),
+      role("damage", 3900, null, { subrole: "hitscan" }),
       role("support", 2400, null, { subrole: "main_heal", priority: 1 }),
     ]);
 
@@ -613,7 +613,7 @@ describe("registration role pass-through", () => {
   });
 
   it("keeps a rankless registration out of a balance run", () => {
-    const player = built([role("dps", null)]);
+    const player = built([role("damage", null)]);
 
     expect(
       getPlayerValidationIssues(player, null).some((issue) => issue.code === "missing_ranked_role"),
@@ -692,9 +692,9 @@ describe("convertBalanceResponseToInternalPayload", () => {
     assigned_rating: 3000,
     role_discomfort: 0,
     is_captain: false,
-    role_preferences: ["tank", "dps"],
-    all_ratings: { tank: 3000, dps: 2800 },
-    all_discomforts: { tank: 0, dps: 100, support: 5000 },
+    role_preferences: ["tank", "damage"],
+    all_ratings: { tank: 3000, damage: 2800 },
+    all_discomforts: { tank: 0, damage: 100, support: 5000 },
     ...overrides,
   });
 
@@ -716,10 +716,10 @@ describe("convertBalanceResponseToInternalPayload", () => {
 
   it("re-keys the solver's canonical roster codes onto the editor's buckets", () => {
     // The solver keys the response by the tournament roster shape's slot codes,
-    // so a run whose roster arrives as tank/dps/support must still land in the
+    // so a run whose roster arrives as tank/damage/support must still land in the
     // Tank/Damage/Support buckets the editor and result_json use.
     const payload = convertBalanceResponseToInternalPayload(
-      response({ tank: [player({ uuid: "t" })], dps: [player({ uuid: "d" })], support: [player({ uuid: "s" })] }),
+      response({ tank: [player({ uuid: "t" })], damage: [player({ uuid: "d" })], support: [player({ uuid: "s" })] }),
     );
 
     const roster = payload.teams[0].roster;

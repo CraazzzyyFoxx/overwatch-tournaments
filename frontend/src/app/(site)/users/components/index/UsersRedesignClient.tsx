@@ -73,7 +73,7 @@ const SORT_OPTIONS: Array<{ value: SortValue; labelKey: SortLabelKey }> = [
 const ROLE_FILTERS: Array<{ value: "all" | UserRoleType; labelKey: "common.all" | (typeof ROLE_LABEL_KEY)[UserRoleType] }> = [
   { value: "all", labelKey: "common.all" },
   { value: "Tank", labelKey: "common.roles.tank" },
-  { value: "Damage", labelKey: "common.roles.dps" },
+  { value: "Damage", labelKey: "common.roles.damage" },
   { value: "Support", labelKey: "common.roles.support" },
   { value: "Flex", labelKey: "common.roles.flex" }
 ];
@@ -399,7 +399,7 @@ const UsersRedesignClient = () => {
                 {stats
                   ? t("users.list.stats.roleBreakdown", {
                       tank: String(stats.tank_count),
-                      dps: String(stats.damage_count),
+                      damage: String(stats.damage_count),
                       support: String(stats.support_count)
                     })
                   : t("common.loading")}

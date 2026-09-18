@@ -46,9 +46,9 @@ def test_registration_role_literal_cannot_drift_from_the_tuple() -> None:
 
 
 def test_slot_codes_and_defaults_have_the_expected_membership() -> None:
-    assert ROSTER_SLOT_CODES == ("tank", "dps", "support", "flex")
+    assert ROSTER_SLOT_CODES == ("tank", "damage", "support", "flex")
     assert FLEX_SLOT_CODE == "flex"
-    assert DEFAULT_ROSTER_SLOTS == {"tank": 1, "dps": 2, "support": 2}
+    assert DEFAULT_ROSTER_SLOTS == {"tank": 1, "damage": 2, "support": 2}
 
 
 def test_team_size_bounds_are_pinned() -> None:
@@ -63,17 +63,17 @@ def test_default_roster_slots_cannot_be_mutated() -> None:
 
 def test_default_shape_is_the_parsed_default_slots() -> None:
     assert DEFAULT_ROSTER_SHAPE == parse_roster_slots(DEFAULT_ROSTER_SLOTS)
-    assert DEFAULT_ROSTER_SHAPE.slots == {"tank": 1, "dps": 2, "support": 2}
+    assert DEFAULT_ROSTER_SHAPE.slots == {"tank": 1, "damage": 2, "support": 2}
     assert DEFAULT_ROSTER_SHAPE.team_size == 5
 
 
 def test_parses_overwatch_five_v_five() -> None:
-    shape = parse_roster_slots({"tank": 1, "dps": 2, "support": 2})
+    shape = parse_roster_slots({"tank": 1, "damage": 2, "support": 2})
 
-    assert shape.slots == {"tank": 1, "dps": 2, "support": 2}
+    assert shape.slots == {"tank": 1, "damage": 2, "support": 2}
     assert shape.team_size == 5
     assert shape.flex_slots == 0
-    assert shape.role_slots == {"tank": 1, "dps": 2, "support": 2}
+    assert shape.role_slots == {"tank": 1, "damage": 2, "support": 2}
     assert shape.has_role_slots is True
     assert shape.draft_rounds == 4
 
@@ -98,7 +98,7 @@ def test_parses_hybrid_roster() -> None:
 
 
 def test_drops_zero_counts_so_has_role_slots_is_unambiguous() -> None:
-    shape = parse_roster_slots({"tank": 0, "dps": 0, "support": 0, "flex": 6})
+    shape = parse_roster_slots({"tank": 0, "damage": 0, "support": 0, "flex": 6})
 
     assert shape.slots == {"flex": 6}
     assert shape.has_role_slots is False
@@ -143,7 +143,7 @@ def test_slots_returns_a_detached_mutable_copy() -> None:
 def test_role_slots_returns_a_detached_mutable_copy() -> None:
     shape = parse_roster_slots({"tank": 1, "flex": 5})
     dumped = shape.role_slots
-    dumped["dps"] = 4
+    dumped["damage"] = 4
 
     assert shape.role_slots == {"tank": 1}
 
@@ -163,7 +163,7 @@ def test_role_slots_returns_a_detached_mutable_copy() -> None:
         ({"tank": 0}, "roster_slots_empty"),
         ({"flex": MAX_TEAM_SIZE + 1}, "roster_slots_out_of_range"),
         # Over the limit by sum rather than by any single slot.
-        ({"tank": 1, "dps": MAX_TEAM_SIZE}, "roster_slots_out_of_range"),
+        ({"tank": 1, "damage": MAX_TEAM_SIZE}, "roster_slots_out_of_range"),
         ({"flex": MIN_TEAM_SIZE - 1}, "roster_slots_out_of_range"),
     ],
 )
@@ -223,7 +223,7 @@ def test_shape_survives_the_serialization_paths_it_travels_through() -> None:
 
 
 def test_tournament_override_wins() -> None:
-    shape = resolve_roster_shape({"flex": 6}, {"tank": 1, "dps": 2, "support": 2})
+    shape = resolve_roster_shape({"flex": 6}, {"tank": 1, "damage": 2, "support": 2})
 
     assert shape.slots == {"flex": 6}
 
@@ -237,7 +237,7 @@ def test_falls_back_to_workspace_default() -> None:
 def test_falls_back_to_builtin_default_when_nothing_is_set() -> None:
     shape = resolve_roster_shape(None, None)
 
-    assert shape.slots == {"tank": 1, "dps": 2, "support": 2}
+    assert shape.slots == {"tank": 1, "damage": 2, "support": 2}
 
 
 def test_builtin_fallback_returns_the_prebuilt_default_shape() -> None:

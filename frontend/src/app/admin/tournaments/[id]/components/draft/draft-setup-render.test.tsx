@@ -77,9 +77,9 @@ function registration(id: number, roles: string[], rank: number | null): AdminRe
 }
 
 const POOL = [
-  registration(1, ["tank", "dps", "support"], null),
+  registration(1, ["tank", "damage", "support"], null),
   registration(2, ["support", "tank"], 2600),
-  registration(3, ["dps"], 3800)
+  registration(3, ["damage"], 3800)
 ];
 
 // Deliberately NOT the OW ladder: 2600 and 3800 sit in Diamond/Grandmaster
@@ -171,7 +171,7 @@ describe("draft captains step", () => {
   test("renders each candidate's roles as glyphs and the rank as a division icon", () => {
     // Roles used to be text badges; they are icons now, announced by role name.
     expect(html).toContain('aria-label="roles.tank"');
-    expect(html).toContain('aria-label="roles.dps"');
+    expect(html).toContain('aria-label="roles.damage"');
     expect(html).toContain('aria-label="roles.support"');
     // Ranked candidates carry a division image; the unranked one still shows a dash.
     expect(html).toContain("<img");

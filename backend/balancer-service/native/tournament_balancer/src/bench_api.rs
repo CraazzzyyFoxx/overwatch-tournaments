@@ -23,7 +23,7 @@ fn bench_config() -> ConfigSpec {
         low_rank_collision_weight: 250.0,
         use_captains: false,
         tank_impact_weight: 1.4,
-        dps_impact_weight: 1.0,
+        damage_impact_weight: 1.0,
         support_impact_weight: 1.1,
         tank_gap_weight: 1.0,
         tank_std_weight: 1.5,

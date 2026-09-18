@@ -17,7 +17,7 @@ import {
   slotsPayload
 } from "./roster-shape-editor.model";
 
-const OW5V5 = { tank: 1, dps: 2, support: 2 } as const;
+const OW5V5 = { tank: 1, damage: 2, support: 2 } as const;
 
 function shape(partial: Partial<RosterShape> = {}): RosterShape {
   return {
@@ -69,7 +69,7 @@ describe("initialSelection", () => {
   });
 
   it("normalizes a stored map into canonical order without zeros", () => {
-    const selection = initialSelection({ flex: 5, dps: 0, tank: 1 }, {});
+    const selection = initialSelection({ flex: 5, damage: 0, tank: 1 }, {});
     expect(Object.keys(selection.slots)).toEqual(["tank", "flex"]);
   });
 });
@@ -93,14 +93,14 @@ describe("selectMode", () => {
 
 describe("setSlotCount", () => {
   it("re-derives the mode, so hand-typing a preset stops claiming custom", () => {
-    const next = setSlotCount({ mode: "custom", slots: { tank: 1, dps: 2, support: 1 } }, "support", 2);
+    const next = setSlotCount({ mode: "custom", slots: { tank: 1, damage: 2, support: 1 } }, "support", 2);
     expect(next.mode).toBe("ow5v5");
   });
 
   it("switches away from a preset as soon as a count diverges", () => {
     const next = setSlotCount({ mode: "ow5v5", slots: { ...OW5V5 } }, "flex", 1);
     expect(next.mode).toBe("custom");
-    expect(next.slots).toEqual({ tank: 1, dps: 2, support: 2, flex: 1 });
+    expect(next.slots).toEqual({ tank: 1, damage: 2, support: 2, flex: 1 });
   });
 
   it("drops a code zeroed back out instead of storing a zero", () => {
@@ -113,15 +113,15 @@ describe("setSlotCount", () => {
       flex: MAX_SLOT_COUNT
     });
     expect(setSlotCount({ mode: "custom", slots: { flex: 4 } }, "flex", -3).slots).toEqual({});
-    expect(setSlotCount({ mode: "custom", slots: {} }, "dps", 2.6).slots).toEqual({ dps: 3 });
+    expect(setSlotCount({ mode: "custom", slots: {} }, "damage", 2.6).slots).toEqual({ damage: 3 });
   });
 });
 
 describe("payloadTotalError", () => {
   it("accepts a total inside the savable range", () => {
     expect(payloadTotalError({ ...OW5V5 })).toBeNull();
-    expect(payloadTotalError({ dps: MIN_ROSTER_TOTAL })).toBeNull();
-    expect(payloadTotalError({ dps: MAX_ROSTER_TOTAL })).toBeNull();
+    expect(payloadTotalError({ damage: MIN_ROSTER_TOTAL })).toBeNull();
+    expect(payloadTotalError({ damage: MAX_ROSTER_TOTAL })).toBeNull();
   });
 
   it("rejects a total below the minimum instead of waiting for a 422", () => {
@@ -130,7 +130,7 @@ describe("payloadTotalError", () => {
   });
 
   it("rejects a total above the maximum", () => {
-    expect(payloadTotalError({ tank: 6, dps: 7 })).toBe("too_many");
+    expect(payloadTotalError({ tank: 6, damage: 7 })).toBe("too_many");
   });
 
   it("never blocks inherit, which sends no counts at all", () => {
@@ -170,7 +170,7 @@ describe("previewSlotRows", () => {
   });
 
   it("orders role slots canonically regardless of key order", () => {
-    expect(previewSlotRows({ support: 1, tank: 1, dps: 1 })).toEqual(["tank", "dps", "support"]);
+    expect(previewSlotRows({ support: 1, tank: 1, damage: 1 })).toEqual(["tank", "damage", "support"]);
   });
 
   it("is empty for an empty map", () => {
@@ -190,7 +190,7 @@ describe("slotsPayload", () => {
   });
 
   it("normalizes so the tab's JSON dirty check stays stable", () => {
-    const payload = slotsPayload({ mode: "custom", slots: { flex: 5, dps: 0, tank: 1 } });
+    const payload = slotsPayload({ mode: "custom", slots: { flex: 5, damage: 0, tank: 1 } });
     expect(JSON.stringify(payload)).toBe(JSON.stringify({ tank: 1, flex: 5 }));
   });
 });

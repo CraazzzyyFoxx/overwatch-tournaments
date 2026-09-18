@@ -74,9 +74,9 @@ vi.mock("../_hooks/useTournamentClientData", () => ({
   useTournamentQuery: () => ({ data: tournament, isError: false, refetch: () => {} })
 }));
 
-/** 1 tank, 2 dps, 2 support — the shape the five glyphs of a row come from. */
+/** 1 tank, 2 damage, 2 support — the shape the five glyphs of a row come from. */
 const SHAPE: RosterShape = {
-  slots: { tank: 1, dps: 2, support: 2 },
+  slots: { tank: 1, damage: 2, support: 2 },
   team_size: 5,
   flex_slots: 0,
   has_role_slots: true,

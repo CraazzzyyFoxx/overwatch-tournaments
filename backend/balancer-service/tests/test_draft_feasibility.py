@@ -80,7 +80,7 @@ def test_service_errors_expose_contract_codes_and_role_deficit_details() -> None
     _, feasibility = _load_feature_modules()
     report = feasibility.analyze_draft_feasibility(
         team_ids=[10],
-        slot_targets={"tank": 1, "dps": 1, "support": 1},
+        slot_targets={"tank": 1, "damage": 1, "support": 1},
         players=[
             _player(feasibility, 1, HeroClass.tank),
             _player(feasibility, 2, HeroClass.damage),
@@ -108,7 +108,7 @@ def test_insufficient_pool_reports_unmatched_slot() -> None:
 
     report = feasibility.analyze_draft_feasibility(
         team_ids=(10, 20),
-        slot_targets={"tank": 1, "dps": 1, "support": 1},
+        slot_targets={"tank": 1, "damage": 1, "support": 1},
         players=players,
     )
 
@@ -133,14 +133,14 @@ def test_hall_deficit_is_detected_when_each_role_counter_looks_sufficient() -> N
 
     report = feasibility.analyze_draft_feasibility(
         team_ids=(10, 20),
-        slot_targets={"tank": 1, "dps": 1, "support": 1},
+        slot_targets={"tank": 1, "damage": 1, "support": 1},
         players=players,
     )
 
     assert report.is_feasible is False
     assert report.matched_slots == 4
     assert len(report.unmatched_slots) == 2
-    assert {slot.slot_code for slot in report.unmatched_slots} <= {"tank", "dps"}
+    assert {slot.slot_code for slot in report.unmatched_slots} <= {"tank", "damage"}
     assert report.blocking_player_ids == (1, 2)
 
 
@@ -154,7 +154,7 @@ def test_one_flex_player_cannot_cover_two_critical_roles() -> None:
 
     report = feasibility.analyze_draft_feasibility(
         team_ids=(10,),
-        slot_targets={"tank": 1, "dps": 1, "support": 1},
+        slot_targets={"tank": 1, "damage": 1, "support": 1},
         players=players,
     )
 
@@ -177,7 +177,7 @@ def test_hypothetical_pick_can_be_locally_legal_but_globally_unsafe() -> None:
     )
     common = {
         "team_ids": (10, 20),
-        "slot_targets": {"tank": 1, "dps": 1, "support": 1},
+        "slot_targets": {"tank": 1, "damage": 1, "support": 1},
         "players": players,
         "assignments": assignments,
     }
@@ -188,7 +188,7 @@ def test_hypothetical_pick_can_be_locally_legal_but_globally_unsafe() -> None:
     )
     unsafe = feasibility.analyze_draft_feasibility(
         **common,
-        hypothetical=_assignment(feasibility, 2, 10, "dps"),
+        hypothetical=_assignment(feasibility, 2, 10, "damage"),
     )
 
     assert safe.is_feasible is True
@@ -212,7 +212,7 @@ def test_pick_options_explain_safe_slot_filled_and_role_shortage_states() -> Non
     options = feasibility.evaluate_pick_options(
         team_id=10,
         team_ids=(10, 20),
-        slot_targets={"tank": 1, "dps": 1, "support": 1},
+        slot_targets={"tank": 1, "damage": 1, "support": 1},
         players=players,
         assignments=assignments,
     )
@@ -236,7 +236,7 @@ def test_full_coverage_with_extra_players_is_feasible() -> None:
 
     report = feasibility.analyze_draft_feasibility(
         team_ids=(10,),
-        slot_targets={"tank": 1, "dps": 1, "support": 1},
+        slot_targets={"tank": 1, "damage": 1, "support": 1},
         players=players,
     )
 
@@ -282,7 +282,7 @@ def test_build_state_reads_roles_off_the_engine_rosters_and_the_pick_target_role
     )
 
     state = feasibility.build_feasibility_state(
-        shape=_shape({"tank": 1, "dps": 2, "support": 2}),
+        shape=_shape({"tank": 1, "damage": 2, "support": 2}),
         teams=(team,),
         players=(captain, picked, flex),
         picks=(pick,),
@@ -290,15 +290,15 @@ def test_build_state_reads_roles_off_the_engine_rosters_and_the_pick_target_role
             101: roster(201, ranks={"tank": 3100}),
             # Drafted onto SUPPORT even though DPS leads: the frozen target_role
             # names the slot they occupy.
-            102: roster(202, ranks={"dps": 4000, "support": 2800}),
-            103: roster(203, ranks={"dps": 3000, "tank": 3000, "support": 3000}, flex=True),
+            102: roster(202, ranks={"damage": 4000, "support": 2800}),
+            103: roster(203, ranks={"damage": 3000, "tank": 3000, "support": 3000}, flex=True),
         },
     )
 
     assert state.team_ids == (10,)
     # The explicit 5v5 shape must reproduce exactly what the deleted
     # role_targets_for_team_size(5) used to derive from the scalar team size.
-    assert state.slot_targets == {"tank": 1, "dps": 2, "support": 2}
+    assert state.slot_targets == {"tank": 1, "damage": 2, "support": 2}
     assert state.assignments == (
         feasibility.DraftAssignment(player_id=101, team_id=10, slot_code="tank"),
         feasibility.DraftAssignment(player_id=102, team_id=10, slot_code="support"),
@@ -363,7 +363,7 @@ def test_options_for_supported_scale_complete_under_latency_budget() -> None:
         options = feasibility.evaluate_pick_options(
             team_id=1,
             team_ids=team_ids,
-            slot_targets={"tank": 1, "dps": 2, "support": 2},
+            slot_targets={"tank": 1, "damage": 2, "support": 2},
             players=players,
             assignments=assignments,
         )
@@ -447,7 +447,7 @@ def test_player_level_flex_still_covers_a_role_slot() -> None:
         teams=(DraftTeam(id=10, session_id=1, name="Alpha", draft_position=1),),
         players=(flex_player,),
         picks=(),
-        rosters={103: roster(203, ranks={"dps": 3000, "tank": 3000, "support": 3000}, flex=True)},
+        rosters={103: roster(203, ranks={"damage": 3000, "tank": 3000, "support": 3000}, flex=True)},
     )
     report = feasibility.analyze_draft_feasibility(
         team_ids=state.team_ids,

@@ -34,7 +34,7 @@ export const MAX_POINTS_PER_WIN = 1000;
 /** Display names for the slot codes, matching the roster-shape vocabulary. */
 export const SLOT_LABELS: Record<RosterSlotCode, string> = {
   tank: "Tank",
-  dps: "Damage",
+  damage: "Damage",
   support: "Support",
   flex: "Flex",
 };

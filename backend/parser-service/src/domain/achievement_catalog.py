@@ -644,7 +644,7 @@ CANONICAL_ACHIEVEMENT_CATALOG: tuple[dict[str, str], ...] = (
         "slug": "damage-above-5-division",
         "name": "Киберкотлета с пюрешкой",
         "description_ru": "Попасть в команду к капитану дд 5 дива и выше.",
-        "description_en": "Get into a team with a captain dps 5 div and above.",
+        "description_en": "Get into a team with a captain damage 5 div and above.",
     },
     {
         "category": "team",

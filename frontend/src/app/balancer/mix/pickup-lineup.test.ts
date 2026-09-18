@@ -28,8 +28,8 @@ function row(overrides: Partial<CustomGamePlayer> = {}): CustomGamePlayer {
     role_selection_mode: "all_ranked",
     is_flex: false,
     roles: null,
-    ranks: { tank: 2400, dps: 2600, support: 2500 },
-    rank_sources: { tank: "workspace", dps: "workspace", support: "workspace" },
+    ranks: { tank: 2400, damage: 2600, support: 2500 },
+    rank_sources: { tank: "workspace", damage: "workspace", support: "workspace" },
     author_ranks: {},
     ...overrides,
   };
@@ -131,19 +131,19 @@ describe("summarizeRoleSupply", () => {
   it("counts a player once per role they both picked and are ranked for", () => {
     expect(
       summarizeRoleSupply([
-        row({ workspace_member_id: 1, roles: ["tank", "dps"] }),
+        row({ workspace_member_id: 1, roles: ["tank", "damage"] }),
         row({ workspace_member_id: 2, roles: ["support"] }),
       ]),
     ).toEqual([
       { role: "tank", supply: 1, need: 2, short: 1 },
-      { role: "dps", supply: 1, need: 4, short: 3 },
+      { role: "damage", supply: 1, need: 4, short: 3 },
       { role: "support", supply: 1, need: 4, short: 3 },
     ]);
   });
 
   it("does not count a selected role the player has no rank for", () => {
     // The balance refuses to seat it, so it is not supply however lit the chip is.
-    const supply = summarizeRoleSupply([row({ roles: ["tank"], ranks: { dps: 2600 } })]);
+    const supply = summarizeRoleSupply([row({ roles: ["tank"], ranks: { damage: 2600 } })]);
     expect(supply.find((entry) => entry.role === "tank")).toEqual({
       role: "tank",
       supply: 0,
@@ -199,8 +199,8 @@ describe("participationEntries", () => {
 
 describe("resolveRoleOrder", () => {
   it("expands an unset role list to the ranked roles the balancer would use", () => {
-    expect(resolveRoleOrder(row({ roles: null, ranks: { dps: 2600, support: 2500 } }))).toEqual([
-      "dps",
+    expect(resolveRoleOrder(row({ roles: null, ranks: { damage: 2600, support: 2500 } }))).toEqual([
+      "damage",
       "support",
     ]);
   });
@@ -219,14 +219,14 @@ describe("toggleRole", () => {
   });
 
   it("removes a role that was on, leaving the rest of the order untouched", () => {
-    expect(toggleRole(["tank", "dps", "support"], "dps")).toEqual(["tank", "support"]);
+    expect(toggleRole(["tank", "damage", "support"], "damage")).toEqual(["tank", "support"]);
   });
 
   it("never resorts the roles it did not touch", () => {
     const afterTank = toggleRole([], "tank");
-    const afterDps = toggleRole(afterTank, "dps");
+    const afterDamage = toggleRole(afterTank, "damage");
     // Tank was picked first, so it stays first however the ranks compare.
-    expect(afterDps).toEqual(["tank", "dps"]);
+    expect(afterDamage).toEqual(["tank", "damage"]);
   });
 });
 
@@ -236,7 +236,7 @@ describe("getLineupIssue", () => {
   });
 
   it("flags an active player whose selected roles have no rank", () => {
-    expect(getLineupIssue(row({ roles: ["tank"], ranks: { dps: 2600 } }))).toBe("no_rank");
+    expect(getLineupIssue(row({ roles: ["tank"], ranks: { damage: 2600 } }))).toBe("no_rank");
   });
 
   it("flags an active player with every role switched off", () => {
@@ -244,13 +244,13 @@ describe("getLineupIssue", () => {
   });
 
   it("passes a player with one ranked role", () => {
-    expect(getLineupIssue(row({ roles: ["dps"], ranks: { dps: 2600 } }))).toBeNull();
+    expect(getLineupIssue(row({ roles: ["damage"], ranks: { damage: 2600 } }))).toBeNull();
   });
 });
 
 describe("averageRank", () => {
   it("averages only the roles the player will be assigned", () => {
-    expect(averageRank(row({ roles: ["tank"], ranks: { tank: 2400, dps: 3000 } }))).toBe(2400);
+    expect(averageRank(row({ roles: ["tank"], ranks: { tank: 2400, damage: 3000 } }))).toBe(2400);
   });
 
   it("has no value when nothing is ranked", () => {
@@ -338,7 +338,7 @@ describe("parseVariants", () => {
     const [first] = parseVariants(payload);
     expect(first.teams[0].seats.map((seat) => [seat.role, seat.name])).toEqual([
       ["tank", "karin"],
-      ["dps", "DemonDimon"],
+      ["damage", "DemonDimon"],
     ]);
     expect(first.teams[0].seats[0].rating).toBe(2900);
     expect(first.teams[0].averageRank).toBe(3000);

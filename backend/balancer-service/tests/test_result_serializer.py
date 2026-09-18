@@ -24,17 +24,17 @@ def test_response_is_keyed_by_the_mask_slot_codes() -> None:
     # names a pre-roster-shape run emitted. Clients keyed by the display names
     # must translate; this pins which spelling they translate from.
     mask = DEFAULT_ROSTER_SHAPE.slots
-    player = make_player("1", {"tank": 3000, "dps": 2900}, ["tank", "dps"], mask=mask)
+    player = make_player("1", {"tank": 3000, "damage": 2900}, ["tank", "damage"], mask=mask)
     team = Team(1, mask)
     team.add_player("tank", player)
 
     team_data = teams_to_json([team], mask)["teams"][0]
 
-    assert set(team_data["roster"]) == {"tank", "dps", "support"}
+    assert set(team_data["roster"]) == {"tank", "damage", "support"}
     serialized = team_data["roster"]["tank"][0]
-    assert serialized["role_preferences"] == ["tank", "dps"]
-    assert set(serialized["all_ratings"]) == {"tank", "dps"}
-    assert set(serialized["all_discomforts"]) == {"tank", "dps", "support"}
+    assert serialized["role_preferences"] == ["tank", "damage"]
+    assert set(serialized["all_ratings"]) == {"tank", "damage"}
+    assert set(serialized["all_discomforts"]) == {"tank", "damage", "support"}
 
 
 def test_roster_player_exposes_all_discomforts_snapshot() -> None:

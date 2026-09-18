@@ -57,9 +57,9 @@ from src.services.draft.rosters import draft_rosters  # noqa: E402
 
 # The 3-slot roster these tests draft for. It replaces the old
 # `rounds=2, team_size=3` pair: `role_targets_for_team_size(3)` resolved to
-# 1 tank / 2 dps / 0 support, which is exactly this shape, and `draft_rounds`
+# 1 tank / 2 damage / 0 support, which is exactly this shape, and `draft_rounds`
 # derives the same 2 rounds the calls used to pass explicitly.
-_SHAPE = parse_roster_slots({"tank": 1, "dps": 2})
+_SHAPE = parse_roster_slots({"tank": 1, "damage": 2})
 
 
 _UNIQUE = 0
@@ -94,7 +94,7 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
             # The draft resolves its shape from the tournament/workspace override,
             # not from the shape stored on the session, so the override has to
             # match `_SHAPE` or every start preflight sees the default 5-stack.
-            tourn.roster_slots_json = {"tank": 1, "dps": 2}
+            tourn.roster_slots_json = {"tank": 1, "damage": 2}
             s.add(tourn)
             await s.flush()
             users = []
@@ -210,7 +210,7 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
     async def _player_seats(self, s) -> list[PoolSeat]:
         # Captains are TANK in this fixture. A 3-slot roster therefore needs two
         # DPS picks per team; keep enough DPS players for the start preflight.
-        roles = ["dps"] * 6 + ["tank", "support", "support"]
+        roles = ["damage"] * 6 + ["tank", "support", "support"]
         seats = []
         for i, role in enumerate(roles):
             registration_id = await self._registration(s, tag=f"P{self._suffix}-{i}#1", ranks={role: 3000 + i * 50})
@@ -349,7 +349,7 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
             flex_registration_id = await self._registration(
                 s,
                 tag=f"Flex{self._suffix}#1",
-                ranks={"tank": 3000, "dps": 2500},
+                ranks={"tank": 3000, "damage": 2500},
                 primary="tank",
             )
             await lifecycle.lifecycle_service.seed(
@@ -766,7 +766,7 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
 
     async def _build_balancer_pool(self, s, n: int) -> list[int]:
         """Create n approved, in-pool BalancerRegistration rows (with roles). Returns ids."""
-        roles = ["tank", "dps", "support"]
+        roles = ["tank", "damage", "support"]
         return [
             await self._registration(s, tag=f"Pool{self._suffix}-{i}#1", ranks={roles[i % 3]: 3000 + i * 25})
             for i in range(n)
@@ -799,7 +799,7 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
             rosters = await draft_rosters.load(s, draft, list(players))
             self.assertEqual(len(rosters), 9)
             leads = {rosters[p.id].primary.role.slot_code for p in players}
-            self.assertEqual(leads, {"tank", "dps", "support"})
+            self.assertEqual(leads, {"tank", "damage", "support"})
             available = [p for p in players if p.status == DraftPlayerStatus.AVAILABLE.value]
             self.assertEqual(len(available), 6)
             # ranks read back from the pool
@@ -881,7 +881,7 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
             draft_id = draft.id
             seats = await self._seats(s)
             unranked_id = await self._registration(
-                s, tag=f"NoRank{self._suffix}#1", ranks={"dps": None, "support": None}
+                s, tag=f"NoRank{self._suffix}#1", ranks={"damage": None, "support": None}
             )
             await s.commit()
 

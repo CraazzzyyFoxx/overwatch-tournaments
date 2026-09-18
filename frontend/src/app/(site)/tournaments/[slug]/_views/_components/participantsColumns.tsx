@@ -76,7 +76,7 @@ export interface ColumnDefinition {
 
 const ROLE_TO_ICON: Record<string, string> = {
   tank: "Tank",
-  dps: "Damage",
+  damage: "Damage",
   support: "Support",
   flex: "Flex",
 };
@@ -85,8 +85,8 @@ export function getRoleLabel(role: string, t: Translator): string {
   switch (role.toLowerCase()) {
     case "tank":
       return t("common.roles.tank");
-    case "dps":
-      return t("common.roles.dps");
+    case "damage":
+      return t("common.roles.damage");
     case "support":
       return t("common.roles.support");
     case "flex":
@@ -165,12 +165,12 @@ function RolesCell({
 
 function getCanonicalRole(hero: Hero): Exclude<PlayerRoleSlotCode, "flex"> {
   const slotCode = playerRoleSlotCode(normalizePlayerRole(hero.type || hero.role));
-  return slotCode === "flex" ? "dps" : slotCode;
+  return slotCode === "flex" ? "damage" : slotCode;
 }
 
 const ROLE_COLORS: Record<string, string> = {
   tank: "text-[color:var(--aqt-tank)]",
-  dps: "text-[color:var(--aqt-damage)]",
+  damage: "text-[color:var(--aqt-damage)]",
   support: "text-[color:var(--aqt-support)]",
 };
 
@@ -246,7 +246,7 @@ function TopHeroesCell({
   const heroesByRole = useMemo(() => {
     const groups: Record<Exclude<PlayerRoleSlotCode, "flex">, Hero[]> = {
       tank: [],
-      dps: [],
+      damage: [],
       support: [],
     };
 
@@ -259,7 +259,7 @@ function TopHeroesCell({
   }, [topHeroesList]);
 
   const activeRoles = useMemo(() => {
-    return (["tank", "dps", "support"] as const).filter(
+    return (["tank", "damage", "support"] as const).filter(
       (role) => heroesByRole[role].length > 0
     );
   }, [heroesByRole]);

@@ -54,7 +54,7 @@ const UNSET: MixBalancerPreferencesRead = {
   role_mask: null,
   points_per_win: null,
   roster_shape: {
-    slots: { tank: 1, dps: 2, support: 2 },
+    slots: { tank: 1, damage: 2, support: 2 },
     team_size: 5,
     flex_slots: 0,
     has_role_slots: true,

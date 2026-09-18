@@ -23,14 +23,14 @@
   "cases": [
     {
       "name": "single ranked role",
-      "roles": [{ "role": "dps", "rank_value": 3900, "ow_rank_value": 4100, "is_active": true }],
+      "roles": [{ "role": "damage", "rank_value": 3900, "ow_rank_value": 4100, "is_active": true }],
       "expected": { "eff_rank": 3900, "eff_ow_rank": 4100 }
     },
     {
       "name": "primary is not the strongest",
       "roles": [
         { "role": "support", "rank_value": 2400, "ow_rank_value": 2500, "is_active": true },
-        { "role": "dps", "rank_value": 3900, "ow_rank_value": null, "is_active": true }
+        { "role": "damage", "rank_value": 3900, "ow_rank_value": null, "is_active": true }
       ],
       "expected": { "eff_rank": 3900, "eff_ow_rank": 2500 }
     },
@@ -38,7 +38,7 @@
       "name": "all three ranked",
       "roles": [
         { "role": "tank", "rank_value": 3100, "ow_rank_value": 3000, "is_active": true },
-        { "role": "dps", "rank_value": 2800, "ow_rank_value": 4400, "is_active": true },
+        { "role": "damage", "rank_value": 2800, "ow_rank_value": 4400, "is_active": true },
         { "role": "support", "rank_value": 3300, "ow_rank_value": 3200, "is_active": true }
       ],
       "expected": { "eff_rank": 3300, "eff_ow_rank": 4400 }
@@ -51,19 +51,19 @@
     {
       "name": "inactive role wins the maximum",
       "roles": [
-        { "role": "dps", "rank_value": 2000, "ow_rank_value": null, "is_active": true },
+        { "role": "damage", "rank_value": 2000, "ow_rank_value": null, "is_active": true },
         { "role": "tank", "rank_value": 4200, "ow_rank_value": null, "is_active": false }
       ],
       "expected": { "eff_rank": 4200, "eff_ow_rank": null }
     },
     {
       "name": "no ranks at all",
-      "roles": [{ "role": "dps", "rank_value": null, "ow_rank_value": null, "is_active": true }],
+      "roles": [{ "role": "damage", "rank_value": null, "ow_rank_value": null, "is_active": true }],
       "expected": { "eff_rank": null, "eff_ow_rank": null }
     },
     {
       "name": "ow rank without a manual rank",
-      "roles": [{ "role": "dps", "rank_value": null, "ow_rank_value": 4100, "is_active": true }],
+      "roles": [{ "role": "damage", "rank_value": null, "ow_rank_value": 4100, "is_active": true }],
       "expected": { "eff_rank": null, "eff_ow_rank": 4100 }
     },
     {

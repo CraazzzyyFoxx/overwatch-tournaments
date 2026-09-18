@@ -62,13 +62,13 @@ describe("getTournamentUpdatePayload", () => {
   });
 
   it("diffs roster_slots_json by value, not by reference", () => {
-    const initial = form({ roster_slots_json: { tank: 1, dps: 2, support: 2 } });
-    const unchanged = form({ roster_slots_json: { tank: 1, dps: 2, support: 2 } });
-    const changed = form({ roster_slots_json: { tank: 2, dps: 2, support: 1 } });
+    const initial = form({ roster_slots_json: { tank: 1, damage: 2, support: 2 } });
+    const unchanged = form({ roster_slots_json: { tank: 1, damage: 2, support: 2 } });
+    const changed = form({ roster_slots_json: { tank: 2, damage: 2, support: 1 } });
 
     expect(getTournamentUpdatePayload(unchanged, initial)).toEqual({});
     expect(getTournamentUpdatePayload(changed, initial)).toEqual({
-      roster_slots_json: { tank: 2, dps: 2, support: 1 }
+      roster_slots_json: { tank: 2, damage: 2, support: 1 }
     });
   });
 

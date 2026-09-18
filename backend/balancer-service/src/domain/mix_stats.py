@@ -33,7 +33,7 @@ class SeatOutcome:
     ``match_id`` orders seats in the order they were played -- ids are
     monotonic per recording, ``played_at`` is not guaranteed distinct between
     two maps recorded in the same second -- and is what the streak walks back
-    from. ``role`` is the wire spelling (``tank``/``dps``/``support``) or
+    from. ``role`` is the wire spelling (``tank``/``damage``/``support``) or
     ``None`` for a seat recorded without one.
     """
 

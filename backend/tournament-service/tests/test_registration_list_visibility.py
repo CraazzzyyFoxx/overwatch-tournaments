@@ -49,13 +49,13 @@ class RoleCountTests(IsolatedAsyncioTestCase):
         """A flex player declaring three roles is one tank, not one of each."""
         counts = service._role_counts(
             [
-                _registration(1, _role("tank"), _role("dps", is_primary=False, priority=1)),
-                _registration(2, _role("dps")),
-                _registration(3, _role("dps")),
+                _registration(1, _role("tank"), _role("damage", is_primary=False, priority=1)),
+                _registration(2, _role("damage")),
+                _registration(3, _role("damage")),
             ]
         )
 
-        self.assertEqual(counts, {"tank": 1, "dps": 2})
+        self.assertEqual(counts, {"tank": 1, "damage": 2})
 
     def test_falls_back_to_the_highest_priority_role_when_none_is_primary(self):
         """Legacy rows carry no primary flag; dropping them would under-count the field."""
@@ -94,15 +94,15 @@ class HiddenListTests(IsolatedAsyncioTestCase):
             _form(hide_registrations=True, max_participants=60),
             [
                 _registration(1, _role("tank")),
-                _registration(2, _role("dps")),
-                _registration(3, _role("dps")),
+                _registration(2, _role("damage")),
+                _registration(3, _role("damage")),
             ],
         )
 
         self.assertTrue(response.hidden)
         self.assertEqual(response.registrations, [])
         self.assertEqual(response.total, 3)
-        self.assertEqual(response.role_counts, {"tank": 1, "dps": 2})
+        self.assertEqual(response.role_counts, {"tank": 1, "damage": 2})
         self.assertEqual(response.max_participants, 60)
 
     async def test_a_hidden_list_never_reads_the_identities_it_is_hiding(self):

@@ -68,7 +68,7 @@ const MARK_CLASS =
 /** Slot code -> the canonical role name `PlayerRoleIcon` maps to a glyph. */
 const SLOT_ROLE: Record<RosterSlotCode, string> = {
   tank: "Tank",
-  dps: "Damage",
+  damage: "Damage",
   support: "Support",
   flex: "Flex"
 };

@@ -22,7 +22,7 @@ from sqlalchemy.orm import aliased, selectinload
 from shared.core import enums
 from shared.core.social import SocialProvider
 from shared.division_grid import DivisionGrid
-from shared.domain.player_sub_roles import REGISTRATION_TO_CANONICAL
+from shared.domain.player_sub_roles import REGISTRATION_TO_CANONICAL, canonical_to_registration_role
 from shared.repository import (
     BalancerRegistrationRepository,
     SocialAccountRepository,
@@ -75,24 +75,12 @@ class _OwRankSignals:
     latest_snapshot: models.UserRankSnapshot | Any | None = None
 
 
-# Registration role code -> canonical HeroClass name (e.g. dps -> damage). Single source of
-# truth is shared.domain.player_sub_roles; aliased here for the autofill snapshot lookups.
+# Registration role codes, kept as a *validated* lookup: ``.get()`` answers None for
+# anything that is not one of the three roles a registration can name. Single source of
+# truth is shared.domain.player_sub_roles.
 RANK_ROLE_BY_REGISTRATION_ROLE = dict(REGISTRATION_TO_CANONICAL)
 REGISTRATION_ROLE_LABELS = {
     role.slot_code: role.value for role in (enums.HeroClass.tank, enums.HeroClass.damage, enums.HeroClass.support)
-}
-# tournament.player.role is a HeroClass (Tank/Damage/Support); bridge it to the registration
-# role codes (tank/dps/support) used to key balancer history and the per-role rank data.
-# ``HeroClass.flex`` is deliberately absent and callers must keep using ``.get()``:
-# a flex roster row carries ONE rank that stands for no particular role (the
-# player's maximum, see balancer-service ``services.draft.ranks.slot_rank``), so
-# attributing it to tank, dps or support would invent per-role history the
-# tournament never recorded. Such rows are skipped, which is why a player whose
-# only history is flex tournaments autofills empty.
-HERO_CLASS_TO_REGISTRATION_ROLE = {
-    enums.HeroClass.tank: "tank",
-    enums.HeroClass.damage: "dps",
-    enums.HeroClass.support: "support",
 }
 # Window for the OW rank source: aggregate snapshots captured within one week.
 OW_RANK_WEEK_WINDOW = timedelta(days=7)
@@ -376,7 +364,7 @@ class RankSourcesService:
         This is the "analytics" source: actual ranks played in the workspace's previous tournaments
         (``tournament.player``), distinct from the balancer-registration history. Excludes the current
         tournament and substitution rows; the most recent tournament wins per role. ``Player.role`` is
-        a HeroClass and is bridged to the registration role code (Damage → dps) to match keying. Ranks
+        a HeroClass and its name is the registration role code, so the keying lines up directly. Ranks
         are normalized from each source tournament's grid version into the target grid. When
         ``allowed_tournament_ids`` is set, only players from those tournaments are considered
         (recency window).
@@ -421,7 +409,13 @@ class RankSourcesService:
 
         latest: dict[int, dict[str, int]] = {}
         for row in rows:
-            role_code = HERO_CLASS_TO_REGISTRATION_ROLE.get(row.role)
+            # ``HeroClass.flex`` is not a registration role, so the validator answers None and the
+            # row is skipped: a flex roster row carries ONE rank that stands for no particular role
+            # (the player's maximum, see balancer-service ``services.draft.ranks.slot_rank``), and
+            # attributing it to tank, damage or support would invent per-role history the tournament
+            # never recorded. That is why a player whose only history is flex tournaments autofills
+            # empty.
+            role_code = canonical_to_registration_role(row.role)
             if role_code is None:
                 continue
             user_map = latest.setdefault(row.user_id, {})

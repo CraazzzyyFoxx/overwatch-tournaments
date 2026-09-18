@@ -2,23 +2,20 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
-# Input JSON role names ("Tank"/"Damage"/"Support") mapped onto the canonical
-# roster slot codes of ``shared.domain.roster_shape``. ``flex`` is deliberately
-# absent: no game role means "ready to play anything", so "damage -> flex"
-# would be a lie. A flex slot is resolved only from the literal ``flex``.
-STANDARD_ROLE_CODES: dict[str, str] = {
-    "tank": "tank",
-    "damage": "dps",
-    "dps": "dps",
-    "support": "support",
-}
+from shared.core.enums import HeroClass
 
 
 def normalize_standard_role_code(raw_role: str | None) -> str | None:
-    if raw_role is None:
-        return None
+    """Any accepted spelling of a game role -> its canonical slot code.
 
-    return STANDARD_ROLE_CODES.get(raw_role.strip().lower())
+    Just ``HeroClass.parse`` narrowed to the three game roles: ``flex`` is a
+    SLOT, not a role, so no game role may resolve to it -- a flex slot is worth
+    the best role the player actually plays, synthesized in
+    ``player_loader.parse_player_node``. ``None`` for anything else, which the
+    caller reads as "not a role this roster fields" and skips.
+    """
+    parsed = HeroClass.parse(raw_role)
+    return None if parsed is None or parsed is HeroClass.flex else parsed.slot_code
 
 
 def resolve_input_role_name(raw_role: str | None, role_mask: Mapping[str, int]) -> str | None:

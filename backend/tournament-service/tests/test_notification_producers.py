@@ -89,7 +89,7 @@ CAPTAIN_AUTH = 501
 INVITEE_AUTH = 502
 OPPONENT_AUTH = 503
 
-FIVE_STACK = parse_roster_slots({"tank": 1, "dps": 2, "support": 2})
+FIVE_STACK = parse_roster_slots({"tank": 1, "damage": 2, "support": 2})
 
 
 class _AsyncSessionShim:
@@ -303,7 +303,7 @@ class TeamInviteReceivedTests(_ProducerTestCase):
             self.fx.shim,
             team_id=self.team.id,
             auth_user=_auth_user(CAPTAIN_AUTH, "cap"),
-            slot_code="dps",
+            slot_code="damage",
             target_registration_id=self.invitee_registration.id,
         )
 
@@ -319,7 +319,7 @@ class TeamInviteReceivedTests(_ProducerTestCase):
                 "team_name": "Vanguard",
                 "tournament_id": TOURNAMENT_ID,
                 "tournament_name": TOURNAMENT_NAME,
-                "slot_code": "dps",
+                "slot_code": "damage",
                 "is_substitute": False,
                 "invite_id": invite.id,
             },
@@ -332,7 +332,7 @@ class TeamInviteReceivedTests(_ProducerTestCase):
             self.fx.shim,
             team_id=self.team.id,
             auth_user=_auth_user(CAPTAIN_AUTH, "cap"),
-            slot_code="dps",
+            slot_code="damage",
         )
 
         self.assertIsNotNone(raw_token)
@@ -354,7 +354,7 @@ class TeamInviteAnsweredTests(_ProducerTestCase):
         # An existing free-agent registration: accepting attaches it to the team
         # rather than running the whole public-registration write path.
         self.invitee_registration = self.fx.registration(invitee_member, battle_tag="Rook#2222")
-        self.invite = self.fx.invite(self.team, slot_code="dps", target_auth_user_id=INVITEE_AUTH)
+        self.invite = self.fx.invite(self.team, slot_code="damage", target_auth_user_id=INVITEE_AUTH)
         self.fx.session.flush()
 
         limiter = patch.object(teams_module, "assert_accept_attempt_allowed", AsyncMock())
@@ -686,7 +686,7 @@ class TeamRosterOutcomeTests(_ProducerTestCase):
         self.team.captain_registration_id = captain_registration.id
         mate_member = self.fx.player("Mate", auth_user_id=MATE_AUTH)
         self.mate_registration = self.fx.registration(
-            mate_member, battle_tag="Mate#2222", team_id=self.team.id, slot_code="dps"
+            mate_member, battle_tag="Mate#2222", team_id=self.team.id, slot_code="damage"
         )
         self.fx.session.flush()
 
@@ -781,7 +781,7 @@ class TargetedInviteAvailabilityTests(_ProducerTestCase):
         shape = patch.object(
             teams_module.RegistrationTeamService,
             "_resolve_shape",
-            AsyncMock(return_value=parse_roster_slots({"tank": 1, "dps": 1})),
+            AsyncMock(return_value=parse_roster_slots({"tank": 1, "damage": 1})),
         )
         shape.start()
         self.addCleanup(shape.stop)

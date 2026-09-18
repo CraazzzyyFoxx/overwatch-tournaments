@@ -11,7 +11,7 @@ import styles from "../../TournamentDetail.module.css";
 /** The site's role tints (`PlayerRoleIcon` uses the same tokens), keyed by slot code. */
 export const ROLE_TINT: Record<RosterSlotCode, string> = {
   tank: "var(--aqt-tank)",
-  dps: "var(--aqt-damage)",
+  damage: "var(--aqt-damage)",
   support: "var(--aqt-support)",
   flex: "var(--aqt-flex)"
 };
@@ -41,13 +41,13 @@ export function StatTile({
 /**
  * Folds the server's raw registration role codes onto the four slot codes the
  * site renders. The server counts one bucket per registration (its primary
- * role) and sends whatever code that row stores; `dps`/`damage` and friends
- * resolve here rather than in two places.
+ * role) and sends whatever code that row stores; capitalized `Damage` and
+ * friends resolve here rather than in two places.
  */
 export function toRoleSlotCounts(
   roleCounts: Readonly<Record<string, number>> | undefined
 ): Record<RosterSlotCode, number> {
-  const counts: Record<RosterSlotCode, number> = { tank: 0, dps: 0, support: 0, flex: 0 };
+  const counts: Record<RosterSlotCode, number> = { tank: 0, damage: 0, support: 0, flex: 0 };
   for (const [role, count] of Object.entries(roleCounts ?? {})) {
     counts[playerRoleSlotCode(normalizePlayerRole(role))] += count;
   }

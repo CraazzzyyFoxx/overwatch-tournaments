@@ -8,7 +8,7 @@ import type {
   DraftTeam
 } from "@/types/draft.types";
 
-const ROLES: DraftRole[] = ["tank", "dps", "support"];
+const ROLES: DraftRole[] = ["tank", "damage", "support"];
 
 export function availableRolesForPlayer(player: DraftPlayer): DraftRole[] {
   const declared = new Set<DraftRole>(player.secondary_roles as DraftRole[]);

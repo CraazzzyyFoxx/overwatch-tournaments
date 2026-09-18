@@ -42,7 +42,7 @@ def _draft_to_balancer_payload(
 
     The team name is the captain's battle_tag so the export's
     ``find_users_by_battle_tags`` resolves the captain; members carry their
-    battle_tag, the slot they were *drafted into* (tank/dps/support), and the
+    battle_tag, the slot they were *drafted into* (tank/damage/support), and the
     rank that pick froze. Mirrors the balancer's own payload (assigned role +
     assigned rating) so both feed ``bulk_create_from_balancer`` identically.
 
@@ -84,7 +84,7 @@ def _draft_to_balancer_payload(
                     uuid=str(p.user_id) if p.user_id is not None else str(uuid4()),
                     name=(player_roster.battle_tag if player_roster is not None else None) or "",
                     sub_role=player_roster.sub_role if player_roster is not None else None,
-                    role=role,  # tank/dps/support/flex
+                    role=role,  # tank/damage/support/flex
                     rank=rank,
                 )
             )

@@ -28,7 +28,7 @@ fn regression_config() -> ConfigSpec {
         low_rank_collision_weight: 250.0,
         use_captains: false,
         tank_impact_weight: 1.4,
-        dps_impact_weight: 1.0,
+        damage_impact_weight: 1.0,
         support_impact_weight: 1.1,
         tank_gap_weight: 1.0,
         tank_std_weight: 1.5,
@@ -99,49 +99,49 @@ fn regression_request() -> NativeRequest {
                 &["Tank", "Damage"],
             ),
             player(
-                "dps-1",
+                "damage-1",
                 "Damage",
                 &[("Damage", 2860), ("Support", 2540)],
                 &["Damage", "Support"],
             ),
             player(
-                "dps-2",
+                "damage-2",
                 "Damage",
                 &[("Damage", 2800), ("Support", 2510)],
                 &["Damage", "Support"],
             ),
             player(
-                "dps-3",
+                "damage-3",
                 "Damage",
                 &[("Damage", 2730), ("Support", 2480)],
                 &["Damage", "Support"],
             ),
             player(
-                "dps-4",
+                "damage-4",
                 "Damage",
                 &[("Damage", 2690), ("Support", 2450)],
                 &["Damage", "Support"],
             ),
             player(
-                "dps-5",
+                "damage-5",
                 "Damage",
                 &[("Damage", 2620), ("Support", 2440), ("Tank", 2350)],
                 &["Damage", "Support"],
             ),
             player(
-                "dps-6",
+                "damage-6",
                 "Damage",
                 &[("Damage", 2580), ("Support", 2410)],
                 &["Damage", "Support"],
             ),
             player(
-                "dps-7",
+                "damage-7",
                 "Damage",
                 &[("Damage", 2520), ("Support", 2390)],
                 &["Damage", "Support"],
             ),
             player(
-                "dps-8",
+                "damage-8",
                 "Damage",
                 &[("Damage", 2470), ("Support", 2360)],
                 &["Damage", "Support"],
@@ -353,7 +353,7 @@ fn validation_rejects_player_slot_mismatch() {
 
 #[test]
 fn flex_slot_is_free_of_discomfort_and_keeps_the_main_role() {
-    // Маска {Tank:1, flex:1}: танк-мейн с рейтингом на dps вне маски.
+    // Маска {Tank:1, flex:1}: танк-мейн с рейтингом на damage вне маски.
     // Слот flex стоит 0 дискомфорта (он без роли), Tank — 0 (основная роль),
     // а first_preference остаётся Tank, а не flex.
     let mut tank = player("t", "Tank", &[("Tank", 3000), ("Damage", 2000), ("flex", 3000)], &["Tank"]);

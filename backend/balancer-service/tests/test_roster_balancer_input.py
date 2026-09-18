@@ -32,8 +32,8 @@ def test_payload_carries_only_playable_roles_all_active() -> None:
         [
             roster(
                 7,
-                ranks={"dps": 4000, "support": 2800, "tank": None},
-                primary="dps",
+                ranks={"damage": 4000, "support": 2800, "tank": None},
+                primary="damage",
                 battle_tag="Ana#1",
                 subroles={"support": "main_heal"},
             )
@@ -43,17 +43,17 @@ def test_payload_carries_only_playable_roles_all_active() -> None:
     assert payload["format"] == "xv-1"
     classes = payload["players"]["7"]["stats"]["classes"]
     # Tank is declared but unranked: it must not reach the solver as eligible.
-    assert set(classes) == {"dps", "support"}
+    assert set(classes) == {"damage", "support"}
     assert [entry["isActive"] for entry in classes.values()] == [True, True]
-    assert classes["dps"] == {"isActive": True, "rank": 4000, "priority": 0, "subtype": None}
+    assert classes["damage"] == {"isActive": True, "rank": 4000, "priority": 0, "subtype": None}
     assert classes["support"] == {"isActive": True, "rank": 2800, "priority": 1, "subtype": "main_heal"}
 
 
 def test_a_registration_with_no_playable_role_is_not_in_the_payload() -> None:
     payload = roster_engine.balancer_input(
         [
-            roster(7, ranks={"dps": 3000}),
-            roster(8, ranks={"dps": None, "tank": None}),
+            roster(7, ranks={"damage": 3000}),
+            roster(8, ranks={"damage": None, "tank": None}),
             roster(9, ranks={}),
         ]
     )
@@ -64,9 +64,9 @@ def test_a_registration_with_no_playable_role_is_not_in_the_payload() -> None:
 def test_identity_falls_back_from_battle_tag_to_display_name_to_the_registration() -> None:
     payload = roster_engine.balancer_input(
         [
-            roster(7, ranks={"dps": 3000}, battle_tag="Ana#1", display_name="Ana"),
-            roster(8, ranks={"dps": 3000}, battle_tag=None, display_name="Nameless"),
-            roster(9, ranks={"dps": 3000}, battle_tag=None),
+            roster(7, ranks={"damage": 3000}, battle_tag="Ana#1", display_name="Ana"),
+            roster(8, ranks={"damage": 3000}, battle_tag=None, display_name="Nameless"),
+            roster(9, ranks={"damage": 3000}, battle_tag=None),
         ]
     )
 
@@ -80,8 +80,8 @@ def test_identity_falls_back_from_battle_tag_to_display_name_to_the_registration
 def test_full_flex_is_carried_through_from_the_registration() -> None:
     payload = roster_engine.balancer_input(
         [
-            roster(7, ranks={"dps": 3000, "tank": 3000}, flex=True),
-            roster(8, ranks={"dps": 3000, "tank": 3000}, flex=False),
+            roster(7, ranks={"damage": 3000, "tank": 3000}, flex=True),
+            roster(8, ranks={"damage": 3000, "tank": 3000}, flex=False),
         ]
     )
 
@@ -93,7 +93,7 @@ def test_the_uuid_field_is_selectable_so_a_solved_team_maps_back() -> None:
     # The draft solves on registrations, the mix on workspace members: the
     # caller names the field the result's player uuids carry.
     payload = roster_engine.balancer_input(
-        [roster(7, ranks={"dps": 3000}, workspace_member_id=42)],
+        [roster(7, ranks={"damage": 3000}, workspace_member_id=42)],
         key="workspace_member_id",
     )
 

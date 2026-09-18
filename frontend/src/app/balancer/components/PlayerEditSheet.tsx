@@ -69,7 +69,7 @@ import { ROLE_RANK_ACCENTS, RoleRankControls } from "./RoleRankControls";
 
 const ROLE_OPTIONS: Array<{ value: BalancerRoleCode; label: string }> = [
   { value: "tank", label: "Tank" },
-  { value: "dps", label: "Damage" },
+  { value: "damage", label: "Damage" },
   { value: "support", label: "Support" }
 ];
 
@@ -77,7 +77,7 @@ const ROLE_OPTIONS: Array<{ value: BalancerRoleCode; label: string }> = [
 
 const ROLE_DISPLAY: Record<BalancerRoleCode, string> = {
   tank: "Tank",
-  dps: "Damage",
+  damage: "Damage",
   support: "Support"
 };
 
@@ -552,13 +552,13 @@ export function PlayerEditModal({
   const subtypeOptions = useMemo(() => {
     const options: Record<BalancerRoleCode, Array<{ value: string; label: string }>> = {
       tank: [],
-      dps: [],
+      damage: [],
       support: []
     };
 
     if (subRoles) {
       for (const sr of subRoles) {
-        const roleKey = sr.role === "damage" ? "dps" : (sr.role as BalancerRoleCode);
+        const roleKey = sr.role as BalancerRoleCode;
         if (options[roleKey]) {
           options[roleKey].push({
             value: sr.slug,

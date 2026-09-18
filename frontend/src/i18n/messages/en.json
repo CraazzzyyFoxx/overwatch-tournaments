@@ -186,7 +186,7 @@
     },
     "roles": {
       "tank": "Tank",
-      "dps": "DPS",
+      "damage": "DPS",
       "support": "Support",
       "flex": "Flex"
     },
@@ -3897,7 +3897,7 @@
       },
       "stats": {
         "totalPlayers": "Total players",
-        "roleBreakdown": "Tank {tank} · Dmg {dps} · Sup {support}",
+        "roleBreakdown": "Tank {tank} · Dmg {damage} · Sup {support}",
         "withLogs": "With logs",
         "withParsedGames": "{count} with parsed games",
         "avgTournamentsPerPlayer": "Avg tournaments / player",
@@ -4318,7 +4318,7 @@
     "roleCoverage": "Declared role coverage",
     "roles": {
       "tank": "Tank",
-      "dps": "Damage",
+      "damage": "Damage",
       "support": "Support",
       "flex": "Flex"
     },
@@ -4330,7 +4330,7 @@
       "not_enough_players": "There are fewer eligible players than roster slots.",
       "pool_unranked": "{count} pool players have no rank — add their ranks in the balancer.",
       "role_shortage_tank": "There are not enough eligible tank players.",
-      "role_shortage_dps": "There are not enough eligible damage players.",
+      "role_shortage_damage": "There are not enough eligible damage players.",
       "role_shortage_support": "There are not enough eligible support players."
     },
     "roleDeficit": "{role}: {count, plural, one {# unmatched slot} other {# unmatched slots}} after server validation.",
@@ -4490,7 +4490,7 @@
       "slotCoverage": "Matched role slots: {matched} of {total}",
       "roles": {
         "tank": "Tank",
-        "dps": "Damage",
+        "damage": "Damage",
         "support": "Support",
         "flex": "Flex"
       },
@@ -4550,7 +4550,7 @@
       "unmatchedSlots": "Unmatched team-role slots",
       "roles": {
         "tank": "Tank",
-        "dps": "Damage",
+        "damage": "Damage",
         "support": "Support",
         "flex": "Flex"
       },
@@ -4650,7 +4650,7 @@
     "onTheClock": "On the clock",
     "roles": {
       "tank": "Tank",
-      "dps": "Damage",
+      "damage": "Damage",
       "support": "Support",
       "flex": "Flex"
     },
@@ -4940,7 +4940,7 @@
         },
         "primary_role": {
           "label": "Primary Role",
-          "description": "Main role (tank/dps/support) with subrole selection"
+          "description": "Main role (tank/damage/support) with subrole selection"
         },
         "additional_roles": {
           "label": "Additional Roles",
@@ -5442,7 +5442,7 @@
     "slots": "Slots per team",
     "slotCodes": {
       "tank": "Tank",
-      "dps": "Damage",
+      "damage": "Damage",
       "support": "Support",
       "flex": "Flex"
     },

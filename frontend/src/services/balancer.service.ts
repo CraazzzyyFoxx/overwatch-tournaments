@@ -4,23 +4,23 @@ import {
   BalanceJobStatusResponse,
   BalancerConfig,
   BalancerConfigResponse,
-  BalancerConfigField,
-  SUPPORTED_BALANCER_ALGORITHMS,
-  SUPPORTED_BALANCER_CONFIG_KEYS
+  BalancerConfigField
 } from "@/types/balancer.types";
 import { apiFetch } from "@/lib/api-fetch";
 
-const SUPPORTED_CONFIG_FIELD_TYPES = new Set<string>([
-  "boolean",
-  "float",
-  "integer",
-  "role_mask",
-  "select",
-  "slider"
-]);
+/** Widgets the drawer can render. A row typed anything else is dropped rather
+ * than handed to `ConfigFieldControl`, which would fall through to a number
+ * input and mangle the value. Which KEYS exist is not checked here: that is the
+ * backend's answer and this response is it. */
+const SUPPORTED_CONFIG_FIELD_TYPES: Record<string, true> = {
+  boolean: true,
+  float: true,
+  integer: true,
+  slider: true
+};
 
-type RawBalancerConfigField = Omit<BalancerConfigField, "key"> & {
-  key: string;
+type RawBalancerConfigField = Omit<BalancerConfigField, "type"> & {
+  type: string;
 };
 
 type RawBalancerConfigResponse = Omit<BalancerConfigResponse, "defaults" | "presets" | "fields"> & {
@@ -29,88 +29,30 @@ type RawBalancerConfigResponse = Omit<BalancerConfigResponse, "defaults" | "pres
   fields: RawBalancerConfigField[];
 };
 
-const SUPPORTED_BALANCER_ALGORITHM_SET = new Set<string>(SUPPORTED_BALANCER_ALGORITHMS);
-const SUPPORTED_BALANCER_CONFIG_KEY_SET = new Set<string>(SUPPORTED_BALANCER_CONFIG_KEYS);
-
-function normalizeAlgorithm(
-  value: unknown
-): BalancerConfig["algorithm"] | undefined {
-  if (typeof value !== "string") {
-    return undefined;
-  }
-
-  return SUPPORTED_BALANCER_ALGORITHM_SET.has(value)
-    ? (value as BalancerConfig["algorithm"])
-    : undefined;
-}
-
-function sanitizeConfigForFrontend(
-  config: BalancerConfig | Record<string, unknown> | null | undefined
-): BalancerConfig {
-  if (!config || typeof config !== "object") {
-    return {};
-  }
-
-  const entries = Object.entries(config).flatMap(([key, value]) => {
-    if (!SUPPORTED_BALANCER_CONFIG_KEY_SET.has(key) || value === undefined || value === null) {
-      return [];
-    }
-
-    if (key === "algorithm") {
-      const algorithm = normalizeAlgorithm(value);
-      return algorithm ? [[key, algorithm]] : [];
-    }
-
-    return [[key, value]];
-  });
-
-  return Object.fromEntries(entries) as BalancerConfig;
-}
-
-function normalizeConfigField(
-  field: RawBalancerConfigField,
-  defaults: BalancerConfig
-): BalancerConfigField | null {
-  if (
-    !SUPPORTED_BALANCER_CONFIG_KEY_SET.has(field.key) ||
-    !SUPPORTED_CONFIG_FIELD_TYPES.has(field.type as string)
-  ) {
-    return null;
-  }
-
-  const options =
-    field.key === "algorithm"
-      ? (field.options ?? []).filter((option) => SUPPORTED_BALANCER_ALGORITHM_SET.has(option))
-      : field.options;
-
-  return {
-    ...field,
-    key: field.key as BalancerConfigField["key"],
-    options,
-    default: defaults[field.key as keyof BalancerConfig] ?? field.default
-  };
+/** A knob the server left null is an absent knob, not a knob set to null:
+ * `null` would survive `sanitizeBalancerConfig` comparisons as a real value and
+ * make every preset look custom. */
+function dropEmptyConfigValues(config: Record<string, unknown>): BalancerConfig {
+  return Object.fromEntries(
+    Object.entries(config).filter(([, value]) => value !== undefined && value !== null)
+  ) as BalancerConfig;
 }
 
 function normalizeConfigResponse(payload: RawBalancerConfigResponse): BalancerConfigResponse {
-  const defaults = sanitizeConfigForFrontend(payload.defaults);
-  const presets = Object.fromEntries(
-    Object.entries(payload.presets).flatMap(([presetName, presetConfig]) => {
-      const algorithm = normalizeAlgorithm(presetConfig.algorithm);
-      if (presetConfig.algorithm !== undefined && !algorithm) {
-        return [];
-      }
-
-      return [[presetName, sanitizeConfigForFrontend(presetConfig)]];
-    })
-  );
+  const defaults = dropEmptyConfigValues(payload.defaults);
 
   return {
     ...payload,
     defaults,
-    presets,
+    presets: Object.fromEntries(
+      Object.entries(payload.presets).map(([name, preset]) => [name, dropEmptyConfigValues(preset)])
+    ),
     fields: payload.fields
-      .map((field) => normalizeConfigField(field, defaults))
-      .filter((field): field is BalancerConfigField => field !== null)
+      .filter((field) => SUPPORTED_CONFIG_FIELD_TYPES[field.type])
+      .map((field) => ({
+        ...(field as BalancerConfigField),
+        default: defaults[field.key] ?? field.default
+      }))
   };
 }
 

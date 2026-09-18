@@ -19,13 +19,13 @@ select_main_account_ow_ranks = ow_rank_selection.select_main_account_ow_ranks
 
 def test_takes_max_across_non_smurf_accounts() -> None:
     accounts = {
-        "Main#1111": {"tank": 2000, "dps": 2500},
+        "Main#1111": {"tank": 2000, "damage": 2500},
         "Alt#2222": {"tank": 3000, "support": 1800},
     }
     # No smurfs declared -> both accounts are "main"; per role take the max.
     assert select_main_account_ow_ranks(accounts, None) == {
         "tank": 3000,
-        "dps": 2500,
+        "damage": 2500,
         "support": 1800,
     }
 
@@ -53,11 +53,11 @@ def test_falls_back_to_smurf_when_no_main_rank_for_role() -> None:
 
 def test_smurf_matching_is_case_and_space_insensitive() -> None:
     accounts = {
-        "Main#1111": {"dps": 2200},
-        "SmUrF #9999": {"dps": 3900},
+        "Main#1111": {"damage": 2200},
+        "SmUrF #9999": {"damage": 3900},
     }
     # Declared smurf differs in case/spacing but normalises to the same key -> excluded.
-    assert select_main_account_ow_ranks(accounts, ["smurf#9999"]) == {"dps": 2200}
+    assert select_main_account_ow_ranks(accounts, ["smurf#9999"]) == {"damage": 2200}
 
 
 def test_max_across_multiple_smurfs_on_fallback() -> None:
@@ -75,8 +75,8 @@ def test_empty_accounts_returns_empty() -> None:
 
 def test_per_role_independence() -> None:
     accounts = {
-        "Main#1111": {"tank": 1500, "dps": 2600},
-        "Alt#2222": {"tank": 2700, "dps": 2100},
+        "Main#1111": {"tank": 1500, "damage": 2600},
+        "Alt#2222": {"tank": 2700, "damage": 2100},
     }
     # Different accounts win different roles.
-    assert select_main_account_ow_ranks(accounts, None) == {"tank": 2700, "dps": 2600}
+    assert select_main_account_ow_ranks(accounts, None) == {"tank": 2700, "damage": 2600}

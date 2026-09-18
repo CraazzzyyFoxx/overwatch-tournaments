@@ -187,7 +187,7 @@ Export into `tournament.team` skips waitlisted / incomplete / empty and records 
 
 `backend/shared/domain/roster_shape.py`
 
-Codes: `tank | dps | support | flex`. Built-in 5v5: `{tank: 1, dps: 2, support: 2}`.
+Codes: `tank | damage | support | flex`. Built-in 5v5: `{tank: 1, damage: 2, support: 2}`.
 
 Team size **2–12**. A one-slot roster is forbidden (nothing to draft or balance). `draft_rounds = team_size - 1`.
 

@@ -224,7 +224,7 @@ Model: `backend/shared/models/member_rank/member_rank.py`.
 workspace_id
 workspace_member_id     FK workspace_member CASCADE
 author_user_id          NULL = workspace canon; otherwise the personal book of an auth.user
-role                    tank / dps / support
+role                    tank / damage / support
 rank_value              NOT NULL
 ```
 

@@ -20,12 +20,12 @@ interface DraftPoolStepProps {
   failed: boolean;
 }
 
-const ROLES: DraftRole[] = ["tank", "dps", "support"];
+const ROLES: DraftRole[] = ["tank", "damage", "support"];
 const BLOCKER_MESSAGE_KEYS = {
   not_enough_players: "blockers.not_enough_players",
   pool_unranked: "blockers.pool_unranked",
   "role_shortage:tank": "blockers.role_shortage_tank",
-  "role_shortage:dps": "blockers.role_shortage_dps",
+  "role_shortage:damage": "blockers.role_shortage_damage",
   "role_shortage:support": "blockers.role_shortage_support"
 } as const;
 

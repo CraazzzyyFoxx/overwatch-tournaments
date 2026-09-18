@@ -130,7 +130,7 @@ export const ICON_BUTTON_CLASS =
 /** One accent per role, so a rank number carries its role without a second label. */
 export const ROLE_TEXT_ACCENTS: Record<string, string> = {
   tank: "text-sky-300",
-  dps: "text-orange-300",
+  damage: "text-orange-300",
   support: "text-emerald-300"
 };
 

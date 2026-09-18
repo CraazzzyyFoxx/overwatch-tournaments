@@ -36,7 +36,7 @@ import { formatSubRoleLabel, getHeroIconUrl, getPlayerSlug } from "@/utils/playe
 import type { DraftPoolRoleFilter, DraftPoolSort } from "@/lib/draft-workspace-model";
 import { allPlayerHeroes, playerRoles, roleTopHeroes, safeRoleForPlayer } from "@/lib/draft-workspace-model";
 
-const POOL_ROLES: DraftRole[] = ["tank", "dps", "support"];
+const POOL_ROLES: DraftRole[] = ["tank", "damage", "support"];
 const SEGMENT_CLASS =
   "inline-flex min-h-8 items-center justify-center gap-1 rounded-md px-2.5 text-xs font-medium text-[color:var(--aqt-fg-muted)] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)]";
 const SEGMENT_ACTIVE = "bg-[color:var(--aqt-card)] text-[color:var(--aqt-fg)]";
@@ -228,7 +228,7 @@ export function PlayerPool({
           {visiblePlayers.map((player) => {
             const roles = playerRoles(player);
             const secondaryRoles = roles.filter((entry) => entry !== player.primary_role);
-            // The server lists options in its own role order (tank, dps,
+            // The server lists options in its own role order (tank, damage,
             // support), so taking its first safe one preselected a secondary
             // role for anybody whose primary sorts later. Ask in the player's
             // own order instead.

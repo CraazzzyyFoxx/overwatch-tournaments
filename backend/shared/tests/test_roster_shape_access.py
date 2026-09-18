@@ -128,8 +128,8 @@ class RosterShapeAccessTests(IsolatedAsyncioTestCase):
 
     async def test_tournament_override_beats_workspace_default(self) -> None:
         session = _Session(
-            tournament_slots={"tank": 2, "dps": 2, "support": 2},
-            workspace_slots={"tank": 1, "dps": 1, "support": 1},
+            tournament_slots={"tank": 2, "damage": 2, "support": 2},
+            workspace_slots={"tank": 1, "damage": 1, "support": 1},
         )
 
         shape = await access.get_effective_roster_shape(
@@ -138,10 +138,10 @@ class RosterShapeAccessTests(IsolatedAsyncioTestCase):
             workspace_id=1,
         )
 
-        self.assertEqual(shape, parse_roster_slots({"tank": 2, "dps": 2, "support": 2}))
+        self.assertEqual(shape, parse_roster_slots({"tank": 2, "damage": 2, "support": 2}))
 
     async def test_workspace_default_applies_without_tournament_override(self) -> None:
-        session = _Session(tournament_slots=None, workspace_slots={"tank": 1, "dps": 3, "support": 2})
+        session = _Session(tournament_slots=None, workspace_slots={"tank": 1, "damage": 3, "support": 2})
 
         shape = await access.get_effective_roster_shape(
             session,
@@ -149,7 +149,7 @@ class RosterShapeAccessTests(IsolatedAsyncioTestCase):
             workspace_id=2,
         )
 
-        self.assertEqual(shape, parse_roster_slots({"tank": 1, "dps": 3, "support": 2}))
+        self.assertEqual(shape, parse_roster_slots({"tank": 1, "damage": 3, "support": 2}))
 
     async def test_both_levels_null_returns_the_canonical_default_object(self) -> None:
         session = _Session(tournament_slots=None, workspace_slots=None)
@@ -196,8 +196,8 @@ class RosterShapeAccessTests(IsolatedAsyncioTestCase):
 
     async def test_second_read_of_a_stored_shape_skips_the_database(self) -> None:
         session = _Session(
-            tournament_slots={"tank": 1, "dps": 2, "support": 2},
-            workspace_slots={"tank": 2, "dps": 2, "support": 2},
+            tournament_slots={"tank": 1, "damage": 2, "support": 2},
+            workspace_slots={"tank": 2, "damage": 2, "support": 2},
         )
 
         first = await access.get_effective_roster_shape(session, tournament_id=5, workspace_id=5)
@@ -224,7 +224,7 @@ class RosterShapeAccessTests(IsolatedAsyncioTestCase):
         self.assertEqual(session.calls, calls_after_first)
 
     async def test_tournament_invalidation_rereads_only_the_tournament_key(self) -> None:
-        session = _Session(tournament_slots=None, workspace_slots={"tank": 1, "dps": 2, "support": 2})
+        session = _Session(tournament_slots=None, workspace_slots={"tank": 1, "damage": 2, "support": 2})
 
         await access.get_effective_roster_shape(session, tournament_id=7, workspace_id=7)
         self.assertEqual((session.tournament_calls, session.workspace_calls), (1, 1))
@@ -240,7 +240,7 @@ class RosterShapeAccessTests(IsolatedAsyncioTestCase):
         # it caches the *effective* value per tournament. We cache the raw
         # per-level maps, so a workspace default change touches exactly its own
         # key -- no key-space scan.
-        session = _Session(tournament_slots=None, workspace_slots={"tank": 1, "dps": 2, "support": 2})
+        session = _Session(tournament_slots=None, workspace_slots={"tank": 1, "damage": 2, "support": 2})
 
         await access.get_effective_roster_shape(session, tournament_id=8, workspace_id=8)
 
@@ -263,21 +263,21 @@ class RosterShapeAccessTests(IsolatedAsyncioTestCase):
     # --- degradation ------------------------------------------------------
 
     async def test_works_without_a_configured_cache(self) -> None:
-        session = _Session(tournament_slots={"tank": 1, "dps": 2, "support": 2})
+        session = _Session(tournament_slots={"tank": 1, "damage": 2, "support": 2})
         fake = _FakeCache(setup=False)
 
         with patch.object(access, "cache", fake):
             shape = await access.get_effective_roster_shape(session, tournament_id=9, workspace_id=9)
             await access.invalidate_roster_shape_cache(tournament_id=9, workspace_id=9)
 
-        self.assertEqual(shape, parse_roster_slots({"tank": 1, "dps": 2, "support": 2}))
+        self.assertEqual(shape, parse_roster_slots({"tank": 1, "damage": 2, "support": 2}))
         self.assertEqual(fake.get_calls, [])
         self.assertEqual(fake.set_calls, [])
         # No cache means every read goes to the database -- correctness over speed.
         self.assertEqual(session.calls, 2)
 
     async def test_a_broken_cache_does_not_break_the_read(self) -> None:
-        session = _Session(tournament_slots={"tank": 2, "dps": 2, "support": 1})
+        session = _Session(tournament_slots={"tank": 2, "damage": 2, "support": 1})
         fake = _FakeCache(fail=True)
 
         with patch.object(access, "cache", fake):
@@ -285,7 +285,7 @@ class RosterShapeAccessTests(IsolatedAsyncioTestCase):
             # Invalidation is best-effort too: a dead Redis must not fail a write path.
             await access.invalidate_roster_shape_cache(tournament_id=10, workspace_id=10)
 
-        self.assertEqual(shape, parse_roster_slots({"tank": 2, "dps": 2, "support": 1}))
+        self.assertEqual(shape, parse_roster_slots({"tank": 2, "damage": 2, "support": 1}))
         # Both sides of the wrapper were exercised and both swallowed the failure.
         self.assertTrue(fake.get_calls)
         self.assertTrue(fake.set_calls)
@@ -309,11 +309,11 @@ class RosterShapeAccessTests(IsolatedAsyncioTestCase):
 
     async def test_level_getters_return_stored_maps_and_skip_the_session_for_none_ids(self) -> None:
         session = _Session(
-            tournament_slots={"tank": 1, "dps": 1},
+            tournament_slots={"tank": 1, "damage": 1},
             workspace_slots={"support": 2, "flex": 1},
         )
 
-        self.assertEqual(await access.get_tournament_roster_slots(session, 12), {"tank": 1, "dps": 1})
+        self.assertEqual(await access.get_tournament_roster_slots(session, 12), {"tank": 1, "damage": 1})
         self.assertEqual(await access.get_workspace_roster_slots(session, 12), {"support": 2, "flex": 1})
 
         empty = AsyncMock()

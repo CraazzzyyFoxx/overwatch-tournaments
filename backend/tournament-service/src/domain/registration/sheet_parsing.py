@@ -69,7 +69,7 @@ def map_role_token(value: str | None, value_mapping: dict[str, Any]) -> str | No
     }
     if normalized in custom_map:
         mapped = custom_map[normalized]
-        return mapped if mapped in {"tank", "dps", "support"} else None
+        return mapped if mapped in {"tank", "damage", "support"} else None
     return None
 
 
@@ -433,11 +433,12 @@ def parse_sheet_row_detailed(
                 "is_active": flat_values.get("roles.tank.is_active"),
                 "priority": flat_values.get("roles.tank.priority"),
             },
-            "dps": {
-                "rank_value": flat_values.get("roles.dps.rank_value") or flat_values.get("roles.dps.division_input"),
-                "subrole": _subrole_for_role(flat_values.get("roles.dps.subrole"), "dps", subrole_catalog),
-                "is_active": flat_values.get("roles.dps.is_active"),
-                "priority": flat_values.get("roles.dps.priority"),
+            "damage": {
+                "rank_value": flat_values.get("roles.damage.rank_value")
+                or flat_values.get("roles.damage.division_input"),
+                "subrole": _subrole_for_role(flat_values.get("roles.damage.subrole"), "damage", subrole_catalog),
+                "is_active": flat_values.get("roles.damage.is_active"),
+                "priority": flat_values.get("roles.damage.priority"),
             },
             "support": {
                 "rank_value": flat_values.get("roles.support.rank_value")

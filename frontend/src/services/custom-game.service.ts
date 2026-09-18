@@ -219,7 +219,7 @@ export type MixMemberStats = {
   streak: number;
   last_played_at: string | null;
   /** Only roles with games played -- a seat with no role counts in the totals and in no bucket. */
-  by_role: Partial<Record<"tank" | "dps" | "support", MixRoleTally>>;
+  by_role: Partial<Record<"tank" | "damage" | "support", MixRoleTally>>;
 };
 
 /** `since` echoes back the window the server parsed, so a reader can tell it from all time. */

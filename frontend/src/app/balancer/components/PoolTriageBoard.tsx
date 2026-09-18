@@ -70,7 +70,7 @@ const LANE_COPY: Record<PoolLane, string> = {
 
 const ROLE_TEXT_ACCENTS: Record<BalancerRoleCode, string> = {
   tank: "text-sky-300",
-  dps: "text-orange-300",
+  damage: "text-orange-300",
   support: "text-emerald-300",
 };
 

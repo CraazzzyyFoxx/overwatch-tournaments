@@ -137,16 +137,16 @@ describe("WorkspaceSubRolesSettingsPage", () => {
     expect(scope.textContent).toContain("1 of 2 active.");
   });
 
-  it("groups each entry under its registration role, not its canonical role", async () => {
+  it("groups each entry under its role's display label", async () => {
     const scope = await mount();
     const cards = [...scope.querySelectorAll("h2")].map((node) => node.textContent);
 
     expect(cards).toEqual(["Tank", "DPS", "Support"]);
-    // `damage` is the catalog's canonical name for the `dps` registration role.
-    const dpsCard = [...scope.querySelectorAll("[data-ui='card']")].find(
+    // "DPS" is the display label the `damage` role code renders under.
+    const damageCard = [...scope.querySelectorAll("[data-ui='card']")].find(
       (card) => card.querySelector("h2")?.textContent === "DPS"
     );
-    expect(dpsCard?.textContent).toContain("Hitscan");
+    expect(damageCard?.textContent).toContain("Hitscan");
   });
 
   it("deactivates through DELETE so the player.delete gate is unchanged", async () => {

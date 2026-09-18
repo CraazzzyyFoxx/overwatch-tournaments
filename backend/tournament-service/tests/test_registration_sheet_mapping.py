@@ -48,11 +48,11 @@ LEGACY_BUILTIN_TARGETS = {
     "roles.tank.division_input",
     "roles.tank.is_active",
     "roles.tank.priority",
-    "roles.dps.rank_value",
-    "roles.dps.division_input",
-    "roles.dps.subrole",
-    "roles.dps.is_active",
-    "roles.dps.priority",
+    "roles.damage.rank_value",
+    "roles.damage.division_input",
+    "roles.damage.subrole",
+    "roles.damage.is_active",
+    "roles.damage.priority",
     "roles.support.rank_value",
     "roles.support.division_input",
     "roles.support.subrole",
@@ -411,10 +411,10 @@ def test_role_subrole_token_custom_hitscan():
     result = sheet_parsing.parse_target_value(
         parser="role_subrole_token",
         values=["Хитскан ДПС"],
-        value_mapping={"role_subroles": {"хитскан дпс": {"role": "dps", "subrole": "hitscan"}}},
+        value_mapping={"role_subroles": {"хитскан дпс": {"role": "damage", "subrole": "hitscan"}}},
         grid=_grid(),
     )
-    assert result == {"role": "dps", "subrole": "hitscan"}
+    assert result == {"role": "damage", "subrole": "hitscan"}
 
 
 def test_role_subrole_token_custom_flex():
@@ -469,7 +469,7 @@ def test_role_subrole_token_unknown_returns_none():
 
 _SUBROLE_CATALOG = {
     "tank": [],
-    "dps": [{"slug": "hitscan", "label": "Hitscan"}],
+    "damage": [{"slug": "hitscan", "label": "Hitscan"}],
     "support": [{"slug": "main_heal", "label": "Main Heal"}],
 }
 
@@ -523,7 +523,7 @@ def test_catalog_slugs_none_skips_enforcement():
     from shared.domain.player_sub_roles import catalog_slugs
 
     assert catalog_slugs(None) is None
-    assert catalog_slugs(_SUBROLE_CATALOG, "dps") == {"hitscan"}
+    assert catalog_slugs(_SUBROLE_CATALOG, "damage") == {"hitscan"}
     assert catalog_slugs(_SUBROLE_CATALOG) == {"hitscan", "main_heal"}
 
 
@@ -572,16 +572,16 @@ def _make_parsed(primary, additional=None, is_flex=False, roles=None):
 
 def test_priority_follows_declaration_order():
     parsed = _make_parsed(
-        primary="dps",
+        primary="damage",
         additional=["support"],
         roles={
-            "dps": {"rank_value": 2500, "subrole": None, "is_active": True, "priority": None},
+            "damage": {"rank_value": 2500, "subrole": None, "is_active": True, "priority": None},
             "support": {"rank_value": 2300, "subrole": None, "is_active": True, "priority": None},
         },
     )
     payloads = sheet_parsing.build_registration_role_payloads(parsed)
     by_role = {p["role"]: p for p in payloads}
-    assert by_role["dps"]["priority"] == 0
+    assert by_role["damage"]["priority"] == 0
     assert by_role["support"]["priority"] == 1
 
 
@@ -590,7 +590,7 @@ def test_flex_token_in_primary_sets_is_full_flex():
         primary={"role": "flex", "subrole": None},
         roles={
             "tank": {"rank_value": 2000, "subrole": None, "is_active": True, "priority": None},
-            "dps": {"rank_value": 2200, "subrole": None, "is_active": True, "priority": None},
+            "damage": {"rank_value": 2200, "subrole": None, "is_active": True, "priority": None},
             "support": {"rank_value": 2100, "subrole": None, "is_active": True, "priority": None},
         },
     )
@@ -600,36 +600,36 @@ def test_flex_token_in_primary_sets_is_full_flex():
 
 def test_subrole_from_token_propagates_to_payload():
     parsed = _make_parsed(
-        primary={"role": "dps", "subrole": "hitscan"},
-        roles={"dps": {"rank_value": 2500, "subrole": None, "is_active": True, "priority": None}},
+        primary={"role": "damage", "subrole": "hitscan"},
+        roles={"damage": {"rank_value": 2500, "subrole": None, "is_active": True, "priority": None}},
     )
     payloads = sheet_parsing.build_registration_role_payloads(parsed)
-    dps_payload = next(p for p in payloads if p["role"] == "dps")
-    assert dps_payload["subrole"] == "hitscan"
+    damage_payload = next(p for p in payloads if p["role"] == "damage")
+    assert damage_payload["subrole"] == "hitscan"
 
 
 def test_explicit_subrole_wins_over_token_subrole():
     parsed = _make_parsed(
-        primary={"role": "dps", "subrole": "hitscan"},
-        roles={"dps": {"rank_value": 2500, "subrole": "projectile", "is_active": True, "priority": None}},
+        primary={"role": "damage", "subrole": "hitscan"},
+        roles={"damage": {"rank_value": 2500, "subrole": "projectile", "is_active": True, "priority": None}},
     )
     payloads = sheet_parsing.build_registration_role_payloads(parsed)
-    dps_payload = next(p for p in payloads if p["role"] == "dps")
-    assert dps_payload["subrole"] == "projectile"
+    damage_payload = next(p for p in payloads if p["role"] == "damage")
+    assert damage_payload["subrole"] == "projectile"
 
 
 def test_subrole_from_additional_token_propagates_to_payload():
     parsed = _make_parsed(
-        primary={"role": "dps", "subrole": "hitscan"},
+        primary={"role": "damage", "subrole": "hitscan"},
         additional=[{"role": "support", "subrole": "main_heal"}],
         roles={
-            "dps": {"rank_value": 2500, "subrole": None, "is_active": True, "priority": None},
+            "damage": {"rank_value": 2500, "subrole": None, "is_active": True, "priority": None},
             "support": {"rank_value": 2300, "subrole": None, "is_active": True, "priority": None},
         },
     )
     payloads = sheet_parsing.build_registration_role_payloads(parsed)
     by_role = {p["role"]: p for p in payloads}
-    assert by_role["dps"]["subrole"] == "hitscan"
+    assert by_role["damage"]["subrole"] == "hitscan"
     assert by_role["support"]["subrole"] == "main_heal"
 
 
@@ -642,7 +642,7 @@ def test_role_subrole_token_accepted_for_primary_and_additional():
 
 def test_sr_value_accepted_for_all_rank_value_targets():
     specs = catalog.target_spec_map({})
-    for role_code in ("tank", "dps", "support"):
+    for role_code in ("tank", "damage", "support"):
         spec = specs[f"roles.{role_code}.rank_value"]
         assert catalog.PARSER_SR_VALUE in spec.accepted_parsers
 
@@ -652,29 +652,29 @@ def test_sr_value_accepted_for_all_rank_value_targets():
 # ---------------------------------------------------------------------------
 
 
-_ROLE_MAP = {"roles": {"dps": "dps", "support": "support", "tank": "tank"}}
+_ROLE_MAP = {"roles": {"damage": "damage", "support": "support", "tank": "tank"}}
 
 
 def test_role_token_is_list_multiple_values():
     result = sheet_parsing.parse_target_value(
         parser="role_token",
-        values=["dps", "support"],
+        values=["damage", "support"],
         value_mapping=_ROLE_MAP,
         grid=_grid(),
         is_list=True,
     )
-    assert result == ["dps", "support"]
+    assert result == ["damage", "support"]
 
 
 def test_role_token_is_list_splits_comma_separated():
     result = sheet_parsing.parse_target_value(
         parser="role_token",
-        values=["tank,dps"],
+        values=["tank,damage"],
         value_mapping=_ROLE_MAP,
         grid=_grid(),
         is_list=True,
     )
-    assert result == ["tank", "dps"]
+    assert result == ["tank", "damage"]
 
 
 def test_role_token_is_list_skips_empty_values():
@@ -690,16 +690,16 @@ def test_role_token_is_list_skips_empty_values():
 
 _ROLE_SUBROLE_MAP = {
     "role_subroles": {
-        "хитскан дпс": {"role": "dps", "subrole": "hitscan"},
+        "хитскан дпс": {"role": "damage", "subrole": "hitscan"},
         "мейн хил": {"role": "support", "subrole": "main_heal"},
         "лайт хил (мерси, кирико)": {"role": "support", "subrole": "light_heal"},
         "проджектайл дд (генджи, фара, ханзо, торбьерн, джанкрет, эхо, мей, рипер, сомбра, симметра, трейсер)": {
-            "role": "dps",
+            "role": "damage",
             "subrole": "projectile",
         },
-        "хитскан дд (маккри, вдова, солдат76, эш)": {"role": "dps", "subrole": "hitscan"},
+        "хитскан дд (маккри, вдова, солдат76, эш)": {"role": "damage", "subrole": "hitscan"},
         "support": {"role": "support", "subrole": None},
-        "dps": {"role": "dps", "subrole": None},
+        "damage": {"role": "damage", "subrole": None},
     }
 }
 
@@ -712,7 +712,7 @@ def test_role_subrole_token_is_list_multiple_columns():
         grid=_grid(),
         is_list=True,
     )
-    assert result == [{"role": "dps", "subrole": "hitscan"}, {"role": "support", "subrole": "main_heal"}]
+    assert result == [{"role": "damage", "subrole": "hitscan"}, {"role": "support", "subrole": "main_heal"}]
 
 
 def test_role_subrole_token_verbose_google_forms_label():
@@ -725,7 +725,7 @@ def test_role_subrole_token_verbose_google_forms_label():
         grid=_grid(),
         is_list=True,
     )
-    assert result == [{"role": "dps", "subrole": "projectile"}]
+    assert result == [{"role": "damage", "subrole": "projectile"}]
 
 
 def test_role_subrole_token_verbose_hitscan_label():
@@ -736,7 +736,7 @@ def test_role_subrole_token_verbose_hitscan_label():
         grid=_grid(),
         is_list=True,
     )
-    assert result == [{"role": "dps", "subrole": "hitscan"}]
+    assert result == [{"role": "damage", "subrole": "hitscan"}]
 
 
 def test_role_subrole_token_verbose_light_heal_label():
@@ -766,12 +766,12 @@ def test_role_subrole_token_is_list_first_column_empty():
 def test_role_subrole_token_is_list_deduplicates_by_role():
     result = sheet_parsing.parse_target_value(
         parser="role_subrole_token",
-        values=["dps", "dps"],
+        values=["damage", "damage"],
         value_mapping=_ROLE_SUBROLE_MAP,
         grid=_grid(),
         is_list=True,
     )
-    assert result == [{"role": "dps", "subrole": None}]
+    assert result == [{"role": "damage", "subrole": None}]
 
 
 def test_role_subrole_token_no_is_list_unchanged():
@@ -781,7 +781,7 @@ def test_role_subrole_token_no_is_list_unchanged():
         value_mapping=_ROLE_SUBROLE_MAP,
         grid=_grid(),
     )
-    assert result == {"role": "dps", "subrole": "hitscan"}
+    assert result == {"role": "damage", "subrole": "hitscan"}
 
 
 def test_role_subrole_token_multi_role_mapping_expands():
@@ -832,8 +832,8 @@ def test_additional_roles_spec_has_default_is_list():
 def test_role_token_list_with_explicit_mapping():
     result = sheet_parsing.parse_target_value(
         parser="role_token_list",
-        values=["dps", "support"],
+        values=["damage", "support"],
         value_mapping=_ROLE_MAP,
         grid=_grid(),
     )
-    assert result == ["dps", "support"]
+    assert result == ["damage", "support"]
