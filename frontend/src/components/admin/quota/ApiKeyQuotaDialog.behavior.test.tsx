@@ -1,15 +1,23 @@
 // @vitest-environment happy-dom
 //
-// The two things this dialog has to get right are both about attribution.
+// Three things this dialog has to get right.
 //
-// A quota refusal names exactly ONE of the two budgets a key spends from, so
-// the dialog is useless unless both are on screen and labelled: a 429 on a key
-// sitting at 2/600 requests is the workspace pool running dry, and without the
-// workspace bar next to the key bar that reads as a random failure.
+// Attribution: a quota refusal names exactly ONE of the two budgets a key
+// spends from, so the dialog is useless unless both are on screen and
+// labelled: a 429 on a key sitting at 2/600 requests is the workspace pool
+// running dry, and without the workspace bar next to the key bar that reads as
+// a random failure. Likewise a write refused with 422 `quota_above_inherited`
+// names exactly ONE of the five numbers, and it has to land on that input.
 //
-// And a write refused with 422 `quota_above_inherited` names exactly ONE of the
-// five numbers. It has to land on that input — a toast saying "could not save"
-// leaves the admin re-typing all five to find out which one the server hated.
+// The stored row: the fields are seeded from the override written on the key.
+// They used to start blank while the read reported only EFFECTIVE ceilings, so
+// the dialog showed nothing about what was stored and its submit sent an
+// all-null payload — i.e. opening it and pressing the button deleted limits
+// nobody could see.
+//
+// Authority: raising a limit above what the key inherits is superuser-only, so
+// the field says so instead of spending a round trip on a 422 an admin cannot
+// act on.
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { NextIntlClientProvider } from "next-intl";
 import { act } from "react";
@@ -17,7 +25,13 @@ import { createRoot } from "react-dom/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import en from "@/i18n/messages/en.json";
-import type { AccountApiKey, QuotaScope, QuotaScopeUsage } from "@/types/auth.types";
+import type {
+  AccountApiKey,
+  QuotaLimitsPayload,
+  QuotaScope,
+  QuotaScopePolicy,
+  QuotaScopeUsage
+} from "@/types/auth.types";
 
 import { ApiKeyQuotaDialog } from "./ApiKeyQuotaDialog";
 
@@ -28,6 +42,11 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() })
+}));
+
+let superuser = false;
+vi.mock("@/hooks/usePermissions", () => ({
+  usePermissions: () => ({ isSuperuser: superuser })
 }));
 
 const notifySuccess = vi.fn();
@@ -66,6 +85,29 @@ function scope(name: QuotaScope, over: Partial<QuotaScopeUsage> = {}): QuotaScop
     max_upload_bytes: 10 * 1024 * 1024,
     max_items_per_request: 500,
     ...over
+  };
+}
+
+const NO_LIMITS: QuotaLimitsPayload = {
+  requests_per_minute: null,
+  heavy_per_day: null,
+  concurrent_heavy: null,
+  max_upload_bytes: null,
+  max_items_per_request: null
+};
+
+/** The key's stored row plus the ceiling `set_quota` holds it to. */
+function policy(override: Partial<QuotaLimitsPayload> = {}): QuotaScopePolicy {
+  return {
+    scope: "key",
+    override: { ...NO_LIMITS, heavy_per_day: 120, ...override },
+    inherited: {
+      requests_per_minute: 600,
+      heavy_per_day: 500,
+      concurrent_heavy: 4,
+      max_upload_bytes: 10 * 1024 * 1024,
+      max_items_per_request: 500
+    }
   };
 }
 
@@ -109,9 +151,17 @@ function field(dimension: string): HTMLInputElement {
   return found as HTMLInputElement;
 }
 
+// React installs a value tracker on controlled inputs, so a plain
+// `input.value = x` looks like "no change" and onChange never fires. Going
+// through the prototype setter is what makes the keystroke real.
+const setInputValue = Object.getOwnPropertyDescriptor(
+  window.HTMLInputElement.prototype,
+  "value"
+)!.set!;
+
 async function type(input: HTMLInputElement, value: string) {
   await act(async () => {
-    input.value = value;
+    setInputValue.call(input, value);
     input.dispatchEvent(new Event("input", { bubbles: true }));
   });
 }
@@ -125,20 +175,37 @@ async function submit() {
   await settle();
 }
 
-beforeEach(() => {
-  document.body.innerHTML = "";
-  notifySuccess.mockReset();
-  notifyApiError.mockReset();
-  fetchMock.mockReset();
+function respondWith(rows: QuotaScopePolicy[]) {
   fetchMock.mockResolvedValue({
     ok: true,
     status: 200,
     json: async () => ({
       plan_slug: "verified",
       workspace_id: 42,
-      scopes: [scope("key"), scope("workspace", { requests_used: 598, heavy_used: 500 })]
+      scopes: [scope("key"), scope("workspace", { requests_used: 598, heavy_used: 500 })],
+      policy: rows
     })
   });
+}
+
+/** The PUT the dialog sent, skipping the refetch that follows a success. */
+function writtenLimits(): QuotaLimitsPayload {
+  const write = (fetchMock.mock.calls as [string, RequestInit][]).find(
+    ([, init]) => init?.method === "PUT"
+  );
+  if (!write) throw new Error("no PUT was sent");
+  const [url, init] = write;
+  expect(url).toBe("/api/account/api-keys/7/quota");
+  return JSON.parse(init.body as string).limits as QuotaLimitsPayload;
+}
+
+beforeEach(() => {
+  document.body.innerHTML = "";
+  superuser = false;
+  notifySuccess.mockReset();
+  notifyApiError.mockReset();
+  fetchMock.mockReset();
+  respondWith([policy()]);
   vi.stubGlobal("fetch", fetchMock);
 });
 
@@ -163,7 +230,71 @@ describe("ApiKeyQuotaDialog", () => {
     );
   });
 
+  it("starts from the override stored on the key, not from a blank form", async () => {
+    await mount();
+
+    // The row says 120 heavy units a day and inherits the rest. A blank form
+    // here is not a neutral start: submitting it deletes the row.
+    expect(field("heavy_per_day").value).toBe("120");
+    expect(field("requests_per_minute").value).toBe("");
+    expect(document.body.textContent).toContain(en.quota.state.overridden);
+
+    await submit();
+    expect(writtenLimits().heavy_per_day).toBe(120);
+  });
+
+  it("empties every field to stop overriding, and says so on the button", async () => {
+    await mount();
+
+    await type(field("heavy_per_day"), "");
+    const submitButton = [...document.body.querySelectorAll("button")].find((button) =>
+      button.textContent?.includes(en.quota.clearOverride)
+    );
+    expect(submitButton).toBeTruthy();
+
+    await submit();
+    expect(writtenLimits()).toEqual({
+      requests_per_minute: null,
+      heavy_per_day: null,
+      concurrent_heavy: null,
+      max_upload_bytes: null,
+      max_items_per_request: null
+    });
+  });
+
+  it("refuses a raise for an admin before spending a request on the 422", async () => {
+    await mount();
+
+    // 5000 is over the 500 this key inherits, and only a superuser may store
+    // that. The admin gets the number marked, not a round trip.
+    await type(field("heavy_per_day"), "5000");
+    const input = field("heavy_per_day");
+    expect(input.getAttribute("aria-invalid")).toBe("true");
+    expect(document.body.textContent).toContain(en.quota.superuserOnly);
+
+    await submit();
+    expect(
+      (fetchMock.mock.calls as [string, RequestInit][]).some(([, init]) => init?.method === "PUT")
+    ).toBe(false);
+  });
+
+  it("lets a superuser store the same raise, and marks it as one", async () => {
+    superuser = true;
+    await mount();
+
+    await type(field("heavy_per_day"), "5000");
+    expect(field("heavy_per_day").getAttribute("aria-invalid")).toBeNull();
+    expect(document.body.textContent).toContain(en.quota.superuserOnly);
+
+    await submit();
+    expect(writtenLimits().heavy_per_day).toBe(5000);
+  });
+
   it("puts a 422 quota_above_inherited on the field it names, not in a toast", async () => {
+    // No policy in the payload — a plan that moved since the read, or a worker
+    // that does not report one. The client has no ceiling to check against, so
+    // the server's refusal is the only one there is and it still has to land.
+    respondWith([]);
     await mount();
 
     await type(field("heavy_per_day"), "5000");
@@ -214,29 +345,5 @@ describe("ApiKeyQuotaDialog", () => {
     expect(notifyApiError).toHaveBeenCalled();
     expect(field("requests_per_minute").getAttribute("aria-invalid")).toBeNull();
     expect(body.textContent).toContain(en.quota.overrideHeading);
-  });
-
-  it("sends an all-null payload as the way to stop overriding", async () => {
-    await mount();
-    fetchMock.mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({}) });
-    await submit();
-
-    // A successful write invalidates the usage query, so the LAST call is the
-    // refetch; the write is the one carrying a method.
-    const write = (fetchMock.mock.calls as [string, RequestInit][]).find(
-      ([, init]) => init?.method === "PUT"
-    );
-    if (!write) throw new Error("no PUT was sent");
-    const [url, init] = write;
-    expect(url).toBe("/api/account/api-keys/7/quota");
-    expect(JSON.parse(init.body as string)).toEqual({
-      limits: {
-        requests_per_minute: null,
-        heavy_per_day: null,
-        concurrent_heavy: null,
-        max_upload_bytes: null,
-        max_items_per_request: null
-      }
-    });
   });
 });

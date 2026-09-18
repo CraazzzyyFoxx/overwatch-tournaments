@@ -95,6 +95,10 @@ export interface QuotaUsage {
   plan_slug: string | null;
   workspace_id: number | null;
   scopes: QuotaScopeUsage[];
+  /**
+   * Editable policy per scope. Empty on reads that only report consumption.
+   */
+  policy: QuotaScopePolicy[];
 }
 
 /**
@@ -108,6 +112,23 @@ export interface QuotaLimitsPayload {
   concurrent_heavy?: number | null;
   max_upload_bytes?: number | null;
   max_items_per_request?: number | null;
+}
+
+/**
+ * What is stored for one scope, and the ceiling a write must stay under.
+ *
+ * `QuotaScopeUsage` carries the *effective* number, which cannot tell "the plan
+ * grants 600" apart from "someone wrote 600 here" — so an editor seeded from it
+ * would turn a glance into a permanent override, and an editor seeded from
+ * nothing deletes the row on its first save.
+ *
+ * `inherited` is the same bound the server enforces for this scope: a value
+ * above it is a raise, and a raise is superuser-only.
+ */
+export interface QuotaScopePolicy {
+  scope: QuotaScope;
+  override: QuotaLimitsPayload;
+  inherited: QuotaLimitsPayload;
 }
 
 export interface AuthUser {

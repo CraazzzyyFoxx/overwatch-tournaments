@@ -25,7 +25,7 @@ from shared.quota import admin as quota_admin
 from shared.rbac import SCOPE_PAIRS, normalize_scopes, scope_pairs, unknown_scopes
 from shared.repository import ApiKeyRepository, RoleRepository, WorkspaceMemberRepository, WorkspaceRepository
 from shared.rpc.identity import rehydrate_user
-from shared.schemas.quota import QuotaLimitsPayload, QuotaUsageRead
+from shared.schemas.quota import QuotaLimitsPayload, QuotaScopePolicy, QuotaUsageRead
 from shared.services.audit import record_audit
 from src import models, schemas
 from src.core import key_derivation
@@ -458,8 +458,7 @@ class ApiKeyService:
         ).scalar_one_or_none()
         return {name: (getattr(row, name) if row is not None else None) for name in quota_admin.DIMENSIONS}
 
-    @staticmethod
-    async def _quota_usage(session: AsyncSession, row: models.ApiKey) -> QuotaUsageRead:
+    async def _quota_usage(self, session: AsyncSession, row: models.ApiKey) -> QuotaUsageRead:
         report = await quota.usage(
             principal_kind="api_key",
             principal_id=row.id,
@@ -468,6 +467,19 @@ class ApiKeyService:
         return QuotaUsageRead(
             plan_slug=await quota_admin.plan_slug_for_workspace(session, row.workspace_id),
             **report,
+            # The key's own row and the bound ``set_quota`` holds it to (plan
+            # narrowed by the workspace's key override). Without the row an
+            # editor cannot show what it is about to replace, and without the
+            # bound it cannot say which edits are superuser-only.
+            policy=[
+                QuotaScopePolicy(
+                    scope="key",
+                    override=QuotaLimitsPayload(**await self._quota_override(session, row.id)),
+                    inherited=QuotaLimitsPayload(
+                        **await quota_admin.inherited_limits(session, workspace_id=row.workspace_id, scope="key")
+                    ),
+                )
+            ],
         )
 
     async def set_quota(

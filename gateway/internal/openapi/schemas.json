@@ -1337,7 +1337,7 @@
       "summary": "List quota plans"
     },
     "rpc.app.quota.workspace_usage": {
-      "description": "Permission: workspace `team.create` (i.e. a workspace admin) or superuser. Returns the workspace's plan slug and its shared pool's effective ceilings next to what has been spent \u2014 requests this minute, heavy units today, concurrent heavy slots held, and the two payload caps \u2014 with the seconds until each window resets. Per-key usage is not reported here (identity-service answers for an API key). 404 if the workspace is missing. A metered call refused against these numbers answers 429 `code=rate_limited` with `Retry-After`, naming the dimension and the bucket as `details.limit_name` and `details.scope` (relayed by the gateway inside `fields[0]`).",
+      "description": "Permission: workspace `team.create` (i.e. a workspace admin) or superuser. Returns the workspace's plan slug and its shared pool's effective ceilings next to what has been spent \u2014 requests this minute, heavy units today, concurrent heavy slots held, and the two payload caps \u2014 with the seconds until each window resets. Per-key usage is not reported here (identity-service answers for an API key). `policy` is the editable half and covers all three scopes (`workspace`/`key`/`session`), because all three override rows belong to this tenant: each entry carries `override`, the row exactly as stored (all-null when the scope has none), and `inherited`, the ceiling `quota_set` holds a non-superuser write to. 404 if the workspace is missing. A metered call refused against these numbers answers 429 `code=rate_limited` with `Retry-After`, naming the dimension and the bucket as `details.limit_name` and `details.scope` (relayed by the gateway inside `fields[0]`).",
       "query_params": [
         {
           "name": "workspace_id",
@@ -15454,6 +15454,31 @@
       "title": "QuotaPlanWrite",
       "type": "object"
     },
+    "app.QuotaScopePolicy": {
+      "description": "One scope's stored override next to the ceiling a write must stay under.\n\n``QuotaScopeUsage`` reports the EFFECTIVE number, which cannot tell \"the\nplan grants 600\" apart from \"someone wrote 600 here\". An editor needs both:\n``override`` is the row exactly as stored (all-``None`` when the scope has\nno row at all), and ``inherited`` is what a null dimension falls back to.\n\n``inherited`` is the same bound the write path enforces for this scope, so a\nscreen can mark a raise as superuser-only before spending the round trip\nthat would answer 422 ``quota_above_inherited``.",
+      "properties": {
+        "inherited": {
+          "$ref": "#/components/schemas/app.QuotaLimitsPayload"
+        },
+        "override": {
+          "$ref": "#/components/schemas/app.QuotaLimitsPayload"
+        },
+        "scope": {
+          "enum": [
+            "workspace",
+            "key",
+            "session"
+          ],
+          "title": "Scope",
+          "type": "string"
+        }
+      },
+      "required": [
+        "scope"
+      ],
+      "title": "QuotaScopePolicy",
+      "type": "object"
+    },
     "app.QuotaScopeUsage": {
       "description": "One bucket's effective ceiling next to what has been spent against it.",
       "properties": {
@@ -15585,6 +15610,13 @@
           ],
           "default": null,
           "title": "Plan Slug"
+        },
+        "policy": {
+          "items": {
+            "$ref": "#/components/schemas/app.QuotaScopePolicy"
+          },
+          "title": "Policy",
+          "type": "array"
         },
         "scopes": {
           "items": {
@@ -25603,6 +25635,31 @@
       "title": "QuotaLimitsPayload",
       "type": "object"
     },
+    "identity.QuotaScopePolicy": {
+      "description": "One scope's stored override next to the ceiling a write must stay under.\n\n``QuotaScopeUsage`` reports the EFFECTIVE number, which cannot tell \"the\nplan grants 600\" apart from \"someone wrote 600 here\". An editor needs both:\n``override`` is the row exactly as stored (all-``None`` when the scope has\nno row at all), and ``inherited`` is what a null dimension falls back to.\n\n``inherited`` is the same bound the write path enforces for this scope, so a\nscreen can mark a raise as superuser-only before spending the round trip\nthat would answer 422 ``quota_above_inherited``.",
+      "properties": {
+        "inherited": {
+          "$ref": "#/components/schemas/identity.QuotaLimitsPayload"
+        },
+        "override": {
+          "$ref": "#/components/schemas/identity.QuotaLimitsPayload"
+        },
+        "scope": {
+          "enum": [
+            "workspace",
+            "key",
+            "session"
+          ],
+          "title": "Scope",
+          "type": "string"
+        }
+      },
+      "required": [
+        "scope"
+      ],
+      "title": "QuotaScopePolicy",
+      "type": "object"
+    },
     "identity.QuotaScopeUsage": {
       "description": "One bucket's effective ceiling next to what has been spent against it.",
       "properties": {
@@ -25734,6 +25791,13 @@
           ],
           "default": null,
           "title": "Plan Slug"
+        },
+        "policy": {
+          "items": {
+            "$ref": "#/components/schemas/identity.QuotaScopePolicy"
+          },
+          "title": "Policy",
+          "type": "array"
         },
         "scopes": {
           "items": {

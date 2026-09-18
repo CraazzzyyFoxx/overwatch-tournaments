@@ -48,6 +48,7 @@ __all__ = (
     "plan_slug_for_workspace",
     "upsert_operation",
     "upsert_plan",
+    "workspace_override",
 )
 
 #: The five dimensions, in the order every table declares them.
@@ -128,6 +129,24 @@ async def inherited_limits(
         candidates = [item for item in (value, inherited[name]) if item is not None]
         inherited[name] = min(candidates) if candidates else None
     return inherited
+
+
+async def workspace_override(session: Any, *, workspace_id: int, scope: str) -> dict[str, int | None]:
+    """The stored override row as a flat dimension map, all-``None`` when absent.
+
+    Distinct from ``inherited_limits`` on purpose: that answers "what will be
+    enforced", this answers "what is written here", and an editor that cannot
+    tell them apart offers a form whose empty state silently deletes the row.
+    """
+    row = (
+        await session.execute(
+            select(QuotaWorkspaceLimit).where(
+                QuotaWorkspaceLimit.workspace_id == workspace_id,
+                QuotaWorkspaceLimit.scope == scope,
+            )
+        )
+    ).scalar_one_or_none()
+    return {name: (getattr(row, name) if row is not None else None) for name in DIMENSIONS}
 
 
 def _assert_within(values: dict[str, int | None], inherited: dict[str, int | None]) -> None:

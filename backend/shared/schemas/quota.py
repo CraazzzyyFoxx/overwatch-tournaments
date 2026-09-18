@@ -25,6 +25,7 @@ __all__ = (
     "QuotaPlanRead",
     "QuotaPlanWrite",
     "QuotaScope",
+    "QuotaScopePolicy",
     "QuotaScopeUsage",
     "QuotaUsageRead",
 )
@@ -107,7 +108,27 @@ class QuotaScopeUsage(BaseModel):
     max_items_per_request: int | None = None
 
 
+class QuotaScopePolicy(BaseModel):
+    """One scope's stored override next to the ceiling a write must stay under.
+
+    ``QuotaScopeUsage`` reports the EFFECTIVE number, which cannot tell "the
+    plan grants 600" apart from "someone wrote 600 here". An editor needs both:
+    ``override`` is the row exactly as stored (all-``None`` when the scope has
+    no row at all), and ``inherited`` is what a null dimension falls back to.
+
+    ``inherited`` is the same bound the write path enforces for this scope, so a
+    screen can mark a raise as superuser-only before spending the round trip
+    that would answer 422 ``quota_above_inherited``.
+    """
+
+    scope: QuotaScope
+    override: QuotaLimitsPayload = Field(default_factory=QuotaLimitsPayload)
+    inherited: QuotaLimitsPayload = Field(default_factory=QuotaLimitsPayload)
+
+
 class QuotaUsageRead(BaseModel):
     plan_slug: str | None = None
     workspace_id: int | None = None
     scopes: list[QuotaScopeUsage] = Field(default_factory=list)
+    #: Editable policy per scope. Empty on reads that only report consumption.
+    policy: list[QuotaScopePolicy] = Field(default_factory=list)

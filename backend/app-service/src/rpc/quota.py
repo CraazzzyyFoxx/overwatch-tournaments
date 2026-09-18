@@ -14,7 +14,10 @@ TTL, which is what the shared invalidation rail is for elsewhere.
 
 ``workspace_usage`` reports the workspace bucket only. The per-key and
 per-session buckets belong to principals the workspace's admin does not
-necessarily own, and identity-service already answers for an API key.
+necessarily own, and identity-service already answers for an API key. Its
+``policy`` half is wider than its ``scopes`` half on purpose: all three override
+rows live in this tenant's own ``quota.workspace_limit``, and the screen that
+edits them has to show what is stored there before it can offer to replace it.
 """
 
 from __future__ import annotations
@@ -28,11 +31,14 @@ from shared.core.errors import BaseAPIException as HTTPException
 from shared.quota import admin as quota_admin
 from shared.rpc.identity import ensure_workspace_permission
 from shared.schemas.quota import (
+    QUOTA_SCOPES,
+    QuotaLimitsPayload,
     QuotaOperationRead,
     QuotaOperationWrite,
     QuotaPlanLimitRead,
     QuotaPlanRead,
     QuotaPlanWrite,
+    QuotaScopePolicy,
     QuotaScopeUsage,
     QuotaUsageRead,
 )
@@ -78,6 +84,29 @@ def _plan_snapshot(title: str, description: str | None, limits: list[Any]) -> di
             QuotaPlanLimitRead.model_validate(row, from_attributes=True).model_dump(mode="json") for row in limits
         ],
     }
+
+
+async def _scope_policy(session: Any, workspace_id: int) -> list[QuotaScopePolicy]:
+    """Every scope's stored row next to the ceiling ``quota_set`` holds it to.
+
+    ``skip_workspace_override=True`` matches ``apply_workspace_limits``: the row
+    being edited is never its own ceiling, so the bound reported here is the one
+    a non-superuser write is actually measured against.
+    """
+    return [
+        QuotaScopePolicy(
+            scope=scope,
+            override=QuotaLimitsPayload(
+                **await quota_admin.workspace_override(session, workspace_id=workspace_id, scope=scope)
+            ),
+            inherited=QuotaLimitsPayload(
+                **await quota_admin.inherited_limits(
+                    session, workspace_id=workspace_id, scope=scope, skip_workspace_override=True
+                )
+            ),
+        )
+        for scope in QUOTA_SCOPES
+    ]
 
 
 def register(broker: Any, logger: Any) -> None:
@@ -199,6 +228,7 @@ def register(broker: Any, logger: Any) -> None:
                     for entry in report.get("scopes", [])
                     if entry.get("scope") == "workspace"
                 ],
+                policy=await _scope_policy(session, workspace_id),
             )
 
         return await c.envelope(logger, "quota.workspace_usage", op, session_factory=_SF)

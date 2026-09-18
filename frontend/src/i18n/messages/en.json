@@ -5940,13 +5940,29 @@
     "usageEmpty": "No quota scope applies here yet.",
     "usageHeading": "Spent against each budget",
     "overrideHeading": "Overrides",
-    "overrideHint": "An empty field inherits, from the workspace and then from the plan. A 0 does not inherit: it stores zero and blocks the operation. Saving replaces the whole override, so keep the numbers you still want.",
+    "overrideHint": "The fields start from what is stored here. An empty field inherits — first from the workspace, then from the plan. A 0 does not inherit: it stores zero and blocks the operation outright. Emptying all five removes the override.",
     "inheritPlaceholder": "Inherit",
-    "effectiveNow": "In force now: {value}.",
+    "inheritPlaceholderValue": "Inherit ({value})",
+    "inheritedCeiling": "Inherited ceiling: {value}.",
+    "superuserOnly": "Superuser only",
+    "raiseAbove": "Above the inherited ceiling of {limit}. Only a superuser can store this value.",
+    "raiseAboveUnlimited": "The inherited value is already unlimited, so any number here raises it. Only a superuser can store this value.",
+    "state": {
+      "overridden": "Overridden",
+      "inherited": "Inherited"
+    },
+    "authority": {
+      "badge": "Superuser",
+      "superuser": "You can raise a limit above what the plan grants; a workspace admin cannot. Any field that does is marked as a superuser-only override.",
+      "admin": "You can only lower these. Raising a limit above what the plan grants is superuser-only — ask a superuser.",
+      "keySuperuser": "You can raise this key above what its workspace and plan grant; a workspace admin cannot.",
+      "keyAdmin": "You can only lower this key. Raising it above what its workspace and plan grant is superuser-only."
+    },
     "save": "Save limits",
     "saving": "Saving…",
     "saved": "Limits saved",
     "clearOverride": "Stop overriding",
+    "reset": "Discard changes",
     "errors": {
       "aboveInherited": "{dimension} can only be lowered here. The inherited ceiling is {limit}; you asked for {requested}. A superuser can raise it.",
       "aboveInheritedUnlimited": "{dimension} can only be lowered here, and the inherited value is already unlimited, so any number raises it. A superuser can set it.",
