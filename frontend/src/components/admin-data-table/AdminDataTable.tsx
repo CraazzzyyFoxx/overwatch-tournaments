@@ -163,12 +163,13 @@ export interface AdminDataTableProps<TData> {
 
   /**
    * `pages` (default) numbers the results. `infinite` grows one batch at a
-   * time from a sentinel plus a Load-more button, and is client mode only —
-   * server mode would need an accumulating `useInfiniteQuery` contract.
-   * `initialPageSize` is the batch size either way, and `?page=` still records
-   * how deep the list is, so a reload restores the same depth.
+   * time from a sentinel plus a Load-more button, and `all` renders every row
+   * with no footer at all; both are client mode only — server mode would need
+   * an accumulating `useInfiniteQuery` contract.
+   * `initialPageSize` is the batch size for `pages`/`infinite`, and `?page=`
+   * still records how deep the list is, so a reload restores the same depth.
    */
-  paging?: "pages" | "infinite";
+  paging?: "pages" | "infinite" | "all";
   /** Plural noun for the rows in the infinite footer, e.g. "registrations". */
   rowUnit?: string;
 
@@ -288,6 +289,9 @@ export function AdminDataTable<TData>({
   const isClientMode = rows !== undefined;
   // Server mode has no accumulating query to grow, so it always paginates.
   const isInfinite = isClientMode && paging === "infinite";
+  // Every row at once: the caller already holds the whole pool and wants no
+  // batching UI over it.
+  const showAll = isClientMode && paging === "all";
   const pathname = usePathname();
   const isMobile = useIsMobile();
   const searchInputId = useId();
@@ -507,9 +511,12 @@ export function AdminDataTable<TData>({
 
   // Infinite scrolling renders one page that grows: `page` still counts the
   // batches loaded, so `?page=` restores the same depth after a reload.
-  const paginationState = isInfinite
-    ? { pageIndex: 0, pageSize: safeCurrentPage * safePageSize }
-    : { pageIndex: safeCurrentPage - 1, pageSize: safePageSize };
+  // `all` is one page big enough to hold every row `clientRows` can yield.
+  const paginationState = showAll
+    ? { pageIndex: 0, pageSize: Math.max(clientRows.length, 1) }
+    : isInfinite
+      ? { pageIndex: 0, pageSize: safeCurrentPage * safePageSize }
+      : { pageIndex: safeCurrentPage - 1, pageSize: safePageSize };
 
   const table = useReactTable<TData>({
     data: isClientMode ? clientRows : (data.results ?? []),
@@ -1406,7 +1413,7 @@ export function AdminDataTable<TData>({
       </div>
 
       {/* ── FOOTER: pagination ─────────────────────────── */}
-      {safeTotal > 0 && !isInfinite && (
+      {safeTotal > 0 && !isInfinite && !showAll && (
         <div className="flex items-center justify-between gap-3 border-t border-border/40 px-4 py-2">
           <div className="flex items-center gap-3 text-sm text-muted-foreground">
             <span className="tabular-nums">{rangeStart}–{rangeEnd} of {safeTotal}</span>

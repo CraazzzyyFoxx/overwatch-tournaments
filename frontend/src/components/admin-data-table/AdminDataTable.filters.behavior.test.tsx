@@ -267,6 +267,40 @@ describe("AdminDataTable column filters", () => {
     ).toBe(false);
   });
 
+  it("renders every row with no pager when paging is all", async () => {
+    queryFn.mockClear();
+    const rows = Array.from({ length: 7 }, (_unused, index) => ({
+      id: index + 1,
+      status: index % 2 === 0 ? "OPEN" : "PENDING"
+    }));
+    window.history.replaceState(null, "", "/admin/encounters");
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    await act(async () => {
+      root.render(
+        <QueryClientProvider client={client}>
+          <AdminDataTable<Row>
+            rows={rows}
+            columns={columns}
+            getRowId={(row) => String(row.id)}
+            initialPageSize={3}
+            paging="all"
+          />
+        </QueryClientProvider>
+      );
+    });
+
+    expect(container.querySelectorAll("tbody tr[data-row-id]").length).toBe(7);
+    expect(container.querySelector("button[aria-label='Next page']")).toBeNull();
+    expect(
+      [...container.querySelectorAll("button")].some((node) =>
+        node.textContent?.includes("Load more")
+      )
+    ).toBe(false);
+  });
+
   it("ignores a value the column does not declare", async () => {
     await render("?status=NONSENSE");
     expect(lastCallFilters()).toEqual({});

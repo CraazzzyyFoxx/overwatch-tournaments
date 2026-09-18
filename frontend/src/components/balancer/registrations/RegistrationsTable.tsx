@@ -168,9 +168,8 @@ export default function RegistrationsTable({
   // public participants page, so they live in the message catalogue rather than
   // as English literals like the rest of this admin table.
   const t = useTranslations();
-  // `id` (the inspector) is navigation, not narrowing: it must not drop `page`
-  // the way a filter change does, or opening a row would rewind an infinite
-  // list to its first batch.
+  // `id` (the inspector) is navigation, not narrowing: it must not drop the
+  // filters the way a narrowing change does.
   const { searchParams, setParams } = useQueryParams({ resetOnChange: [] });
   const { canAccessPermission } = usePermissions();
   const { open: openAuditTrail } = useAuditTrail();
@@ -776,9 +775,7 @@ export default function RegistrationsTable({
           onFiltersChange={handleTableFiltersChange}
           filterKey={filters.filterKey}
           initialSort={{ field: "submitted", dir: "desc" }}
-          initialPageSize={25}
-          paging="infinite"
-          rowUnit="registrations"
+          paging="all"
           cellAlign="top"
           searchPlaceholder="Search registrations"
           emptyMessage="No registrations yet."
