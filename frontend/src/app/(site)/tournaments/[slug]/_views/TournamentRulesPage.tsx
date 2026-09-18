@@ -3,7 +3,6 @@
 import { useTranslations } from "next-intl";
 
 import { Markdown } from "@/components/Markdown";
-import { Card, CardContent } from "@/components/ui/card";
 
 import { TournamentPageState } from "../_components/TournamentPageState";
 import { useTournamentQuery } from "../_hooks/useTournamentClientData";
@@ -33,14 +32,12 @@ export default function TournamentRulesPage({ slug }: Readonly<{ slug: string }>
   return (
     <section className={styles.publicDataPage} aria-label={t("common.rules")}>
       {rules ? (
-        <Card>
-          {/* A measure cap, not a layout: prose set to the full width of a
-              desktop card runs past the ~75-character line every readability
-              guide draws the limit at. Tables inside scroll on their own. */}
-          <CardContent className="pt-6">
-            <Markdown source={rules} className="max-w-[72ch]" />
-          </CardContent>
-        </Card>
+        // No card: a regulation is a page of prose, and boxing it adds a border
+        // around text that nothing else on the page is competing with. The
+        // measure cap is the only layout it needs — prose run to the full width
+        // of a desktop viewport passes the ~75-character line every readability
+        // guide draws the limit at. Tables inside still scroll on their own.
+        <Markdown source={rules} className="max-w-[72ch] py-2" />
       ) : (
         // Reachable by a direct link after an organizer clears the document:
         // the tab is gone from the rail, the URL still resolves.

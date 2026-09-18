@@ -213,6 +213,22 @@ describe("buildTournamentSectionNav", () => {
     expect(model("live").some((item) => item.id === "rules")).toBe(false);
   });
 
+  it("keeps Rules directly under Overview in both phase orders", () => {
+    // The one section whose place does not move with the phase: before play it
+    // decides whether a player signs up, during play it settles a dispute.
+    for (const status of ["registration", "live"] as const) {
+      const ids = buildTournamentSectionNav({
+        tournamentId,
+        status,
+        stages: [stage()],
+        hasRules: true,
+        pathname: `/tournaments/${tournamentId}`
+      }).map((item) => item.id);
+
+      expect(ids.slice(0, 2)).toEqual(["overview", "rules"]);
+    }
+  });
+
   it("links Overview to the tournament root and marks exactly the canonical route active", () => {
     const root = model("playoffs", `/tournaments/${tournamentId}/`);
     expect(root.filter((item) => item.active).map((item) => item.id)).toEqual(["overview"]);

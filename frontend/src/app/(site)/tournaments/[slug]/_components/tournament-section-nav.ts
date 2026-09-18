@@ -58,8 +58,11 @@ const competitionOnlySections = new Set<TournamentSectionId>(["bracket", "matche
  */
 const preCompetitionOrder: TournamentSectionId[] = [
   "overview",
-  // The regulations are what a player reads BEFORE deciding to sign up, so
-  // before the phase starts they sit directly under the overview.
+  // The regulations sit directly under the overview in BOTH orders, and they
+  // are the one section that does not move with the phase: before play they
+  // are what a player reads to decide whether to sign up, during play they are
+  // what a dispute is settled by. Neither is a thing to hunt for at the far end
+  // of the rail.
   "rules",
   "participants",
   // Which maps the tournament plays is reference data a registering player
@@ -73,13 +76,11 @@ const preCompetitionOrder: TournamentSectionId[] = [
 
 const competitionOrder: TournamentSectionId[] = [
   "overview",
+  "rules",
   "bracket",
   "teams",
   "matches",
   "maps",
-  // Reference material, next to the map pool: mid-tournament the rules are
-  // opened for a tiebreaker, not as the first thing anybody wants.
-  "rules",
   "stats",
   "stream",
   "participants"
