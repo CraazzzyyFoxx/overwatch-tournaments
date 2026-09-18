@@ -15,10 +15,11 @@ name: owt-monitoring
 
 services:
   prometheus:
-    image: prom/prometheus:v2.55.1
+    # 3.13 is the current Prometheus LTS (bugfixes until 2027-07-31); 3.5 LTS
+    # went EOL 2026-07-31. v3 derives GOMEMLIMIT from the container memory
+    # limit below on its own, so the explicit env var v2 needed is gone.
+    image: prom/prometheus:v3.13.3
     restart: unless-stopped
-    environment:
-      GOMEMLIMIT: 450MiB
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"
       - "--storage.tsdb.path=/prometheus"
@@ -50,7 +51,7 @@ services:
     # v0.28+ is REQUIRED: v0.27.0 parses `webhook_url_file` in discord_configs but
     # its receiver validation still demands `webhook_url`, so a file-backed Discord
     # webhook fails config load with "no discord webhook URL provided".
-    image: prom/alertmanager:v0.28.1
+    image: prom/alertmanager:v0.34.1
     restart: unless-stopped
     command:
       - "--config.file=/etc/alertmanager/alertmanager.yml"
@@ -71,7 +72,7 @@ services:
           memory: 64M
 
   redis-exporter:
-    image: oliver006/redis_exporter:v1.67.0
+    image: oliver006/redis_exporter:v1.91.1
     restart: unless-stopped
     environment:
       REDIS_ADDR: "redis:6379"
@@ -87,7 +88,9 @@ services:
           memory: 32M
 
   rabbitmq-exporter:
-    image: kbudde/rabbitmq-exporter:1.0.0-RC19
+    # 1.0.0 (2024-03) is the last release; the project is dormant. If it ever
+    # breaks, RabbitMQ's built-in rabbitmq_prometheus plugin replaces it.
+    image: kbudde/rabbitmq-exporter:1.0.0
     restart: unless-stopped
     environment:
       RABBIT_URL: "http://rabbitmq:15672"
@@ -118,7 +121,7 @@ services:
   # exporter covers saturation and slowloris signals
   # (nginx_connections_{active,reading,writing,waiting}).
   nginx-exporter:
-    image: nginx/nginx-prometheus-exporter:1.4.1
+    image: nginx/nginx-prometheus-exporter:1.5.3
     restart: unless-stopped
     command:
       - "--nginx.scrape-uri=http://nginx:8081/stub_status"
@@ -136,7 +139,7 @@ services:
   # Host-level metrics (CPU / memory / disk / network). Reads the host via
   # bind-mounts; no ports published — scraped over the compose network.
   node-exporter:
-    image: prom/node-exporter:v1.8.2
+    image: prom/node-exporter:v1.12.1
     restart: unless-stopped
     pid: host
     command:
@@ -159,7 +162,9 @@ services:
 
   # Per-container CPU / memory / restarts for the whole Docker host.
   cadvisor:
-    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    # Upstream moved publishing to ghcr.io at v0.53.0; gcr.io/cadvisor/cadvisor
+    # stops at v0.55.1.
+    image: ghcr.io/google/cadvisor:v0.60.5
     restart: unless-stopped
     privileged: true
     devices:
@@ -168,6 +173,12 @@ services:
       - --housekeeping_interval=30s
       - --docker_only=true
       - --store_container_labels=false
+      # Only the collectors the dashboards read (container_cpu_usage_seconds_total,
+      # container_memory_working_set_bytes; container_start_time_seconds is a base
+      # metric). v0.60 with the default set walks every container's filesystem —
+      # 15-20s per sweep here — and sat pinned against the 192M limit until
+      # /metrics stopped answering at all.
+      - --enable_metrics=cpu,memory
     volumes:
       - /:/rootfs:ro
       - /var/run:/var/run:ro
@@ -190,7 +201,7 @@ services:
   # exporter's session-level queries. Example:
   #   POSTGRES_EXPORTER_DSN=postgresql://user:pass@host.docker.internal:5432/anak_dev?sslmode=disable
   postgres-exporter:
-    image: prometheuscommunity/postgres-exporter:v0.16.0
+    image: prometheuscommunity/postgres-exporter:v0.20.1
     restart: unless-stopped
     environment:
       DATA_SOURCE_NAME: "${POSTGRES_EXPORTER_DSN}"
@@ -213,7 +224,7 @@ services:
   # run; enable these with `make monitoring-up MONITORING_PROFILES="logs traces"`.
   loki:
     profiles: ["logs"]
-    image: grafana/loki:3.3.2
+    image: grafana/loki:3.7.8
     restart: unless-stopped
     environment:
       GOMEMLIMIT: 280MiB
@@ -234,7 +245,10 @@ services:
 
   tempo:
     profiles: ["traces"]
-    image: grafana/tempo:2.7.0
+    # Pinned to the 2.x line on purpose: Tempo 3.x drops the ingester/compactor
+    # config blocks, requires vParquet4 blocks, and its metrics-generator reads
+    # from Kafka instead of the distributor — a rewrite, not a bump.
+    image: grafana/tempo:2.10.8
     restart: unless-stopped
     environment:
       GOMEMLIMIT: 400MiB
@@ -257,7 +271,7 @@ services:
     profiles: ["traces"]
     # 0.145.0 is the first release shipping the Sentry Exporter (alpha) used by
     # monitoring/otel/otel-collector.yml.
-    image: otel/opentelemetry-collector-contrib:0.157.0
+    image: otel/opentelemetry-collector-contrib:0.161.0
     restart: unless-stopped
     command: ["--config=/etc/otel-collector/config.yml"]
     environment:
@@ -288,7 +302,9 @@ services:
 
   promtail:
     profiles: ["logs"]
-    image: grafana/promtail:3.3.2
+    # 3.6.x is the end of the line: Promtail is superseded by Grafana Alloy and
+    # gets no 3.7 build. Migrate when this tier is turned on for real.
+    image: grafana/promtail:3.6.11
     restart: unless-stopped
     command: -config.file=/etc/promtail/promtail.yml
     volumes:
@@ -308,7 +324,7 @@ services:
           memory: 64M
 
   grafana:
-    image: grafana/grafana:11.4.0
+    image: grafana/grafana:13.2.2
     restart: unless-stopped
     environment:
       GF_SECURITY_ADMIN_USER: "${GRAFANA_ADMIN_USER:-admin}"
@@ -331,11 +347,14 @@ services:
     # so grafana must not depend on tiers that may be profiled off.
     depends_on:
       - prometheus
+    # 512M, not the 192M that carried Grafana 11: v13 runs the app-platform
+    # apiserver and unified storage in-process and never finished booting
+    # under the old cap (memory.max hit ~300k times, no "HTTP Server Listen").
     deploy:
       resources:
         limits:
-          cpus: '0.50'
-          memory: 192M
+          cpus: '0.75'
+          memory: 512M
         reservations:
           cpus: '0.10'
           memory: 64M
