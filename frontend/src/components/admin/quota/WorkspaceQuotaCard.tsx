@@ -1,10 +1,12 @@
 "use client";
 
 import { useId } from "react";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { LoaderCircle } from "lucide-react";
 import { useTranslations } from "next-intl";
 
+import { AdminTabs, type AdminTabItem } from "@/components/admin/kit/AdminTabs";
 import { EmptyNote } from "@/components/admin/kit/EmptyNote";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -27,6 +29,9 @@ import { useQuotaDraft } from "./useQuotaDraft";
 
 /** In table order: the tenant pool first, then the two per-principal buckets. */
 const SCOPES: readonly QuotaScope[] = ["workspace", "key", "session"];
+
+/** `?tab=` like every other admin tab row, so one scope's form is linkable. */
+const SCOPE_PARAM = "tab";
 
 function workspaceQuotaKey(workspaceId: number) {
   return ["workspace", workspaceId, "quota", "usage"] as const;
@@ -149,11 +154,32 @@ function WorkspaceQuotaScopeCard({
 export function WorkspaceQuotaCard({ workspaceId }: Readonly<{ workspaceId: number }>) {
   const t = useTranslations("quota");
   const { isSuperuser } = usePermissions();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const usageQuery = useQuery({
     queryKey: workspaceQuotaKey(workspaceId),
     queryFn: () => workspaceService.getQuotaUsage(workspaceId),
     staleTime: 0
   });
+
+  // Routed like every other admin tab row, so one scope's form is linkable and
+  // survives a reload. An unknown `?tab=` falls back to the tenant pool rather
+  // than rendering nothing.
+  const requested = searchParams?.get(SCOPE_PARAM) ?? "";
+  const active = SCOPES.find((scope) => scope === requested) ?? SCOPES[0];
+  const policyOf = (scope: QuotaScope) =>
+    usageQuery.data?.policy?.find((row) => row.scope === scope) ?? null;
+
+  const tabs: AdminTabItem[] = SCOPES.map((scope) => ({
+    key: scope,
+    label: t(`scopes.${scope}.tab`),
+    href: `${pathname}?${SCOPE_PARAM}=${scope}`,
+    // Which scopes carry a row is the one thing tabbing away hides, so it rides
+    // on the tab itself instead of only inside the panel it belongs to.
+    dot: hasQuotaOverride(policyOf(scope)?.override ?? {})
+      ? { tone: "info" as const, label: t("state.overridden") }
+      : undefined
+  }));
 
   return (
     <div className="space-y-8">
@@ -173,7 +199,7 @@ export function WorkspaceQuotaCard({ workspaceId }: Readonly<{ workspaceId: numb
         </CardContent>
       </Card>
 
-      {/* The heading sits closer to the three cards it owns than the gap that
+      {/* The heading sits closer to the tab row it owns than the gap that
           separates it from the usage card above — the grouping is the spacing,
           not a rule. */}
       <section className="space-y-3">
@@ -195,15 +221,22 @@ export function WorkspaceQuotaCard({ workspaceId }: Readonly<{ workspaceId: numb
         {usageQuery.isPending ? (
           <Skeleton className="h-72 w-full rounded-xl" />
         ) : usageQuery.data ? (
-          SCOPES.map((scope) => (
-            <WorkspaceQuotaScopeCard
-              key={scope}
-              workspaceId={workspaceId}
-              scope={scope}
-              policy={usageQuery.data.policy?.find((row) => row.scope === scope) ?? null}
-              canRaise={isSuperuser}
-            />
-          ))
+          <>
+            <AdminTabs items={tabs} activeKey={active} ariaLabel={t("overrideHeading")} />
+            {/* Every scope stays mounted and the inactive ones are hidden: a
+                half-typed override on another tab is unsaved work, and
+                unmounting it would drop it without a word. */}
+            {SCOPES.map((scope) => (
+              <div key={scope} hidden={scope !== active}>
+                <WorkspaceQuotaScopeCard
+                  workspaceId={workspaceId}
+                  scope={scope}
+                  policy={policyOf(scope)}
+                  canRaise={isSuperuser}
+                />
+              </div>
+            ))}
+          </>
         ) : (
           <EmptyNote size="sm">{t("loadFailed")}</EmptyNote>
         )}

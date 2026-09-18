@@ -5895,14 +5895,17 @@
   "quota": {
     "scopes": {
       "workspace": {
+        "tab": "Workspace",
         "label": "Workspace budget",
         "hint": "Shared by every API key and every signed-in member of this workspace."
       },
       "key": {
+        "tab": "API key",
         "label": "This API key",
         "hint": "What one key may take out of the workspace budget on its own."
       },
       "session": {
+        "tab": "Session",
         "label": "One session",
         "hint": "What one signed-in member's session may take out of the workspace budget."
       }
