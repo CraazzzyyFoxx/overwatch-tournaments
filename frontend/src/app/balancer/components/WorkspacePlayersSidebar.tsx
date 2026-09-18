@@ -124,14 +124,16 @@ const RosterMemberRow = memo(function RosterMemberRow({ member, onOpen }: Roster
     <ContextMenu>
       <ContextMenuTrigger asChild>
         <li
-          onDoubleClick={(event) => {
+          // `Element`, not `HTMLElement`: a click on an action button's SVG icon
+          // has an `SVGElement` target and would fall through to the row.
+          onClick={(event) => {
             if (event.target instanceof Element && event.target.closest("[data-card-action]")) {
               return;
             }
             onOpen(member);
           }}
           className={cn(
-            "group grid w-full grid-cols-1 items-start gap-2 rounded-lg border px-2.5 py-2 transition-colors",
+            "group grid w-full cursor-pointer grid-cols-1 items-start gap-2 rounded-lg border px-2.5 py-2 transition-colors",
             "border-[color:var(--aqt-border)] bg-[color:var(--aqt-overlay-1)]",
             "hover:border-[color:var(--aqt-border-2)] hover:bg-[color:var(--aqt-overlay-3)]",
           )}

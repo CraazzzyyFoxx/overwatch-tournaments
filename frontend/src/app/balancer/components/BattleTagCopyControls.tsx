@@ -80,10 +80,9 @@ export function SmurfTagStrip({ smurfTags, className, compact = false }: Readonl
   }
 
   return (
-    <div
-      className={cn("flex shrink-0 items-center gap-1", className)}
-      onDoubleClick={(event) => event.stopPropagation()}
-    >
+    // `data-card-action`: the clickable pool and roster rows skip this subtree,
+    // so opening the smurf menu never opens the player sheet behind it.
+    <div data-card-action className={cn("flex shrink-0 items-center gap-1", className)}>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button

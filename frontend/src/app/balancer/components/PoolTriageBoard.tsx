@@ -140,18 +140,12 @@ function TriagePlayerCard({
         <div
           ref={setNodeRef}
           style={style}
-          onDoubleClick={(event) => {
-            if (isCardActionTarget(event.target)) {
-              return;
-            }
-            onSelectPlayer(state.player.id);
-          }}
           className={cn(
             "cursor-pointer rounded-xl border border-border bg-card p-2.5 transition",
             isSelected && "border-primary/45 bg-primary/[0.08]",
             isDragging && "z-50 scale-[1.02] opacity-80 shadow-[0_22px_56px_rgba(0,0,0,0.34)]",
           )}
-          title="Double-click to edit player"
+          title={primaryBattleTag}
         >
           <div className="flex items-start gap-2">
             <button
@@ -166,8 +160,14 @@ function TriagePlayerCard({
             </button>
 
             <div className="min-w-0 flex-1">
-              <div className="w-full min-w-0 text-left">
-                <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+              <button
+                type="button"
+                data-card-action
+                onClick={() => onSelectPlayer(state.player.id)}
+                title={`Edit ${primaryBattleTag}`}
+                className="w-full min-w-0 rounded text-left"
+              >
+                <span className="flex min-w-0 flex-wrap items-center gap-1.5">
                   {rankedRoleCodes.length > 0 ? (
                     rankedRoleCodes.map((roleCode) => (
                       <PlayerRoleIcon key={roleCode} role={ROLE_LABELS[roleCode]} size={15} />
@@ -175,15 +175,12 @@ function TriagePlayerCard({
                   ) : (
                     <span className="text-label text-[color:var(--aqt-fg-faint)]">No roles</span>
                   )}
-                  <span
-                    className="truncate text-caption font-semibold text-[color:var(--aqt-fg)]"
-                    title={`${name}${suffix ?? ""}`}
-                  >
+                  <span className="truncate text-caption font-semibold text-[color:var(--aqt-fg)]">
                     {name}
                   </span>
                   {suffix ? <span className="shrink-0 text-label text-[color:var(--aqt-fg-dim)]">{suffix}</span> : null}
-                </div>
-              </div>
+                </span>
+              </button>
               {state.player.is_flex || isReady || state.issues.length > 0 || smurfTags.length > 0 ? (
                 <div className="mt-1 flex min-w-0 items-center gap-1 overflow-x-auto whitespace-nowrap pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                   {state.player.is_flex ? (
@@ -316,27 +313,41 @@ function TriageLaneColumn({
         </div>
       </div>
       <ScrollArea className="min-h-0 flex-1">
-        <div className="space-y-2 pr-2">
-          {states.length > 0 ? (
-            states.map((state) => (
-              <TriagePlayerCard
+        {states.length > 0 ? (
+          // The click sits on the `<li>`, not on the card's own `div`: the card
+          // is a drag source and a plain `div`, and `onClick` on a
+          // non-interactive `div` is what the design gate rejects. Subtrees
+          // marked `data-card-action` (grip, pool toggle, status menu, copy
+          // controls) keep their own clicks.
+          <ul aria-label={`${POOL_LANE_LABELS[lane]} players`} className="space-y-2 pr-2">
+            {states.map((state) => (
+              <li
                 key={state.player.id}
-                state={state}
-                registration={registrationsById?.get(state.player.id) ?? null}
-                statusOptions={statusOptions}
-                selectedPlayerId={selectedPlayerId}
-                actionsDisabled={actionsDisabled}
-                onSelectPlayer={onSelectPlayer}
-                onSetPoolMembership={onSetPoolMembership}
-                onSetBalancerStatus={onSetBalancerStatus}
-              />
-            ))
-          ) : (
-            <div className="rounded-xl border border-dashed border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-bg-2)] px-3 py-8 text-center text-xs text-[color:var(--aqt-fg-dim)]">
-              Drop players here
-            </div>
-          )}
-        </div>
+                onClick={(event) => {
+                  if (isCardActionTarget(event.target)) {
+                    return;
+                  }
+                  onSelectPlayer(state.player.id);
+                }}
+              >
+                <TriagePlayerCard
+                  state={state}
+                  registration={registrationsById?.get(state.player.id) ?? null}
+                  statusOptions={statusOptions}
+                  selectedPlayerId={selectedPlayerId}
+                  actionsDisabled={actionsDisabled}
+                  onSelectPlayer={onSelectPlayer}
+                  onSetPoolMembership={onSetPoolMembership}
+                  onSetBalancerStatus={onSetBalancerStatus}
+                />
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <div className="rounded-xl border border-dashed border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-bg-2)] px-3 py-8 text-center text-xs text-[color:var(--aqt-fg-dim)]">
+            Drop players here
+          </div>
+        )}
       </ScrollArea>
     </section>
   );

@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useRef } from "react";
+import { memo, useRef, type MouseEvent } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Check, Circle, Pencil, PlusCircle, ShieldX } from "lucide-react";
 
@@ -107,12 +107,6 @@ const PoolPlayerRow = memo(function PoolPlayerRow({
       <ContextMenuTrigger asChild>
         <div
           title={issueSummary || primaryBattleTag}
-          onDoubleClick={(event) => {
-            if (event.target instanceof Element && event.target.closest("[data-card-action]")) {
-              return;
-            }
-            onSelectPlayer?.(player.id);
-          }}
           className={cn(
             "group grid w-full cursor-pointer grid-cols-[24px_minmax(0,1fr)] items-start gap-2 rounded-lg border px-2.5 py-2 text-left transition-colors",
             "border-[color:var(--aqt-border)] bg-[color:var(--aqt-overlay-1)] hover:border-[color:var(--aqt-border-2)] hover:bg-[color:var(--aqt-overlay-3)]",
@@ -329,6 +323,19 @@ export function PoolPlayerCompactList({
     );
   };
 
+  // One click on a row opens the player sheet. The handler sits on the `<li>`
+  // rather than the row's own `div` — `onClick` on a non-interactive `div` is
+  // what the design gate rejects — and subtrees marked `data-card-action`
+  // (bulk select, status menu, copy controls) keep their own clicks. The check
+  // is `Element`, not `HTMLElement`: a click landing on a button's SVG icon
+  // has an `SVGElement` target and would otherwise fall through to here.
+  const openRow = (index: number) => (event: MouseEvent<HTMLLIElement>) => {
+    if (event.target instanceof Element && event.target.closest("[data-card-action]")) {
+      return;
+    }
+    onSelectPlayer?.(playerStates[index].player.id);
+  };
+
   return (
     // Below `xl` the balancer shell drops its `h-svh`/`overflow-hidden`, so `flex-1` alone would
     // resolve to the full virtual height and push a scrollbar onto the document. The cap keeps the
@@ -338,25 +345,32 @@ export function PoolPlayerCompactList({
       className="min-h-0 max-h-[calc(100svh-16rem)] flex-1 overflow-y-auto overflow-x-hidden pr-2"
     >
       {shouldVirtualize ? (
-        <div className="relative w-full" style={{ height: virtualizer.getTotalSize() }}>
+        <ul
+          aria-label="Pool players"
+          className="relative w-full"
+          style={{ height: virtualizer.getTotalSize() }}
+        >
           {virtualizer.getVirtualItems().map((virtualRow) => (
-            <div
+            <li
               key={playerStates[virtualRow.index].player.id}
               data-index={virtualRow.index}
               ref={virtualizer.measureElement}
               className="absolute inset-x-0 top-0"
               style={{ transform: `translateY(${virtualRow.start}px)` }}
+              onClick={openRow(virtualRow.index)}
             >
               {row(virtualRow.index)}
-            </div>
+            </li>
           ))}
-        </div>
+        </ul>
       ) : (
-        <div className="space-y-1.5">
+        <ul aria-label="Pool players" className="space-y-1.5">
           {playerStates.map((state, index) => (
-            <div key={state.player.id}>{row(index)}</div>
+            <li key={state.player.id} onClick={openRow(index)}>
+              {row(index)}
+            </li>
           ))}
-        </div>
+        </ul>
       )}
     </div>
   );

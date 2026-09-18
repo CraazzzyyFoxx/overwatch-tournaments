@@ -200,4 +200,20 @@ describe("BalancingPoolSidebar", () => {
 
     expect(onSelectPlayer).toHaveBeenCalledWith(1);
   });
+
+  it("opens the player editor on one row click, but not from a row action", async () => {
+    const scope = await mount();
+    const row = [...scope.querySelectorAll("li")].find((node) =>
+      node.textContent?.includes("Aria#1111"),
+    );
+    if (!row) throw new Error("Expected the Aria row");
+
+    // The bulk-select control owns its clicks; the row must not open behind it.
+    await click(row.querySelector("[data-card-action]"));
+    expect(onSelectPlayer).not.toHaveBeenCalled();
+
+    await click(row);
+
+    expect(onSelectPlayer).toHaveBeenCalledWith(1);
+  });
 });
