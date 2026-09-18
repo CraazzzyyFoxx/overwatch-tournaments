@@ -50,7 +50,7 @@
           "color": { "mode": "thresholds" }
         }
       },
-      "targets": [{ "expr": "1 - node_filesystem_avail_bytes{mountpoint=\"/host\", fstype!~\"tmpfs|overlay|squashfs\"} / node_filesystem_size_bytes{mountpoint=\"/host\", fstype!~\"tmpfs|overlay|squashfs\"}", "legendFormat": "Disk", "instant": true }]
+      "targets": [{ "expr": "1 - node_filesystem_avail_bytes{mountpoint=\"/\", fstype!~\"tmpfs|overlay|squashfs\"} / node_filesystem_size_bytes{mountpoint=\"/\", fstype!~\"tmpfs|overlay|squashfs\"}", "legendFormat": "Disk", "instant": true }]
     },
     {
       "id": 4,
@@ -172,7 +172,7 @@
         }
       },
       "targets": [
-        { "expr": "predict_linear(node_filesystem_avail_bytes{mountpoint=\"/host\", fstype!~\"tmpfs|overlay|squashfs\"}[6h], 7 * 24 * 3600)", "legendFormat": "free in 7d" }
+        { "expr": "predict_linear(node_filesystem_avail_bytes{mountpoint=\"/\", fstype!~\"tmpfs|overlay|squashfs\"}[6h], 7 * 24 * 3600)", "legendFormat": "free in 7d" }
       ]
     },
     {
