@@ -7,6 +7,8 @@ import { Markdown, MARKDOWN_REMARK_PLUGINS } from "@/components/Markdown";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
+import styles from "./MarkdownEditor.module.css";
+
 /**
  * `@uiw/react-md-editor` renders a `textarea` plus a toolbar and reads `window`
  * on mount, so it is client-only and loaded on demand: the editor's JS never
@@ -80,7 +82,7 @@ export function MarkdownEditor({
   }
 
   return (
-    <div className={cn("overflow-hidden rounded-lg", className)} style={EDITOR_THEME}>
+    <div className={cn(styles.editor, "overflow-hidden rounded-lg", className)} style={EDITOR_THEME}>
       <MDEditor
         value={value}
         onChange={(next) => onChange(next ?? "")}

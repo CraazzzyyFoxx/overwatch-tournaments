@@ -6,6 +6,13 @@ import { Card, CardContent } from "@/components/ui/card";
 import { EditableAvatar } from "@/components/ui/editable-avatar";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { AuditTrailButton } from "@/components/admin/AuditTrailSheet";
 import { SaveBar } from "@/components/admin/kit/SaveBar";
@@ -13,6 +20,7 @@ import { MAX_AVATAR_BYTES } from "@/lib/avatar";
 import { notify } from "@/lib/notify";
 import adminService from "@/services/admin.service";
 import type { Tournament, TournamentImageSlot } from "@/types/tournament.types";
+import { flattenDivisionGridVersions, useHubDivisionGridsQuery } from "../../hubQueries";
 import { SettingsSectionPage } from "../SettingsSection";
 import { useTournamentSettingsForm } from "../useTournamentSettingsForm";
 import { invalidateTournamentWorkspace } from "../../components/tournamentWorkspace.queryKeys";
@@ -21,12 +29,13 @@ export default function GeneralSettingsPage() {
   return (
     <SettingsSectionPage
       section="general"
-      description="How this tournament is named and described."
+      description="How this tournament is named and described, how teams form, and which division grid seeds them."
     >
-      {({ tournament, tournamentId, canUpdateTournament }) => (
+      {({ tournament, tournamentId, workspaceId, canUpdateTournament }) => (
         <GeneralForm
           tournament={tournament}
           tournamentId={tournamentId}
+          workspaceId={workspaceId}
           disabled={!canUpdateTournament}
         />
       )}
@@ -37,13 +46,23 @@ export default function GeneralSettingsPage() {
 function GeneralForm({
   tournament,
   tournamentId,
+  workspaceId,
   disabled
-}: Readonly<{ tournament: Tournament; tournamentId: number; disabled: boolean }>) {
+}: Readonly<{
+  tournament: Tournament;
+  tournamentId: number;
+  workspaceId: number;
+  disabled: boolean;
+}>) {
   const { form, patch, dirty, summary, saving, save, discard } = useTournamentSettingsForm(
     tournament,
     tournamentId,
     "general"
   );
+  // Only this section reads the grid list, which is why the hub shell does not
+  // fetch it on every tab load.
+  const gridsQuery = useHubDivisionGridsQuery(tournamentId, workspaceId);
+  const versions = flattenDivisionGridVersions(gridsQuery.data);
 
   return (
     <>
@@ -98,6 +117,52 @@ function GeneralForm({
               placeholder="Optional tournament description…"
               onChange={(event) => patch({ description: event.target.value })}
             />
+          </div>
+
+          <div className="grid gap-4 border-t border-border pt-4 sm:grid-cols-2">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="settings-team-formation">Team formation</Label>
+              <Select
+                value={form.team_formation}
+                disabled={disabled}
+                onValueChange={(value) => patch({ team_formation: value })}
+              >
+                <SelectTrigger id="settings-team-formation">
+                  <SelectValue placeholder="Select method" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="balancer">Auto-balance (Balancer)</SelectItem>
+                  <SelectItem value="draft">Live draft</SelectItem>
+                  <SelectItem value="registration">Team registration</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">How teams are formed for this tournament.</p>
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="settings-division-grid-version">Division grid version</Label>
+              <Select
+                value={form.division_grid_version_id?.toString() ?? "none"}
+                disabled={disabled}
+                onValueChange={(value) =>
+                  patch({ division_grid_version_id: value === "none" ? null : Number(value) })
+                }
+              >
+                <SelectTrigger id="settings-division-grid-version">
+                  <SelectValue
+                    placeholder={gridsQuery.isLoading ? "Loading division grids…" : "Select version"}
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Workspace default</SelectItem>
+                  {versions.map((version) => (
+                    <SelectItem key={version.id} value={version.id.toString()}>
+                      {version.label} (v{version.version}, {version.status})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         </CardContent>
       </Card>
