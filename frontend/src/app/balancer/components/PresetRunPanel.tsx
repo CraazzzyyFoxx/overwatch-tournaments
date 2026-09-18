@@ -32,7 +32,7 @@ import {
   DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
 import type { BalancerPlayerExportFormat } from "@/types/balancer-admin.types";
-import { PANEL_CLASS, PRESET_LABELS } from "./balancer-page-helpers";
+import { PANEL_CLASS, PRESET_LABELS, TOOLBAR_BUTTON_CLASS } from "./balancer-page-helpers";
 import { WorkspaceCounter } from "./WorkspaceCounter";
 
 type CounterItem = {
@@ -124,7 +124,7 @@ export function PresetRunPanel({
       ) : null}
       <div className="min-w-[140px] sm:w-[170px]">
         <Select value={selectedPreset} onValueChange={onSelectPreset}>
-          <SelectTrigger className="h-8 rounded-lg border-[color:var(--aqt-border-2)] bg-black/15 text-sm text-[color:var(--aqt-fg)]">
+          <SelectTrigger className="h-8 rounded-lg border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-bg-2)] text-sm text-[color:var(--aqt-fg)]">
             <SelectValue placeholder="Preset" />
           </SelectTrigger>
           <SelectContent>
@@ -140,7 +140,7 @@ export function PresetRunPanel({
         type="button"
         variant="outline"
         onClick={onOpenSettings}
-        className="h-8 rounded-lg border-[color:var(--aqt-border-2)] bg-black/15 px-3 text-sm text-[color:var(--aqt-fg-muted)] hover:bg-white/[0.05] hover:text-[color:var(--aqt-fg)]"
+        className={TOOLBAR_BUTTON_CLASS}
       >
         <SlidersHorizontal className="mr-1.5 h-3.5 w-3.5" />
         Settings{settingsDirty ? "*" : ""}
@@ -174,7 +174,7 @@ export function PresetRunPanel({
         onClick={() => importFileRef.current?.click()}
         disabled={isImportPending}
         title="Load a balance JSON downloaded from this tool as a preview variant — nothing is written to the tournament"
-        className="h-8 rounded-lg border-[color:var(--aqt-border-2)] bg-black/15 px-3 text-sm text-[color:var(--aqt-fg-muted)] hover:bg-white/[0.05] hover:text-[color:var(--aqt-fg)]"
+        className={TOOLBAR_BUTTON_CLASS}
       >
         {isImportPending ? (
           <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
@@ -189,7 +189,7 @@ export function PresetRunPanel({
             type="button"
             variant="outline"
             disabled={isExportPlayersPending}
-            className="h-8 shrink-0 rounded-lg border-[color:var(--aqt-border-2)] bg-black/15 px-2 text-sm text-[color:var(--aqt-fg-muted)] hover:bg-white/[0.05] hover:text-[color:var(--aqt-fg)] sm:px-3"
+            className={cn(TOOLBAR_BUTTON_CLASS, "shrink-0 px-2 sm:px-3")}
             aria-label="Export players"
             title="Export players"
           >
@@ -239,7 +239,7 @@ export function PresetRunPanel({
 
       {jobStatus ? (
         <div className={cn(PANEL_CLASS, "px-3 py-2")}>
-          <div className="rounded-lg border border-[color:var(--aqt-border)] bg-black/15 p-2.5">
+          <div className="rounded-lg border border-[color:var(--aqt-border)] bg-[color:var(--aqt-bg-2)] p-2.5">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <div className="text-sm font-medium text-[color:var(--aqt-fg)]">Balance job</div>
@@ -252,14 +252,14 @@ export function PresetRunPanel({
                     ? "border-red-400/20 bg-red-500/10 text-red-200"
                     : jobStatus === "succeeded"
                       ? "border-emerald-400/20 bg-emerald-500/10 text-emerald-200"
-                      : "border-[color:var(--aqt-border-2)] bg-white/4 text-[color:var(--aqt-fg-muted)]"
+                      : "border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-overlay-3)] text-[color:var(--aqt-fg-muted)]"
                 )}
               >
                 {jobStatus}
               </Badge>
             </div>
             {jobProgress !== null ? (
-              <Progress value={jobProgress} className="mt-2.5 h-2 bg-white/8" />
+              <Progress value={jobProgress} className="mt-2.5 h-2 bg-[color:var(--aqt-overlay-3)]" />
             ) : null}
           </div>
         </div>

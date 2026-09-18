@@ -259,7 +259,7 @@ export function RankAutofillPreviewTables({
             {updatablePlayers.map((player) => (
               <label
                 key={player.registration_id}
-                className="flex min-w-0 cursor-pointer flex-col gap-1.5 rounded-lg border border-[color:var(--aqt-border-2)] bg-white/[0.02] p-2.5 hover:bg-white/[0.04]"
+                className="flex min-w-0 cursor-pointer flex-col gap-1.5 rounded-lg border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-overlay-1)] p-2.5 hover:bg-[color:var(--aqt-overlay-3)]"
               >
                 <div className="flex min-w-0 items-center gap-2">
                   <Checkbox
@@ -317,7 +317,7 @@ export function RankAutofillPreviewTables({
             {skippedPlayers.map((player) => (
               <div
                 key={player.registration_id}
-                className="min-w-0 rounded-lg border border-[color:var(--aqt-border-2)] bg-white/[0.02] p-2.5"
+                className="min-w-0 rounded-lg border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-overlay-1)] p-2.5"
               >
                 <div className="truncate text-xs font-medium text-[color:var(--aqt-fg-muted)]">
                   {playerLabel(player)}
@@ -357,7 +357,7 @@ export function RankAutofillPreviewTables({
               return (
                 <div
                   key={player.registration_id}
-                  className="min-w-0 rounded-lg border border-[color:var(--aqt-border-2)] bg-white/[0.02] p-2.5"
+                  className="min-w-0 rounded-lg border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-overlay-1)] p-2.5"
                 >
                   <div className="flex items-center gap-1.5">
                     <span className="min-w-0 flex-1 truncate text-xs font-medium text-[color:var(--aqt-fg-muted)]">

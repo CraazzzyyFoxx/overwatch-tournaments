@@ -143,7 +143,7 @@ export function BalancerConfigDrawer({
           <div className="space-y-5">
             {fieldsByGroup.map(({ group, fields: groupFields }) => (
               <section key={group} className="space-y-3">
-                <div className="text-xs font-semibold uppercase tracking-label text-[color:var(--aqt-fg-dim)]">
+                <div className="text-label font-semibold uppercase tracking-label text-[color:var(--aqt-fg-dim)]">
                   {group}
                 </div>
                 <div className="space-y-3">
@@ -152,7 +152,7 @@ export function BalancerConfigDrawer({
                     return (
                       <div
                         key={field.key}
-                        className="rounded-lg border border-[color:var(--aqt-border-2)] bg-black/15 p-3"
+                        className="rounded-lg border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-bg-2)] p-3"
                       >
                         <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_220px]">
                           <div>

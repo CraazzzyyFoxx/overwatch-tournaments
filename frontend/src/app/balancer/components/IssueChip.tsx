@@ -35,7 +35,7 @@ export function IssueChip({ issue }: Readonly<{ issue: PlayerValidationIssue }>)
   if (issue.code === "rank_delta_warning") {
     return (
       <span className={CHIP_CLASS} title={issue.message}>
-        <span className="font-semibold uppercase tracking-wide">{ROLE_LABELS[issue.role]}</span>
+        <span className="font-semibold uppercase tracking-label">{ROLE_LABELS[issue.role]}</span>
         {issue.currentDivision != null ? (
           <DivisionIcon division={issue.currentDivision} width={14} height={14} />
         ) : null}

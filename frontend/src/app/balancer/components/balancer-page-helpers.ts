@@ -117,15 +117,23 @@ export const TEAM_BADGE_ACCENTS = [
 
 export const BALANCE_ROSTER_KEYS: BalancerRosterKey[] = ["Tank", "Damage", "Support", "Flex"];
 
-export const PANEL_CLASS =
-  "rounded-xl border border-border bg-card";
+export const PANEL_CLASS = "rounded-xl border border-border bg-card";
 
+/**
+ * Secondary-control chrome for the whole tool. `rounded-lg` steps down from the
+ * `rounded-xl` panels these sit in, and every surface is a token: the previous
+ * `bg-black/15` / `hover:bg-white/[0.05]` pair was re-typed by hand in nine
+ * files and workspace theming cannot reach a raw alpha wash.
+ */
 export const MUTED_BUTTON_CLASS =
-  "rounded-xl border-[color:var(--aqt-border-2)] bg-black/15 text-[color:var(--aqt-fg-muted)] hover:bg-white/[0.05] hover:text-[color:var(--aqt-fg)]";
+  "rounded-lg border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-bg-2)] text-[color:var(--aqt-fg-muted)] hover:bg-[color:var(--aqt-overlay-3)] hover:text-[color:var(--aqt-fg)]";
+
+/** `MUTED_BUTTON_CLASS` at the tool's dense toolbar height. */
+export const TOOLBAR_BUTTON_CLASS = `h-8 px-3 text-sm ${MUTED_BUTTON_CLASS}`;
 
 /** Square icon-button chrome shared by both balancer sidebars. */
 export const ICON_BUTTON_CLASS =
-  "h-8 w-8 rounded-lg border border-[color:var(--aqt-border)] bg-black/15 text-[color:var(--aqt-fg-muted)] hover:bg-white/5 hover:text-[color:var(--aqt-fg)]";
+  "h-8 w-8 rounded-lg border border-[color:var(--aqt-border)] bg-[color:var(--aqt-bg-2)] text-[color:var(--aqt-fg-muted)] hover:bg-[color:var(--aqt-overlay-3)] hover:text-[color:var(--aqt-fg)]";
 
 /** One accent per role, so a rank number carries its role without a second label. */
 export const ROLE_TEXT_ACCENTS: Record<string, string> = {

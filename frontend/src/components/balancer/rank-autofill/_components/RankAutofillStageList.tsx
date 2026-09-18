@@ -73,7 +73,7 @@ function SortableStageRow({
       ref={setNodeRef}
       style={style}
       className={cn(
-        "flex items-center gap-3 rounded-lg border border-[color:var(--aqt-border-2)] bg-white/[0.03] px-3 py-2.5",
+        "flex items-center gap-3 rounded-lg border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-overlay-2)] px-3 py-2.5",
         isDragging && "z-10 opacity-80 shadow-lg shadow-black/40",
         !stage.enabled && "opacity-55"
       )}

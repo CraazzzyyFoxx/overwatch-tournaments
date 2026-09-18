@@ -4,6 +4,7 @@ import { forwardRef, useCallback, useMemo, useState } from "react";
 import {
   DndContext,
   DragOverlay,
+  KeyboardSensor,
   PointerSensor,
   useSensor,
   useSensors,
@@ -73,7 +74,14 @@ export const BalanceEditor = forwardRef<HTMLDivElement, BalanceEditorProps>(func
     player: InternalBalancePlayer;
     roleKey: BalancerRosterKey;
   } | null>(null);
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
+  // Keyboard as well as pointer: the rows already carry dnd-kit's `attributes`
+  // (focusable, `role="button"`), so Space lifts a player, the arrows move the
+  // drag between role sections and Space drops. Without this sensor the only
+  // way to move anybody was a mouse drag.
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor),
+  );
   const teamCards = useMemo(() => value?.teams ?? [], [value]);
   // The buckets this tournament's roster shape actually fields (a 1-2-2 shape
   // has no Flex row, an all-flex shape has only one): the same capacity read
@@ -120,7 +128,7 @@ export const BalanceEditor = forwardRef<HTMLDivElement, BalanceEditorProps>(func
 
   if (!value || teamCards.length === 0) {
     return (
-      <div className="rounded-2xl border border-[color:var(--aqt-border)] bg-white/2 px-4 py-6 text-sm text-[color:var(--aqt-fg-dim)]">
+      <div className="rounded-lg border border-[color:var(--aqt-border)] bg-[color:var(--aqt-overlay-1)] px-4 py-6 text-sm text-[color:var(--aqt-fg-dim)]">
         Run the balancer to edit teams.
       </div>
     );
@@ -191,7 +199,7 @@ export const BalanceEditor = forwardRef<HTMLDivElement, BalanceEditorProps>(func
       <div ref={ref} className="space-y-4">
         {benchedPlayers.length > 0 ? (
           <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-rose-400/20 bg-rose-500/5 px-4 py-3">
-            <span className="inline-flex items-center gap-1.5 text-xs font-medium uppercase tracking-label text-rose-200/80">
+            <span className="inline-flex items-center gap-1.5 text-label font-medium uppercase tracking-label text-rose-200/80">
               <UserX className="h-3.5 w-3.5" />
               Unassigned
             </span>

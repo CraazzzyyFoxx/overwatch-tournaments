@@ -121,7 +121,9 @@ function type(input: HTMLInputElement, value: string) {
 }
 
 function searchInput(scope: Element) {
-  return scope.querySelector<HTMLInputElement>("input[aria-label='Search the Balancing Pool']");
+  // `SearchField` names the input through a real `<label>`, so the surface is
+  // identified by its type, not by an `aria-label` the primitive doesn't set.
+  return scope.querySelector<HTMLInputElement>("input[type='search']");
 }
 
 function pill(scope: Element, label: string) {
@@ -146,7 +148,7 @@ describe("BalancingPoolSidebar", () => {
     expect(scope.textContent).not.toContain("Aria#1111");
     // The removed popover announced its own result header above the list it had just filtered.
     expect(scope.textContent).not.toContain("Quick results");
-    expect(scope.querySelectorAll("input[aria-label='Search the Balancing Pool']")).toHaveLength(1);
+    expect(scope.querySelectorAll("input[type='search']")).toHaveLength(1);
   });
 
   it("reaches available registrations through a filter pill and keeps the search applied", async () => {

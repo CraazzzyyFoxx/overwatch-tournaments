@@ -175,7 +175,7 @@ function RolesCell({
             >
               <PlayerRoleIcon role={getRoleIconName(role.role)} size={20} />
             </span>
-            <span className="text-center text-xs font-semibold uppercase leading-none tracking-label text-[color:var(--aqt-fg-dim)]">
+            <span className="text-center text-label font-semibold uppercase leading-none tracking-label text-[color:var(--aqt-fg-dim)]">
               {subroleLabel ?? role.rank_value ?? ""}
             </span>
           </div>

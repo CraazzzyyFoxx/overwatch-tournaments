@@ -42,7 +42,7 @@ function useBattleTagClipboard() {
       await navigator.clipboard.writeText(value);
       notify.success(`${label} copied`);
     } catch {
-      notify.error("Clipboard unavailable");
+      notify.error(`Unable to copy the ${label}. Your browser blocked clipboard access — select the text and copy it manually.`);
     }
   };
 }
@@ -60,7 +60,7 @@ export function BattleTagCopyButton({
       variant="ghost"
       size="icon"
       className={cn(
-        "h-7 w-7 rounded-lg border border-[color:var(--aqt-border)] bg-black/15 text-[color:var(--aqt-fg-dim)] hover:bg-white/5 hover:text-cyan-100",
+        "h-7 w-7 rounded-lg border border-[color:var(--aqt-border)] bg-[color:var(--aqt-bg-2)] text-[color:var(--aqt-fg-dim)] hover:bg-[color:var(--aqt-overlay-3)] hover:text-cyan-100",
         className
       )}
       title={`Copy ${label}`}

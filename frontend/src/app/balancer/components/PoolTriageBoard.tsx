@@ -157,7 +157,7 @@ function TriagePlayerCard({
             <button
               type="button"
               data-card-action
-              className="mt-0.5 flex h-6 w-6 shrink-0 cursor-grab touch-none items-center justify-center rounded-lg border border-[color:var(--aqt-border-2)] bg-black/20 text-[color:var(--aqt-fg-dim)] hover:text-[color:var(--aqt-fg)] active:cursor-grabbing"
+              className="mt-0.5 flex h-6 w-6 shrink-0 cursor-grab touch-none items-center justify-center rounded-lg border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-bg-2)] text-[color:var(--aqt-fg-dim)] hover:text-[color:var(--aqt-fg)] active:cursor-grabbing"
               {...attributes}
               {...listeners}
             >
@@ -175,7 +175,12 @@ function TriagePlayerCard({
                   ) : (
                     <span className="text-label text-[color:var(--aqt-fg-faint)]">No roles</span>
                   )}
-                  <span className="truncate text-caption font-semibold text-[color:var(--aqt-fg)]">{name}</span>
+                  <span
+                    className="truncate text-caption font-semibold text-[color:var(--aqt-fg)]"
+                    title={`${name}${suffix ?? ""}`}
+                  >
+                    {name}
+                  </span>
                   {suffix ? <span className="shrink-0 text-label text-[color:var(--aqt-fg-dim)]">{suffix}</span> : null}
                 </div>
               </div>
@@ -228,7 +233,7 @@ function TriagePlayerCard({
                 variant="ghost"
                 size="sm"
                 disabled={actionsDisabled || !onSetPoolMembership}
-                className="h-7 rounded-lg border border-[color:var(--aqt-border)] bg-black/15 px-2 text-label text-[color:var(--aqt-fg-muted)] hover:bg-white/5 hover:text-[color:var(--aqt-fg)]"
+                className="h-7 rounded-lg border border-[color:var(--aqt-border)] bg-[color:var(--aqt-bg-2)] px-2 text-label text-[color:var(--aqt-fg-muted)] hover:bg-[color:var(--aqt-overlay-3)] hover:text-[color:var(--aqt-fg)]"
                 onClick={() => onSetPoolMembership?.(state.player.id, !state.player.is_in_pool)}
               >
                 {state.player.is_in_pool ? <ShieldX className="mr-1 h-3 w-3" /> : <PlusCircle className="mr-1 h-3 w-3" />}
@@ -306,7 +311,7 @@ function TriageLaneColumn({
           <div className="text-sm font-semibold text-[color:var(--aqt-fg)]">{POOL_LANE_LABELS[lane]}</div>
           <div className="mt-0.5 text-label text-[color:var(--aqt-fg-dim)]">{LANE_COPY[lane]}</div>
         </div>
-        <div className="rounded-full border border-[color:var(--aqt-border-2)] bg-black/20 px-2 py-0.5 text-label font-semibold tabular-nums text-[color:var(--aqt-fg-muted)]">
+        <div className="rounded-full border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-bg-2)] px-2 py-0.5 text-label font-semibold tabular-nums text-[color:var(--aqt-fg-muted)]">
           {states.length}
         </div>
       </div>
@@ -327,7 +332,7 @@ function TriageLaneColumn({
               />
             ))
           ) : (
-            <div className="rounded-xl border border-dashed border-[color:var(--aqt-border-2)] bg-black/10 px-3 py-8 text-center text-xs text-[color:var(--aqt-fg-dim)]">
+            <div className="rounded-xl border border-dashed border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-bg-2)] px-3 py-8 text-center text-xs text-[color:var(--aqt-fg-dim)]">
               Drop players here
             </div>
           )}
@@ -386,7 +391,7 @@ export function PoolTriageBoard({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex h-[min(760px,calc(100vh-3rem))] w-[min(1180px,calc(100vw-2rem))] max-w-none flex-col gap-0 overflow-hidden border-border bg-popover p-0 text-[color:var(--aqt-fg)] shadow-2xl shadow-black/50">
         <DialogHeader className="shrink-0 border-b border-[color:var(--aqt-border)] px-5 py-4">
-          <DialogTitle className="text-base text-[color:var(--aqt-fg)]">Balancing Pool Triage</DialogTitle>
+          <DialogTitle className="text-base text-[color:var(--aqt-fg)]">Balancing Pool triage</DialogTitle>
           <DialogDescription className="text-xs text-[color:var(--aqt-fg-dim)]">
             Drag players to include or exclude them. Need Fix and Ready are computed from validation, so included players settle into the correct lane automatically.
           </DialogDescription>

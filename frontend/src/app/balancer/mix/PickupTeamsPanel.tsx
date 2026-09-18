@@ -298,7 +298,7 @@ export function PickupTeamsPanel({
           ) : null}
 
           {canWrite && variants.length > 1 ? (
-            <div className="flex h-9 items-center gap-0.5 rounded-lg border border-[color:var(--aqt-border)] bg-white/[0.015] px-1">
+            <div className="flex h-9 items-center gap-0.5 rounded-lg border border-[color:var(--aqt-border)] bg-[color:var(--aqt-overlay-1)] px-1">
               <Button
                 type="button"
                 variant="ghost"
@@ -509,7 +509,7 @@ function NextMapStrip({
   return (
     <div
       className={cn(
-        "flex flex-wrap items-center gap-3 rounded-xl border border-[color:var(--aqt-border-2)] bg-white/[0.012] px-3 py-2.5",
+        "flex flex-wrap items-center gap-3 rounded-xl border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-overlay-1)] px-3 py-2.5",
         capturing && nextMap == null && "hidden"
       )}
     >
@@ -596,7 +596,7 @@ function ModeChip({
         "inline-flex h-7 shrink-0 items-center rounded-full border px-2.5 text-label transition-colors",
         active
           ? "border-[color:color-mix(in_srgb,var(--aqt-teal)_38%,transparent)] bg-[color:color-mix(in_srgb,var(--aqt-teal)_12%,transparent)] text-[color:var(--aqt-teal)]"
-          : "border-[color:var(--aqt-border)] bg-white/[0.02] text-[color:var(--aqt-fg-muted)] hover:bg-white/[0.05] hover:text-[color:var(--aqt-fg)]"
+          : "border-[color:var(--aqt-border)] bg-[color:var(--aqt-overlay-1)] text-[color:var(--aqt-fg-muted)] hover:bg-[color:var(--aqt-overlay-3)] hover:text-[color:var(--aqt-fg)]"
       )}
     >
       {label}
@@ -664,7 +664,7 @@ function MatchHistoryRow({
   const awayAccent = teamAccent(1);
 
   return (
-    <li className="flex items-center gap-3 rounded-lg border border-[color:var(--aqt-border-2)] bg-white/[0.012] px-2.5 py-2">
+    <li className="flex items-center gap-3 rounded-lg border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-overlay-1)] px-2.5 py-2">
       <div className="relative h-8 w-14 shrink-0 overflow-hidden rounded-md border border-[color:var(--aqt-border-2)] bg-[linear-gradient(135deg,var(--aqt-card-2),var(--aqt-bg-2))]">
         {match.map_image_path ? (
           <Image src={match.map_image_path} alt="" fill sizes="56px" className="object-cover" />
@@ -1065,7 +1065,7 @@ function SeatRow({
           ? "opacity-40"
           : isDropReady
             ? "border-[color:var(--aqt-teal)] bg-[color:color-mix(in_srgb,var(--aqt-teal)_10%,transparent)]"
-            : "border-[color:var(--aqt-border)] bg-white/[0.015] hover:bg-white/[0.045]"
+            : "border-[color:var(--aqt-border)] bg-[color:var(--aqt-overlay-1)] hover:bg-[color:var(--aqt-overlay-3)]"
       )}
     >
       <span

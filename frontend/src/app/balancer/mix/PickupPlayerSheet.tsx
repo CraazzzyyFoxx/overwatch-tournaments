@@ -277,7 +277,7 @@ export function PickupPlayerSheet({
                   "flex items-center justify-between gap-3 rounded-lg border px-3 py-2",
                   draft.isFlex
                     ? "border-emerald-400/20 bg-emerald-500/[0.08]"
-                    : "border-[color:var(--aqt-border-2)] bg-white/[0.03]",
+                    : "border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-overlay-2)]",
                 )}
               >
                 <div className="min-w-0">
@@ -347,7 +347,7 @@ export function PickupPlayerSheet({
                     return (
                       <li
                         key={role}
-                        className="flex items-start gap-2.5 rounded-xl border border-[color:var(--aqt-border)] bg-white/2 p-2.5 opacity-80"
+                        className="flex items-start gap-2.5 rounded-xl border border-[color:var(--aqt-border)] bg-[color:var(--aqt-overlay-1)] p-2.5 opacity-80"
                       >
                         <RoleCardBody
                           role={role}
@@ -390,7 +390,7 @@ export function PickupPlayerSheet({
               <Label className="text-xs font-medium text-[color:var(--aqt-fg)]">
                 Live rank (OverFast)
               </Label>
-              <div className="rounded-lg border border-[color:var(--aqt-border-2)] bg-white/[0.03] p-2.5">
+              <div className="rounded-lg border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-overlay-2)] p-2.5">
                 <RankHistory battleTag={row.battle_tag} />
               </div>
             </section>
@@ -414,7 +414,7 @@ export function PickupPlayerSheet({
             <div className="flex gap-2">
               <Button
                 variant="outline"
-                className="h-8 border-[color:var(--aqt-border-2)] bg-black/20 px-3 text-xs text-[color:var(--aqt-fg)] hover:bg-white/5 hover:text-[color:var(--aqt-fg)]"
+                className="h-8 border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-bg-2)] px-3 text-xs text-[color:var(--aqt-fg)] hover:bg-[color:var(--aqt-overlay-3)] hover:text-[color:var(--aqt-fg)]"
                 onClick={() => handleOpenChange(false)}
               >
                 Cancel
@@ -506,7 +506,7 @@ function SortableRoleCard({
       ref={ref}
       style={style}
       className={cn(
-        "flex items-start gap-2.5 rounded-xl border bg-white/3 p-2.5 transition-colors",
+        "flex items-start gap-2.5 rounded-xl border bg-[color:var(--aqt-overlay-2)] p-2.5 transition-colors",
         "border-[color:var(--aqt-border-2)]",
         ROLE_RANK_ACCENTS[role]?.row,
       )}
@@ -598,7 +598,7 @@ function RoleCardBody({
           ) : null}
         </div>
 
-        <div className="flex h-6 items-center gap-1.5 rounded-md border border-[color:var(--aqt-border-2)] bg-black/15 px-2">
+        <div className="flex h-6 items-center gap-1.5 rounded-md border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-bg-2)] px-2">
           <Switch
             checked={isOn}
             disabled={disabled}
@@ -608,7 +608,7 @@ function RoleCardBody({
           />
           <span
             className={cn(
-              "text-label font-semibold uppercase tracking-wide",
+              "text-label font-semibold uppercase tracking-label",
               isOn ? accent.text : "text-[color:var(--aqt-fg-dim)]",
             )}
           >

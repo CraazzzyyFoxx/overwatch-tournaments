@@ -51,9 +51,9 @@ export const ROLE_RANK_ACCENTS: Record<string, RoleRankAccent> = {
 
 /** For a rank that belongs to no single role — a whole-player override, say. */
 export const NEUTRAL_RANK_ACCENT: RoleRankAccent = {
-  row: "border-[color:var(--aqt-border-2)] bg-white/[0.03]",
+  row: "border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-overlay-2)]",
   text: "text-[color:var(--aqt-fg-muted)]",
-  chip: "border-[color:var(--aqt-border-2)] bg-white/[0.06] text-[color:var(--aqt-fg-muted)]",
+  chip: "border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-overlay-3)] text-[color:var(--aqt-fg-muted)]",
   sliderColor: "var(--aqt-teal)",
 };
 
@@ -115,7 +115,7 @@ function gridBounds(grid: DivisionGrid): { min: number; max: number } {
 }
 
 const LABEL_CLASS =
-  "text-label font-semibold uppercase tracking-wide text-[color:var(--aqt-fg-dim)]";
+  "text-label font-semibold uppercase tracking-label text-[color:var(--aqt-fg-dim)]";
 
 type RoleRankControlsProps = {
   /** The rank these controls read and write; `null` renders as unset. */
@@ -212,7 +212,7 @@ export function RoleRankControls({
                   disabled={disabled}
                   onClick={onClear}
                   title="Clear this role's rank"
-                  className="rounded px-1 text-label font-semibold uppercase tracking-wide text-[color:var(--aqt-fg-dim)] transition-colors hover:text-rose-200 disabled:opacity-50"
+                  className="rounded px-1 text-label font-semibold uppercase tracking-label text-[color:var(--aqt-fg-dim)] transition-colors hover:text-rose-200 disabled:opacity-50"
                 >
                   Clear
                 </button>
@@ -226,7 +226,7 @@ export function RoleRankControls({
           max={bounds.max}
           disabled={disabled}
           className={cn(
-            "h-7 border-[color:var(--aqt-border-2)] bg-black/15 px-2 text-xs text-[color:var(--aqt-fg)] shadow-none focus-visible:ring-1 focus-visible:ring-primary/40",
+            "h-7 border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-bg-2)] px-2 text-xs text-[color:var(--aqt-fg)] shadow-none focus-visible:ring-1 focus-visible:ring-primary/40",
             !active && "text-[color:var(--aqt-fg-dim)]",
           )}
           value={rankValue}
@@ -244,7 +244,7 @@ export function RoleRankControls({
             onChange(resolveRankFromDivision(grid, nextDivision), nextDivision);
           }}
           className={cn(
-            "h-1 w-full cursor-pointer appearance-none rounded-full bg-white/8",
+            "h-1 w-full cursor-pointer appearance-none rounded-full bg-[color:var(--aqt-overlay-3)]",
             (disabled || !active) && "cursor-not-allowed opacity-50",
           )}
           style={{
@@ -258,7 +258,7 @@ export function RoleRankControls({
         <span className={LABEL_CLASS}>Rank</span>
         <div
           className={cn(
-            "flex min-h-[36px] items-center gap-1.5 rounded-md border border-[color:var(--aqt-border-2)] bg-black/15 px-2 py-1",
+            "flex min-h-[36px] items-center gap-1.5 rounded-md border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-bg-2)] px-2 py-1",
             !active && "text-[color:var(--aqt-fg-dim)]",
           )}
           title={divisionName ?? undefined}

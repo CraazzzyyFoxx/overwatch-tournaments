@@ -55,12 +55,12 @@ export function BalanceEditorTeamCard({
   const teamAccent = TEAM_BADGE_ACCENTS[teamIndex % TEAM_BADGE_ACCENTS.length];
 
   return (
-    <div className="overflow-hidden rounded-xl border border-border bg-card">
+    <div className="overflow-hidden rounded-lg border border-border bg-card">
       <div className="flex items-start justify-between gap-3 border-b border-[color:var(--aqt-border)] px-4 py-3">
         <div className="flex min-w-0 gap-2 items-center">
           <Badge
             className={cn(
-              "rounded-full border px-2.5 py-1 text-xs font-semibold uppercase tracking-label",
+              "rounded-full border px-2.5 py-1 text-label font-semibold uppercase tracking-label",
               teamAccent,
             )}
           >
@@ -71,19 +71,15 @@ export function BalanceEditorTeamCard({
           </div>
         </div>
 
-        <div className="flex shrink-0 items-start gap-2">
-          <div className="text-right">
-            <div className="flex flex-wrap justify-end gap-x-3 gap-y-1 text-xs font-medium text-[color:var(--aqt-fg-muted)]">
-              <span>
-                Total: <span className="tabular-nums text-[color:var(--aqt-fg)]">{total}</span>
-              </span>
-              <span>
-                Avg: <span className="tabular-nums text-[color:var(--aqt-fg)]">{average}</span>
-              </span>
-            </div>
-            <div className="mt-1 flex flex-wrap justify-end gap-1.5" />
+        <div className="shrink-0 text-right">
+          <div className="flex flex-wrap justify-end gap-x-3 gap-y-1 text-label font-medium text-[color:var(--aqt-fg-muted)]">
+            <span>
+              Total: <span className="tabular-nums text-[color:var(--aqt-fg)]">{total}</span>
+            </span>
+            <span>
+              Avg: <span className="tabular-nums text-[color:var(--aqt-fg)]">{average}</span>
+            </span>
           </div>
-          
         </div>
       </div>
       {remoteDrags.length > 0 ? (
@@ -114,16 +110,16 @@ export function BalanceEditorTeamCard({
       <Table wrapperClassName="overflow-x-auto overflow-y-visible" className="min-w-90">
         <TableHeader>
           <TableRow className="border-[color:var(--aqt-border)] hover:bg-transparent">
-            <TableHead className="h-8 w-13 px-4 text-xs font-semibold uppercase tracking-label text-[color:var(--aqt-fg-dim)]">
+            <TableHead className="h-8 w-13 px-4 text-label font-semibold uppercase tracking-label text-[color:var(--aqt-fg-dim)]">
               Role
             </TableHead>
-            <TableHead className="h-8 min-w-45 px-0 text-xs font-semibold uppercase tracking-label text-[color:var(--aqt-fg-dim)]">
+            <TableHead className="h-8 min-w-45 px-0 text-label font-semibold uppercase tracking-label text-[color:var(--aqt-fg-dim)]">
               Player
             </TableHead>
-            <TableHead className="h-8 w-18 px-2 text-center text-xs font-semibold uppercase tracking-label text-[color:var(--aqt-fg-dim)]">
+            <TableHead className="h-8 w-18 px-2 text-center text-label font-semibold uppercase tracking-label text-[color:var(--aqt-fg-dim)]">
               Rank
             </TableHead>
-            <TableHead className="h-8 w-22 px-3 text-center text-xs font-semibold uppercase tracking-label text-[color:var(--aqt-fg-dim)]">
+            <TableHead className="h-8 w-22 px-3 text-center text-label font-semibold uppercase tracking-label text-[color:var(--aqt-fg-dim)]">
               Prefs
             </TableHead>
           </TableRow>

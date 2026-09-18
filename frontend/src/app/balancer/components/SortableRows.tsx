@@ -154,7 +154,7 @@ export function SortableGrip({
       aria-label={label}
       className={cn(
         "flex size-6 shrink-0 cursor-grab touch-none items-center justify-center rounded-md",
-        "border border-[color:var(--aqt-border-2)] bg-black/15 text-[color:var(--aqt-fg-dim)]",
+        "border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-bg-2)] text-[color:var(--aqt-fg-dim)]",
         "hover:text-[color:var(--aqt-fg)] active:cursor-grabbing",
         "disabled:cursor-default disabled:opacity-40",
         className,

@@ -115,8 +115,11 @@
   }
 }
 
+/* Both axes: `width` alone left horizontal scrollers on the ~15px platform
+   default, so a scrolling strip cost twice the chrome of a scrolling column. */
 ::-webkit-scrollbar {
   width: 8px;
+  height: 8px;
 }
 
 /* Track */

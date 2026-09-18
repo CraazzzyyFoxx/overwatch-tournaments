@@ -108,7 +108,7 @@ export function WorkspacePlayerSheet({
                   <li
                     key={role.code}
                     className={cn(
-                      "rounded-xl border bg-white/3 p-2.5",
+                      "rounded-xl border bg-[color:var(--aqt-overlay-2)] p-2.5",
                       "border-[color:var(--aqt-border-2)]",
                       ROLE_RANK_ACCENTS[role.code]?.row,
                     )}
@@ -133,7 +133,7 @@ export function WorkspacePlayerSheet({
                 <Label className="text-xs font-medium text-[color:var(--aqt-fg)]">
                   Live rank (OverFast)
                 </Label>
-                <div className="rounded-lg border border-[color:var(--aqt-border-2)] bg-white/[0.03] p-2.5">
+                <div className="rounded-lg border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-overlay-2)] p-2.5">
                   <RankHistory battleTag={member.battle_tag} />
                 </div>
               </section>
