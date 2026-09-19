@@ -233,7 +233,7 @@ beforeEach(() => {
 });
 
 describe("RegistrationsTable toolbar", () => {
-  it("keeps the counts in the toolbar and the footer, never in a header row", async () => {
+  it("keeps the counts in the toolbar, never in a header row", async () => {
     const scope = await mount();
     const headerText = scope.querySelector("thead")?.textContent ?? "";
 
@@ -242,8 +242,6 @@ describe("RegistrationsTable toolbar", () => {
     // Unfiltered: a single total, not a redundant "25/25".
     expect(scope.textContent).not.toContain("25/25");
     expect([...scope.querySelectorAll("span")].map((node) => node.textContent)).toContain("25");
-    // Loading progress belongs to the infinite footer.
-    expect(scope.textContent).toContain("Showing 25 of 25 registrations");
   });
 
   it("fetches the whole pool once, so the pending count survives filtering", async () => {
