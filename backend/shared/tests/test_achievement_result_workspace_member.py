@@ -55,6 +55,7 @@ def test_evaluation_result_unique_constraint_uses_workspace_member_id():
         "achievement_rule_id",
         "workspace_member_id",
         "tournament_id",
+        "encounter_id",
         "match_id",
     ]
 

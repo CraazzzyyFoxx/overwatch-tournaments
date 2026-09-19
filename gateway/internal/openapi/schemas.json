@@ -27621,6 +27621,13 @@
     },
     "parser.ConditionTypeInfo": {
       "properties": {
+        "depends_on": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Depends On",
+          "type": "array"
+        },
         "description": {
           "title": "Description",
           "type": "string"
@@ -27646,6 +27653,16 @@
           },
           "title": "Required Params",
           "type": "array"
+        },
+        "subcondition_ok": {
+          "default": false,
+          "title": "Subcondition Ok",
+          "type": "boolean"
+        },
+        "subcondition_only": {
+          "default": false,
+          "title": "Subcondition Only",
+          "type": "boolean"
         }
       },
       "required": [
