@@ -32,13 +32,21 @@ func marker(name string) http.HandlerFunc {
 	}
 }
 
-// buildGuardedMux mirrors gateway/cmd/gateway/main.go's /api/v1 wiring. Building
-// it must NOT panic — a ServeMux pattern conflict would crash the gateway at
-// startup. app + tournament + parser now share the unified /api/v1/* namespace
-// (the old /api/v1/core and /api/parser prefixes are gone), so this guards the
-// merged surface. Any unmatched /api/v1/* must hit the /api/v1/ guard (404),
-// never the "/" frontend catch-all (which rewrites /api/v1/* back to the gateway
-// -> infinite proxy loop).
+// buildGuardedMux mirrors gateway/cmd/gateway/main.go's whole REST wiring on
+// ONE mux, which is what main.go does. Building it must NOT panic — a ServeMux
+// pattern conflict would crash the gateway at startup, and nothing else in the
+// suite would catch it.
+//
+// Every domain is here on purpose. auth, analytics, balancer, streams,
+// notifications and announcements used to sit beside the version with a guard
+// each, and each had its own test mux — so a pattern that conflicted ACROSS two
+// domains (now all under /api/v1/) was unreachable by any test. Folding them
+// into the version folded the four muxes into this one.
+//
+// Any unmatched /api/v1/* must hit the single /api/v1/ guard (404), never the
+// "/" frontend catch-all (which rewrites /api/v1/* back to the gateway ->
+// infinite proxy loop). Legacy spellings reach that same guard because
+// `apiver` rewrites them onto /api/v1/... before routing.
 func buildGuardedMux(t *testing.T) *http.ServeMux {
 	t.Helper()
 	d := edge.New(errCaller{}, slog.New(slog.NewTextHandler(io.Discard, nil)), nil)
@@ -86,6 +94,64 @@ func buildGuardedMux(t *testing.T) *http.ServeMux {
 	pbin := parser.NewBinary(errCaller{}, func(*http.Request) (map[string]any, bool, error) { return nil, false, nil },
 		slog.New(slog.NewTextHandler(io.Discard, nil)))
 	mux.HandleFunc("POST /api/v1/admin/logs/upload", pbin.AdminLogsUpload)
+	// balancer-worker: public config + admin balance/config + draft + jobs.
+	d.Register(mux, balancer.PublicRoutes)
+	d.Register(mux, balancer.AdminRoutes)
+	d.Register(mux, balancer.RosterRoutes)
+
+	d.Register(mux, balancer.DraftReadRoutes)
+	d.Register(mux, balancer.DraftRoutes)
+	d.Register(mux, balancer.JobRoutes)
+	bbin := balancer.NewBinary(errCaller{}, func(*http.Request) (map[string]any, bool, error) { return nil, false, nil },
+		slog.New(slog.NewTextHandler(io.Discard, nil)))
+	mux.HandleFunc("POST /api/v1/balancer/tournaments/{tournament_id}/teams/import", bbin.TeamsImport)
+	mux.HandleFunc("POST /api/v1/balancer/jobs", bbin.JobCreate)
+	// stream-svc: the repoll route nests under the read route's {tournament_id}.
+	d.Register(mux, stream.PublicRoutes)
+	d.Register(mux, stream.AdminRoutes)
+	// identity-svc: the rbac users/{user_id} vs users/assign-role and the player
+	// linked/{player_id}/primary patterns are what would conflict under ServeMux.
+	h := identity.NewHandler(errCaller{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	mux.HandleFunc("POST /api/v1/auth/validate", h.Validate)
+	mux.HandleFunc("POST /api/v1/auth/login", h.Login)
+	mux.HandleFunc("GET /api/v1/auth/sessions", h.Sessions)
+	mux.HandleFunc("DELETE /api/v1/auth/sessions/{id}", h.RevokeSession)
+	mux.HandleFunc("GET /api/v1/auth/me", h.Me)
+	mux.HandleFunc("PATCH /api/v1/auth/me", h.UpdateMe)
+	mux.HandleFunc("GET /api/v1/auth/oauth/connections", h.OAuthConnections)
+	mux.HandleFunc("GET /api/v1/auth/oauth/{provider}/url", h.OAuthURL)
+	mux.HandleFunc("GET /api/v1/auth/api-keys", h.ListApiKeys)
+	mux.HandleFunc("PATCH /api/v1/auth/api-keys/{id}", h.UpdateApiKey)
+	// RBAC admin.
+	mux.HandleFunc("GET /api/v1/auth/rbac/permissions", h.RbacListPermissions)
+	mux.HandleFunc("POST /api/v1/auth/rbac/permissions", h.RbacCreatePermission)
+	mux.HandleFunc("DELETE /api/v1/auth/rbac/permissions/{permission_id}", h.RbacDeletePermission)
+	mux.HandleFunc("GET /api/v1/auth/rbac/roles", h.RbacListRoles)
+	mux.HandleFunc("POST /api/v1/auth/rbac/roles", h.RbacCreateRole)
+	mux.HandleFunc("GET /api/v1/auth/rbac/roles/{role_id}", h.RbacGetRole)
+	mux.HandleFunc("PATCH /api/v1/auth/rbac/roles/{role_id}", h.RbacUpdateRole)
+	mux.HandleFunc("DELETE /api/v1/auth/rbac/roles/{role_id}", h.RbacDeleteRole)
+	mux.HandleFunc("GET /api/v1/auth/rbac/users", h.RbacListAuthUsers)
+	mux.HandleFunc("POST /api/v1/auth/rbac/users/assign-role", h.RbacAssignRole)
+	mux.HandleFunc("POST /api/v1/auth/rbac/users/remove-role", h.RbacRemoveRole)
+	mux.HandleFunc("GET /api/v1/auth/rbac/users/{user_id}", h.RbacGetAuthUser)
+	mux.HandleFunc("DELETE /api/v1/auth/rbac/users/{user_id}", h.RbacDeleteAuthUser)
+	mux.HandleFunc("GET /api/v1/auth/rbac/users/{user_id}/roles", h.RbacGetUserRoles)
+	mux.HandleFunc("POST /api/v1/auth/rbac/users/{user_id}/linked-players", h.RbacAssignLinkedPlayer)
+	mux.HandleFunc("DELETE /api/v1/auth/rbac/users/{user_id}/linked-players/{player_id}", h.RbacRemoveLinkedPlayer)
+	mux.HandleFunc("GET /api/v1/auth/rbac/oauth-connections", h.RbacListOAuthConnections)
+	mux.HandleFunc("DELETE /api/v1/auth/rbac/oauth-connections/{connection_id}", h.RbacDeleteOAuthConnection)
+	mux.HandleFunc("GET /api/v1/auth/rbac/sessions", h.RbacListSessions)
+	// Player linking.
+	mux.HandleFunc("POST /api/v1/auth/player/link", h.PlayerLink)
+	mux.HandleFunc("DELETE /api/v1/auth/player/unlink/{player_id}", h.PlayerUnlink)
+	mux.HandleFunc("GET /api/v1/auth/player/linked", h.PlayerLinked)
+	mux.HandleFunc("PATCH /api/v1/auth/player/linked/{player_id}/primary", h.PlayerSetPrimary)
+	// Avatar (multipart). `identityBin`, not `bin`: app.NewBinary already owns
+	// that name above, and both now register on the same mux.
+	identityBin := identity.NewBinary(h, nil)
+	mux.HandleFunc("POST /api/v1/auth/me/avatar", identityBin.AvatarSet)
+	mux.HandleFunc("DELETE /api/v1/auth/me/avatar", identityBin.AvatarDelete)
 	// Unmatched /api/v1/* falls to the /api/v1/ guard (404), never the "/" frontend
 	// catch-all.
 	mux.HandleFunc("/api/v1/", func(w http.ResponseWriter, _ *http.Request) {
@@ -182,10 +248,10 @@ func TestApiV1Guard_NotificationRoutesAreRegistered(t *testing.T) {
 	defer srv.Close()
 
 	for _, c := range []struct{ method, path string }{
-		{"GET", "/api/notifications"},
-		{"POST", "/api/notifications/read"},
-		{"POST", "/api/notifications/delete"},
-		{"GET", "/api/announcements/active"},
+		{"GET", "/api/v1/notifications"},
+		{"POST", "/api/v1/notifications/read"},
+		{"POST", "/api/v1/notifications/delete"},
+		{"GET", "/api/v1/announcements/active"},
 		{"GET", "/api/v1/admin/announcements?workspace_id=1"},
 		// The {id} routes are PATCH/DELETE only: a GET here belongs to the
 		// guard, which is why the method travels with the path.
@@ -278,37 +344,14 @@ func TestApiV1Guard_MeRoutesAreRegistered(t *testing.T) {
 	}
 }
 
-// buildBalancerGuardedMux mirrors gateway/cmd/gateway/main.go's /api/balancer
+// buildBalancerGuardedMux mirrors gateway/cmd/gateway/main.go's /api/v1/balancer
 // wiring. Building it must NOT panic (a ServeMux pattern conflict would crash the
 // gateway at startup). The HTTP balancer-service is decommissioned: every
-// /api/balancer/* path is a typed RPC route here, and unmatched paths must hit the
-// /api/balancer/ guard (404), never the "/" frontend catch-all (which rewrites
-// /api/balancer/* back to the gateway -> infinite proxy loop).
-func buildBalancerGuardedMux(t *testing.T) *http.ServeMux {
-	t.Helper()
-	d := edge.New(errCaller{}, slog.New(slog.NewTextHandler(io.Discard, nil)), nil)
-	mux := http.NewServeMux()
-	d.Register(mux, balancer.PublicRoutes)
-	d.Register(mux, balancer.AdminRoutes)
-	d.Register(mux, balancer.RosterRoutes)
-
-	d.Register(mux, balancer.DraftReadRoutes)
-	d.Register(mux, balancer.DraftRoutes)
-	d.Register(mux, balancer.JobRoutes)
-	bbin := balancer.NewBinary(errCaller{}, func(*http.Request) (map[string]any, bool, error) { return nil, false, nil },
-		slog.New(slog.NewTextHandler(io.Discard, nil)))
-	mux.HandleFunc("POST /api/balancer/tournaments/{tournament_id}/teams/import", bbin.TeamsImport)
-	mux.HandleFunc("POST /api/balancer/jobs", bbin.JobCreate)
-	mux.HandleFunc("/api/balancer/", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("X-Route", "guard")
-		w.WriteHeader(http.StatusNotFound)
-	})
-	mux.Handle("/", marker("frontend"))
-	return mux
-}
-
+// /api/v1/balancer/* path is a typed RPC route here, and unmatched paths must hit the
+// /api/v1/balancer/ guard (404), never the "/" frontend catch-all (which rewrites
+// /api/v1/balancer/* back to the gateway -> infinite proxy loop).
 func TestApiBalancerGuard_NoConflictAndNoLoop(t *testing.T) {
-	mux := buildBalancerGuardedMux(t) // panics here on any ServeMux pattern conflict
+	mux := buildGuardedMux(t) // panics here on any ServeMux pattern conflict
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
@@ -316,11 +359,11 @@ func TestApiBalancerGuard_NoConflictAndNoLoop(t *testing.T) {
 		name      string
 		method    string
 		path      string
-		wantRoute string // "" => expect the /api/balancer/ guard 404
+		wantRoute string // "" => expect the /api/v1/balancer/ guard 404
 	}{
-		{"unmatched balancer path", "GET", "/api/balancer/does-not-exist", ""},
-		{"unmatched draft path", "GET", "/api/balancer/draft/nope", ""},
-		{"dead sse stream is gone", "GET", "/api/balancer/jobs/abc/stream", ""},
+		{"unmatched balancer path", "GET", "/api/v1/balancer/does-not-exist", ""},
+		{"unmatched draft path", "GET", "/api/v1/balancer/draft/nope", ""},
+		{"dead sse stream is gone", "GET", "/api/v1/balancer/jobs/abc/stream", ""},
 		{"non-api path hits frontend", "GET", "/users/someone", "frontend"},
 	}
 	for _, c := range cases {
@@ -334,7 +377,7 @@ func TestApiBalancerGuard_NoConflictAndNoLoop(t *testing.T) {
 			route := resp.Header.Get("X-Route")
 			if c.wantRoute == "" {
 				if resp.StatusCode != http.StatusNotFound || route != "guard" {
-					t.Fatalf("%s %s: got route=%q status=%d, want the /api/balancer/ guard (404). "+
+					t.Fatalf("%s %s: got route=%q status=%d, want the /api/v1/balancer/ guard (404). "+
 						"Falling through to the frontend would re-create the proxy loop.",
 						c.method, c.path, route, resp.StatusCode)
 				}
@@ -348,18 +391,18 @@ func TestApiBalancerGuard_NoConflictAndNoLoop(t *testing.T) {
 }
 
 // TestApiBalancer_MigratedRoutesHitDispatcher asserts the typed balancer routes win
-// over the /api/balancer/ guard (ServeMux specificity) and reach the dispatcher
+// over the /api/v1/balancer/ guard (ServeMux specificity) and reach the dispatcher
 // (empty X-Route with the stub RPC caller), never "frontend"/"guard".
 func TestApiBalancer_MigratedRoutesHitDispatcher(t *testing.T) {
-	mux := buildBalancerGuardedMux(t)
+	mux := buildGuardedMux(t)
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
 	paths := []string{
-		"/api/balancer/config",
-		"/api/balancer/draft/sessions/abc",
-		"/api/balancer/draft/tournaments/5/draft",
-		"/api/balancer/draft/sessions/abc/board",
+		"/api/v1/balancer/config",
+		"/api/v1/balancer/draft/sessions/abc",
+		"/api/v1/balancer/draft/tournaments/5/draft",
+		"/api/v1/balancer/draft/sessions/abc/board",
 	}
 	for _, p := range paths {
 		t.Run(p, func(t *testing.T) {
@@ -436,66 +479,15 @@ func TestApiV1_MigratedReadsHitDispatcher(t *testing.T) {
 	}
 }
 
-// buildAuthGuardedMux mirrors gateway/cmd/gateway/main.go's /api/auth wiring. The
-// HTTP-over-RPC tunnel + auth-service proxy are decommissioned: every /api/auth/*
-// path is now a typed RPC route here, and unmatched paths must hit the /api/auth/
-// guard (404), never the "/" frontend catch-all (which rewrites /api/auth/* back
+// buildAuthGuardedMux mirrors gateway/cmd/gateway/main.go's /api/v1/auth wiring. The
+// HTTP-over-RPC tunnel + auth-service proxy are decommissioned: every /api/v1/auth/*
+// path is now a typed RPC route here, and unmatched paths must hit the /api/v1/auth/
+// guard (404), never the "/" frontend catch-all (which rewrites /api/v1/auth/* back
 // to the gateway -> infinite proxy loop). Building it must NOT panic — the rbac
 // users/{user_id} vs users/assign-role and the player linked/{player_id}/primary
 // patterns are the cases that would conflict under ServeMux.
-func buildAuthGuardedMux(t *testing.T) *http.ServeMux {
-	t.Helper()
-	h := identity.NewHandler(errCaller{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
-	mux := http.NewServeMux()
-	mux.HandleFunc("POST /api/auth/validate", h.Validate)
-	mux.HandleFunc("POST /api/auth/login", h.Login)
-	mux.HandleFunc("GET /api/auth/sessions", h.Sessions)
-	mux.HandleFunc("DELETE /api/auth/sessions/{id}", h.RevokeSession)
-	mux.HandleFunc("GET /api/auth/me", h.Me)
-	mux.HandleFunc("PATCH /api/auth/me", h.UpdateMe)
-	mux.HandleFunc("GET /api/auth/oauth/connections", h.OAuthConnections)
-	mux.HandleFunc("GET /api/auth/oauth/{provider}/url", h.OAuthURL)
-	mux.HandleFunc("GET /api/auth/api-keys", h.ListApiKeys)
-	mux.HandleFunc("PATCH /api/auth/api-keys/{id}", h.UpdateApiKey)
-	// RBAC admin.
-	mux.HandleFunc("GET /api/auth/rbac/permissions", h.RbacListPermissions)
-	mux.HandleFunc("POST /api/auth/rbac/permissions", h.RbacCreatePermission)
-	mux.HandleFunc("DELETE /api/auth/rbac/permissions/{permission_id}", h.RbacDeletePermission)
-	mux.HandleFunc("GET /api/auth/rbac/roles", h.RbacListRoles)
-	mux.HandleFunc("POST /api/auth/rbac/roles", h.RbacCreateRole)
-	mux.HandleFunc("GET /api/auth/rbac/roles/{role_id}", h.RbacGetRole)
-	mux.HandleFunc("PATCH /api/auth/rbac/roles/{role_id}", h.RbacUpdateRole)
-	mux.HandleFunc("DELETE /api/auth/rbac/roles/{role_id}", h.RbacDeleteRole)
-	mux.HandleFunc("GET /api/auth/rbac/users", h.RbacListAuthUsers)
-	mux.HandleFunc("POST /api/auth/rbac/users/assign-role", h.RbacAssignRole)
-	mux.HandleFunc("POST /api/auth/rbac/users/remove-role", h.RbacRemoveRole)
-	mux.HandleFunc("GET /api/auth/rbac/users/{user_id}", h.RbacGetAuthUser)
-	mux.HandleFunc("DELETE /api/auth/rbac/users/{user_id}", h.RbacDeleteAuthUser)
-	mux.HandleFunc("GET /api/auth/rbac/users/{user_id}/roles", h.RbacGetUserRoles)
-	mux.HandleFunc("POST /api/auth/rbac/users/{user_id}/linked-players", h.RbacAssignLinkedPlayer)
-	mux.HandleFunc("DELETE /api/auth/rbac/users/{user_id}/linked-players/{player_id}", h.RbacRemoveLinkedPlayer)
-	mux.HandleFunc("GET /api/auth/rbac/oauth-connections", h.RbacListOAuthConnections)
-	mux.HandleFunc("DELETE /api/auth/rbac/oauth-connections/{connection_id}", h.RbacDeleteOAuthConnection)
-	mux.HandleFunc("GET /api/auth/rbac/sessions", h.RbacListSessions)
-	// Player linking.
-	mux.HandleFunc("POST /api/auth/player/link", h.PlayerLink)
-	mux.HandleFunc("DELETE /api/auth/player/unlink/{player_id}", h.PlayerUnlink)
-	mux.HandleFunc("GET /api/auth/player/linked", h.PlayerLinked)
-	mux.HandleFunc("PATCH /api/auth/player/linked/{player_id}/primary", h.PlayerSetPrimary)
-	// Avatar (multipart).
-	bin := identity.NewBinary(h, nil)
-	mux.HandleFunc("POST /api/auth/me/avatar", bin.AvatarSet)
-	mux.HandleFunc("DELETE /api/auth/me/avatar", bin.AvatarDelete)
-	mux.HandleFunc("/api/auth/", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("X-Route", "guard")
-		w.WriteHeader(http.StatusNotFound)
-	})
-	mux.Handle("/", marker("frontend"))
-	return mux
-}
-
 func TestApiAuthGuard_NoConflictAndNoLoop(t *testing.T) {
-	mux := buildAuthGuardedMux(t) // panics here on any ServeMux pattern conflict
+	mux := buildGuardedMux(t) // panics here on any ServeMux pattern conflict
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
@@ -503,11 +495,11 @@ func TestApiAuthGuard_NoConflictAndNoLoop(t *testing.T) {
 		name      string
 		method    string
 		path      string
-		wantRoute string // "" => expect the /api/auth/ guard 404
+		wantRoute string // "" => expect the /api/v1/auth/ guard 404
 	}{
-		{"unmatched auth path", "GET", "/api/auth/does-not-exist", ""},
-		{"removed tunnel rbac typo path", "GET", "/api/auth/rbac/nope", ""},
-		{"unmatched player path", "GET", "/api/auth/player/nope", ""},
+		{"unmatched auth path", "GET", "/api/v1/auth/does-not-exist", ""},
+		{"removed tunnel rbac typo path", "GET", "/api/v1/auth/rbac/nope", ""},
+		{"unmatched player path", "GET", "/api/v1/auth/player/nope", ""},
 		{"non-api path hits frontend", "GET", "/users/someone", "frontend"},
 	}
 	for _, c := range cases {
@@ -521,7 +513,7 @@ func TestApiAuthGuard_NoConflictAndNoLoop(t *testing.T) {
 			route := resp.Header.Get("X-Route")
 			if c.wantRoute == "" {
 				if resp.StatusCode != http.StatusNotFound || route != "guard" {
-					t.Fatalf("%s %s: got route=%q status=%d, want the /api/auth/ guard (404). "+
+					t.Fatalf("%s %s: got route=%q status=%d, want the /api/v1/auth/ guard (404). "+
 						"Falling through to the frontend would re-create the proxy loop.",
 						c.method, c.path, route, resp.StatusCode)
 				}
@@ -535,10 +527,10 @@ func TestApiAuthGuard_NoConflictAndNoLoop(t *testing.T) {
 }
 
 // TestApiAuth_TypedRoutesHitHandler asserts the typed RBAC/player/avatar routes win
-// over the /api/auth/ guard (ServeMux specificity) and reach the identity handler
+// over the /api/v1/auth/ guard (ServeMux specificity) and reach the identity handler
 // (401 without a bearer, or 504 with the stub caller), never "frontend"/"guard".
 func TestApiAuth_TypedRoutesHitHandler(t *testing.T) {
-	mux := buildAuthGuardedMux(t)
+	mux := buildGuardedMux(t)
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
@@ -546,26 +538,26 @@ func TestApiAuth_TypedRoutesHitHandler(t *testing.T) {
 		method string
 		path   string
 	}{
-		{"GET", "/api/auth/rbac/permissions"},
-		{"GET", "/api/auth/rbac/roles"},
-		{"GET", "/api/auth/rbac/roles/5"},
-		{"GET", "/api/auth/rbac/users"},
-		{"POST", "/api/auth/rbac/users/assign-role"},
-		{"POST", "/api/auth/rbac/users/remove-role"},
-		{"GET", "/api/auth/rbac/users/5"},
-		{"DELETE", "/api/auth/rbac/users/5"},
-		{"GET", "/api/auth/rbac/users/5/roles"},
-		{"POST", "/api/auth/rbac/users/5/linked-players"},
-		{"DELETE", "/api/auth/rbac/users/5/linked-players/9"},
-		{"GET", "/api/auth/rbac/oauth-connections"},
-		{"DELETE", "/api/auth/rbac/oauth-connections/3"},
-		{"GET", "/api/auth/rbac/sessions"},
-		{"POST", "/api/auth/player/link"},
-		{"DELETE", "/api/auth/player/unlink/5"},
-		{"GET", "/api/auth/player/linked"},
-		{"PATCH", "/api/auth/player/linked/5/primary"},
-		{"POST", "/api/auth/me/avatar"},
-		{"DELETE", "/api/auth/me/avatar"},
+		{"GET", "/api/v1/auth/rbac/permissions"},
+		{"GET", "/api/v1/auth/rbac/roles"},
+		{"GET", "/api/v1/auth/rbac/roles/5"},
+		{"GET", "/api/v1/auth/rbac/users"},
+		{"POST", "/api/v1/auth/rbac/users/assign-role"},
+		{"POST", "/api/v1/auth/rbac/users/remove-role"},
+		{"GET", "/api/v1/auth/rbac/users/5"},
+		{"DELETE", "/api/v1/auth/rbac/users/5"},
+		{"GET", "/api/v1/auth/rbac/users/5/roles"},
+		{"POST", "/api/v1/auth/rbac/users/5/linked-players"},
+		{"DELETE", "/api/v1/auth/rbac/users/5/linked-players/9"},
+		{"GET", "/api/v1/auth/rbac/oauth-connections"},
+		{"DELETE", "/api/v1/auth/rbac/oauth-connections/3"},
+		{"GET", "/api/v1/auth/rbac/sessions"},
+		{"POST", "/api/v1/auth/player/link"},
+		{"DELETE", "/api/v1/auth/player/unlink/5"},
+		{"GET", "/api/v1/auth/player/linked"},
+		{"PATCH", "/api/v1/auth/player/linked/5/primary"},
+		{"POST", "/api/v1/auth/me/avatar"},
+		{"DELETE", "/api/v1/auth/me/avatar"},
 	}
 	for _, c := range cases {
 		t.Run(c.method+" "+c.path, func(t *testing.T) {
@@ -584,29 +576,15 @@ func TestApiAuth_TypedRoutesHitHandler(t *testing.T) {
 	}
 }
 
-// buildStreamsGuardedMux mirrors gateway/cmd/gateway/main.go's /api/streams
+// buildStreamsGuardedMux mirrors gateway/cmd/gateway/main.go's /api/v1/streams
 // wiring. Building it must NOT panic (a ServeMux pattern conflict would crash
 // the gateway at startup): the repoll route nests under the read route's
 // {tournament_id}, so the two must coexist. There is no HTTP stream-service —
-// every /api/streams/* path is a typed RPC route here, and unmatched paths must
-// hit the /api/streams/ guard (404), never the "/" frontend catch-all (which
-// rewrites /api/streams/* back to the gateway -> infinite proxy loop).
-func buildStreamsGuardedMux(t *testing.T) *http.ServeMux {
-	t.Helper()
-	d := edge.New(errCaller{}, slog.New(slog.NewTextHandler(io.Discard, nil)), nil)
-	mux := http.NewServeMux()
-	d.Register(mux, stream.PublicRoutes)
-	d.Register(mux, stream.AdminRoutes)
-	mux.HandleFunc("/api/streams/", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("X-Route", "guard")
-		w.WriteHeader(http.StatusNotFound)
-	})
-	mux.Handle("/", marker("frontend"))
-	return mux
-}
-
+// every /api/v1/streams/* path is a typed RPC route here, and unmatched paths must
+// hit the /api/v1/streams/ guard (404), never the "/" frontend catch-all (which
+// rewrites /api/v1/streams/* back to the gateway -> infinite proxy loop).
 func TestApiStreamsGuard_NoConflictAndNoLoop(t *testing.T) {
-	mux := buildStreamsGuardedMux(t) // panics here on any ServeMux pattern conflict
+	mux := buildGuardedMux(t) // panics here on any ServeMux pattern conflict
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
@@ -614,11 +592,11 @@ func TestApiStreamsGuard_NoConflictAndNoLoop(t *testing.T) {
 		name      string
 		method    string
 		path      string
-		wantRoute string // "" => expect the /api/streams/ guard 404
+		wantRoute string // "" => expect the /api/v1/streams/ guard 404
 	}{
-		{"unmatched streams path", "GET", "/api/streams/does-not-exist", ""},
-		{"unmatched tournament leaf", "GET", "/api/streams/tournament/7/nope", ""},
-		{"read is GET-only", "DELETE", "/api/streams/tournament/7", ""},
+		{"unmatched streams path", "GET", "/api/v1/streams/does-not-exist", ""},
+		{"unmatched tournament leaf", "GET", "/api/v1/streams/tournament/7/nope", ""},
+		{"read is GET-only", "DELETE", "/api/v1/streams/tournament/7", ""},
 		{"non-api path hits frontend", "GET", "/users/someone", "frontend"},
 	}
 	for _, c := range cases {
@@ -632,7 +610,7 @@ func TestApiStreamsGuard_NoConflictAndNoLoop(t *testing.T) {
 			route := resp.Header.Get("X-Route")
 			if c.wantRoute == "" {
 				if resp.StatusCode != http.StatusNotFound || route != "guard" {
-					t.Fatalf("%s %s: got route=%q status=%d, want the /api/streams/ guard (404). "+
+					t.Fatalf("%s %s: got route=%q status=%d, want the /api/v1/streams/ guard (404). "+
 						"Falling through to the frontend would re-create the proxy loop.",
 						c.method, c.path, route, resp.StatusCode)
 				}
@@ -647,16 +625,16 @@ func TestApiStreamsGuard_NoConflictAndNoLoop(t *testing.T) {
 
 // The streams surface rides its own tables (stream.PublicRoutes /
 // stream.AdminRoutes), so a missing main.go registration would leave every path
-// answered by the /api/streams/ guard with 404 — the feature dead on arrival
+// answered by the /api/v1/streams/ guard with 404 — the feature dead on arrival
 // with no compile error to warn anyone. This pins that both made it onto the mux.
 func TestApiStreamsGuard_RoutesAreRegistered(t *testing.T) {
-	mux := buildStreamsGuardedMux(t)
+	mux := buildGuardedMux(t)
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
 	for _, tc := range []struct{ method, path string }{
-		{http.MethodGet, "/api/streams/tournament/7"},
-		{http.MethodPost, "/api/streams/tournament/7/repoll?workspace_id=1"},
+		{http.MethodGet, "/api/v1/streams/tournament/7"},
+		{http.MethodPost, "/api/v1/streams/tournament/7/repoll?workspace_id=1"},
 	} {
 		t.Run(tc.method+" "+tc.path, func(t *testing.T) {
 			req, err := http.NewRequest(tc.method, srv.URL+tc.path, http.NoBody)

@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 //
-// Access › Roles, driven by a REAL `/api/auth/me` payload instead of a mocked
+// Access › Roles, driven by a REAL `/api/v1/auth/me` payload instead of a mocked
 // `usePermissions`.
 //
 // `page.behavior.test.tsx` mocks the whole permissions hook, so every gate in
@@ -61,7 +61,7 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 const OWNED_WORKSPACE = 8;
 
-/** Verbatim `/api/auth/me`, mapped the way `auth-profile.store` maps it. */
+/** Verbatim `/api/v1/auth/me`, mapped the way `auth-profile.store` maps it. */
 const OWNER_PROFILE = {
   id: 26,
   username: "shadow_pulse_dl",

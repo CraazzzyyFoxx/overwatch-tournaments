@@ -8,7 +8,7 @@ vi.mock("@/lib/api-fetch", () => ({ apiFetch }));
 
 import balancerService from "./balancer.service";
 
-/** Shaped like `GET /api/balancer/config`: `fields` is the server's catalog of
+/** Shaped like `GET /api/v1/balancer/config`: `fields` is the server's catalog of
  * knobs, `defaults`/`presets` are values keyed by knob name. */
 function configPayload() {
   return {

@@ -15,7 +15,7 @@ import { usePermissions } from "@/hooks/usePermissions";
  *
  * Status is gated on `stream.read` and on the GLOBAL grant, not a
  * workspace-scoped one, because there is one poller and one Redis key behind
- * `GET /api/streams/health`; `canAccessPermission(..., null)` is what asks for
+ * `GET /api/v1/streams/health`; `canAccessPermission(..., null)` is what asks for
  * the global form, and `adminRoutePermissions` gates the route the same way.
  * That is also why this page has no workspace dimension: the numbers carry
  * none. Settings writes `stream.collection` through

@@ -6,7 +6,7 @@ import { useAuthProfileStore } from "@/stores/auth-profile.store";
 // Drives the REAL fetchMe / refreshAccessToken via a URL-aware fetch mock (no
 // module mock that could leak across files). getTokenFromCookies resolves to
 // undefined here (window is stubbed but there's no document for js-cookie), so
-// the FIRST /api/auth/me call never carries an Authorization header — which is
+// the FIRST /api/v1/auth/me call never carries an Authorization header — which is
 // exactly the production case this store has to survive.
 
 type Globals = { window?: unknown; fetch?: typeof fetch };
@@ -17,7 +17,7 @@ const originalFetch = globalThis.fetch;
 // Status the mocked POST /auth/refresh returns: 200 => refreshed, 401 => dead
 // session, anything else => transient error.
 let refreshStatus = 500;
-// Status /api/auth/me returns for the unauthenticated (no-bearer) attempt.
+// Status /api/v1/auth/me returns for the unauthenticated (no-bearer) attempt.
 let meStatus = 401;
 
 const profile = {

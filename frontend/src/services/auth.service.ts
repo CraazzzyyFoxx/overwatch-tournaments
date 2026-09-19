@@ -45,7 +45,7 @@ type OAuthLinkParams = {
   headers?: ForwardedAuthHeaders;
 };
 
-// Returned by POST /api/auth/oauth/{provider}/callback. `origin`/`redirect`/
+// Returned by POST /api/v1/auth/oauth/{provider}/callback. `origin`/`redirect`/
 // `action` are decoded server-side from the signed OAuth state (Task 9) so the
 // callback can redirect back to whichever subdomain started the flow.
 //
@@ -66,7 +66,7 @@ export interface OAuthCallbackResult {
   action?: OAuthAction;
 }
 
-// Returned by POST /api/auth/oauth/{provider}/link. `origin`/`redirect`/
+// Returned by POST /api/v1/auth/oauth/{provider}/link. `origin`/`redirect`/
 // `action` echo OAuthCallbackResult "for symmetry" (Task 9), so the caller
 // can honor the origin the flow started on either way.
 //
@@ -137,7 +137,7 @@ function linkErrorCode(status: number): OAuthLinkErrorCode {
 
 export const authService = {
   async getOAuthUrl(provider: OAuthProviderName, params: OAuthUrlParams): Promise<OAuthUrlResponse> {
-    const res = await apiFetch(`/api/auth/oauth/${provider}/url`, {
+    const res = await apiFetch(`/api/v1/auth/oauth/${provider}/url`, {
       query: {
         origin: params.origin,
         redirect: params.redirect,
@@ -156,7 +156,7 @@ export const authService = {
   },
 
   async getAvailableOAuthProviders(): Promise<OAuthProviderAvailability[]> {
-    const res = await apiFetch("/api/auth/providers", { throwOnError: false });
+    const res = await apiFetch("/api/v1/auth/providers", { throwOnError: false });
     if (!res.ok) throw new Error("Failed to load available OAuth providers");
     return res.json();
   },
@@ -173,7 +173,7 @@ export const authService = {
     csrf: string,
     headers?: ForwardedAuthHeaders,
   ): Promise<OAuthCallbackResult> {
-    const res = await apiFetch(`/api/auth/oauth/${provider}/callback`, {
+    const res = await apiFetch(`/api/v1/auth/oauth/${provider}/callback`, {
       method: "POST",
       headers,
       body: { code, state, csrf },
@@ -192,7 +192,7 @@ export const authService = {
   // bound into the ticket at issuance, or identity-svc fails closed (no
   // tokens) even for an otherwise-valid ticket.
   async ssoExchange(ticket: string, guard: string): Promise<TokenPair> {
-    const res = await apiFetch("/api/auth/sso/exchange", {
+    const res = await apiFetch("/api/v1/auth/sso/exchange", {
       method: "POST",
       body: { ticket, guard },
       throwOnError: false
@@ -202,7 +202,7 @@ export const authService = {
   },
 
   async linkOAuth(provider: OAuthProviderName, params: OAuthLinkParams): Promise<OAuthLinkResult> {
-    const res = await apiFetch(`/api/auth/oauth/${provider}/link`, {
+    const res = await apiFetch(`/api/v1/auth/oauth/${provider}/link`, {
       method: "POST",
       token: params.accessToken,
       headers: params.headers,
@@ -244,7 +244,7 @@ export const authService = {
   // session redeeming an attacker's ticket): identity-svc additionally
   // requires `guard`'s hash to match the ticket's bound hash, fail closed.
   async completeLink(ticket: string, accessToken: string, guard: string): Promise<{ message: string; provider?: string; username?: string }> {
-    const res = await apiFetch("/api/auth/link/complete", {
+    const res = await apiFetch("/api/v1/auth/link/complete", {
       method: "POST",
       token: accessToken,
       body: { ticket, guard },
@@ -262,14 +262,14 @@ export const authService = {
 
   async me(accessToken?: string): Promise<AuthUser> {
     const res = accessToken
-      ? await apiFetch("/api/auth/me", { token: accessToken, throwOnError: false })
-      : await apiFetch("/api/auth/me", { throwOnError: false });
+      ? await apiFetch("/api/v1/auth/me", { token: accessToken, throwOnError: false })
+      : await apiFetch("/api/v1/auth/me", { throwOnError: false });
     if (!res.ok) throw new Error("Failed to fetch current user");
     return res.json();
   },
 
   async refresh(refreshToken: string, headers?: ForwardedAuthHeaders): Promise<TokenPair> {
-    const res = await apiFetch("/api/auth/refresh", {
+    const res = await apiFetch("/api/v1/auth/refresh", {
       method: "POST",
       headers,
       body: { refresh_token: refreshToken },
@@ -285,22 +285,22 @@ export const authService = {
 
   async getLinkedPlayers(accessToken?: string): Promise<LinkedPlayer[]> {
     const res = accessToken
-      ? await apiFetch("/api/auth/player/linked", { token: accessToken, throwOnError: false })
-      : await apiFetch("/api/auth/player/linked", { throwOnError: false });
+      ? await apiFetch("/api/v1/auth/player/linked", { token: accessToken, throwOnError: false })
+      : await apiFetch("/api/v1/auth/player/linked", { throwOnError: false });
     if (!res.ok) throw new Error("Failed to fetch linked players");
     return res.json();
   },
 
   async logout(accessToken?: string, refreshToken?: string, headers?: ForwardedAuthHeaders): Promise<void> {
     const res = accessToken
-      ? await apiFetch("/api/auth/logout", {
+      ? await apiFetch("/api/v1/auth/logout", {
           method: "POST",
           token: accessToken,
           headers,
           body: refreshToken ? { refresh_token: refreshToken } : undefined,
           throwOnError: false
         })
-      : await apiFetch("/api/auth/logout", { method: "POST", headers, throwOnError: false });
+      : await apiFetch("/api/v1/auth/logout", { method: "POST", headers, throwOnError: false });
 
     // /logout returns 204
     if (!res.ok && res.status !== 204) {

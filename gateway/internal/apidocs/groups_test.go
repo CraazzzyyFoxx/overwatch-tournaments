@@ -70,7 +70,7 @@ func TestGroups_RealSpecsValid(t *testing.T) {
 // TestGroups_NoOverlap ensures the public and admin specs are disjoint by
 // operation (method + path) — a single endpoint should be documented on exactly
 // one page. The same path may legitimately appear on both pages with different
-// methods (e.g. a public GET read + an admin POST write on /api/analytics/jobs).
+// methods (e.g. a public GET read + an admin POST write on /api/v1/analytics/jobs).
 func TestGroups_NoOverlap(t *testing.T) {
 	public, admin := Groups()
 	pubOps := opSet(public)

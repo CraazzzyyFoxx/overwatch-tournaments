@@ -50,16 +50,51 @@ drifts from the import graph.
 
 ## Backend integration
 
-The app talks to a **single gateway origin** via path-namespaced routes:
+One API: one origin, one process (the Go gateway), one dispatcher
+(`edge.RouteSpec` → RabbitMQ RPC queue), one error envelope, one OpenAPI generator, and one
+URL shape. The HTTP parser/analytics/balancer services are decommissioned — nothing behind the
+gateway speaks HTTP.
 
-- `/api/v1` — app, tournament, and parser reads/writes
-- `/api/balancer` — team balancing and draft
-- `/api/analytics` — post-tournament analytics
-- `/api/auth` — identity (auth, RBAC, workspace membership)
-- `/api/realtime/ws` — realtime WebSocket stream
+**Every gateway path is `/api/v{n}/<domain>/...`.** One version axis, always the second
+segment; no namespace sits beside it.
+
+| Domain | Covers |
+| --- | --- |
+| `/api/v1/{tournaments,users,workspaces,admin,me,…}` | app + tournament + parser reads/writes |
+| `/api/v1/auth/*` | identity, RBAC, sessions, API keys |
+| `/api/v1/balancer/*` | team balancing and draft |
+| `/api/v1/analytics/*` | post-tournament analytics |
+| `/api/v1/streams/*` | tournament live streams |
+| `/api/v1/notifications*`, `/api/v1/announcements/*` | the per-user inbox and feed |
+| `/api/v1/realtime/ws` | realtime WebSocket stream |
+
+`/api/v2/*` is the same paths, handlers and statuses with the RPC envelope as the body;
+`internal/apiver` rewrites it onto v1 before routing and `internal/apierr` picks the shape. It
+is a response version, not a second route table — which is why it now covers the whole surface
+instead of everything-except-auth.
+
+Three things live outside the version, on purpose:
+
+- `/api/docs`, `/api/openapi*.json` — the generated reference. It *describes* the versions, so
+  it cannot sit inside one.
+- `/api/health` — the frontend container's probe (`docker-compose` healthcheck, TLS runbooks).
+- `/bff/*` — **this app's own** endpoints: cookie-authenticated Next route handlers that hold
+  the access token server-side so the browser never sees it (`/bff/account/api-keys`,
+  `/bff/account/sessions`). Served by Next, never by the gateway. It used to be `/api/account`,
+  which made a second resource API hide inside the gateway's namespace.
+
+### Migrating off the old prefixes
+
+`auth`, `analytics`, `balancer`, `streams`, `notifications` and `announcements` used to sit
+beside the version (`/api/auth/me`). Those spellings still answer — `apiver.LegacyPrefixes`
+rewrites them onto the canonical path — and every such response carries `Deprecation: true`, a
+`Sunset` date (`apiver.SunsetDate`) and `Link: <canonical>; rel="successor-version"`. Move the
+prefix; nothing else changes. Nothing in this app uses them any more, and
+`frontend/src/lib/api-fetch.ts` keys its per-domain behaviour off the domain segment, so a
+legacy path would silently lose workspace injection here even while the gateway still served it.
 
 The browser uses **relative same-origin paths**; SSR and middleware use `NEXT_INTERNAL_API_URL`
-(the gateway, e.g. `http://gateway:8080`). Route definitions are the source of truth in
+(the gateway, e.g. `http://gateway:8080`). The URL contract is documented once in
 `frontend/src/lib/api-routes.ts`. Multidomain / white-label tenancy is resolved in
 `frontend/src/middleware.ts`, which maps the request `Host` to a workspace.
 

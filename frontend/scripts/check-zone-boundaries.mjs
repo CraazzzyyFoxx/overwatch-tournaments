@@ -43,12 +43,13 @@ const ROUTE_ZONES = {
 };
 
 /**
- * `app/api` (route handlers) and `app/actions` (server actions) are Next's own
- * server-entry conventions, not zones — any zone may call them, and the Z2 ban
- * on importing out of `src/app` would otherwise force them into `src/`, where
- * Next would stop treating them as entries.
+ * `app/api` (route handlers), `app/actions` (server actions) and `app/bff`
+ * (this app's own cookie-authenticated endpoints, the ones the gateway never
+ * serves) are Next's server-entry conventions, not zones — any zone may call
+ * them, and the Z2 ban on importing out of `src/app` would otherwise force
+ * them into `src/`, where Next would stop treating them as entries.
  */
-const SHARED_APP_DIRS = ["app/api/", "app/actions/"];
+const SHARED_APP_DIRS = ["app/api/", "app/actions/", "app/bff/"];
 
 function files(dir = SRC, out = []) {
   for (const e of readdirSync(dir, { withFileTypes: true })) {

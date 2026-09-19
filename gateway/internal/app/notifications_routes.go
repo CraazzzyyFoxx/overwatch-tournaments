@@ -7,14 +7,14 @@ import "github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/edge"
 // in the worker from the injected identity alone, never from a client-supplied
 // id, so there is nothing here to serve without one.
 //
-// Delete is a POST to a verb path rather than DELETE /api/notifications: the
+// Delete is a POST to a verb path rather than DELETE /api/v1/notifications: the
 // body carries the id list (and the "clear read" flag), and a request body on
 // DELETE is the part of HTTP that caches, proxies and fetch polyfills disagree
 // about. It is the same shape as the sibling /read write.
 var NotificationRoutes = []edge.RouteSpec{
-	{Method: "GET", Pattern: "/api/notifications", Queue: "rpc.app.notifications_list", AllQuery: true, Auth: edge.AuthRequired},
-	{Method: "POST", Pattern: "/api/notifications/read", Queue: "rpc.app.notifications_mark_read", Body: true, Auth: edge.AuthRequired},
-	{Method: "POST", Pattern: "/api/notifications/delete", Queue: "rpc.app.notifications_delete", Body: true, Auth: edge.AuthRequired},
+	{Method: "GET", Pattern: "/api/v1/notifications", Queue: "rpc.app.notifications_list", AllQuery: true, Auth: edge.AuthRequired},
+	{Method: "POST", Pattern: "/api/v1/notifications/read", Queue: "rpc.app.notifications_mark_read", Body: true, Auth: edge.AuthRequired},
+	{Method: "POST", Pattern: "/api/v1/notifications/delete", Queue: "rpc.app.notifications_delete", Body: true, Auth: edge.AuthRequired},
 }
 
 // NotificationAdminRoutes is the operator screen for the notifications a
@@ -41,7 +41,7 @@ var NotificationAdminRoutes = []edge.RouteSpec{
 // stream.PublicRoutes documents the same choice for the same reason. Anonymous
 // visitors still reach it and get the global-audience rows.
 var AnnouncementPublicRoutes = []edge.RouteSpec{
-	{Method: "GET", Pattern: "/api/announcements/active", Queue: "rpc.app.active_announcements", Auth: edge.AuthOptional},
+	{Method: "GET", Pattern: "/api/v1/announcements/active", Queue: "rpc.app.active_announcements", Auth: edge.AuthOptional},
 }
 
 // AnnouncementAdminRoutes is the operator CRUD. AuthRequired only; which

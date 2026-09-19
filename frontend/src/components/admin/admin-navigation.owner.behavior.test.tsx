@@ -106,7 +106,7 @@ async function probe(): Promise<Probe> {
 
 describe("a workspace owner's admin navigation", () => {
   beforeEach(() => {
-    // What /api/auth/me returns for an owner: no global role, no global
+    // What /api/v1/auth/me returns for an owner: no global role, no global
     // permission, one workspace carrying the `owner` role's `admin.*`.
     useAuthProfileStore.setState({
       status: "authenticated",

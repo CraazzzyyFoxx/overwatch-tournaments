@@ -42,12 +42,15 @@ func TestProxy_LongestPrefixRouting(t *testing.T) {
 		wantPath string
 		seen     *string
 	}{
-		// /api/v1/* (app + tournament + parser, all typed RPC) is no longer proxied;
-		// in the bare proxy it falls through to the frontend catch-all. The mux-level
-		// guard (see edge/apiv1_guard_test.go) returns 404 for unmatched /api/v1/*.
+		// /api/v1/* (every backend domain, all typed RPC) is no longer proxied;
+		// in the bare proxy it falls through to the frontend catch-all. The
+		// mux-level guard (see edge/apiv1_guard_test.go) returns 404 for
+		// unmatched /api/v1/*.
 		{"/api/v1/users/1", "frontend", "/api/v1/users/1", frontendPath},
 		{"/api/v1/tournaments/5", "frontend", "/api/v1/tournaments/5", frontendPath},
-		{"/api/account/me", "frontend", "/api/account/me", frontendPath},
+		// The frontend's own surface: served by Next, reached through "/" with no
+		// spec of its own. `/api/account` was its old spelling and is gone.
+		{"/bff/account/sessions", "frontend", "/bff/account/sessions", frontendPath},
 		{"/tournaments/5", "frontend", "/tournaments/5", frontendPath},
 	}
 	for _, c := range cases {

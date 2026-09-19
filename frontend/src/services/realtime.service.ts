@@ -39,7 +39,7 @@ export function buildRealtimeWebSocketUrl(
   }
 
   const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-  return `${protocol}//${window.location.host}/api/realtime/ws`;
+  return `${protocol}//${window.location.host}/api/v1/realtime/ws`;
 }
 
 class RealtimeClient {

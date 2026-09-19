@@ -356,7 +356,7 @@ const adminRoutePermissions: Array<{
 
   // ── Platform ──
   { prefix: "/admin/content", permissions: [], superuserOnly: true },
-  // One poller, one Redis key: `GET /api/streams/health` authorizes against a
+  // One poller, one Redis key: `GET /api/v1/streams/health` authorizes against a
   // GLOBAL `stream.read`, so a workspace-scoped holder must not reach it.
   { prefix: "/admin/collectors/streams", permissions: ["stream.read"], globalOnly: true },
   { prefix: "/admin/collectors/subscriptions", permissions: ["subscription.read"] },

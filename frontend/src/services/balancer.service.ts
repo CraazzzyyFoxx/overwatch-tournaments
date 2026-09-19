@@ -59,7 +59,7 @@ function normalizeConfigResponse(payload: RawBalancerConfigResponse): BalancerCo
 export default class balancerService {
   static async getConfig(): Promise<BalancerConfigResponse> {
     try {
-      const response = await apiFetch("/api/balancer/config", { timeout: 10_000 });
+      const response = await apiFetch("/api/v1/balancer/config", { timeout: 10_000 });
       const payload = (await response.json()) as RawBalancerConfigResponse;
       return normalizeConfigResponse(payload);
     } catch (error) {
@@ -84,7 +84,7 @@ export default class balancerService {
   }): Promise<BalanceJobCreateResponse> {
     try {
       const response = await apiFetch(
-        `/api/balancer/tournaments/${params.tournament_id}/balance`,
+        `/api/v1/balancer/tournaments/${params.tournament_id}/balance`,
         {
           method: "POST",
           body: { config_overrides: params.config_overrides ?? null },
@@ -101,12 +101,12 @@ export default class balancerService {
   }
 
   static async getBalanceJobStatus(jobId: string): Promise<BalanceJobStatusResponse> {
-    const response = await apiFetch(`/api/balancer/jobs/${jobId}`, { timeout: 10_000 });
+    const response = await apiFetch(`/api/v1/balancer/jobs/${jobId}`, { timeout: 10_000 });
     return response.json();
   }
 
   static async getBalanceJobResult(jobId: string): Promise<BalanceJobResult> {
-    const response = await apiFetch(`/api/balancer/jobs/${jobId}/result`, { timeout: 20_000 });
+    const response = await apiFetch(`/api/v1/balancer/jobs/${jobId}/result`, { timeout: 20_000 });
     return response.json();
   }
 }

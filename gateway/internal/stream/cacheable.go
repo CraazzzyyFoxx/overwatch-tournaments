@@ -18,5 +18,5 @@ import "github.com/CraazzzyyFoxx/anak-tournaments/gateway/internal/respcache"
 // already gives open pages immediacy. Upgrade path: Extract:
 // respcache.FromPathValue("tournament_id") + case "stream_changed".
 var PublicCacheableReads = map[string]respcache.Rule{
-	"/api/streams/tournament/{tournament_id}": {Extract: respcache.TTLOnly()},
+	"/api/v1/streams/tournament/{tournament_id}": {Extract: respcache.TTLOnly()},
 }

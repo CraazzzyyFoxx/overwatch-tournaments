@@ -79,7 +79,7 @@ export const useAuthProfileStore = create<AuthProfileState>((set, get) => ({
 
     try {
       const token = await getAccessTokenCookie();
-      let res = await fetch("/api/auth/me", {
+      let res = await fetch("/api/v1/auth/me", {
         method: "GET",
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
@@ -97,7 +97,7 @@ export const useAuthProfileStore = create<AuthProfileState>((set, get) => ({
       if ((res.status === 401 || res.status === 403) && typeof window !== "undefined") {
         const outcome = await refreshAccessToken();
         if (outcome.status === "refreshed") {
-          res = await fetch("/api/auth/me", {
+          res = await fetch("/api/v1/auth/me", {
             method: "GET",
             headers: { Authorization: `Bearer ${outcome.token}` },
           });

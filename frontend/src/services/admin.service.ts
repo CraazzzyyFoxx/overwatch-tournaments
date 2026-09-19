@@ -1875,15 +1875,15 @@ class AdminService {
   // ─── Twitch stream poller ──────────────────────────────────────────────────
 
   /**
-   * Poller health. Note the domain: `/api/streams`, not `/api/v1`, so
-   * `domainBehavior` gives it `no-store` (no cache-policy dance) but still
-   * injects `workspace_id` by default — hence the explicit `skipWorkspace`.
+   * Poller health. `streams` is a live domain, so `domainBehavior` gives it
+   * `no-store` (no cache-policy dance) but still injects `workspace_id` by
+   * default — hence the explicit `skipWorkspace`.
    * There is one poller and one Redis key behind this, so the read is
    * platform-wide and authorizes against the GLOBAL `stream.read`; sending a
    * workspace would be a scope the endpoint does not have.
    */
   async getStreamPollHealth(): Promise<StreamPollHealth> {
-    const response = await apiFetch("/api/streams/health", { skipWorkspace: true });
+    const response = await apiFetch("/api/v1/streams/health", { skipWorkspace: true });
     return response.json();
   }
 

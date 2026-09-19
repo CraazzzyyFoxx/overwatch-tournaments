@@ -46,7 +46,7 @@ func NewBinary(h *Handler, resolver IdentityResolver) *Binary {
 	return &Binary{Handler: h, resolver: resolver}
 }
 
-// AvatarSet: POST /api/auth/me/avatar. Multipart "file" -> base64 RPC body.
+// AvatarSet: POST /api/v1/auth/me/avatar. Multipart "file" -> base64 RPC body.
 func (b *Binary) AvatarSet(w http.ResponseWriter, r *http.Request) {
 	token := bearerToken(r)
 	if token == "" {
@@ -98,7 +98,7 @@ func (b *Binary) AvatarSet(w http.ResponseWriter, r *http.Request) {
 	b.relayAvatar(w, r, queueAvatarSet, body)
 }
 
-// AvatarDelete: DELETE /api/auth/me/avatar.
+// AvatarDelete: DELETE /api/v1/auth/me/avatar.
 func (b *Binary) AvatarDelete(w http.ResponseWriter, r *http.Request) {
 	token := bearerToken(r)
 	if token == "" {

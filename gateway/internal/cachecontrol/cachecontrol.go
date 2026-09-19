@@ -16,7 +16,10 @@
 // `public, s-maxage=30` on a public tournament read) without touching the
 // gateway — the middleware defers to any explicit upstream decision.
 //
-// Scope: paths under /api/ only. The "/" frontend catch-all (Next.js HTML,
+// Scope: paths under /api/ and /bff/ only. `/bff/*` is the frontend's own
+// cookie-authenticated surface (account settings, API keys) — served by Next,
+// not the gateway, but reverse-proxied through it, and every bit as
+// viewer-dependent as the API. The "/" frontend catch-all (Next.js HTML,
 // /_next/static assets) is untouched — Next already emits correct headers
 // there (`no-store` for dynamic HTML, `immutable` for hashed static assets),
 // and stamping those would either duplicate or fight them.
@@ -34,12 +37,13 @@ import (
 const directive = "private, no-store"
 
 // Middleware wraps next, stamping `Cache-Control: private, no-store` on every
-// /api/* response whose handler (or proxied upstream) did not set its own
-// Cache-Control. Non-API paths pass through with the original ResponseWriter —
-// zero overhead for the frontend proxy and static assets.
+// /api/* and /bff/* response whose handler (or proxied upstream) did not set
+// its own Cache-Control. Other paths pass through with the original
+// ResponseWriter — zero overhead for the frontend proxy and static assets.
 func Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !strings.HasPrefix(r.URL.Path, "/api/") {
+		p := r.URL.Path
+		if !strings.HasPrefix(p, "/api/") && !strings.HasPrefix(p, "/bff/") {
 			next.ServeHTTP(w, r)
 			return
 		}

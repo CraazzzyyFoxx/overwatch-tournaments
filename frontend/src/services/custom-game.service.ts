@@ -75,7 +75,7 @@ export type CustomGameCoHost = {
  *
  * Everything that describes how a host RUNS a mix -- roster shape, solver
  * knobs, the rank points a win is worth -- lives on their account instead
- * (`/api/balancer/me/mix-preferences`), and the Discord target is the
+ * (`/api/v1/balancer/me/mix-preferences`), and the Discord target is the
  * workspace's. What is left here is the mix's own state.
  */
 export type CustomGameSettings = {
@@ -241,7 +241,7 @@ export const customGameKeys = {
 
 export const customGameService = {
   list(workspaceId: number): Promise<CustomGame[]> {
-    return apiFetch(`/api/balancer/workspaces/${workspaceId}/custom-games`).then((r) => r.json());
+    return apiFetch(`/api/v1/balancer/workspaces/${workspaceId}/custom-games`).then((r) => r.json());
   },
 
   /**
@@ -250,7 +250,7 @@ export const customGameService = {
    * everyone lands in the pool, and no match history comes with it.
    */
   create(workspaceId: number, name: string, cloneFromGameId: number | null = null): Promise<CustomGame> {
-    return apiFetch(`/api/balancer/workspaces/${workspaceId}/custom-games`, {
+    return apiFetch(`/api/v1/balancer/workspaces/${workspaceId}/custom-games`, {
       method: "POST",
       body: {
         name,
@@ -261,11 +261,11 @@ export const customGameService = {
   },
 
   get(workspaceId: number, gameId: number): Promise<CustomGame> {
-    return apiFetch(`/api/balancer/workspaces/${workspaceId}/custom-games/${gameId}`).then((r) => r.json());
+    return apiFetch(`/api/v1/balancer/workspaces/${workspaceId}/custom-games/${gameId}`).then((r) => r.json());
   },
 
   updateRoster(workspaceId: number, gameId: number, memberIds: number[]): Promise<CustomGame> {
-    return apiFetch(`/api/balancer/workspaces/${workspaceId}/custom-games/${gameId}/roster`, {
+    return apiFetch(`/api/v1/balancer/workspaces/${workspaceId}/custom-games/${gameId}/roster`, {
       method: "POST",
       body: { member_ids: memberIds },
     }).then((r) => r.json());
@@ -278,7 +278,7 @@ export const customGameService = {
     patch: CustomGamePlayerPatch,
   ): Promise<CustomGame> {
     return apiFetch(
-      `/api/balancer/workspaces/${workspaceId}/custom-games/${gameId}/players/${workspaceMemberId}`,
+      `/api/v1/balancer/workspaces/${workspaceId}/custom-games/${gameId}/players/${workspaceMemberId}`,
       { method: "PUT", body: patch },
     ).then((r) => r.json());
   },
@@ -293,14 +293,14 @@ export const customGameService = {
     gameId: number,
     players: CustomGameParticipationEntry[],
   ): Promise<CustomGame> {
-    return apiFetch(`/api/balancer/workspaces/${workspaceId}/custom-games/${gameId}/players`, {
+    return apiFetch(`/api/v1/balancer/workspaces/${workspaceId}/custom-games/${gameId}/players`, {
       method: "PUT",
       body: { players },
     }).then((r) => r.json());
   },
 
   balance(workspaceId: number, gameId: number): Promise<CustomGame> {
-    return apiFetch(`/api/balancer/workspaces/${workspaceId}/custom-games/${gameId}/balance`, {
+    return apiFetch(`/api/v1/balancer/workspaces/${workspaceId}/custom-games/${gameId}/balance`, {
       method: "POST",
     }).then((r) => r.json());
   },
@@ -317,7 +317,7 @@ export const customGameService = {
     outcome: CustomGameOutcome,
     variantIndex: number,
   ): Promise<CustomGame> {
-    return apiFetch(`/api/balancer/workspaces/${workspaceId}/custom-games/${gameId}/outcome`, {
+    return apiFetch(`/api/v1/balancer/workspaces/${workspaceId}/custom-games/${gameId}/outcome`, {
       method: "POST",
       body: { outcome, variant_index: variantIndex },
     }).then((r) => r.json());
@@ -325,7 +325,7 @@ export const customGameService = {
 
   /** Every match this mix has recorded, newest first. */
   listMatches(workspaceId: number, gameId: number): Promise<CustomGameMatch[]> {
-    return apiFetch(`/api/balancer/workspaces/${workspaceId}/custom-games/${gameId}/matches`).then((r) => r.json());
+    return apiFetch(`/api/v1/balancer/workspaces/${workspaceId}/custom-games/${gameId}/matches`).then((r) => r.json());
   },
 
   /**
@@ -338,7 +338,7 @@ export const customGameService = {
    */
   undoMatch(workspaceId: number, gameId: number, matchId: number): Promise<CustomGame> {
     return apiFetch(
-      `/api/balancer/workspaces/${workspaceId}/custom-games/${gameId}/matches/${matchId}`,
+      `/api/v1/balancer/workspaces/${workspaceId}/custom-games/${gameId}/matches/${matchId}`,
       { method: "DELETE" },
     ).then((r) => r.json());
   },
@@ -350,7 +350,7 @@ export const customGameService = {
    * hint -- it writes nothing on its own.
    */
   rotation(workspaceId: number, gameId: number): Promise<RotationRecommendation[]> {
-    return apiFetch(`/api/balancer/workspaces/${workspaceId}/custom-games/${gameId}/rotation`).then((r) =>
+    return apiFetch(`/api/v1/balancer/workspaces/${workspaceId}/custom-games/${gameId}/rotation`).then((r) =>
       r.json(),
     );
   },
@@ -361,7 +361,7 @@ export const customGameService = {
    * only matches recorded from then on; `null` counts all time.
    */
   stats(workspaceId: number, since: string | null = null): Promise<MixStatsResponse> {
-    return apiFetch(`/api/balancer/workspaces/${workspaceId}/custom-games/stats`, {
+    return apiFetch(`/api/v1/balancer/workspaces/${workspaceId}/custom-games/stats`, {
       // `apiFetch` drops a null query value, so all time sends no `since` at all.
       query: { since },
     }).then((r) => r.json());
@@ -369,7 +369,7 @@ export const customGameService = {
 
   /** Ends the mix. Matches already recorded stay recorded; this only stops further writes. */
   close(workspaceId: number, gameId: number): Promise<CustomGame> {
-    return apiFetch(`/api/balancer/workspaces/${workspaceId}/custom-games/${gameId}/close`, {
+    return apiFetch(`/api/v1/balancer/workspaces/${workspaceId}/custom-games/${gameId}/close`, {
       method: "POST",
     }).then((r) => r.json());
   },
@@ -379,7 +379,7 @@ export const customGameService = {
    * only -- unlike `close` (a host-triggered status flip) this is irreversible.
    */
   hardDelete(workspaceId: number, gameId: number): Promise<void> {
-    return apiFetch(`/api/balancer/workspaces/${workspaceId}/custom-games/${gameId}`, {
+    return apiFetch(`/api/v1/balancer/workspaces/${workspaceId}/custom-games/${gameId}`, {
       method: "DELETE",
     }).then(() => undefined);
   },
@@ -390,7 +390,7 @@ export const customGameService = {
    * default (``Team N``).
    */
   setTeamNames(workspaceId: number, gameId: number, teamNames: Record<string, string>): Promise<CustomGame> {
-    return apiFetch(`/api/balancer/workspaces/${workspaceId}/custom-games/${gameId}/team-names`, {
+    return apiFetch(`/api/v1/balancer/workspaces/${workspaceId}/custom-games/${gameId}/team-names`, {
       method: "PUT",
       body: { team_names: teamNames },
     }).then((r) => r.json());
@@ -402,7 +402,7 @@ export const customGameService = {
    * co-hosts and viewers see the same map and `recordOutcome` stamps it.
    */
   setNextMap(workspaceId: number, gameId: number, mapId: number | null): Promise<CustomGame> {
-    return apiFetch(`/api/balancer/workspaces/${workspaceId}/custom-games/${gameId}/next-map`, {
+    return apiFetch(`/api/v1/balancer/workspaces/${workspaceId}/custom-games/${gameId}/next-map`, {
       method: "PUT",
       body: { map_id: mapId },
     }).then((r) => r.json());
@@ -414,7 +414,7 @@ export const customGameService = {
    * with the host. 404s an index past the stored options.
    */
   setVariantIndex(workspaceId: number, gameId: number, variantIndex: number): Promise<CustomGame> {
-    return apiFetch(`/api/balancer/workspaces/${workspaceId}/custom-games/${gameId}/variant`, {
+    return apiFetch(`/api/v1/balancer/workspaces/${workspaceId}/custom-games/${gameId}/variant`, {
       method: "PUT",
       body: { variant_index: variantIndex },
     }).then((r) => r.json());
@@ -427,7 +427,7 @@ export const customGameService = {
    * (roster, balance, outcomes, settings) to the new host.
    */
   transferHost(workspaceId: number, gameId: number, newHostUserId: number): Promise<CustomGame> {
-    return apiFetch(`/api/balancer/workspaces/${workspaceId}/custom-games/${gameId}/host`, {
+    return apiFetch(`/api/v1/balancer/workspaces/${workspaceId}/custom-games/${gameId}/host`, {
       method: "PUT",
       body: { new_host_user_id: newHostUserId },
     }).then((r) => r.json());
@@ -439,7 +439,7 @@ export const customGameService = {
    * current writer (host or existing co-host) may extend the list.
    */
   addCoHost(workspaceId: number, gameId: number, coHostUserId: number): Promise<CustomGame> {
-    return apiFetch(`/api/balancer/workspaces/${workspaceId}/custom-games/${gameId}/co-hosts`, {
+    return apiFetch(`/api/v1/balancer/workspaces/${workspaceId}/custom-games/${gameId}/co-hosts`, {
       method: "POST",
       body: { co_host_user_id: coHostUserId },
     }).then((r) => r.json());
@@ -448,7 +448,7 @@ export const customGameService = {
   /** Revokes a co-host's write access, including a co-host removing themselves. */
   removeCoHost(workspaceId: number, gameId: number, coHostUserId: number): Promise<CustomGame> {
     return apiFetch(
-      `/api/balancer/workspaces/${workspaceId}/custom-games/${gameId}/co-hosts/${coHostUserId}`,
+      `/api/v1/balancer/workspaces/${workspaceId}/custom-games/${gameId}/co-hosts/${coHostUserId}`,
       { method: "DELETE" },
     ).then((r) => r.json());
   },
@@ -466,7 +466,7 @@ export const customGameService = {
     firstUuid: string,
     secondUuid: string,
   ): Promise<CustomGame> {
-    return apiFetch(`/api/balancer/workspaces/${workspaceId}/custom-games/${gameId}/teams/swap`, {
+    return apiFetch(`/api/v1/balancer/workspaces/${workspaceId}/custom-games/${gameId}/teams/swap`, {
       method: "POST",
       body: { variant_index: variantIndex, first_uuid: firstUuid, second_uuid: secondUuid },
     }).then((r) => r.json());
@@ -489,7 +489,7 @@ export const customGameService = {
     image: Blob | null = null,
   ): Promise<{ status: "queued"; channel_id: string }> {
     const response = await apiFetch(
-      `/api/balancer/workspaces/${workspaceId}/custom-games/${gameId}/discord/post`,
+      `/api/v1/balancer/workspaces/${workspaceId}/custom-games/${gameId}/discord/post`,
       {
         method: "POST",
         body: { variant_index: variantIndex, image_b64: image ? await blobToBase64(image) : null },

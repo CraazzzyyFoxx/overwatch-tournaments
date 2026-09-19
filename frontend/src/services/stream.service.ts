@@ -8,14 +8,14 @@ export default class streamService {
    * a workspace id the endpoint does not scope by.
    */
   static async getTournamentStreams(tournamentId: number): Promise<TournamentStreams> {
-    return apiFetch(`/api/streams/tournament/${tournamentId}`, {
+    return apiFetch(`/api/v1/streams/tournament/${tournamentId}`, {
       skipWorkspace: true,
     }).then((response) => response.json());
   }
 
   /** Ask the poller for an out-of-band re-poll. Requires `stream.update`; 202. */
   static async repollTournament(tournamentId: number): Promise<void> {
-    await apiFetch(`/api/streams/tournament/${tournamentId}/repoll`, {
+    await apiFetch(`/api/v1/streams/tournament/${tournamentId}/repoll`, {
       method: "POST",
     });
   }

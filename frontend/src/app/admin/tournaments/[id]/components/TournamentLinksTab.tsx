@@ -249,9 +249,10 @@ export function TournamentLinksTab({
   });
 
   const repollMutation = useMutation({
-    // `POST /api/streams/tournament/{id}/repoll` already has a client in
+    // `POST /api/v1/streams/tournament/{id}/repoll` already has a client in
     // `stream.service`, so there is no admin-service twin of it. `workspace_id`
-    // rides along: `domainBehavior` injects it for every non-`/api/auth` domain,
+    // rides along: `domainBehavior` injects it for every domain outside
+    // `UNSCOPED_DOMAINS` (api-fetch.ts keys on the domain segment, not a prefix),
     // and the hub shell has already synced the store to this tournament's
     // workspace — which is exactly the scope the endpoint authorizes against.
     mutationFn: () => streamService.repollTournament(tournamentId),

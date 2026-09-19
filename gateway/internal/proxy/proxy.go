@@ -30,13 +30,13 @@ type Proxy struct {
 // New builds the proxy from the configured upstreams.
 func New(up config.Upstreams) (*Proxy, error) {
 	specs := []struct{ prefix, target string }{
-		// All backend domains (/api/v1/* for tournament+app+parser, /api/auth/* via
-		// identity-svc, /api/analytics/* via analytics-svc, /api/balancer/* via
-		// balancer-worker) are served by the gateway's typed RPC routes — never
-		// proxied; per-prefix 404 guards in main.go catch unmatched paths. The HTTP
-		// parser/analytics/balancer services are decommissioned. Only the frontend
-		// is reverse-proxied now.
-		{"/api/account", up.Frontend},
+		// Every backend domain is a typed RPC route on the gateway itself —
+		// `/api/v{n}/...`, one version axis, one 404 guard in main.go. The HTTP
+		// parser/analytics/balancer services are decommissioned. Only the
+		// frontend is reverse-proxied, and it needs exactly one rule: the
+		// catch-all. `/api/account` used to be listed here as belt-and-braces
+		// for the Next BFF; that surface is `/bff/*` now, which was never under
+		// a guarded namespace and reaches the frontend through "/" anyway.
 		{"/", up.Frontend},
 	}
 

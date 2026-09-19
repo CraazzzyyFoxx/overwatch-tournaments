@@ -13,15 +13,15 @@ func TestDraftSafetyRoutes(t *testing.T) {
 		method string
 		queue  string
 	}{
-		"/api/balancer/draft/sessions/{session_id}/feasibility": {
+		"/api/v1/balancer/draft/sessions/{session_id}/feasibility": {
 			method: "GET",
 			queue:  "rpc.balancer.draft.feasibility",
 		},
-		"/api/balancer/draft/picks/{pick_id}/options": {
+		"/api/v1/balancer/draft/picks/{pick_id}/options": {
 			method: "GET",
 			queue:  "rpc.balancer.draft.pick_options",
 		},
-		"/api/balancer/draft/sessions/{session_id}/players/{player_id}/roles": {
+		"/api/v1/balancer/draft/sessions/{session_id}/players/{player_id}/roles": {
 			method: "POST",
 			queue:  "rpc.balancer.draft.player_role_edit",
 		},
@@ -58,10 +58,10 @@ func TestDraftSessionHistoryRoutes(t *testing.T) {
 	if list == nil || del == nil {
 		t.Fatal("draft session list/delete routes are not registered")
 	}
-	if list.Method != "GET" || list.Pattern != "/api/balancer/draft/tournaments/{tournament_id}/sessions" || list.IDParam != "tournament_id" || list.Auth != edge.AuthRequired {
+	if list.Method != "GET" || list.Pattern != "/api/v1/balancer/draft/tournaments/{tournament_id}/sessions" || list.IDParam != "tournament_id" || list.Auth != edge.AuthRequired {
 		t.Fatalf("unexpected session_list contract: %#v", *list)
 	}
-	if del.Method != "DELETE" || del.Pattern != "/api/balancer/draft/tournaments/{tournament_id}/sessions/{session_id}" || del.IDParam != "session_id" || del.Success != 204 || del.Auth != edge.AuthRequired {
+	if del.Method != "DELETE" || del.Pattern != "/api/v1/balancer/draft/tournaments/{tournament_id}/sessions/{session_id}" || del.IDParam != "session_id" || del.Success != 204 || del.Auth != edge.AuthRequired {
 		t.Fatalf("unexpected session_delete contract: %#v", *del)
 	}
 	if len(del.Path) != 1 || del.Path[0] != "tournament_id" {
@@ -71,10 +71,10 @@ func TestDraftSessionHistoryRoutes(t *testing.T) {
 
 func TestRosterRoutes(t *testing.T) {
 	want := map[string]string{
-		"GET /api/balancer/workspaces/{workspace_id}/players":                   "rpc.balancer.players.list",
-		"GET /api/balancer/workspaces/{workspace_id}/players/summary":           "rpc.balancer.players.summary",
-		"POST /api/balancer/workspaces/{workspace_id}/players":                  "rpc.balancer.players.upsert",
-		"PUT /api/balancer/workspaces/{workspace_id}/players/{member_id}/ranks": "rpc.balancer.players.set_ranks",
+		"GET /api/v1/balancer/workspaces/{workspace_id}/players":                   "rpc.balancer.players.list",
+		"GET /api/v1/balancer/workspaces/{workspace_id}/players/summary":           "rpc.balancer.players.summary",
+		"POST /api/v1/balancer/workspaces/{workspace_id}/players":                  "rpc.balancer.players.upsert",
+		"PUT /api/v1/balancer/workspaces/{workspace_id}/players/{member_id}/ranks": "rpc.balancer.players.set_ranks",
 	}
 	for _, route := range RosterRoutes {
 		key := route.Method + " " + route.Pattern
@@ -99,11 +99,11 @@ func TestRosterRoutes(t *testing.T) {
 // no actor to check host-or-co-host against.
 func TestMixReadsArePublic(t *testing.T) {
 	public := map[string]bool{
-		"GET /api/balancer/workspaces/{workspace_id}/custom-games":                    true,
-		"GET /api/balancer/workspaces/{workspace_id}/custom-games/stats":              true,
-		"GET /api/balancer/workspaces/{workspace_id}/custom-games/{game_id}":          true,
-		"GET /api/balancer/workspaces/{workspace_id}/custom-games/{game_id}/matches":  true,
-		"GET /api/balancer/workspaces/{workspace_id}/custom-games/{game_id}/rotation": true,
+		"GET /api/v1/balancer/workspaces/{workspace_id}/custom-games":                    true,
+		"GET /api/v1/balancer/workspaces/{workspace_id}/custom-games/stats":              true,
+		"GET /api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}":          true,
+		"GET /api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/matches":  true,
+		"GET /api/v1/balancer/workspaces/{workspace_id}/custom-games/{game_id}/rotation": true,
 	}
 	seen := 0
 	for _, route := range RosterRoutes {
@@ -142,6 +142,6 @@ func TestRoutesRegisterWithoutConflict(t *testing.T) {
 		}
 	}
 	// Multipart handlers registered directly in main.go.
-	mux.HandleFunc("POST /api/balancer/tournaments/{tournament_id}/teams/import", dummy)
-	mux.HandleFunc("POST /api/balancer/jobs", dummy)
+	mux.HandleFunc("POST /api/v1/balancer/tournaments/{tournament_id}/teams/import", dummy)
+	mux.HandleFunc("POST /api/v1/balancer/jobs", dummy)
 }

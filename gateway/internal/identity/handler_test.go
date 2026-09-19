@@ -33,7 +33,7 @@ func newHandler(c RPCCaller) *Handler {
 }
 
 func doValidate(h *Handler, token string) *httptest.ResponseRecorder {
-	r := httptest.NewRequest(http.MethodPost, "/api/auth/validate", nil)
+	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/validate", nil)
 	if token != "" {
 		r.Header.Set("Authorization", "Bearer "+token)
 	}
@@ -115,7 +115,7 @@ func TestValidate_BadEnvelope(t *testing.T) {
 
 func TestLogin_ForwardsBodyAndMeta(t *testing.T) {
 	caller := &fakeCaller{resp: []byte(`{"ok":true,"data":{"access_token":"a","refresh_token":"r","token_type":"bearer"}}`)}
-	r := httptest.NewRequest(http.MethodPost, "/api/auth/login", strings.NewReader(`{"email":"e@x.com","password":"p"}`))
+	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", strings.NewReader(`{"email":"e@x.com","password":"p"}`))
 	r.Header.Set("X-Forwarded-For", "1.2.3.4")
 	r.Header.Set("User-Agent", "UA/1")
 	w := httptest.NewRecorder()
@@ -141,7 +141,7 @@ func TestLogin_ForwardsBodyAndMeta(t *testing.T) {
 
 func TestLogout_NoBearer(t *testing.T) {
 	caller := &fakeCaller{}
-	r := httptest.NewRequest(http.MethodPost, "/api/auth/logout", strings.NewReader(`{"refresh_token":"r"}`))
+	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", strings.NewReader(`{"refresh_token":"r"}`))
 	w := httptest.NewRecorder()
 	newHandler(caller).Logout(w, r)
 
@@ -155,7 +155,7 @@ func TestLogout_NoBearer(t *testing.T) {
 
 func TestLogout_ForwardsAccessToken(t *testing.T) {
 	caller := &fakeCaller{resp: []byte(`{"ok":true,"data":null}`)}
-	r := httptest.NewRequest(http.MethodPost, "/api/auth/logout", strings.NewReader(`{"refresh_token":"rt"}`))
+	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/logout", strings.NewReader(`{"refresh_token":"rt"}`))
 	r.Header.Set("Authorization", "Bearer acc")
 	w := httptest.NewRecorder()
 	newHandler(caller).Logout(w, r)
@@ -177,7 +177,7 @@ func TestLogout_ForwardsAccessToken(t *testing.T) {
 func TestOAuthURL_ForwardsGuardHash(t *testing.T) {
 	caller := &fakeCaller{resp: []byte(`{"ok":true,"data":{"provider":"discord","url":"https://discord.example/authorize","state":"s"}}`)}
 	r := httptest.NewRequest(http.MethodGet,
-		"/api/auth/oauth/discord/url?origin=https://tenant.example.com&redirect=/account&action=login&csrf=raw-csrf&guard_hash=abc123",
+		"/api/v1/auth/oauth/discord/url?origin=https://tenant.example.com&redirect=/account&action=login&csrf=raw-csrf&guard_hash=abc123",
 		nil)
 	w := httptest.NewRecorder()
 	newHandler(caller).OAuthURL(w, r)
@@ -199,7 +199,7 @@ func TestOAuthURL_ForwardsGuardHash(t *testing.T) {
 func TestOAuthURL_OmittedGuardHashForwardsEmptyString(t *testing.T) {
 	caller := &fakeCaller{resp: []byte(`{"ok":true,"data":{"provider":"discord","url":"https://discord.example/authorize","state":"s"}}`)}
 	r := httptest.NewRequest(http.MethodGet,
-		"/api/auth/oauth/discord/url?origin=https://owt.craazzzyyfoxx.me&redirect=/&action=login&csrf=raw-csrf",
+		"/api/v1/auth/oauth/discord/url?origin=https://owt.craazzzyyfoxx.me&redirect=/&action=login&csrf=raw-csrf",
 		nil)
 	w := httptest.NewRecorder()
 	newHandler(caller).OAuthURL(w, r)
@@ -217,7 +217,7 @@ func TestOAuthURL_OmittedGuardHashForwardsEmptyString(t *testing.T) {
 // (branching on the signed OAuth state's origin) whether one is required.
 func TestOAuthLink_NoBearer_StillCallsIdentity(t *testing.T) {
 	caller := &fakeCaller{resp: []byte(`{"ok":true,"data":{"mode":"link_ticket","ticket":"tic-1","origin":"https://tenant.example.com","redirect":"/account"}}`)}
-	r := httptest.NewRequest(http.MethodPost, "/api/auth/oauth/discord/link", strings.NewReader(`{"code":"c","state":"s","csrf":"x"}`))
+	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/oauth/discord/link", strings.NewReader(`{"code":"c","state":"s","csrf":"x"}`))
 	w := httptest.NewRecorder()
 	newHandler(caller).OAuthLink(w, r)
 
@@ -236,7 +236,7 @@ func TestOAuthLink_NoBearer_StillCallsIdentity(t *testing.T) {
 // the empty string, never the attacker-supplied value.
 func TestOAuthLink_NoBearer_BodyAccessTokenNeverReachesIdentity(t *testing.T) {
 	caller := &fakeCaller{resp: []byte(`{"ok":true,"data":{"mode":"link_ticket","ticket":"tic-1","origin":"https://tenant.example.com","redirect":"/account"}}`)}
-	r := httptest.NewRequest(http.MethodPost, "/api/auth/oauth/discord/link",
+	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/oauth/discord/link",
 		strings.NewReader(`{"code":"c","state":"s","csrf":"x","access_token":"attacker-supplied"}`))
 	w := httptest.NewRecorder()
 	newHandler(caller).OAuthLink(w, r)
@@ -254,7 +254,7 @@ func TestOAuthLink_NoBearer_BodyAccessTokenNeverReachesIdentity(t *testing.T) {
 // client put in the JSON body.
 func TestOAuthLink_WithBearer_OverridesBodyAccessToken(t *testing.T) {
 	caller := &fakeCaller{resp: []byte(`{"ok":true,"data":{"mode":"linked","message":"ok","provider":"discord","username":"u","origin":"https://owt.craazzzyyfoxx.me","redirect":"/account"}}`)}
-	r := httptest.NewRequest(http.MethodPost, "/api/auth/oauth/discord/link",
+	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/oauth/discord/link",
 		strings.NewReader(`{"code":"c","state":"s","csrf":"x","access_token":"attacker-supplied"}`))
 	r.Header.Set("Authorization", "Bearer real-token")
 	w := httptest.NewRecorder()
@@ -269,7 +269,7 @@ func TestOAuthLink_WithBearer_OverridesBodyAccessToken(t *testing.T) {
 
 func TestLinkComplete_NoBearer(t *testing.T) {
 	caller := &fakeCaller{}
-	r := httptest.NewRequest(http.MethodPost, "/api/auth/link/complete", strings.NewReader(`{"ticket":"tic-1"}`))
+	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/link/complete", strings.NewReader(`{"ticket":"tic-1"}`))
 	w := httptest.NewRecorder()
 	newHandler(caller).LinkComplete(w, r)
 
@@ -283,7 +283,7 @@ func TestLinkComplete_NoBearer(t *testing.T) {
 
 func TestLinkComplete_ForwardsAccessTokenAndTicket(t *testing.T) {
 	caller := &fakeCaller{resp: []byte(`{"ok":true,"data":{"message":"Discord account linked successfully","provider":"discord","username":"u"}}`)}
-	r := httptest.NewRequest(http.MethodPost, "/api/auth/link/complete", strings.NewReader(`{"ticket":"tic-1"}`))
+	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/link/complete", strings.NewReader(`{"ticket":"tic-1"}`))
 	r.Header.Set("Authorization", "Bearer acc")
 	w := httptest.NewRecorder()
 	newHandler(caller).LinkComplete(w, r)
@@ -305,7 +305,7 @@ func TestLinkComplete_ForwardsAccessTokenAndTicket(t *testing.T) {
 // footgun as OAuthLink above, for the new route.
 func TestLinkComplete_BodyAccessTokenNeverOverridesBearer(t *testing.T) {
 	caller := &fakeCaller{resp: []byte(`{"ok":true,"data":{}}`)}
-	r := httptest.NewRequest(http.MethodPost, "/api/auth/link/complete",
+	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/link/complete",
 		strings.NewReader(`{"ticket":"tic-1","access_token":"attacker-supplied"}`))
 	r.Header.Set("Authorization", "Bearer real-token")
 	w := httptest.NewRecorder()
@@ -326,7 +326,7 @@ func TestLinkComplete_BodyAccessTokenNeverOverridesBearer(t *testing.T) {
 // to name "guard" explicitly for it to be forwarded.
 func TestLinkComplete_ForwardsGuard(t *testing.T) {
 	caller := &fakeCaller{resp: []byte(`{"ok":true,"data":{"message":"Discord account linked successfully","provider":"discord","username":"u"}}`)}
-	r := httptest.NewRequest(http.MethodPost, "/api/auth/link/complete",
+	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/link/complete",
 		strings.NewReader(`{"ticket":"tic-1","guard":"raw-guard-value"}`))
 	r.Header.Set("Authorization", "Bearer acc")
 	w := httptest.NewRecorder()
@@ -348,7 +348,7 @@ func TestLinkComplete_ForwardsGuard(t *testing.T) {
 // mergeBody.
 func TestSsoExchange_ForwardsGuard(t *testing.T) {
 	caller := &fakeCaller{resp: []byte(`{"ok":true,"data":{"access_token":"a","refresh_token":"r"}}`)}
-	r := httptest.NewRequest(http.MethodPost, "/api/auth/sso/exchange",
+	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/sso/exchange",
 		strings.NewReader(`{"ticket":"tic-1","guard":"raw-guard-value"}`))
 	w := httptest.NewRecorder()
 	newHandler(caller).SsoExchange(w, r)
@@ -369,7 +369,7 @@ func TestSsoExchange_ForwardsGuard(t *testing.T) {
 func TestRbacListSessions_ForwardsAllQuery(t *testing.T) {
 	caller := &fakeCaller{resp: []byte(`{"ok":true,"data":{"results":[],"total":0,"page":2,"per_page":25}}`)}
 	r := httptest.NewRequest(http.MethodGet,
-		"/api/auth/rbac/sessions?page=2&per_page=25&sort=last_seen_at&order=desc&status=active", nil)
+		"/api/v1/auth/rbac/sessions?page=2&per_page=25&sort=last_seen_at&order=desc&status=active", nil)
 	r.Header.Set("Authorization", "Bearer acc")
 	w := httptest.NewRecorder()
 	newHandler(caller).RbacListSessions(w, r)
@@ -403,7 +403,7 @@ func TestRbacListSessions_ForwardsAllQuery(t *testing.T) {
 
 func TestRbacListSessions_NoBearer(t *testing.T) {
 	caller := &fakeCaller{}
-	r := httptest.NewRequest(http.MethodGet, "/api/auth/rbac/sessions?page=1", nil)
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/auth/rbac/sessions?page=1", nil)
 	w := httptest.NewRecorder()
 	newHandler(caller).RbacListSessions(w, r)
 
@@ -464,7 +464,7 @@ func rpcClientMeta(t *testing.T, caller *fakeCaller) (userAgent, ip string) {
 
 func TestAuthedFields_StampsClientMeta(t *testing.T) {
 	caller := &fakeCaller{resp: []byte(`{"ok":true,"data":null}`)}
-	r := httptest.NewRequest(http.MethodPatch, "/api/auth/player/linked/7/primary", nil)
+	r := httptest.NewRequest(http.MethodPatch, "/api/v1/auth/player/linked/7/primary", nil)
 	r.SetPathValue("player_id", "7")
 	r.Header.Set("Authorization", "Bearer acc")
 	r.Header.Set("X-Real-IP", "203.0.113.7")
@@ -490,7 +490,7 @@ func TestAuthedFields_StampsClientMeta(t *testing.T) {
 
 func TestAuthedAllQuery_StampsClientMetaOutsideQuery(t *testing.T) {
 	caller := &fakeCaller{resp: []byte(`{"ok":true,"data":{"results":[],"total":0,"page":1,"per_page":25}}`)}
-	r := httptest.NewRequest(http.MethodGet, "/api/auth/rbac/sessions?page=1", nil)
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/auth/rbac/sessions?page=1", nil)
 	r.Header.Set("Authorization", "Bearer acc")
 	r.Header.Set("X-Real-IP", "203.0.113.7")
 	r.Header.Set("User-Agent", "UA/1")
@@ -522,7 +522,7 @@ func TestAuthedAllQuery_StampsClientMetaOutsideQuery(t *testing.T) {
 
 func TestAuthedMerge_ServerClientMetaOverridesBody(t *testing.T) {
 	caller := &fakeCaller{resp: []byte(`{"ok":true,"data":{}}`)}
-	r := httptest.NewRequest(http.MethodPost, "/api/auth/player/link",
+	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/player/link",
 		strings.NewReader(`{"battle_tag":"x#1","ip_address":"6.6.6.6","user_agent":"forged"}`))
 	r.Header.Set("Authorization", "Bearer acc")
 	r.Header.Set("X-Real-IP", "203.0.113.7")
@@ -549,7 +549,7 @@ func TestAuthedMerge_ServerClientMetaOverridesBody(t *testing.T) {
 
 func TestAuthedNoBody_StampsClientMeta(t *testing.T) {
 	caller := &fakeCaller{resp: []byte(`{"ok":true,"data":[]}`)}
-	r := httptest.NewRequest(http.MethodGet, "/api/auth/player/linked", nil)
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/auth/player/linked", nil)
 	r.Header.Set("Authorization", "Bearer acc")
 	r.Header.Set("X-Real-IP", "203.0.113.7")
 	r.Header.Set("User-Agent", "UA/1")
@@ -578,7 +578,7 @@ func TestAuthedHelpers_LeftmostForwardedHopNeverWins(t *testing.T) {
 			name: "authedFields",
 			resp: []byte(`{"ok":true,"data":null}`),
 			newReq: func() *http.Request {
-				r := httptest.NewRequest(http.MethodPatch, "/api/auth/player/linked/7/primary", nil)
+				r := httptest.NewRequest(http.MethodPatch, "/api/v1/auth/player/linked/7/primary", nil)
 				r.SetPathValue("player_id", "7")
 				return r
 			},
@@ -588,7 +588,7 @@ func TestAuthedHelpers_LeftmostForwardedHopNeverWins(t *testing.T) {
 			name: "authedAllQuery",
 			resp: []byte(`{"ok":true,"data":{"results":[],"total":0,"page":1,"per_page":25}}`),
 			newReq: func() *http.Request {
-				return httptest.NewRequest(http.MethodGet, "/api/auth/rbac/sessions?page=1", nil)
+				return httptest.NewRequest(http.MethodGet, "/api/v1/auth/rbac/sessions?page=1", nil)
 			},
 			invoke: (*Handler).RbacListSessions,
 		},
@@ -596,7 +596,7 @@ func TestAuthedHelpers_LeftmostForwardedHopNeverWins(t *testing.T) {
 			name: "authedMerge",
 			resp: []byte(`{"ok":true,"data":{}}`),
 			newReq: func() *http.Request {
-				return httptest.NewRequest(http.MethodPost, "/api/auth/player/link",
+				return httptest.NewRequest(http.MethodPost, "/api/v1/auth/player/link",
 					strings.NewReader(`{"battle_tag":"x#1","ip_address":"9.9.9.9"}`))
 			},
 			invoke: (*Handler).PlayerLink,
@@ -604,7 +604,7 @@ func TestAuthedHelpers_LeftmostForwardedHopNeverWins(t *testing.T) {
 		{
 			name:   "authedNoBody",
 			resp:   []byte(`{"ok":true,"data":[]}`),
-			newReq: func() *http.Request { return httptest.NewRequest(http.MethodGet, "/api/auth/player/linked", nil) },
+			newReq: func() *http.Request { return httptest.NewRequest(http.MethodGet, "/api/v1/auth/player/linked", nil) },
 			invoke: (*Handler).PlayerLinked,
 		},
 	}
@@ -638,7 +638,7 @@ func TestAuthedHelpers_LeftmostForwardedHopNeverWins(t *testing.T) {
 // (appended by nginx), still never the client-supplied left-most one.
 func TestAuthedFields_TrustsRightmostForwardedHop(t *testing.T) {
 	caller := &fakeCaller{resp: []byte(`{"ok":true,"data":null}`)}
-	r := httptest.NewRequest(http.MethodPatch, "/api/auth/player/linked/7/primary", nil)
+	r := httptest.NewRequest(http.MethodPatch, "/api/v1/auth/player/linked/7/primary", nil)
 	r.SetPathValue("player_id", "7")
 	r.Header.Set("Authorization", "Bearer acc")
 	r.Header.Set("X-Forwarded-For", "9.9.9.9, 10.0.0.1")

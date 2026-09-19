@@ -75,7 +75,7 @@ export const workspacePlayerKeys = {
 
 export const workspacePlayerService = {
   list(workspaceId: number, params: WorkspacePlayerListParams = {}): Promise<PaginatedResponse<RosterMember>> {
-    return apiFetch(`/api/balancer/workspaces/${workspaceId}/players`, {
+    return apiFetch(`/api/v1/balancer/workspaces/${workspaceId}/players`, {
       query: {
         page: params.page ?? 1,
         per_page: params.perPage ?? 30,
@@ -87,18 +87,18 @@ export const workspacePlayerService = {
   },
 
   summary(workspaceId: number, authorUserId?: number): Promise<RosterSummary> {
-    return apiFetch(`/api/balancer/workspaces/${workspaceId}/players/summary`, {
+    return apiFetch(`/api/v1/balancer/workspaces/${workspaceId}/players/summary`, {
       query: authorUserId == null ? {} : { author_user_id: authorUserId },
     }).then((r) => r.json());
   },
 
   /** Every author who has ever set a rank here, busiest first. */
   listAuthors(workspaceId: number): Promise<{ authors: RosterAuthor[] }> {
-    return apiFetch(`/api/balancer/workspaces/${workspaceId}/players/authors`).then((r) => r.json());
+    return apiFetch(`/api/v1/balancer/workspaces/${workspaceId}/players/authors`).then((r) => r.json());
   },
 
   upsert(workspaceId: number, battleTag: string, displayName?: string): Promise<RosterMember> {
-    return apiFetch(`/api/balancer/workspaces/${workspaceId}/players`, {
+    return apiFetch(`/api/v1/balancer/workspaces/${workspaceId}/players`, {
       method: "POST",
       body: { battle_tag: battleTag, display_name: displayName || undefined },
     }).then((r) => r.json());
@@ -121,7 +121,7 @@ export const workspacePlayerService = {
     memberId: number,
     input: { scope?: RankScope; ranks: Record<string, number>; clear?: string[] },
   ): Promise<{ ranks: Record<string, number> }> {
-    return apiFetch(`/api/balancer/workspaces/${workspaceId}/players/${memberId}/ranks`, {
+    return apiFetch(`/api/v1/balancer/workspaces/${workspaceId}/players/${memberId}/ranks`, {
       method: "PUT",
       body: {
         scope: input.scope ?? "workspace",

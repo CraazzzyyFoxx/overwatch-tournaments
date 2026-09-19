@@ -195,7 +195,7 @@ function writtenLimits(): QuotaLimitsPayload {
   );
   if (!write) throw new Error("no PUT was sent");
   const [url, init] = write;
-  expect(url).toBe("/api/account/api-keys/7/quota");
+  expect(url).toBe("/bff/account/api-keys/7/quota");
   return JSON.parse(init.body as string).limits as QuotaLimitsPayload;
 }
 

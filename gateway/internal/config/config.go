@@ -66,7 +66,7 @@ type Config struct {
 	// WSCustomDomainRateLimit/Window bound how often ws.Handler's dynamic
 	// custom-domain Origin lookup (see acceptOptionsFor) may run per client
 	// IP. /ws carries neither auth nor the outer nginx-level limiter that
-	// guards /api/auth/*, so this is the only per-IP throttle on a lookup
+	// guards /api/v1/auth/*, so this is the only per-IP throttle on a lookup
 	// path that is otherwise reachable by anyone with distinct fake Origin
 	// headers. The default (30 requests / 10s) is generous relative to any
 	// realistic WS reconnect storm from a single IP.
