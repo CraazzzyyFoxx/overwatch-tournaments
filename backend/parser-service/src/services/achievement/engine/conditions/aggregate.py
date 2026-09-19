@@ -11,6 +11,7 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.core.enums import EncounterStatus
+from shared.models.achievements.achievement import AchievementGrain
 from src import models
 
 from ..context import EvalContext
@@ -18,7 +19,13 @@ from . import ResultSet, register
 from .stat_threshold import OPERATORS
 
 
-@register("global_stat_sum")
+@register(
+    "global_stat_sum",
+    grain=AchievementGrain.user,
+    description="Career total of a log stat",
+    required=("stat", "op", "value"),
+    depends_on=("matches.statistics",),
+)
 async def execute_global_stat_sum(
     session: AsyncSession,
     params: dict[str, Any],
@@ -51,7 +58,13 @@ async def execute_global_stat_sum(
     return {(row[0],) for row in result}
 
 
-@register("global_winrate")
+@register(
+    "global_winrate",
+    grain=AchievementGrain.user,
+    description="Career winrate ranking",
+    optional=("include_league", "limit", "metric", "op", "order", "value"),
+    depends_on=("tournament.encounter", "tournament.player"),
+)
 async def execute_global_winrate(
     session: AsyncSession,
     params: dict[str, Any],
@@ -127,7 +140,17 @@ async def execute_global_winrate(
     return {(row[0],) for row in result}
 
 
-@register("distinct_count")
+@register(
+    "distinct_count",
+    grain=AchievementGrain.user,
+    description="Distinct heroes, matches or roles",
+    required=("field", "op", "value"),
+    optional=("min_playtime", "scope"),
+    depends_on=("matches.statistics", "tournament.player"),
+    grain_for=lambda params: (
+        AchievementGrain.user_tournament if params.get("scope") == "tournament" else AchievementGrain.user
+    ),
+)
 async def execute_distinct_count(
     session: AsyncSession,
     params: dict[str, Any],

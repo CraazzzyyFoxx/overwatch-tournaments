@@ -1,79 +1,47 @@
-"""Condition tree validation: structure, types, grain compatibility."""
+"""Condition tree validation: structure, types, grain compatibility.
+
+Every per-node fact — result grain, which params it takes, which tables it
+reads — lives on the node's own ``@register(...)`` call (``engine/conditions``).
+This module only enforces the shape; it never keeps a second copy of the node
+list, which is how the editor's palette and the validator used to drift apart.
+"""
 
 from __future__ import annotations
 
 from typing import Any
 
 from shared.models.achievements.achievement import AchievementGrain
-from src.services.achievement.engine.conditions import get_registered_types, validate_stat_name
-
-# Types accepted inside player sub-condition trees (team_players_match / captain_property).
-SUBCONDITION_ONLY_TYPES = {
-    "player_role",
-    "player_div",
-    "is_newcomer",
-}
-
-# Types that have no standalone executor and therefore cannot appear at the top
-# level. ``is_newcomer`` is dual-use — it has a real top-level executor (e.g. the
-# legacy ``dirty-smurf`` rule) and is also valid inside player sub-conditions — so
-# it is intentionally excluded here.
-TOP_LEVEL_FORBIDDEN_TYPES = SUBCONDITION_ONLY_TYPES - {"is_newcomer"}
-
-# Grain produced by each leaf condition type.
-LEAF_GRAINS: dict[str, AchievementGrain] = {
-    # Match grain
-    "stat_threshold": AchievementGrain.user_match,
-    "match_criteria": AchievementGrain.user_match,
-    "match_win": AchievementGrain.user_match,
-    "hero_stat": AchievementGrain.user_match,
-    "match_mvp_check": AchievementGrain.user_match,
-    # Tournament grain
-    "standing_position": AchievementGrain.user_tournament,
-    "standing_record": AchievementGrain.user_tournament,
-    "div_change": AchievementGrain.user_tournament,
-    "div_level": AchievementGrain.user_tournament,
-    "is_captain": AchievementGrain.user_tournament,
-    "is_newcomer": AchievementGrain.user_tournament,
-    "tournament_type": AchievementGrain.user_tournament,
-    "hero_kd_best": AchievementGrain.user_tournament,
-    "team_players_match": AchievementGrain.user_tournament,
-    "captain_property": AchievementGrain.user_tournament,
-    "encounter_score": AchievementGrain.user_tournament,
-    "encounter_revenge": AchievementGrain.user_tournament,
-    "bracket_path": AchievementGrain.user_tournament,
-    "tournament_format": AchievementGrain.user_tournament,
-    "log_stat_rank": AchievementGrain.user_tournament,
-    "tournament_winrate": AchievementGrain.user_tournament,
-    "hero_pickrate": AchievementGrain.user_tournament,
-    "team_otp_count": AchievementGrain.user_tournament,
-    "reached_playoffs": AchievementGrain.user_tournament,  # user when scope="global"
-    # Global grain
-    "global_stat_sum": AchievementGrain.user,
-    "tournament_count": AchievementGrain.user,
-    "global_winrate": AchievementGrain.user,
-    "distinct_count": AchievementGrain.user,  # can be user or user_tournament depending on scope
-    "consecutive": AchievementGrain.user,
-    "stable_streak": AchievementGrain.user,
-    "standing_count": AchievementGrain.user,
-    "div_span": AchievementGrain.user,
-    "teammate_recurrence": AchievementGrain.user,
-}
+from src.services.achievement.engine.conditions import LeafSpec, get_specs, validate_stat_name
 
 # Grain ordering: finer grains are "larger" (more specific).
 GRAIN_ORDER = {
     AchievementGrain.user: 0,
     AchievementGrain.user_tournament: 1,
-    AchievementGrain.user_match: 2,
+    AchievementGrain.user_encounter: 2,
+    AchievementGrain.user_match: 3,
 }
 
+# ``user_encounter`` and ``user_match`` are both 3-tuples: (user, tournament, X).
+# Arity alone cannot tell them apart, which is fine — a rule declares exactly one
+# grain and ``_reject_mixed_grains`` refuses trees that mix them.
 GRAIN_ARITY = {
     AchievementGrain.user: 1,
     AchievementGrain.user_tournament: 2,
+    AchievementGrain.user_encounter: 3,
     AchievementGrain.user_match: 3,
 }
 
 STANDING_RECORD_FIELDS = frozenset({"wins", "losses", "draws", "points", "buchholz", "matches"})
+
+# Params whose value is drawn from a closed set. Membership is not derivable from
+# the spec (the spec names the key, not its domain), so it is stated once here
+# instead of in each node's executor.
+_ENUM_PARAMS: dict[str, dict[str, tuple[str, ...]]] = {
+    "match_criteria": {"field": ("closeness", "match_time", "time")},
+    "div_change": {"direction": ("up", "down")},
+    "team_players_match": {"mode": ("all", "any", "count")},
+    "standing_record": {"field": tuple(sorted(STANDING_RECORD_FIELDS))},
+}
 
 # Structural limits on a condition tree, enforced at validation time (before a
 # rule is ever saved). A pathologically deep or huge tree would otherwise blow
@@ -81,6 +49,27 @@ STANDING_RECORD_FIELDS = frozenset({"wins", "losses", "draws", "points", "buchho
 # capping here turns that into a clean validation error instead.
 MAX_CONDITION_TREE_DEPTH = 40
 MAX_CONDITION_TREE_NODES = 500
+
+
+def _specs() -> dict[str, LeafSpec]:
+    return get_specs()
+
+
+def __getattr__(name: str) -> Any:
+    """Derived views of the registry, resolved on access.
+
+    ``LEAF_GRAINS`` and the two sub-condition sets used to be hand-maintained
+    tables; they are now projections of the registered specs. Module-level
+    ``__getattr__`` keeps them importable by name without freezing a copy at
+    import time (condition modules register on import, order not guaranteed).
+    """
+    if name == "LEAF_GRAINS":
+        return {spec.name: spec.grain for spec in _specs().values()}
+    if name == "SUBCONDITION_ONLY_TYPES":
+        return {spec.name for spec in _specs().values() if spec.subcondition_only}
+    if name == "TOP_LEVEL_FORBIDDEN_TYPES":
+        return {spec.name for spec in _specs().values() if spec.subcondition_only}
+    raise AttributeError(name)
 
 
 def validate_condition_tree(condition: dict[str, Any]) -> list[str]:
@@ -107,14 +96,10 @@ def validate_rule_definition(
 
 def leaf_grain(ctype: str, params: dict[str, Any] | None = None) -> AchievementGrain | None:
     """Grain of one leaf, including parametric types whose grain depends on params."""
-    params = params or {}
-    if ctype == "distinct_count" and params.get("scope") == "tournament":
-        return AchievementGrain.user_tournament
-    if ctype == "reached_playoffs" and params.get("scope") == "global":
-        return AchievementGrain.user
-    if ctype == "is_newcomer" and params.get("op") is not None and params.get("value") is not None:
-        return AchievementGrain.user
-    return LEAF_GRAINS.get(ctype)
+    spec = _specs().get(ctype)
+    if spec is None:
+        return None
+    return spec.resolve_grain(params)
 
 
 def infer_grain(condition: dict[str, Any]) -> AchievementGrain:
@@ -130,6 +115,43 @@ def infer_grain(condition: dict[str, Any]) -> AchievementGrain:
     if len(unique) == 1:
         return next(iter(unique))
     return max(grains, key=lambda g: GRAIN_ORDER[g])
+
+
+def derive_depends_on(condition: dict[str, Any]) -> list[str]:
+    """Source tables a tree reads — the union of its leaves' declared tables.
+
+    This is what an evaluation trigger matches its ``changed_tables`` against, so
+    getting it wrong means a rule silently stops re-evaluating. Deriving it from
+    the tree removes the chance of an author (or an imported rule) getting it
+    wrong at all.
+    """
+    tables: set[str] = set()
+    _collect_depends_on(condition, tables)
+    return sorted(tables)
+
+
+def _collect_depends_on(node: dict[str, Any], tables: set[str]) -> None:
+    if not isinstance(node, dict) or not node:
+        return
+
+    for op in ("AND", "OR"):
+        children = node.get(op)
+        if isinstance(children, list):
+            for child in children:
+                _collect_depends_on(child, tables)
+            return
+
+    if "NOT" in node:
+        _collect_depends_on(node["NOT"], tables)
+        return
+
+    spec = _specs().get(node.get("type", ""))
+    if spec is not None:
+        tables.update(spec.depends_on)
+
+    params = node.get("params")
+    if isinstance(params, dict) and isinstance(params.get("condition"), dict):
+        _collect_depends_on(params["condition"], tables)
 
 
 def _validate_node(
@@ -197,18 +219,16 @@ def _validate_node(
         errors.append(f"{path}: missing 'type' field")
         return
 
-    registered = get_registered_types()
-    # Also allow sub-condition types
-    all_valid = registered + ["player_role", "player_div"]
-    if ctype not in all_valid:
+    spec = _specs().get(ctype)
+    if spec is None:
         errors.append(f"{path}: unknown condition type '{ctype}'")
         return
 
-    if in_player_subcondition and ctype not in SUBCONDITION_ONLY_TYPES:
+    if in_player_subcondition and not spec.subcondition_ok:
         errors.append(f"{path}: unsupported player sub-condition type '{ctype}'")
         return
 
-    if not in_player_subcondition and ctype in TOP_LEVEL_FORBIDDEN_TYPES:
+    if not in_player_subcondition and spec.subcondition_only:
         errors.append(f"{path}: '{ctype}' cannot be used as a top-level condition")
         return
 
@@ -217,12 +237,11 @@ def _validate_node(
         errors.append(f"{path}.params: expected dict")
         return
 
-    # Type-specific param validation
-    _validate_leaf_params(ctype, params, errors, path, depth=depth, budget=budget)
+    _validate_leaf_params(spec, params, errors, path, depth=depth, budget=budget)
 
 
 def _validate_leaf_params(
-    ctype: str,
+    spec: LeafSpec,
     params: dict[str, Any],
     errors: list[str],
     path: str,
@@ -230,130 +249,44 @@ def _validate_leaf_params(
     depth: int = 0,
     budget: list[int] | None = None,
 ) -> None:
-    """Validate params for a specific leaf type."""
-    if ctype == "stat_threshold":
-        _require_keys(params, ["stat", "op", "value"], errors, path)
-        _validate_stat_param(params, errors, path)
-    elif ctype == "match_criteria":
-        _require_keys(params, ["field", "op", "value"], errors, path)
-        valid_fields = ("closeness", "match_time", "time")
-        if params.get("field") not in valid_fields:
-            errors.append(f"{path}.params.field: must be one of {valid_fields}")
-    elif ctype == "match_win":
-        pass  # no params needed
-    elif ctype == "standing_position":
-        _require_keys(params, ["op", "value"], errors, path)
-    elif ctype == "standing_record":
-        _require_keys(params, ["field", "op", "value"], errors, path)
-        field = params.get("field")
-        if field is not None and field not in STANDING_RECORD_FIELDS:
-            allowed = ", ".join(sorted(STANDING_RECORD_FIELDS))
-            errors.append(f"{path}.params.field: must be one of {allowed}")
-    elif ctype == "div_change":
-        _require_keys(params, ["direction", "min_shift"], errors, path)
-        if params.get("direction") not in ("up", "down"):
-            errors.append(f"{path}.params.direction: must be 'up' or 'down'")
-    elif ctype == "div_level":
-        _require_keys(params, ["op", "value"], errors, path)
-    elif ctype == "team_players_match":
-        _require_keys(params, ["mode", "condition"], errors, path)
-        if params.get("mode") not in ("all", "any", "count"):
-            errors.append(f"{path}.params.mode: must be 'all', 'any', or 'count'")
-        if params.get("mode") == "count":
-            _require_keys(params, ["count_op", "count_value"], errors, path)
-        sub = params.get("condition")
-        if sub:
-            _validate_node(
-                sub,
-                errors,
-                f"{path}.params.condition",
-                in_player_subcondition=True,
-                depth=depth + 1,
-                budget=budget,
-            )
-    elif ctype == "captain_property":
-        _require_keys(params, ["condition"], errors, path)
-        sub = params.get("condition")
-        if sub:
-            _validate_node(
-                sub,
-                errors,
-                f"{path}.params.condition",
-                in_player_subcondition=True,
-                depth=depth + 1,
-                budget=budget,
-            )
-    elif ctype == "hero_kd_best":
-        pass  # all params optional
-    elif ctype == "hero_stat":
-        _require_keys(params, ["hero_slug", "stat", "op", "value"], errors, path)
-        _validate_stat_param(params, errors, path)
-    elif ctype == "encounter_score":
-        _require_keys(params, ["scores"], errors, path)
-    elif ctype == "encounter_revenge":
-        pass
-    elif ctype == "global_stat_sum":
-        _require_keys(params, ["stat", "op", "value"], errors, path)
-        _validate_stat_param(params, errors, path)
-    elif ctype == "match_mvp_check":
-        if "stat" in params:
-            _validate_stat_param(params, errors, path)
-    elif ctype == "global_winrate":
-        pass  # flexible params
-    elif ctype == "tournament_count":
-        _require_keys(params, ["op", "value"], errors, path)
-
-    elif ctype == "distinct_count":
-        _require_keys(params, ["field", "op", "value"], errors, path)
-    elif ctype == "consecutive":
-        _require_keys(params, ["metric", "min_streak"], errors, path)
-    elif ctype == "stable_streak":
-        _require_keys(params, ["fields", "min_streak"], errors, path)
-    elif ctype == "log_stat_rank":
-        _require_keys(params, ["stat"], errors, path)
-        _validate_stat_param(params, errors, path)
-    elif ctype == "standing_count":
-        _require_keys(params, ["op", "value"], errors, path)
-    elif ctype == "tournament_winrate":
-        _require_keys(params, ["op", "value"], errors, path)
-    elif ctype == "div_span":
-        _require_keys(params, ["op", "value"], errors, path)
-    elif ctype == "hero_pickrate":
-        pass  # op/value optional with defaults
-    elif ctype == "teammate_recurrence":
-        pass  # op/value optional with defaults
-    elif ctype == "team_otp_count":
-        pass  # op/value optional with defaults
-    elif ctype == "reached_playoffs":
-        pass  # scope/op/value optional with defaults
-    elif ctype == "player_role":
-        _require_keys(params, ["role"], errors, path)
-    elif ctype == "player_div":
-        _require_keys(params, ["op", "value"], errors, path)
-
-
-def _require_keys(
-    params: dict[str, Any],
-    keys: list[str],
-    errors: list[str],
-    path: str,
-) -> None:
-    for key in keys:
+    """Validate one leaf's params against its registered contract."""
+    for key in spec.required:
         if key not in params:
             errors.append(f"{path}.params: missing required key '{key}'")
 
+    known = set(spec.required) | set(spec.optional)
+    for key in sorted(set(params) - known):
+        # A param the node never reads is a silent no-op — the rule looks
+        # configured and behaves as if it were not.
+        errors.append(f"{path}.params: unknown key '{key}' for '{spec.name}'")
 
-def _validate_stat_param(
-    params: dict[str, Any],
-    errors: list[str],
-    path: str,
-) -> None:
-    raw = params.get("stat")
-    if not isinstance(raw, str):
-        return
-    stat_error = validate_stat_name(raw)
-    if stat_error is not None:
-        errors.append(f"{path}.params.stat: {stat_error}")
+    for key, allowed in _ENUM_PARAMS.get(spec.name, {}).items():
+        value = params.get(key)
+        if value is not None and value not in allowed:
+            errors.append(f"{path}.params.{key}: must be one of {', '.join(allowed)}")
+
+    if "stat" in known:
+        raw = params.get("stat")
+        if isinstance(raw, str):
+            stat_error = validate_stat_name(raw)
+            if stat_error is not None:
+                errors.append(f"{path}.params.stat: {stat_error}")
+
+    if spec.name == "team_players_match" and params.get("mode") == "count":
+        for key in ("count_op", "count_value"):
+            if key not in params:
+                errors.append(f"{path}.params: missing required key '{key}'")
+
+    sub = params.get("condition")
+    if "condition" in known and isinstance(sub, dict):
+        _validate_node(
+            sub,
+            errors,
+            f"{path}.params.condition",
+            in_player_subcondition=True,
+            depth=depth + 1,
+            budget=budget,
+        )
 
 
 def _reject_mixed_grains(node: dict[str, Any], errors: list[str], path: str) -> None:

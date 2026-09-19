@@ -48,7 +48,6 @@ from src import models, schemas
 from src.core import clients as _clients
 from src.core import db
 from src.domain.achievement_validation import (
-    LEAF_GRAINS,
     infer_grain,
     validate_condition_tree,
     validate_rule_definition,
@@ -58,6 +57,7 @@ from src.services.achievement.admin_reads import (
     _get_visible_workspace_ids,
     _get_workspace_or_404,
 )
+from src.services.achievement.engine.conditions import get_specs
 from src.services.achievement.engine.runner import run_evaluation
 from src.services.achievement.engine.seeder import hard_reset_workspace, seed_workspace
 from src.services.achievement.import_export import (
@@ -177,13 +177,16 @@ def register(broker: Any, logger: Any) -> None:  # noqa: C901 - one subscriber p
             _require_ws(data, "read")
             return [
                 schemas.ConditionTypeInfo(
-                    name=name,
-                    grain=grain.value,
-                    description=f"Condition type: {name}",
-                    required_params=[],
-                    optional_params=[],
+                    name=spec.name,
+                    grain=spec.grain.value,
+                    description=spec.description,
+                    required_params=list(spec.required),
+                    optional_params=list(spec.optional),
+                    depends_on=list(spec.depends_on),
+                    subcondition_only=spec.subcondition_only,
+                    subcondition_ok=spec.subcondition_ok,
                 )
-                for name, grain in sorted(LEAF_GRAINS.items())
+                for _name, spec in sorted(get_specs().items())
             ]
 
         return await c.envelope(logger, "ach.condition_types", op, session_factory=_SF)

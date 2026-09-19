@@ -23,6 +23,7 @@ from shared.models.achievements.achievement import (
 )
 from shared.repository.support import AchievementOverrideRepository, AchievementRuleRepository
 from src import schemas
+from src.domain.achievement_validation import derive_depends_on
 
 from .engine.runner import AchievementEvaluationRunnerService, achievement_evaluation_runner_service
 
@@ -84,6 +85,9 @@ class AchievementRuleService:
         )
         if existing:
             raise HTTPException(status_code=409, detail=f"Slug '{rule_data['slug']}' already exists in workspace")
+        # Derived, never taken from the caller: a hand-written ``depends_on`` that
+        # misses a table is a rule that silently stops re-evaluating.
+        rule_data["depends_on"] = derive_depends_on(rule_data.get("condition_tree") or {})
         rule = AchievementRule(workspace_id=workspace_id, **rule_data)
         await self.rule_repo.create(session, rule)
         await session.commit()
@@ -101,6 +105,10 @@ class AchievementRuleService:
     ) -> AchievementRule:
         if condition_tree_changed and "rule_version" not in update_data:
             update_data["rule_version"] = rule.rule_version + 1
+        if condition_tree_changed:
+            update_data["depends_on"] = derive_depends_on(update_data.get("condition_tree") or rule.condition_tree)
+        else:
+            update_data.pop("depends_on", None)
         await self.rule_repo.update_fields(session, rule, update_data)
         await session.refresh(rule)
         if (condition_tree_changed or "enabled" in update_data) and rule.enabled and rule.condition_tree:

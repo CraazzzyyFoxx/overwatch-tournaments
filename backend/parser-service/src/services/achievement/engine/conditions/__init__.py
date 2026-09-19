@@ -2,11 +2,17 @@
 
 Each leaf executor is an async function with signature:
     async def execute(session, params, context) -> ResultSet
+
+Registration carries the node's whole contract — result grain, parameter names,
+and the tables it reads. That contract is the single source the validator, the
+``depends_on`` derivation and the admin editor's palette all read, so a node
+cannot be added to one of them and forgotten in the others.
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable, Coroutine
+from dataclasses import dataclass
 from typing import Any
 
 import sqlalchemy as sa
@@ -62,17 +68,82 @@ LeafExecutor = Callable[
     Coroutine[Any, Any, ResultSet],
 ]
 
+GrainResolver = Callable[[dict[str, Any]], AchievementGrain]
+
+
+@dataclass(frozen=True, slots=True)
+class LeafSpec:
+    """Everything about a condition node that is not its query."""
+
+    name: str
+    grain: AchievementGrain
+    description: str
+    required: tuple[str, ...] = ()
+    optional: tuple[str, ...] = ()
+    #: Source tables. A rule's ``depends_on`` is the union over its leaves, which
+    #: is what decides whether a change event re-evaluates the rule at all.
+    depends_on: tuple[str, ...] = ()
+    #: Usable inside ``team_players_match`` / ``captain_property`` sub-trees.
+    subcondition_ok: bool = False
+    #: Only usable there — no standalone executor.
+    subcondition_only: bool = False
+    #: Grain depends on params (``distinct_count``'s scope, and friends).
+    grain_for: GrainResolver | None = None
+
+    def resolve_grain(self, params: dict[str, Any] | None = None) -> AchievementGrain:
+        if self.grain_for is None:
+            return self.grain
+        return self.grain_for(params or {})
+
+
 _REGISTRY: dict[str, LeafExecutor] = {}
+_SPECS: dict[str, LeafSpec] = {}
 
 
-def register(name: str):
-    """Decorator to register a leaf condition executor."""
+def register(
+    name: str,
+    *,
+    grain: AchievementGrain,
+    description: str,
+    required: tuple[str, ...] = (),
+    optional: tuple[str, ...] = (),
+    depends_on: tuple[str, ...] = (),
+    subcondition_ok: bool = False,
+    grain_for: GrainResolver | None = None,
+):
+    """Decorator to register a leaf condition executor and its contract."""
 
     def decorator(fn: LeafExecutor) -> LeafExecutor:
         _REGISTRY[name] = fn
+        register_spec(
+            LeafSpec(
+                name=name,
+                grain=grain,
+                description=description,
+                required=required,
+                optional=optional,
+                depends_on=depends_on,
+                subcondition_ok=subcondition_ok,
+                grain_for=grain_for,
+            )
+        )
         return fn
 
     return decorator
+
+
+def register_spec(spec: LeafSpec) -> LeafSpec:
+    """Register a contract with no executor of its own (sub-condition predicates)."""
+    _SPECS[spec.name] = spec
+    return spec
+
+
+def get_spec(name: str) -> LeafSpec | None:
+    return _SPECS.get(name)
+
+
+def get_specs() -> dict[str, LeafSpec]:
+    return dict(_SPECS)
 
 
 async def execute_leaf(
@@ -140,6 +211,43 @@ async def get_eligible_keys(
         result = await session.execute(query)
         return {(row[0], row[1]) for row in result}
 
+    if resolved is AchievementGrain.user_encounter:
+        query = (
+            sa.select(
+                models.WorkspaceMember.player_id,
+                models.Encounter.tournament_id,
+                models.Encounter.id.label("encounter_id"),
+            )
+            .select_from(models.Encounter)
+            .join(models.Tournament, models.Tournament.id == models.Encounter.tournament_id)
+            .join(
+                models.Team,
+                sa.or_(
+                    models.Team.id == models.Encounter.home_team_id,
+                    models.Team.id == models.Encounter.away_team_id,
+                ),
+            )
+            .join(
+                models.Player,
+                sa.and_(
+                    models.Player.team_id == models.Team.id,
+                    models.Player.tournament_id == models.Encounter.tournament_id,
+                ),
+            )
+            .join(
+                models.WorkspaceMember,
+                models.WorkspaceMember.id == models.Player.workspace_member_id,
+            )
+            .where(
+                models.Tournament.workspace_id == context.workspace_id,
+                models.Player.is_substitution.is_(False),
+            )
+        )
+        if context.tournament:
+            query = query.where(models.Encounter.tournament_id == context.tournament.id)
+        result = await session.execute(query)
+        return {(row[0], row[1], row[2]) for row in result}
+
     query = (
         sa.select(
             models.WorkspaceMember.player_id,
@@ -189,15 +297,23 @@ from . import (  # noqa: E402, F401
     bracket,
     div_span,
     division,
+    draft,
     encounter,
+    encounter_series,
     hero,
     hero_pickrate,
+    kill_feed,
     log_stat_rank,
+    map_coverage,
     match_criteria,
+    match_event,
     match_win,
     mvp,
+    participation,
     player,
+    rank_history,
     reached_playoffs,
+    registration,
     standing,
     standing_count,
     stat_threshold,

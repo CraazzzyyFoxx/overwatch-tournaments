@@ -11,10 +11,34 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.core.enums import HeroClass
+from shared.models.achievements.achievement import AchievementGrain
 from src import models
 
 from ..context import EvalContext
-from . import ResultSet, register
+from . import LeafSpec, ResultSet, register, register_spec
+
+register_spec(
+    LeafSpec(
+        name="player_role",
+        grain=AchievementGrain.user_tournament,
+        description="Team-mate plays this role",
+        required=("role",),
+        depends_on=("tournament.player",),
+        subcondition_only=True,
+        subcondition_ok=True,
+    )
+)
+register_spec(
+    LeafSpec(
+        name="player_div",
+        grain=AchievementGrain.user_tournament,
+        description="Team-mate's division compared against a value",
+        required=("op", "value"),
+        depends_on=("analytics.player_shift", "tournament.player"),
+        subcondition_only=True,
+        subcondition_ok=True,
+    )
+)
 
 
 def _build_player_filter(
@@ -114,7 +138,14 @@ def _player_matches_condition(
     return True
 
 
-@register("team_players_match")
+@register(
+    "team_players_match",
+    grain=AchievementGrain.user_tournament,
+    description="Team-mates matching a player sub-condition",
+    required=("mode", "condition"),
+    optional=("count_op", "count_value"),
+    depends_on=("tournament.player", "tournament.team"),
+)
 async def execute_team_players_match(
     session: AsyncSession,
     params: dict[str, Any],
@@ -275,7 +306,13 @@ async def execute_team_players_match(
     }
 
 
-@register("captain_property")
+@register(
+    "captain_property",
+    grain=AchievementGrain.user_tournament,
+    description="The team captain matches a player sub-condition",
+    required=("condition",),
+    depends_on=("tournament.player", "tournament.team"),
+)
 async def execute_captain_property(
     session: AsyncSession,
     params: dict[str, Any],

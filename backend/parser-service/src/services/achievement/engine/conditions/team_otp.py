@@ -15,6 +15,7 @@ from typing import Any
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.models.achievements.achievement import AchievementGrain
 from src import models
 
 from ..context import EvalContext
@@ -25,7 +26,13 @@ MIN_PLAYTIME_SEC = 60
 MIN_OTP_MATCHES = 5
 
 
-@register("team_otp_count")
+@register(
+    "team_otp_count",
+    grain=AchievementGrain.user_tournament,
+    description="How many one-trick players the team fielded",
+    optional=("op", "value"),
+    depends_on=("matches.statistics", "tournament.team"),
+)
 async def execute_team_otp_count(
     session: AsyncSession,
     params: dict[str, Any],

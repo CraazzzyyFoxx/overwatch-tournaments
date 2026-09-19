@@ -6,6 +6,10 @@ import sqlalchemy as sa
 from faststream.exceptions import RejectMessage
 from loguru import logger
 
+from shared.messaging.config import ACHIEVEMENT_EVALUATE_QUEUE
+from shared.messaging.outbox import enqueue_outbox_event
+from shared.schemas.events import AchievementEvaluateEvent
+from shared.services.scrim_scope import is_scrim_container
 from src import models
 from src.core import db
 from src.services.admin.stage import stage_service as admin_stage_service
@@ -17,6 +21,35 @@ from src.services.tournament.events import (
     STRUCTURE_RESOURCES,
     publish_tournament_invalidation,
 )
+
+# Standings are the input to every placement-, streak- and playoff-shaped rule.
+# Those rules used to be re-evaluated only by events that fire BEFORE this job
+# writes its generation, so they read the previous standings or were skipped by
+# the dependency filter entirely (review 2026-09-16 §1.6). The outbox row goes
+# out in the same transaction as the standings themselves, so the evaluation can
+# never observe an older generation than the one that triggered it.
+_STANDINGS_CHANGED_TABLES = ["tournament.standing", "tournament.player", "tournament.team"]
+
+
+async def _enqueue_achievement_evaluation(session, tournament_id: int) -> None:
+    if await is_scrim_container(session, tournament_id):
+        return
+    workspace_id = await session.scalar(
+        sa.select(models.Tournament.workspace_id).where(models.Tournament.id == tournament_id)
+    )
+    if workspace_id is None:
+        return
+    await enqueue_outbox_event(
+        session,
+        AchievementEvaluateEvent(
+            workspace_id=workspace_id,
+            tournament_id=tournament_id,
+            changed_tables=_STANDINGS_CHANGED_TABLES,
+        ),
+        # Default exchange: the routing key IS the queue name.
+        exchange=None,
+        routing_key=ACHIEVEMENT_EVALUATE_QUEUE.name,
+    )
 
 
 async def process_standings_job(job_id: int) -> None:
@@ -48,6 +81,7 @@ async def process_standings_job(job_id: int) -> None:
             # A generated round is a new bracket section, not just new numbers.
             resources = STRUCTURE_RESOURCES if generated else RESULT_RESOURCES
             await publish_tournament_invalidation(session, current.tournament_id, resources)
+            await _enqueue_achievement_evaluation(session, current.tournament_id)
             await jobs_service.mark_job_succeeded(
                 session,
                 current,

@@ -41,7 +41,7 @@ class EvaluationSlice:
         return filters
 
     def contains_key(self, key: tuple[int, ...]) -> bool:
-        _user_id, tournament_id, match_id = key
+        _user_id, tournament_id, _encounter_id, match_id = key
         if self.tournament_id is not None and tournament_id != self.tournament_id:
             return False
         if self.match_id is not None and match_id != self.match_id:
@@ -85,6 +85,7 @@ class AchievementResultDifferService:
         new_results: ResultSet,
         run_id: str,
         evaluation_slice: EvaluationSlice | None = None,
+        evidence: dict[tuple[int, ...], dict] | None = None,
     ) -> DiffResult:
         """Compare new results with stored results and apply changes.
 
@@ -105,6 +106,7 @@ class AchievementResultDifferService:
                 AchievementEvaluationResult.id,
                 WorkspaceMember.player_id,
                 AchievementEvaluationResult.tournament_id,
+                AchievementEvaluationResult.encounter_id,
                 AchievementEvaluationResult.match_id,
             )
             .select_from(AchievementEvaluationResult)
@@ -118,16 +120,17 @@ class AchievementResultDifferService:
 
         # Build lookup: tuple → row_id
         existing_map: dict[tuple[int, ...], int] = {}
-        for row_id, user_id, tournament_id, match_id in existing_rows:
-            key = _make_key(user_id, tournament_id, match_id)
+        for row_id, user_id, tournament_id, encounter_id, match_id in existing_rows:
+            key = _make_key(user_id, tournament_id, encounter_id, match_id)
             existing_map[key] = row_id
 
         existing_keys = set(existing_map.keys())
 
         # Normalize new results to consistent key format
+        grain = AchievementGrain(rule.grain)
         new_keys: dict[tuple[int, ...], tuple[int, ...]] = {}
         for result_tuple in new_results:
-            key = _normalize_tuple(result_tuple)
+            key = _normalize_tuple(result_tuple, grain)
             if evaluation_slice is not None and not evaluation_slice.contains_key(key):
                 continue
             new_keys[key] = result_tuple
@@ -159,25 +162,36 @@ class AchievementResultDifferService:
         values: list[dict] = []
         member_id_by_player: dict[int, int] = {}
         for key in to_add:
-            user_id, tournament_id, match_id = _unpack_key(key)
+            user_id, tournament_id, encounter_id, match_id = _unpack_key(key)
             if user_id not in member_id_by_player:
                 member = await get_or_create_workspace_member(
                     session, workspace_id=rule.workspace_id, player_id=user_id
                 )
                 member_id_by_player[user_id] = member.id
+            # "Why this player": whatever the leaf that matched them recorded —
+            # the measured value and the threshold it cleared, not just the slug.
+            matched = (evidence or {}).get(new_keys[key]) or {}
             values.append(
                 {
                     "achievement_rule_id": rule.id,
                     "workspace_member_id": member_id_by_player[user_id],
                     "tournament_id": tournament_id,
+                    "encounter_id": encounter_id,
                     "match_id": match_id,
                     "qualified_at": now,
                     "rule_version": rule.rule_version,
                     "run_id": run_id,
-                    "evidence_json": {"rule_slug": rule.slug, "rule_version": rule.rule_version},
+                    "evidence_json": {"rule_slug": rule.slug, "rule_version": rule.rule_version, **matched},
                 }
             )
-            inserts.append({"user_id": user_id, "tournament_id": tournament_id, "match_id": match_id})
+            inserts.append(
+                {
+                    "user_id": user_id,
+                    "tournament_id": tournament_id,
+                    "encounter_id": encounter_id,
+                    "match_id": match_id,
+                }
+            )
 
         if values:
             # get_or_create_workspace_member may have created member rows in this
@@ -192,23 +206,35 @@ achievement_result_differ_service = AchievementResultDifferService()
 diff_and_apply = achievement_result_differ_service.diff_and_apply
 
 
-def _make_key(user_id: int, tournament_id: int | None, match_id: int | None) -> tuple[int, ...]:
+def _make_key(
+    user_id: int,
+    tournament_id: int | None,
+    encounter_id: int | None,
+    match_id: int | None,
+) -> tuple[int, ...]:
     """Create a consistent hashable key from nullable fields."""
-    return (user_id, tournament_id or 0, match_id or 0)
+    return (user_id, tournament_id or 0, encounter_id or 0, match_id or 0)
 
 
-def _normalize_tuple(t: tuple[int, ...]) -> tuple[int, ...]:
-    """Normalize variable-length result tuple to (user_id, tournament_id, match_id)."""
+def _normalize_tuple(t: tuple[int, ...], grain: AchievementGrain) -> tuple[int, ...]:
+    """Normalize a result tuple to (user_id, tournament_id, encounter_id, match_id).
+
+    ``user_encounter`` and ``user_match`` both arrive as 3-tuples; only the
+    rule's grain says whether the third slot is a series or one of its maps.
+    """
     if len(t) == 1:
-        return (t[0], 0, 0)
+        return (t[0], 0, 0, 0)
     if len(t) == 2:
-        return (t[0], t[1], 0)
-    return (t[0], t[1], t[2])
+        return (t[0], t[1], 0, 0)
+    if grain is AchievementGrain.user_encounter:
+        return (t[0], t[1], t[2], 0)
+    return (t[0], t[1], 0, t[2])
 
 
-def _unpack_key(key: tuple[int, ...]) -> tuple[int, int | None, int | None]:
+def _unpack_key(key: tuple[int, ...]) -> tuple[int, int | None, int | None, int | None]:
     """Unpack key back to nullable values."""
     user_id = key[0]
     tournament_id = key[1] if key[1] != 0 else None
-    match_id = key[2] if key[2] != 0 else None
-    return user_id, tournament_id, match_id
+    encounter_id = key[2] if key[2] != 0 else None
+    match_id = key[3] if key[3] != 0 else None
+    return user_id, tournament_id, encounter_id, match_id

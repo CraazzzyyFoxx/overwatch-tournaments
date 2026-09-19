@@ -7,6 +7,7 @@ from typing import Any
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.models.achievements.achievement import AchievementGrain
 from src import models
 from src.domain.achievement_stage_filters import encounter_is_bracket
 
@@ -24,7 +25,76 @@ def _encounter_query_with_stage_context() -> sa.Select:
     )
 
 
-@register("encounter_score")
+def join_final_encounters(query: sa.Select, workspace_id: int) -> sa.Select:
+    """Narrow a query already joined to ``Encounter``/``Stage``/``StageItem`` to each tournament's final.
+
+    Stage identity matters: the highest round number alone would let an earlier
+    stage's round of the same number pass as the final, so the last bracket
+    stage is picked first and the last round is taken *within* that stage.
+    """
+    bracket_clause = encounter_is_bracket(
+        encounter=models.Encounter,
+        stage=models.Stage,
+        stage_item=models.StageItem,
+    )
+    stage_order = sa.func.coalesce(models.Stage.order, 0)
+
+    final_stage_sq = (
+        _encounter_query_with_stage_context()
+        .with_only_columns(
+            models.Encounter.tournament_id.label("tournament_id"),
+            sa.func.max(stage_order).label("final_stage_order"),
+        )
+        .where(
+            models.Encounter.status == "COMPLETED",
+            models.Tournament.workspace_id == workspace_id,
+            bracket_clause,
+        )
+        .group_by(models.Encounter.tournament_id)
+        .subquery("final_stage")
+    )
+
+    final_round_sq = (
+        _encounter_query_with_stage_context()
+        .with_only_columns(
+            models.Encounter.tournament_id.label("tournament_id"),
+            stage_order.label("final_stage_order"),
+            sa.func.max(models.Encounter.round).label("final_round"),
+        )
+        .join(
+            final_stage_sq,
+            sa.and_(
+                models.Encounter.tournament_id == final_stage_sq.c.tournament_id,
+                stage_order == final_stage_sq.c.final_stage_order,
+            ),
+        )
+        .where(
+            models.Encounter.status == "COMPLETED",
+            models.Tournament.workspace_id == workspace_id,
+            bracket_clause,
+        )
+        .group_by(models.Encounter.tournament_id, stage_order)
+        .subquery("final_round")
+    )
+
+    return query.join(
+        final_round_sq,
+        sa.and_(
+            models.Encounter.tournament_id == final_round_sq.c.tournament_id,
+            stage_order == final_round_sq.c.final_stage_order,
+            models.Encounter.round == final_round_sq.c.final_round,
+        ),
+    )
+
+
+@register(
+    "encounter_score",
+    grain=AchievementGrain.user_tournament,
+    description="A series ended with one of the listed scorelines",
+    required=("scores",),
+    optional=("round_type", "side", "winner"),
+    depends_on=("tournament.encounter", "tournament.player"),
+)
 async def execute_encounter_score(
     session: AsyncSession,
     params: dict[str, Any],
@@ -62,73 +132,13 @@ async def execute_encounter_score(
     if context.tournament:
         base_where.append(models.Encounter.tournament_id == context.tournament.id)
 
-    encounter_select = _encounter_query_with_stage_context()
+    query = _encounter_query_with_stage_context().with_only_columns(
+        models.WorkspaceMember.player_id,
+        models.Encounter.tournament_id,
+    )
 
     if round_type == "final":
-        bracket_clause = encounter_is_bracket(
-            encounter=models.Encounter,
-            stage=models.Stage,
-            stage_item=models.StageItem,
-        )
-        stage_order = sa.func.coalesce(models.Stage.order, 0)
-
-        final_stage_sq = (
-            encounter_select.with_only_columns(
-                models.Encounter.tournament_id.label("tournament_id"),
-                sa.func.max(stage_order).label("final_stage_order"),
-            )
-            .where(
-                models.Encounter.status == "COMPLETED",
-                models.Tournament.workspace_id == context.workspace_id,
-                bracket_clause,
-            )
-            .group_by(models.Encounter.tournament_id)
-            .subquery("final_stage")
-        )
-
-        final_round_sq = (
-            _encounter_query_with_stage_context()
-            .with_only_columns(
-                models.Encounter.tournament_id.label("tournament_id"),
-                stage_order.label("final_stage_order"),
-                sa.func.max(models.Encounter.round).label("final_round"),
-            )
-            .join(
-                final_stage_sq,
-                sa.and_(
-                    models.Encounter.tournament_id == final_stage_sq.c.tournament_id,
-                    stage_order == final_stage_sq.c.final_stage_order,
-                ),
-            )
-            .where(
-                models.Encounter.status == "COMPLETED",
-                models.Tournament.workspace_id == context.workspace_id,
-                bracket_clause,
-            )
-            .group_by(models.Encounter.tournament_id, stage_order)
-            .subquery("final_round")
-        )
-
-        query = (
-            _encounter_query_with_stage_context()
-            .with_only_columns(
-                models.WorkspaceMember.player_id,
-                models.Encounter.tournament_id,
-            )
-            .join(
-                final_round_sq,
-                sa.and_(
-                    models.Encounter.tournament_id == final_round_sq.c.tournament_id,
-                    stage_order == final_round_sq.c.final_stage_order,
-                    models.Encounter.round == final_round_sq.c.final_round,
-                ),
-            )
-        )
-    else:
-        query = _encounter_query_with_stage_context().with_only_columns(
-            models.WorkspaceMember.player_id,
-            models.Encounter.tournament_id,
-        )
+        query = join_final_encounters(query, context.workspace_id)
 
     if side in ("winner", "loser"):
         if side == "winner":
@@ -178,7 +188,12 @@ async def execute_encounter_score(
     return {(row[0], row[1]) for row in result}
 
 
-@register("encounter_revenge")
+@register(
+    "encounter_revenge",
+    grain=AchievementGrain.user_tournament,
+    description="Beat a team that had beaten them earlier",
+    depends_on=("tournament.encounter", "tournament.player"),
+)
 async def execute_encounter_revenge(
     session: AsyncSession,
     params: dict[str, Any],

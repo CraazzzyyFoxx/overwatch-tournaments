@@ -22,6 +22,7 @@ from shared.models.tournament.tournament import Tournament
 if typing.TYPE_CHECKING:
     from shared.models.matches.match import Match
     from shared.models.tenancy.workspace import Workspace, WorkspaceMember
+    from shared.models.tournament.encounter import Encounter
 
 __all__ = (
     "AchievementCategory",
@@ -60,6 +61,9 @@ class AchievementScope(StrEnum):
 class AchievementGrain(StrEnum):
     user = "user"
     user_tournament = "user_tournament"
+    # One row per (user, encounter): a whole series, not one of its maps.
+    # ``user_match`` stays the per-map grain; a rule declares exactly one.
+    user_encounter = "user_encounter"
     user_match = "user_match"
 
 
@@ -86,7 +90,6 @@ class EvaluationRunStatus(StrEnum):
     # an aborted run (lost connection, outer exception).
     partial = "partial"
     failed = "failed"
-    cancelled = "cancelled"
 
 
 # ---------------------------------------------------------------------------
@@ -142,6 +145,7 @@ class AchievementEvaluationResult(db.TimeStampIntegerMixin):
             "achievement_rule_id",
             "workspace_member_id",
             "tournament_id",
+            "encounter_id",
             "match_id",
             name="uq_eval_result_rule_user_tournament_match",
         ),
@@ -152,6 +156,12 @@ class AchievementEvaluationResult(db.TimeStampIntegerMixin):
             "match_id",
             postgresql_where=text("match_id IS NOT NULL"),
         ),
+        # Same shape for the encounter (series) grain — added by ``achenc01``.
+        Index(
+            "ix_achievements_evaluation_result_encounter_id",
+            "encounter_id",
+            postgresql_where=text("encounter_id IS NOT NULL"),
+        ),
         {"schema": "achievements"},
     )
 
@@ -159,6 +169,12 @@ class AchievementEvaluationResult(db.TimeStampIntegerMixin):
     workspace_member_id: Mapped[int] = mapped_column(ForeignKey("workspace_member.id", ondelete="CASCADE"), index=True)
     tournament_id: Mapped[int | None] = mapped_column(
         ForeignKey(Tournament.id, ondelete="CASCADE"), nullable=True, index=True
+    )
+    # Series grain. Mutually exclusive with ``match_id`` in practice: a rule
+    # declares one grain, and ``user_match`` rows carry the map while
+    # ``user_encounter`` rows carry the series.
+    encounter_id: Mapped[int | None] = mapped_column(
+        ForeignKey("tournament.encounter.id", ondelete="CASCADE"), nullable=True
     )
     match_id: Mapped[int | None] = mapped_column(ForeignKey("matches.match.id", ondelete="CASCADE"), nullable=True)
     qualified_at: Mapped[db.datetime] = mapped_column(db.DateTime(timezone=True), server_default=func.now())
@@ -177,6 +193,7 @@ class AchievementEvaluationResult(db.TimeStampIntegerMixin):
     workspace_member: Mapped[WorkspaceMember] = relationship()
     tournament: Mapped[Tournament | None] = relationship()
     match: Mapped[Match | None] = relationship()
+    encounter: Mapped[Encounter | None] = relationship()
 
 
 class AchievementOverride(db.TimeStampIntegerMixin):

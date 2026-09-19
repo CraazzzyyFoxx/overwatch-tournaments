@@ -7,36 +7,19 @@ import { Badge } from "@/components/ui/badge";
 
 type Translator = ReturnType<typeof useTranslations<never>>;
 
-const CONDITION_TYPES = [
-  "stat_threshold",
-  "match_criteria",
-  "match_win",
-  "hero_stat",
-  "standing_position",
-  "standing_record",
-  "div_change",
-  "div_level",
-  "is_captain",
-  "is_newcomer",
-  "tournament_type",
-  "hero_kd_best",
-  "team_players_match",
-  "captain_property",
-  "encounter_score",
-  "encounter_revenge",
-  "global_stat_sum",
-  "tournament_count",
-  "global_winrate",
-  "distinct_count",
-  "consecutive",
-  "stable_streak",
-] as const;
-
-type ConditionType = (typeof CONDITION_TYPES)[number];
-const CONDITION_TYPE_SET = new Set<string>(CONDITION_TYPES);
-
-function isConditionType(value: string): value is ConditionType {
-  return CONDITION_TYPE_SET.has(value);
+/**
+ * Node labels come from the message catalogue, keyed by the engine's own node
+ * name. The component used to keep a hard-coded list of the types it knew; a
+ * node the engine added and nobody mirrored here rendered as a raw slug, so the
+ * lookup is now "is there a message for it", with a humanized fallback.
+ */
+function conditionLabel(type: string, t: Translator): string {
+  // The key is built from an engine-supplied node name, so it cannot be one of
+  // next-intl's statically known literals.
+  const key = `achievements.condition.${type}` as Parameters<Translator>[0];
+  if (t.has(key)) return t(key);
+  const spaced = type.replace(/_/g, " ");
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
 }
 
 const OP_LABELS: Record<string, string> = {
@@ -67,9 +50,7 @@ function formatParamValue(key: string, value: unknown, t: Translator): string {
 
 function LeafNode({ node }: Readonly<{ node: { type: string; params?: Record<string, unknown> } }>) {
   const t = useTranslations();
-  const label = isConditionType(node.type)
-    ? t(`achievements.condition.${node.type}`)
-    : node.type;
+  const label = conditionLabel(node.type, t);
   const params = node.params ?? {};
   const entries = Object.entries(params).filter(([, v]) => v !== null && v !== undefined);
 

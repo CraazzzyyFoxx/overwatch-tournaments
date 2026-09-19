@@ -56,7 +56,7 @@ class AchievementEvaluationResultRepository(BaseRepository[models.AchievementEva
     """``achievements.evaluation_result`` — reconcile writes for one rule's diff.
 
     ``bulk_upsert_ignore_conflicts``'s conflict target mirrors migration
-    ``perfidx05``'s functional unique index verbatim (``COALESCE(x, 0)`` on the
+    ``achenc01``'s functional unique index verbatim (``COALESCE(x, 0)`` on the
     nullable dedup columns) — Postgres only matches an ``ON CONFLICT`` target
     against an index whose expressions are syntactically identical, so this
     tuple must never be simplified to a plain ``0`` literal or dropped.
@@ -66,6 +66,7 @@ class AchievementEvaluationResultRepository(BaseRepository[models.AchievementEva
         models.AchievementEvaluationResult.achievement_rule_id,
         models.AchievementEvaluationResult.workspace_member_id,
         sa.func.coalesce(models.AchievementEvaluationResult.tournament_id, sa.literal_column("0")),
+        sa.func.coalesce(models.AchievementEvaluationResult.encounter_id, sa.literal_column("0")),
         sa.func.coalesce(models.AchievementEvaluationResult.match_id, sa.literal_column("0")),
     )
 

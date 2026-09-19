@@ -1,4 +1,4 @@
-"""stat_threshold — per-match stat meets a threshold.
+"""match_event_count — how often a parsed log event fired for one player on one map.
 
 Grain: user_match (user_id, tournament_id, match_id).
 """
@@ -10,6 +10,7 @@ from typing import Any
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.core.enums import MatchEvent as MatchEventName
 from shared.models.achievements.achievement import AchievementGrain
 from src import models
 
@@ -27,49 +28,56 @@ OPERATORS = {
 
 
 @register(
-    "stat_threshold",
+    "match_event_count",
     grain=AchievementGrain.user_match,
-    description="Per-map log stat compared against a threshold",
-    required=("stat", "op", "value"),
-    depends_on=("matches.match", "matches.statistics"),
+    description="How many times an in-match event happened for this player on one map",
+    required=("event", "op", "value"),
+    optional=("hero_slug",),
+    depends_on=("matches.event", "matches.match", "tournament.encounter"),
 )
-async def execute(
+async def execute_match_event_count(
     session: AsyncSession,
     params: dict[str, Any],
     context: EvalContext,
 ) -> ResultSet:
-    from . import resolve_stat_name
-
-    stat_name = resolve_stat_name(params["stat"])
+    # ``Enum(enums.MatchEvent)`` persists the member NAME ("HeroSwap"), not its
+    # value ("hero_swap") — so the param is a member name and the bind is the
+    # member itself, which the column type renders back to that name. An
+    # unknown name raises KeyError here; the runner records it as a rule failure.
+    event = MatchEventName[params["event"]]
     op = params["op"]
     value = params["value"]
+    hero_slug = params.get("hero_slug")
 
     op_fn = OPERATORS[op]
-    sum_expr = sa.func.sum(models.MatchStatistics.value)
+    count_expr = sa.func.count()
 
     query = (
         sa.select(
-            models.MatchStatistics.user_id,
+            models.MatchEvent.user_id,
             models.Encounter.tournament_id,
-            models.MatchStatistics.match_id,
-            sum_expr.label("measured"),
+            models.MatchEvent.match_id,
+            count_expr.label("measured"),
         )
-        .join(models.Match, models.Match.id == models.MatchStatistics.match_id)
+        .join(models.Match, models.Match.id == models.MatchEvent.match_id)
         .join(models.Encounter, models.Encounter.id == models.Match.encounter_id)
         .join(models.Tournament, models.Tournament.id == models.Encounter.tournament_id)
         .where(
-            models.MatchStatistics.name == stat_name,
-            models.MatchStatistics.round == 0,
-            models.MatchStatistics.hero_id.is_(None),
+            models.MatchEvent.name == event,
             models.Tournament.workspace_id == context.workspace_id,
         )
         .group_by(
-            models.MatchStatistics.user_id,
+            models.MatchEvent.user_id,
             models.Encounter.tournament_id,
-            models.MatchStatistics.match_id,
+            models.MatchEvent.match_id,
         )
-        .having(op_fn(sum_expr, value))
+        .having(op_fn(count_expr, value))
     )
+
+    if hero_slug:
+        query = query.join(models.Hero, models.Hero.id == models.MatchEvent.hero_id).where(
+            models.Hero.slug == hero_slug
+        )
 
     if context.tournament:
         query = query.where(models.Encounter.tournament_id == context.tournament.id)
@@ -79,5 +87,5 @@ async def execute(
     for row in result:
         key = (row[0], row[1], row[2])
         keys.add(key)
-        context.record_evidence(key, stat=stat_name, measured=row[3], op=op, threshold=value)
+        context.record_evidence(key, event=event.name, count=int(row[3]))
     return keys

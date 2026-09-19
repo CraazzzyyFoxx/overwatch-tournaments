@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from shared.division_grid import DivisionGrid, DivisionTier
 from shared.services.division_grid.normalization import DivisionGridNormalizer
@@ -16,6 +16,17 @@ class EvalContext:
     tournament: models.Tournament | None = None
     grid: DivisionGrid | None = None
     normalizer: DivisionGridNormalizer | None = None
+    #: Why a key qualified, keyed by the exact result tuple a leaf emitted.
+    #: A leaf fills it in as it produces rows; the differ copies whatever
+    #: survived the tree into ``evidence_json``. Nothing depends on a leaf
+    #: recording anything, so a node that has no number worth showing simply
+    #: stays silent. Mutable by design (the dataclass is frozen, the dict is
+    #: not) — this is a side channel, not part of the context's identity.
+    evidence: dict[tuple[int, ...], dict] = field(default_factory=dict, repr=False, compare=False)
+
+    def record_evidence(self, key: tuple[int, ...], **values: object) -> None:
+        """Attach measured values to one result key."""
+        self.evidence.setdefault(key, {}).update(values)
 
     def resolve_division(
         self,

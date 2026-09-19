@@ -10,6 +10,7 @@ from typing import Any
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.models.achievements.achievement import AchievementGrain
 from src import models
 
 from ..context import EvalContext
@@ -17,7 +18,13 @@ from . import ResultSet, register
 from .stat_threshold import OPERATORS
 
 
-@register("hero_stat")
+@register(
+    "hero_stat",
+    grain=AchievementGrain.user_match,
+    description="Per-map stat while playing one specific hero",
+    required=("hero_slug", "stat", "op", "value"),
+    depends_on=("matches.statistics",),
+)
 async def execute_hero_stat(
     session: AsyncSession,
     params: dict[str, Any],
@@ -65,7 +72,13 @@ async def execute_hero_stat(
     return {(row[0], row[1], row[2]) for row in result}
 
 
-@register("hero_kd_best")
+@register(
+    "hero_kd_best",
+    grain=AchievementGrain.user_tournament,
+    description="Best K/D on a hero across the tournament",
+    optional=("hero_slug", "min_match_time", "min_matches", "min_time"),
+    depends_on=("matches.statistics",),
+)
 async def execute_hero_kd_best(
     session: AsyncSession,
     params: dict[str, Any],

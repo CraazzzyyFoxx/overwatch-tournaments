@@ -2,6 +2,7 @@
 from shared.models.achievements.achievement import *
 from shared.models.analytics.analytics import *
 from shared.models.balancer.balance import *
+from shared.models.balancer.draft import *
 from shared.models.catalog.alias_miss import *
 from shared.models.catalog.gamemode import *
 from shared.models.catalog.hero import *
@@ -24,6 +25,8 @@ from shared.models.tournament.challonge import *
 from shared.models.tournament.computation import *
 from shared.models.tournament.encounter import *
 from shared.models.tournament.encounter_link import *
+from shared.models.tournament.encounter_report import *
+from shared.models.tournament.pick_ban import *
 from shared.models.tournament.stage import *
 from shared.models.tournament.standings import *
 from shared.models.tournament.team import *

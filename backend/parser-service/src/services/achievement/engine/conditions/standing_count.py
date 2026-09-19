@@ -14,6 +14,7 @@ from typing import Any
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.models.achievements.achievement import AchievementGrain
 from src import models
 from src.domain.achievement_stage_filters import standing_is_elimination
 
@@ -22,7 +23,14 @@ from . import ResultSet, register
 from .stat_threshold import OPERATORS
 
 
-@register("standing_count")
+@register(
+    "standing_count",
+    grain=AchievementGrain.user,
+    description="How many times a standing position was reached",
+    required=("op", "value"),
+    optional=("count_by", "is_league", "position_op", "position_value"),
+    depends_on=("tournament.standing", "tournament.player"),
+)
 async def execute_standing_count(
     session: AsyncSession,
     params: dict[str, Any],

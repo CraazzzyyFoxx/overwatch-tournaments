@@ -13,6 +13,7 @@ from typing import Any
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.models.achievements.achievement import AchievementGrain
 from src import models
 
 from ..context import EvalContext
@@ -20,7 +21,13 @@ from . import ResultSet, register
 from .stat_threshold import OPERATORS
 
 
-@register("teammate_recurrence")
+@register(
+    "teammate_recurrence",
+    grain=AchievementGrain.user,
+    description="Played on the same team as someone repeatedly",
+    optional=("op", "value"),
+    depends_on=("tournament.player", "tournament.team"),
+)
 async def execute_teammate_recurrence(
     session: AsyncSession,
     params: dict[str, Any],

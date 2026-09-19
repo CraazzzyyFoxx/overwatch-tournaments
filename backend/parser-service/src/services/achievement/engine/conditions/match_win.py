@@ -13,13 +13,19 @@ from typing import Any
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.models.achievements.achievement import AchievementGrain
 from src import models
 
 from ..context import EvalContext
 from . import ResultSet, register
 
 
-@register("match_win")
+@register(
+    "match_win",
+    grain=AchievementGrain.user_match,
+    description="The player's team won this map",
+    depends_on=("matches.match", "tournament.encounter"),
+)
 async def execute(
     session: AsyncSession,
     params: dict[str, Any],

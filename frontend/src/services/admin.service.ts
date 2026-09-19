@@ -1294,8 +1294,8 @@ class AdminService {
     return response.json();
   }
 
-  async getConditionTypes(): Promise<ConditionTypeInfo[]> {
-    const response = await apiFetch("/api/v1/admin/ws/0/achievements/rules/condition-types");
+  async getConditionTypes(workspaceId: number): Promise<ConditionTypeInfo[]> {
+    const response = await apiFetch(`/api/v1/admin/ws/${workspaceId}/achievements/rules/condition-types`);
     return response.json();
   }
 

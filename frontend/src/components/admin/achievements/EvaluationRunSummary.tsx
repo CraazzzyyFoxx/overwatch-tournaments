@@ -5,7 +5,6 @@ import { useFormatter } from "next-intl";
 import {
   AlertTriangle,
   CheckCircle2,
-  CircleOff,
   Clock3,
   Loader2,
   X,
@@ -45,8 +44,7 @@ const STATUS_TONE: Record<EvaluationRunRead["status"], Tone> = {
   running: "info",
   done: "success",
   partial: "warning",
-  failed: "danger",
-  cancelled: "neutral"
+  failed: "danger"
 };
 
 const STATUS_ICON: Record<EvaluationRunRead["status"], LucideIcon> = {
@@ -54,8 +52,7 @@ const STATUS_ICON: Record<EvaluationRunRead["status"], LucideIcon> = {
   running: Loader2,
   done: CheckCircle2,
   partial: AlertTriangle,
-  failed: XCircle,
-  cancelled: CircleOff
+  failed: XCircle
 };
 
 /** Left edge only: the panel keeps `bg-card`, so a partial run reads without shouting. */
@@ -141,8 +138,6 @@ export function describeEvaluationRun(run: EvaluationRunRead): EvaluationRunDige
     }
     case "failed":
       return { ...base, headline: "Evaluation stopped before it finished", note: null };
-    case "cancelled":
-      return { ...base, headline: "Evaluation was cancelled", note: null };
     default:
       return {
         ...base,
