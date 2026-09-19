@@ -22,7 +22,7 @@ import {
   normalizeMaxRounds,
   type SeedRanking,
   type StageSettings
-} from "./projection";
+} from "@/lib/bracket-projection";
 
 export interface StageForm {
   name: string;

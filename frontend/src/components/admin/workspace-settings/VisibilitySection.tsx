@@ -10,7 +10,7 @@ import {
   SelectValue
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { SaveBar } from "@/components/admin/kit/SaveBar";
+import { SaveBar } from "@/components/kit/SaveBar";
 import { WorkspaceSettingsFrame } from "./WorkspaceSettingsFrame";
 import { useWorkspaceSettingsForm } from "./useWorkspaceSettingsForm";
 

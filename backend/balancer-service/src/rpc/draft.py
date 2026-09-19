@@ -116,7 +116,7 @@ async def _actor_player_ids(session: AsyncSession, auth_user_id: int) -> list[in
 def _to_role(slot_code: str | None) -> HeroClass | None:
     """Wire slot code -> the domain's ``HeroClass``.
 
-    Requests carry ``tank``/``dps``/``support``; everything below this layer —
+    Requests carry ``tank``/``damage``/``support``; everything below this layer —
     ``rules.resolve_pick_slot``, ``role_edit_service``, ``fit`` — takes a
     ``HeroClass``. Handing the raw string down reached ``role.slot_code`` on a
     ``str`` and 500'd the pick instead of drafting anyone.

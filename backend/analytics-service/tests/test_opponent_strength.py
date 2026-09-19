@@ -41,7 +41,7 @@ class SnapshotDedupTests(IsolatedAsyncioTestCase):
         from openskill.models import PlackettLuce
 
         pl = PlackettLuce()
-        p1, p2, p3 = _player(1, "tank"), _player(2, "tank"), _player(3, "dps")
+        p1, p2, p3 = _player(1, "tank"), _player(2, "tank"), _player(3, "damage")
         e_normal = SimpleNamespace(
             id=1,
             home_team_id=10,

@@ -126,7 +126,7 @@ type Handler struct {
 //
 // customDomainLimiter bounds how often the customDomains lookup itself may
 // run per client IP (see acceptOptionsFor): /ws has neither auth nor a
-// rate limiter in front of it (contrast /api/auth/* in cmd/gateway/main.go),
+// rate limiter in front of it (contrast /api/v1/auth/* in cmd/gateway/main.go),
 // so without this an unauthenticated flood of distinct fake Origin headers
 // could otherwise drive one DB query + one cache write per unique host,
 // unbounded in rate. May be nil (and a disabled *ratelimit.Limiter, i.e. one

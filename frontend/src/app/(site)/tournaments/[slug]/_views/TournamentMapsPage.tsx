@@ -19,7 +19,7 @@ import {
   type MapPoolScopeView,
   type MapPoolStageView
 } from "../_hooks/useTournamentMapPool";
-import { getPublicPageQueryPresentation } from "./publicPageQueryPresentation";
+import { getPublicPageQueryPresentation } from "@/lib/public-page-query-presentation";
 
 const EYEBROW =
   "aqt-tnum block text-label uppercase tracking-[0.06em] text-[color:var(--aqt-fg-faint)]";

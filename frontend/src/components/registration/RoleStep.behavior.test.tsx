@@ -115,7 +115,7 @@ const FORM = {
   custom_fields: [],
   subrole_catalog: {
     tank: [{ slug: "main-tank", label: "Main tank" }],
-    dps: [{ slug: "hitscan", label: "Hitscan" }],
+    damage: [{ slug: "hitscan", label: "Hitscan" }],
     support: [{ slug: "main-heal", label: "Main heal" }],
   },
 } as unknown as RegistrationForm;
@@ -176,7 +176,7 @@ function click(selector: string, index = 0) {
   });
 }
 
-/** Row order is tank, dps, support — one hero-picker trigger each. */
+/** Row order is tank, damage, support — one hero-picker trigger each. */
 const HERO_TRIGGER = 'button[aria-label="registration.roles.matrix.heroesLabel"]';
 
 /** Slugs the open roster of `row` offers; the tiles carry the hero name. */
@@ -189,8 +189,8 @@ function roster(row: number) {
   return titles;
 }
 
-/** `[role="radio"]` order is tank(off,fallback,main), dps(...), support(...). */
-const MAIN = { tank: 2, dps: 5, support: 8 } as const;
+/** `[role="radio"]` order is tank(off,fallback,main), damage(...), support(...). */
+const MAIN = { tank: 2, damage: 5, support: 8 } as const;
 
 describe("RoleStep", () => {
   it("keeps the rendered control set identical no matter what is selected", () => {
@@ -200,7 +200,7 @@ describe("RoleStep", () => {
     // The roster lives behind the hero popover, so it never lands on this surface.
     expect(initial.controls).toBe(16);
 
-    click('[role="radio"]', MAIN.dps);
+    click('[role="radio"]', MAIN.damage);
     expect(surface()).toEqual(initial);
 
     click('[role="radio"]', MAIN.tank - 1); // tank → fallback
@@ -218,12 +218,12 @@ describe("RoleStep", () => {
   it("allows exactly one main role, or every role for flex", () => {
     mount();
 
-    click('[role="radio"]', MAIN.dps);
-    expect(latest.dps.priority).toBe("main");
+    click('[role="radio"]', MAIN.damage);
+    expect(latest.damage.priority).toBe("main");
 
     click('[role="radio"]', MAIN.tank);
     expect(latest.tank.priority).toBe("main");
-    expect(latest.dps.priority).toBe("fallback");
+    expect(latest.damage.priority).toBe("fallback");
     expect(isFlexSelection(latest)).toBe(false);
   });
 
@@ -378,10 +378,10 @@ describe("RoleStep all-roles mode", () => {
     mount("all_roles");
     click('[role="radio"]', 1);
 
-    expect(latest.dps.priority).toBe("main");
+    expect(latest.damage.priority).toBe("main");
     expect(latest.tank.priority).toBe("fallback");
     expect(latest.support.priority).toBe("fallback");
-    expect(priorityChoice(latest)).toBe("dps");
+    expect(priorityChoice(latest)).toBe("damage");
   });
 
   it("picking flex promotes all three, which is the flex submission", () => {

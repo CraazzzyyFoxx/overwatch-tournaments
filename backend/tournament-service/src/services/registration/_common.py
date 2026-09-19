@@ -123,7 +123,7 @@ def replace_registration_roles(
 
     for index, role in enumerate(sorted(roles, key=lambda item: item.get("priority", DEFAULT_SORT_PRIORITY_SENTINEL))):
         role_code = role.get("role")
-        if role_code not in {"tank", "dps", "support"} or role_code in seen_roles:
+        if role_code not in {"tank", "damage", "support"} or role_code in seen_roles:
             continue
         seen_roles.add(role_code)
 

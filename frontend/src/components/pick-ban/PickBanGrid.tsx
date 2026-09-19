@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FilterChip, FilterChipGroup } from "@/components/ui/filter-chip";
 import { cn } from "@/lib/utils";
 import HeroImage from "@/components/hero/HeroImage";
-import { normalizeRole, type AqtRoleKey, type PlayerRoleSlotCode } from "@/lib/player-role";
+import { normalizeRole, type AqtRoleKey } from "@/lib/player-role";
 import type { PickBanEntry, PickBanEntryStatus, PickBanKind } from "@/types/tournament.types";
 
 import {
@@ -78,13 +78,8 @@ const STATUS_BADGE_VARIANT: Record<
   played: "secondary"
 };
 
-/** Hero Pool role filter: display order and the `common.roles.*` label suffix per role. */
+/** Hero Pool role filter display order; each code is its own `common.roles.*` key. */
 const ROLE_ORDER: AqtRoleKey[] = ["tank", "damage", "support"];
-const ROLE_LABEL_SUFFIX: Record<AqtRoleKey, Exclude<PlayerRoleSlotCode, "flex">> = {
-  tank: "tank",
-  damage: "dps",
-  support: "support"
-};
 
 /** Ties a locked round's tiles to the paragraph that explains why they are inert. */
 const lockedHintId = (round: number) => `pick-ban-round-${round}-locked`;
@@ -381,7 +376,7 @@ export function PickBanGrid({
                 count={roleCounts[role]}
                 onClick={() => setRoleFilter(role)}
               >
-                {tCommon(`roles.${ROLE_LABEL_SUFFIX[role]}`)}
+                {tCommon(`roles.${role}`)}
               </FilterChip>
             ))}
           </FilterChipGroup>

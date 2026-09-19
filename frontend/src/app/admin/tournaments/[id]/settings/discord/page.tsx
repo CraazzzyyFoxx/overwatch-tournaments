@@ -6,7 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import adminService from "@/services/admin.service";
 import type { Tournament } from "@/types/tournament.types";
 import { TournamentDiscordSection } from "../../components/TournamentDiscordSection";
-import { getTournamentWorkspaceQueryKeys } from "../../components/tournamentWorkspace.queryKeys";
+import { getTournamentWorkspaceQueryKeys } from "@/lib/tournament-workspace-query-keys";
 import { SettingsSectionPage } from "../SettingsSection";
 
 export default function DiscordSettingsPage() {

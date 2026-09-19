@@ -132,10 +132,14 @@ describe("sub-tabs", () => {
 });
 
 describe("settings sections", () => {
-  test("carries the thirteen sections in navigation order", () => {
+  test("carries the fourteen sections in navigation order", () => {
     expect(SETTINGS_SECTIONS).toEqual([
       "general",
+      // Authoring the published document and setting what a win is worth are
+      // separate sections: one PATCH must not rewrite the other in the audit
+      // trail, and the editor needs the page to itself.
       "rules",
+      "scoring",
       "schedule",
       "roster",
       "registration",

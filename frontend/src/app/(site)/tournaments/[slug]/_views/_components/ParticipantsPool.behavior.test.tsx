@@ -61,8 +61,8 @@ vi.mock("@/services/hero.service", () => ({
             name: "Genji",
             slug: "genji",
             image_path: "/genji.png",
-            role: "dps",
-            type: "dps"
+            role: "damage",
+            type: "damage"
           },
           { id: 3, name: "Rein", slug: "rein", image_path: "/rein.png", role: "tank", type: "tank" }
         ]
@@ -114,12 +114,12 @@ vi.mock("next/navigation", () => ({
 
 let tournament: Tournament;
 
-vi.mock("../../_hooks/useTournamentClientData", () => ({
+vi.mock("@/hooks/useTournamentClientData", () => ({
   useTournamentQuery: () => ({ data: tournament, isError: false, refetch: () => {} })
 }));
 
 const OW5V5_SHAPE: RosterShape = {
-  slots: { tank: 1, dps: 2, support: 2 },
+  slots: { tank: 1, damage: 2, support: 2 },
   team_size: 5,
   flex_slots: 0,
   has_role_slots: true,
@@ -221,14 +221,14 @@ function makeRegistration(
 
 const POOL_ROSTER: Registration[] = [
   makeRegistration(1, "Hornet#21345", [role("tank", 3900, ["rein"])]),
-  makeRegistration(2, "zMize#2978", [role("dps", 4010, ["genji"])]),
+  makeRegistration(2, "zMize#2978", [role("damage", 4010, ["genji"])]),
   makeRegistration(3, "manqa#21668", [role("support", 3720, ["ana"])]),
   // The flex player: two declared roles, so two columns.
   makeRegistration(4, "CraazzzyyFox#1", [
-    role("dps", 3540, ["genji"]),
+    role("damage", 3540, ["genji"]),
     role("support", 3380, ["ana"], false)
   ]),
-  makeRegistration(5, "Gone#404", [role("dps", 3000)], "withdrawn")
+  makeRegistration(5, "Gone#404", [role("damage", 3000)], "withdrawn")
 ];
 
 function makeForm(overrides: Partial<RegistrationForm> = {}): RegistrationForm {
@@ -345,20 +345,20 @@ describe("participants pool", () => {
       [...container.querySelectorAll("[data-pool-column]")].map((node) =>
         node.getAttribute("data-pool-column")
       )
-    ).toEqual(["tank", "dps", "support"]);
+    ).toEqual(["tank", "damage", "support"]);
     expect(container.querySelector('[data-testid="roster"]')).toBeNull();
 
     expect(column("tank")?.textContent).toContain("Hornet#21345");
-    expect(column("dps")?.textContent).toContain("zMize#2978");
+    expect(column("damage")?.textContent).toContain("zMize#2978");
     expect(column("support")?.textContent).toContain("manqa#21668");
   });
 
   it("lists a player with several roles in each of them, marked and explained", async () => {
     await mountPool();
 
-    const dps = column("dps");
+    const damage = column("damage");
     const support = column("support");
-    expect(dps?.textContent).toContain("CraazzzyyFox#1");
+    expect(damage?.textContent).toContain("CraazzzyyFox#1");
     expect(support?.textContent).toContain("CraazzzyyFox#1");
     // The tank column is not everybody's column: the mark means "also elsewhere",
     // not "shown everywhere".
@@ -366,7 +366,7 @@ describe("participants pool", () => {
 
     // The explanation rides on the name link; the secondary-role copy is dimmed
     // rather than carrying a glyph, which in a flex tournament every row would.
-    const marked = dps?.querySelector<HTMLElement>("[data-flex-mark]");
+    const marked = damage?.querySelector<HTMLElement>("[data-flex-mark]");
     const link = marked?.querySelector("a");
     expect(link?.getAttribute("title")).toContain("Plays several roles");
     expect(link?.getAttribute("title")).toContain("DPS");
@@ -380,19 +380,19 @@ describe("participants pool", () => {
     // Rank is per role, not per player: the same person sits at a different
     // height in each column. The division reads as an icon, so the SR rides on
     // the title of the cell that carries it.
-    expect(dps?.querySelector('[title$="3540"]')).not.toBeNull();
+    expect(damage?.querySelector('[title$="3540"]')).not.toBeNull();
     expect(support?.querySelector('[title$="3380"]')).not.toBeNull();
-    expect(dps?.textContent).not.toMatch(/3540/);
+    expect(damage?.textContent).not.toMatch(/3540/);
   });
 
   it("sorts each column by rank and folds withdrawn registrations away", async () => {
     await mountPool();
 
-    const dpsNames = [...(column("dps")?.querySelectorAll("li") ?? [])].map(
+    const damageNames = [...(column("damage")?.querySelectorAll("li") ?? [])].map(
       (node) => node.textContent ?? ""
     );
-    expect(dpsNames[0]).toContain("zMize#2978");
-    expect(dpsNames[1]).toContain("CraazzzyyFox#1");
+    expect(damageNames[0]).toContain("zMize#2978");
+    expect(damageNames[1]).toContain("CraazzzyyFox#1");
     // A withdrawn registration is never a column row.
     expect(container.querySelector("[data-pool-column]")?.textContent).not.toContain("Gone#404");
 

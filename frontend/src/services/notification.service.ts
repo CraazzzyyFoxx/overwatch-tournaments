@@ -17,7 +17,7 @@ export default class notificationService {
    * every workspace the caller belongs to rather than the current one.
    */
   static async list(params: { limit?: number; cursor?: string | null } = {}): Promise<NotificationInbox> {
-    return apiFetch("/api/notifications", {
+    return apiFetch("/api/v1/notifications", {
       query: { limit: params.limit, cursor: params.cursor ?? undefined },
       skipWorkspace: true
     }).then((response) => response.json());
@@ -30,7 +30,7 @@ export default class notificationService {
    * must not enumerate the page it happens to be showing.
    */
   static async markRead(ids?: number[]): Promise<NotificationMarkReadResult> {
-    return apiFetch("/api/notifications/read", {
+    return apiFetch("/api/v1/notifications/read", {
       method: "POST",
       body: ids ? { ids } : {},
       skipWorkspace: true
@@ -46,14 +46,14 @@ export default class notificationService {
    * to the rows already marked read — the "clear read" button, which must not
    * be able to swallow something unopened.
    *
-   * POST to a verb path rather than `DELETE /api/notifications`: the id list
+   * POST to a verb path rather than `DELETE /api/v1/notifications`: the id list
    * travels in the body, and a body on DELETE is the corner of HTTP that
    * caches and proxies disagree about.
    */
   static async remove(
     params: { ids?: number[]; onlyRead?: boolean } = {}
   ): Promise<NotificationDeleteResult> {
-    return apiFetch("/api/notifications/delete", {
+    return apiFetch("/api/v1/notifications/delete", {
       method: "POST",
       body: {
         ...(params.ids ? { ids: params.ids } : {}),
@@ -69,7 +69,7 @@ export default class notificationService {
    * may ride along and fragment it.
    */
   static async activeAnnouncements(): Promise<NotificationItem[]> {
-    return apiFetch("/api/announcements/active", {
+    return apiFetch("/api/v1/announcements/active", {
       skipWorkspace: true
     }).then((response) => response.json());
   }

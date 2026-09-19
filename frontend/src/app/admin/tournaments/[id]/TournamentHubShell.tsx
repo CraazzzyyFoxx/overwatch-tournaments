@@ -5,8 +5,8 @@ import { usePathname, useRouter } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { AdminTabs, type AdminTabItem } from "@/components/admin/kit/AdminTabs";
-import { EntityHubHeader } from "@/components/admin/kit/EntityHubHeader";
+import { AdminTabs, type AdminTabItem } from "@/components/kit/AdminTabs";
+import { EntityHubHeader } from "@/components/kit/EntityHubHeader";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useInvalidation } from "@/hooks/useInvalidation";
 import { useSyncActiveWorkspace } from "@/hooks/useSyncActiveWorkspace";
@@ -16,7 +16,7 @@ import encounterService from "@/services/encounter.service";
 import teamService from "@/services/team.service";
 import { TournamentHubActions } from "./components/TournamentHubActions";
 import { formatDate, TOURNAMENT_STATUS_TONE } from "./components/tournamentWorkspace.helpers";
-import { getTournamentWorkspaceQueryKeys } from "./components/tournamentWorkspace.queryKeys";
+import { getTournamentWorkspaceQueryKeys } from "@/lib/tournament-workspace-query-keys";
 import {
   TOURNAMENT_WORKSPACE_REFRESH_INTERVAL_MS,
   useHubStagesQuery,
@@ -51,7 +51,7 @@ const READINESS_INVALIDATE_DEBOUNCE_MS = 400;
  * workspace header, the tab bar with route guards, the hub's two
  * `useInvalidation` mounts and the shared queries. Query keys MUST stay
  * identical to the tab pages — realtime patch-in-cache and workspace
- * invalidation depend on them (see components/tournamentWorkspace.queryKeys.ts).
+ * invalidation depend on them (see lib/tournament-workspace-query-keys.ts).
  */
 export function TournamentHubShell({
   tournamentId,

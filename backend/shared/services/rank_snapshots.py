@@ -2,7 +2,7 @@
 
 Used by services that need to surface a player's current OW2 rank alongside their
 balancer/registration rank (e.g. the rank-delta highlight in the balancing pool). Keeping the
-query + role translation + grid normalisation here avoids duplicating it per service.
+query + role filtering + grid normalisation here avoids duplicating it per service.
 """
 
 from __future__ import annotations
@@ -25,10 +25,10 @@ async def fetch_latest_ow_ranks_by_account(
     """Latest raw OW2 rank per (user, battle_tag, role), keyed by registration role code.
 
     Returns ``{user_id: {battle_tag: {registration_role: rank_value}}}`` where ``battle_tag`` is the
-    snapshot's denormalized ``Name#1234`` and ``registration_role`` is one of ``tank``/``dps``/
-    ``support`` (the snapshot stores the canonical ``HeroClass`` name, e.g. ``damage``, which is
-    translated to ``dps`` here). Only ranked snapshots with a non-null ``rank_value`` are considered,
-    and only the newest per **(user, battle_tag, role)** by ``captured_at``.
+    snapshot's denormalized ``Name#1234`` and ``registration_role`` is one of ``tank``/``damage``/
+    ``support`` (the snapshot stores the canonical ``HeroClass`` name, which is what registration
+    uses too; ``flex`` snapshots are dropped). Only ranked snapshots with a non-null ``rank_value``
+    are considered, and only the newest per **(user, battle_tag, role)** by ``captured_at``.
 
     Keeping one entry per account (rather than collapsing by user) lets callers prefer main accounts
     over declared smurfs and take the maximum rank across accounts. The raw OW SR is returned as-is;

@@ -10,6 +10,7 @@ from typing import Any
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.models.achievements.achievement import AchievementGrain
 from src import models
 from src.domain.achievement_stage_filters import standing_is_elimination
 
@@ -17,7 +18,14 @@ from ..context import EvalContext
 from . import ResultSet, register
 
 
-@register("consecutive")
+@register(
+    "consecutive",
+    grain=AchievementGrain.user,
+    description="Streak of consecutive tournaments meeting a metric",
+    required=("metric", "min_streak"),
+    optional=("position_op", "position_value"),
+    depends_on=("tournament.standing", "tournament.player"),
+)
 async def execute_consecutive(
     session: AsyncSession,
     params: dict[str, Any],
@@ -210,7 +218,13 @@ async def execute_consecutive(
     return {(row[0],) for row in result}
 
 
-@register("stable_streak")
+@register(
+    "stable_streak",
+    grain=AchievementGrain.user,
+    description="Streak of tournaments with unchanged fields",
+    required=("fields", "min_streak"),
+    depends_on=("tournament.player",),
+)
 async def execute_stable_streak(
     session: AsyncSession,
     params: dict[str, Any],

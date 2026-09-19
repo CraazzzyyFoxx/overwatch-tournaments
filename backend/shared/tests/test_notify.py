@@ -33,7 +33,7 @@ _INVITE = {
     "team_name": "Anak",
     "tournament_id": 3,
     "tournament_name": "OWT Season 5",
-    "slot_code": "dps1",
+    "slot_code": "damage1",
     "is_substitute": False,
     "invite_id": 99,
 }

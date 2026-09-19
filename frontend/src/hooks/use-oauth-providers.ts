@@ -6,7 +6,7 @@ import type { OAuthProviderAvailability } from "@/types/auth.types";
 const OAUTH_PROVIDERS_QUERY_KEY = ["auth", "oauth-providers"] as const;
 
 async function fetchOAuthProviders(): Promise<OAuthProviderAvailability[]> {
-  const response = await fetch("/api/auth/providers", {
+  const response = await fetch("/api/v1/auth/providers", {
     method: "GET",
     cache: "no-store"
   });

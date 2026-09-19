@@ -96,7 +96,7 @@ const HeroRail = ({ rows, selectedId, onSelect }: Props) => {
       case "tank":
         return t("common.roles.tank");
       case "damage":
-        return t("common.roles.dps");
+        return t("common.roles.damage");
       case "support":
         return t("common.roles.support");
     }

@@ -5,12 +5,12 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { Globe, MonitorSmartphone, UserCog } from "lucide-react";
 import { useFormatter } from "next-intl";
 
-import { AdminDataTable, createKebabColumn } from "@/components/admin-data-table";
-import { AdminFilterBar } from "@/components/admin/kit/AdminFilterBar";
-import { AdminInspector } from "@/components/admin/kit/AdminInspector";
-import { useAdminFilters, type FilterDef } from "@/components/admin/kit/useAdminFilters";
-import { EYEBROW_CLASS, TONE_TEXT, type Tone } from "@/components/admin/tone";
-import type { AdminDateFormatter } from "@/components/admin/format-time";
+import { AdminDataTable, createKebabColumn } from "@/components/data-table";
+import { AdminFilterBar } from "@/components/kit/AdminFilterBar";
+import { AdminInspector } from "@/components/kit/AdminInspector";
+import { useAdminFilters, type FilterDef } from "@/components/kit/useAdminFilters";
+import { EYEBROW_CLASS, TONE_TEXT, type Tone } from "@/components/kit/tone";
+import type { AdminDateFormatter } from "@/components/kit/format-time";
 import { useQueryParams } from "@/hooks/useQueryParams";
 import { cn } from "@/lib/utils";
 import { detectBrowser, detectPlatform } from "@/lib/user-agent";

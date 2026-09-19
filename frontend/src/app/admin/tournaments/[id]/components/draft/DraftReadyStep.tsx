@@ -16,9 +16,9 @@ import {
   AlertDialogTitle
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import { StatusPill } from "@/components/admin/kit/StatusPill";
+import { StatusPill } from "@/components/kit/StatusPill";
 import { StatTile, StatTileGrid } from "@/components/admin/StatTile";
-import { TONE_CLASS } from "@/components/admin/tone";
+import { TONE_CLASS } from "@/components/kit/tone";
 import { cn } from "@/lib/utils";
 import type { DraftFeasibility, DraftSession } from "@/types/draft.types";
 

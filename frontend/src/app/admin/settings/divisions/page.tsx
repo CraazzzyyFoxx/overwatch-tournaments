@@ -9,11 +9,11 @@ import Image from "next/image";
 import Link from "next/link";
 import { useFormatter } from "next-intl";
 
-import { AdminDataTable } from "@/components/admin-data-table";
-import { ConfirmDialog } from "@/components/admin/kit/ConfirmDialog";
-import { EmptyNote } from "@/components/admin/kit/EmptyNote";
-import { StatusPill } from "@/components/admin/kit/StatusPill";
-import { EYEBROW_CLASS } from "@/components/admin/tone";
+import { AdminDataTable } from "@/components/data-table";
+import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
+import { EmptyNote } from "@/components/kit/EmptyNote";
+import { StatusPill } from "@/components/kit/StatusPill";
+import { EYEBROW_CLASS } from "@/components/kit/tone";
 import { Button } from "@/components/ui/button";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import {

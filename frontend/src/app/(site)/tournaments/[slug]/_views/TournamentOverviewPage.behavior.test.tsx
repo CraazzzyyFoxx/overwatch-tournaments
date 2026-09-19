@@ -98,7 +98,7 @@ vi.mock("next/link", () => ({
 
 let tournament: Tournament;
 
-vi.mock("../_hooks/useTournamentClientData", () => ({
+vi.mock("@/hooks/useTournamentClientData", () => ({
   useTournamentQuery: () => ({ data: tournament, isError: false, refetch: () => {} })
 }));
 
@@ -179,7 +179,7 @@ function makeTournament(status: TournamentStatus, overrides: Partial<Tournament>
     division_grid_version: null,
     roster_slots_json: null,
     roster_shape: {
-      slots: { tank: 1, dps: 2, support: 2 },
+      slots: { tank: 1, damage: 2, support: 2 },
       team_size: 5,
       flex_slots: 0,
       has_role_slots: true,
@@ -466,8 +466,8 @@ describe("before the tournament starts (§3A)", () => {
     listRegistrations.mockResolvedValue(
       regList([
         makeRegistration(1, "tank", "Hornet#21345"),
-        makeRegistration(2, "dps", "zMize#2978"),
-        makeRegistration(3, "dps", "manqa#21668"),
+        makeRegistration(2, "damage", "zMize#2978"),
+        makeRegistration(3, "damage", "manqa#21668"),
         makeRegistration(4, "support", "Naord#2100")
       ])
     );
@@ -493,7 +493,7 @@ describe("before the tournament starts (§3A)", () => {
     expect(registration).toBeDefined();
     const text = registration?.textContent ?? "";
     expect(text).toContain(en.common.roles.tank);
-    expect(text).toContain(en.common.roles.dps);
+    expect(text).toContain(en.common.roles.damage);
     expect(text).toContain(en.common.roles.support);
     // Two DPS, one tank, one support — counted off the primary role.
     expect(text).toContain("2");
@@ -505,13 +505,13 @@ describe("before the tournament starts (§3A)", () => {
 
     expect(headings()).toContain(COPY.format.title);
     expect(container.textContent).toContain("Players may swap roles between matches.");
-    // The roster shape reads as role glyphs (1 tank, 2 dps, 2 support), each
+    // The roster shape reads as role glyphs (1 tank, 2 damage, 2 support), each
     // announced by its slot name — not as "1 × Tank · 2 × DPS".
     const glyphs = Array.from(container.querySelectorAll('[role="img"]')).map((node) =>
       node.getAttribute("aria-label")
     );
     expect(glyphs).toContain(en.rosterShape.slotCodes.tank);
-    expect(glyphs).toContain(en.rosterShape.slotCodes.dps);
+    expect(glyphs).toContain(en.rosterShape.slotCodes.damage);
     expect(glyphs).toContain(en.rosterShape.slotCodes.support);
     expect(container.textContent).toContain("×2");
     // The old "1 × Tank" spelling is gone: no slot name in the format card.

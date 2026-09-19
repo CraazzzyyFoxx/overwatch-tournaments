@@ -4,8 +4,8 @@ import Link from "next/link";
 import { AlertCircle, AlertTriangle, ChevronRight, Info, type LucideIcon } from "lucide-react";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { StatusPill } from "@/components/admin/kit/StatusPill";
-import { TONE_TEXT, type Tone } from "@/components/admin/tone";
+import { StatusPill } from "@/components/kit/StatusPill";
+import { TONE_TEXT, type Tone } from "@/components/kit/tone";
 import { cn } from "@/lib/utils";
 
 type AttentionTone = "critical" | "warning" | "info";

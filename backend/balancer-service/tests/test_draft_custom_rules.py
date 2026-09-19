@@ -31,9 +31,9 @@ from src.domain.draft.entities import PoolSeat
 from src.services.draft import lifecycle, selection
 
 # The 5-slot roster these tests draft for, replacing `rounds=4, team_size=5`:
-# `role_targets_for_team_size(5)` resolved to 1 tank / 2 dps / 2 support, and
+# `role_targets_for_team_size(5)` resolved to 1 tank / 2 damage / 2 support, and
 # `draft_rounds` derives the same 4 rounds.
-_SHAPE = parse_roster_slots({"tank": 1, "dps": 2, "support": 2})
+_SHAPE = parse_roster_slots({"tank": 1, "damage": 2, "support": 2})
 
 
 _UNIQUE = 0
@@ -117,7 +117,7 @@ class DraftCustomRulesTests(IsolatedAsyncioTestCase):
         return reg.id
 
     async def _captain_seats(self, s) -> list[PoolSeat]:
-        roles = ["tank", "dps", "support"]
+        roles = ["tank", "damage", "support"]
         seats = []
         for i, rank in enumerate(self.captain_ranks):
             registration_id = await self._registration(s, tag=f"Cap{self._suffix}-{i}#1", ranks={roles[i % 3]: rank})
@@ -125,13 +125,13 @@ class DraftCustomRulesTests(IsolatedAsyncioTestCase):
         return seats
 
     async def _player_seats(self, s, *, ranks: dict[int, int] | None = None) -> list[PoolSeat]:
-        """15 pool registrations, roles cycling tank / dps / support by index.
+        """15 pool registrations, roles cycling tank / damage / support by index.
 
         ``ranks`` pins ``{index: rank}`` so a test can steer a team average: the
         rank is a property of the registration now, so it has to be set here
         rather than poked onto the seat after seeding.
         """
-        roles = ["tank", "dps", "support"]
+        roles = ["tank", "damage", "support"]
         pinned = ranks or {}
         seats = []
         for i in range(15):
@@ -259,7 +259,7 @@ class DraftCustomRulesTests(IsolatedAsyncioTestCase):
                 settings={"round_rules": rules},
             )
             # Steer the round-2 averages through the REGISTRATIONS: pool players
-            # 0/1/2 are tank/dps/support by index, so this pins the three ranks
+            # 0/1/2 are tank/damage/support by index, so this pins the three ranks
             # the picks below freeze onto their teams.
             seats = await self._seats(s, player_ranks={0: 2000, 1: 3500, 2: 1000})
             await lifecycle.lifecycle_service.seed(s, draft, seats=seats)
@@ -276,11 +276,11 @@ class DraftCustomRulesTests(IsolatedAsyncioTestCase):
             ).all()
             by_registration = {p.registration_id: p for p in available}
             # seats[0:3] are the captains; the pool block starts at index 3.
-            tank_2000, dps_3500, support_1000 = (seats[3 + index].registration_id for index in (0, 1, 2))
-            spare_dps = by_registration[seats[3 + 4].registration_id]
+            tank_2000, damage_3500, support_1000 = (seats[3 + index].registration_id for index in (0, 1, 2))
+            spare_damage = by_registration[seats[3 + 4].registration_id]
 
             # Pick 1 (Cap0: TANK) picks the DPS player at 3500
-            p1 = by_registration[dps_3500]
+            p1 = by_registration[damage_3500]
             # Pick 2 (Cap1: DPS) picks the SUPPORT player at 1000
             p2 = by_registration[support_1000]
             # Pick 3 (Cap2: SUPPORT) picks the TANK player at 2000
@@ -360,7 +360,7 @@ class DraftCustomRulesTests(IsolatedAsyncioTestCase):
                     s,
                     draft,
                     picks[3],
-                    player_id=spare_dps.id,
+                    player_id=spare_damage.id,
                     expected_version=picks[3].version,
                     target_role=None,
                     actor_user_id=None,

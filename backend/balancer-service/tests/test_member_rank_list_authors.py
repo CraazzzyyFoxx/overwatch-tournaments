@@ -92,7 +92,7 @@ class MemberRankListAuthorsTests(IsolatedAsyncioTestCase):
                         workspace_id=workspace.id,
                         workspace_member_id=first_member.id,
                         author_user_id=busy_host.id,
-                        role="dps",
+                        role="damage",
                         rank_value=2400,
                     ),
                     MemberRank(

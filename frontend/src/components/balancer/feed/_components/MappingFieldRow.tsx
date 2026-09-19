@@ -21,7 +21,7 @@ import type { SubroleCatalog } from "@/types/registration.types";
 import { HeaderCombobox } from "./HeaderCombobox";
 import { HeaderMultiCombobox } from "./HeaderMultiCombobox";
 import { ModeToggle } from "./ModeToggle";
-import { EYEBROW_CLASS } from "@/components/admin/tone";
+import { EYEBROW_CLASS } from "@/components/kit/tone";
 
 const AUTO_FIELD_MODES: MappingTargetMode[] = ["auto", "columns"];
 const STANDARD_FIELD_MODES: MappingTargetMode[] = ["columns", "constant", "disabled"];
@@ -46,7 +46,7 @@ interface MappingFieldRowProps {
 }
 
 function subroleRoleFromTarget(key: string): string | null {
-  const match = /^roles\.(dps|support)\.subrole$/.exec(key);
+  const match = /^roles\.(damage|support)\.subrole$/.exec(key);
   return match?.[1] ?? null;
 }
 

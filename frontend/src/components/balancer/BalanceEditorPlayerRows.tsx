@@ -122,10 +122,10 @@ function BalanceEditorPlayerTableRow({
       className={cn(
         "cursor-grab border-[color:var(--aqt-border)] active:cursor-grabbing",
         dragging && "opacity-40",
-        dropActive && "bg-white/[0.05]",
+        dropActive && "bg-[color:var(--aqt-overlay-3)]",
         isSelected
           ? "bg-violet-500/8 shadow-[inset_0_0_0_1px_rgba(139,92,246,0.24)] hover:bg-violet-500/[0.1]"
-          : "hover:bg-white/[0.03]",
+          : "hover:bg-[color:var(--aqt-overlay-2)]",
       )}
       onClick={() => {
         if (playerId !== null) {
@@ -149,7 +149,7 @@ function BalanceEditorPlayerTableRow({
           </div>
           {subRoleLabel ? (
             <span
-              className="truncate text-xs font-medium uppercase tracking-label text-[color:var(--aqt-fg-dim)]"
+              className="truncate text-label font-medium uppercase tracking-label text-[color:var(--aqt-fg-dim)]"
               title={subRoleLabel}
             >
               {subRoleLabel}
@@ -304,7 +304,7 @@ export function DroppableRoleSection({
       ref={setNodeRef}
       className={cn(
         "transition-colors",
-        isOver && "bg-white/3",
+        isOver && "bg-[color:var(--aqt-overlay-2)]",
         dropDisabled && "cursor-not-allowed opacity-35",
       )}
     >
@@ -335,7 +335,7 @@ export function DroppableRoleSection({
         <TableRow className="border-[color:var(--aqt-border)] hover:bg-transparent">
           <TableCell
             colSpan={4}
-            className="px-3 py-2.5 text-center text-xs uppercase tracking-label text-[color:var(--aqt-fg-faint)]"
+            className="px-3 py-2.5 text-center text-label uppercase tracking-label text-[color:var(--aqt-fg-faint)]"
           >
             Drop {roleKey.toLowerCase()} here
           </TableCell>

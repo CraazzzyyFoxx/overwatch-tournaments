@@ -69,6 +69,7 @@ export type MatchesSubTabKey = (typeof MATCHES_SUB_TABS)[number];
 export const SETTINGS_SECTIONS = [
   "general",
   "rules",
+  "scoring",
   "schedule",
   "roster",
   "registration",

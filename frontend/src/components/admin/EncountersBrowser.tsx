@@ -19,8 +19,8 @@ import {
   Upload
 } from "lucide-react";
 
-import { AdminDataTable, adminColumnMeta, createKebabColumn } from "@/components/admin-data-table";
-import { AuditTrailButton } from "@/components/admin/AuditTrailSheet";
+import { AdminDataTable, adminColumnMeta, createKebabColumn } from "@/components/data-table";
+import { AuditTrailButton } from "@/components/kit/AuditTrailSheet";
 import {
   EncounterForm,
   emptyEncounterForm,
@@ -31,20 +31,20 @@ import {
   type EncounterFormMode,
   type EncounterFormState
 } from "@/components/admin/EncounterForm";
-import { EntityFormDialog } from "@/components/admin/EntityFormDialog";
+import { EntityFormDialog } from "@/components/kit/EntityFormDialog";
 import { StatusIcon } from "@/components/admin/StatusIcon";
-import { AdminFilterBar } from "@/components/admin/kit/AdminFilterBar";
-import { AdminInspector } from "@/components/admin/kit/AdminInspector";
-import { ConfirmDialog } from "@/components/admin/kit/ConfirmDialog";
-import { useAdminFilters, type FilterDef } from "@/components/admin/kit/useAdminFilters";
-import { StatusPill } from "@/components/admin/kit/StatusPill";
-import { EYEBROW_CLASS } from "@/components/admin/tone";
+import { AdminFilterBar } from "@/components/kit/AdminFilterBar";
+import { AdminInspector } from "@/components/kit/AdminInspector";
+import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
+import { useAdminFilters, type FilterDef } from "@/components/kit/useAdminFilters";
+import { StatusPill } from "@/components/kit/StatusPill";
+import { EYEBROW_CLASS } from "@/components/kit/tone";
 import { hasChallongeSource } from "@/components/admin/tournament-checklist";
 import { TOURNAMENT_QUERY_PARAM, parseTournamentQueryParam } from "@/components/admin/tournament-filter";
 import TeamName from "@/components/TeamName";
 import { Button } from "@/components/ui/button";
 import { TournamentLogUploadDialog } from "@/app/admin/tournaments/[id]/components/TournamentLogUploadDialog";
-import { invalidateTournamentWorkspace } from "@/app/admin/tournaments/[id]/components/tournamentWorkspace.queryKeys";
+import { invalidateTournamentWorkspace } from "@/lib/tournament-workspace-query-keys";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useQueryParams } from "@/hooks/useQueryParams";
 import {
@@ -60,7 +60,7 @@ import teamService from "@/services/team.service";
 import tournamentService from "@/services/tournament.service";
 import type { AdminMatchRow } from "@/types/admin.types";
 import type { Encounter } from "@/types/encounter.types";
-import { EmptyNote } from "@/components/admin/kit/EmptyNote";
+import { EmptyNote } from "@/components/kit/EmptyNote";
 
 const PAGE_SIZE = 15;
 

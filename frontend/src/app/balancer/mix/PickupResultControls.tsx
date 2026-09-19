@@ -6,7 +6,7 @@ import type { CustomGameOutcome } from "@/services/custom-game.service";
 
 /** Draw: neutral but as solid as the two win buttons, so the row reads as one control. */
 const DRAW_TONE =
-  "border-[color:var(--aqt-border-3)] bg-white/[0.06] text-[color:var(--aqt-fg)] hover:bg-white/[0.1] hover:border-[color:var(--aqt-fg-faint)]";
+  "border-[color:var(--aqt-border-3)] bg-[color:var(--aqt-overlay-2)] text-[color:var(--aqt-fg)] hover:bg-[color:var(--aqt-overlay-3)] hover:border-[color:var(--aqt-fg-faint)]";
 
 type PickupResultControlsProps = {
   /** How many teams the open balance produced — one win button each. */

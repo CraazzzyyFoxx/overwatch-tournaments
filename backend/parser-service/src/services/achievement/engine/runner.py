@@ -301,6 +301,7 @@ class AchievementEvaluationRunnerService:
                             results,
                             run_id,
                             evaluation_slice=persist_slice,
+                            evidence=context.evidence,
                         )
                         total_created += len(diff.to_insert)
                         total_removed += len(diff.to_delete)

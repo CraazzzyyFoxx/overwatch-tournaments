@@ -21,11 +21,11 @@ describe("draft data contracts", () => {
 
   it("builds the new gateway endpoint paths", () => {
     expect(draftEndpoints.feasibility(12)).toBe(
-      "/api/balancer/draft/sessions/12/feasibility"
+      "/api/v1/balancer/draft/sessions/12/feasibility"
     );
-    expect(draftEndpoints.pickOptions(44)).toBe("/api/balancer/draft/picks/44/options");
+    expect(draftEndpoints.pickOptions(44)).toBe("/api/v1/balancer/draft/picks/44/options");
     expect(draftEndpoints.playerRole(12, 20)).toBe(
-      "/api/balancer/draft/sessions/12/players/20/roles"
+      "/api/v1/balancer/draft/sessions/12/players/20/roles"
     );
   });
 });

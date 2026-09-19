@@ -4,7 +4,7 @@ import { AlertTriangle, CheckCircle2, EyeOff, RefreshCw, ShieldCheck, XCircle } 
 import { useTranslations } from "next-intl";
 
 import { StatTile, StatTileGrid } from "@/components/admin/StatTile";
-import { TONE_CLASS } from "@/components/admin/tone";
+import { TONE_CLASS } from "@/components/kit/tone";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import type { AdminRegistration } from "@/types/balancer-admin.types";

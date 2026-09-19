@@ -6,14 +6,14 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Trash2, Users } from "lucide-react";
 
 import TeamName from "@/components/TeamName";
-import { AdminDataTable, createKebabColumn } from "@/components/admin-data-table";
+import { AdminDataTable, createKebabColumn } from "@/components/data-table";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
-import { AdminFilterBar } from "@/components/admin/kit/AdminFilterBar";
-import { AdminInspector } from "@/components/admin/kit/AdminInspector";
-import { ConfirmDialog } from "@/components/admin/kit/ConfirmDialog";
-import { useAdminFilters, type FilterDef } from "@/components/admin/kit/useAdminFilters";
+import { AdminFilterBar } from "@/components/kit/AdminFilterBar";
+import { AdminInspector } from "@/components/kit/AdminInspector";
+import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
+import { useAdminFilters, type FilterDef } from "@/components/kit/useAdminFilters";
 import { TeamCreateDialog } from "@/components/admin/teams/TeamCreateDialog";
-import { EYEBROW_CLASS } from "@/components/admin/tone";
+import { EYEBROW_CLASS } from "@/components/kit/tone";
 import {
   TOURNAMENT_QUERY_PARAM,
   parseTournamentQueryParam

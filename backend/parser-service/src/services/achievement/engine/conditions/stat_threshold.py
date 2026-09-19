@@ -10,6 +10,7 @@ from typing import Any
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.models.achievements.achievement import AchievementGrain
 from src import models
 
 from ..context import EvalContext
@@ -25,7 +26,13 @@ OPERATORS = {
 }
 
 
-@register("stat_threshold")
+@register(
+    "stat_threshold",
+    grain=AchievementGrain.user_match,
+    description="Per-map log stat compared against a threshold",
+    required=("stat", "op", "value"),
+    depends_on=("matches.match", "matches.statistics"),
+)
 async def execute(
     session: AsyncSession,
     params: dict[str, Any],
@@ -45,6 +52,7 @@ async def execute(
             models.MatchStatistics.user_id,
             models.Encounter.tournament_id,
             models.MatchStatistics.match_id,
+            sum_expr.label("measured"),
         )
         .join(models.Match, models.Match.id == models.MatchStatistics.match_id)
         .join(models.Encounter, models.Encounter.id == models.Match.encounter_id)
@@ -67,4 +75,9 @@ async def execute(
         query = query.where(models.Encounter.tournament_id == context.tournament.id)
 
     result = await session.execute(query)
-    return {(row[0], row[1], row[2]) for row in result}
+    keys: ResultSet = set()
+    for row in result:
+        key = (row[0], row[1], row[2])
+        keys.add(key)
+        context.record_evidence(key, stat=stat_name, measured=row[3], op=op, threshold=value)
+    return keys

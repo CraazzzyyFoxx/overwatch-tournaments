@@ -8,7 +8,7 @@ import {
   activeRoundNumber,
   bracketRoundShape,
   buildRoundGroups
-} from "@/components/bracket-view.helpers";
+} from "@/lib/bracket-view";
 import { FilterChip, FilterChipGroup } from "@/components/ui/filter-chip";
 import { useBracketRoundLabel } from "@/hooks/useBracketRoundLabel";
 import type { Encounter } from "@/types/encounter.types";

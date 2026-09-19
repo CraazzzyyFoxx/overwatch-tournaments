@@ -53,7 +53,7 @@ export function createRoleSelections(mode: FlexMode = "optional"): RoleSelection
     mode === "forced" ? "main" : mode === "all_roles" ? "fallback" : "off";
   return {
     tank: { ...EMPTY_ROLE_SELECTION, priority },
-    dps: { ...EMPTY_ROLE_SELECTION, priority },
+    damage: { ...EMPTY_ROLE_SELECTION, priority },
     support: { ...EMPTY_ROLE_SELECTION, priority },
   };
 }

@@ -13,6 +13,7 @@ from typing import Any
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.models.achievements.achievement import AchievementGrain
 from src import models
 
 from ..context import EvalContext
@@ -31,7 +32,13 @@ ENCOUNTER_FIELD_MAP = {
 }
 
 
-@register("match_criteria")
+@register(
+    "match_criteria",
+    grain=AchievementGrain.user_match,
+    description="Map or series field (closeness, match_time) compared against a value",
+    required=("field", "op", "value"),
+    depends_on=("matches.match", "tournament.encounter"),
+)
 async def execute(
     session: AsyncSession,
     params: dict[str, Any],

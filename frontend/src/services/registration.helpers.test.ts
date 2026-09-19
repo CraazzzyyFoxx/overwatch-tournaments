@@ -30,7 +30,7 @@ const buildResponse = (): RegistrationListResponse =>
           {
             tournament_id: 12,
             tournament_name: "T12",
-            role: "dps",
+            role: "damage",
             division: 2,
             division_grid_version_id: 99, // not present in division_grids
           },

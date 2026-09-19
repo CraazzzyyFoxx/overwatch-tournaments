@@ -4,8 +4,8 @@ import { useId } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
 
-import { SaveBar } from "@/components/admin/kit/SaveBar";
-import { SettingGroup, SettingRow } from "@/components/admin/kit/SettingRow";
+import { SaveBar } from "@/components/kit/SaveBar";
+import { SettingGroup, SettingRow } from "@/components/kit/SettingRow";
 import { useRequirementDescription } from "@/components/admin/subscriptions/useRequirementDescription";
 import { Card, CardContent } from "@/components/ui/card";
 import { NumberInput } from "@/components/ui/number-input";

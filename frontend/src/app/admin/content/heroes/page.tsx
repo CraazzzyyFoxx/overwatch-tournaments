@@ -4,15 +4,15 @@ import { useId, useMemo } from "react";
 import { ColumnDef } from "@tanstack/react-table";
 import { Pencil, Trash2 } from "lucide-react";
 
-import { AdminDataTable, adminColumnMeta, createKebabColumn } from "@/components/admin-data-table";
+import { AdminDataTable, adminColumnMeta, createKebabColumn } from "@/components/data-table";
 import { AssetPreview } from "@/components/admin/AssetPreview";
 import { CatalogAliasesField, CatalogNameField } from "@/components/admin/CatalogFormFields";
 import { CatalogToolbarActions, entityFormError, onEntityDialogClose } from "@/components/admin/CatalogToolbarActions";
-import { EntityFormDialog } from "@/components/admin/EntityFormDialog";
+import { EntityFormDialog } from "@/components/kit/EntityFormDialog";
 import { createAliasesColumn } from "@/components/admin/catalog-table-columns";
-import { AdminFilterBar } from "@/components/admin/kit/AdminFilterBar";
-import { useAdminFilters, type FilterDef } from "@/components/admin/kit/useAdminFilters";
-import { ConfirmDialog } from "@/components/admin/kit/ConfirmDialog";
+import { AdminFilterBar } from "@/components/kit/AdminFilterBar";
+import { useAdminFilters, type FilterDef } from "@/components/kit/useAdminFilters";
+import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {

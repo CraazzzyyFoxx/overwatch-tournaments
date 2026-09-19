@@ -2,16 +2,8 @@
 
 import { Save, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NumberInput } from "@/components/ui/number-input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   Sheet,
   SheetContent,
@@ -22,10 +14,13 @@ import {
 } from "@/components/ui/sheet";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
-import type { BalancerConfig, BalancerConfigField } from "@/types/balancer.types";
+import type {
+  BalancerConfig,
+  BalancerConfigField,
+  BalancerConfigValue,
+} from "@/types/balancer.types";
 
 const GROUP_ORDER: BalancerConfigField["group"][] = [
-  "Roles",
   "Algorithm",
   "Quality weights",
   "Strategy",
@@ -40,7 +35,7 @@ type BalancerConfigDrawerProps = {
   selectedPresetLabel: string;
   dirty: boolean;
   saving: boolean;
-  onChange: (key: keyof BalancerConfig, value: unknown) => void;
+  onChange: (key: string, value: BalancerConfigValue) => void;
   onSave: () => void;
   onReset: () => void;
 };
@@ -57,132 +52,23 @@ function formatValue(value: unknown): string {
   return String(value);
 }
 
-function ConfigMapEditor({
-  id,
-  value,
-  valueType,
-  onChange,
-}: Readonly<{
-  id: string;
-  value: Record<string, number | string>;
-  valueType: "number" | "string";
-  onChange: (value: Record<string, number | string>) => void;
-}>) {
-  const entries = Object.entries(value);
-  const nextKeyPrefix = valueType === "number" ? "Role" : "role";
-  const nextKey =
-    entries.length === 0
-      ? nextKeyPrefix
-      : `${nextKeyPrefix}_${entries.length + 1}`;
-
-  const updateEntry = (index: number, nextKey: string, nextValue: string) => {
-    const nextEntries = entries.map(([key, currentValue], entryIndex) => {
-      if (entryIndex !== index) {
-        return [key, currentValue] as const;
-      }
-
-      return [
-        nextKey,
-        valueType === "number" ? Number(nextValue || 0) : nextValue,
-      ] as const;
-    });
-    onChange(Object.fromEntries(nextEntries));
-  };
-
-  const removeEntry = (index: number) => {
-    onChange(Object.fromEntries(entries.filter((_, entryIndex) => entryIndex !== index)));
-  };
-
-  return (
-    <div id={id} className="space-y-2">
-      {entries.map(([key, currentValue], index) => (
-        <div key={`${key}-${index}`} className="grid grid-cols-[1fr_1fr_auto] gap-2">
-          <Input
-            value={key}
-            onChange={(event) => updateEntry(index, event.target.value, String(currentValue))}
-            className="h-8 rounded-lg"
-            aria-label="Config key"
-          />
-          {valueType === "number" ? (
-            <NumberInput
-              value={typeof currentValue === "number" ? currentValue : Number(currentValue) || 0}
-              onValueChange={(next) => updateEntry(index, key, String(next ?? 0))}
-              className="h-8 rounded-lg"
-              aria-label="Config value"
-            />
-          ) : (
-            <Input
-              value={String(currentValue)}
-              onChange={(event) => updateEntry(index, key, event.target.value)}
-              className="h-8 rounded-lg"
-              aria-label="Config value"
-            />
-          )}
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => removeEntry(index)}
-            className="h-8 rounded-lg"
-          >
-            Remove
-          </Button>
-        </div>
-      ))}
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        onClick={() => onChange({ ...value, [nextKey]: valueType === "number" ? 0 : "" })}
-        className="h-8 rounded-lg"
-      >
-        Add row
-      </Button>
-    </div>
-  );
-}
-
 function ConfigFieldControl({
   field,
   value,
   onChange,
 }: Readonly<{
   field: BalancerConfigField;
-  value: unknown;
-  onChange: (value: unknown) => void;
+  value: BalancerConfigValue;
+  onChange: (value: BalancerConfigValue) => void;
 }>) {
   if (field.type === "boolean") {
     return <Switch checked={Boolean(value)} onCheckedChange={onChange} />;
   }
 
-  if (field.type === "select") {
-    return (
-      <Select value={String(value ?? "")} onValueChange={onChange}>
-        <SelectTrigger className="h-9 rounded-lg">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {(field.options ?? []).map((option) => (
-            <SelectItem key={option} value={option}>
-              {option}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    );
-  }
-
-  if (field.type === "role_mask") {
-    return (
-      <ConfigMapEditor
-        id={`config-${field.key}`}
-        value={(value as Record<string, number | string> | undefined) ?? {}}
-        valueType="number"
-        onChange={onChange}
-      />
-    );
-  }
-
+  // No `select`/`role_mask` branches: the backend emits only
+  // boolean/integer/float/slider rows. `algorithm` died with the pure-Python
+  // solver, and the per-team slot counts come from the tournament roster shape
+  // rather than from this drawer.
   if (field.type === "slider") {
     const numeric =
       typeof value === "number" ? value : Number(value ?? field.default ?? 0);
@@ -257,7 +143,7 @@ export function BalancerConfigDrawer({
           <div className="space-y-5">
             {fieldsByGroup.map(({ group, fields: groupFields }) => (
               <section key={group} className="space-y-3">
-                <div className="text-xs font-semibold uppercase tracking-label text-[color:var(--aqt-fg-dim)]">
+                <div className="text-label font-semibold uppercase tracking-label text-[color:var(--aqt-fg-dim)]">
                   {group}
                 </div>
                 <div className="space-y-3">
@@ -266,7 +152,7 @@ export function BalancerConfigDrawer({
                     return (
                       <div
                         key={field.key}
-                        className="rounded-lg border border-[color:var(--aqt-border-2)] bg-black/15 p-3"
+                        className="rounded-lg border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-bg-2)] p-3"
                       >
                         <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_220px]">
                           <div>

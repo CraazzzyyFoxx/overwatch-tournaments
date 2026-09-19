@@ -51,7 +51,7 @@ class _CaptureDiffer:
     def __init__(self) -> None:
         self.calls: list[tuple[str, set[tuple[int, ...]], EvaluationSlice | None]] = []
 
-    async def __call__(self, session, rule, new_results, run_id, evaluation_slice=None):  # noqa: ANN001
+    async def __call__(self, session, rule, new_results, run_id, evaluation_slice=None, evidence=None):  # noqa: ANN001
         self.calls.append((rule.slug, set(new_results), evaluation_slice))
         return DiffResult(to_insert=[{"key": key} for key in new_results], to_delete=[])
 

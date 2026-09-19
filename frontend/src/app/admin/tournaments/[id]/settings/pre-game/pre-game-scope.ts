@@ -4,7 +4,7 @@ import {
   isRulesTemplate,
   pickBanDraftFromConfig,
   sameRuleValues
-} from "../../components/pickBanConfig.helpers";
+} from "@/lib/pick-ban-config";
 
 /** One node of the scope tree: the tournament, a stage, or a stage's round. */
 export interface PreGameScope {

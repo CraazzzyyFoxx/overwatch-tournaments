@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { ChevronDown, ChevronUp, LoaderCircle, RotateCcw } from "lucide-react";
 
-import { StatusPill } from "@/components/admin/kit/StatusPill";
+import { StatusPill } from "@/components/kit/StatusPill";
 import TeamName from "@/components/TeamName";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";

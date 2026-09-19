@@ -5,9 +5,9 @@ import { useRouter } from "next/navigation";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { LoaderCircle } from "lucide-react";
 
-import { WizardShell, type WizardStep } from "@/components/admin/kit/WizardShell";
-import { StatusPill } from "@/components/admin/kit/StatusPill";
-import { EYEBROW_CLASS } from "@/components/admin/tone";
+import { WizardShell, type WizardStep } from "@/components/kit/WizardShell";
+import { StatusPill } from "@/components/kit/StatusPill";
+import { EYEBROW_CLASS } from "@/components/kit/tone";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { PageStateCard } from "@/components/ui/page-state-card";

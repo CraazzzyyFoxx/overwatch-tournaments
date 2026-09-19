@@ -3,7 +3,7 @@
 import { useId, useState } from "react";
 import { CheckSquare, XSquare } from "lucide-react";
 
-import { EYEBROW_CLASS, TONE_CLASS } from "@/components/admin/tone";
+import { EYEBROW_CLASS, TONE_CLASS } from "@/components/kit/tone";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -18,7 +18,7 @@ import {
   TableRow
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
-import { EmptyNote } from "@/components/admin/kit/EmptyNote";
+import { EmptyNote } from "@/components/kit/EmptyNote";
 
 /**
  * One grantable permission. `key` is what travels in `value` — the RBAC

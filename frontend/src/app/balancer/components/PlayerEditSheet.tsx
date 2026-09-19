@@ -12,7 +12,7 @@ import {
   Trash2,
   X
 } from "lucide-react";
-import { SortableGrip, SortableRows, useSortableRow } from "./SortableRows";
+import { SortableGrip, SortableRows, useSortableRow } from "@/components/kit/SortableRows";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -61,15 +61,15 @@ import {
   fetchPlayerRankHistoryPreview,
   type PlayerRankHistoryPreview,
   type PlayerRankHistoryPreviewEntry
-} from "@/app/balancer/components/workspace-helpers";
-import { getRegistrationBattleTags } from "./balancer-page-helpers";
+} from "@/components/balancer/workspace-helpers";
+import { getRegistrationBattleTags } from "@/components/balancer/balancer-page-helpers";
 import { BattleTagCopyButton, SmurfTagStrip } from "./BattleTagCopyControls";
 import RankHistory from "@/components/RankHistory";
 import { ROLE_RANK_ACCENTS, RoleRankControls } from "./RoleRankControls";
 
 const ROLE_OPTIONS: Array<{ value: BalancerRoleCode; label: string }> = [
   { value: "tank", label: "Tank" },
-  { value: "dps", label: "Damage" },
+  { value: "damage", label: "Damage" },
   { value: "support", label: "Support" }
 ];
 
@@ -77,7 +77,7 @@ const ROLE_OPTIONS: Array<{ value: BalancerRoleCode; label: string }> = [
 
 const ROLE_DISPLAY: Record<BalancerRoleCode, string> = {
   tank: "Tank",
-  dps: "Damage",
+  damage: "Damage",
   support: "Support"
 };
 
@@ -248,8 +248,8 @@ function SortableRoleEntry({
       className={cn(
         "grid gap-2 rounded-xl border p-2.5 transition-colors md:grid-cols-[32px_minmax(0,1fr)]",
         declaredActive
-          ? cn("border-[color:var(--aqt-border-2)] bg-white/3", accent.row)
-          : "border-[color:var(--aqt-border)] bg-white/2 opacity-80"
+          ? cn("border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-overlay-2)]", accent.row)
+          : "border-[color:var(--aqt-border)] bg-[color:var(--aqt-overlay-1)] opacity-80"
       )}
     >
       <div className="flex items-center justify-between md:flex-col md:items-center md:justify-center md:gap-1">
@@ -280,7 +280,7 @@ function SortableRoleEntry({
           </div>
 
           <div className="flex items-center gap-1.5">
-            <div className="flex h-6 items-center gap-1.5 rounded-md border border-[color:var(--aqt-border-2)] bg-black/15 px-2">
+            <div className="flex h-6 items-center gap-1.5 rounded-md border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-bg-2)] px-2">
               <Switch
                 checked={declaredActive}
                 className="h-4 w-7 [&>span]:h-3 [&>span]:w-3 data-[state=checked]:[&>span]:translate-x-3"
@@ -291,7 +291,7 @@ function SortableRoleEntry({
               />
               <span
                 className={cn(
-                  "text-label font-semibold uppercase tracking-wide",
+                  "text-label font-semibold uppercase tracking-label",
                   declaredActive ? accent.text : "text-[color:var(--aqt-fg-dim)]"
                 )}
               >
@@ -302,17 +302,18 @@ function SortableRoleEntry({
             <Button
               variant="ghost"
               size="icon"
-              className="h-6 w-6 shrink-0 rounded-md border border-[color:var(--aqt-border-2)] bg-black/15 text-[color:var(--aqt-fg-dim)] hover:bg-white/5 hover:text-[color:var(--aqt-fg)]"
+              className="h-6 w-6 shrink-0 rounded-md border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-bg-2)] text-[color:var(--aqt-fg-dim)] hover:bg-[color:var(--aqt-overlay-3)] hover:text-[color:var(--aqt-fg)]"
+              aria-label={`Remove ${ROLE_DISPLAY[entry.role]}`}
               onClick={() => onRemove(index)}
             >
-              <Trash2 className="h-3 w-3" />
+              <Trash2 className="h-3 w-3" aria-hidden="true" />
             </Button>
           </div>
         </div>
 
         <div className="grid gap-2 lg:grid-cols-[minmax(0,140px)_minmax(0,1fr)_130px]">
           <div className="space-y-1">
-            <span className="text-label font-semibold uppercase tracking-wide text-[color:var(--aqt-fg-dim)]">
+            <span className="text-label font-semibold uppercase tracking-label text-[color:var(--aqt-fg-dim)]">
               Sub-role
             </span>
             <Select
@@ -327,7 +328,7 @@ function SortableRoleEntry({
             >
               <SelectTrigger
                 className={cn(
-                  "h-7 w-full border-[color:var(--aqt-border-2)] bg-black/15 px-2 text-xs text-[color:var(--aqt-fg)]",
+                  "h-7 w-full border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-bg-2)] px-2 text-xs text-[color:var(--aqt-fg)]",
                   !declaredActive && "text-[color:var(--aqt-fg-dim)]"
                 )}
               >
@@ -373,10 +374,10 @@ function SortableRoleEntry({
               })
             }
             title={`Apply live OW rank${owSuggestionName ? `: ${owSuggestionName}` : ""} (${owRankValue})`}
-            className="flex w-full items-center gap-1.5 rounded-lg border border-[color:var(--aqt-border-2)] bg-black/15 px-2 py-1.5 text-left transition hover:border-[color:var(--aqt-border-2)] hover:bg-white/5"
+            className="flex w-full items-center gap-1.5 rounded-lg border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-bg-2)] px-2 py-1.5 text-left transition hover:border-[color:var(--aqt-border-2)] hover:bg-[color:var(--aqt-overlay-3)]"
           >
             <Sparkles className="h-3 w-3 shrink-0 text-amber-300/70" />
-            <span className="text-label font-semibold uppercase tracking-wide text-[color:var(--aqt-fg-dim)]">OW</span>
+            <span className="text-label font-semibold uppercase tracking-label text-[color:var(--aqt-fg-dim)]">OW</span>
             {owSuggestionDivision != null ? (
               <DivisionIcon division={owSuggestionDivision} width={16} height={16} />
             ) : null}
@@ -394,9 +395,9 @@ function SortableRoleEntry({
             </span>
           </button>
         ) : (
-          <div className="flex w-full items-center gap-1.5 rounded-lg border border-[color:var(--aqt-border)] bg-black/10 px-2 py-1.5 text-left">
+          <div className="flex w-full items-center gap-1.5 rounded-lg border border-[color:var(--aqt-border)] bg-[color:var(--aqt-bg-2)] px-2 py-1.5 text-left">
             <Sparkles className="h-3 w-3 shrink-0 text-[color:var(--aqt-fg-faint)]" />
-            <span className="text-label font-semibold uppercase tracking-wide text-[color:var(--aqt-fg-dim)]">OW</span>
+            <span className="text-label font-semibold uppercase tracking-label text-[color:var(--aqt-fg-dim)]">OW</span>
             <span className="text-label text-[color:var(--aqt-fg-dim)]">No live OW rank</span>
           </div>
         )}
@@ -439,7 +440,7 @@ function HistoryPreviewCard({
     <div
       className={cn(
         "grid gap-2.5 rounded-xl border p-3 sm:grid-cols-[minmax(0,1fr)_auto]",
-        "border-[color:var(--aqt-border-2)] bg-white/[0.03]",
+        "border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-overlay-2)]",
         accent.row
       )}
     >
@@ -456,7 +457,7 @@ function HistoryPreviewCard({
           </Badge>
           {/* Original division (source tournament grid) */}
           {originalDivisionName ? (
-            <div className="flex items-center gap-1.5 rounded-full border border-[color:var(--aqt-border-2)] bg-black/15 px-2 py-1 text-[color:var(--aqt-fg)]">
+            <div className="flex items-center gap-1.5 rounded-full border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-bg-2)] px-2 py-1 text-[color:var(--aqt-fg)]">
               {entry.original_division_number != null ? (
                 <DivisionIcon
                   division={entry.original_division_number}
@@ -472,7 +473,7 @@ function HistoryPreviewCard({
           {showNormalisedArrow && divisionName ? (
             <>
               <ArrowRight className="size-4 shrink-0 text-[color:var(--aqt-fg-dim)]" aria-hidden />
-              <div className="flex items-center gap-1.5 rounded-full border border-[color:var(--aqt-border-2)] bg-white/5 px-2 py-1 text-[color:var(--aqt-fg)]">
+              <div className="flex items-center gap-1.5 rounded-full border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-overlay-3)] px-2 py-1 text-[color:var(--aqt-fg)]">
                 {entry.division_number != null ? (
                   <DivisionIcon division={entry.division_number} width={16} height={16} />
                 ) : null}
@@ -487,10 +488,10 @@ function HistoryPreviewCard({
         <div className="flex items-center justify-end gap-1.5">
           <span
             className={cn(
-              "rounded border px-1.5 py-0.5 text-label font-semibold uppercase tracking-wide",
+              "rounded border px-1.5 py-0.5 text-label font-semibold uppercase tracking-label",
               entry.source === "balancer"
                 ? "border-indigo-400/25 bg-indigo-500/10 text-indigo-200"
-                : "border-[color:var(--aqt-border-2)] bg-white/5 text-[color:var(--aqt-fg-muted)]"
+                : "border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-overlay-3)] text-[color:var(--aqt-fg-muted)]"
             )}
           >
             {entry.source === "balancer" ? "Balancer" : "Analytics"}
@@ -552,13 +553,13 @@ export function PlayerEditModal({
   const subtypeOptions = useMemo(() => {
     const options: Record<BalancerRoleCode, Array<{ value: string; label: string }>> = {
       tank: [],
-      dps: [],
+      damage: [],
       support: []
     };
 
     if (subRoles) {
       for (const sr of subRoles) {
-        const roleKey = sr.role === "damage" ? "dps" : (sr.role as BalancerRoleCode);
+        const roleKey = sr.role as BalancerRoleCode;
         if (options[roleKey]) {
           options[roleKey].push({
             value: sr.slug,
@@ -810,7 +811,7 @@ export function PlayerEditModal({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="right"
-        className="flex w-full flex-col overflow-hidden border-border bg-popover/95 p-0 text-[color:var(--aqt-fg)] shadow-2xl shadow-black/50 backdrop-blur-xl sm:max-w-[640px] [&>button:last-child]:right-4 [&>button:last-child]:top-4 [&>button:last-child]:z-20 [&>button:last-child]:flex [&>button:last-child]:h-8 [&>button:last-child]:w-8 [&>button:last-child]:items-center [&>button:last-child]:justify-center [&>button:last-child]:rounded-lg [&>button:last-child]:border [&>button:last-child]:border-[color:var(--aqt-border-2)] [&>button:last-child]:bg-black/30 [&>button:last-child]:p-0 [&>button:last-child]:text-[color:var(--aqt-fg-muted)] [&>button:last-child]:backdrop-blur-sm [&>button:last-child]:hover:bg-white/8 [&>button:last-child]:hover:text-[color:var(--aqt-fg)] [&>button:last-child]:data-[state=open]:bg-black/30 [&>button:last-child]:data-[state=open]:text-[color:var(--aqt-fg-muted)]"
+        className="flex w-full flex-col overflow-hidden border-border bg-popover/95 p-0 text-[color:var(--aqt-fg)] shadow-2xl shadow-black/50 backdrop-blur-xl sm:max-w-[640px] [&>button:last-child]:right-4 [&>button:last-child]:top-4 [&>button:last-child]:z-20 [&>button:last-child]:flex [&>button:last-child]:h-8 [&>button:last-child]:w-8 [&>button:last-child]:items-center [&>button:last-child]:justify-center [&>button:last-child]:rounded-lg [&>button:last-child]:border [&>button:last-child]:border-[color:var(--aqt-border-2)] [&>button:last-child]:bg-[color:var(--aqt-bg-2)] [&>button:last-child]:p-0 [&>button:last-child]:text-[color:var(--aqt-fg-muted)] [&>button:last-child]:backdrop-blur-sm [&>button:last-child]:hover:bg-[color:var(--aqt-overlay-3)] [&>button:last-child]:hover:text-[color:var(--aqt-fg)] [&>button:last-child]:data-[state=open]:bg-[color:var(--aqt-bg-2)] [&>button:last-child]:data-[state=open]:text-[color:var(--aqt-fg-muted)]"
       >
         <SheetHeader
           className={cn(
@@ -837,7 +838,7 @@ export function PlayerEditModal({
 
         <div className="flex-1 space-y-3 overflow-y-auto px-4 py-3 sm:px-5">
           <div className="grid gap-2.5 lg:grid-cols-2">
-            <div className="rounded-lg border border-[color:var(--aqt-border-2)] bg-white/[0.03] px-3 py-2">
+            <div className="rounded-lg border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-overlay-2)] px-3 py-2">
               <div className="flex items-center justify-between gap-3">
                 <span className="text-xs font-medium text-[color:var(--aqt-fg)]">Balancer status</span>
                 {registration ? (
@@ -861,7 +862,7 @@ export function PlayerEditModal({
                 "rounded-lg border px-3 py-2",
                 isFlex
                   ? "border-emerald-400/20 bg-emerald-500/[0.08]"
-                  : "border-[color:var(--aqt-border-2)] bg-white/[0.03]"
+                  : "border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-overlay-2)]"
               )}
             >
               <div className="flex items-center justify-between gap-3">
@@ -886,7 +887,7 @@ export function PlayerEditModal({
                   type="button"
                   variant="outline"
                   size="sm"
-                  className="h-7 whitespace-nowrap border-[color:var(--aqt-border-2)] bg-black/20 px-2.5 text-label text-[color:var(--aqt-fg)] hover:bg-white/5 hover:text-[color:var(--aqt-fg)]"
+                  className="h-7 whitespace-nowrap border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-bg-2)] px-2.5 text-label text-[color:var(--aqt-fg)] hover:bg-[color:var(--aqt-overlay-3)] hover:text-[color:var(--aqt-fg)]"
                   onClick={addRole}
                   disabled={roleEntries.length >= ROLE_OPTIONS.length}
                 >
@@ -897,7 +898,7 @@ export function PlayerEditModal({
                   type="button"
                   variant="outline"
                   size="sm"
-                  className="h-7 whitespace-nowrap border-[color:var(--aqt-border-2)] bg-black/20 px-2.5 text-label text-[color:var(--aqt-fg)] hover:bg-white/5 hover:text-[color:var(--aqt-fg)]"
+                  className="h-7 whitespace-nowrap border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-bg-2)] px-2.5 text-label text-[color:var(--aqt-fg)] hover:bg-[color:var(--aqt-overlay-3)] hover:text-[color:var(--aqt-fg)]"
                   onClick={handleLoadFromHistory}
                   disabled={loadingHistory}
                 >
@@ -912,7 +913,7 @@ export function PlayerEditModal({
             </div>
 
             {historyPreviewRequested ? (
-              <div className="rounded-lg border border-[color:var(--aqt-border-2)] bg-white/[0.03] p-2.5">
+              <div className="rounded-lg border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-overlay-2)] p-2.5">
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-semibold text-[color:var(--aqt-fg)]">History preview</span>
@@ -937,7 +938,7 @@ export function PlayerEditModal({
                       type="button"
                       variant="ghost"
                       size="icon"
-                      className="h-8 w-8 rounded-lg border border-[color:var(--aqt-border-2)] bg-black/15 text-[color:var(--aqt-fg-muted)] hover:bg-white/5 hover:text-[color:var(--aqt-fg)]"
+                      className="h-8 w-8 rounded-lg border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-bg-2)] text-[color:var(--aqt-fg-muted)] hover:bg-[color:var(--aqt-overlay-3)] hover:text-[color:var(--aqt-fg)]"
                       onClick={handleDismissHistoryPreview}
                       aria-label="Close history preview"
                     >
@@ -954,7 +955,7 @@ export function PlayerEditModal({
                   ) : null}
 
                   {!historyLoadError && !loadingHistory && !hasHistoryPreview ? (
-                    <div className="rounded-lg border border-[color:var(--aqt-border-2)] bg-black/15 px-2.5 py-2 text-xs text-[color:var(--aqt-fg-muted)]">
+                    <div className="rounded-lg border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-bg-2)] px-2.5 py-2 text-xs text-[color:var(--aqt-fg-muted)]">
                       No ranked tournament history was found for this BattleTag.
                     </div>
                   ) : null}
@@ -978,7 +979,7 @@ export function PlayerEditModal({
                     value={historyWorkspaceValue}
                     onValueChange={handleHistoryWorkspaceChange}
                   >
-                    <SelectTrigger className="h-6 w-[180px] border-[color:var(--aqt-border-2)] bg-black/20 text-label text-[color:var(--aqt-fg)] px-2">
+                    <SelectTrigger className="h-6 w-[180px] border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-bg-2)] text-label text-[color:var(--aqt-fg)] px-2">
                       <SelectValue placeholder="Select workspace" />
                     </SelectTrigger>
                     <SelectContent className="border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-card)] text-[color:var(--aqt-fg)] text-label">
@@ -999,7 +1000,7 @@ export function PlayerEditModal({
               </div>
             ) : null}
 
-            <div className="flex items-center justify-between gap-2 rounded-lg border border-[color:var(--aqt-border-2)] bg-white/[0.03] px-3 py-2">
+            <div className="flex items-center justify-between gap-2 rounded-lg border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-overlay-2)] px-3 py-2">
               <Label htmlFor="pin-tournament" className="cursor-pointer text-xs font-medium text-[color:var(--aqt-fg)]">
                 Only this tournament
               </Label>
@@ -1009,7 +1010,7 @@ export function PlayerEditModal({
                     type="button"
                     variant="outline"
                     size="sm"
-                    className="h-6 border-[color:var(--aqt-border-2)] bg-black/20 px-2 text-label text-[color:var(--aqt-fg)] hover:bg-white/5"
+                    className="h-6 border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-bg-2)] px-2 text-label text-[color:var(--aqt-fg)] hover:bg-[color:var(--aqt-overlay-3)]"
                     disabled={saving}
                     onClick={handleClearPin}
                   >
@@ -1049,7 +1050,7 @@ export function PlayerEditModal({
 
           <div className="space-y-2">
             <Label className="text-xs font-medium text-[color:var(--aqt-fg)]">Live rank (OverFast)</Label>
-            <div className="rounded-lg border border-[color:var(--aqt-border-2)] bg-white/[0.03] p-2.5">
+            <div className="rounded-lg border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-overlay-2)] p-2.5">
               {player.user_id != null ? (
                 <RankHistory userId={player.user_id} />
               ) : (
@@ -1063,7 +1064,7 @@ export function PlayerEditModal({
             <Textarea
               value={notes}
               onChange={(event) => setNotes(event.target.value)}
-              className="min-h-14 border-[color:var(--aqt-border-2)] bg-black/20 px-2.5 py-1.5 text-xs text-[color:var(--aqt-fg)] placeholder:text-[color:var(--aqt-fg-faint)]"
+              className="min-h-14 border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-bg-2)] px-2.5 py-1.5 text-xs text-[color:var(--aqt-fg)] placeholder:text-[color:var(--aqt-fg-faint)]"
               placeholder="Notes about availability, role comfort, or balancing caveats."
             />
           </div>
@@ -1072,7 +1073,7 @@ export function PlayerEditModal({
               <div className="space-y-1">
                 <Label className="text-xs font-medium text-[color:var(--aqt-fg)]">Registration status</Label>
                 <Select value={registrationStatus} onValueChange={setRegistrationStatus}>
-                  <SelectTrigger className="h-8 border-[color:var(--aqt-border-2)] bg-black/20 text-xs text-[color:var(--aqt-fg)]">
+                  <SelectTrigger className="h-8 border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-bg-2)] text-xs text-[color:var(--aqt-fg)]">
                     <SelectValue placeholder="Select registration status" />
                   </SelectTrigger>
                   <SelectContent>
@@ -1095,7 +1096,7 @@ export function PlayerEditModal({
                   value={registrationBalancerStatus}
                   onValueChange={setRegistrationBalancerStatus}
                 >
-                  <SelectTrigger className="h-8 border-[color:var(--aqt-border-2)] bg-black/20 text-xs text-[color:var(--aqt-fg)]">
+                  <SelectTrigger className="h-8 border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-bg-2)] text-xs text-[color:var(--aqt-fg)]">
                     <SelectValue placeholder="Select balancer status" />
                   </SelectTrigger>
                   <SelectContent>
@@ -1133,7 +1134,7 @@ export function PlayerEditModal({
                       title="Saves your pending edits, then recomputes this player's balancer status from their current role ranks"
                     >
                       <CheckCircle2 className="h-3 w-3" />
-                      Move to Ready
+                      Move to ready
                     </Button>
                   ) : null}
                 </div>
@@ -1149,7 +1150,7 @@ export function PlayerEditModal({
           <div className="flex gap-2">
             <Button
               variant="outline"
-              className="h-8 border-[color:var(--aqt-border-2)] bg-black/20 px-3 text-xs text-[color:var(--aqt-fg)] hover:bg-white/5 hover:text-[color:var(--aqt-fg)]"
+              className="h-8 border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-bg-2)] px-3 text-xs text-[color:var(--aqt-fg)] hover:bg-[color:var(--aqt-overlay-3)] hover:text-[color:var(--aqt-fg)]"
               onClick={() => onOpenChange(false)}
             >
               Cancel

@@ -127,7 +127,7 @@ def test_public_roles_come_from_the_roster_not_the_rows():
 
     read = _reg_to_read(stub, workspace_id=1, show_ranks=True, roster=_roster(3200, "registration", synthesized))
 
-    assert [(role.role, role.rank_value) for role in read.roles] == [("tank", 3200), ("dps", None)]
+    assert [(role.role, role.rank_value) for role in read.roles] == [("tank", 3200), ("damage", None)]
 
 
 def test_read_payload_includes_profile_visibility():

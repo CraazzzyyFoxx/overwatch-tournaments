@@ -36,7 +36,7 @@ function player(id: number): DraftPlayer {
     registration_id: id * 10,
     user_id: id,
     battle_tag: `P${id}`,
-    primary_role: "dps",
+    primary_role: "damage",
     sub_role: null,
     is_flex: false,
     effective_rank: 3000,
@@ -86,7 +86,7 @@ function makeBoard(): DraftBoard {
       rounds: 2,
       pick_time_seconds: 45,
       roster_shape: {
-        slots: { tank: 1, dps: 2 },
+        slots: { tank: 1, damage: 2 },
         team_size: 3,
         flex_slots: 0,
         has_role_slots: true,

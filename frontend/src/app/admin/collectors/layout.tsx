@@ -8,7 +8,7 @@ import { rankHealthDot } from "@/components/admin/collectors/rank-shared";
 import { streamHealthDot } from "@/components/admin/collectors/stream-shared";
 import { subscriptionHealthDot } from "@/components/admin/collectors/subscription-shared";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
-import { AdminTabs, type AdminTabItem } from "@/components/admin/kit/AdminTabs";
+import { AdminTabs, type AdminTabItem } from "@/components/kit/AdminTabs";
 import { usePermissions } from "@/hooks/usePermissions";
 import adminService from "@/services/admin.service";
 import { useWorkspaceStore } from "@/stores/workspace.store";

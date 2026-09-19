@@ -1,18 +1,20 @@
 "use client";
 
-import { useId, useState, type FormEvent } from "react";
+import { useId, type FormEvent } from "react";
 import { useTranslations } from "next-intl";
 
-import { EntityFormDialog } from "@/components/admin/EntityFormDialog";
-import { EmptyNote } from "@/components/admin/kit/EmptyNote";
+import { EntityFormDialog } from "@/components/kit/EntityFormDialog";
+import { EmptyNote } from "@/components/kit/EmptyNote";
+import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useApiKeyQuota, useSetApiKeyQuota } from "@/hooks/use-account-api-keys";
+import { usePermissions } from "@/hooks/usePermissions";
 import { notify } from "@/lib/notify";
-import { parseQuotaAboveInherited } from "@/lib/quota";
-import type { AccountApiKey, QuotaDimension } from "@/types/auth.types";
-import { EMPTY_QUOTA_LIMITS, hasQuotaOverride, type QuotaLimitsDraft } from "./dimensions";
+import type { AccountApiKey } from "@/types/auth.types";
+import { hasQuotaOverride } from "./dimensions";
 import { QuotaLimitFields } from "./QuotaLimitFields";
 import { QuotaUsagePanel } from "./QuotaUsagePanel";
+import { useQuotaDraft } from "./useQuotaDraft";
 
 export interface ApiKeyQuotaDialogProps {
   /** The key under edit; `null` closes the dialog. */
@@ -24,10 +26,11 @@ export interface ApiKeyQuotaDialogProps {
 /**
  * One key's budgets, and the override written on the key itself.
  *
- * Mounted keyed by the key's id, so a fresh instance (and an empty draft) is
- * what every open starts from: the read contract reports *effective* ceilings,
- * not the stored override row, and pre-filling with an inherited value would
- * turn a glance into a permanent override on the next save.
+ * The fields are seeded from the STORED override, never from the effective
+ * ceiling: most of an effective number is inherited, so pre-filling with it
+ * would turn a glance into a permanent override — and starting blank was worse,
+ * because an all-null payload deletes the row, so opening the dialog and
+ * pressing the button silently reset limits the dialog never showed.
  */
 export function ApiKeyQuotaDialog({
   apiKey,
@@ -36,46 +39,35 @@ export function ApiKeyQuotaDialog({
 }: Readonly<ApiKeyQuotaDialogProps>) {
   const t = useTranslations("quota");
   const fieldPrefix = useId();
-  const [draft, setDraft] = useState<QuotaLimitsDraft>(EMPTY_QUOTA_LIMITS);
-  const [fieldErrors, setFieldErrors] = useState<Partial<Record<QuotaDimension, string>>>({});
+  const { isSuperuser } = usePermissions();
 
   const usageQuery = useApiKeyQuota(apiKey?.id ?? null);
   const setQuota = useSetApiKeyQuota(workspaceId);
+  const policy = usageQuery.data?.policy?.find((row) => row.scope === "key") ?? null;
+  const form = useQuotaDraft(policy);
 
-  const keyScope = usageQuery.data?.scopes.find((scope) => scope.scope === "key") ?? null;
+  // "Stop overriding" only when there is a row to stop: a key that already
+  // inherits must not be offered the removal of an override it never had.
+  const removing = form.overridden && !hasQuotaOverride(form.draft);
+  const blocked = form.raised.length > 0 && !isSuperuser;
 
   const handleSubmit = (event: FormEvent) => {
     event.preventDefault();
     if (!apiKey) return;
-    setFieldErrors({});
+    if (blocked) {
+      document.getElementById(`${fieldPrefix}-${form.raised[0]}`)?.focus();
+      return;
+    }
 
     setQuota.mutate(
-      { id: apiKey.id, limits: draft },
+      { id: apiKey.id, limits: form.draft },
       {
         onSuccess: () => {
           notify.success(t("saved"));
           onClose();
         },
         onError: (error) => {
-          const rejection = parseQuotaAboveInherited(error);
-          if (!rejection) {
-            notify.apiError(error, { title: t("errors.saveFailed") });
-            return;
-          }
-          // The rejection names one dimension, so it belongs on that input —
-          // a toast would leave the admin guessing which of five numbers the
-          // server refused, and why.
-          const dimension = t(`dimensions.${rejection.dimension}.label`);
-          setFieldErrors({
-            [rejection.dimension]:
-              rejection.limit === null
-                ? t("errors.aboveInheritedUnlimited", { dimension })
-                : t("errors.aboveInherited", {
-                    dimension,
-                    limit: rejection.limit,
-                    requested: rejection.requested ?? draft[rejection.dimension] ?? 0
-                  })
-          });
+          if (!form.reject(error)) notify.apiError(error, { title: t("errors.saveFailed") });
         }
       }
     );
@@ -89,11 +81,11 @@ export function ApiKeyQuotaDialog({
       }}
       title={t("apiKey.dialogTitle", { name: apiKey?.name ?? "" })}
       description={t("apiKey.dialogDescription")}
-      submitLabel={hasQuotaOverride(draft) ? t("save") : t("clearOverride")}
+      submitLabel={removing ? t("clearOverride") : t("save")}
       submittingLabel={t("saving")}
       isSubmitting={setQuota.isPending}
-      isDirty={hasQuotaOverride(draft)}
-      fieldErrors={fieldErrors as Record<string, string>}
+      isDirty={form.dirty}
+      fieldErrors={form.errors as Record<string, string>}
       contentClassName="!max-w-2xl"
       onSubmit={handleSubmit}
     >
@@ -115,20 +107,31 @@ export function ApiKeyQuotaDialog({
         </section>
 
         <section className="border-t border-border/60 pt-4">
-          <h3 className="text-sm font-medium">{t("overrideHeading")}</h3>
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="text-sm font-medium">{t("overrideHeading")}</h3>
+            <Badge tone={form.overridden ? "info" : "neutral"} className="font-normal">
+              {t(form.overridden ? "state.overridden" : "state.inherited")}
+            </Badge>
+            {isSuperuser ? (
+              <Badge tone="warning" className="font-normal">
+                {t("authority.badge")}
+              </Badge>
+            ) : null}
+          </div>
+          <p className="mt-1 max-w-prose text-xs text-muted-foreground">{t("overrideHint")}</p>
           <p className="mt-0.5 max-w-prose text-xs text-muted-foreground">
-            {t("overrideHint")}
+            {isSuperuser ? t("authority.keySuperuser") : t("authority.keyAdmin")}
           </p>
           <div className="mt-3">
             <QuotaLimitFields
               idPrefix={fieldPrefix}
-              values={draft}
-              effective={keyScope}
-              errors={fieldErrors}
+              values={form.draft}
+              inherited={policy?.inherited}
+              raised={form.raised}
+              canRaise={isSuperuser}
+              errors={form.errors}
               disabled={setQuota.isPending}
-              onChange={(dimension, value) =>
-                setDraft((current) => ({ ...current, [dimension]: value }))
-              }
+              onChange={form.set}
             />
           </div>
         </section>

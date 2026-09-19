@@ -46,7 +46,7 @@ export interface SubroleOption {
   label: string;
 }
 
-/** Workspace sub-role catalog keyed by registration role code (tank/dps/support). */
+/** Workspace sub-role catalog keyed by registration role code (tank/damage/support). */
 export type SubroleCatalog = Record<string, SubroleOption[]>;
 
 // ---------------------------------------------------------------------------

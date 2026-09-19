@@ -4,8 +4,8 @@ import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { ExternalLink } from "lucide-react";
 
-import { StatusPill } from "@/components/admin/kit/StatusPill";
-import { EYEBROW_CLASS } from "@/components/admin/tone";
+import { StatusPill } from "@/components/kit/StatusPill";
+import { EYEBROW_CLASS } from "@/components/kit/tone";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { PageStateCard } from "@/components/ui/page-state-card";

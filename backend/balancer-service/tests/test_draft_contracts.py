@@ -100,22 +100,22 @@ def test_read_models_and_handlers_cross_the_role_vocabulary_both_ways() -> None:
         is_safe=True,
         reason_code=None,
     )
-    assert schemas.DraftPickOptionRead.model_validate(option).role == "dps"
+    assert schemas.DraftPickOptionRead.model_validate(option).role == "damage"
     assert schemas.DraftSuggestion(player_id=20, role=HeroClass.tank, fit_score=1.0).role == "tank"
 
     # wire -> domain: the reverse crossing, which the pick/override/role-edit
     # handlers own. Passing the raw string down reached `role.slot_code` on a
     # `str`.
-    assert draft_rpc._to_role("dps") is HeroClass.damage
+    assert draft_rpc._to_role("damage") is HeroClass.damage
     assert draft_rpc._to_role(None) is None
     shape = DEFAULT_ROSTER_SHAPE
     decision = rules.resolve_pick_slot(
         shape,
         dict.fromkeys(shape.slots, 0),
-        roster(101, ranks={"dps": 4000}),
-        draft_rpc._to_role("dps"),
+        roster(101, ranks={"damage": 4000}),
+        draft_rpc._to_role("damage"),
     )
-    assert decision.recorded_role == "dps"
+    assert decision.recorded_role == "damage"
 
 
 def test_role_edit_contract_requires_a_reason_and_a_positive_rank() -> None:
@@ -577,14 +577,14 @@ def test_board_projects_flagged_answers_and_never_ships_the_rest(monkeypatch) ->
 
 
 def test_board_ranks_a_player_on_their_own_role_under_role_slots(monkeypatch) -> None:
-    # A support main rated 2800 on support and 4000 on dps: the pool card, the
+    # A support main rated 2800 on support and 4000 on damage: the pool card, the
     # inspector header and the shortlist all render `effective_rank`, and they
     # were showing this player as a 4000. Under a shape with role slots the
     # number that represents them is the rank of the role they actually lead
     # with; the maximum belongs to a role-less roster, where nobody is assigned
     # a role at all. Contract: DraftPlayerRead.effective_rank's docstring.
     player = _seat(21)
-    resolved = roster(121, ranks={"support": 2800, "dps": 4000}, primary="support", battle_tag="Ana#2")
+    resolved = roster(121, ranks={"support": 2800, "damage": 4000}, primary="support", battle_tag="Ana#2")
     monkeypatch.setattr(board.board_service, "rosters", _FakeRosters({21: resolved}))
 
     async def _role_shape(*_args, **_kwargs):
@@ -599,7 +599,7 @@ def test_board_ranks_a_player_on_their_own_role_under_role_slots(monkeypatch) ->
     assert role_slots.players[0].effective_rank == 2800
     # The per-role catalogue keeps every playable number beside it, so the role
     # chooser still shows the 4000 on the DPS row.
-    assert role_slots.players[0].role_ranks == {"support": 2800, "dps": 4000}
+    assert role_slots.players[0].role_ranks == {"support": 2800, "damage": 4000}
 
     async def _flex_shape(*_args, **_kwargs):
         return parse_roster_slots({"flex": 5})

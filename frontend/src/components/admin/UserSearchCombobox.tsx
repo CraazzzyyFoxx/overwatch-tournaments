@@ -4,8 +4,8 @@ import { useMemo } from "react";
 
 import userService from "@/services/user.service";
 import { MinimizedUser } from "@/types/user.types";
-import { AdminCombobox, AdminComboboxCheck } from "@/components/admin/AdminCombobox";
-import { useSearchComboboxQuery } from "@/components/admin/useSearchComboboxQuery";
+import { AdminCombobox, AdminComboboxCheck } from "@/components/kit/AdminCombobox";
+import { useSearchComboboxQuery } from "@/components/kit/useSearchComboboxQuery";
 import { CommandGroup, CommandItem } from "@/components/ui/command";
 
 interface UserSearchComboboxProps {

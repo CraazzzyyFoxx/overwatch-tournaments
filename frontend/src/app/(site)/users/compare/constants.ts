@@ -5,7 +5,7 @@ export { getDivisionOptions } from "@/lib/division-grid";
 export type RoleFilterLabelKey =
   | "users.compare.allRoles"
   | "common.roles.tank"
-  | "common.roles.dps"
+  | "common.roles.damage"
   | "common.roles.support"
   | "common.roles.flex";
 
@@ -15,7 +15,7 @@ export const ROLE_FILTER_OPTIONS: Array<{
 }> = [
   { value: "all", labelKey: "users.compare.allRoles" },
   { value: "Tank", labelKey: "common.roles.tank" },
-  { value: "Damage", labelKey: "common.roles.dps" },
+  { value: "Damage", labelKey: "common.roles.damage" },
   { value: "Support", labelKey: "common.roles.support" },
   { value: "Flex", labelKey: "common.roles.flex" }
 ];

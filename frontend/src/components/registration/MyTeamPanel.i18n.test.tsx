@@ -65,7 +65,7 @@ const TEAM: RegistrationTeam = {
       registration_id: 101,
       display_name: "Mate",
       battle_tag: "Mate#2222",
-      slot_code: "dps",
+      slot_code: "damage",
       is_substitute: false,
       is_captain: false,
       status: "approved",
@@ -74,7 +74,7 @@ const TEAM: RegistrationTeam = {
       registration_id: 102,
       display_name: "Bench",
       battle_tag: "Bench#3333",
-      slot_code: "dps",
+      slot_code: "damage",
       is_substitute: true,
       is_captain: false,
       status: "approved",
@@ -92,8 +92,8 @@ const TEAM: RegistrationTeam = {
       invited_at: "2026-08-20T10:00:00Z",
     },
   ],
-  open_slots: { dps: 1, support: 2 },
-  shortfall: "1x dps, 2x support",
+  open_slots: { damage: 1, support: 2 },
+  shortfall: "1x damage, 2x support",
   is_complete: false,
   substitutes_used: 1,
   max_substitutes: 2,
@@ -173,7 +173,7 @@ describe("MyTeamPanel i18n", () => {
   });
 
   it("renders the shortfall from open_slots with TRANSLATED slot labels", async () => {
-    // Two bugs pinned at once. The API ships `shortfall: "1x dps, 2x support"` —
+    // Two bugs pinned at once. The API ships `shortfall: "1x damage, 2x support"` —
     // raw slot codes in an English shape — which must not reach a Russian
     // sentence. And the labels must come from `rosterShape.slotCodes`, the same
     // set the chips use: an earlier version reached for the hardcoded-English
@@ -181,15 +181,15 @@ describe("MyTeamPanel i18n", () => {
     //
     // Read off the dictionary rather than spelled out here, because spelling
     // them out is the very coupling this pins against: the glossary sweep in
-    // a26165cc renamed dps/support to Дамаг/Саппорт, and a literal expectation
+    // a26165cc renamed damage/support to Дамаг/Саппорт, and a literal expectation
     // failed for the one reason that is not a bug.
     const { container, root } = await renderPanel("ru", true);
     const text = container.textContent ?? "";
     const slot = ru.rosterShape.slotCodes;
 
-    expect(text).toContain(`1× ${slot.dps}`);
+    expect(text).toContain(`1× ${slot.damage}`);
     expect(text).toContain(`2× ${slot.support}`);
-    expect(text).not.toContain("1x dps");
+    expect(text).not.toContain("1x damage");
     expect(text).not.toContain("1× DPS");
 
     await act(async () => {

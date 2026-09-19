@@ -15,6 +15,7 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
+from shared.models.achievements.achievement import AchievementGrain
 from src import models
 
 from ..context import EvalContext
@@ -32,6 +33,19 @@ _RATE_STATS = frozenset(
     }
 )
 
+# Additive per map, but already normalized when the parser computed them
+# (``impact.py`` multiplies by the player's time share). Dividing them by
+# HeroTimePlayed a second time would rank the shortest appearance highest.
+_NO_TIME_NORMALIZE = frozenset(
+    {
+        "ImpactPoints",
+        "ImpactRank",
+        "OverperformanceScore",
+        "Performance",
+        "PerformancePoints",
+    }
+)
+
 # Prefer the original hits/shots fraction when both sides are logged.
 _RATE_FRACTIONS: dict[str, tuple[str, str]] = {
     "CriticalHitAccuracy": ("CriticalHits", "ShotsFired"),
@@ -40,7 +54,14 @@ _RATE_FRACTIONS: dict[str, tuple[str, str]] = {
 }
 
 
-@register("log_stat_rank")
+@register(
+    "log_stat_rank",
+    grain=AchievementGrain.user_tournament,
+    description="Ranked by a log stat across the tournament",
+    required=("stat",),
+    optional=("limit", "normalize_by_time", "order"),
+    depends_on=("matches.statistics",),
+)
 async def execute_log_stat_rank(
     session: AsyncSession,
     params: dict[str, Any],
@@ -64,7 +85,7 @@ async def execute_log_stat_rank(
     if "normalize_by_time" in params:
         normalize_by_time = bool(params["normalize_by_time"]) and not is_rate
     else:
-        normalize_by_time = not is_rate
+        normalize_by_time = not is_rate and stat not in _NO_TIME_NORMALIZE
 
     if stat in _RATE_FRACTIONS:
         per_user = _fraction_query(stat, context)

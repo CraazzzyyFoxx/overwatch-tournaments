@@ -11,8 +11,8 @@ import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import {
   WizardShell,
   type WizardStep as WizardRailStep
-} from "@/components/admin/kit/WizardShell";
-import { EYEBROW_CLASS } from "@/components/admin/tone";
+} from "@/components/kit/WizardShell";
+import { EYEBROW_CLASS } from "@/components/kit/tone";
 import {
   AlertDialog,
   AlertDialogAction,

@@ -13,7 +13,7 @@ from shared.clients.s3.upload import upload_asset
 from shared.models.achievements.achievement import AchievementRule
 from shared.repository import AchievementRuleRepository, HeroRepository
 from src import models
-from src.domain.achievement_validation import validate_rule_definition
+from src.domain.achievement_validation import derive_depends_on, validate_rule_definition
 
 EXPORT_SCHEMA_VERSION = 1
 
@@ -259,7 +259,9 @@ def _apply_rule_data(
     rule.scope = payload.scope
     rule.grain = payload.grain
     rule.condition_tree = payload.condition_tree
-    rule.depends_on = payload.depends_on
+    # An imported rule's declared dependencies are whatever the exporting
+    # workspace happened to have; the tree is the truth.
+    rule.depends_on = derive_depends_on(payload.condition_tree)
     rule.enabled = payload.enabled
     rule.rule_version = payload.rule_version
     rule.min_tournament_id = payload.min_tournament_id

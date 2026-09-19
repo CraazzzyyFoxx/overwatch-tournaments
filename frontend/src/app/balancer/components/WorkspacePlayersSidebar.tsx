@@ -18,7 +18,7 @@ import {
   PANEL_CLASS,
   ROLE_TEXT_ACCENTS,
   splitBattleTag,
-} from "@/app/balancer/components/balancer-page-helpers";
+} from "@/components/balancer/balancer-page-helpers";
 import {
   BattleTagContextMenuItems,
   BattleTagCopyButton,
@@ -124,16 +124,18 @@ const RosterMemberRow = memo(function RosterMemberRow({ member, onOpen }: Roster
     <ContextMenu>
       <ContextMenuTrigger asChild>
         <li
-          onDoubleClick={(event) => {
+          // `Element`, not `HTMLElement`: a click on an action button's SVG icon
+          // has an `SVGElement` target and would fall through to the row.
+          onClick={(event) => {
             if (event.target instanceof Element && event.target.closest("[data-card-action]")) {
               return;
             }
             onOpen(member);
           }}
           className={cn(
-            "group grid w-full grid-cols-1 items-start gap-2 rounded-xl border px-2.5 py-2 transition-colors",
-            "border-[color:var(--aqt-border)] bg-white/[0.02]",
-            "hover:border-[color:var(--aqt-border-2)] hover:bg-white/[0.04]",
+            "group grid w-full cursor-pointer grid-cols-1 items-start gap-2 rounded-lg border px-2.5 py-2 transition-colors",
+            "border-[color:var(--aqt-border)] bg-[color:var(--aqt-overlay-1)]",
+            "hover:border-[color:var(--aqt-border-2)] hover:bg-[color:var(--aqt-overlay-3)]",
           )}
         >
           <div className="min-w-0">
@@ -276,14 +278,15 @@ export function WorkspacePlayersSidebar({
           type="button"
           variant="ghost"
           size="icon"
-          className={cn(ICON_BUTTON_CLASS, "h-9 w-9 rounded-xl")}
+          aria-expanded={false}
+          className={cn(ICON_BUTTON_CLASS, "h-9 w-9")}
           onClick={onToggleCollapsed}
         >
           <PanelRightOpen className="h-4 w-4" aria-hidden="true" />
           <span className="sr-only">Expand workspace players sidebar</span>
         </Button>
         <div className="flex flex-1 flex-col items-center gap-2 pt-1">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-[color:var(--aqt-border)] bg-black/15 text-[color:var(--aqt-fg-muted)]">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-[color:var(--aqt-border)] bg-[color:var(--aqt-bg-2)] text-[color:var(--aqt-fg-muted)]">
             <Users className="h-4 w-4" aria-hidden="true" />
           </div>
           <div
@@ -300,7 +303,7 @@ export function WorkspacePlayersSidebar({
         ) : (
           <div
             title={`${total} workspace players`}
-            className="rounded-lg border border-[color:var(--aqt-border)] bg-black/15 px-2 py-1 text-label tabular-nums text-[color:var(--aqt-fg-muted)]"
+            className="rounded-lg border border-[color:var(--aqt-border)] bg-[color:var(--aqt-bg-2)] px-2 py-1 text-label tabular-nums text-[color:var(--aqt-fg-muted)]"
           >
             {total}
             <span className="sr-only"> workspace players</span>
@@ -395,7 +398,7 @@ export function WorkspacePlayersSidebar({
                       aria-describedby={battleTagHintId}
                       // `min-w-0`: an `<input>` carries an intrinsic ~170px width that
                       // `min-width: auto` in a flex row turns into a floor.
-                      className="h-9 min-w-0 rounded-lg border-[color:var(--aqt-border-2)] bg-black/15 text-sm"
+                      className="h-9 min-w-0 rounded-lg border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-bg-2)] text-sm"
                     />
                     {/* Enabled while empty on purpose: submit validates and points at the field. */}
                     <Button
@@ -429,6 +432,7 @@ export function WorkspacePlayersSidebar({
               type="button"
               variant="ghost"
               size="icon"
+              aria-expanded
               className={ICON_BUTTON_CLASS}
               onClick={onToggleCollapsed}
             >
@@ -455,7 +459,7 @@ export function WorkspacePlayersSidebar({
           aria-label="Search workspace players"
           autoComplete="off"
           className={cn(
-            "h-9 rounded-lg border-[color:var(--aqt-border-2)] bg-black/15 pl-9 text-sm",
+            "h-9 rounded-lg border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-bg-2)] pl-9 text-sm",
             search && "pr-9",
           )}
         />
@@ -464,7 +468,7 @@ export function WorkspacePlayersSidebar({
             type="button"
             variant="ghost"
             size="icon"
-            className="absolute right-0.5 top-1/2 h-8 w-8 -translate-y-1/2 rounded-lg text-[color:var(--aqt-fg-dim)] hover:bg-white/5 hover:text-[color:var(--aqt-fg)]"
+            className="absolute right-0.5 top-1/2 h-8 w-8 -translate-y-1/2 rounded-lg text-[color:var(--aqt-fg-dim)] hover:bg-[color:var(--aqt-overlay-3)] hover:text-[color:var(--aqt-fg)]"
             onClick={clearSearch}
           >
             <X className="h-3.5 w-3.5" aria-hidden="true" />

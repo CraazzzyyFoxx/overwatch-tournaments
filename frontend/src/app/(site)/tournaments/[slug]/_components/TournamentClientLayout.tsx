@@ -18,7 +18,7 @@ import { reachedAtLeast } from "@/lib/tournament-lifecycle";
 import { cn, formatDateRange } from "@/lib/utils";
 import { useInvalidation } from "@/hooks/useInvalidation";
 import { createTrailingCoalescer } from "@/lib/realtime-coalesce";
-import { useTournamentQuery } from "../_hooks/useTournamentClientData";
+import { useTournamentQuery } from "@/hooks/useTournamentClientData";
 import { TournamentRouteProvider } from "../_hooks/useTournamentId";
 import { useSyncActiveWorkspace } from "@/hooks/useSyncActiveWorkspace";
 import { useTournamentStreamsQuery } from "../_hooks/useTournamentStreams";
@@ -289,6 +289,7 @@ export default function TournamentClientLayout({
         stages={stages}
         hasTeams={teamsCount > 0}
         hasStreams={(streams?.official.length ?? 0) > 0 || (streams?.participants.length ?? 0) > 0}
+        hasRules={Boolean(tournament.rules?.trim())}
         collapsed={heroScrolledPast}
         collapsedTitle={<span title={tournament.name}>{tournament.name}</span>}
         collapsedActions={

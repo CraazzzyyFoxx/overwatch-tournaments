@@ -30,7 +30,7 @@ from shared.services.member_rank import (  # noqa: E402
 )
 
 _FETCH = "shared.services.member_rank.fetch_latest_ow_ranks_by_account"
-_ROLES = ("tank", "dps", "support")
+_ROLES = ("tank", "damage", "support")
 
 _HOST = 99
 
@@ -85,11 +85,11 @@ class MemberRankResolveTests(IsolatedAsyncioTestCase):
         """Absence of a row is what makes inheritance work; a 0 would not."""
         self.ranks.list_layers.return_value = [
             _rank(1, "tank", 2000),
-            _rank(1, "dps", 1900, author_user_id=_HOST),
+            _rank(1, "damage", 1900, author_user_id=_HOST),
         ]
-        result, _fetch = await self._mix({1: 10}, ["tank", "dps"])
+        result, _fetch = await self._mix({1: 10}, ["tank", "damage"])
         self.assertEqual(result[(1, "tank")], ResolvedRank(2000, "workspace"))
-        self.assertEqual(result[(1, "dps")], ResolvedRank(1900, "author"))
+        self.assertEqual(result[(1, "damage")], ResolvedRank(1900, "author"))
 
     async def test_ow_fills_what_no_stored_layer_covers(self) -> None:
         result, fetch = await self._mix({1: 10}, ["tank"], ow={10: {"Ana#1": {"tank": 1800}}})
@@ -125,7 +125,7 @@ class MemberRankResolveTests(IsolatedAsyncioTestCase):
         fetch.assert_not_awaited()
 
     async def test_unranked_after_every_layer_is_none(self) -> None:
-        result, fetch = await self._mix({1: 10}, ["tank"], ow={10: {"Ana#1": {"dps": 1800}}})
+        result, fetch = await self._mix({1: 10}, ["tank"], ow={10: {"Ana#1": {"damage": 1800}}})
         self.assertEqual(result[(1, "tank")], ResolvedRank(None, "none"))
         fetch.assert_awaited_once()
 
@@ -143,12 +143,12 @@ class MemberRankResolveTests(IsolatedAsyncioTestCase):
                 self.session,
                 workspace_id=1,
                 members={1: 10},
-                roles=["tank", "dps"],
+                roles=["tank", "damage"],
                 order=TOURNAMENT_ORDER,
                 author_user_id=_HOST,
-                registration_ranks={(1, "dps"): 2600},
+                registration_ranks={(1, "damage"): 2600},
             )
         self.assertIsNone(self.ranks.list_layers.await_args.kwargs["author_user_id"])
         # An empty registration role inherits the canon instead of reading as unranked.
         self.assertEqual(result[(1, "tank")], ResolvedRank(2000, "workspace"))
-        self.assertEqual(result[(1, "dps")], ResolvedRank(2600, "registration"))
+        self.assertEqual(result[(1, "damage")], ResolvedRank(2600, "registration"))

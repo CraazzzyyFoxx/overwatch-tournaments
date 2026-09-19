@@ -15,6 +15,7 @@ from typing import Any
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.models.achievements.achievement import AchievementGrain
 from src import models
 from src.domain.achievement_stage_filters import standing_is_elimination
 
@@ -46,7 +47,16 @@ def _base_query() -> sa.Select[tuple[int, int]]:
     )
 
 
-@register("reached_playoffs")
+@register(
+    "reached_playoffs",
+    grain=AchievementGrain.user_tournament,
+    description="Reached the elimination stage",
+    optional=("op", "scope", "value"),
+    depends_on=("tournament.standing", "tournament.player"),
+    grain_for=lambda params: (
+        AchievementGrain.user if params.get("scope") == "global" else AchievementGrain.user_tournament
+    ),
+)
 async def execute_reached_playoffs(
     session: AsyncSession,
     params: dict[str, Any],

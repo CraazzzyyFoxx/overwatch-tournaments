@@ -25,31 +25,33 @@ export interface RoleDef {
 
 export const ROLES: readonly RoleDef[] = [
   { code: "tank", display: "Tank", icon: "Tank" },
-  { code: "dps", display: "DPS", icon: "Damage" },
+  { code: "damage", display: "DPS", icon: "Damage" },
   { code: "support", display: "Support", icon: "Support" },
 ] as const;
 
 export const ROLE_LABELS: Record<string, string> = {
   tank: "Tank",
-  dps: "DPS",
+  damage: "DPS",
   support: "Support",
 };
 
-/** Registration role code → canonical role used by the PlayerSubRole catalog/HeroClass. */
+/**
+ * Known registration role codes. The codes and the canonical `HeroClass` names
+ * are the same vocabulary now, so this table only validates membership.
+ */
 export const REGISTRATION_TO_CANONICAL: Record<RoleCode, string> = {
   tank: "tank",
-  dps: "damage",
+  damage: "damage",
   support: "support",
 };
 
 const CANONICAL_TO_REGISTRATION: Record<string, RoleCode> = {
   tank: "tank",
-  damage: "dps",
-  dps: "dps",
+  damage: "damage",
   support: "support",
 };
 
-/** Map a canonical catalog role (tank/damage/support) to a registration code. */
+/** Narrow a free-form catalog role string to a known role code, or `null`. */
 export function canonicalToRegistrationRole(role: string): RoleCode | null {
   return CANONICAL_TO_REGISTRATION[role.trim().toLowerCase()] ?? null;
 }
@@ -68,7 +70,7 @@ export const ROLE_ACCENTS: Record<string, RoleAccent> = {
     indicator: "border-sky-300",
     mutedIndicator: "border-sky-300/45",
   },
-  dps: {
+  damage: {
     tile: "bg-orange-500/18 text-orange-200",
     selectedCard: "border-orange-400/75 bg-orange-500/10 shadow-[0_0_0_1px_rgba(251,146,60,0.14)]",
     indicator: "border-orange-300",
@@ -90,7 +92,7 @@ export const ROLE_ACCENTS: Record<string, RoleAccent> = {
 
 const ROLE_ICON_NAMES: Record<RoleCode, "Tank" | "Damage" | "Support"> = {
   tank: "Tank",
-  dps: "Damage",
+  damage: "Damage",
   support: "Support",
 };
 
@@ -102,11 +104,11 @@ export function getRoleIconName(roleCode: RoleCode): "Tank" | "Damage" | "Suppor
 /** Draft role accent colors (CSS custom properties) shared across the draft-room UI. */
 export const ROLE_ACCENT: Record<RoleCode, string> = {
   tank: "var(--aqt-tank)",
-  dps: "var(--aqt-damage)",
+  damage: "var(--aqt-damage)",
   support: "var(--aqt-support)"
 };
 
-const SUBROLE_ACRONYMS = new Set(["dps", "pov", "vk"]);
+const SUBROLE_ACRONYMS = new Set(["pov", "vk"]);
 
 /** Humanize a sub-role slug as a fallback when no catalog label is available. */
 export function formatSubroleSlug(slug: string): string {

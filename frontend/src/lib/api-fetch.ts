@@ -38,18 +38,20 @@ interface ApiFetchOptions {
   throwOnError?: boolean;
 }
 
-// ─── Per-domain behaviour (keyed by path prefix) ──────────────────────────────
+// ─── Per-domain behaviour (keyed by the domain segment) ──────────────────────
 //
-// The gateway is a single origin, so the path's top-level namespace IS the
-// domain. Behaviour (workspace injection + default cache) is attached per
-// domain, not per service. Callers pass the full gateway path, e.g.
+// Every gateway path is `/api/v{n}/<domain>/...` — one version axis, always the
+// second segment (docs/frontend-zones.md's sibling rule for the API; the
+// generated reference is at /api/docs). Behaviour — workspace injection and the
+// default cache — is attached per domain, so it keys off segment THREE, not a
+// top-level prefix. Callers pass the full gateway path:
 //   apiFetch("/api/v1/tournaments/5")
-//   apiFetch("/api/balancer/config")
-//   apiFetch("/api/auth/me")
+//   apiFetch("/api/v1/balancer/config")
+//   apiFetch("/api/v1/auth/me")
 
 const cachePolicy = process.env.NEXT_PUBLIC_CACHE_POLICY;
 
-function resolveV1Cache(): RequestCache {
+function resolveMainCache(): RequestCache {
   switch (cachePolicy) {
     case "no-cache":
       return "no-cache";
@@ -65,17 +67,46 @@ interface DomainBehavior {
   defaultCache: RequestCache;
 }
 
+/**
+ * Domains that are NOT workspace-scoped: the server resolves the audience from
+ * the credential instead. Identity is per-credential; the inbox and the
+ * announcement feed are per-user unions of every workspace the caller belongs
+ * to, so injecting one workspace id would narrow them wrongly. All three are
+ * also never cached — a stale answer here is a wrong answer (a signed-out
+ * viewer seeing the previous account's profile).
+ */
+const UNSCOPED_DOMAINS: Record<string, true> = {
+  auth: true,
+  notifications: true,
+  announcements: true
+};
+
+/**
+ * Workspace-scoped, but edited while they are being watched: a balance run, an
+ * analytics job, a live stream list. They opt out of the cache policy so a
+ * `default` HTTP cache can never serve a superseded board.
+ */
+const LIVE_DOMAINS: Record<string, true> = { balancer: true, analytics: true, streams: true };
+
+/** `/api/v1/auth/me` -> "auth". Empty for a non-gateway path. */
+function domainOf(path: string): string {
+  const match = /^\/api\/v\d+\/([^/?#]+)/.exec(path);
+  return match ? match[1] : "";
+}
+
 function domainBehavior(path: string): DomainBehavior {
-  // Identity domain: no workspace scoping.
-  if (path.startsWith("/api/auth")) {
+  const domain = domainOf(path);
+  if (UNSCOPED_DOMAINS[domain]) {
     return { injectWorkspace: false, defaultCache: "no-store" };
   }
-  // Main API (app + tournament + parser): workspace-scoped, cache per policy.
-  if (path.startsWith("/api/v1")) {
-    return { injectWorkspace: true, defaultCache: resolveV1Cache() };
+  if (LIVE_DOMAINS[domain]) {
+    return { injectWorkspace: true, defaultCache: "no-store" };
   }
-  // /api/balancer, /api/analytics, and any other workspace-scoped domain.
-  return { injectWorkspace: true, defaultCache: "no-store" };
+  // The main resource surface (tournaments, users, admin, …) and anything a
+  // caller invents: workspace-scoped, cached per policy. Defaulting an unknown
+  // path to scoped is the safe direction — an unscoped read of scoped data
+  // leaks across tenants, a redundant workspace_id is ignored.
+  return { injectWorkspace: true, defaultCache: resolveMainCache() };
 }
 
 // ─── Workspace ID (server-side, cached per request) ─────────────────────────

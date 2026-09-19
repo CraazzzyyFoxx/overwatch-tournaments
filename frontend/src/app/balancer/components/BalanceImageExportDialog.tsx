@@ -28,10 +28,11 @@ import type { DivisionGrid } from "@/types/workspace.types";
 
 import {
   BALANCE_ROSTER_KEYS,
+  MUTED_BUTTON_CLASS,
   TEAM_BADGE_ACCENTS,
   calculateTeamAverageFromPayload,
   calculateTeamTotalFromPayload
-} from "./balancer-page-helpers";
+} from "@/components/balancer/balancer-page-helpers";
 
 const TEAMS_PER_IMAGE = 10;
 const EXPORT_WIDTH = 1920;
@@ -222,7 +223,7 @@ export function BalanceImageExportDialog({
                   type="button"
                   variant="outline"
                   size="sm"
-                  className="rounded-xl border-[color:var(--aqt-border-2)] bg-white/[0.04] text-[color:var(--aqt-fg-muted)] hover:bg-white/[0.08] hover:text-[color:var(--aqt-fg)]"
+                  className={MUTED_BUTTON_CLASS}
                   onClick={handleDownloadAll}
                   disabled={isGenerating || images.length === 0}
                 >
@@ -233,7 +234,7 @@ export function BalanceImageExportDialog({
                   type="button"
                   variant="outline"
                   size="sm"
-                  className="rounded-xl border-[color:var(--aqt-border-2)] bg-white/[0.04] text-[color:var(--aqt-fg-muted)] hover:bg-white/[0.08] hover:text-[color:var(--aqt-fg)]"
+                  className={MUTED_BUTTON_CLASS}
                   onClick={() => {
                     if (fullImageBlob) {
                       void handleCopyImage(fullImageBlob, "Full image copied");
@@ -250,7 +251,7 @@ export function BalanceImageExportDialog({
 
           <div className="min-h-0 flex-1 overflow-y-auto p-4">
             {isGenerating ? (
-              <div className="flex min-h-64 items-center justify-center rounded-2xl border border-[color:var(--aqt-border)] bg-white/[0.03] text-sm text-[color:var(--aqt-fg-muted)]">
+              <div className="flex min-h-64 items-center justify-center rounded-2xl border border-[color:var(--aqt-border)] bg-[color:var(--aqt-overlay-2)] text-sm text-[color:var(--aqt-fg-muted)]">
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 Generating images...
               </div>
@@ -271,14 +272,14 @@ export function BalanceImageExportDialog({
                     className="overflow-hidden rounded-xl border border-border bg-card"
                   >
                     <div className="flex items-center justify-between gap-3 border-b border-[color:var(--aqt-border)] px-3 py-2.5">
-                      <div className="text-xs font-semibold uppercase tracking-label text-[color:var(--aqt-fg-muted)]">
+                      <div className="text-label font-semibold uppercase tracking-label text-[color:var(--aqt-fg-muted)]">
                         {image.label}
                       </div>
                       <Button
                         type="button"
                         variant="outline"
                         size="sm"
-                        className="rounded-xl border-[color:var(--aqt-border-2)] bg-white/[0.04] text-[color:var(--aqt-fg-muted)] hover:bg-white/[0.08] hover:text-[color:var(--aqt-fg)]"
+                        className={MUTED_BUTTON_CLASS}
                         onClick={() =>
                           void handleCopyImage(image.blob, `Image ${index + 1} copied`)
                         }

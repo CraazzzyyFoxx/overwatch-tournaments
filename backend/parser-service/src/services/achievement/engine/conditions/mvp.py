@@ -10,6 +10,7 @@ from typing import Any
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.models.achievements.achievement import AchievementGrain
 from src import models
 
 from ..context import EvalContext
@@ -17,7 +18,13 @@ from . import ResultSet, register
 from .stat_threshold import OPERATORS
 
 
-@register("match_mvp_check")
+@register(
+    "match_mvp_check",
+    grain=AchievementGrain.user_match,
+    description="Best value of a stat among the map's players",
+    optional=("op", "sort_order", "stat", "top_n", "value"),
+    depends_on=("matches.statistics",),
+)
 async def execute(
     session: AsyncSession,
     params: dict[str, Any],

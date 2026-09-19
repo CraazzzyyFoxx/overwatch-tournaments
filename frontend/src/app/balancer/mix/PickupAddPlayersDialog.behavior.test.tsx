@@ -348,7 +348,7 @@ describe("PickupAddPlayersDialog", () => {
 
   it("shows an inherited workspace rank dimmed, rather than as an empty slot", async () => {
     list.mockResolvedValue({
-      results: [member(1, "Aria#1111", { ranks: { tank: 2400 }, author_ranks: { dps: 2600 } })],
+      results: [member(1, "Aria#1111", { ranks: { tank: 2400 }, author_ranks: { damage: 2600 } })],
       total: 1,
       page: 1,
       per_page: 24,

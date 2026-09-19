@@ -67,7 +67,7 @@ def _serialize_native_request(
             "low_rank_threshold": config.low_rank_threshold,
             "low_rank_collision_weight": config.low_rank_collision_weight,
             "tank_impact_weight": config.tank_impact_weight,
-            "dps_impact_weight": config.dps_impact_weight,
+            "damage_impact_weight": config.damage_impact_weight,
             "support_impact_weight": config.support_impact_weight,
             "tank_gap_weight": config.tank_gap_weight,
             "tank_std_weight": config.tank_std_weight,

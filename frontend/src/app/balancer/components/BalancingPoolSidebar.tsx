@@ -1,7 +1,7 @@
 "use client";
 
 import { forwardRef, useCallback, useImperativeHandle, useMemo, useState } from "react";
-import { Check, Columns3, Kanban, PanelLeftClose, PanelLeftOpen, PlusCircle, Search, Settings2, ShieldX, Tag, X } from "lucide-react";
+import { Check, Columns3, Kanban, PanelLeftClose, PanelLeftOpen, PlusCircle, Settings2, ShieldX, Tag, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,13 +12,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Input } from "@/components/ui/input";
+import { FilterChip, FilterChipGroup } from "@/components/ui/filter-chip";
+import { SearchField } from "@/components/ui/search-field";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { AdminRegistration, BalancerApplication, WorkspaceBalancerConfig } from "@/types/balancer-admin.types";
 import type { StatusMeta } from "@/types/registration.types";
-import type { PlayerValidationState, PoolView, PoolSortValue } from "./balancer-page-helpers";
-import { ICON_BUTTON_CLASS, PANEL_CLASS, hasBlockingIssues, sortPlayerStates } from "./balancer-page-helpers";
-import { buildPlayerSearchIndex } from "./workspace-helpers";
+import type { PlayerValidationState, PoolView, PoolSortValue } from "@/components/balancer/balancer-page-helpers";
+import { ICON_BUTTON_CLASS, PANEL_CLASS, hasBlockingIssues, sortPlayerStates } from "@/components/balancer/balancer-page-helpers";
+import { buildPlayerSearchIndex } from "@/components/balancer/workspace-helpers";
 import { PoolAvailableList } from "./PoolAvailableList";
 import { PoolPlayerCompactList } from "./PoolPlayerCompactList";
 import { PoolTriageBoard } from "./PoolTriageBoard";
@@ -82,7 +83,7 @@ function BulkStatusMenu({
           variant="outline"
           size="sm"
           disabled={disabled}
-          className="h-7 rounded-lg border-[color:var(--aqt-border-2)] bg-black/15 px-2 text-label text-[color:var(--aqt-fg-muted)] hover:bg-white/5 hover:text-[color:var(--aqt-fg)]"
+          className="h-7 rounded-lg border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-bg-2)] px-2 text-label text-[color:var(--aqt-fg-muted)] hover:bg-[color:var(--aqt-overlay-3)] hover:text-[color:var(--aqt-fg)]"
         >
           <Tag className="mr-1 h-3 w-3" aria-hidden="true" />
           Status
@@ -289,14 +290,15 @@ export const BalancingPoolSidebar = forwardRef<BalancingPoolSidebarHandle, Balan
             type="button"
             variant="ghost"
             size="icon"
-            className={cn(ICON_BUTTON_CLASS, "h-9 w-9 rounded-xl")}
+            aria-expanded={false}
+            className={cn(ICON_BUTTON_CLASS, "h-9 w-9")}
             onClick={onToggleCollapsed}
           >
             <PanelLeftOpen className="h-4 w-4" aria-hidden="true" />
             <span className="sr-only">Expand Balancing Pool sidebar</span>
           </Button>
           <div className="flex flex-1 flex-col items-center gap-2 pt-1">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-[color:var(--aqt-border)] bg-black/15 text-[color:var(--aqt-fg-muted)]">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-[color:var(--aqt-border)] bg-[color:var(--aqt-bg-2)] text-[color:var(--aqt-fg-muted)]">
               <Columns3 className="h-4 w-4" aria-hidden="true" />
             </div>
             <div className="text-center text-label uppercase tracking-label text-[color:var(--aqt-fg-dim)] [writing-mode:vertical-rl]">
@@ -304,7 +306,7 @@ export const BalancingPoolSidebar = forwardRef<BalancingPoolSidebarHandle, Balan
             </div>
           </div>
           <div className="flex flex-col items-center gap-1.5">
-            <div className="rounded-lg border border-[color:var(--aqt-border)] bg-black/15 px-2 py-1 text-label tabular-nums text-[color:var(--aqt-fg-muted)]">
+            <div className="rounded-lg border border-[color:var(--aqt-border)] bg-[color:var(--aqt-bg-2)] px-2 py-1 text-label tabular-nums text-[color:var(--aqt-fg-muted)]">
               {poolPlayers.length}
             </div>
             {invalidPlayers.length > 0 ? (
@@ -362,6 +364,7 @@ export const BalancingPoolSidebar = forwardRef<BalancingPoolSidebarHandle, Balan
                 type="button"
                 variant="ghost"
                 size="icon"
+                aria-expanded
                 className={ICON_BUTTON_CLASS}
                 onClick={onToggleCollapsed}
               >
@@ -373,26 +376,24 @@ export const BalancingPoolSidebar = forwardRef<BalancingPoolSidebarHandle, Balan
         </div>
 
         <div className="space-y-2">
-          <div className="flex items-center gap-1.5">
-            <div className="relative flex-1">
-              <Search
-                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[color:var(--aqt-fg-dim)]"
-                aria-hidden="true"
-              />
-              <Input
-                value={searchQuery}
-                onChange={(event) => setSearchQuery(event.target.value)}
-                placeholder="Search BattleTag or role"
-                aria-label="Search the Balancing Pool"
-                autoComplete="off"
-                className="h-9 rounded-lg border-[color:var(--aqt-border-2)] bg-black/15 pl-9 text-sm"
-              />
-            </div>
+          {/* Wraps: at the 260px minimum sidebar width the 168px sort trigger
+              left the search field ~54px wide — icon only, no room to read the
+              query. Below its own minimum the sort control takes the next row. */}
+          <div className="flex flex-wrap items-center gap-1.5">
+            <SearchField
+              containerClassName="min-w-32 flex-1"
+              value={searchQuery}
+              onValueChange={setSearchQuery}
+              label="Search the Balancing Pool"
+              placeholder="Search BattleTag or role"
+              autoComplete="off"
+              className="h-9"
+            />
             {isAvailableView ? null : (
               <Select value={poolSort} onValueChange={(value) => setPoolSort(value as PoolSortValue)}>
                 <SelectTrigger
                   aria-label="Sort players"
-                  className="h-9 w-[10.5rem] shrink-0 rounded-lg border-[color:var(--aqt-border-2)] bg-black/15 text-sm text-[color:var(--aqt-fg)]"
+                  className="h-9 w-[10.5rem] shrink-0 rounded-lg border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-bg-2)] text-sm text-[color:var(--aqt-fg)]"
                 >
                   <SelectValue />
                 </SelectTrigger>
@@ -407,35 +408,31 @@ export const BalancingPoolSidebar = forwardRef<BalancingPoolSidebarHandle, Balan
             )}
           </div>
 
-          <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Filter the Balancing Pool">
-            {poolFilterOptions.map((option) => {
-              const isActive = option.value === poolView;
-              const needsAttention = option.value === "needs_fix" && option.count > 0;
-
-              return (
-                <button
-                  key={option.value}
-                  type="button"
-                  aria-pressed={isActive}
-                  aria-label={option.announcedLabel}
-                  onClick={() => setPoolView(option.value)}
-                  className={cn(
-                    "rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors",
-                    isActive
-                      ? "border-[color:var(--aqt-border-3)] bg-white/10 text-[color:var(--aqt-fg)]"
-                      : "border-transparent bg-white/[0.03] text-[color:var(--aqt-fg-dim)] hover:bg-white/[0.06] hover:text-[color:var(--aqt-fg)]",
-                    needsAttention && !isActive && "border-amber-400/25 bg-amber-500/10 text-amber-100",
-                  )}
-                >
-                  {option.label}
-                  <span className="ml-1 text-label tabular-nums opacity-70">{option.count}</span>
-                </button>
-              );
-            })}
-          </div>
+          {/* `FilterChip`/`FilterChipGroup` instead of a local pill: one chip
+              implementation for the whole app, and the active state is the
+              shared teal tint rather than a white wash a hover could match. */}
+          <FilterChipGroup label="Filter the Balancing Pool" className="gap-1.5">
+            {poolFilterOptions.map((option) => (
+              <FilterChip
+                key={option.value}
+                active={option.value === poolView}
+                count={option.count}
+                aria-label={option.announcedLabel}
+                onClick={() => setPoolView(option.value)}
+                className={cn(
+                  option.value === "needs_fix" &&
+                    option.count > 0 &&
+                    option.value !== poolView &&
+                    "border-amber-400/25 bg-amber-500/10 text-amber-100",
+                )}
+              >
+                {option.label}
+              </FilterChip>
+            ))}
+          </FilterChipGroup>
 
           {selectedCount > 0 && !isAvailableView ? (
-            <div className="flex flex-wrap items-center gap-1.5 rounded-xl border border-[color:var(--aqt-border)] bg-black/15 p-1.5">
+            <div className="flex flex-wrap items-center gap-1.5 rounded-xl border border-[color:var(--aqt-border)] bg-[color:var(--aqt-bg-2)] p-1.5">
               <div className="flex items-center gap-1.5 px-1.5 text-label font-medium tabular-nums text-[color:var(--aqt-fg-muted)]">
                 <Check className="h-3.5 w-3.5 text-cyan-200" aria-hidden="true" />
                 {selectedCount} selected
@@ -445,7 +442,7 @@ export const BalancingPoolSidebar = forwardRef<BalancingPoolSidebarHandle, Balan
                   type="button"
                   variant="ghost"
                   size="sm"
-                  className="h-7 rounded-lg border border-[color:var(--aqt-border)] bg-black/15 px-2 text-label text-[color:var(--aqt-fg-muted)] hover:bg-white/5 hover:text-[color:var(--aqt-fg)]"
+                  className="h-7 rounded-lg border border-[color:var(--aqt-border)] bg-[color:var(--aqt-bg-2)] px-2 text-label text-[color:var(--aqt-fg-muted)] hover:bg-[color:var(--aqt-overlay-3)] hover:text-[color:var(--aqt-fg)]"
                   onClick={selectAllVisible}
                 >
                   Select all {filteredPoolPlayerStates.length}
@@ -456,7 +453,7 @@ export const BalancingPoolSidebar = forwardRef<BalancingPoolSidebarHandle, Balan
                 variant="outline"
                 size="sm"
                 disabled={quickActionsDisabled || !onBulkPoolMembership}
-                className="h-7 rounded-lg border-[color:var(--aqt-border-2)] bg-black/15 px-2 text-label text-[color:var(--aqt-fg-muted)] hover:bg-white/5 hover:text-[color:var(--aqt-fg)]"
+                className="h-7 rounded-lg border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-bg-2)] px-2 text-label text-[color:var(--aqt-fg-muted)] hover:bg-[color:var(--aqt-overlay-3)] hover:text-[color:var(--aqt-fg)]"
                 onClick={() => runBulkPoolMembership(true)}
               >
                 <PlusCircle className="mr-1 h-3 w-3" aria-hidden="true" />
@@ -467,7 +464,7 @@ export const BalancingPoolSidebar = forwardRef<BalancingPoolSidebarHandle, Balan
                 variant="outline"
                 size="sm"
                 disabled={quickActionsDisabled || !onBulkPoolMembership}
-                className="h-7 rounded-lg border-[color:var(--aqt-border-2)] bg-black/15 px-2 text-label text-[color:var(--aqt-fg-muted)] hover:bg-white/5 hover:text-[color:var(--aqt-fg)]"
+                className="h-7 rounded-lg border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-bg-2)] px-2 text-label text-[color:var(--aqt-fg-muted)] hover:bg-[color:var(--aqt-overlay-3)] hover:text-[color:var(--aqt-fg)]"
                 onClick={() => runBulkPoolMembership(false)}
               >
                 <ShieldX className="mr-1 h-3 w-3" aria-hidden="true" />
@@ -482,7 +479,7 @@ export const BalancingPoolSidebar = forwardRef<BalancingPoolSidebarHandle, Balan
                 type="button"
                 variant="ghost"
                 size="icon"
-                className="ml-auto h-7 w-7 rounded-lg border border-[color:var(--aqt-border)] bg-black/15 text-[color:var(--aqt-fg-dim)] hover:bg-white/5 hover:text-[color:var(--aqt-fg)]"
+                className="ml-auto h-7 w-7 rounded-lg border border-[color:var(--aqt-border)] bg-[color:var(--aqt-bg-2)] text-[color:var(--aqt-fg-dim)] hover:bg-[color:var(--aqt-overlay-3)] hover:text-[color:var(--aqt-fg)]"
                 onClick={clearSelection}
               >
                 <X className="h-3.5 w-3.5" aria-hidden="true" />

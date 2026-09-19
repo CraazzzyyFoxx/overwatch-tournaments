@@ -3,8 +3,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, HelpCircle } from "lucide-react";
 
-import { StatusPill } from "@/components/admin/kit/StatusPill";
-import { EYEBROW_CLASS, TONE_CLASS, type Tone } from "@/components/admin/tone";
+import { StatusPill } from "@/components/kit/StatusPill";
+import { EYEBROW_CLASS, TONE_CLASS, type Tone } from "@/components/kit/tone";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import adminService from "@/services/admin.service";

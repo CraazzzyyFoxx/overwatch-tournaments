@@ -5,12 +5,12 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Pencil, RefreshCw, Trash2, Trophy } from "lucide-react";
 
-import { AdminDataTable, createKebabColumn } from "@/components/admin-data-table";
-import { EntityFormDialog } from "@/components/admin/EntityFormDialog";
+import { AdminDataTable, createKebabColumn } from "@/components/data-table";
+import { EntityFormDialog } from "@/components/kit/EntityFormDialog";
 import { StandingsTiesPanel } from "@/components/admin/StandingsTiesPanel";
-import { AdminFilterBar } from "@/components/admin/kit/AdminFilterBar";
-import { ConfirmDialog } from "@/components/admin/kit/ConfirmDialog";
-import { useAdminFilters, type FilterDef } from "@/components/admin/kit/useAdminFilters";
+import { AdminFilterBar } from "@/components/kit/AdminFilterBar";
+import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
+import { useAdminFilters, type FilterDef } from "@/components/kit/useAdminFilters";
 import {
   TOURNAMENT_QUERY_PARAM,
   parseTournamentQueryParam
@@ -19,7 +19,7 @@ import TeamName from "@/components/TeamName";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { NumberInput } from "@/components/ui/number-input";
-import { getTournamentWorkspaceQueryKeys, invalidateTournamentWorkspace } from "@/app/admin/tournaments/[id]/components/tournamentWorkspace.queryKeys";
+import { getTournamentWorkspaceQueryKeys, invalidateTournamentWorkspace } from "@/lib/tournament-workspace-query-keys";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useQueryParams } from "@/hooks/useQueryParams";
 import { hasUnsavedChanges } from "@/lib/form-change";
@@ -29,7 +29,7 @@ import adminService from "@/services/admin.service";
 import tournamentService from "@/services/tournament.service";
 import type { StandingUpdateInput } from "@/types/admin.types";
 import type { Standings } from "@/types/tournament.types";
-import { EmptyNote } from "@/components/admin/kit/EmptyNote";
+import { EmptyNote } from "@/components/kit/EmptyNote";
 
 const PAGE_SIZE = 25;
 

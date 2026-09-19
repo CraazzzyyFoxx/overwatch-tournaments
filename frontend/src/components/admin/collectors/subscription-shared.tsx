@@ -1,8 +1,8 @@
 import { TintedBadge } from "@/components/admin/TintedBadge";
-import type { Tone } from "@/components/admin/tone";
+import type { Tone } from "@/components/kit/tone";
 import type { SubscriptionCollectionStats } from "@/types/admin.types";
 
-export { formatDate, formatRelative, formatInterval } from "@/components/admin/format-time";
+export { formatDate, formatRelative, formatInterval } from "@/components/kit/format-time";
 
 /** Tone per check state, handed to `TintedBadge` as the domain's vocabulary. */
 const STATE_TONES: Record<string, Tone> = {

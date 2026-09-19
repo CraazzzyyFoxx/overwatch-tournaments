@@ -4,23 +4,23 @@ import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { History, Pencil, Trash2 } from "lucide-react";
 
-import { ConfirmDialog } from "@/components/admin/kit/ConfirmDialog";
-import { EntityFormDialog } from "@/components/admin/EntityFormDialog";
-import { StatusPill } from "@/components/admin/kit/StatusPill";
+import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
+import { EntityFormDialog } from "@/components/kit/EntityFormDialog";
+import { StatusPill } from "@/components/kit/StatusPill";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DiscordChannelSelect } from "@/components/discord/DiscordChannelSelect";
 import { Skeleton } from "@/components/ui/skeleton";
-import { EYEBROW_CLASS, type Tone } from "@/components/admin/tone";
+import { EYEBROW_CLASS, type Tone } from "@/components/kit/tone";
 import { hasUnsavedChanges } from "@/lib/form-change";
 import { notify } from "@/lib/notify";
 import adminService from "@/services/admin.service";
 import type { DiscordChannelInput, DiscordChannelRead } from "@/types/admin.types";
 import type { Tournament } from "@/types/tournament.types";
-import { getTournamentWorkspaceQueryKeys } from "./tournamentWorkspace.queryKeys";
-import { EmptyNote } from "@/components/admin/kit/EmptyNote";
+import { getTournamentWorkspaceQueryKeys } from "@/lib/tournament-workspace-query-keys";
+import { EmptyNote } from "@/components/kit/EmptyNote";
 
 const EMPTY_CHANNEL_FORM: DiscordChannelInput = {
   channel_id: "",

@@ -2,9 +2,9 @@ import { useMemo, type ReactNode } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLocalStorageState } from "@/hooks/useLocalStorageState";
-import { PANEL_CLASS, TEAM_BADGE_ACCENTS } from "./balancer-page-helpers";
-import { calculateTeamAverageFromPayload } from "./balancer-page-helpers";
-import type { BalanceVariant } from "./workspace-helpers";
+import { PANEL_CLASS, TEAM_BADGE_ACCENTS } from "@/components/balancer/balancer-page-helpers";
+import { calculateTeamAverageFromPayload } from "@/components/balancer/balancer-page-helpers";
+import type { BalanceVariant } from "@/components/balancer/workspace-helpers";
 
 type TeamDistributionPanelProps = {
   variant: BalanceVariant;
@@ -111,16 +111,16 @@ export function TeamDistributionPanel({ variant, variantSelector }: Readonly<Tea
           onClick={() => setCollapsed((value) => !value)}
           aria-expanded={!collapsed}
           aria-label={collapsed ? "Expand team distribution chart" : "Collapse team distribution chart"}
-          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-[color:var(--aqt-fg-dim)] transition hover:bg-white/5 hover:text-[color:var(--aqt-fg-muted)]"
+          className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-[color:var(--aqt-fg-dim)] transition hover:bg-[color:var(--aqt-overlay-3)] hover:text-[color:var(--aqt-fg-muted)]"
         >
           {collapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
         </button>
       </div>
 
       {collapsed ? null : (
-      <div className="mt-2 rounded-xl border border-[color:var(--aqt-border)] bg-black/15 px-3 py-2">
+      <div className="mt-2 rounded-xl border border-[color:var(--aqt-border)] bg-[color:var(--aqt-bg-2)] px-3 py-2">
         <div className="relative min-h-8">
-          <div className="absolute inset-x-0 top-1/2 h-3 -translate-y-1/2 rounded-full bg-white/4" />
+          <div className="absolute inset-x-0 top-1/2 h-3 -translate-y-1/2 rounded-full bg-[color:var(--aqt-overlay-3)]" />
           {buckets.map((bucket) => {
             const clampedLeft = Math.max(4, Math.min(bucket.position, 96));
             const isGroup = bucket.points.length > 1;
@@ -153,7 +153,7 @@ export function TeamDistributionPanel({ variant, variantSelector }: Readonly<Tea
                 {isGroup ? (
                   <div
                     className={cn(
-                      "relative flex flex-row flex-wrap items-center gap-y-0.5 rounded-lg bg-white/4 p-0.5 ring-1 ring-[color:var(--aqt-border-2)] backdrop-blur-sm",
+                      "relative flex flex-row flex-wrap items-center gap-y-0.5 rounded-lg bg-[color:var(--aqt-overlay-3)] p-0.5 ring-1 ring-[color:var(--aqt-border-2)] backdrop-blur-sm",
                       wrapJustifyClass
                     )}
                   >

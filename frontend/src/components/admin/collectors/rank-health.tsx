@@ -6,7 +6,7 @@ import { AlertTriangle, Loader2, Pause, Play, RotateCcw } from "lucide-react";
 import { StatTile, StatTileGrid } from "@/components/admin/StatTile";
 import { StatTileGridSkeleton } from "@/components/admin/StatTileGridSkeleton";
 import { TintedBadge } from "@/components/admin/TintedBadge";
-import { EYEBROW_CLASS } from "@/components/admin/tone";
+import { EYEBROW_CLASS } from "@/components/kit/tone";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { useAuthProfile } from "@/hooks/useAuthProfile";

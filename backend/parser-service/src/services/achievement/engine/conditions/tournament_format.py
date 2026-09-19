@@ -9,6 +9,7 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.core.enums import StageType
+from shared.models.achievements.achievement import AchievementGrain
 from src import models
 from src.domain.achievement_stage_filters import BRACKET_STAGE_TYPES
 
@@ -33,7 +34,13 @@ def matches_tournament_format(stage_types: Iterable[StageType], fmt: str) -> boo
     return False
 
 
-@register("tournament_format")
+@register(
+    "tournament_format",
+    grain=AchievementGrain.user_tournament,
+    description="The tournament ran in this bracket format",
+    required=("format",),
+    depends_on=("tournament.encounter", "tournament.player"),
+)
 async def execute(
     session: AsyncSession,
     params: dict[str, Any],

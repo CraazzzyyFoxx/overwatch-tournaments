@@ -3,11 +3,11 @@
 import type { ColumnDef, Row, SortingFn } from "@tanstack/react-table";
 import { useFormatter, useTranslations, type DateTimeFormatOptions } from "next-intl";
 
-import { adminColumnMeta } from "@/components/admin-data-table";
-import { InlineEditText } from "@/components/admin/InlineEditText";
+import { adminColumnMeta } from "@/components/data-table";
+import { InlineEditText } from "@/components/kit/InlineEditText";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
-import { StatusPill } from "@/components/admin/kit/StatusPill";
-import { TONE_CLASS, TONE_TEXT } from "@/components/admin/tone";
+import { StatusPill } from "@/components/kit/StatusPill";
+import { TONE_CLASS, TONE_TEXT } from "@/components/kit/tone";
 import { Badge } from "@/components/ui/badge";
 import {
   AdmissionStatusBadge,
@@ -175,7 +175,7 @@ function RolesCell({
             >
               <PlayerRoleIcon role={getRoleIconName(role.role)} size={20} />
             </span>
-            <span className="text-center text-xs font-semibold uppercase leading-none tracking-label text-[color:var(--aqt-fg-dim)]">
+            <span className="text-center text-label font-semibold uppercase leading-none tracking-label text-[color:var(--aqt-fg-dim)]">
               {subroleLabel ?? role.rank_value ?? ""}
             </span>
           </div>

@@ -96,8 +96,8 @@ function row(overrides: Partial<CustomGamePlayer> = {}): CustomGamePlayer {
     sort_order: 0,
     participation: "pool",
     roles: null,
-    ranks: { tank: 2400, dps: 2600, support: 2500 },
-    rank_sources: { tank: "workspace", dps: "workspace", support: "workspace" },
+    ranks: { tank: 2400, damage: 2600, support: 2500 },
+    rank_sources: { tank: "workspace", damage: "workspace", support: "workspace" },
     author_ranks: {},
     ...overrides,
   };
@@ -412,7 +412,7 @@ describe("PickupLobbyPanel", () => {
 
     await click(byLabel(scope, "Tank for Aria#1111, first choice, 2400 points"));
 
-    expect(patchOf(7)).toEqual({ roles: ["dps", "support"] });
+    expect(patchOf(7)).toEqual({ roles: ["damage", "support"] });
   });
 
   it("appends a switched-on role to the end of the stored order, not by its rank", async () => {
@@ -426,9 +426,9 @@ describe("PickupLobbyPanel", () => {
   });
 
   it("names which role the balancer will seat first from the stored order, not the rank", async () => {
-    // The order was stored tank-dps-support; ranks say dps is strongest, but
+    // The order was stored tank-damage-support; ranks say damage is strongest, but
     // the rail shows what the host set, not what the ranks would pick.
-    const scope = await mount([row({ roles: ["tank", "dps", "support"] })]);
+    const scope = await mount([row({ roles: ["tank", "damage", "support"] })]);
 
     expect(byLabel(scope, "Tank for Aria#1111, first choice, 2400 points")).not.toBeNull();
     expect(byLabel(scope, "DPS for Aria#1111, also plays, 2600 points")).not.toBeNull();
@@ -453,13 +453,13 @@ describe("PickupLobbyPanel", () => {
     // Tank is selected but unranked, so it is not supply: 5v5 wants 2 tanks and
     // this lineup can seat none.
     const scope = await mount([
-      row({ roles: ["tank", "dps"], ranks: { dps: 2600 } }),
+      row({ roles: ["tank", "damage"], ranks: { damage: 2600 } }),
       row({
         id: 2,
         workspace_member_id: 8,
         battle_tag: "Borys#2222",
-        roles: ["dps"],
-        ranks: { dps: 2500 },
+        roles: ["damage"],
+        ranks: { damage: 2500 },
       }),
     ]);
 
@@ -468,7 +468,7 @@ describe("PickupLobbyPanel", () => {
   });
 
   it("warns once every selected role of an active player is unranked", async () => {
-    const scope = await mount([row({ roles: ["tank"], ranks: { dps: 2600 } })]);
+    const scope = await mount([row({ roles: ["tank"], ranks: { damage: 2600 } })]);
 
     expect(scope.textContent).toContain("1 player has no ranked role");
   });

@@ -5,7 +5,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { Archive, CircleDot, Clock } from "lucide-react";
 import { useFormatter, useLocale, useTranslations } from "next-intl";
 
-import { AdminDataTable, adminColumnMeta } from "@/components/admin-data-table";
+import { AdminDataTable, adminColumnMeta } from "@/components/data-table";
 import { StatusIcon } from "@/components/admin/StatusIcon";
 import {
   AlertDialog,

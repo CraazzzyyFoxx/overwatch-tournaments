@@ -67,7 +67,7 @@ function team(overrides: Partial<Team> = {}): Team {
         sub_role: null,
         rank: 3400,
         division: 4,
-        role: "dps",
+        role: "damage",
         tournament_id: 7,
         user_id: 91,
         team_id: 9,

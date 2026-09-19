@@ -130,7 +130,7 @@ def test_a_second_tank_is_legal_while_a_flex_slot_is_open() -> None:
 
 
 def test_slot_filled_needs_both_the_role_and_the_flex_capacity_gone() -> None:
-    shape = _shape({"tank": 1, "dps": 2, "flex": 1})
+    shape = _shape({"tank": 1, "damage": 2, "flex": 1})
     picked = (
         _player(1, HeroClass.tank, status=DraftPlayerStatus.PICKED, team_id=10),
         _player(2, HeroClass.damage, status=DraftPlayerStatus.PICKED, team_id=10),
@@ -148,7 +148,7 @@ def test_slot_filled_needs_both_the_role_and_the_flex_capacity_gone() -> None:
     counts = rules.team_slot_counts(picked, picks, 10, shape, _rosters(*picked))
 
     # Tank and DPS role slots are exhausted, the single flex slot is not.
-    assert counts == {"tank": 1, "dps": 2, "flex": 0}
+    assert counts == {"tank": 1, "damage": 2, "flex": 0}
     assert rules.role_openings(shape, counts)[HeroClass.tank] == 1
     fourth = _player(4, HeroClass.tank)
     decision = rules.resolve_pick_slot(shape, counts, _roster_of(fourth), HeroClass.tank)
@@ -175,7 +175,7 @@ def test_pick_options_report_slot_filled_only_without_any_remaining_capacity() -
     without_flex = feasibility.evaluate_pick_options(
         team_id=10,
         team_ids=(10,),
-        slot_targets={"tank": 1, "dps": 1},
+        slot_targets={"tank": 1, "damage": 1},
         players=(_eligible(1, HeroClass.tank),),
         assignments=(feasibility.DraftAssignment(player_id=99, team_id=10, slot_code="tank"),),
     )
@@ -204,7 +204,7 @@ def test_a_role_less_roster_ignores_the_requested_target_role() -> None:
 
 
 def test_a_role_slot_roster_keeps_the_existing_target_role_rules() -> None:
-    shape = _shape({"tank": 1, "dps": 2, "support": 2})
+    shape = _shape({"tank": 1, "damage": 2, "support": 2})
     counts = rules.team_slot_counts((), (), 10, shape, {})
 
     flexible = _player(1, HeroClass.damage, HeroClass.tank)
@@ -212,9 +212,9 @@ def test_a_role_slot_roster_keeps_the_existing_target_role_rules() -> None:
     assert decision.role is HeroClass.tank
     assert decision.recorded_role == "tank"
 
-    dps_only = _player(2, HeroClass.damage)
+    damage_only = _player(2, HeroClass.damage)
     with pytest.raises(Exception) as illegal:
-        rules.resolve_pick_slot(shape, counts, _roster_of(dps_only), HeroClass.tank)
+        rules.resolve_pick_slot(shape, counts, _roster_of(damage_only), HeroClass.tank)
     assert _code(illegal.value) == "illegal_role"
 
     tank = _player(3, HeroClass.tank)
@@ -228,9 +228,9 @@ def test_a_player_the_balancer_ranks_on_no_role_cannot_be_picked() -> None:
     # ``damage`` at rank 0 and autopick took them last. Both the "declared but
     # unranked" roster and a seat with no roster at all must be refused, and the
     # refusal must precede the role/slot checks so the message names the cause.
-    shape = _shape({"tank": 1, "dps": 2, "support": 2})
+    shape = _shape({"tank": 1, "damage": 2, "support": 2})
     counts = rules.team_slot_counts((), (), 10, shape, {})
-    unranked = roster(7, ranks={"dps": None, "tank": None})
+    unranked = roster(7, ranks={"damage": None, "tank": None})
 
     assert unranked.is_draftable is False
     for candidate in (unranked, None):
@@ -245,7 +245,7 @@ def test_a_player_the_balancer_ranks_on_no_role_cannot_be_picked() -> None:
 
 
 def test_team_slot_counts_fill_role_slots_first_and_flex_with_the_remainder() -> None:
-    shape = _shape({"tank": 1, "dps": 1, "flex": 2})
+    shape = _shape({"tank": 1, "damage": 1, "flex": 2})
     captain = _player(1, HeroClass.support, status=DraftPlayerStatus.PICKED, team_id=10)
     off_role = _player(2, HeroClass.support, HeroClass.damage, status=DraftPlayerStatus.PICKED, team_id=10)
     tank = _player(3, HeroClass.tank, status=DraftPlayerStatus.PICKED, team_id=10)
@@ -261,9 +261,9 @@ def test_team_slot_counts_fill_role_slots_first_and_flex_with_the_remainder() ->
 
     counts = rules.team_slot_counts(players, picks, 10, shape, _rosters(*players))
 
-    # Three picked players on team 10: tank and dps role slots take one each, and
+    # Three picked players on team 10: tank and damage role slots take one each, and
     # the support captain has no role slot to land in, so flex absorbs them.
-    assert counts == {"tank": 1, "dps": 1, "flex": 1}
+    assert counts == {"tank": 1, "damage": 1, "flex": 1}
     assert rules.role_openings(shape, counts) == {
         HeroClass.tank: 1,
         HeroClass.damage: 1,

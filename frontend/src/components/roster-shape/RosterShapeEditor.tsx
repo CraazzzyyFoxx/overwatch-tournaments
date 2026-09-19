@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/select";
 import FlexIcon from "@/components/icons/FlexIcon";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
-import { EYEBROW_CLASS, TONE_CLASS } from "@/components/admin/tone";
+import { EYEBROW_CLASS, TONE_CLASS } from "@/components/kit/tone";
 import { cn } from "@/lib/utils";
 import { ROLE_ACCENT, getRoleIconName } from "@/lib/roles";
 import {
@@ -40,7 +40,7 @@ import {
   setSlotCount,
   slotsPayload,
   type RosterShapeSelection
-} from "./roster-shape-editor.model";
+} from "@/lib/roster-shape-editor-model";
 
 /**
  * Role hues, straight off the design-book role tokens (`--aqt-tank`,
@@ -50,7 +50,7 @@ import {
  */
 const SLOT_CHIP: Record<RosterSlotCode, string> = {
   tank: "border-[color:var(--aqt-tank)]/35 bg-[color:var(--aqt-tank)]/12 text-[color:var(--aqt-tank)]",
-  dps: "border-[color:var(--aqt-damage)]/35 bg-[color:var(--aqt-damage)]/12 text-[color:var(--aqt-damage)]",
+  damage: "border-[color:var(--aqt-damage)]/35 bg-[color:var(--aqt-damage)]/12 text-[color:var(--aqt-damage)]",
   support:
     "border-[color:var(--aqt-support)]/35 bg-[color:var(--aqt-support)]/12 text-[color:var(--aqt-support)]",
   flex: "border-border/60 bg-muted/25 text-muted-foreground"

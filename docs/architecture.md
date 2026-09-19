@@ -94,9 +94,10 @@ entirely by RabbitMQ; the only one that runs as a plain process rather than an R
    - dispatches typed REST routes to workers as **RabbitMQ request/reply RPC**
      (`rpc.app.*`, `rpc.identity.*`, `rpc.tournament.*`, `rpc.parser.*`, `rpc.balancer.*`,
      `rpc.analytics.*`), carrying an `x-deadline-ms` budget;
-   - reverse-proxies non-API requests (`/`) to the Next.js frontend;
-   - serves `/ws` and `/api/realtime/ws` from an in-process **Redis → WebSocket hub**,
-     replaying missed events from `realtime.workspace_event`;
+   - reverse-proxies non-API requests (`/`) to the Next.js frontend, including the frontend's
+     own cookie-authenticated `/bff/*` endpoints;
+   - serves `/api/v1/realtime/ws` (and the legacy `/ws`, `/api/realtime/ws`) from an in-process
+     **Redis → WebSocket hub**, replaying missed events from `realtime.workspace_event`;
    - caches anonymous public reads in-process (30 s TTL), invalidated by the workers' Redis
      pub/sub;
    - enforces per-IP rate limits (auth / anonymous / WS custom-domain);

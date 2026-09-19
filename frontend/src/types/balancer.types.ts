@@ -1,49 +1,3 @@
-export const SUPPORTED_BALANCER_ALGORITHMS = ["moo"] as const;
-
-type BalancerAlgorithm = (typeof SUPPORTED_BALANCER_ALGORITHMS)[number];
-
-export const SUPPORTED_BALANCER_CONFIG_KEYS = [
-  "role_mask",
-  "algorithm",
-  "population_size",
-  "generation_count",
-  "mutation_rate",
-  "mutation_strength",
-  "average_mmr_balance_weight",
-  "role_discomfort_weight",
-  "intra_team_variance_weight",
-  "max_role_discomfort_weight",
-  "team_total_balance_weight",
-  "max_team_gap_weight",
-  "role_line_balance_weight",
-  "role_spread_weight",
-  "intra_team_std_weight",
-  "internal_role_spread_weight",
-  "sub_role_collision_weight",
-  "low_rank_threshold",
-  "low_rank_collision_weight",
-  "tank_impact_weight",
-  "dps_impact_weight",
-  "support_impact_weight",
-  "tank_gap_weight",
-  "tank_std_weight",
-  "effective_total_std_weight",
-  "use_captains",
-  "convergence_patience",
-  "convergence_epsilon",
-  "mutation_rate_min",
-  "mutation_rate_max",
-  "island_count",
-  "polish_max_passes",
-  "greedy_seed_count",
-  "stagnation_kick_patience",
-  "crossover_rate",
-  "max_result_variants",
-  "rank_comfort_tilt"
-] as const;
-
-type BalancerConfigKey = (typeof SUPPORTED_BALANCER_CONFIG_KEYS)[number];
-
 export interface PlayerData {
   uuid: string;
   name: string;
@@ -110,63 +64,39 @@ export interface BalanceResponse {
   applied_config?: BalancerConfig | null;
 }
 
-export interface BalancerConfig {
-  role_mask?: Record<string, number>;
-  algorithm?: BalancerAlgorithm;
-  population_size?: number;
-  generation_count?: number;
-  mutation_rate?: number;
-  mutation_strength?: number;
-  average_mmr_balance_weight?: number;
-  role_discomfort_weight?: number;
-  intra_team_variance_weight?: number;
-  max_role_discomfort_weight?: number;
-  team_total_balance_weight?: number;
-  max_team_gap_weight?: number;
-  role_line_balance_weight?: number;
-  role_spread_weight?: number;
-  intra_team_std_weight?: number;
-  internal_role_spread_weight?: number;
-  sub_role_collision_weight?: number;
-  low_rank_threshold?: number;
-  low_rank_collision_weight?: number;
-  tank_impact_weight?: number;
-  dps_impact_weight?: number;
-  support_impact_weight?: number;
-  tank_gap_weight?: number;
-  tank_std_weight?: number;
-  effective_total_std_weight?: number;
-  use_captains?: boolean;
-  convergence_patience?: number;
-  convergence_epsilon?: number;
-  mutation_rate_min?: number;
-  mutation_rate_max?: number;
-  island_count?: number;
-  polish_max_passes?: number;
-  greedy_seed_count?: number;
-  stagnation_kick_patience?: number;
-  crossover_rate?: number;
-  max_result_variants?: number;
-  rank_comfort_tilt?: number;
-}
+/** A balancer config: knob values keyed by knob name.
+ *
+ * Deliberately not a closed list of fields. Knobs are declared in exactly one
+ * place -- `AlgorithmConfig` on the backend -- and reach the client as
+ * `BalancerConfigResponse.fields`, which is what the drawer renders. A second
+ * hand-maintained copy here only ever drifted: it still listed two weights the
+ * cost function stopped reading (`intra_team_variance_weight`,
+ * `role_spread_weight`) and was missing `team_max_pain_weight` and
+ * `time_limit_ms`, so the drawer offered those two and the client stripped them
+ * back out before the request. */
+export type BalancerConfig = Record<string, BalancerConfigValue>;
 
-type BalancerConfigFieldType =
-  | "boolean"
-  | "float"
-  | "integer"
-  | "role_mask"
-  | "select"
-  | "slider";
+/** A knob value on the wire, or the raw string a number input holds mid-edit;
+ * `sanitizeBalancerConfig` coerces that back to a number. */
+export type BalancerConfigValue =
+  | number
+  | boolean
+  | string
+  | Record<string, number>
+  | null
+  | undefined;
+
+/** Widget the drawer renders for a knob; mirrors the backend's `ConfigControl`. */
+type BalancerConfigFieldType = "boolean" | "float" | "integer" | "slider";
 
 export interface BalancerConfigField {
-  key: BalancerConfigKey;
+  key: string;
   label: string;
   description: string;
   type: BalancerConfigFieldType;
-  group: "Roles" | "Algorithm" | "Quality weights" | "Strategy" | "Solver output";
-  default: unknown;
+  group: "Algorithm" | "Quality weights" | "Strategy" | "Solver output";
+  default: BalancerConfigValue;
   limits?: { min: number; max: number } | null;
-  options?: string[];
 }
 
 export interface BalanceJobResult {

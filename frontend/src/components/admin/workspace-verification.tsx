@@ -12,7 +12,7 @@ import {
   SelectValue
 } from "@/components/ui/select";
 import { StatusIcon } from "@/components/admin/StatusIcon";
-import { TONE_CLASS, type Tone } from "@/components/admin/tone";
+import { TONE_CLASS, type Tone } from "@/components/kit/tone";
 import { notify } from "@/lib/notify";
 import { cn } from "@/lib/utils";
 import workspaceService from "@/services/workspace.service";

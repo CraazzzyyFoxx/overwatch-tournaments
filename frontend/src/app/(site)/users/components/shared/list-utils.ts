@@ -14,7 +14,7 @@ import { LogStatsName } from "@/types/stats.types";
 export type Translate = ReturnType<typeof useTranslations<never>>;
 
 /**
- * Maps a role type to its shared `common.roles.*` message key (dps = "Damage").
+ * Maps a role type to its shared `common.roles.*` message key.
  * Re-exported under this tree's historical name so there is exactly one role
  * label map in the codebase — the canonical one in `@/lib/player-role`.
  */

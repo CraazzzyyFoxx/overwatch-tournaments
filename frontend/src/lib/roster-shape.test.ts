@@ -4,7 +4,7 @@ import { isRoleSlotCode, orderSlotCodes, presetForSlots, slotsTotal } from "./ro
 
 describe("presetForSlots", () => {
   it("recognizes the OW 5v5 shape", () => {
-    expect(presetForSlots({ tank: 1, dps: 2, support: 2 })).toBe("ow5v5");
+    expect(presetForSlots({ tank: 1, damage: 2, support: 2 })).toBe("ow5v5");
   });
 
   it("recognizes the role-free shape", () => {
@@ -16,22 +16,22 @@ describe("presetForSlots", () => {
   });
 
   it("ignores key order", () => {
-    expect(presetForSlots({ dps: 2, tank: 1, support: 2 })).toBe("ow5v5");
+    expect(presetForSlots({ damage: 2, tank: 1, support: 2 })).toBe("ow5v5");
   });
 });
 
 describe("orderSlotCodes", () => {
   it("returns the canonical order regardless of key order", () => {
-    expect(orderSlotCodes({ support: 2, flex: 1, dps: 2, tank: 1 })).toEqual([
+    expect(orderSlotCodes({ support: 2, flex: 1, damage: 2, tank: 1 })).toEqual([
       "tank",
-      "dps",
+      "damage",
       "support",
       "flex"
     ]);
   });
 
   it("omits codes that are absent or zeroed", () => {
-    expect(orderSlotCodes({ tank: 1, dps: 0, flex: 5 })).toEqual(["tank", "flex"]);
+    expect(orderSlotCodes({ tank: 1, damage: 0, flex: 5 })).toEqual(["tank", "flex"]);
     expect(orderSlotCodes({})).toEqual([]);
   });
 });

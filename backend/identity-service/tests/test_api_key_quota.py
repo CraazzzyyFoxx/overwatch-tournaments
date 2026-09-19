@@ -223,7 +223,14 @@ def test_quota_write_is_journalled_with_the_previous_and_new_limits(audit: list[
 
 
 def test_usage_read_reports_the_plan_and_one_entry_per_scope(monkeypatch: pytest.MonkeyPatch) -> None:
-    session = _FakeSession([{"first": ("verified", None)}])
+    session = _FakeSession(
+        [
+            {"first": ("verified", None)},
+            # The key's own stored row, then the ceiling a write is held to.
+            {"scalar": QuotaApiKeyLimit(heavy_per_day=25)},
+            *_inheritance(_plan_limit(requests_per_minute=600, heavy_per_day=500)),
+        ]
+    )
     seen: dict[str, object] = {}
 
     async def _usage(*, principal_kind: str, principal_id: int, workspace_id: int | None):
@@ -246,11 +253,24 @@ def test_usage_read_reports_the_plan_and_one_entry_per_scope(monkeypatch: pytest
     assert result.workspace_id == 11
     assert [scope.scope for scope in result.scopes] == ["workspace", "key"]
     assert [scope.requests_per_minute for scope in result.scopes] == [600, 60]
+    # The editable half: what is written on this key, and the bound above it.
+    # Without both, a form over this read is either pre-filled with inherited
+    # numbers it would then store, or blank and one submit from deleting the row.
+    assert [row.scope for row in result.policy] == ["key"]
+    assert result.policy[0].override.heavy_per_day == 25
+    assert result.policy[0].override.requests_per_minute is None
+    assert result.policy[0].inherited.requests_per_minute == 600
 
 
 def test_a_key_reads_its_own_budget_without_the_management_gate(monkeypatch: pytest.MonkeyPatch) -> None:
     """The self read must work for a key whose holder is nobody's workspace admin."""
-    session = _FakeSession([{"first": ("verified", None)}])
+    session = _FakeSession(
+        [
+            {"first": ("verified", None)},
+            {"scalar": None},
+            *_inheritance(_plan_limit(requests_per_minute=60)),
+        ]
+    )
 
     async def _deny(*_args, **_kwargs) -> None:
         raise AssertionError("self_quota_usage must not consult the management gate")

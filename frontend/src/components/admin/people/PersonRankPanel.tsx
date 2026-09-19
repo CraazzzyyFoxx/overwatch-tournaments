@@ -20,7 +20,7 @@ import { useWorkspaceStore } from "@/stores/workspace.store";
 import type { CurrentRank } from "@/types/rank.types";
 
 import { StatusBadge, formatDate } from "@/components/admin/collectors/rank-shared";
-import { EmptyNote } from "@/components/admin/kit/EmptyNote";
+import { EmptyNote } from "@/components/kit/EmptyNote";
 
 interface SelectUser {
   (userId: number, label: string): void;

@@ -83,7 +83,7 @@ vi.mock("next/navigation", () => ({
 
 let tournament: Tournament;
 
-vi.mock("../_hooks/useTournamentClientData", () => ({
+vi.mock("@/hooks/useTournamentClientData", () => ({
   useTournamentQuery: () => ({ data: tournament, isError: false, refetch: () => {} })
 }));
 
@@ -137,7 +137,7 @@ function makeRegistration(overrides: Partial<Registration> = {}): Registration {
     discord_nick: null,
     twitch_nick: null,
     stream_pov: false,
-    roles: [{ role: "dps", subrole: null, is_primary: true, priority: 0, top_heroes: [] }],
+    roles: [{ role: "damage", subrole: null, is_primary: true, priority: 0, top_heroes: [] }],
     notes: null,
     custom_fields_json: null,
     status: "approved",
@@ -475,7 +475,7 @@ describe("a roster the organizer hid", () => {
   const HIDDEN = regList([], {
     hidden: true,
     total: 48,
-    role_counts: { tank: 8, dps: 24, support: 16 },
+    role_counts: { tank: 8, damage: 24, support: 16 },
     max_participants: 60
   });
 
@@ -510,7 +510,7 @@ describe("a roster the organizer hid", () => {
       makeRegistration({
         queue_position: 12,
         queue_total: 48,
-        queue_role: "dps",
+        queue_role: "damage",
         queue_role_position: 4,
         queue_role_total: 24
       })
@@ -529,9 +529,9 @@ describe("a roster the organizer hid", () => {
       en.registration.myCard.queueRolePositionLabel
         .replace("{position}", "4")
         .replace("{total}", "24")
-        .replace("{role}", en.common.roles.dps)
+        .replace("{role}", en.common.roles.damage)
     );
-    expect(onRole?.textContent).toBe(`${en.common.roles.dps} 4 / 24`);
+    expect(onRole?.textContent).toBe(`${en.common.roles.damage} 4 / 24`);
   });
 
   it("says nothing about a role queue for a registration that declared no role", async () => {

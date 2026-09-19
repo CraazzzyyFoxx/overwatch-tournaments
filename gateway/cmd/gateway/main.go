@@ -186,102 +186,92 @@ func run() error {
 	// long-lived WS connection, and trace every health probe).
 	mux := http.NewServeMux()
 	// Identity HTTP face (RPC into identity-svc). Additive: these specific
-	// /api/auth/* paths are served here; the rest still proxy to auth-service.
-	mux.HandleFunc("POST /api/auth/validate", identityHandler.Validate)
+	// /api/v1/auth/* paths are served here; the rest still proxy to auth-service.
+	mux.HandleFunc("POST /api/v1/auth/validate", identityHandler.Validate)
 	// Rate-limited (anti-brute-force): register/login/refresh + oauth callbacks.
-	mux.HandleFunc("POST /api/auth/register", authLimiter.Wrap(identityHandler.Register))
-	mux.HandleFunc("POST /api/auth/login", authLimiter.Wrap(identityHandler.Login))
+	mux.HandleFunc("POST /api/v1/auth/register", authLimiter.Wrap(identityHandler.Register))
+	mux.HandleFunc("POST /api/v1/auth/login", authLimiter.Wrap(identityHandler.Login))
 	// Refresh meters only FAILED attempts (WrapFailures): legitimate rotations
 	// from a shared VPN/NAT exit IP must not exhaust one flat per-IP budget and
 	// 429 everyone behind it into a forced re-login.
-	mux.HandleFunc("POST /api/auth/refresh", authLimiter.WrapFailures(identityHandler.Refresh))
-	mux.HandleFunc("POST /api/auth/logout", identityHandler.Logout)
-	mux.HandleFunc("POST /api/auth/logout-all", identityHandler.LogoutAll)
-	mux.HandleFunc("GET /api/auth/sessions", identityHandler.Sessions)
-	mux.HandleFunc("DELETE /api/auth/sessions/{id}", identityHandler.RevokeSession)
-	mux.HandleFunc("GET /api/auth/me", identityHandler.Me)
-	mux.HandleFunc("PATCH /api/auth/me", identityHandler.UpdateMe)
-	mux.HandleFunc("DELETE /api/auth/me", identityHandler.DeleteMe)
-	mux.HandleFunc("POST /api/auth/set-password", identityHandler.SetPassword)
-	mux.HandleFunc("POST /api/auth/service/token", identityHandler.ServiceToken)
-	mux.HandleFunc("POST /api/auth/service/validate", identityHandler.ValidateService)
-	mux.HandleFunc("POST /api/auth/service/invalidate-session/{user_id}", identityHandler.InvalidateSession)
+	mux.HandleFunc("POST /api/v1/auth/refresh", authLimiter.WrapFailures(identityHandler.Refresh))
+	mux.HandleFunc("POST /api/v1/auth/logout", identityHandler.Logout)
+	mux.HandleFunc("POST /api/v1/auth/logout-all", identityHandler.LogoutAll)
+	mux.HandleFunc("GET /api/v1/auth/sessions", identityHandler.Sessions)
+	mux.HandleFunc("DELETE /api/v1/auth/sessions/{id}", identityHandler.RevokeSession)
+	mux.HandleFunc("GET /api/v1/auth/me", identityHandler.Me)
+	mux.HandleFunc("PATCH /api/v1/auth/me", identityHandler.UpdateMe)
+	mux.HandleFunc("DELETE /api/v1/auth/me", identityHandler.DeleteMe)
+	mux.HandleFunc("POST /api/v1/auth/set-password", identityHandler.SetPassword)
+	mux.HandleFunc("POST /api/v1/auth/service/token", identityHandler.ServiceToken)
+	mux.HandleFunc("POST /api/v1/auth/service/validate", identityHandler.ValidateService)
+	mux.HandleFunc("POST /api/v1/auth/service/invalidate-session/{user_id}", identityHandler.InvalidateSession)
 	// Top-level alias the frontend uses (use-oauth-providers / auth.service); the
 	// original API exposed both this and the /oauth/providers path.
-	mux.HandleFunc("GET /api/auth/providers", identityHandler.OAuthProviders)
-	mux.HandleFunc("GET /api/auth/oauth/providers", identityHandler.OAuthProviders)
-	mux.HandleFunc("GET /api/auth/oauth/connections", identityHandler.OAuthConnections)
-	mux.HandleFunc("GET /api/auth/oauth/{provider}/url", identityHandler.OAuthURL)
-	mux.HandleFunc("POST /api/auth/oauth/{provider}/callback", authLimiter.Wrap(identityHandler.OAuthCallbackPost))
-	mux.HandleFunc("POST /api/auth/oauth/{provider}/link", identityHandler.OAuthLink)
-	mux.HandleFunc("DELETE /api/auth/oauth/{provider}/unlink", identityHandler.OAuthUnlink)
+	mux.HandleFunc("GET /api/v1/auth/providers", identityHandler.OAuthProviders)
+	mux.HandleFunc("GET /api/v1/auth/oauth/providers", identityHandler.OAuthProviders)
+	mux.HandleFunc("GET /api/v1/auth/oauth/connections", identityHandler.OAuthConnections)
+	mux.HandleFunc("GET /api/v1/auth/oauth/{provider}/url", identityHandler.OAuthURL)
+	mux.HandleFunc("POST /api/v1/auth/oauth/{provider}/callback", authLimiter.Wrap(identityHandler.OAuthCallbackPost))
+	mux.HandleFunc("POST /api/v1/auth/oauth/{provider}/link", identityHandler.OAuthLink)
+	mux.HandleFunc("DELETE /api/v1/auth/oauth/{provider}/unlink", identityHandler.OAuthUnlink)
 	// Custom-domain SSO ticket handoff (Task 8): redeems a one-time ticket
 	// minted by the apex OAuth callback for the session tokens. Same
 	// anti-brute-force posture as the other auth token-exchange endpoints.
-	mux.HandleFunc("POST /api/auth/sso/exchange", authLimiter.Wrap(identityHandler.SsoExchange))
+	mux.HandleFunc("POST /api/v1/auth/sso/exchange", authLimiter.Wrap(identityHandler.SsoExchange))
 	// Custom-domain account-linking end-ticket (Task 10R): redeems a
 	// pending-link ticket minted by a custom-domain OAuth link callback and
 	// attaches its provider identity to the bearer-authenticated caller.
 	// Unlike sso/exchange above, this route IS authenticated.
-	mux.HandleFunc("POST /api/auth/link/complete", identityHandler.LinkComplete)
-	mux.HandleFunc("GET /api/auth/api-keys", identityHandler.ListApiKeys)
+	mux.HandleFunc("POST /api/v1/auth/link/complete", identityHandler.LinkComplete)
+	mux.HandleFunc("GET /api/v1/auth/api-keys", identityHandler.ListApiKeys)
 	// Key self-introspection: the calling key's own scopes/limits/expiry. The
 	// literal "self" beats the /{id} patterns below by ServeMux specificity, and
 	// none of those is a GET, so there is no ambiguity to resolve.
-	mux.HandleFunc("GET /api/auth/api-keys/self", identityHandler.SelfApiKey)
-	mux.HandleFunc("POST /api/auth/api-keys", identityHandler.CreateApiKey)
-	mux.HandleFunc("PATCH /api/auth/api-keys/{id}", identityHandler.UpdateApiKey)
-	mux.HandleFunc("DELETE /api/auth/api-keys/{id}", identityHandler.RevokeApiKey)
+	mux.HandleFunc("GET /api/v1/auth/api-keys/self", identityHandler.SelfApiKey)
+	mux.HandleFunc("POST /api/v1/auth/api-keys", identityHandler.CreateApiKey)
+	mux.HandleFunc("PATCH /api/v1/auth/api-keys/{id}", identityHandler.UpdateApiKey)
+	mux.HandleFunc("DELETE /api/v1/auth/api-keys/{id}", identityHandler.RevokeApiKey)
 	// Quota: usage is a read of both applicable buckets, the PUT writes the
 	// per-key override. ``self/quota`` is the keyed client's own budget, and
 	// wins over /{id}/quota by the same ServeMux specificity as "self" above.
-	mux.HandleFunc("GET /api/auth/api-keys/self/quota", identityHandler.SelfApiKeyQuota)
-	mux.HandleFunc("GET /api/auth/api-keys/{id}/quota", identityHandler.ApiKeyQuota)
-	mux.HandleFunc("PUT /api/auth/api-keys/{id}/quota", identityHandler.SetApiKeyQuota)
+	mux.HandleFunc("GET /api/v1/auth/api-keys/self/quota", identityHandler.SelfApiKeyQuota)
+	mux.HandleFunc("GET /api/v1/auth/api-keys/{id}/quota", identityHandler.ApiKeyQuota)
+	mux.HandleFunc("PUT /api/v1/auth/api-keys/{id}/quota", identityHandler.SetApiKeyQuota)
 	// RBAC admin (typed RPC into identity-svc; permission checks + cache
 	// invalidation enforced in the worker's rbac_admin services).
-	mux.HandleFunc("GET /api/auth/rbac/permissions", identityHandler.RbacListPermissions)
-	mux.HandleFunc("POST /api/auth/rbac/permissions", identityHandler.RbacCreatePermission)
-	mux.HandleFunc("DELETE /api/auth/rbac/permissions/{permission_id}", identityHandler.RbacDeletePermission)
-	mux.HandleFunc("GET /api/auth/rbac/roles", identityHandler.RbacListRoles)
-	mux.HandleFunc("POST /api/auth/rbac/roles", identityHandler.RbacCreateRole)
-	mux.HandleFunc("GET /api/auth/rbac/roles/{role_id}", identityHandler.RbacGetRole)
-	mux.HandleFunc("PATCH /api/auth/rbac/roles/{role_id}", identityHandler.RbacUpdateRole)
-	mux.HandleFunc("DELETE /api/auth/rbac/roles/{role_id}", identityHandler.RbacDeleteRole)
-	mux.HandleFunc("GET /api/auth/rbac/users", identityHandler.RbacListAuthUsers)
-	mux.HandleFunc("POST /api/auth/rbac/users/assign-role", identityHandler.RbacAssignRole)
-	mux.HandleFunc("POST /api/auth/rbac/users/remove-role", identityHandler.RbacRemoveRole)
-	mux.HandleFunc("GET /api/auth/rbac/users/{user_id}", identityHandler.RbacGetAuthUser)
-	mux.HandleFunc("DELETE /api/auth/rbac/users/{user_id}", identityHandler.RbacDeleteAuthUser)
-	mux.HandleFunc("GET /api/auth/rbac/users/{user_id}/roles", identityHandler.RbacGetUserRoles)
-	mux.HandleFunc("GET /api/auth/rbac/users/{user_id}/denies", identityHandler.RbacListUserDenies)
-	mux.HandleFunc("POST /api/auth/rbac/users/{user_id}/denies", identityHandler.RbacAddUserDeny)
-	mux.HandleFunc("DELETE /api/auth/rbac/users/{user_id}/denies/{permission_id}", identityHandler.RbacRemoveUserDeny)
-	mux.HandleFunc("POST /api/auth/rbac/users/{user_id}/linked-players", identityHandler.RbacAssignLinkedPlayer)
-	mux.HandleFunc("DELETE /api/auth/rbac/users/{user_id}/linked-players/{player_id}", identityHandler.RbacRemoveLinkedPlayer)
-	mux.HandleFunc("GET /api/auth/rbac/oauth-connections", identityHandler.RbacListOAuthConnections)
-	mux.HandleFunc("DELETE /api/auth/rbac/oauth-connections/{connection_id}", identityHandler.RbacDeleteOAuthConnection)
-	mux.HandleFunc("GET /api/auth/rbac/sessions", identityHandler.RbacListSessions)
+	mux.HandleFunc("GET /api/v1/auth/rbac/permissions", identityHandler.RbacListPermissions)
+	mux.HandleFunc("POST /api/v1/auth/rbac/permissions", identityHandler.RbacCreatePermission)
+	mux.HandleFunc("DELETE /api/v1/auth/rbac/permissions/{permission_id}", identityHandler.RbacDeletePermission)
+	mux.HandleFunc("GET /api/v1/auth/rbac/roles", identityHandler.RbacListRoles)
+	mux.HandleFunc("POST /api/v1/auth/rbac/roles", identityHandler.RbacCreateRole)
+	mux.HandleFunc("GET /api/v1/auth/rbac/roles/{role_id}", identityHandler.RbacGetRole)
+	mux.HandleFunc("PATCH /api/v1/auth/rbac/roles/{role_id}", identityHandler.RbacUpdateRole)
+	mux.HandleFunc("DELETE /api/v1/auth/rbac/roles/{role_id}", identityHandler.RbacDeleteRole)
+	mux.HandleFunc("GET /api/v1/auth/rbac/users", identityHandler.RbacListAuthUsers)
+	mux.HandleFunc("POST /api/v1/auth/rbac/users/assign-role", identityHandler.RbacAssignRole)
+	mux.HandleFunc("POST /api/v1/auth/rbac/users/remove-role", identityHandler.RbacRemoveRole)
+	mux.HandleFunc("GET /api/v1/auth/rbac/users/{user_id}", identityHandler.RbacGetAuthUser)
+	mux.HandleFunc("DELETE /api/v1/auth/rbac/users/{user_id}", identityHandler.RbacDeleteAuthUser)
+	mux.HandleFunc("GET /api/v1/auth/rbac/users/{user_id}/roles", identityHandler.RbacGetUserRoles)
+	mux.HandleFunc("GET /api/v1/auth/rbac/users/{user_id}/denies", identityHandler.RbacListUserDenies)
+	mux.HandleFunc("POST /api/v1/auth/rbac/users/{user_id}/denies", identityHandler.RbacAddUserDeny)
+	mux.HandleFunc("DELETE /api/v1/auth/rbac/users/{user_id}/denies/{permission_id}", identityHandler.RbacRemoveUserDeny)
+	mux.HandleFunc("POST /api/v1/auth/rbac/users/{user_id}/linked-players", identityHandler.RbacAssignLinkedPlayer)
+	mux.HandleFunc("DELETE /api/v1/auth/rbac/users/{user_id}/linked-players/{player_id}", identityHandler.RbacRemoveLinkedPlayer)
+	mux.HandleFunc("GET /api/v1/auth/rbac/oauth-connections", identityHandler.RbacListOAuthConnections)
+	mux.HandleFunc("DELETE /api/v1/auth/rbac/oauth-connections/{connection_id}", identityHandler.RbacDeleteOAuthConnection)
+	mux.HandleFunc("GET /api/v1/auth/rbac/sessions", identityHandler.RbacListSessions)
 	// Player linking (typed RPC; identity-svc resolves the active user from the bearer).
-	mux.HandleFunc("POST /api/auth/player/link", identityHandler.PlayerLink)
-	mux.HandleFunc("DELETE /api/auth/player/unlink/{player_id}", identityHandler.PlayerUnlink)
-	mux.HandleFunc("GET /api/auth/player/linked", identityHandler.PlayerLinked)
-	mux.HandleFunc("PATCH /api/auth/player/linked/{player_id}/primary", identityHandler.PlayerSetPrimary)
+	mux.HandleFunc("POST /api/v1/auth/player/link", identityHandler.PlayerLink)
+	mux.HandleFunc("DELETE /api/v1/auth/player/unlink/{player_id}", identityHandler.PlayerUnlink)
+	mux.HandleFunc("GET /api/v1/auth/player/linked", identityHandler.PlayerLinked)
+	mux.HandleFunc("PATCH /api/v1/auth/player/linked/{player_id}/primary", identityHandler.PlayerSetPrimary)
 	// Current-user avatar (multipart -> base64 RPC body; the JSON path can't do it).
 	// The resolver validates the bearer token before the multipart body is parsed.
 	identityBinary := identity.NewBinary(identityHandler, resolver.Resolve)
-	mux.HandleFunc("POST /api/auth/me/avatar", identityBinary.AvatarSet)
-	mux.HandleFunc("DELETE /api/auth/me/avatar", identityBinary.AvatarDelete)
-	// Guard the /api/auth namespace: the HTTP-over-RPC tunnel + auth-service proxy
-	// are gone — every /api/auth/* path is a typed RPC route above. Anything
-	// unmatched must NOT fall through to the "/" frontend catch-all (next.config
-	// rewrites /api/auth/* back to the gateway -> infinite gateway<->frontend proxy
-	// loop). Return 404 instead, mirroring the /api/v1 + /api/analytics guards.
-	mux.HandleFunc("/api/auth/", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusNotFound)
-		_, _ = w.Write([]byte(`{"detail":"Not Found"}`))
-	})
+	mux.HandleFunc("POST /api/v1/auth/me/avatar", identityBinary.AvatarSet)
+	mux.HandleFunc("DELETE /api/v1/auth/me/avatar", identityBinary.AvatarDelete)
 	// tournament-service: typed RPC reads + generic admin CRUD (the rest of
 	// /api/v1 still proxies). Specific patterns win over the proxy.
 	// Public reads go through the anonymous response cache (respcache): one
@@ -314,7 +304,7 @@ func run() error {
 	mux.HandleFunc("POST /api/v1/admin/teams/{team_id}/image", tournamentBinary.TeamImageUpload)
 	mux.HandleFunc("POST /api/v1/registration-teams/{team_id}/image", tournamentBinary.RegistrationTeamImageUpload)
 	mux.HandleFunc("POST /api/v1/admin/tournaments/{tournament_id}/images/{slot}", tournamentBinary.TournamentImageUpload)
-	// analytics-service: typed RPC reads + job-control (the rest of /api/analytics
+	// analytics-service: typed RPC reads + job-control (the rest of /api/v1/analytics
 	// still proxies). Specific patterns win over the proxy.
 	analyticsEdge := edge.New(rpcClient, logger, resolver.Resolve)
 	analyticsEdge.Register(mux, analytics.ReadRoutes)
@@ -368,7 +358,7 @@ func run() error {
 	// balancer-service: typed RPC public config + admin balance/config + draft +
 	// jobs. The HTTP balancer-service is decommissioned and no longer proxied; the
 	// only un-migrated endpoint (SSE job stream) was dead code. Unmatched
-	// /api/balancer/* is guarded with 404 below.
+	// /api/v1/balancer/* is guarded with 404 below.
 	balancerEdge := edge.New(rpcClient, logger, resolver.Resolve)
 	balancerEdge.Register(mux, balancer.PublicRoutes)
 	balancerEdge.Register(mux, balancer.AdminRoutes)
@@ -379,8 +369,8 @@ func run() error {
 	balancerEdge.Register(mux, balancer.JobRoutes)
 	// Multipart uploads (multipart -> base64 RPC): teams-import + job-create.
 	balancerBinary := balancer.NewBinary(rpcClient, resolver.Resolve, logger)
-	mux.HandleFunc("POST /api/balancer/tournaments/{tournament_id}/teams/import", balancerBinary.TeamsImport)
-	mux.HandleFunc("POST /api/balancer/jobs", balancerBinary.JobCreate)
+	mux.HandleFunc("POST /api/v1/balancer/tournaments/{tournament_id}/teams/import", balancerBinary.TeamsImport)
+	mux.HandleFunc("POST /api/v1/balancer/jobs", balancerBinary.JobCreate)
 	// stream-service: the tournament live-stream surface. The spectator read is
 	// public and rides the anonymous response cache (TTL-only — see
 	// stream.PublicCacheableReads); the repoll trigger is an operator action
@@ -388,42 +378,22 @@ func run() error {
 	streamEdge := edge.New(rpcClient, logger, resolver.Resolve)
 	respcache.RegisterCached(mux, streamEdge, stream.PublicRoutes, stream.PublicCacheableReads, respCache)
 	streamEdge.Register(mux, stream.AdminRoutes)
-	// Guard the /api/v1 namespace: anything not matched by a typed route above
-	// must NOT fall through to the "/" frontend catch-all. The frontend rewrites
-	// /api/v1/* back to the gateway (next.config.mjs), so proxying an unmatched
-	// /api/v1 path to the frontend creates an infinite gateway<->frontend proxy
-	// loop (hang + resource exhaustion that crash-loops the frontend). Return 404
-	// instead. app-service (/api/v1/*) is now fully served by the typed app
-	// routes above; unmatched /api/v1/* falls here too (404, no proxy).
+	// Guard the whole `/api/v1` namespace: anything not matched by a typed route
+	// above must NOT fall through to the "/" frontend catch-all. The frontend
+	// rewrites /api/v1/* back to the gateway (next.config.mjs), so proxying an
+	// unmatched /api/v1 path to the frontend creates an infinite
+	// gateway<->frontend proxy loop (hang + resource exhaustion that crash-loops
+	// the frontend). Return 404 instead.
+	//
+	// This is the ONLY namespace guard, and that is the point of folding auth,
+	// analytics, balancer, streams, notifications and announcements inside the
+	// version: each used to need a guard of its own, and each wrote a hand-rolled
+	// `{"detail":"Not Found"}` that the v2 envelope never reached. `apiver`
+	// rewrites every legacy spelling onto /api/v1/... before routing, so an
+	// unmatched legacy path lands here too — with the right body shape for the
+	// version it asked for.
 	mux.HandleFunc("/api/v1/", func(w http.ResponseWriter, _ *http.Request) {
 		apierr.WriteError(w, http.StatusNotFound, "Not Found", "", nil)
-	})
-	// /api/analytics is fully served by the typed analytics routes above (RPC into
-	// analytics-svc); the HTTP analytics-service is decommissioned and no longer
-	// proxied. Guard unmatched /api/analytics/* with 404 (same gateway<->frontend
-	// loop hazard as /api/v1, since next.config rewrites /api/analytics -> gateway).
-	mux.HandleFunc("/api/analytics/", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusNotFound)
-		_, _ = w.Write([]byte(`{"detail":"Not Found"}`))
-	})
-	// /api/balancer is fully served by the typed balancer routes above (RPC into
-	// balancer-worker); the HTTP balancer-service is decommissioned and no longer
-	// proxied. Guard unmatched /api/balancer/* with 404 (same gateway<->frontend
-	// loop hazard as /api/v1, since next.config rewrites /api/balancer -> gateway).
-	mux.HandleFunc("/api/balancer/", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusNotFound)
-		_, _ = w.Write([]byte(`{"detail":"Not Found"}`))
-	})
-	// /api/streams is fully served by the typed stream routes above (RPC into
-	// stream-svc); there is no HTTP stream-service to proxy to. Guard unmatched
-	// /api/streams/* with 404 (same gateway<->frontend loop hazard as /api/v1,
-	// since next.config rewrites /api/streams -> gateway).
-	mux.HandleFunc("/api/streams/", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusNotFound)
-		_, _ = w.Write([]byte(`{"detail":"Not Found"}`))
 	})
 
 	// Scalar API docs: two pages generated from the route tables above. The
@@ -522,9 +492,15 @@ func run() error {
 
 	// Outer router: WS + health are served directly (bypassing tracing); every
 	// other path falls through "/" to the traced REST surface.
+	//
+	// The socket is registered at all three spellings rather than rewritten,
+	// because this mux sits OUTSIDE apiver — the middleware that folds legacy
+	// paths onto the canonical one wraps the REST mux only, and putting a
+	// long-lived hijacked connection behind it would buy nothing.
 	root := http.NewServeMux()
-	root.Handle("/ws", wsWithRecover)
-	root.Handle("/api/realtime/ws", wsWithRecover)
+	root.Handle("/api/v1/realtime/ws", wsWithRecover) // canonical
+	root.Handle("/api/realtime/ws", wsWithRecover)    // legacy, sunset with LegacyPrefixes
+	root.Handle("/ws", wsWithRecover)                 // legacy, the original spelling
 	root.HandleFunc("GET /health", health)
 	root.Handle("/", tracedMux)
 

@@ -9,7 +9,6 @@ import {
   Sparkles,
   Upload
 } from "lucide-react";
-import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -18,7 +17,7 @@ import {
   DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
 import type { InternalBalancePayload } from "@/types/balancer-admin.types";
-import { MUTED_BUTTON_CLASS } from "./balancer-page-helpers";
+import { MUTED_BUTTON_CLASS } from "@/components/balancer/balancer-page-helpers";
 import { BalanceStatsRow, type VariantStats } from "./BalanceStatsRow";
 
 type BalanceActionsBarProps = {
@@ -69,7 +68,7 @@ export function BalanceActionsBar({
         <Button
           type="button"
           variant="outline"
-          className={cn("rounded-xl", MUTED_BUTTON_CLASS)}
+          className={MUTED_BUTTON_CLASS}
           onClick={onRunBalance}
           disabled={!canRunBalance || isExportPending}
         >
@@ -78,7 +77,7 @@ export function BalanceActionsBar({
         </Button>
         <Button
           type="button"
-          className="rounded-xl bg-primary text-primary-foreground hover:bg-primary/90"
+          className="rounded-lg bg-primary text-primary-foreground hover:bg-primary/90"
           onClick={onSaveBalance}
           title={
             isBalanceSaved
@@ -97,7 +96,7 @@ export function BalanceActionsBar({
         <Button
           type="button"
           variant="outline"
-          className={cn("rounded-xl", MUTED_BUTTON_CLASS)}
+          className={MUTED_BUTTON_CLASS}
           onClick={onExportBalance}
           title={
             isBalanceExported
@@ -111,12 +110,12 @@ export function BalanceActionsBar({
           ) : (
             <Upload className="mr-2 h-4 w-4" />
           )}
-          {isBalanceExported ? "Exported" : "Export to Tournament"}
+          {isBalanceExported ? "Exported" : "Export to tournament"}
         </Button>
         <Button
           type="button"
           variant="outline"
-          className={cn("rounded-xl", MUTED_BUTTON_CLASS)}
+          className={MUTED_BUTTON_CLASS}
           onClick={onExportRanks}
           title="Push the saved balance's ranks onto the already-exported players. Teams and the bracket stay untouched."
           disabled={!canExportRanks || isExportRanksPending || isExportPending || isSavePending}
@@ -133,7 +132,7 @@ export function BalanceActionsBar({
             <Button
               type="button"
               variant="outline"
-              className={cn("rounded-xl", MUTED_BUTTON_CLASS)}
+              className={MUTED_BUTTON_CLASS}
               disabled={!activeVariant}
             >
               <MoreHorizontal className="mr-2 h-4 w-4" aria-hidden="true" />

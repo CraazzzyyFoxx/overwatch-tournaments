@@ -1,4 +1,9 @@
-import type { QuotaDimension, QuotaLimitsPayload, QuotaScopeUsage } from "@/types/auth.types";
+import {
+  QUOTA_DIMENSIONS,
+  type QuotaDimension,
+  type QuotaLimitsPayload,
+  type QuotaScopeUsage
+} from "@/types/auth.types";
 
 /**
  * The three counted dimensions and where a usage row keeps their spend and
@@ -47,4 +52,37 @@ export function hasQuotaOverride(limits: QuotaLimitsPayload): boolean {
     limits.max_upload_bytes != null ||
     limits.max_items_per_request != null
   );
+}
+
+/** The stored override row as a draft, so the form starts from what exists. */
+export function draftFromLimits(limits: QuotaLimitsPayload | null | undefined): QuotaLimitsDraft {
+  if (!limits) return EMPTY_QUOTA_LIMITS;
+  return Object.fromEntries(
+    QUOTA_DIMENSIONS.map((dimension) => [dimension, limits[dimension] ?? null])
+  ) as QuotaLimitsDraft;
+}
+
+/** Whether two drafts describe the same row, i.e. whether saving would change anything. */
+export function sameQuotaLimits(left: QuotaLimitsDraft, right: QuotaLimitsDraft): boolean {
+  return QUOTA_DIMENSIONS.every((dimension) => left[dimension] === right[dimension]);
+}
+
+/**
+ * The dimensions this draft raises above what the scope inherits — the edits
+ * only a superuser may store.
+ *
+ * Mirrors the server's rule exactly (`_assert_within`): an inherited `null` is
+ * *unlimited*, so lowering an unbounded dimension is never a raise, and an
+ * emptied field inherits rather than setting zero.
+ */
+export function raisedDimensions(
+  draft: QuotaLimitsDraft,
+  inherited: QuotaLimitsPayload | null | undefined
+): QuotaDimension[] {
+  if (!inherited) return [];
+  return QUOTA_DIMENSIONS.filter((dimension) => {
+    const requested = draft[dimension];
+    const ceiling = inherited[dimension] ?? null;
+    return requested !== null && ceiling !== null && requested > ceiling;
+  });
 }

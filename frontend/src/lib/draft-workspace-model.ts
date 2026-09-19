@@ -24,7 +24,7 @@ export function parseDraftViewParams(params: URLSearchParams): DraftViewParams {
   const viewValue = params.get("view");
   return {
     role:
-      roleValue === "tank" || roleValue === "dps" || roleValue === "support"
+      roleValue === "tank" || roleValue === "damage" || roleValue === "support"
         ? roleValue
         : "all",
     sort: sortValue === "name" ? "name" : "rank",
@@ -35,7 +35,7 @@ export function parseDraftViewParams(params: URLSearchParams): DraftViewParams {
 
 const ROLE_LABELS: Record<DraftRole, string[]> = {
   tank: ["tank"],
-  dps: ["dps", "damage"],
+  damage: ["damage"],
   support: ["support", "sup", "heal"],
 };
 
@@ -95,7 +95,7 @@ export function playerRoles(player: DraftPlayer): DraftRole[] {
  * The role to preselect for a player: the first SAFE one in the player's own
  * order (primary, then the declared secondaries).
  *
- * The server emits an option per role in its own canonical order — tank, dps,
+ * The server emits an option per role in its own canonical order — tank, damage,
  * support (`evaluate_pick_options` iterates `HERO_TYPE_CLASSES`) — so reading
  * its first safe option handed a support main their tank option. `null` means
  * the player has no safe role at all, which is what blocks the row.

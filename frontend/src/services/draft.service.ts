@@ -15,13 +15,13 @@ import type {
 import type { RanksExportResponse } from "@/types/balancer-admin.types";
 
 export const draftEndpoints = {
-  feasibility: (sessionId: number) => `/api/balancer/draft/sessions/${sessionId}/feasibility`,
-  pickOptions: (pickId: number) => `/api/balancer/draft/picks/${pickId}/options`,
+  feasibility: (sessionId: number) => `/api/v1/balancer/draft/sessions/${sessionId}/feasibility`,
+  pickOptions: (pickId: number) => `/api/v1/balancer/draft/picks/${pickId}/options`,
   playerRole: (sessionId: number, playerId: number) =>
-    `/api/balancer/draft/sessions/${sessionId}/players/${playerId}/roles`
+    `/api/v1/balancer/draft/sessions/${sessionId}/players/${playerId}/roles`
 };
 
-// All draft endpoints live on balancer-service under /api/balancer/draft/...
+// All draft endpoints live on balancer-service under /api/v1/balancer/draft/...
 // Reads are public (spectating); writes use apiFetch's automatic bearer token.
 
 // The `X | None` board read returns HTTP 200 with a `null` body from FastAPI,
@@ -34,22 +34,22 @@ async function readJsonOrNull<T>(response: Response): Promise<T | null> {
 
 export default class draftService {
   static async getTournamentBoard(tournamentId: number): Promise<DraftBoard | null> {
-    const res = await apiFetch(`/api/balancer/draft/tournaments/${tournamentId}/draft`);
+    const res = await apiFetch(`/api/v1/balancer/draft/tournaments/${tournamentId}/draft`);
     return readJsonOrNull<DraftBoard>(res);
   }
 
   static async getSessionBoard(sessionId: number): Promise<DraftBoard> {
-    const res = await apiFetch(`/api/balancer/draft/sessions/${sessionId}/board`);
+    const res = await apiFetch(`/api/v1/balancer/draft/sessions/${sessionId}/board`);
     return res.json();
   }
 
   static async getSession(sessionId: number): Promise<DraftSession> {
-    const res = await apiFetch(`/api/balancer/draft/sessions/${sessionId}`);
+    const res = await apiFetch(`/api/v1/balancer/draft/sessions/${sessionId}`);
     return res.json();
   }
 
   static async getSuggestions(sessionId: number): Promise<DraftSuggestionsResponse> {
-    const res = await apiFetch(`/api/balancer/draft/sessions/${sessionId}/suggestions`);
+    const res = await apiFetch(`/api/v1/balancer/draft/sessions/${sessionId}/suggestions`);
     return res.json();
   }
 
@@ -80,7 +80,7 @@ export default class draftService {
     tournamentId: number,
     body: DraftSessionCreateRequest
   ): Promise<DraftSession> {
-    const res = await apiFetch(`/api/balancer/draft/tournaments/${tournamentId}/sessions`, {
+    const res = await apiFetch(`/api/v1/balancer/draft/tournaments/${tournamentId}/sessions`, {
       method: "POST",
       body
     });
@@ -89,7 +89,7 @@ export default class draftService {
 
   /** Every session ever created for the tournament, newest first. */
   static async listSessions(tournamentId: number): Promise<DraftSession[]> {
-    const res = await apiFetch(`/api/balancer/draft/tournaments/${tournamentId}/sessions`);
+    const res = await apiFetch(`/api/v1/balancer/draft/tournaments/${tournamentId}/sessions`);
     return res.json();
   }
 
@@ -99,7 +99,7 @@ export default class draftService {
    * paused — cancel it first.
    */
   static async deleteSession(tournamentId: number, sessionId: number): Promise<void> {
-    await apiFetch(`/api/balancer/draft/tournaments/${tournamentId}/sessions/${sessionId}`, {
+    await apiFetch(`/api/v1/balancer/draft/tournaments/${tournamentId}/sessions/${sessionId}`, {
       method: "DELETE"
     });
   }
@@ -109,7 +109,7 @@ export default class draftService {
     sessionId: number,
     body: DraftSeedRequest
   ): Promise<DraftSeedResponse> {
-    const res = await apiFetch(`/api/balancer/draft/tournaments/${tournamentId}/sessions/${sessionId}/seed`,
+    const res = await apiFetch(`/api/v1/balancer/draft/tournaments/${tournamentId}/sessions/${sessionId}/seed`,
       { method: "POST", body }
     );
     return res.json();
@@ -120,7 +120,7 @@ export default class draftService {
     sessionId: number,
     action: "start" | "pause" | "resume" | "cancel" | "export" | "rollback"
   ): Promise<DraftSession> {
-    const res = await apiFetch(`/api/balancer/draft/tournaments/${tournamentId}/sessions/${sessionId}/${action}`,
+    const res = await apiFetch(`/api/v1/balancer/draft/tournaments/${tournamentId}/sessions/${sessionId}/${action}`,
       { method: "POST" }
     );
     return res.json();
@@ -131,7 +131,7 @@ export default class draftService {
     tournamentId: number,
     sessionId: number
   ): Promise<RanksExportResponse> {
-    const res = await apiFetch(`/api/balancer/draft/tournaments/${tournamentId}/sessions/${sessionId}/export-ranks`,
+    const res = await apiFetch(`/api/v1/balancer/draft/tournaments/${tournamentId}/sessions/${sessionId}/export-ranks`,
       { method: "POST" }
     );
     return res.json();
@@ -142,7 +142,7 @@ export default class draftService {
     pickId: number,
     body: { player_id: number; expected_version: number; target_role?: DraftRole | null }
   ): Promise<DraftSession> {
-    const res = await apiFetch(`/api/balancer/draft/picks/${pickId}/select`, {
+    const res = await apiFetch(`/api/v1/balancer/draft/picks/${pickId}/select`, {
       method: "POST",
       body
     });
@@ -153,7 +153,7 @@ export default class draftService {
     pickId: number,
     body: { expected_version: number; reason?: "expiry" | "admin" }
   ): Promise<DraftSession> {
-    const res = await apiFetch(`/api/balancer/draft/picks/${pickId}/autopick`, {
+    const res = await apiFetch(`/api/v1/balancer/draft/picks/${pickId}/autopick`, {
       method: "POST",
       body
     });
@@ -169,7 +169,7 @@ export default class draftService {
       note?: string | null;
     }
   ): Promise<DraftSession> {
-    const res = await apiFetch(`/api/balancer/draft/picks/${pickId}/override`, {
+    const res = await apiFetch(`/api/v1/balancer/draft/picks/${pickId}/override`, {
       method: "POST",
       body
     });

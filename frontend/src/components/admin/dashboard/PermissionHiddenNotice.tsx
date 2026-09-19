@@ -1,6 +1,6 @@
 import { Lock } from "lucide-react";
 
-import { EmptyNote } from "@/components/admin/kit/EmptyNote";
+import { EmptyNote } from "@/components/kit/EmptyNote";
 
 interface PermissionHiddenNoticeProps {
   /** What is hidden, phrased as a statement: "Tournament data is hidden". */

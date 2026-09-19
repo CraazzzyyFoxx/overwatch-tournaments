@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { replaceVariantPayload, upsertSavedVariant } from "./balancer-page-selectors";
-import type { BalanceVariant } from "./workspace-helpers";
+import type { BalanceVariant } from "@/components/balancer/workspace-helpers";
 import type { InternalBalancePayload } from "@/types/balancer-admin.types";
 
 function createPayload(teamName: string): InternalBalancePayload {

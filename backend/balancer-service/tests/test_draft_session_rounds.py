@@ -57,8 +57,8 @@ def _create(**kwargs: Any):
     ("slots", "expected_rounds"),
     [
         ({"flex": 6}, 5),
-        ({"tank": 1, "dps": 2, "support": 2}, 4),
-        ({"tank": 1, "dps": 2}, 2),
+        ({"tank": 1, "damage": 2, "support": 2}, 4),
+        ({"tank": 1, "damage": 2}, 2),
         ({"tank": 1, "flex": 1}, 1),
     ],
 )

@@ -4,9 +4,9 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import adminService from "@/services/admin.service";
-import { GROUP_STAGE_TYPES, projectedRoundRobinRounds } from "../../bracket/projection";
+import { GROUP_STAGE_TYPES, projectedRoundRobinRounds } from "@/lib/bracket-projection";
 import type { Stage } from "@/types/tournament.types";
-import { stageRoundOptions, type PickBanScopeEncounter } from "../../components/pickBanConfig.helpers";
+import { stageRoundOptions, type PickBanScopeEncounter } from "@/lib/pick-ban-config";
 
 export interface StageRounds {
   /** Ascending round numbers; negative ones are lower-bracket rounds. */

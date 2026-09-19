@@ -64,7 +64,7 @@ const FULL_TEAM: RegistrationTeam = {
   status: "complete",
   captain_registration_id: 100,
   exported_team_id: null,
-  members: [member(100, "tank", true), member(101, "dps"), member(102, "support")],
+  members: [member(100, "tank", true), member(101, "damage"), member(102, "support")],
   invites: [],
   open_slots: {},
   shortfall: "",
@@ -130,7 +130,7 @@ describe("bench invites on a full starting roster", () => {
     await click(findButton(en.registrationTeams.invite.action));
 
     const slots = [...document.querySelectorAll<HTMLInputElement>('input[name="invite-slot"]')];
-    expect(slots.map((input) => input.value)).toEqual(["tank", "dps", "support"]);
+    expect(slots.map((input) => input.value)).toEqual(["tank", "damage", "support"]);
 
     await click(findButton(en.registrationTeams.invite.submit));
 
@@ -150,7 +150,7 @@ describe("bench invites on a full starting roster", () => {
         {
           id: 9,
           team_id: 7,
-          slot_code: "dps",
+          slot_code: "damage",
           is_substitute: true,
           state: "pending"
         }

@@ -34,9 +34,9 @@ import {
   getRegistrationBattleTags,
   type PlayerValidationState,
   type PoolLane,
-} from "./balancer-page-helpers";
+} from "@/components/balancer/balancer-page-helpers";
 import { BattleTagContextMenuItems, BattleTagCopyButton, SmurfTagStrip } from "./BattleTagCopyControls";
-import { ROLE_LABELS, isRoleEntryActive } from "./workspace-helpers";
+import { ROLE_LABELS, isRoleEntryActive } from "@/components/balancer/workspace-helpers";
 import { IssueChip, issueChipKey } from "./IssueChip";
 
 import { BalancerStatusContextMenuItems, BalancerStatusMenu, type StatusOptionGroups } from "./BalancerStatusMenu";
@@ -70,7 +70,7 @@ const LANE_COPY: Record<PoolLane, string> = {
 
 const ROLE_TEXT_ACCENTS: Record<BalancerRoleCode, string> = {
   tank: "text-sky-300",
-  dps: "text-orange-300",
+  damage: "text-orange-300",
   support: "text-emerald-300",
 };
 
@@ -140,24 +140,18 @@ function TriagePlayerCard({
         <div
           ref={setNodeRef}
           style={style}
-          onDoubleClick={(event) => {
-            if (isCardActionTarget(event.target)) {
-              return;
-            }
-            onSelectPlayer(state.player.id);
-          }}
           className={cn(
             "cursor-pointer rounded-xl border border-border bg-card p-2.5 transition",
             isSelected && "border-primary/45 bg-primary/[0.08]",
             isDragging && "z-50 scale-[1.02] opacity-80 shadow-[0_22px_56px_rgba(0,0,0,0.34)]",
           )}
-          title="Double-click to edit player"
+          title={primaryBattleTag}
         >
           <div className="flex items-start gap-2">
             <button
               type="button"
               data-card-action
-              className="mt-0.5 flex h-6 w-6 shrink-0 cursor-grab touch-none items-center justify-center rounded-lg border border-[color:var(--aqt-border-2)] bg-black/20 text-[color:var(--aqt-fg-dim)] hover:text-[color:var(--aqt-fg)] active:cursor-grabbing"
+              className="mt-0.5 flex h-6 w-6 shrink-0 cursor-grab touch-none items-center justify-center rounded-lg border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-bg-2)] text-[color:var(--aqt-fg-dim)] hover:text-[color:var(--aqt-fg)] active:cursor-grabbing"
               {...attributes}
               {...listeners}
             >
@@ -166,8 +160,14 @@ function TriagePlayerCard({
             </button>
 
             <div className="min-w-0 flex-1">
-              <div className="w-full min-w-0 text-left">
-                <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+              <button
+                type="button"
+                data-card-action
+                onClick={() => onSelectPlayer(state.player.id)}
+                title={`Edit ${primaryBattleTag}`}
+                className="w-full min-w-0 rounded text-left"
+              >
+                <span className="flex min-w-0 flex-wrap items-center gap-1.5">
                   {rankedRoleCodes.length > 0 ? (
                     rankedRoleCodes.map((roleCode) => (
                       <PlayerRoleIcon key={roleCode} role={ROLE_LABELS[roleCode]} size={15} />
@@ -175,10 +175,12 @@ function TriagePlayerCard({
                   ) : (
                     <span className="text-label text-[color:var(--aqt-fg-faint)]">No roles</span>
                   )}
-                  <span className="truncate text-caption font-semibold text-[color:var(--aqt-fg)]">{name}</span>
+                  <span className="truncate text-caption font-semibold text-[color:var(--aqt-fg)]">
+                    {name}
+                  </span>
                   {suffix ? <span className="shrink-0 text-label text-[color:var(--aqt-fg-dim)]">{suffix}</span> : null}
-                </div>
-              </div>
+                </span>
+              </button>
               {state.player.is_flex || isReady || state.issues.length > 0 || smurfTags.length > 0 ? (
                 <div className="mt-1 flex min-w-0 items-center gap-1 overflow-x-auto whitespace-nowrap pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                   {state.player.is_flex ? (
@@ -228,7 +230,7 @@ function TriagePlayerCard({
                 variant="ghost"
                 size="sm"
                 disabled={actionsDisabled || !onSetPoolMembership}
-                className="h-7 rounded-lg border border-[color:var(--aqt-border)] bg-black/15 px-2 text-label text-[color:var(--aqt-fg-muted)] hover:bg-white/5 hover:text-[color:var(--aqt-fg)]"
+                className="h-7 rounded-lg border border-[color:var(--aqt-border)] bg-[color:var(--aqt-bg-2)] px-2 text-label text-[color:var(--aqt-fg-muted)] hover:bg-[color:var(--aqt-overlay-3)] hover:text-[color:var(--aqt-fg)]"
                 onClick={() => onSetPoolMembership?.(state.player.id, !state.player.is_in_pool)}
               >
                 {state.player.is_in_pool ? <ShieldX className="mr-1 h-3 w-3" /> : <PlusCircle className="mr-1 h-3 w-3" />}
@@ -306,32 +308,46 @@ function TriageLaneColumn({
           <div className="text-sm font-semibold text-[color:var(--aqt-fg)]">{POOL_LANE_LABELS[lane]}</div>
           <div className="mt-0.5 text-label text-[color:var(--aqt-fg-dim)]">{LANE_COPY[lane]}</div>
         </div>
-        <div className="rounded-full border border-[color:var(--aqt-border-2)] bg-black/20 px-2 py-0.5 text-label font-semibold tabular-nums text-[color:var(--aqt-fg-muted)]">
+        <div className="rounded-full border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-bg-2)] px-2 py-0.5 text-label font-semibold tabular-nums text-[color:var(--aqt-fg-muted)]">
           {states.length}
         </div>
       </div>
       <ScrollArea className="min-h-0 flex-1">
-        <div className="space-y-2 pr-2">
-          {states.length > 0 ? (
-            states.map((state) => (
-              <TriagePlayerCard
+        {states.length > 0 ? (
+          // The click sits on the `<li>`, not on the card's own `div`: the card
+          // is a drag source and a plain `div`, and `onClick` on a
+          // non-interactive `div` is what the design gate rejects. Subtrees
+          // marked `data-card-action` (grip, pool toggle, status menu, copy
+          // controls) keep their own clicks.
+          <ul aria-label={`${POOL_LANE_LABELS[lane]} players`} className="space-y-2 pr-2">
+            {states.map((state) => (
+              <li
                 key={state.player.id}
-                state={state}
-                registration={registrationsById?.get(state.player.id) ?? null}
-                statusOptions={statusOptions}
-                selectedPlayerId={selectedPlayerId}
-                actionsDisabled={actionsDisabled}
-                onSelectPlayer={onSelectPlayer}
-                onSetPoolMembership={onSetPoolMembership}
-                onSetBalancerStatus={onSetBalancerStatus}
-              />
-            ))
-          ) : (
-            <div className="rounded-xl border border-dashed border-[color:var(--aqt-border-2)] bg-black/10 px-3 py-8 text-center text-xs text-[color:var(--aqt-fg-dim)]">
-              Drop players here
-            </div>
-          )}
-        </div>
+                onClick={(event) => {
+                  if (isCardActionTarget(event.target)) {
+                    return;
+                  }
+                  onSelectPlayer(state.player.id);
+                }}
+              >
+                <TriagePlayerCard
+                  state={state}
+                  registration={registrationsById?.get(state.player.id) ?? null}
+                  statusOptions={statusOptions}
+                  selectedPlayerId={selectedPlayerId}
+                  actionsDisabled={actionsDisabled}
+                  onSelectPlayer={onSelectPlayer}
+                  onSetPoolMembership={onSetPoolMembership}
+                  onSetBalancerStatus={onSetBalancerStatus}
+                />
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <div className="rounded-xl border border-dashed border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-bg-2)] px-3 py-8 text-center text-xs text-[color:var(--aqt-fg-dim)]">
+            Drop players here
+          </div>
+        )}
       </ScrollArea>
     </section>
   );
@@ -386,7 +402,7 @@ export function PoolTriageBoard({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex h-[min(760px,calc(100vh-3rem))] w-[min(1180px,calc(100vw-2rem))] max-w-none flex-col gap-0 overflow-hidden border-border bg-popover p-0 text-[color:var(--aqt-fg)] shadow-2xl shadow-black/50">
         <DialogHeader className="shrink-0 border-b border-[color:var(--aqt-border)] px-5 py-4">
-          <DialogTitle className="text-base text-[color:var(--aqt-fg)]">Balancing Pool Triage</DialogTitle>
+          <DialogTitle className="text-base text-[color:var(--aqt-fg)]">Balancing Pool triage</DialogTitle>
           <DialogDescription className="text-xs text-[color:var(--aqt-fg-dim)]">
             Drag players to include or exclude them. Need Fix and Ready are computed from validation, so included players settle into the correct lane automatically.
           </DialogDescription>

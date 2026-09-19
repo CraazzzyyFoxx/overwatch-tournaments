@@ -14,6 +14,7 @@ import {
   LayoutGrid,
   Map as MapIcon,
   Radio,
+  Scale,
   Users
 } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -37,6 +38,7 @@ const icons: Record<TournamentSectionId, React.ComponentType<{ className?: strin
   maps: MapIcon,
   stats: BarChart3,
   stream: Radio,
+  rules: Scale,
   participants: ClipboardList
 };
 
@@ -56,6 +58,7 @@ type TournamentSectionNavProps = {
   stages?: StageSummary[];
   hasTeams?: boolean;
   hasStreams?: boolean;
+  hasRules?: boolean;
   /**
    * Rendered in the rail's leading slot only while the page's big title is out
    * of view, so the viewer never loses the tournament's name without the rail
@@ -75,6 +78,7 @@ export default function TournamentSectionNav({
   stages = [],
   hasTeams,
   hasStreams,
+  hasRules,
   collapsedTitle,
   collapsedActions,
   collapsed = false,
@@ -95,9 +99,10 @@ export default function TournamentSectionNav({
         stages,
         hasTeams,
         hasStreams,
+        hasRules,
         pathname
       }),
-    [hasTeams, hasStreams, pathname, stages, status, tournamentId]
+    [hasRules, hasTeams, hasStreams, pathname, stages, status, tournamentId]
   );
   const setActiveRef = (node: HTMLElement | null) => {
     activeRef.current = node;

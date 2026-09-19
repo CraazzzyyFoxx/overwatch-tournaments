@@ -1,20 +1,19 @@
-"""Single-source-of-truth guard tests for balancer algorithm configuration.
+"""Cross-language drift guards for balancer algorithm configuration.
 
-These assertions lock the consistency invariants between the canonical
-``AlgorithmConfig`` defaults, the preset deltas, the editable-field catalog,
-the limit table, the public ``/config`` payload, the public write allowlist
-(``PUBLIC_CONFIG_KEYS``), the hand-written native request
-(``moo_backend._serialize_native_request``) and the Rust ``ConfigSpec``.
-They are deliberately offline/deterministic (no DB/Redis/network) and exist to
-catch future drift between these parallel sources of truth, not to fail on the
-current code.
+The Python side no longer needs guarding: ``AlgorithmConfig`` is the only place
+a knob is declared, and the write allowlist, the limit table, the editable-field
+catalog, the ``ConfigOverrides`` schema and ``ConfigPresets.DEFAULT`` are all
+derived from it at import time. The six tests that used to compare those lists
+are gone with the lists.
 
-Ten places enumerate the same parameter set. The ring closed here covers the
-dangerous links: a field added to ``AlgorithmConfig`` but missed in
-``PUBLIC_CONFIG_KEYS`` is silently dropped on write, and one missed in
-``_serialize_native_request`` silently falls back to a Rust ``serde`` default —
+What is left is the link a type system cannot close: the hand-written native
+request (``moo_backend._serialize_native_request``) against the Rust
+``ConfigSpec``. A knob missed there silently falls back to a serde default --
 the UI shows and saves the value while the solver ignores it, with no error
-anywhere.
+anywhere. Same for a roster slot code Rust does not recognise: its role-impact
+weight is dropped on the floor.
+
+Deliberately offline/deterministic: no DB, Redis or network.
 """
 
 from __future__ import annotations
@@ -37,63 +36,11 @@ os.environ["DEBUG"] = "false"
 from shared.domain.roster_shape import DEFAULT_ROSTER_SLOTS  # noqa: E402
 from src.domain.balancer.moo_backend import _serialize_native_request  # noqa: E402
 from src.services.balancer.config.defaults import AlgorithmConfig  # noqa: E402
-from src.services.balancer.config.presets import ConfigPresets  # noqa: E402
-from src.services.balancer.config.provider import (  # noqa: E402
-    CONFIG_FIELD_DEFINITIONS,
-    CONFIG_LIMITS,
-    EDITABLE_CONFIG_FIELD_KEYS,
-    get_balancer_config_payload,
-)
-from src.services.balancer.config.public_contract import PUBLIC_CONFIG_KEYS  # noqa: E402
+from src.services.balancer.config.provider import get_balancer_config_payload  # noqa: E402
 
 
 def _algorithm_field_names() -> set[str]:
     return set(AlgorithmConfig().model_dump().keys())
-
-
-def test_default_preset_matches_algorithm_config_defaults() -> None:
-    """Every ``ConfigPresets.DEFAULT`` entry that is also an ``AlgorithmConfig``
-    field must equal that field's default — the preset and the settings class
-    must not drift apart."""
-    defaults = AlgorithmConfig().model_dump()
-
-    mismatches = {
-        key: (preset_value, defaults[key])
-        for key, preset_value in ConfigPresets.DEFAULT.items()
-        if key in defaults and preset_value != defaults[key]
-    }
-
-    assert mismatches == {}, f"DEFAULT preset drifted from AlgorithmConfig defaults: {mismatches}"
-
-
-def test_default_preset_keys_are_all_algorithm_config_fields() -> None:
-    """``ConfigPresets.DEFAULT`` must not reference keys that are not real
-    ``AlgorithmConfig`` fields."""
-    field_names = _algorithm_field_names()
-
-    unknown_default_keys = set(ConfigPresets.DEFAULT) - field_names
-
-    assert unknown_default_keys == set(), f"DEFAULT preset has non-field keys: {sorted(unknown_default_keys)}"
-
-
-def test_config_limits_keys_are_valid_algorithm_config_fields() -> None:
-    """Every key in ``CONFIG_LIMITS`` must be a valid ``AlgorithmConfig``
-    field name."""
-    field_names = _algorithm_field_names()
-
-    invalid_limit_keys = set(CONFIG_LIMITS) - field_names
-
-    assert invalid_limit_keys == set(), f"CONFIG_LIMITS references unknown fields: {sorted(invalid_limit_keys)}"
-
-
-def test_field_definitions_keys_are_editable() -> None:
-    """Every ``CONFIG_FIELD_DEFINITIONS`` entry's ``key`` must be an editable
-    config field key."""
-    definition_keys = {definition["key"] for definition in CONFIG_FIELD_DEFINITIONS}
-
-    non_editable = definition_keys - EDITABLE_CONFIG_FIELD_KEYS
-
-    assert non_editable == set(), f"Field definitions reference non-editable keys: {sorted(non_editable)}"
 
 
 def test_config_payload_exposes_expected_top_level_keys() -> None:
@@ -102,47 +49,6 @@ def test_config_payload_exposes_expected_top_level_keys() -> None:
 
     assert isinstance(payload, dict)
     assert set(payload.keys()) == {"defaults", "limits", "presets", "fields"}
-
-
-# ---------------------------------------------------------------------------
-# Python ring: AlgorithmConfig <-> PUBLIC_CONFIG_KEYS
-# ---------------------------------------------------------------------------
-
-# ``rating_scale_ceiling`` is a rating-normalisation constant applied Python-side
-# by RatingNormalizer, not a solver knob: it is intentionally absent from the
-# public write allowlist and from the native payload.
-# ``role_mask`` is a projection of the tournament roster shape, resolved per run
-# by ``_prepare_balance_context``: it stays an ``AlgorithmConfig`` field (the
-# native payload needs it) but is deliberately not writable, so a saved config
-# cannot contradict the shape the tournament actually fields.
-NON_PUBLIC_ALGORITHM_FIELDS = {"rating_scale_ceiling", "role_mask"}
-
-# ``algorithm`` is accepted for backwards compatibility and then unconditionally
-# dropped: ``ConfigOverrides`` has ``extra="forbid"`` and no ``algorithm`` field,
-# so the validate-or-pop at public_contract.py:78-82 always pops it.
-PUBLIC_KEYS_WITHOUT_ALGORITHM_FIELD = {"algorithm"}
-
-
-def test_public_config_keys_cover_every_algorithm_field() -> None:
-    """A field missing from ``PUBLIC_CONFIG_KEYS`` is silently dropped on write.
-
-    ``normalize_persisted_config_payload`` filters the incoming payload by this
-    set, so an override for an unlisted field "saves" and disappears.
-    """
-    missing = _algorithm_field_names() - PUBLIC_CONFIG_KEYS - NON_PUBLIC_ALGORITHM_FIELDS
-
-    assert missing == set(), (
-        f"AlgorithmConfig fields absent from PUBLIC_CONFIG_KEYS: {sorted(missing)}. "
-        "Overrides for them are dropped on write. Add them to PUBLIC_CONFIG_KEYS "
-        "or to NON_PUBLIC_ALGORITHM_FIELDS with a reason."
-    )
-
-
-def test_public_config_keys_are_algorithm_fields() -> None:
-    """``PUBLIC_CONFIG_KEYS`` must not advertise keys that do not exist."""
-    unknown = PUBLIC_CONFIG_KEYS - _algorithm_field_names() - PUBLIC_KEYS_WITHOUT_ALGORITHM_FIELD
-
-    assert unknown == set(), f"PUBLIC_CONFIG_KEYS references non-fields: {sorted(unknown)}"
 
 
 # ---------------------------------------------------------------------------
@@ -289,7 +195,7 @@ def _rust_role_idx_spellings() -> set[str]:
 def test_rust_recognizes_every_canonical_role_code() -> None:
     """A role code Rust does not recognise loses its impact weight silently.
 
-    ``objectives.rs`` picks ``tank/dps/support_impact_weight`` by comparing the
+    ``objectives.rs`` picks ``tank/damage/support_impact_weight`` by comparing the
     role index against ``Context.*_role_idx``; an unmatched spelling leaves the
     index ``None`` and the objective falls back to ``impact = 1.0`` with no
     error anywhere. Rust cannot be compiled on every dev machine (the crate

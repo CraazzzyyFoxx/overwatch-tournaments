@@ -17,7 +17,7 @@ import { createRoleSelections, isFlexSelection, type FlexMode } from "./types";
 import type { User } from "@/types/user.types";
 import type { AdminRegistration } from "@/types/balancer-admin.types";
 
-import { AuthUserSearchCombobox, type AuthUserOption } from "@/components/admin/AuthUserSearchCombobox";
+import { AuthUserSearchCombobox, type AuthUserOption } from "@/components/kit/AuthUserSearchCombobox";
 import { rbacService } from "@/services/rbac.service";
 import StepIndicator from "@/components/registration/StepIndicator";
 import AccountStep from "@/components/registration/AccountStep";
@@ -77,7 +77,7 @@ const initialState: UnifiedFormState = {
   status: "approved",
   balancerStatus: "not_in_balancer",
   roleSelections: createRoleSelections(),
-  ranks: { tank: "", dps: "", support: "" },
+  ranks: { tank: "", damage: "", support: "" },
   customFieldsValues: {},
 };
 
@@ -261,7 +261,7 @@ export default function UnifiedRegistrationForm({
   const publicPrefillApplied = useRef(false);
   useEffect(() => {
     if (mode === "admin" && initialData) {
-      const initRanks: Record<string, string> = { tank: "", dps: "", support: "" };
+      const initRanks: Record<string, string> = { tank: "", damage: "", support: "" };
       const roleSelections = createRoleSelections();
 
       for (const role of [...(initialData.roles ?? [])].sort((a, b) => a.priority - b.priority)) {

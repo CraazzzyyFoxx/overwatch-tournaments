@@ -242,7 +242,7 @@ class BalancerRegistration(db.TimeStampIntegerMixin):
         ForeignKey("balancer.registration_team.id", ondelete="SET NULL"), nullable=True, index=True
     )
     # The captain-assigned roster slot. NOT derivable from ``roles``:
-    # ``REGISTRATION_ROLE_CODES`` is tank/dps/support only, while ``flex`` is a
+    # ``REGISTRATION_ROLE_CODES`` is tank/damage/support only, while ``flex`` is a
     # roster SLOT code, so a role-less roster's slot cannot be expressed as a
     # role row. Values are ``shared.domain.roster_shape.RosterSlotCode``.
     team_slot_code: Mapped[str | None] = mapped_column(String(16), nullable=True)

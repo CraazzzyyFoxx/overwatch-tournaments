@@ -10,6 +10,7 @@ from typing import Any
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.models.achievements.achievement import AchievementGrain
 from src import models
 
 from ..context import EvalContext
@@ -17,7 +18,13 @@ from . import ResultSet, register
 from .stat_threshold import OPERATORS
 
 
-@register("div_level")
+@register(
+    "div_level",
+    grain=AchievementGrain.user_tournament,
+    description="Division level at the time of the tournament",
+    required=("op", "value"),
+    depends_on=("analytics.player_shift", "tournament.player"),
+)
 async def execute_div_level(
     session: AsyncSession,
     params: dict[str, Any],
@@ -63,7 +70,13 @@ async def execute_div_level(
     return results
 
 
-@register("div_change")
+@register(
+    "div_change",
+    grain=AchievementGrain.user_tournament,
+    description="Division moved up or down between participations",
+    required=("direction", "min_shift"),
+    depends_on=("analytics.player_shift", "tournament.player"),
+)
 async def execute_div_change(
     session: AsyncSession,
     params: dict[str, Any],

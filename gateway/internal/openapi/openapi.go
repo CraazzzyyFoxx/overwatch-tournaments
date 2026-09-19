@@ -117,31 +117,40 @@ func documentNote(envelope bool) string {
 }
 
 const versionsNote = "\n\n## Versions\n\n" +
-	"- **v1** — `/api/v1` and `/api/auth`. Unwrapped JSON.\n" +
-	"- **v2** — `/api/v2` (auth stays on v1). Same handlers and HTTP status; " +
-	"body is `{ok: true, data, warnings?}` or `{ok: false, error: {code, message, details?}}`.\n\n" +
-	"Switcher: `/api/docs`. Specs: `/api/openapi.json`, `/api/openapi.v2.json`."
+	"Every path is `/api/v{n}/<domain>/...` — one version axis, always the second segment. " +
+	"There is no namespace beside the version.\n\n" +
+	"- **v1** (`/api/v1/...`) — unwrapped JSON, the FastAPI-shaped contract.\n" +
+	"- **v2** (`/api/v2/...`) — the same paths, handlers and HTTP status; body is " +
+	"`{ok: true, data, warnings?}` or `{ok: false, error: {code, message, details?}}`.\n\n" +
+	"Switcher: `/api/docs`. Specs: `/api/openapi.json`, `/api/openapi.v2.json`.\n\n" +
+	"**Deprecated spellings.** `auth`, `analytics`, `balancer`, `streams`, `notifications` and " +
+	"`announcements` used to sit beside the version (`/api/auth/me`). Those paths still work and " +
+	"are rewritten onto the canonical one, but every such response carries `Deprecation: true`, " +
+	"a `Sunset` date and a `Link: <canonical>; rel=\"successor-version\"`. They stop being served " +
+	"after the sunset date; move the prefix and nothing else changes.\n\n" +
+	"The documentation surface (`/api/docs`, `/api/openapi*.json`) sits outside the version " +
+	"deliberately — it describes the versions."
 
 const authNote = "\n\n## Authentication\n\n" +
 	"Two credential types share the `Authorization: Bearer` header, and every authenticated " +
 	"operation below accepts either one (its `security` list is a logical OR).\n\n" +
-	"A **session JWT** is the browser credential: short-lived, minted by `POST /api/auth/login` " +
-	"and refreshed via `POST /api/auth/refresh`, carrying the caller's full RBAC — global roles " +
+	"A **session JWT** is the browser credential: short-lived, minted by `POST /api/v1/auth/login` " +
+	"and refreshed via `POST /api/v1/auth/refresh`, carrying the caller's full RBAC — global roles " +
 	"and permissions plus every workspace they belong to.\n\n" +
 	"A **workspace-scoped API key** (`aqt_sk_<public_id>_<secret>`) is the machine credential: " +
-	"long-lived, created by `POST /api/auth/api-keys` and shown once. Its authorization is the " +
+	"long-lived, created by `POST /api/v1/auth/api-keys` and shown once. Its authorization is the " +
 	"intersection of the scopes granted to the key with what the key's owner actually holds in " +
 	"that one workspace, so a key can never outrank its owner and never reaches a second " +
 	"workspace. Scopes are RBAC permission names — the same vocabulary the endpoints are " +
 	"checked against; the catalog lives in `backend/shared/rbac/catalog.py`. A key carries no " +
 	"global permissions and no role names by design, so role-based shortcuts (workspace owner, " +
 	"admin) never apply to it.\n\n" +
-	"Session-only surfaces: the `/api/auth` operations that act on the caller's own account or " +
-	"session — logout, session list and revoke, `/api/auth/me`, password changes, and API-key " +
+	"Session-only surfaces: the `/api/v1/auth` operations that act on the caller's own account or " +
+	"session — logout, session list and revoke, `/api/v1/auth/me`, password changes, and API-key " +
 	"management (creating, updating and revoking keys) — resolve the caller by decoding the " +
 	"bearer as a JWT, so an API key is rejected there with 401. " +
-	"`GET /api/auth/api-keys/self` is the inverse: it describes the calling key, so it needs a " +
-	"key. WebSocket connections (`/ws`, `/api/realtime/ws`) accept either credential, but a key " +
+	"`GET /api/v1/auth/api-keys/self` is the inverse: it describes the calling key, so it needs a " +
+	"key. WebSocket connections (`/ws`, `/api/v1/realtime/ws`) accept either credential, but a key " +
 	"only authenticates the socket if it holds at least one grant in its workspace; a " +
 	"zero-scope key connects anonymously and cannot subscribe to auth-gated topics."
 
@@ -174,7 +183,7 @@ type errDoc struct {
 // so this table cannot drift from the gateway mapping.
 var errorCatalog = []errDoc{
 	{"bad_request", "Bad request", "Malformed JSON or a request the gateway rejects before RPC."},
-	{"unauthorized", "Not authenticated", "Missing, invalid, or expired bearer. Session-only `/api/auth` routes also return this for an API key."},
+	{"unauthorized", "Not authenticated", "Missing, invalid, or expired bearer. Session-only `/api/v1/auth` routes also return this for an API key."},
 	{"forbidden", "Not authorized", "Authenticated, but the credential lacks the permission, workspace, or scope."},
 	{"not_found", "Not found", "Unknown id, or an id outside this credential's workspace (no existence leak)."},
 	{"conflict", "Conflict", "The current state does not allow the write (already confirmed, duplicate, concurrent update)."},
@@ -220,7 +229,11 @@ func Build(info Info, groups []Group) []byte {
 }
 
 // BuildV2 is Build with /api/v1 paths rewritten to /api/v2 and every JSON
-// response wrapped in the RPC envelope. Auth routes under /api/auth are omitted.
+// response wrapped in the RPC envelope. Since the domains that used to sit
+// beside the version (auth, analytics, balancer, streams, notifications,
+// announcements) now live inside it, the v2 spec covers the whole surface —
+// the filter below no longer silently drops them, and `apiver` really does
+// route /api/v2/auth/... through the envelope-aware writers in `apierr`.
 func BuildV2(info Info, groups []Group) []byte {
 	info.Title = info.Title + " v2"
 	return build(info, v2Groups(groups), true)
@@ -533,7 +546,7 @@ func (b *builder) components() map[string]any {
 				"type":         "http",
 				"scheme":       "bearer",
 				"bearerFormat": "aqt_sk_<public_id>_<secret>",
-				"description":  "Workspace-scoped API key, issued by `POST /api/auth/api-keys` and shown once at creation. Sent as `Authorization: Bearer aqt_sk_...` — the same header as the session JWT. A key's scopes are RBAC permission names (`team.create`, `registration.approve`, `admin.*`) from the permission catalog, and its effective authorization is those scopes intersected with what the key's owner holds in that single workspace: a key can never exceed its owner's rights and never reaches another workspace.",
+				"description":  "Workspace-scoped API key, issued by `POST /api/v1/auth/api-keys` and shown once at creation. Sent as `Authorization: Bearer aqt_sk_...` — the same header as the session JWT. A key's scopes are RBAC permission names (`team.create`, `registration.approve`, `admin.*`) from the permission catalog, and its effective authorization is those scopes intersected with what the key's owner holds in that single workspace: a key can never exceed its owner's rights and never reaches another workspace.",
 			},
 		},
 		"schemas": schemas,

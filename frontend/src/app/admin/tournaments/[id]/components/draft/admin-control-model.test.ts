@@ -24,7 +24,7 @@ const player = {
   id: 10,
   version: 4,
   primary_role: "tank",
-  secondary_roles: ["dps"]
+  secondary_roles: ["damage"]
 } as DraftPlayer;
 
 describe("admin draft control model", () => {

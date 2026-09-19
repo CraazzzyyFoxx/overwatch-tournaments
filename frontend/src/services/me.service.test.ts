@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, mock } from "bun:test";
 
 // Capture what me.service sends to apiFetch. The gateway avatar handler
-// (POST /api/auth/me/avatar) requires a multipart form with a "file" field and
+// (POST /api/v1/auth/me/avatar) requires a multipart form with a "file" field and
 // rejects a JSON body with 400 — this guards that setAvatar posts FormData, not
 // a base64 JSON payload (the historical bug where My Account avatar changes
 // silently failed while the admin path, which already sent FormData, worked).
@@ -27,7 +27,7 @@ describe("meService.setAvatar", () => {
 
     await meService.setAvatar(file);
 
-    expect(calls[0].path).toBe("/api/auth/me/avatar");
+    expect(calls[0].path).toBe("/api/v1/auth/me/avatar");
     expect(calls[0].options?.method).toBe("POST");
 
     const body = calls[0].options?.body;
@@ -42,7 +42,7 @@ describe("meService.setAvatar", () => {
   it("deletes the avatar via DELETE with no body", async () => {
     await meService.deleteAvatar();
 
-    expect(calls[0].path).toBe("/api/auth/me/avatar");
+    expect(calls[0].path).toBe("/api/v1/auth/me/avatar");
     expect(calls[0].options?.method).toBe("DELETE");
     expect(calls[0].options?.body).toBeUndefined();
   });
@@ -56,7 +56,7 @@ describe("meService.unlinkOAuth", () => {
   it("unlinks an OAuth provider via DELETE on the identity route", async () => {
     await meService.unlinkOAuth("discord");
 
-    expect(calls[0].path).toBe("/api/auth/oauth/discord/unlink");
+    expect(calls[0].path).toBe("/api/v1/auth/oauth/discord/unlink");
     expect(calls[0].options?.method).toBe("DELETE");
   });
 });

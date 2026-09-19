@@ -45,12 +45,12 @@ class _Session:
 class QueuePlaceTests(IsolatedAsyncioTestCase):
     async def test_reports_the_role_place_beside_the_overall_one(self):
         place = await service.registration_service.queue_position(
-            _Session(role="dps", counts=(2, 119, 1, 42)),
+            _Session(role="damage", counts=(2, 119, 1, 42)),
             SimpleNamespace(id=7, tournament_id=115, submitted_at=None),
         )
 
         self.assertEqual((place.position, place.total), (2, 119))
-        self.assertEqual((place.role, place.role_position, place.role_total), ("dps", 1, 42))
+        self.assertEqual((place.role, place.role_position, place.role_total), ("damage", 1, 42))
 
     async def test_a_registration_with_no_role_holds_no_place_in_a_role_queue(self):
         """The counts come back zero; "0 of 0" and "1 of 1" are both lies."""

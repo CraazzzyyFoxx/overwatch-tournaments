@@ -198,7 +198,7 @@ function openSheet(scope: Element, label: string) {
   return click(scope.querySelector(`button[title='Edit ${label}']`));
 }
 
-/** Every rank field in the open sheet, in render order: tank, dps, support. */
+/** Every rank field in the open sheet, in render order: tank, damage, support. */
 function rankFields() {
   return [...document.body.querySelectorAll<HTMLInputElement>('input[inputmode="numeric"]')];
 }

@@ -152,7 +152,7 @@ const registrationTeamService = {
     teamIds?: number[],
   ): Promise<RegistrationTeamExportResult> {
     const response = await apiFetch(
-      `/api/balancer/tournaments/${tournamentId}/registered-teams/export`,
+      `/api/v1/balancer/tournaments/${tournamentId}/registered-teams/export`,
       { method: "POST", body: teamIds !== undefined ? { team_ids: teamIds } : {} },
     );
     return response.json();

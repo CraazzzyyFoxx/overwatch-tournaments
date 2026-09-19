@@ -19,7 +19,7 @@ let refreshInFlight: Promise<RefreshOutcome> | null = null;
 // both cookies on the way out — nothing in this page context can make the next
 // attempt succeed. Latch it, because every 401 used to be re-attempted on each
 // focus/visibility event: prod logs showed clients that had never been logged in
-// at all looping `/auth/refresh 401` + `/api/auth/me` pairs indefinitely (57
+// at all looping `/auth/refresh 401` + `/api/v1/auth/me` pairs indefinitely (57
 // browsers, 408 of the 627 "logout" responses in five days). A real login always
 // navigates the document (the OAuth redirect), which resets this module.
 let sessionKnownDead = false;

@@ -102,11 +102,11 @@ export interface RoleSubgroup {
 const ROLE_SUBGROUP_LABELS: Record<string, string> = {
   source_roles: "Declared roles",
   tank: "Tank",
-  dps: "DPS",
+  damage: "DPS",
   support: "Support",
 };
 
-const ROLE_SUBGROUP_ORDER = ["source_roles", "tank", "dps", "support", "other"] as const;
+const ROLE_SUBGROUP_ORDER = ["source_roles", "tank", "damage", "support", "other"] as const;
 
 /** Resolve the sub-group id for a roles-group target from its key. */
 export function roleSubgroupId(targetKey: string): string {

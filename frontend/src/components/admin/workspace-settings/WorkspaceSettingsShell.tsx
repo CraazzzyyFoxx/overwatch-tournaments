@@ -4,7 +4,7 @@ import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
-import { AdminSectionNav } from "@/components/admin/kit/AdminSectionNav";
+import { AdminSectionNav } from "@/components/kit/AdminSectionNav";
 import {
   WORKSPACE_SETTINGS_SECTIONS,
   WORKSPACE_SETTINGS_SECTION_DESCRIPTIONS,

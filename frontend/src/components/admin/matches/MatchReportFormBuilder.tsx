@@ -5,7 +5,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Loader2, Plus, Save, Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import { EYEBROW_CLASS } from "@/components/admin/tone";
+import { EYEBROW_CLASS } from "@/components/kit/tone";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -29,7 +29,7 @@ import {
   type ReportBuiltInFieldConfig,
   type ReportCustomFieldDefinition
 } from "@/types/encounter.types";
-import { EmptyNote } from "@/components/admin/kit/EmptyNote";
+import { EmptyNote } from "@/components/kit/EmptyNote";
 
 type BuiltInKey = keyof MatchReportForm["built_in_fields"];
 

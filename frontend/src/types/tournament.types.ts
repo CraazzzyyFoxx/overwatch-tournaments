@@ -98,6 +98,14 @@ export interface Tournament {
   start_date: Date;
   end_date: Date;
   description: string | null;
+  /**
+   * Organizer-published regulations, Markdown. `null` means BOTH "nothing
+   * published" and "this read did not opt into the `rules` entity" — only the
+   * public tournament shell read (`getPublicOverview`) and the admin read ask
+   * for it, because a multi-page document has no business riding in every
+   * nested tournament of an encounter list.
+   */
+  rules: string | null;
   challonge_id: number | null;
   challonge_slug: string | null;
   is_league: boolean;

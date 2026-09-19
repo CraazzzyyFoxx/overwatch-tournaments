@@ -20,10 +20,10 @@ from shared.core.enums import HeroClass  # noqa: E402
 from shared.domain.roster import PlayerRoster, RosterRole  # noqa: E402
 
 
-def test_snapshot_role_translates_damage_to_dps() -> None:
-    # The snapshot uses the canonical HeroClass name ("damage"); the registration uses "dps".
-    # Translation now lives in shared and is used by shared.services.rank_snapshots.
-    assert player_sub_roles.canonical_to_registration_role("damage") == "dps"
+def test_snapshot_role_is_the_canonical_damage_code() -> None:
+    # Snapshot and registration speak one vocabulary: the canonical HeroClass name.
+    # The lookup lives in shared and is used by shared.services.rank_snapshots.
+    assert player_sub_roles.canonical_to_registration_role("damage") == "damage"
     assert player_sub_roles.canonical_to_registration_role("tank") == "tank"
     assert player_sub_roles.canonical_to_registration_role("support") == "support"
 
@@ -48,7 +48,9 @@ def _entry(role: str, rank: int | None):
 
 
 def test_serialize_role_carries_ow_rank_value() -> None:
-    out = serializers.serialize_registration_role(_role_model("dps", 500), ow_rank_value=3000, entry=_entry("dps", 500))
+    out = serializers.serialize_registration_role(
+        _role_model("damage", 500), ow_rank_value=3000, entry=_entry("damage", 500)
+    )
 
     assert out.rank_value == 500
     assert out.ow_rank_value == 3000

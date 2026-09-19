@@ -24,6 +24,7 @@ The system as it is. These are updated in the same commit as the change they des
 | [`database_erd.md`](./database_erd.md) | Every table, column and relationship, one diagram per model package. Diagrams generated from `Base.metadata` and gated in CI; prose hand-written |
 | [`users-identity.md`](./users-identity.md) | Identity model: `auth.user` vs `players.user`, shadow and virtual players, workspace membership, account linking |
 | [`design-book.md`](./design-book.md) | Frontend design system — tokens, type scale, colour roles, layout patterns |
+| [`frontend-zones.md`](./frontend-zones.md) | Frontend route zones (`web` / `admin` / `tools`), the three import rules CI enforces, and the per-zone i18n message bundles |
 | [`glossary.md`](./glossary.md) | Domain vocabulary used across code, API and UI |
 | [`business-logic-inventory.md`](./business-logic-inventory.md) | Domain rules and invariants: lifecycle, registration, admission, roster, balancer/draft, brackets, pick-ban, logs, achievements, analytics |
 

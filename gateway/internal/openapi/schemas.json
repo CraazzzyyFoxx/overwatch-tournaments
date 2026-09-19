@@ -1337,7 +1337,7 @@
       "summary": "List quota plans"
     },
     "rpc.app.quota.workspace_usage": {
-      "description": "Permission: workspace `team.create` (i.e. a workspace admin) or superuser. Returns the workspace's plan slug and its shared pool's effective ceilings next to what has been spent \u2014 requests this minute, heavy units today, concurrent heavy slots held, and the two payload caps \u2014 with the seconds until each window resets. Per-key usage is not reported here (identity-service answers for an API key). 404 if the workspace is missing. A metered call refused against these numbers answers 429 `code=rate_limited` with `Retry-After`, naming the dimension and the bucket as `details.limit_name` and `details.scope` (relayed by the gateway inside `fields[0]`).",
+      "description": "Permission: workspace `team.create` (i.e. a workspace admin) or superuser. Returns the workspace's plan slug and its shared pool's effective ceilings next to what has been spent \u2014 requests this minute, heavy units today, concurrent heavy slots held, and the two payload caps \u2014 with the seconds until each window resets. Per-key usage is not reported here (identity-service answers for an API key). `policy` is the editable half and covers all three scopes (`workspace`/`key`/`session`), because all three override rows belong to this tenant: each entry carries `override`, the row exactly as stored (all-null when the scope has none), and `inherited`, the ceiling `quota_set` holds a non-superuser write to. 404 if the workspace is missing. A metered call refused against these numbers answers 429 `code=rate_limited` with `Retry-After`, naming the dimension and the bucket as `details.limit_name` and `details.scope` (relayed by the gateway inside `fields[0]`).",
       "query_params": [
         {
           "name": "workspace_id",
@@ -12815,7 +12815,7 @@
       "type": "object"
     },
     "app.HeroClass": {
-      "description": "A roster role OR a hero's class -- two concepts on one Postgres type.\n\n``tank``/``damage``/``support`` mean both things at once, which is why the\nsame ``heroclass`` type backs ``overwatch.hero.type``,\n``matches.stat_baselines.role`` and ``tournament.player.role``. ``flex``\nonly ever means the third: a player who holds no fixed role, which is what\na role-less (all-``flex``) roster shape drafts and balances for. No hero has\na class of \"flex\", so the two hero-side columns are narrowed back to\n:data:`HERO_TYPE_CLASSES` / :data:`HeroTypeClass` in the schema layer and by\nCHECK constraints in the database (migration ``heroflex0001``).\n\nMember NAMES are the stored Postgres labels (SQLAlchemy ``Enum`` default),\nso the DB sees ``flex`` while the Python value is ``\"Flex\"``.\n\nTHE single role enum for the whole backend (frontend mirror:\n``PlayerRoleOption`` in ``lib/player-role.ts``). Draft/balancer/registration\ncode historically spelled ``damage`` as ``dps`` -- that spelling is a wire\nformat, not a second role vocabulary, and lives on as :attr:`slot_code`.",
+      "description": "A roster role OR a hero's class -- two concepts on one Postgres type.\n\n``tank``/``damage``/``support`` mean both things at once, which is why the\nsame ``heroclass`` type backs ``overwatch.hero.type``,\n``matches.stat_baselines.role`` and ``tournament.player.role``. ``flex``\nonly ever means the third: a player who holds no fixed role, which is what\na role-less (all-``flex``) roster shape drafts and balances for. No hero has\na class of \"flex\", so the two hero-side columns are narrowed back to\n:data:`HERO_TYPE_CLASSES` / :data:`HeroTypeClass` in the schema layer and by\nCHECK constraints in the database (migration ``heroflex0001``).\n\nMember NAMES are the stored Postgres labels (SQLAlchemy ``Enum`` default),\nso the DB sees ``flex`` while the Python value is ``\"Flex\"``.\n\nTHE single role enum for the whole backend (frontend mirror:\n``PlayerRoleOption`` in ``lib/player-role.ts``). One spelling per role, in\ncode, on the wire and in the database: :attr:`slot_code` is the lowercase\nmember name. This docstring is the public OpenAPI description of the enum,\nso the retired spelling is documented on :attr:`slot_code` instead.",
       "enum": [
         "Tank",
         "Damage",
@@ -15454,6 +15454,31 @@
       "title": "QuotaPlanWrite",
       "type": "object"
     },
+    "app.QuotaScopePolicy": {
+      "description": "One scope's stored override next to the ceiling a write must stay under.\n\n``QuotaScopeUsage`` reports the EFFECTIVE number, which cannot tell \"the\nplan grants 600\" apart from \"someone wrote 600 here\". An editor needs both:\n``override`` is the row exactly as stored (all-``None`` when the scope has\nno row at all), and ``inherited`` is what a null dimension falls back to.\n\n``inherited`` is the same bound the write path enforces for this scope, so a\nscreen can mark a raise as superuser-only before spending the round trip\nthat would answer 422 ``quota_above_inherited``.",
+      "properties": {
+        "inherited": {
+          "$ref": "#/components/schemas/app.QuotaLimitsPayload"
+        },
+        "override": {
+          "$ref": "#/components/schemas/app.QuotaLimitsPayload"
+        },
+        "scope": {
+          "enum": [
+            "workspace",
+            "key",
+            "session"
+          ],
+          "title": "Scope",
+          "type": "string"
+        }
+      },
+      "required": [
+        "scope"
+      ],
+      "title": "QuotaScopePolicy",
+      "type": "object"
+    },
     "app.QuotaScopeUsage": {
       "description": "One bucket's effective ceiling next to what has been spent against it.",
       "properties": {
@@ -15585,6 +15610,13 @@
           ],
           "default": null,
           "title": "Plan Slug"
+        },
+        "policy": {
+          "items": {
+            "$ref": "#/components/schemas/app.QuotaScopePolicy"
+          },
+          "title": "Policy",
+          "type": "array"
         },
         "scopes": {
           "items": {
@@ -20277,7 +20309,7 @@
             }
           ],
           "default": null,
-          "description": "Per-team slot counts keyed by roster slot code, e.g. {\"tank\": 1, \"dps\": 2, \"support\": 2} -- the default when omitted. Team count is derived from it: floor(players / sum(slots)); the remainder is benched. Input role names are matched case-insensitively against these keys, so a pool written with \"Damage\" fills a \"dps\" slot.",
+          "description": "Per-team slot counts keyed by roster slot code, e.g. {\"tank\": 1, \"damage\": 2, \"support\": 2} -- the default when omitted. Team count is derived from it: floor(players / sum(slots)); the remainder is benched. Input role names are matched case-insensitively against these keys, so a pool written with \"Damage\" fills the \"damage\" slots.",
           "title": "Role Mask"
         }
       },
@@ -20483,7 +20515,8 @@
         "average_mmr_balance_weight": {
           "anyOf": [
             {
-              "minimum": 0,
+              "maximum": 10000.0,
+              "minimum": 0.0,
               "type": "number"
             },
             {
@@ -20491,7 +20524,7 @@
             }
           ],
           "default": null,
-          "description": "Weight for MMR difference between teams",
+          "description": "Penalty weight for differences between team average MMR values.",
           "title": "Average Mmr Balance Weight"
         },
         "convergence_epsilon": {
@@ -20521,7 +20554,7 @@
             }
           ],
           "default": null,
-          "description": "Number of generations without meaningful Pareto improvement before early stop logic can trigger.",
+          "description": "Generations without meaningful Pareto improvement before early stopping can trigger.",
           "title": "Convergence Patience"
         },
         "crossover_rate": {
@@ -20536,13 +20569,14 @@
             }
           ],
           "default": null,
-          "description": "Probability of crossover when producing Rust MOO offspring.",
+          "description": "Probability of crossover when producing offspring in the Rust MOO search.",
           "title": "Crossover Rate"
         },
-        "dps_impact_weight": {
+        "damage_impact_weight": {
           "anyOf": [
             {
-              "minimum": 0,
+              "maximum": 10000.0,
+              "minimum": 0.0,
               "type": "number"
             },
             {
@@ -20550,13 +20584,14 @@
             }
           ],
           "default": null,
-          "description": "Importance multiplier for Damage role contribution in the effective team total.",
-          "title": "Dps Impact Weight"
+          "description": "Importance multiplier for Damage role contribution when comparing effective team totals.",
+          "title": "Damage Impact Weight"
         },
         "effective_total_std_weight": {
           "anyOf": [
             {
-              "minimum": 0,
+              "maximum": 10000.0,
+              "minimum": 0.0,
               "type": "number"
             },
             {
@@ -20564,7 +20599,7 @@
             }
           ],
           "default": null,
-          "description": "Penalty multiplier for the weighted effective team-total standard deviation.",
+          "description": "Penalty multiplier for weighted effective team-total standard deviation.",
           "title": "Effective Total Std Weight"
         },
         "generation_count": {
@@ -20579,7 +20614,7 @@
             }
           ],
           "default": null,
-          "description": "Number of generations",
+          "description": "Maximum optimization iterations. Higher values can improve quality and increase runtime.",
           "title": "Generation Count"
         },
         "greedy_seed_count": {
@@ -20594,13 +20629,14 @@
             }
           ],
           "default": null,
-          "description": "How many initial individuals are built from greedy seeding before random fill.",
+          "description": "How many initial individuals are built with greedy seeding before random fill.",
           "title": "Greedy Seed Count"
         },
         "internal_role_spread_weight": {
           "anyOf": [
             {
-              "minimum": 0,
+              "maximum": 10000.0,
+              "minimum": 0.0,
               "type": "number"
             },
             {
@@ -20608,13 +20644,14 @@
             }
           ],
           "default": null,
-          "description": "Weight for uneven role-average strength inside the same team",
+          "description": "Penalty weight for uneven average strength between roles inside the same team.",
           "title": "Internal Role Spread Weight"
         },
         "intra_team_std_weight": {
           "anyOf": [
             {
-              "minimum": 0,
+              "maximum": 10000.0,
+              "minimum": 0.0,
               "type": "number"
             },
             {
@@ -20637,13 +20674,14 @@
             }
           ],
           "default": null,
-          "description": "Number of independent Rust MOO islands explored in parallel.",
+          "description": "Number of independent Rust MOO islands explored in parallel before merging the archive.",
           "title": "Island Count"
         },
         "low_rank_collision_weight": {
           "anyOf": [
             {
-              "minimum": 0,
+              "maximum": 10000.0,
+              "minimum": 0.0,
               "type": "number"
             },
             {
@@ -20651,7 +20689,7 @@
             }
           ],
           "default": null,
-          "description": "Penalty weight per pair of low-rank players in the same team.",
+          "description": "Penalty weight per pair of low-rank players in the same team, normalized per team count. Discourages stacking two low-rank players together.",
           "title": "Low Rank Collision Weight"
         },
         "low_rank_threshold": {
@@ -20666,7 +20704,7 @@
             }
           ],
           "default": null,
-          "description": "Rating threshold (canonical scale) at or below which a player's best role rating marks them low-rank. 0 disables the low-rank pair penalty.",
+          "description": "Players whose best role rating is at or below this value (canonical scale, see rating_scale_ceiling) count as low-rank; teams with two or more of them get penalized. 0 disables the mechanic.",
           "title": "Low Rank Threshold"
         },
         "max_result_variants": {
@@ -20681,13 +20719,14 @@
             }
           ],
           "default": null,
-          "description": "Maximum number of result variants to return for the selected solver",
+          "description": "Maximum number of solution variants returned by the selected solver.",
           "title": "Max Result Variants"
         },
         "max_role_discomfort_weight": {
           "anyOf": [
             {
-              "minimum": 0,
+              "maximum": 10000.0,
+              "minimum": 0.0,
               "type": "number"
             },
             {
@@ -20695,13 +20734,14 @@
             }
           ],
           "default": null,
-          "description": "Weight for maximum discomfort penalty",
+          "description": "Penalty weight for the single worst role discomfort assignment in a solution.",
           "title": "Max Role Discomfort Weight"
         },
         "max_team_gap_weight": {
           "anyOf": [
             {
-              "minimum": 0,
+              "maximum": 10000.0,
+              "minimum": 0.0,
               "type": "number"
             },
             {
@@ -20709,7 +20749,7 @@
             }
           ],
           "default": null,
-          "description": "Penalty weight for the rating gap between strongest and weakest team",
+          "description": "Penalty weight for the rating gap between the strongest and weakest teams.",
           "title": "Max Team Gap Weight"
         },
         "mix_comfort_tilt": {
@@ -20724,7 +20764,7 @@
             }
           ],
           "default": null,
-          "description": "Mix-only trade-off between rank balance (0) and role comfort (1); 0.5 is the mix engine's own default weighting.",
+          "description": "Mix trade-off between rank balance and role comfort. 0 weighs only how evenly the two teams' ranks split, 1 only how many players got a preferred role; 0.5 reproduces the engine's own defaults.",
           "title": "Mix Comfort Tilt"
         },
         "mix_role_weights": {
@@ -20742,14 +20782,14 @@
             }
           ],
           "default": null,
-          "description": "Mix-only per-role importance for role-line balance, keyed by roster slot code. Omitted roles weigh 1.0.",
+          "description": "Mix per-role importance for the role-line balance term, keyed by roster slot code. A role left out weighs 1.0, as does every role when this is unset.",
           "title": "Mix Role Weights"
         },
         "mutation_rate": {
           "anyOf": [
             {
-              "maximum": 1,
-              "minimum": 0,
+              "maximum": 1.0,
+              "minimum": 0.0,
               "type": "number"
             },
             {
@@ -20757,7 +20797,7 @@
             }
           ],
           "default": null,
-          "description": "Probability of mutation",
+          "description": "Probability that a solution is changed while producing the next generation.",
           "title": "Mutation Rate"
         },
         "mutation_rate_max": {
@@ -20772,7 +20812,7 @@
             }
           ],
           "default": null,
-          "description": "Upper bound for adaptive mutation rate during the Rust MOO search.",
+          "description": "Upper bound for the adaptive mutation rate during Rust MOO search.",
           "title": "Mutation Rate Max"
         },
         "mutation_rate_min": {
@@ -20787,7 +20827,7 @@
             }
           ],
           "default": null,
-          "description": "Lower bound for adaptive mutation rate during the Rust MOO search.",
+          "description": "Lower bound for the adaptive mutation rate during Rust MOO search.",
           "title": "Mutation Rate Min"
         },
         "mutation_strength": {
@@ -20802,7 +20842,7 @@
             }
           ],
           "default": null,
-          "description": "Number of mutation operations per mutation",
+          "description": "Number of swap/change operations attempted during a mutation.",
           "title": "Mutation Strength"
         },
         "polish_max_passes": {
@@ -20817,7 +20857,7 @@
             }
           ],
           "default": null,
-          "description": "Maximum local-polishing passes applied to final archive solutions.",
+          "description": "Maximum local-improvement passes applied to each archive solution after the main search.",
           "title": "Polish Max Passes"
         },
         "population_size": {
@@ -20832,14 +20872,14 @@
             }
           ],
           "default": null,
-          "description": "Population size for the moo solver",
+          "description": "Number of candidate balances kept per generation. Higher values improve search coverage and cost more time.",
           "title": "Population Size"
         },
         "rank_comfort_tilt": {
           "anyOf": [
             {
-              "maximum": 1,
-              "minimum": 0,
+              "maximum": 1.0,
+              "minimum": 0.0,
               "type": "number"
             },
             {
@@ -20847,13 +20887,14 @@
             }
           ],
           "default": null,
-          "description": "Ranking tilt between balance and comfort (0.5 = balanced)",
+          "description": "Shifts how result variants are ranked: 0.5 weighs team balance (StdDev) and comfort (off-role) equally; toward 1 prioritises comfort/off-role, toward 0 prioritises balance. Ordering and primary selection only \u2014 does not change the optimizer search.",
           "title": "Rank Comfort Tilt"
         },
         "role_discomfort_weight": {
           "anyOf": [
             {
-              "minimum": 0,
+              "maximum": 10000.0,
+              "minimum": 0.0,
               "type": "number"
             },
             {
@@ -20861,13 +20902,14 @@
             }
           ],
           "default": null,
-          "description": "Weight for player role discomfort",
+          "description": "Penalty weight for assigning players away from their preferred roles.",
           "title": "Role Discomfort Weight"
         },
         "role_line_balance_weight": {
           "anyOf": [
             {
-              "minimum": 0,
+              "maximum": 10000.0,
+              "minimum": 0.0,
               "type": "number"
             },
             {
@@ -20875,24 +20917,8 @@
             }
           ],
           "default": null,
-          "description": "Weight for balancing roles between teams",
+          "description": "Penalty weight for uneven rating strength between the same role across teams.",
           "title": "Role Line Balance Weight"
-        },
-        "role_mask": {
-          "anyOf": [
-            {
-              "additionalProperties": {
-                "type": "integer"
-              },
-              "type": "object"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Ignored legacy role mask, kept only so configs saved before roster shapes still validate",
-          "title": "Role Mask"
         },
         "stagnation_kick_patience": {
           "anyOf": [
@@ -20906,13 +20932,14 @@
             }
           ],
           "default": null,
-          "description": "Generations without archive improvement before a stronger mutation kick is applied.",
+          "description": "Generations without archive improvement before stronger mutation and crossover are applied.",
           "title": "Stagnation Kick Patience"
         },
         "sub_role_collision_weight": {
           "anyOf": [
             {
-              "minimum": 0,
+              "maximum": 10000.0,
+              "minimum": 0.0,
               "type": "number"
             },
             {
@@ -20920,13 +20947,14 @@
             }
           ],
           "default": null,
-          "description": "Penalty weight per pair of players in the same team sharing the same role subclass. Use 0 to disable.",
+          "description": "Penalty weight per pair of players in the same team sharing the same role subclass, normalized per team count. Use 0 to disable.",
           "title": "Sub Role Collision Weight"
         },
         "support_impact_weight": {
           "anyOf": [
             {
-              "minimum": 0,
+              "maximum": 10000.0,
+              "minimum": 0.0,
               "type": "number"
             },
             {
@@ -20934,13 +20962,14 @@
             }
           ],
           "default": null,
-          "description": "Importance multiplier for Support role contribution in the effective team total.",
+          "description": "Importance multiplier for Support role contribution when comparing effective team totals.",
           "title": "Support Impact Weight"
         },
         "tank_gap_weight": {
           "anyOf": [
             {
-              "minimum": 0,
+              "maximum": 10000.0,
+              "minimum": 0.0,
               "type": "number"
             },
             {
@@ -20948,13 +20977,14 @@
             }
           ],
           "default": null,
-          "description": "Penalty multiplier for the rating gap between the strongest and weakest Tank lines.",
+          "description": "Penalty multiplier for the largest gap between adjacent (sorted by strength) Tank lines.",
           "title": "Tank Gap Weight"
         },
         "tank_impact_weight": {
           "anyOf": [
             {
-              "minimum": 0,
+              "maximum": 10000.0,
+              "minimum": 0.0,
               "type": "number"
             },
             {
@@ -20962,13 +20992,14 @@
             }
           ],
           "default": null,
-          "description": "Importance multiplier for Tank role contribution in the effective team total.",
+          "description": "Importance multiplier for Tank role contribution when comparing effective team totals.",
           "title": "Tank Impact Weight"
         },
         "tank_std_weight": {
           "anyOf": [
             {
-              "minimum": 0,
+              "maximum": 10000.0,
+              "minimum": 0.0,
               "type": "number"
             },
             {
@@ -20982,7 +21013,8 @@
         "team_max_pain_weight": {
           "anyOf": [
             {
-              "minimum": 0,
+              "maximum": 10000.0,
+              "minimum": 0.0,
               "type": "number"
             },
             {
@@ -20990,13 +21022,14 @@
             }
           ],
           "default": null,
-          "description": "Weight for the per-team maximum role discomfort averaged over teams.",
+          "description": "Penalty weight for the per-team maximum role discomfort averaged over all teams. Makes 'one suffering player in every team' visible, unlike the single global maximum.",
           "title": "Team Max Pain Weight"
         },
         "team_total_balance_weight": {
           "anyOf": [
             {
-              "minimum": 0,
+              "maximum": 10000.0,
+              "minimum": 0.0,
               "type": "number"
             },
             {
@@ -21004,7 +21037,7 @@
             }
           ],
           "default": null,
-          "description": "Weight for aligning total rating sums among all teams",
+          "description": "Penalty weight for standard deviation of total team rating sums.",
           "title": "Team Total Balance Weight"
         },
         "time_limit_ms": {
@@ -21019,7 +21052,7 @@
             }
           ],
           "default": null,
-          "description": "Hard wall-clock budget for the native optimizer in milliseconds; the best result found so far is returned when exceeded.",
+          "description": "Hard wall-clock budget for the optimizer in milliseconds. When exceeded, evolution and polishing stop early and the best result found so far is returned. Trades same-seed reproducibility for latency.",
           "title": "Time Limit Ms"
         },
         "use_captains": {
@@ -21032,7 +21065,7 @@
             }
           ],
           "default": null,
-          "description": "Whether to use captain assignment",
+          "description": "Marks top-rated players as captains and uses them as team anchors when supported by the solver.",
           "title": "Use Captains"
         }
       },
@@ -21617,7 +21650,7 @@
         "role": {
           "enum": [
             "tank",
-            "dps",
+            "damage",
             "support"
           ],
           "title": "Role",
@@ -21729,7 +21762,7 @@
             {
               "enum": [
                 "tank",
-                "dps",
+                "damage",
                 "support"
               ],
               "type": "string"
@@ -21894,7 +21927,7 @@
             {
               "enum": [
                 "tank",
-                "dps",
+                "damage",
                 "support"
               ],
               "type": "string"
@@ -22186,7 +22219,7 @@
         "role": {
           "enum": [
             "tank",
-            "dps",
+            "damage",
             "support"
           ],
           "title": "Role",
@@ -22225,7 +22258,7 @@
         "role": {
           "enum": [
             "tank",
-            "dps",
+            "damage",
             "support"
           ],
           "title": "Role",
@@ -22708,7 +22741,7 @@
         "role": {
           "enum": [
             "tank",
-            "dps",
+            "damage",
             "support"
           ],
           "title": "Role",
@@ -23521,7 +23554,7 @@
               "propertyNames": {
                 "enum": [
                   "tank",
-                  "dps",
+                  "damage",
                   "support",
                   "flex"
                 ]
@@ -23621,7 +23654,7 @@
               "propertyNames": {
                 "enum": [
                   "tank",
-                  "dps",
+                  "damage",
                   "support",
                   "flex"
                 ]
@@ -25603,6 +25636,31 @@
       "title": "QuotaLimitsPayload",
       "type": "object"
     },
+    "identity.QuotaScopePolicy": {
+      "description": "One scope's stored override next to the ceiling a write must stay under.\n\n``QuotaScopeUsage`` reports the EFFECTIVE number, which cannot tell \"the\nplan grants 600\" apart from \"someone wrote 600 here\". An editor needs both:\n``override`` is the row exactly as stored (all-``None`` when the scope has\nno row at all), and ``inherited`` is what a null dimension falls back to.\n\n``inherited`` is the same bound the write path enforces for this scope, so a\nscreen can mark a raise as superuser-only before spending the round trip\nthat would answer 422 ``quota_above_inherited``.",
+      "properties": {
+        "inherited": {
+          "$ref": "#/components/schemas/identity.QuotaLimitsPayload"
+        },
+        "override": {
+          "$ref": "#/components/schemas/identity.QuotaLimitsPayload"
+        },
+        "scope": {
+          "enum": [
+            "workspace",
+            "key",
+            "session"
+          ],
+          "title": "Scope",
+          "type": "string"
+        }
+      },
+      "required": [
+        "scope"
+      ],
+      "title": "QuotaScopePolicy",
+      "type": "object"
+    },
     "identity.QuotaScopeUsage": {
       "description": "One bucket's effective ceiling next to what has been spent against it.",
       "properties": {
@@ -25734,6 +25792,13 @@
           ],
           "default": null,
           "title": "Plan Slug"
+        },
+        "policy": {
+          "items": {
+            "$ref": "#/components/schemas/identity.QuotaScopePolicy"
+          },
+          "title": "Policy",
+          "type": "array"
         },
         "scopes": {
           "items": {
@@ -27556,6 +27621,13 @@
     },
     "parser.ConditionTypeInfo": {
       "properties": {
+        "depends_on": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Depends On",
+          "type": "array"
+        },
         "description": {
           "title": "Description",
           "type": "string"
@@ -27581,6 +27653,16 @@
           },
           "title": "Required Params",
           "type": "array"
+        },
+        "subcondition_ok": {
+          "default": false,
+          "title": "Subcondition Ok",
+          "type": "boolean"
+        },
+        "subcondition_only": {
+          "default": false,
+          "title": "Subcondition Only",
+          "type": "boolean"
         }
       },
       "required": [
@@ -31228,7 +31310,7 @@
         "role": {
           "enum": [
             "tank",
-            "dps",
+            "damage",
             "support"
           ],
           "title": "Role",
@@ -31301,7 +31383,7 @@
         "role": {
           "enum": [
             "tank",
-            "dps",
+            "damage",
             "support"
           ],
           "title": "Role",
@@ -31729,7 +31811,7 @@
         "role": {
           "enum": [
             "tank",
-            "dps",
+            "damage",
             "support"
           ],
           "title": "Role",
@@ -31829,7 +31911,7 @@
         "role": {
           "enum": [
             "tank",
-            "dps",
+            "damage",
             "support"
           ],
           "title": "Role",
@@ -37067,7 +37149,7 @@
       "type": "object"
     },
     "tournament.HeroClass": {
-      "description": "A roster role OR a hero's class -- two concepts on one Postgres type.\n\n``tank``/``damage``/``support`` mean both things at once, which is why the\nsame ``heroclass`` type backs ``overwatch.hero.type``,\n``matches.stat_baselines.role`` and ``tournament.player.role``. ``flex``\nonly ever means the third: a player who holds no fixed role, which is what\na role-less (all-``flex``) roster shape drafts and balances for. No hero has\na class of \"flex\", so the two hero-side columns are narrowed back to\n:data:`HERO_TYPE_CLASSES` / :data:`HeroTypeClass` in the schema layer and by\nCHECK constraints in the database (migration ``heroflex0001``).\n\nMember NAMES are the stored Postgres labels (SQLAlchemy ``Enum`` default),\nso the DB sees ``flex`` while the Python value is ``\"Flex\"``.\n\nTHE single role enum for the whole backend (frontend mirror:\n``PlayerRoleOption`` in ``lib/player-role.ts``). Draft/balancer/registration\ncode historically spelled ``damage`` as ``dps`` -- that spelling is a wire\nformat, not a second role vocabulary, and lives on as :attr:`slot_code`.",
+      "description": "A roster role OR a hero's class -- two concepts on one Postgres type.\n\n``tank``/``damage``/``support`` mean both things at once, which is why the\nsame ``heroclass`` type backs ``overwatch.hero.type``,\n``matches.stat_baselines.role`` and ``tournament.player.role``. ``flex``\nonly ever means the third: a player who holds no fixed role, which is what\na role-less (all-``flex``) roster shape drafts and balances for. No hero has\na class of \"flex\", so the two hero-side columns are narrowed back to\n:data:`HERO_TYPE_CLASSES` / :data:`HeroTypeClass` in the schema layer and by\nCHECK constraints in the database (migration ``heroflex0001``).\n\nMember NAMES are the stored Postgres labels (SQLAlchemy ``Enum`` default),\nso the DB sees ``flex`` while the Python value is ``\"Flex\"``.\n\nTHE single role enum for the whole backend (frontend mirror:\n``PlayerRoleOption`` in ``lib/player-role.ts``). One spelling per role, in\ncode, on the wire and in the database: :attr:`slot_code` is the lowercase\nmember name. This docstring is the public OpenAPI description of the enum,\nso the retired spelling is documented on :attr:`slot_code` instead.",
       "enum": [
         "Tank",
         "Damage",
@@ -40350,7 +40432,7 @@
         "slot_code": {
           "enum": [
             "tank",
-            "dps",
+            "damage",
             "support",
             "flex"
           ],
@@ -40439,7 +40521,7 @@
         "slot_code": {
           "enum": [
             "tank",
-            "dps",
+            "damage",
             "support",
             "flex"
           ],
@@ -40491,7 +40573,7 @@
         "slot_code": {
           "enum": [
             "tank",
-            "dps",
+            "damage",
             "support",
             "flex"
           ],
@@ -40981,7 +41063,7 @@
         "slot_code": {
           "enum": [
             "tank",
-            "dps",
+            "damage",
             "support",
             "flex"
           ],
@@ -45125,6 +45207,18 @@
           "default": null,
           "title": "Roster Slots Json"
         },
+        "rules": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rules"
+        },
         "slug": {
           "title": "Slug",
           "type": "string"
@@ -45474,6 +45568,19 @@
           ],
           "default": null,
           "title": "Roster Slots Json"
+        },
+        "rules": {
+          "anyOf": [
+            {
+              "maxLength": 32000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rules"
         },
         "slug": {
           "anyOf": [

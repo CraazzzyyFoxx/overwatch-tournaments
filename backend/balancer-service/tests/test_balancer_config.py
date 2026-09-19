@@ -84,7 +84,7 @@ def test_normalize_tournament_config_payload_ignores_legacy_role_mapping() -> No
     normalized = normalize_tournament_config_payload(
         {
             "population_size": 150,
-            "input_role_mapping": {"tank": "Tank", "dps": "Damage"},
+            "input_role_mapping": {"tank": "Tank", "damage": "Damage"},
         }
     )
 

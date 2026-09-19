@@ -4,7 +4,7 @@ import { createRoot } from "react-dom/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { BalancerApplication, BalancerPlayerRecord } from "@/types/balancer-admin.types";
-import type { PlayerValidationState } from "./balancer-page-helpers";
+import type { PlayerValidationState } from "@/components/balancer/balancer-page-helpers";
 import { BalancingPoolSidebar } from "./BalancingPoolSidebar";
 
 declare global {
@@ -53,7 +53,7 @@ function application(id: number, battleTag: string): BalancerApplication {
     discord_nick: null,
     stream_pov: false,
     last_tournament_text: null,
-    primary_role: "dps",
+    primary_role: "damage",
     additional_roles_json: [],
     notes: null,
     submitted_at: null,
@@ -121,7 +121,9 @@ function type(input: HTMLInputElement, value: string) {
 }
 
 function searchInput(scope: Element) {
-  return scope.querySelector<HTMLInputElement>("input[aria-label='Search the Balancing Pool']");
+  // `SearchField` names the input through a real `<label>`, so the surface is
+  // identified by its type, not by an `aria-label` the primitive doesn't set.
+  return scope.querySelector<HTMLInputElement>("input[type='search']");
 }
 
 function pill(scope: Element, label: string) {
@@ -146,7 +148,7 @@ describe("BalancingPoolSidebar", () => {
     expect(scope.textContent).not.toContain("Aria#1111");
     // The removed popover announced its own result header above the list it had just filtered.
     expect(scope.textContent).not.toContain("Quick results");
-    expect(scope.querySelectorAll("input[aria-label='Search the Balancing Pool']")).toHaveLength(1);
+    expect(scope.querySelectorAll("input[type='search']")).toHaveLength(1);
   });
 
   it("reaches available registrations through a filter pill and keeps the search applied", async () => {
@@ -195,6 +197,22 @@ describe("BalancingPoolSidebar", () => {
     );
 
     await click(nameButton);
+
+    expect(onSelectPlayer).toHaveBeenCalledWith(1);
+  });
+
+  it("opens the player editor on one row click, but not from a row action", async () => {
+    const scope = await mount();
+    const row = [...scope.querySelectorAll("li")].find((node) =>
+      node.textContent?.includes("Aria#1111"),
+    );
+    if (!row) throw new Error("Expected the Aria row");
+
+    // The bulk-select control owns its clicks; the row must not open behind it.
+    await click(row.querySelector("[data-card-action]"));
+    expect(onSelectPlayer).not.toHaveBeenCalled();
+
+    await click(row);
 
     expect(onSelectPlayer).toHaveBeenCalledWith(1);
   });

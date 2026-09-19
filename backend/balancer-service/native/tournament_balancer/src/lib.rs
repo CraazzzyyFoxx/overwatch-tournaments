@@ -16,7 +16,7 @@ type MooRng = ChaCha12Rng;
 fn default_tank_impact() -> f64 {
     1.4
 }
-fn default_dps_impact() -> f64 {
+fn default_damage_impact() -> f64 {
     1.0
 }
 fn default_support_impact() -> f64 {
@@ -113,8 +113,8 @@ struct ConfigSpec {
     use_captains: bool,
     #[serde(default = "default_tank_impact")]
     tank_impact_weight: f64,
-    #[serde(default = "default_dps_impact")]
-    dps_impact_weight: f64,
+    #[serde(default = "default_damage_impact")]
+    damage_impact_weight: f64,
     #[serde(default = "default_support_impact")]
     support_impact_weight: f64,
     #[serde(default = "default_tank_gap_weight")]
@@ -207,7 +207,7 @@ struct Context {
     players: Vec<PlayerData>,
     config: ConfigSpec,
     tank_role_idx: Option<usize>,
-    dps_role_idx: Option<usize>,
+    damage_role_idx: Option<usize>,
     support_role_idx: Option<usize>,
 }
 

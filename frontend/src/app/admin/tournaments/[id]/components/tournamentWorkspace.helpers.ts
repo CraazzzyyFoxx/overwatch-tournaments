@@ -1,5 +1,5 @@
 import type { Tournament, TournamentStatus } from "@/types/tournament.types";
-import type { Tone } from "@/components/admin/tone";
+import type { Tone } from "@/components/kit/tone";
 import type { TournamentPhaseScheduleEntryInput, TournamentUpdateInput } from "@/types/admin.types";
 import { utcToZonedInput, zonedInputToUtc } from "@/lib/timezone";
 import {
@@ -8,7 +8,7 @@ import {
   type SchedulablePhase
 } from "@/lib/tournament-lifecycle";
 import type { RosterSlotMap } from "@/lib/roster-shape";
-import { normalizeSlots } from "@/components/roster-shape/roster-shape-editor.model";
+import { normalizeSlots } from "@/lib/roster-shape-editor-model";
 import { normalizeChallongeSlug } from "@/lib/challonge";
 
 export type PhaseScheduleFormState = Record<
@@ -19,6 +19,8 @@ export type PhaseScheduleFormState = Record<
 export type TournamentFormState = {
   name: string;
   description: string;
+  /** Published regulations, Markdown source. Blank = nothing published. */
+  rules: string;
   challonge_slug: string;
   // Public-URL slug (`/tournaments/<slug>`); renaming it redirects the old link.
   slug: string;
@@ -109,6 +111,7 @@ export function getTournamentForm(tournament: Tournament, timezone: string): Tou
   return {
     name: tournament.name,
     description: tournament.description ?? "",
+    rules: tournament.rules ?? "",
     challonge_slug: tournament.challonge_slug ?? "",
     slug: tournament.slug,
     is_league: tournament.is_league,
@@ -134,8 +137,9 @@ export function getTournamentForm(tournament: Tournament, timezone: string): Tou
 // `TournamentFormState` (minus `phase_schedule`, which travels through
 // `setTournamentSchedule` instead). Kept in one place so the diff below and
 // `getTournamentForm` above cannot drift out of sync field-by-field.
-type TournamentUpdateValues = Required<Omit<TournamentUpdateInput, "description" | "challonge_slug" | "division_grid_version_id" | "roster_slots_json">> & {
+type TournamentUpdateValues = Required<Omit<TournamentUpdateInput, "description" | "rules" | "challonge_slug" | "division_grid_version_id" | "roster_slots_json">> & {
   description: string | null;
+  rules: string | null;
   challonge_slug: string | null;
   division_grid_version_id: number | null;
   roster_slots_json: RosterSlotMap | null;
@@ -145,6 +149,10 @@ function normalizeTournamentFormValues(form: TournamentFormState): TournamentUpd
   return {
     name: form.name.trim(),
     description: form.description.trim() || null,
+    // Only the document's outer whitespace is touched: a trailing double space
+    // INSIDE the text is a Markdown hard line break, and blanking the editor
+    // unpublishes the rules rather than storing an empty document.
+    rules: form.rules.trim() || null,
     challonge_slug: form.challonge_slug ? normalizeChallongeSlug(form.challonge_slug) : null,
     // Blank is a no-op on the backend (see update_tournament), not a clear.
     slug: form.slug.trim() || null,

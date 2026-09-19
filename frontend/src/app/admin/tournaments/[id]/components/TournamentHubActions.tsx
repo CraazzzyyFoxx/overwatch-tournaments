@@ -9,7 +9,7 @@ import { notify } from "@/lib/notify";
 import adminService from "@/services/admin.service";
 import type { Tournament } from "@/types/tournament.types";
 import { TournamentStatusControl } from "./TournamentStatusControl";
-import { invalidateTournamentWorkspace } from "./tournamentWorkspace.queryKeys";
+import { invalidateTournamentWorkspace } from "@/lib/tournament-workspace-query-keys";
 
 /**
  * The hub header's action cluster.

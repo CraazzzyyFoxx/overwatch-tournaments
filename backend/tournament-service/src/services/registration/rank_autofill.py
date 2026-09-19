@@ -431,9 +431,8 @@ class RankAutofillService:
             analytics_by_role = analytics_history_by_user_id.get(user_id or -1, {})
 
             # Build one suggestion per rank-role via the selected priority chain, keyed the way the
-            # plan builder expects. Balancer/analytics history are stored under registration-role codes
-            # (tank/dps/support); OW snapshots use rank-role codes (tank/damage/support) — bridge via
-            # the mapping.
+            # plan builder expects. Registration rows, balancer/analytics history and OW snapshots
+            # all speak the same role vocabulary (tank/damage/support), so the keys line up.
             rank_data_by_role: dict[str, _RankData | Any] = {}
             for registration_role, rank_role in RANK_ROLE_BY_REGISTRATION_ROLE.items():
                 resolved = _build_priority_rank_data(

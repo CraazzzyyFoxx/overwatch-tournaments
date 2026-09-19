@@ -54,7 +54,7 @@ from src.schemas.registration_team import (  # noqa: E402
 from src.services.registration import teams  # noqa: E402
 from src.services.registration.service import registration_service  # noqa: E402
 
-FIVE_STACK = parse_roster_slots({"tank": 1, "dps": 2, "support": 2})
+FIVE_STACK = parse_roster_slots({"tank": 1, "damage": 2, "support": 2})
 
 
 def _code_of(fn: Any) -> str:
@@ -211,7 +211,7 @@ class SlotRejectionCodeTests(TestCase):
     def test_a_full_bench_is_named_separately_from_a_full_roster(self) -> None:
         occupancy = RosterOccupancy(shape=FIVE_STACK, max_substitutes=0)
         with self.assertRaises(ApiHTTPException) as caught:
-            teams._check_slot(occupancy, "dps", is_substitute=True, offering=False)
+            teams._check_slot(occupancy, "damage", is_substitute=True, offering=False)
         self.assertEqual("bench_full", _code(caught.exception))
 
     def test_a_slot_the_tournament_does_not_have_is_a_400(self) -> None:
@@ -233,7 +233,7 @@ class StatusDenormalizationTests(TestCase):
     def test_a_full_roster_reads_as_complete(self) -> None:
         occupancy = RosterOccupancy(
             shape=FIVE_STACK,
-            accepted=tuple(RosterMember(code) for code in ("tank", "dps", "dps", "support", "support")),
+            accepted=tuple(RosterMember(code) for code in ("tank", "damage", "damage", "support", "support")),
         )
         self.assertEqual(teams.TEAM_COMPLETE, teams._status_for(occupancy))
 
@@ -247,7 +247,7 @@ class StatusDenormalizationTests(TestCase):
         occupancy = RosterOccupancy(
             shape=FIVE_STACK,
             accepted=(RosterMember("tank"),),
-            pending=tuple(RosterMember(code) for code in ("dps", "dps", "support", "support")),
+            pending=tuple(RosterMember(code) for code in ("damage", "damage", "support", "support")),
         )
         self.assertEqual(teams.TEAM_FORMING, teams._status_for(occupancy))
 

@@ -21,7 +21,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Tournament } from "@/types/tournament.types";
-import { getTournamentWorkspaceQueryKeys } from "../../components/tournamentWorkspace.queryKeys";
+import { getTournamentWorkspaceQueryKeys } from "@/lib/tournament-workspace-query-keys";
 import GeneralSettingsPage from "./page";
 
 declare global {
@@ -61,7 +61,7 @@ vi.mock("@/hooks/usePermissions", () => ({
 
 // The audit drawer is the admin's, not this section's: it has its own tests and
 // its own permission, and mounting it here would only add a count query.
-vi.mock("@/components/admin/AuditTrailSheet", () => ({ AuditTrailButton: () => null }));
+vi.mock("@/components/kit/AuditTrailSheet", () => ({ AuditTrailButton: () => null }));
 
 vi.mock("@/lib/notify", () => ({
   notify: { success: vi.fn(), error: vi.fn(), info: vi.fn(), apiError: vi.fn() }

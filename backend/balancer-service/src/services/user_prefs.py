@@ -17,7 +17,7 @@ from shared.core.errors import BaseAPIException as HTTPException
 from shared.models.balancer import UserBalancerConfig
 from shared.repository import UserBalancerConfigRepository
 from shared.schemas.roster_slots import normalize_roster_slots
-from src.services.balancer.config.public_contract import normalize_config_overrides
+from src.services.balancer.config.public_contract import normalize_config_payload
 
 __all__ = ("UserMixPrefsService", "user_mix_prefs_service")
 
@@ -65,7 +65,7 @@ class UserMixPrefsService:
             "mix_role_weights": dict(mix_role_weights) if mix_role_weights else None,
             "max_result_variants": max_result_variants,
         }
-        payload = normalize_config_overrides({key: value for key, value in raw.items() if value is not None})
+        payload = normalize_config_payload({key: value for key, value in raw.items() if value is not None})
         try:
             slots = normalize_roster_slots(dict(role_mask) if role_mask else None)
         except ValueError as exc:

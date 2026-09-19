@@ -23,7 +23,7 @@ from src import schemas
 from src.services.workspace import registry as workspace_registry
 from src.services.workspace.service import workspaces as workspace_service
 
-_STORED = {"tank": 1, "dps": 2, "support": 2}
+_STORED = {"tank": 1, "damage": 2, "support": 2}
 
 _INVALID_SLOTS = [
     ({"healer": 2}, "roster_slots_unknown_code"),
@@ -47,15 +47,15 @@ def test_update_accepts_a_flex_only_default() -> None:
 
 
 def test_update_normalizes_zero_counts_away() -> None:
-    model = schemas.WorkspaceUpdate(default_roster_slots_json={"tank": 0, "dps": 0, "support": 0, "flex": 6})
+    model = schemas.WorkspaceUpdate(default_roster_slots_json={"tank": 0, "damage": 0, "support": 0, "flex": 6})
     assert model.default_roster_slots_json == {"flex": 6}
 
 
 def test_create_accepts_and_normalizes_a_default() -> None:
     created = schemas.WorkspaceCreate(
-        slug="ws", name="WS", default_roster_slots_json={"support": 2, "tank": 1, "dps": 2}
+        slug="ws", name="WS", default_roster_slots_json={"support": 2, "tank": 1, "damage": 2}
     )
-    assert list(created.default_roster_slots_json) == ["tank", "dps", "support"]
+    assert list(created.default_roster_slots_json) == ["tank", "damage", "support"]
 
 
 def test_create_defaults_to_the_builtin_shape() -> None:
@@ -168,7 +168,7 @@ def test_changing_the_default_invalidates_the_workspace_cache_after_commit(monke
 def test_resending_the_same_default_does_not_invalidate(monkeypatch) -> None:
     session, _, spy = _run_registry_update(
         monkeypatch,
-        schemas.WorkspaceUpdate(default_roster_slots_json={"support": 2, "dps": 2, "tank": 1}),
+        schemas.WorkspaceUpdate(default_roster_slots_json={"support": 2, "damage": 2, "tank": 1}),
         stored=dict(_STORED),
     )
     assert session.committed is True

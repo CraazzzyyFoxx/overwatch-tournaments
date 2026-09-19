@@ -18,7 +18,7 @@ import {
   DialogHeader,
   DialogTitle
 } from "@/components/ui/dialog";
-import type { BalanceVariant } from "./workspace-helpers";
+import type { BalanceVariant } from "@/components/balancer/workspace-helpers";
 
 const INLINE_VARIANT_LIMIT = 8;
 
@@ -62,10 +62,10 @@ function VariantCard({ variant, isActive, onSelect, onDelete, className }: Reado
         type="button"
         onClick={onSelect}
         className={cn(
-          "h-full w-full rounded-xl border px-3 py-2 text-left transition",
+          "h-full w-full rounded-lg border px-3 py-2 text-left transition",
           isActive
             ? "border-primary/35 bg-primary/[0.12] text-[color:var(--aqt-fg)]"
-            : "border-[color:var(--aqt-border)] bg-white/[0.02] text-[color:var(--aqt-fg-muted)] hover:bg-white/[0.05] hover:text-[color:var(--aqt-fg)]",
+            : "border-[color:var(--aqt-border)] bg-[color:var(--aqt-overlay-1)] text-[color:var(--aqt-fg-muted)] hover:bg-[color:var(--aqt-overlay-3)] hover:text-[color:var(--aqt-fg)]",
           onDelete ? "pr-9" : undefined
         )}
       >
@@ -161,7 +161,10 @@ export function VariantSelector({
   return (
     <>
       <div className="flex items-stretch gap-2">
-        <div className="flex min-w-0 flex-1 items-stretch gap-2 overflow-hidden">
+        {/* Scrolls rather than `overflow-hidden`: a clipped half-card reads as a
+            rendering bug, and the variants past the edge were unreachable
+            without opening "Show all". */}
+        <div className="flex min-w-0 flex-1 items-stretch gap-2 overflow-x-auto">
           {variants.slice(0, INLINE_VARIANT_LIMIT).map((variant) => (
             <VariantCard
               key={variant.id}
@@ -178,7 +181,7 @@ export function VariantSelector({
           variant="ghost"
           size="sm"
           onClick={() => setShowAll(true)}
-          className="shrink-0 self-center border border-[color:var(--aqt-border)] bg-white/[0.02] text-[color:var(--aqt-fg-muted)] hover:bg-white/[0.05] hover:text-[color:var(--aqt-fg)]"
+          className="shrink-0 self-center border border-[color:var(--aqt-border)] bg-[color:var(--aqt-overlay-1)] text-[color:var(--aqt-fg-muted)] hover:bg-[color:var(--aqt-overlay-3)] hover:text-[color:var(--aqt-fg)]"
         >
           <LayoutGrid className="h-3.5 w-3.5" />
           Show all

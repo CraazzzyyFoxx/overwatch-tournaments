@@ -16,10 +16,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle
 } from "@/components/ui/alert-dialog";
-import { StatusPill } from "@/components/admin/kit/StatusPill";
+import { StatusPill } from "@/components/kit/StatusPill";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { type Tone } from "@/components/admin/tone";
+import { type Tone } from "@/components/kit/tone";
 import { notify } from "@/lib/notify";
 import { tournamentQueryKeys } from "@/lib/tournament-query-keys";
 import draftService from "@/services/draft.service";

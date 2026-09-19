@@ -17,7 +17,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import FlexIcon from "@/components/icons/FlexIcon";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
-import { TONE_CLASS } from "@/components/admin/tone";
+import { TONE_CLASS } from "@/components/kit/tone";
 import { getRoleIconName, ROLE_ACCENT } from "@/lib/roles";
 import { cn } from "@/lib/utils";
 import type { DraftAutopickStrategy, DraftFormat } from "@/types/draft.types";

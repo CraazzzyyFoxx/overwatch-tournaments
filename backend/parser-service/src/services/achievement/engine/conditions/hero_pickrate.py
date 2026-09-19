@@ -15,6 +15,7 @@ from typing import Any
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.models.achievements.achievement import AchievementGrain
 from src import models
 
 from ..context import EvalContext
@@ -24,7 +25,13 @@ from .stat_threshold import OPERATORS
 MIN_PLAYTIME_SEC = 60
 
 
-@register("hero_pickrate")
+@register(
+    "hero_pickrate",
+    grain=AchievementGrain.user_tournament,
+    description="Played a hero nobody else picked",
+    optional=("op", "value"),
+    depends_on=("matches.statistics",),
+)
 async def execute_hero_pickrate(
     session: AsyncSession,
     params: dict[str, Any],

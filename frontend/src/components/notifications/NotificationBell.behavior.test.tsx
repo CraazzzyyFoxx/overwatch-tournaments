@@ -82,7 +82,7 @@ const INVITE = item({
     team_name: "Alpha",
     tournament_id: 5,
     tournament_name: "Autumn Cup",
-    slot_code: "dps",
+    slot_code: "damage",
     is_substitute: false,
     invite_id: 42
   }

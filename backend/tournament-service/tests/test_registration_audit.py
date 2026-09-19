@@ -109,7 +109,7 @@ def _registration(**overrides: Any) -> SimpleNamespace:
         "balancer_status": "not_in_balancer",
         "exclude_reason": None,
         "checked_in": False,
-        "roles": [_role("dps", 30)],
+        "roles": [_role("damage", 30)],
     }
     base.update(overrides)
     return SimpleNamespace(**base)
@@ -126,7 +126,7 @@ def _update_payload(**overrides: Any) -> dict[str, Any]:
         "balancer_status": "not_in_balancer",
         "roles": [
             {
-                "role": "dps",
+                "role": "damage",
                 "subrole": None,
                 "priority": 0,
                 "is_primary": True,
@@ -198,7 +198,7 @@ class RegistrationAuditTests(IsolatedAsyncioTestCase):
                     admin_notes="smurf suspected",
                     roles=[
                         {
-                            "role": "dps",
+                            "role": "damage",
                             "subrole": None,
                             "priority": 0,
                             "is_primary": True,

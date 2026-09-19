@@ -85,6 +85,23 @@ TABLE_NAMES = (
     "tournament.standing",
     "matches.match",
     "matches.statistics",
+    "matches.kill_feed",
+    "matches.event",
+    "overwatch.gamemode",
+    "overwatch.map",
+    "overwatch.hero",
+    "overwatch_rank.rank_snapshot",
+    "balancer.registration",
+    "balancer.registration_role",
+    "balancer.draft_session",
+    "balancer.draft_team",
+    "balancer.draft_player",
+    "balancer.draft_pick",
+    "tournament.encounter_captain_report",
+    "tournament.encounter_map_report",
+    "tournament.encounter_map_code",
+    "tournament.encounter_readiness",
+    "log_processing.record",
     "workspace_member",
     "achievements.rule",
     "achievements.evaluation_result",
@@ -183,11 +200,29 @@ class _Fixture:
         # would call ``.hex`` on those strings; claiming native support skips the
         # conversion and lets sqlite3 bind the string as-is.
         self.engine.dialect.supports_native_uuid = True
+        # A few columns carry Postgres-cast server defaults (``'[]'::jsonb``)
+        # that SQLite cannot parse. They are irrelevant here — every row these
+        # tests insert names its own values — so drop them before CREATE.
+        for table in tables:
+            for column in table.columns:
+                default = column.server_default
+                if default is not None and "::" in str(getattr(default, "arg", "")):
+                    column.server_default = None
         with self.engine.begin() as conn:
             for schema in sorted({table.schema for table in tables if table.schema}):
                 conn.exec_driver_sql(f"ATTACH DATABASE ':memory:' AS {schema}")
             for table in tables:
                 table.create(conn)
+            # The differ reconciles with ``INSERT ... ON CONFLICT DO NOTHING``
+            # against a FUNCTIONAL unique index that only a migration creates
+            # (``achenc01``). Without it here, SQLite rejects the conflict
+            # target and the insert path silently goes untested.
+            conn.exec_driver_sql(
+                "CREATE UNIQUE INDEX achievements.uq_eval_result_dedup_coalesced"
+                " ON evaluation_result"
+                " (achievement_rule_id, workspace_member_id, COALESCE(tournament_id, 0),"
+                " COALESCE(encounter_id, 0), COALESCE(match_id, 0))"
+            )
         self.session = Session(self.engine)
         self.shim = _AsyncSessionShim(self.session)
         self._next_id = 1000

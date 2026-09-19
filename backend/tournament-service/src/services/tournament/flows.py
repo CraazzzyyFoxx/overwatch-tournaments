@@ -193,6 +193,10 @@ class TournamentFlowsService:
             status=tournament.status,
             name=tournament.name,
             description=tournament.description,
+            # Opt-in, not free: the column is already loaded, but the document is
+            # the largest field on the row, so nested reads (an encounter list
+            # carries one TournamentRead per row) must not pay for it.
+            rules=tournament.rules if _entity_requested(entities, "rules") else None,
             challonge_id=tournament_challonge_id,
             challonge_slug=tournament_challonge_slug,
             auto_transitions_enabled=tournament.auto_transitions_enabled,

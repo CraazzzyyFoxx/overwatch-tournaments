@@ -35,7 +35,7 @@ func NewBinary(caller edge.RPCCaller, identity edge.IdentityResolver, log *slog.
 	return &Binary{rpc: caller, identity: identity, log: log}
 }
 
-// TeamsImport: POST /api/balancer/tournaments/{tournament_id}/teams/import.
+// TeamsImport: POST /api/v1/balancer/tournaments/{tournament_id}/teams/import.
 // Multipart: file part "data" (a JSON file) + optional form field "payload_format".
 func (b *Binary) TeamsImport(w http.ResponseWriter, r *http.Request) {
 	data, ok := b.identityInto(w, r, map[string]any{"id": r.PathValue("tournament_id")})
@@ -65,7 +65,7 @@ func (b *Binary) TeamsImport(w http.ResponseWriter, r *http.Request) {
 	b.relayJSON(w, r, "rpc.balancer.admin.teams_import", data, http.StatusOK)
 }
 
-// JobCreate: POST /api/balancer/jobs. Multipart: file part "player_data_file"
+// JobCreate: POST /api/v1/balancer/jobs. Multipart: file part "player_data_file"
 // (a JSON file) + optional form fields "config_overrides" and "tournament_id";
 // query "workspace_id" is forwarded. Returns 202 (queued).
 func (b *Binary) JobCreate(w http.ResponseWriter, r *http.Request) {

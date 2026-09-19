@@ -17,7 +17,7 @@ from src.domain.balancer.rating_normalizer import RatingNormalizer
 from src.domain.balancer.result_serializer import _build_response_payload
 from src.domain.balancer.role_assignment_service import find_feasible_role_assignment
 from src.services.balancer.config.defaults import AlgorithmConfig
-from src.services.balancer.config.provider import normalize_config_overrides
+from src.services.balancer.config.public_contract import normalize_config_payload
 
 
 @dataclasses.dataclass(slots=True)
@@ -72,7 +72,6 @@ def _prepare_balance_context(
     overrides and cannot be contradicted by a saved config.
     """
     config = AlgorithmConfig()
-    has_applied_overrides = False
 
     emit_progress(
         progress_callback,
@@ -81,19 +80,14 @@ def _prepare_balance_context(
         message="Validating request payload",
     )
 
-    if config_overrides:
-        normalized_config_overrides = normalize_config_overrides(config_overrides)
-        logger.info(f"Applying configuration overrides: {list(normalized_config_overrides.keys())}")
-
-        for key, value in normalized_config_overrides.items():
-            if value is None:
-                continue
-            if hasattr(config, key):
-                setattr(config, key, value)
-                logger.debug(f"Set {key} = {value}")
-                has_applied_overrides = True
-            else:
-                logger.warning(f"Unknown config parameter '{key}' ignored")
+    # ``normalize_config_payload`` already guarantees real, non-None knobs, so
+    # there is nothing left here to check or skip.
+    overrides = normalize_config_payload(config_overrides) if config_overrides else {}
+    if overrides:
+        logger.info(f"Applying configuration overrides: {overrides}")
+        for key, value in overrides.items():
+            setattr(config, key, value)
+    has_applied_overrides = bool(overrides)
 
     if role_mask:
         config.role_mask = role_mask

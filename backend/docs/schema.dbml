@@ -239,14 +239,16 @@ Table achievements.evaluation_result {
   achievement_rule_id bigint [not null]
   workspace_member_id bigint [not null]
   tournament_id bigint
+  encounter_id bigint
   match_id bigint
   qualified_at timestamptz [not null, default: `now()`]
   evidence_json json
   rule_version int [not null]
   run_id uuid
   indexes {
-    (achievement_rule_id, workspace_member_id, tournament_id, match_id) [unique, name: "uq_eval_result_rule_user_tournament_match"]
+    (achievement_rule_id, workspace_member_id, tournament_id, encounter_id, match_id) [unique, name: "uq_eval_result_rule_user_tournament_match"]
     (achievement_rule_id) [name: "ix_achievements_evaluation_result_achievement_rule_id"]
+    (encounter_id) [name: "ix_achievements_evaluation_result_encounter_id"]
     (match_id) [name: "ix_achievements_evaluation_result_match_id"]
     (run_id) [name: "ix_achievements_evaluation_result_run_id"]
     (tournament_id) [name: "ix_achievements_evaluation_result_tournament_id"]
@@ -1026,8 +1028,8 @@ Table balancer.registration_google_sheet_binding {
   row_hash VARCHAR(128)
   last_seen_at timestamptz
   indexes {
-    (registration_id) [unique, name: "uq_balancer_registration_google_sheet_binding_registration"]
     (feed_id, source_record_key) [unique, name: "uq_balancer_registration_google_sheet_binding_key"]
+    (registration_id) [unique, name: "uq_balancer_registration_google_sheet_binding_registration"]
     (feed_id) [name: "ix_balancer_registration_google_sheet_binding_feed_id"]
   }
 }
@@ -1079,8 +1081,8 @@ Table balancer.registration_role_hero {
   hero_id bigint [not null]
   priority int [not null]
   indexes {
-    (role_id, priority) [unique, name: "uq_reg_role_hero_role_priority"]
     (role_id, hero_id) [unique, name: "uq_reg_role_hero_role_hero"]
+    (role_id, priority) [unique, name: "uq_reg_role_hero_role_priority"]
     (role_id) [name: "ix_balancer_registration_role_hero_role_id"]
   }
 }
@@ -1834,8 +1836,8 @@ Table division_grid_tier {
   ow_rank_min bigint
   ow_rank_max bigint
   indexes {
-    (version_id, slug) [unique]
     (version_id, sort_order) [unique]
+    (version_id, slug) [unique]
     (version_id) [name: "ix_division_grid_tier_version_id"]
   }
 }
@@ -2626,8 +2628,8 @@ Table tournament.scrim_room {
   created_by_auth_user_id bigint [not null]
   closed_at timestamptz
   indexes {
-    (encounter_id) [unique, name: "uq_scrim_room_encounter"]
     (token) [unique, name: "uq_scrim_room_token"]
+    (encounter_id) [unique, name: "uq_scrim_room_encounter"]
     (created_by_auth_user_id) [name: "ix_scrim_room_open_by_creator"]
     (created_by_auth_user_id) [name: "ix_tournament_scrim_room_created_by_auth_user_id"]
     (stage_id) [name: "ix_tournament_scrim_room_stage_id"]
@@ -2753,6 +2755,7 @@ Table tournament.tournament {
   name VARCHAR [not null]
   slug VARCHAR [not null, unique]
   description VARCHAR
+  rules text
   is_league boolean [not null, default: false]
   is_finished boolean [not null, default: false]
   is_hidden boolean [not null, default: false]
@@ -2865,6 +2868,7 @@ TableGroup tournament {
 Ref: achievements.evaluation_result.achievement_rule_id > achievements.rule.id [delete: cascade]
 Ref: achievements.evaluation_result.workspace_member_id > workspace_member.id [delete: cascade]
 Ref: achievements.evaluation_result.tournament_id > tournament.tournament.id [delete: cascade]
+Ref: achievements.evaluation_result.encounter_id > tournament.encounter.id [delete: cascade]
 Ref: achievements.evaluation_result.match_id > matches.match.id [delete: cascade]
 Ref: achievements.evaluation_result.run_id > achievements.evaluation_run.id [delete: set null]
 Ref: achievements.evaluation_run.workspace_id > workspace.id [delete: cascade]

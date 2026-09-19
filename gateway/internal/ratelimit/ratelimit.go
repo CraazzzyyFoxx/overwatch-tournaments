@@ -178,7 +178,7 @@ func (l *Limiter) Wrap(next http.HandlerFunc) http.HandlerFunc {
 // path, but consuming a token ONLY when next rejects the call as unauthenticated
 // (401/403). Successful calls are free.
 //
-// Wrap's flat per-IP budget is wrong for /api/auth/refresh: a VPN or carrier-NAT
+// Wrap's flat per-IP budget is wrong for /api/v1/auth/refresh: a VPN or carrier-NAT
 // exit node puts many legitimate users behind ONE IP, and their ordinary token
 // rotations alone drain the bucket. The resulting 429 reaches the frontend as a
 // refresh failure — i.e. everyone sharing that IP gets logged out. Brute-force

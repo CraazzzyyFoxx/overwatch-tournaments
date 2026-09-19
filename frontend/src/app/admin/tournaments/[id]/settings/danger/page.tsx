@@ -7,7 +7,7 @@ import { Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { ConfirmDialog } from "@/components/admin/kit/ConfirmDialog";
+import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
 import { notify } from "@/lib/notify";
 import adminService from "@/services/admin.service";
 import type { Tournament } from "@/types/tournament.types";

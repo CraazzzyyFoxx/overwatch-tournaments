@@ -49,7 +49,7 @@ function WorkflowStep({
               ? "bg-emerald-500/20 text-emerald-300 ring-emerald-500/8"
               : status === "active"
                 ? "bg-primary/25 text-primary ring-primary/10"
-                : "bg-white/5 text-[color:var(--aqt-fg-faint)] ring-[color:var(--aqt-border-2)]",
+                : "bg-[color:var(--aqt-overlay-3)] text-[color:var(--aqt-fg-faint)] ring-[color:var(--aqt-border-2)]",
           )}
         >
           {status === "done" ? <CheckCircle2 className="h-4.5 w-4.5" /> : step}
@@ -58,7 +58,7 @@ function WorkflowStep({
           <div
             className={cn(
               "mt-2 w-px flex-1",
-              status === "done" ? "bg-emerald-500/20" : "bg-white/8",
+              status === "done" ? "bg-emerald-500/20" : "bg-[color:var(--aqt-overlay-3)]",
             )}
           />
         ) : null}
@@ -90,7 +90,7 @@ function WorkflowStep({
               "mt-3 rounded-lg",
               action.variant === "primary"
                 ? "bg-primary text-primary-foreground hover:bg-primary/90"
-                : "border border-[color:var(--aqt-border-2)] bg-black/15 text-[color:var(--aqt-fg-muted)] hover:bg-white/5 hover:text-[color:var(--aqt-fg)]",
+                : "border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-bg-2)] text-[color:var(--aqt-fg-muted)] hover:bg-[color:var(--aqt-overlay-3)] hover:text-[color:var(--aqt-fg)]",
             )}
           >
             {action.label}
@@ -114,7 +114,7 @@ export function BalancerSetupChecklist({
   const hasInvalidPlayers = invalidPlayerCount > 0;
 
   return (
-    <div className="flex flex-1 items-center justify-center rounded-2xl border border-dashed border-[color:var(--aqt-border-2)] bg-white/2">
+    <div className="flex flex-1 items-center justify-center rounded-lg border border-dashed border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-overlay-1)]">
       <div className="w-full max-w-sm px-6">
         <WorkflowStep
           step={1}

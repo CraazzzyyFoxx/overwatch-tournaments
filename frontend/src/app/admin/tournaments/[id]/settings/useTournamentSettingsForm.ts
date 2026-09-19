@@ -15,7 +15,7 @@ import {
   getTournamentUpdatePayload,
   type TournamentFormState
 } from "../components/tournamentWorkspace.helpers";
-import { invalidateTournamentWorkspace } from "../components/tournamentWorkspace.queryKeys";
+import { invalidateTournamentWorkspace } from "@/lib/tournament-workspace-query-keys";
 
 /**
  * Which tournament fields each settings section owns.
@@ -31,16 +31,14 @@ import { invalidateTournamentWorkspace } from "../components/tournamentWorkspace
  * and only the `schedule` section sends it.
  */
 export const SETTINGS_SECTION_FIELDS = {
-  general: ["name", "slug", "description"],
-  rules: [
-    "team_formation",
-    "division_grid_version_id",
-    "is_league",
-    "is_finished",
-    "win_points",
-    "draw_points",
-    "loss_points"
-  ],
+  // How teams form and which grid seeds them are read on every screen that
+  // describes the tournament, so they sit with its name rather than with the
+  // points a result is worth.
+  general: ["name", "slug", "description", "team_formation", "division_grid_version_id"],
+  // One field, and deliberately alone: the published document is the section.
+  // Saving the scoring must not rewrite it in the audit trail, nor the reverse.
+  rules: ["rules"],
+  scoring: ["is_league", "is_finished", "win_points", "draw_points", "loss_points"],
   schedule: ["start_date", "end_date", "auto_transitions_enabled", "allow_late_registration"],
   roster: ["roster_slots_json"],
   challonge: ["challonge_slug"],

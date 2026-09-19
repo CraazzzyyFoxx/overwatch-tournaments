@@ -49,7 +49,7 @@ vi.mock("@/services/registration-team.service", () => ({
   }
 }));
 
-/** One open `dps` slot so the invite dialog has something to offer. */
+/** One open `damage` slot so the invite dialog has something to offer. */
 const TEAM: RegistrationTeam = {
   id: 7,
   tournament_id: 1,
@@ -70,15 +70,15 @@ const TEAM: RegistrationTeam = {
     }
   ],
   invites: [],
-  open_slots: { dps: 1 },
-  shortfall: "1x dps",
+  open_slots: { damage: 1 },
+  shortfall: "1x damage",
   substitutes_used: 0,
   max_substitutes: 2
 } as unknown as RegistrationTeam;
 
 const AGENTS = [
   { registration_id: 900, battle_tag: "Ana#1111", roles: ["support"] },
-  { registration_id: 901, battle_tag: "Zen#2222", roles: ["dps", "tank"] }
+  { registration_id: 901, battle_tag: "Zen#2222", roles: ["damage", "tank"] }
 ];
 
 async function openDialog(): Promise<HTMLElement> {
@@ -185,7 +185,7 @@ describe("captain's free-agent picker", () => {
     // filling one slot and must spot a tank without opening profiles.
     expect(text).toContain("Support");
     expect(text).toContain("Tank");
-    expect(text).not.toContain("dps");
+    expect(text).toContain("Damage");
   });
 
   it("sends target_registration_id once a candidate is chosen", async () => {

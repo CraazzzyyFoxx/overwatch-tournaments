@@ -134,7 +134,7 @@ class TestEveryRoleModeMakesEveryRolePlayable:
         """The draft shows this number per role, so it may not be overwritten."""
         resolved = _resolve(
             [
-                _role("dps", priority=0, is_primary=True, rank_value=3900),
+                _role("damage", priority=0, is_primary=True, rank_value=3900),
                 _role("support", priority=1, is_primary=True, rank_value=2400),
             ],
             mode="all_roles",
@@ -142,7 +142,7 @@ class TestEveryRoleModeMakesEveryRolePlayable:
 
         # Tank was never ranked, so it takes the maximum: eligibility is the
         # presence of a rating, and that is the only value available for it.
-        assert resolved.role_ranks == {"dps": 3900, "support": 2400, "tank": 3900}
+        assert resolved.role_ranks == {"damage": 3900, "support": 2400, "tank": 3900}
         assert resolved.playable_roles == frozenset(HERO_TYPE_CLASSES)
 
     def test_the_best_rank_is_the_max_not_the_lead_role_s(self) -> None:
@@ -150,7 +150,7 @@ class TestEveryRoleModeMakesEveryRolePlayable:
         resolved = _resolve(
             [
                 _role("support", priority=0, is_primary=True, rank_value=2400),
-                _role("dps", priority=1, is_primary=True, rank_value=3900),
+                _role("damage", priority=1, is_primary=True, rank_value=3900),
             ],
             mode="all_roles",
         )
@@ -160,7 +160,7 @@ class TestEveryRoleModeMakesEveryRolePlayable:
 
     def test_a_single_ranked_role_covers_the_other_two(self) -> None:
         """The target case: ranked on DPS only, still placeable as tank."""
-        resolved = _resolve([_role("dps", is_primary=True, rank_value=3900)], mode="forced")
+        resolved = _resolve([_role("damage", is_primary=True, rank_value=3900)], mode="forced")
 
         assert resolved.role_ranks == dict.fromkeys(ALL_ROLE_VALUES, 3900)
         assert resolved.best_rank == 3900
@@ -175,7 +175,7 @@ class TestEveryRoleModeMakesEveryRolePlayable:
         # There is no number to spread, so every role stays unplayable and the
         # player is not draftable at all -- the pool reports them instead of the
         # draft minting a rank-0 body.
-        resolved = _resolve([_role("dps", is_primary=True)], mode="forced")
+        resolved = _resolve([_role("damage", is_primary=True)], mode="forced")
 
         assert resolved.role_ranks == {}
         assert resolved.best_rank is None
@@ -183,7 +183,7 @@ class TestEveryRoleModeMakesEveryRolePlayable:
         assert resolved.primary is None
 
     def test_all_three_roles_are_covered_even_from_one_entry(self) -> None:
-        resolved = _resolve([_role("dps", is_primary=True, rank_value=3000)], mode="forced")
+        resolved = _resolve([_role("damage", is_primary=True, rank_value=3000)], mode="forced")
 
         lead = resolved.primary
         assert lead is not None
@@ -193,7 +193,7 @@ class TestEveryRoleModeMakesEveryRolePlayable:
         resolved = _resolve(
             [
                 _role("support", priority=0, is_primary=True, rank_value=3000, subrole="main_heal"),
-                _role("dps", priority=1, is_primary=True, rank_value=3000, subrole="hitscan"),
+                _role("damage", priority=1, is_primary=True, rank_value=3000, subrole="hitscan"),
             ],
             mode="forced",
         )
@@ -205,14 +205,14 @@ class TestEveryRoleModeMakesEveryRolePlayable:
         # every one primary), not something the mode stamps on.
         every_role_primary = _resolve(
             [
-                _role("dps", priority=0, is_primary=True, rank_value=3000),
+                _role("damage", priority=0, is_primary=True, rank_value=3000),
                 _role("tank", priority=1, is_primary=True, rank_value=3000),
             ],
             mode="all_roles",
         )
         one_priority_role = _resolve(
             [
-                _role("dps", priority=0, is_primary=True, rank_value=3000),
+                _role("damage", priority=0, is_primary=True, rank_value=3000),
                 _role("tank", priority=1, rank_value=3000),
             ],
             mode="all_roles",
@@ -237,7 +237,7 @@ class TestAllRolesModeKeepsThePriority:
         resolved = _resolve(
             [
                 _role("tank", priority=0, is_primary=True, rank_value=3300),
-                _role("dps", priority=1, rank_value=2800),
+                _role("damage", priority=1, rank_value=2800),
                 _role("support", priority=2, rank_value=3000),
             ],
             mode="all_roles",
@@ -250,14 +250,14 @@ class TestAllRolesModeKeepsThePriority:
         resolved = _resolve(
             [
                 _role("tank", priority=0, is_primary=True, rank_value=2800),
-                _role("dps", priority=1, rank_value=3900),
+                _role("damage", priority=1, rank_value=3900),
             ],
             mode="all_roles",
         )
 
         # Support is unrated and takes the maximum; tank keeps the 2800 the
         # registrant stated, which is what the draft shows on the tank row.
-        assert resolved.role_ranks == {"tank": 2800, "dps": 3900, "support": 3900}
+        assert resolved.role_ranks == {"tank": 2800, "damage": 3900, "support": 3900}
         assert resolved.best_rank == 3900
 
 
@@ -265,18 +265,18 @@ class TestOptionalModeIsUnchanged:
     def test_per_role_ranks_are_preserved(self) -> None:
         resolved = _resolve(
             [
-                _role("dps", priority=0, is_primary=True, rank_value=3900),
+                _role("damage", priority=0, is_primary=True, rank_value=3900),
                 _role("support", priority=1, rank_value=2400),
             ]
         )
 
-        assert resolved.role_ranks == {"dps": 3900, "support": 2400}
+        assert resolved.role_ranks == {"damage": 3900, "support": 2400}
 
     def test_the_lead_role_is_the_priority_one(self) -> None:
         resolved = _resolve(
             [
                 _role("support", priority=0, is_primary=True, rank_value=2400),
-                _role("dps", priority=1, rank_value=3900),
+                _role("damage", priority=1, rank_value=3900),
             ]
         )
 
@@ -288,7 +288,7 @@ class TestOptionalModeIsUnchanged:
         # the registration as incomplete) and out of ``playable_roles``.
         resolved = _resolve(
             [
-                _role("dps", priority=0, is_primary=True, rank_value=3900),
+                _role("damage", priority=0, is_primary=True, rank_value=3900),
                 _role("support", priority=1),
             ]
         )
@@ -300,12 +300,12 @@ class TestOptionalModeIsUnchanged:
     def test_inactive_roles_are_dropped(self) -> None:
         resolved = _resolve(
             [
-                _role("dps", priority=0, is_primary=True, rank_value=3900),
+                _role("damage", priority=0, is_primary=True, rank_value=3900),
                 _role("tank", priority=1, is_active=False, rank_value=3100),
             ]
         )
 
-        assert resolved.role_ranks == {"dps": 3900}
+        assert resolved.role_ranks == {"damage": 3900}
         assert resolved.secondary_roles == ()
 
 

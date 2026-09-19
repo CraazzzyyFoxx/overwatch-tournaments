@@ -18,7 +18,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { notify } from "@/lib/notify";
 import { cn } from "@/lib/utils";
-import { EYEBROW_CLASS, TONE_TEXT } from "@/components/admin/tone";
+import { EYEBROW_CLASS, TONE_TEXT } from "@/components/kit/tone";
 import balancerAdminService from "@/services/balancer-admin.service";
 import type {
   RegistrationRankAutofillRequest,
@@ -214,7 +214,7 @@ export default function RankAutofillPage({ tournamentId }: Readonly<{ tournament
               type="button"
               variant="ghost"
               size="icon"
-              className="h-8 w-8 shrink-0 rounded-lg border border-[color:var(--aqt-border)] bg-black/15 text-[color:var(--aqt-fg-muted)] hover:bg-white/5 hover:text-[color:var(--aqt-fg)]"
+              className="h-8 w-8 shrink-0 rounded-lg border border-[color:var(--aqt-border)] bg-[color:var(--aqt-bg-2)] text-[color:var(--aqt-fg-muted)] hover:bg-[color:var(--aqt-overlay-3)] hover:text-[color:var(--aqt-fg)]"
               onClick={() => setChainOpen((open) => !open)}
               aria-label={t("rankAutofill.toggleChainAria")}
               aria-expanded={chainOpen}
@@ -285,7 +285,7 @@ export default function RankAutofillPage({ tournamentId }: Readonly<{ tournament
             <CardDescription>{t("rankAutofill.previewDescription")}</CardDescription>
           </div>
           {preview && (
-            <div className="flex shrink-0 items-center divide-x divide-[color:var(--aqt-border)] rounded-lg border border-[color:var(--aqt-border-2)] bg-white/[0.03]">
+            <div className="flex shrink-0 items-center divide-x divide-[color:var(--aqt-border)] rounded-lg border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-overlay-2)]">
               {stats.map(({ label, value, color }) => (
                 <div key={label} className="px-3 py-2 text-center">
                   <div className={EYEBROW_CLASS}>{label}</div>

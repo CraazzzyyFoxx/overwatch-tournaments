@@ -23,8 +23,11 @@ from shared.services.team_export import ExportPlan, sync_player_ranks, team_mate
 from src import models, schemas
 from src.schemas.team import InternalBalancerTeamsPayload
 from src.services.admin.balancer_dual_write import BalancerVariantService, balancer_variant_service
-from src.services.balancer.config.provider import normalize_tournament_config_payload, serialize_saved_config_payload
-from src.services.balancer.config.public_contract import normalize_balance_response_payload
+from src.services.balancer.config.provider import normalize_tournament_config_payload
+from src.services.balancer.config.public_contract import (
+    normalize_balance_response_payload,
+    normalize_config_payload,
+)
 from src.services.balancer.realtime import emit_balancer_data
 from src.services.team import to_materialization_teams
 
@@ -192,7 +195,7 @@ class BalancerAdminService:
         auth_user: models.AuthUser,
     ) -> models.BalancerBalance:
         await self.ensure_tournament_exists(session, tournament_id)
-        normalized_config_json = serialize_saved_config_payload(data.config_json)
+        normalized_config_json = normalize_config_payload(data.config_json)
         normalized_result_json = normalize_balance_response_payload(data.result_json)
         payload = InternalBalancerTeamsPayload.model_validate(normalized_result_json)
         if not payload.teams:

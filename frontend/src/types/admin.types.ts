@@ -296,6 +296,8 @@ export interface TournamentCreateInput {
 export interface TournamentUpdateInput {
   name?: string;
   description?: string | null;
+  /** Published regulations, Markdown; `null` unpublishes them. */
+  rules?: string | null;
   challonge_slug?: string | null;
   /** Renames the public-URL slug; the retired value keeps resolving via a redirect. */
   slug?: string | null;
@@ -1167,7 +1169,7 @@ export interface EvaluationRunRead {
   results_removed: number;
   started_at: string;
   finished_at: string | null;
-  status: "queued" | "running" | "done" | "partial" | "failed" | "cancelled";
+  status: "queued" | "running" | "done" | "partial" | "failed";
   error_message: string | null;
 }
 
@@ -1216,6 +1218,12 @@ export interface ConditionTypeInfo {
   description: string;
   required_params: string[];
   optional_params: string[];
+  /** Source tables the node reads; a rule's `depends_on` is their union. */
+  depends_on: string[];
+  /** Only valid inside a `team_players_match`/`captain_property` sub-tree. */
+  subcondition_only: boolean;
+  /** Valid there in addition to the top level. */
+  subcondition_ok: boolean;
 }
 
 // ─── Challonge Sync ─────────────────────────────────────────────────────────

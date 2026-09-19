@@ -1,4 +1,4 @@
-import type { Tone } from "@/components/admin/tone";
+import type { Tone } from "@/components/kit/tone";
 
 /**
  * Tones for the "is this collector running" pill every collector shows above

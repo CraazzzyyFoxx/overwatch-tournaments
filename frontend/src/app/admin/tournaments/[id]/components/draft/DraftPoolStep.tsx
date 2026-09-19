@@ -4,8 +4,8 @@ import { AlertTriangle, CheckCircle2, Link2Off, ShieldAlert, Users, XCircle } fr
 import { useTranslations } from "next-intl";
 
 import { StatTile, StatTileGrid } from "@/components/admin/StatTile";
-import { StatusPill } from "@/components/admin/kit/StatusPill";
-import { TONE_CLASS } from "@/components/admin/tone";
+import { StatusPill } from "@/components/kit/StatusPill";
+import { TONE_CLASS } from "@/components/kit/tone";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
@@ -20,12 +20,12 @@ interface DraftPoolStepProps {
   failed: boolean;
 }
 
-const ROLES: DraftRole[] = ["tank", "dps", "support"];
+const ROLES: DraftRole[] = ["tank", "damage", "support"];
 const BLOCKER_MESSAGE_KEYS = {
   not_enough_players: "blockers.not_enough_players",
   pool_unranked: "blockers.pool_unranked",
   "role_shortage:tank": "blockers.role_shortage_tank",
-  "role_shortage:dps": "blockers.role_shortage_dps",
+  "role_shortage:damage": "blockers.role_shortage_damage",
   "role_shortage:support": "blockers.role_shortage_support"
 } as const;
 

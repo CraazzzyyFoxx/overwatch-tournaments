@@ -5,20 +5,20 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { Check, Clipboard, Gauge, KeyRound, Plus, Trash2, X } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
 
-import { AdminDataTable, createKebabColumn } from "@/components/admin-data-table";
-import { InlineEditText } from "@/components/admin/InlineEditText";
+import { AdminDataTable, createKebabColumn } from "@/components/data-table";
+import { InlineEditText } from "@/components/kit/InlineEditText";
 import { StatTile, StatTileGrid } from "@/components/admin/StatTile";
 import { ApiKeyQuotaDialog } from "@/components/admin/quota/ApiKeyQuotaDialog";
 import {
   PermissionPicker,
   type PermissionCatalogEntry
 } from "@/components/admin/access/PermissionPicker";
-import { AdminFilterBar } from "@/components/admin/kit/AdminFilterBar";
-import { ConfirmDialog } from "@/components/admin/kit/ConfirmDialog";
-import { useAdminFilters, type FilterDef } from "@/components/admin/kit/useAdminFilters";
-import { EntityFormDialog } from "@/components/admin/EntityFormDialog";
-import { TONE_CLASS, TONE_TEXT, type Tone } from "@/components/admin/tone";
-import type { AdminDateFormatter } from "@/components/admin/format-time";
+import { AdminFilterBar } from "@/components/kit/AdminFilterBar";
+import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
+import { useAdminFilters, type FilterDef } from "@/components/kit/useAdminFilters";
+import { EntityFormDialog } from "@/components/kit/EntityFormDialog";
+import { TONE_CLASS, TONE_TEXT, type Tone } from "@/components/kit/tone";
+import type { AdminDateFormatter } from "@/components/kit/format-time";
 import { Button } from "@/components/ui/button";
 import { DateTimePicker } from "@/components/ui/date-picker";
 import { Input } from "@/components/ui/input";
@@ -37,7 +37,7 @@ import { notify } from "@/lib/notify";
 import { cn } from "@/lib/utils";
 import { useWorkspaceStore } from "@/stores/workspace.store";
 import type { AccountApiKey } from "@/types/auth.types";
-import { EmptyNote } from "@/components/admin/kit/EmptyNote";
+import { EmptyNote } from "@/components/kit/EmptyNote";
 
 const PAGE_SIZE = 20;
 

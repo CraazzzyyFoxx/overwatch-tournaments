@@ -39,7 +39,7 @@ var resourcePatterns = map[string][]string{
 	// (registration/admission.py: a stale form is a false refusal or a false
 	// admission). Empty, so a form edit evicts nothing.
 	"tournament.registration_form": {},
-	"tournament.streams":           {"/api/streams/tournament/"},
+	"tournament.streams":           {"/api/v1/streams/tournament/"},
 	// Workspace- and user-scoped resources: this cache only ever stores
 	// anonymous public reads, so there is nothing of theirs to drop.
 	"workspace.logs":           {},

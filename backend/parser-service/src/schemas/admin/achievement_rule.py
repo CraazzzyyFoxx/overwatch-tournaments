@@ -262,3 +262,9 @@ class ConditionTypeInfo(BaseModel):
     description: str
     required_params: list[str]
     optional_params: list[str]
+    #: Source tables the node reads — what a rule's ``depends_on`` is derived from.
+    depends_on: list[str] = Field(default_factory=list)
+    #: Only usable inside a ``team_players_match``/``captain_property`` sub-tree.
+    subcondition_only: bool = False
+    #: Usable there, in addition to the top level.
+    subcondition_ok: bool = False

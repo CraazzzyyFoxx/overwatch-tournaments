@@ -22,7 +22,7 @@ export type VariantStats = {
   feasibility?: FeasibilityReport | null;
 } | null;
 
-const CHIP_CLASS = "rounded-full whitespace-nowrap";
+const CHIP_CLASS = "rounded-full whitespace-nowrap tabular-nums";
 
 /**
  * The bar carries up to ten stats. Past ~1536px of viewport the row wrapped and doubled the
@@ -92,11 +92,11 @@ export function BalanceStatsRow({ stats }: Readonly<{ stats: VariantStats }>) {
               type="button"
               aria-label="Pool diagnostics: role supply, off-role floor, flex headroom"
               className={cn(
-                "inline-flex items-center whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors",
+                "inline-flex items-center whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs font-semibold tabular-nums transition-colors",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
                 shortfall > 0
                   ? "border-rose-400/25 bg-rose-500/10 text-rose-200 hover:bg-rose-500/15"
-                  : "border-[color:var(--aqt-border-2)] bg-white/[0.04] text-[color:var(--aqt-fg-muted)] hover:bg-white/[0.08] hover:text-[color:var(--aqt-fg)]",
+                  : "border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-overlay-2)] text-[color:var(--aqt-fg-muted)] hover:bg-[color:var(--aqt-overlay-3)] hover:text-[color:var(--aqt-fg)]",
               )}
             >
               Pool{shortfall > 0 ? ` −${shortfall}` : ""}

@@ -153,18 +153,18 @@ function Identity() {
       <h2>Чем входите</h2>
       <ul>
         <li>
-          <strong>Сессия JWT</strong> — браузер. <Api>POST /api/auth/login</Api>, обновление через{" "}
-          <Api>/api/auth/refresh</Api>. Несёт все роли и воркспейсы.
+          <strong>Сессия JWT</strong> — браузер. <Api>POST /api/v1/auth/login</Api>, обновление через{" "}
+          <Api>/api/v1/auth/refresh</Api>. Несёт все роли и воркспейсы.
         </li>
         <li>
           <strong>API-ключ</strong> — <Api>aqt_sk_…</Api>, один воркспейс. Создаётся в{" "}
-          <Api>POST /api/auth/api-keys</Api>, секрет показывается один раз. В заголовке{" "}
+          <Api>POST /api/v1/auth/api-keys</Api>, секрет показывается один раз. В заголовке{" "}
           <Api>Authorization: Bearer</Api>, как JWT.
         </li>
       </ul>
       <p>
-        Операции «про меня» (выход, <Api>/api/auth/me</Api>, управление ключами) принимают только
-        JWT. <Api>GET /api/auth/api-keys/self</Api> — наоборот, только ключ.
+        Операции «про меня» (выход, <Api>/api/v1/auth/me</Api>, управление ключами) принимают только
+        JWT. <Api>GET /api/v1/auth/api-keys/self</Api> — наоборот, только ключ.
       </p>
     </>
   );
@@ -225,7 +225,7 @@ function Registration() {
       <h2>Ростер</h2>
       <p>
         Слот ростера указывает на <Api>workspace_member</Api>, не на голого игрока. Форма ростера —
-        сколько слотов и каких ролей, например <Api>{"{tank: 1, dps: 2, support: 2}"}</Api> или шесть
+        сколько слотов и каких ролей, например <Api>{"{tank: 1, damage: 2, support: 2}"}</Api> или шесть
         флексов. <Api>team_size</Api> и <Api>draft_rounds</Api> считаются из неё на сервере.
       </p>
     </>
@@ -295,7 +295,7 @@ function Realtime() {
 
       <h2>Куда подключаться</h2>
       <p>
-        <Api>/ws</Api> и <Api>/api/realtime/ws</Api>. Сессия JWT или API-ключ. Ключ без грантов в
+        <Api>/ws</Api> и <Api>/api/v1/realtime/ws</Api>. Сессия JWT или API-ключ. Ключ без грантов в
         воркспейсе коннектится как аноним и не подписаться на закрытые топики.
       </p>
 
@@ -341,8 +341,10 @@ function ApiGuide() {
     <>
       <h1>HTTP API</h1>
       <p className={styles.lead}>
-        Один шлюз на весь HTTP. v1 — развёрнутый JSON, v2 — тот же путь и статус, тело — RPC
-        envelope. Справочник методов: <a href="/api/docs">/api/docs</a>.
+        Один шлюз на весь HTTP. Любой путь — <Api>/api/v&#123;n&#125;/&lt;домен&gt;/…</Api>: ось
+        версии одна и всегда во втором сегменте. v1 — развёрнутый JSON, v2 — тот же путь и
+        статус, тело — RPC envelope. Справочник методов:{" "}
+        <a href="/api/docs">/api/docs</a>.
       </p>
 
       <h2>Версии</h2>
@@ -358,10 +360,10 @@ function ApiGuide() {
           <tr>
             <td>Префикс</td>
             <td>
-              <Api>/api/v1</Api>, плюс <Api>/api/auth</Api>
+              <Api>/api/v1/…</Api>
             </td>
             <td>
-              <Api>/api/v2</Api>. Auth остаётся на v1
+              <Api>/api/v2/…</Api> — те же пути целиком, включая <Api>auth</Api>
             </td>
           </tr>
           <tr>
@@ -385,6 +387,17 @@ function ApiGuide() {
       <p>
         Ветвитесь по <Api>code</Api> / <Api>error.code</Api>. Человеческое сообщение показывайте,
         не парсите.
+      </p>
+
+      <h2>Старые префиксы</h2>
+      <p>
+        Раньше <Api>auth</Api>, <Api>analytics</Api>, <Api>balancer</Api>, <Api>streams</Api>,{" "}
+        <Api>notifications</Api> и <Api>announcements</Api> стояли рядом с версией —{" "}
+        <Api>/api/auth/me</Api>. Эти пути ещё отвечают и переписываются на канонические, но
+        каждый такой ответ несёт <Api>Deprecation: true</Api>, дату в <Api>Sunset</Api> и{" "}
+        <Api>Link: &lt;канонический&gt;; rel=&quot;successor-version&quot;</Api>. После даты
+        Sunset они перестают отвечать. Переезд — это только префикс: тело, статусы и параметры
+        не меняются.
       </p>
 
       <h2>Коды</h2>

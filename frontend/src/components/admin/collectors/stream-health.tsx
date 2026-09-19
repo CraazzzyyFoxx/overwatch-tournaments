@@ -6,8 +6,8 @@ import { AlertTriangle, Clock, Gauge, Loader2, Pause, Play, Radio, Trophy } from
 import { StatTile, StatTileGrid } from "@/components/admin/StatTile";
 import { StatTileGridSkeleton } from "@/components/admin/StatTileGridSkeleton";
 import { TintedBadge } from "@/components/admin/TintedBadge";
-import { formatInterval, formatRelative } from "@/components/admin/format-time";
-import { TONE_CLASS, type Tone } from "@/components/admin/tone";
+import { formatInterval, formatRelative } from "@/components/kit/format-time";
+import { TONE_CLASS, type Tone } from "@/components/kit/tone";
 import { Button } from "@/components/ui/button";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
 import { notify } from "@/lib/notify";

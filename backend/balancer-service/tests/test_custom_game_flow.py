@@ -196,8 +196,8 @@ def _solver_result(lineup: list[Any]) -> dict[str, Any]:
         "variants": [
             {
                 "teams": [
-                    {"roster": {"tank": [seats[0]], "dps": [seats[1]]}},
-                    {"roster": {"tank": [seats[2]], "dps": [seats[3]]}},
+                    {"roster": {"tank": [seats[0]], "damage": [seats[1]]}},
+                    {"roster": {"tank": [seats[2]], "damage": [seats[3]]}},
                 ],
                 "statistics": {},
                 "benched_players": [{"uuid": str(row.workspace_member_id), "name": "spare"} for row in lineup[4:]],
@@ -224,7 +224,7 @@ class MixFlowTests(IsolatedAsyncioTestCase):
             return_value={
                 (member_id, role): ResolvedRank(2500, "workspace")
                 for member_id in _MEMBERS
-                for role in ("tank", "dps", "support")
+                for role in ("tank", "damage", "support")
             }
         )
         self.ranks.set_ranks = AsyncMock()
@@ -276,7 +276,7 @@ class MixFlowTests(IsolatedAsyncioTestCase):
     async def test_a_whole_mix_from_create_to_close(self) -> None:
         # Everything the host configures is on their account before the mix
         # exists: two teams of two, and 25 rank points riding on the result.
-        self.host_prefs.save(9, role_slots_json={"tank": 1, "dps": 1}, points_per_win=25)
+        self.host_prefs.save(9, role_slots_json={"tank": 1, "damage": 1}, points_per_win=25)
 
         game = await self.service.create(
             self.session,
@@ -307,12 +307,12 @@ class MixFlowTests(IsolatedAsyncioTestCase):
             workspace_id=1,
             custom_game_id=game.id,
             workspace_member_id=8,
-            patch={"roles": ["dps"], "is_flex": False},
+            patch={"roles": ["damage"], "is_flex": False},
             actor_user_id=9,
         )
         narrowed = next(row for row in self.roster.rows if row.workspace_member_id == 8)
         self.assertEqual(narrowed.role_selection_mode, MixRoleSelectionMode.EXPLICIT)
-        self.assertEqual(self.player_roles.by_player[narrowed.id], ["dps"])
+        self.assertEqual(self.player_roles.by_player[narrowed.id], ["damage"])
 
         # A name for the first column -- the only setting that is the mix's own.
         await self.service.set_team_names(
@@ -337,8 +337,8 @@ class MixFlowTests(IsolatedAsyncioTestCase):
         payload, overrides, _progress, role_mask = self.service.run_balance.await_args.args
         self.assertEqual(sorted(payload["players"]), ["10", "7", "8", "9"])
         self.assertTrue(payload["players"]["7"]["identity"]["mustPlay"])
-        self.assertEqual(list(payload["players"]["8"]["stats"]["classes"]), ["dps"])
-        self.assertEqual(role_mask, {"tank": 1, "dps": 1})
+        self.assertEqual(list(payload["players"]["8"]["stats"]["classes"]), ["damage"])
+        self.assertEqual(role_mask, {"tank": 1, "damage": 1})
         # The shape and the points are columns beside the override blob, so
         # neither leaks into the solver's config: this host set no solver knob.
         self.assertEqual(overrides, {})

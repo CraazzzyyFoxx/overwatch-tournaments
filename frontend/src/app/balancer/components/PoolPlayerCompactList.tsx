@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useRef } from "react";
+import { memo, useRef, type MouseEvent } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Check, Circle, Pencil, PlusCircle, ShieldX } from "lucide-react";
 
@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/context-menu";
 import { cn } from "@/lib/utils";
 import type { AdminRegistration, BalancerPlayerRecord } from "@/types/balancer-admin.types";
-import { ROLE_TEXT_ACCENTS, getRegistrationBattleTags, splitBattleTag } from "./balancer-page-helpers";
+import { ROLE_TEXT_ACCENTS, getRegistrationBattleTags, splitBattleTag } from "@/components/balancer/balancer-page-helpers";
 import { BalancerStatusContextMenuItems, BalancerStatusMenu, type StatusOptionGroups } from "./BalancerStatusMenu";
 import { BattleTagContextMenuItems, BattleTagCopyButton, SmurfTagStrip } from "./BattleTagCopyControls";
 import { IssueChip, issueChipKey } from "./IssueChip";
@@ -25,7 +25,7 @@ import {
   ROLE_LABELS,
   isRoleEntryActive,
   type PlayerValidationIssue,
-} from "@/app/balancer/components/workspace-helpers";
+} from "@/components/balancer/workspace-helpers";
 
 type PoolPlayerCompactListProps = {
   playerStates: Array<{
@@ -107,15 +107,9 @@ const PoolPlayerRow = memo(function PoolPlayerRow({
       <ContextMenuTrigger asChild>
         <div
           title={issueSummary || primaryBattleTag}
-          onDoubleClick={(event) => {
-            if (event.target instanceof Element && event.target.closest("[data-card-action]")) {
-              return;
-            }
-            onSelectPlayer?.(player.id);
-          }}
           className={cn(
-            "group grid w-full cursor-pointer grid-cols-[24px_minmax(0,1fr)] items-start gap-2 rounded-xl border px-2.5 py-2 text-left transition-colors",
-            "border-[color:var(--aqt-border)] bg-white/[0.02] hover:border-[color:var(--aqt-border-2)] hover:bg-white/[0.04]",
+            "group grid w-full cursor-pointer grid-cols-[24px_minmax(0,1fr)] items-start gap-2 rounded-lg border px-2.5 py-2 text-left transition-colors",
+            "border-[color:var(--aqt-border)] bg-[color:var(--aqt-overlay-1)] hover:border-[color:var(--aqt-border-2)] hover:bg-[color:var(--aqt-overlay-3)]",
             isSelected && "border-primary/45 bg-primary/[0.08]",
             isBulkSelected && !isSelected && "border-cyan-400/35 bg-cyan-500/[0.06]",
           )}
@@ -130,7 +124,7 @@ const PoolPlayerRow = memo(function PoolPlayerRow({
               "mt-0.5 flex h-6 w-6 items-center justify-center rounded-md border text-label transition-colors",
               isBulkSelected
                 ? "border-cyan-300/50 bg-cyan-500/18 text-cyan-100"
-                : "border-[color:var(--aqt-border-2)] bg-black/15 text-[color:var(--aqt-fg-dim)] hover:text-[color:var(--aqt-fg-muted)]",
+                : "border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-bg-2)] text-[color:var(--aqt-fg-dim)] hover:text-[color:var(--aqt-fg-muted)]",
             )}
           >
             {isBulkSelected ? <Check className="h-3 w-3" /> : <Circle className="h-2.5 w-2.5 fill-current stroke-none" />}
@@ -199,9 +193,14 @@ const PoolPlayerRow = memo(function PoolPlayerRow({
                   size="icon"
                   disabled={actionsDisabled || !onSetPoolMembership}
                   className={cn(
-                    "h-7 w-7 rounded-lg border border-[color:var(--aqt-border)] bg-black/15 text-[color:var(--aqt-fg-dim)] hover:bg-white/5 hover:text-[color:var(--aqt-fg)]",
+                    "h-7 w-7 rounded-lg border border-[color:var(--aqt-border)] bg-[color:var(--aqt-bg-2)] text-[color:var(--aqt-fg-dim)] hover:bg-[color:var(--aqt-overlay-3)] hover:text-[color:var(--aqt-fg)]",
                     !player.is_in_pool && "text-emerald-200/70",
                   )}
+                  aria-label={
+                    player.is_in_pool
+                      ? `Exclude ${primaryBattleTag} from the balancer`
+                      : `Include ${primaryBattleTag} in the balancer`
+                  }
                   title={player.is_in_pool ? "Exclude from balancer" : "Include in balancer"}
                   onClick={() => onSetPoolMembership?.(player.id, !player.is_in_pool)}
                 >
@@ -295,7 +294,7 @@ export function PoolPlayerCompactList({
 
   if (playerStates.length === 0) {
     return (
-      <div className="flex flex-1 items-center justify-center rounded-2xl border border-dashed border-[color:var(--aqt-border-2)] bg-white/[0.02] px-4 py-8 text-center">
+      <div className="flex flex-1 items-center justify-center rounded-lg border border-dashed border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-overlay-1)] px-4 py-8 text-center">
         <div className="space-y-1.5">
           <p className="text-sm font-medium text-[color:var(--aqt-fg)]">{emptyTitle}</p>
           <p className="text-xs text-[color:var(--aqt-fg-dim)]">{emptyDescription}</p>
@@ -324,6 +323,19 @@ export function PoolPlayerCompactList({
     );
   };
 
+  // One click on a row opens the player sheet. The handler sits on the `<li>`
+  // rather than the row's own `div` — `onClick` on a non-interactive `div` is
+  // what the design gate rejects — and subtrees marked `data-card-action`
+  // (bulk select, status menu, copy controls) keep their own clicks. The check
+  // is `Element`, not `HTMLElement`: a click landing on a button's SVG icon
+  // has an `SVGElement` target and would otherwise fall through to here.
+  const openRow = (index: number) => (event: MouseEvent<HTMLLIElement>) => {
+    if (event.target instanceof Element && event.target.closest("[data-card-action]")) {
+      return;
+    }
+    onSelectPlayer?.(playerStates[index].player.id);
+  };
+
   return (
     // Below `xl` the balancer shell drops its `h-svh`/`overflow-hidden`, so `flex-1` alone would
     // resolve to the full virtual height and push a scrollbar onto the document. The cap keeps the
@@ -333,25 +345,32 @@ export function PoolPlayerCompactList({
       className="min-h-0 max-h-[calc(100svh-16rem)] flex-1 overflow-y-auto overflow-x-hidden pr-2"
     >
       {shouldVirtualize ? (
-        <div className="relative w-full" style={{ height: virtualizer.getTotalSize() }}>
+        <ul
+          aria-label="Pool players"
+          className="relative w-full"
+          style={{ height: virtualizer.getTotalSize() }}
+        >
           {virtualizer.getVirtualItems().map((virtualRow) => (
-            <div
+            <li
               key={playerStates[virtualRow.index].player.id}
               data-index={virtualRow.index}
               ref={virtualizer.measureElement}
               className="absolute inset-x-0 top-0"
               style={{ transform: `translateY(${virtualRow.start}px)` }}
+              onClick={openRow(virtualRow.index)}
             >
               {row(virtualRow.index)}
-            </div>
+            </li>
           ))}
-        </div>
+        </ul>
       ) : (
-        <div className="space-y-1.5">
+        <ul aria-label="Pool players" className="space-y-1.5">
           {playerStates.map((state, index) => (
-            <div key={state.player.id}>{row(index)}</div>
+            <li key={state.player.id} onClick={openRow(index)}>
+              {row(index)}
+            </li>
           ))}
-        </div>
+        </ul>
       )}
     </div>
   );

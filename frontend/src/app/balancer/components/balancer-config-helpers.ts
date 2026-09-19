@@ -1,53 +1,8 @@
-import {
-  SUPPORTED_BALANCER_ALGORITHMS,
-  SUPPORTED_BALANCER_CONFIG_KEYS,
-  type BalancerConfig,
-  type BalancerConfigResponse,
-} from "@/types/balancer.types";
+import type { BalancerConfig, BalancerConfigResponse } from "@/types/balancer.types";
 
 export const CUSTOM_PRESET = "CUSTOM";
 
 type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
-
-const NUMERIC_CONFIG_KEYS = new Set<string>([
-  "population_size",
-  "generation_count",
-  "mutation_rate",
-  "mutation_strength",
-  "average_mmr_balance_weight",
-  "team_total_balance_weight",
-  "max_team_gap_weight",
-  "role_discomfort_weight",
-  "intra_team_variance_weight",
-  "max_role_discomfort_weight",
-  "role_line_balance_weight",
-  "role_spread_weight",
-  "intra_team_std_weight",
-  "internal_role_spread_weight",
-  "sub_role_collision_weight",
-  "low_rank_threshold",
-  "low_rank_collision_weight",
-  "tank_impact_weight",
-  "dps_impact_weight",
-  "support_impact_weight",
-  "tank_gap_weight",
-  "tank_std_weight",
-  "effective_total_std_weight",
-  "convergence_patience",
-  "convergence_epsilon",
-  "mutation_rate_min",
-  "mutation_rate_max",
-  "island_count",
-  "polish_max_passes",
-  "greedy_seed_count",
-  "stagnation_kick_patience",
-  "crossover_rate",
-  "max_result_variants",
-  "rank_comfort_tilt",
-]);
-
-const SUPPORTED_CONFIG_KEY_SET = new Set<string>(SUPPORTED_BALANCER_CONFIG_KEYS);
-const SUPPORTED_BALANCER_ALGORITHM_SET = new Set<string>(SUPPORTED_BALANCER_ALGORITHMS);
 
 function sortJsonValue(value: unknown): JsonValue {
   if (Array.isArray(value)) {
@@ -75,40 +30,29 @@ function sortJsonValue(value: unknown): JsonValue {
   return null;
 }
 
+/** Drops empty values and turns a numeric input's raw string into a number.
+ *
+ * There is deliberately no key allowlist here: which knobs exist is the
+ * backend's answer (`BalancerConfigResponse.fields`), and anything unknown that
+ * slips through is dropped server-side by `normalize_config_payload`. The
+ * allowlist this file used to carry was a third copy of that list and had
+ * drifted from it in both directions. Every knob is numeric or boolean, so a
+ * string here can only be a number input mid-edit.
+ */
 export function sanitizeBalancerConfig(config: BalancerConfig | null | undefined): BalancerConfig {
   if (!config) {
     return {};
   }
 
   const entries = Object.entries(config).flatMap(([key, value]) => {
-    if (!SUPPORTED_CONFIG_KEY_SET.has(key)) {
-      return [];
-    }
-
     if (value === undefined || value === null) {
       return [];
     }
 
     if (typeof value === "string") {
-      const trimmedValue = value.trim();
-      if (trimmedValue === "") {
-        return [];
-      }
-
-      if (key === "algorithm") {
-        return SUPPORTED_BALANCER_ALGORITHM_SET.has(trimmedValue) ? [[key, trimmedValue]] : [];
-      }
-
-      if (NUMERIC_CONFIG_KEYS.has(key)) {
-        const numericValue = Number(trimmedValue);
-        return Number.isFinite(numericValue) ? [[key, numericValue]] : [];
-      }
-    }
-
-    if (key === "algorithm") {
-      return typeof value === "string" && SUPPORTED_BALANCER_ALGORITHM_SET.has(value)
-        ? [[key, value]]
-        : [];
+      const trimmed = value.trim();
+      const numeric = Number(trimmed);
+      return trimmed !== "" && Number.isFinite(numeric) ? [[key, numeric]] : [];
     }
 
     return [[key, value]];

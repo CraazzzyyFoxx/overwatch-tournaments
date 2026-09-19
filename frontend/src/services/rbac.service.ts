@@ -60,7 +60,7 @@ async function rbacFetch<T>(
   path: string,
   init?: { method?: string; body?: unknown; query?: Record<string, unknown> }
 ): Promise<T> {
-  const response = await apiFetch(`/api/auth${path}`, {
+  const response = await apiFetch(`/api/v1/auth${path}`, {
     method: init?.method,
     body: init?.body,
     query: init?.query,

@@ -7,8 +7,8 @@ import { Check, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import pickBanService from "@/services/pickBan.service";
 import type { PickBanKind, PickBanState } from "@/types/tournament.types";
-import { Fact, Pill } from "./EncounterAtoms";
-import styles from "../EncounterDetail.module.css";
+import { Fact, Pill } from "@/components/match/EncounterAtoms";
+import styles from "@/components/match/EncounterDetail.module.css";
 
 interface EncounterPregamePanelProps {
   encounterId: number;

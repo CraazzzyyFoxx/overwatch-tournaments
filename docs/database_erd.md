@@ -12,7 +12,7 @@ schema name — `ranks/` writes to `overwatch_rank`, `ingestion/` to `log_proces
 > `--check` and fails on drift, so the diagrams cannot fall behind the models again.
 
 <!-- ERD:auto _alembic_head -->
-Alembic head: **`quota0002`** (67 revisions in `backend/migrations/versions/`).
+Alembic head: **`achenc01`** (70 revisions in `backend/migrations/versions/`).
 <!-- /ERD:auto -->
 
 **Reading the diagrams**
@@ -1200,6 +1200,7 @@ erDiagram
         varchar name
         varchar slug UK
         varchar description "nullable"
+        text rules "nullable"
         boolean is_league
         boolean is_finished
         boolean is_hidden
@@ -2142,6 +2143,7 @@ erDiagram
         bigint achievement_rule_id FK
         bigint workspace_member_id FK
         bigint tournament_id FK "nullable"
+        bigint encounter_id FK "nullable"
         bigint match_id FK "nullable"
         timestamptz qualified_at
         json evidence_json "nullable"
@@ -2207,6 +2209,7 @@ erDiagram
     PUBLIC_WORKSPACE ||--o{ ACHIEVEMENTS_RULE : "workspace_id"
     PUBLIC_WORKSPACE_MEMBER ||--o{ ACHIEVEMENTS_EVALUATION_RESULT : "workspace_member_id"
     PUBLIC_WORKSPACE_MEMBER ||--o{ ACHIEVEMENTS_OVERRIDE : "workspace_member_id"
+    TOURNAMENT_ENCOUNTER |o--o{ ACHIEVEMENTS_EVALUATION_RESULT : "encounter_id"
     TOURNAMENT_TOURNAMENT |o--o{ ACHIEVEMENTS_EVALUATION_RESULT : "tournament_id"
     TOURNAMENT_TOURNAMENT |o--o{ ACHIEVEMENTS_EVALUATION_RUN : "tournament_id"
     TOURNAMENT_TOURNAMENT |o--o{ ACHIEVEMENTS_OVERRIDE : "tournament_id"
@@ -2214,7 +2217,7 @@ erDiagram
 
 Composite unique keys:
 
-- `ACHIEVEMENTS_EVALUATION_RESULT` unique on (`achievement_rule_id`, `workspace_member_id`, `tournament_id`, `match_id`)
+- `ACHIEVEMENTS_EVALUATION_RESULT` unique on (`achievement_rule_id`, `workspace_member_id`, `tournament_id`, `encounter_id`, `match_id`)
 - `ACHIEVEMENTS_RULE` unique on (`workspace_id`, `slug`)
 <!-- /ERD:auto -->
 

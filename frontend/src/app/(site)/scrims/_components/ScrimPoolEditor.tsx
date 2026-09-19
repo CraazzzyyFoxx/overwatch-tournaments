@@ -31,7 +31,7 @@ import {
   validatePickBanDraft,
   type PickBanDraft,
   type PickBanValidationIssue
-} from "@/app/admin/tournaments/[id]/components/pickBanConfig.helpers";
+} from "@/lib/pick-ban-config";
 
 /**
  * A room's hand-authored pick-ban rules.

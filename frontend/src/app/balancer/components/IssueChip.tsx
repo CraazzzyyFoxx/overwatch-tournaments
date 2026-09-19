@@ -4,7 +4,7 @@ import { ArrowRight } from "lucide-react";
 
 import DivisionIcon from "@/components/DivisionIcon";
 
-import { ROLE_LABELS, type PlayerValidationIssue } from "./workspace-helpers";
+import { ROLE_LABELS, type PlayerValidationIssue } from "@/components/balancer/workspace-helpers";
 
 const CHIP_CLASS =
   "inline-flex shrink-0 items-center gap-1 rounded-full border border-amber-300/20 bg-amber-500/10 px-1.5 py-0.5 text-label font-medium text-amber-100/80";
@@ -35,7 +35,7 @@ export function IssueChip({ issue }: Readonly<{ issue: PlayerValidationIssue }>)
   if (issue.code === "rank_delta_warning") {
     return (
       <span className={CHIP_CLASS} title={issue.message}>
-        <span className="font-semibold uppercase tracking-wide">{ROLE_LABELS[issue.role]}</span>
+        <span className="font-semibold uppercase tracking-label">{ROLE_LABELS[issue.role]}</span>
         {issue.currentDivision != null ? (
           <DivisionIcon division={issue.currentDivision} width={14} height={14} />
         ) : null}

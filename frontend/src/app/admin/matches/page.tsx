@@ -4,7 +4,7 @@ import dynamic from "next/dynamic";
 import { useSearchParams } from "next/navigation";
 
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
-import { AdminTabs, type AdminTabItem } from "@/components/admin/kit/AdminTabs";
+import { AdminTabs, type AdminTabItem } from "@/components/kit/AdminTabs";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { usePermissions } from "@/hooks/usePermissions";

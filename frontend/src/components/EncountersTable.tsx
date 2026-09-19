@@ -9,7 +9,7 @@ import styles from "./EncountersTable.module.css";
 import {
   getPublicPageQueryPresentation,
   type PublicPageQueryState
-} from "@/app/(site)/tournaments/[slug]/_views/publicPageQueryPresentation";
+} from "@/lib/public-page-query-presentation";
 import MatchLogIndicator from "@/components/match/MatchLogIndicator";
 import TeamName from "@/components/TeamName";
 import { DataPagination } from "@/components/ui/data-pagination";

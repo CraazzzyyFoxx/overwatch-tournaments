@@ -42,7 +42,7 @@ _VERIFIED_FIELD_LABELS = {
     "twitch_nick": "Twitch",
 }
 
-_ROLE_LABELS = {"tank": "Tank", "dps": "DPS", "support": "Support"}
+_ROLE_LABELS = {"tank": "Tank", "damage": "DPS", "support": "Support"}
 _HERO_CLASS_BY_CANONICAL = {
     "tank": enums.HeroClass.tank,
     "damage": enums.HeroClass.damage,

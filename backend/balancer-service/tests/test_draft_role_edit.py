@@ -54,7 +54,7 @@ def _player() -> DraftPlayer:
 
 
 def _roster():
-    return roster(120, ranks={"dps": 4000})
+    return roster(120, ranks={"damage": 4000})
 
 
 @pytest.mark.parametrize("status", [DraftStatus.LIVE, DraftStatus.COMPLETED, DraftStatus.CANCELLED])
@@ -95,7 +95,7 @@ def test_a_role_declared_but_unranked_is_not_a_duplicate() -> None:
     normalized = rules.validate_role_edit_request(
         _draft(),
         _player(),
-        roster(120, ranks={"dps": 4000, "support": None}),
+        roster(120, ranks={"damage": 4000, "support": None}),
         role=HeroClass.support,
         rank_value=2500,
         reason="  Rank confirmed in VOD  ",
@@ -168,7 +168,7 @@ def test_role_edit_accepts_a_seat_the_engine_resolved_no_roster_for() -> None:
 def test_role_edit_preview_can_restore_global_feasibility_without_mutating_state() -> None:
     state = feasibility.DraftFeasibilityState(
         team_ids=(10, 20),
-        slot_targets={"tank": 1, "dps": 1, "support": 1},
+        slot_targets={"tank": 1, "damage": 1, "support": 1},
         players=(
             feasibility.EligiblePlayer(1, frozenset({HeroClass.support})),
             feasibility.EligiblePlayer(2, frozenset({HeroClass.damage})),
@@ -238,7 +238,7 @@ def _service(*, rosters, audit_repo):
 def _preview(player_id: int = 20):
     state = feasibility.DraftFeasibilityState(
         team_ids=(10,),
-        slot_targets={"tank": 1, "dps": 1, "support": 1},
+        slot_targets={"tank": 1, "damage": 1, "support": 1},
         players=(feasibility.EligiblePlayer(player_id, frozenset({HeroClass.damage})),),
         assignments=(),
     )
@@ -248,7 +248,7 @@ def _preview(player_id: int = 20):
 def test_apply_role_edit_writes_the_registration_bumps_the_seat_and_audits() -> None:
     player = _player()
     before = _roster()
-    after = roster(120, ranks={"dps": 4000, "support": 2750})
+    after = roster(120, ranks={"damage": 4000, "support": 2750})
     session = _FakeSession(max_priority=2)
     rosters = _FakeRosters(after)
     audit_repo = _FakeAuditRepo()
@@ -281,10 +281,10 @@ def test_apply_role_edit_writes_the_registration_bumps_the_seat_and_audits() -> 
     assert isinstance(audit, DraftAuditEvent)
     assert audit.reason == "Confirmed secondary role"
     assert audit.before_json["registration_id"] == 120
-    assert [entry["role"] for entry in audit.before_json["roles"]] == ["dps"]
+    assert [entry["role"] for entry in audit.before_json["roles"]] == ["damage"]
     # The after-roles are RE-RESOLVED through the engine, not assembled by hand.
     assert rosters.calls == 1
-    assert [entry["role"] for entry in audit.after_json["roles"]] == ["dps", "support"]
+    assert [entry["role"] for entry in audit.after_json["roles"]] == ["damage", "support"]
     assert audit.after_json["roles"][1]["rank_value"] == 2750
     assert audit.before_json["feasibility"]["is_feasible"] is False
     assert audit.after_json["feasibility"]["is_feasible"] is False
@@ -308,12 +308,12 @@ def test_apply_role_edit_reactivates_an_existing_inactive_registration_role() ->
 
     asyncio.run(
         _service(
-            rosters=_FakeRosters(roster(120, ranks={"dps": 4000, "support": 2750})), audit_repo=_FakeAuditRepo()
+            rosters=_FakeRosters(roster(120, ranks={"damage": 4000, "support": 2750})), audit_repo=_FakeAuditRepo()
         ).apply_role_edit(
             session,  # type: ignore[arg-type]
             _draft(),
             _player(),
-            roster(120, ranks={"dps": 4000, "support": None}),
+            roster(120, ranks={"damage": 4000, "support": None}),
             role=HeroClass.support,
             rank_value=2750,
             reason="Rank confirmed in VOD",

@@ -15,7 +15,7 @@ import type {
 
 import { MappingGroupSection } from "./MappingGroupSection";
 import { GROUP_DESCRIPTIONS, GROUP_LABELS, GROUP_ORDER, targetsByGroup } from "./mappingConfig";
-import { EmptyNote } from "@/components/admin/kit/EmptyNote";
+import { EmptyNote } from "@/components/kit/EmptyNote";
 
 interface ColumnMappingTabProps {
   catalog: MappingCatalog;

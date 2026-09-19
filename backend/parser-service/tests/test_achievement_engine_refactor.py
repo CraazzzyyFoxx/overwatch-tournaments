@@ -20,10 +20,9 @@ from shared.core.enums import StageType  # noqa: E402
 from shared.models.achievements.achievement import AchievementGrain, AchievementRule  # noqa: E402
 from shared.services.achievement_effective import override_applies_to_scope  # noqa: E402
 from src.domain.achievement_catalog import (  # noqa: E402
-    _DEFAULT_EXCLUDED_SLUGS,
+    RULES,
     _all_default_rules,
     _hero_kd_rules,
-    get_canonical_rule_catalog,
     get_default_rule_slugs,
 )
 from src.domain.achievement_validation import (  # noqa: E402
@@ -47,34 +46,24 @@ from src.services.achievement.engine.differ import (  # noqa: E402
 )
 
 
-def _legacy_rule_catalog() -> dict[str, tuple[str, str, str]]:
-    catalog: dict[str, tuple[str, str, str]] = {}
-    for achievement in get_canonical_rule_catalog():
-        catalog[achievement.slug] = (
-            achievement.name,
-            achievement.description_ru,
-            achievement.description_en,
-        )
-    return catalog
-
-
-EXPECTED_LEGACY_RULES = _legacy_rule_catalog()
+def _catalog_text() -> dict[str, tuple[str, str, str]]:
+    return {rule.slug: (rule.name, rule.description_ru, rule.description_en) for rule in RULES}
 
 
 class DiffScopeTests(IsolatedAsyncioTestCase):
     async def test_tournament_scoped_diff_does_not_delete_other_tournament_results(self) -> None:
-        rule = AchievementRule(id=7, slug="afgan", rule_version=3)
+        rule = AchievementRule(id=7, slug="afgan", rule_version=3, grain=AchievementGrain.user_tournament)
 
         async def execute_side_effect(query):
             sql = str(query)
             if "SELECT achievements.evaluation_result.id" in sql:
                 if "tournament_id" in sql and "=" in sql:
                     return [
-                        (101, 55, 10, None),
+                        (101, 55, 10, None, None),
                     ]
                 return [
-                    (101, 55, 10, None),
-                    (202, 55, 20, None),
+                    (101, 55, 10, None, None),
+                    (202, 55, 20, None, None),
                 ]
             return None
 
@@ -157,6 +146,7 @@ class DiffWorkspaceMemberResolutionTests(IsolatedAsyncioTestCase):
         # expressions with literal zeros, or Postgres will not match it and the
         # duplicate-key crash comes back (migration perfidx05).
         assert "coalesce(tournament_id, 0)" in sql, sql
+        assert "coalesce(encounter_id, 0)" in sql, sql
         assert "coalesce(match_id, 0)" in sql, sql
         # Multi-row VALUES render as <column>_m<row index> bind parameters.
         rows: dict[int, dict] = {}
@@ -168,7 +158,7 @@ class DiffWorkspaceMemberResolutionTests(IsolatedAsyncioTestCase):
         return [rows[i] for i in sorted(rows)]
 
     async def test_insert_path_resolves_workspace_member_for_new_player(self) -> None:
-        rule = AchievementRule(id=9, slug="newcomer", rule_version=1, workspace_id=3)
+        rule = AchievementRule(id=9, slug="newcomer", rule_version=1, workspace_id=3, grain=AchievementGrain.user_match)
         session, statements = self._fake_session([])
 
         fake_member = SimpleNamespace(id=777)
@@ -193,7 +183,9 @@ class DiffWorkspaceMemberResolutionTests(IsolatedAsyncioTestCase):
     async def test_insert_path_memoizes_workspace_member_per_player_across_rows(self) -> None:
         """Two new rows for the same player (different tournaments) must only
         resolve/create the workspace_member once."""
-        rule = AchievementRule(id=9, slug="newcomer", rule_version=1, workspace_id=3)
+        rule = AchievementRule(
+            id=9, slug="newcomer", rule_version=1, workspace_id=3, grain=AchievementGrain.user_tournament
+        )
         session, statements = self._fake_session([])
 
         fake_member = SimpleNamespace(id=888)
@@ -217,10 +209,12 @@ class DiffWorkspaceMemberResolutionTests(IsolatedAsyncioTestCase):
         """A stored row's player identity is recovered through the
         workspace_member join; a new result for the same player must not be
         re-inserted (no spurious get_or_create call, no insert at all)."""
-        rule = AchievementRule(id=9, slug="newcomer", rule_version=1, workspace_id=3)
-        # (row_id, player_id, tournament_id, match_id) — player_id recovered via
-        # the workspace_member join, not a raw column.
-        session, statements = self._fake_session([(101, 55, 10, None)])
+        rule = AchievementRule(
+            id=9, slug="newcomer", rule_version=1, workspace_id=3, grain=AchievementGrain.user_tournament
+        )
+        # (row_id, player_id, tournament_id, encounter_id, match_id) — player_id
+        # recovered via the workspace_member join, not a raw column.
+        session, statements = self._fake_session([(101, 55, 10, None, None)])
 
         get_or_create = AsyncMock()
 
@@ -349,37 +343,18 @@ class ValidationTests(TestCase):
             validate_condition_tree({"type": "standing_count", "params": {"op": ">=", "value": 2}}),
         )
 
-    def test_default_rule_catalog_matches_legacy_consts(self) -> None:
-        rules = {rule.slug: rule for rule in _all_default_rules(1)}
-        expected = {slug: meta for slug, meta in EXPECTED_LEGACY_RULES.items() if slug not in _DEFAULT_EXCLUDED_SLUGS}
-        self.assertEqual(sorted(expected), sorted(rules))
+    def test_every_seeded_rule_is_named_in_both_languages(self) -> None:
+        """A rule with no description is a blank card in the UI, not a caught bug."""
+        unnamed = [slug for slug, text in _catalog_text().items() if not all(text)]
+        self.assertEqual([], unnamed)
 
-        metadata_mismatches = [
-            (
-                slug,
-                expected[slug],
-                (
-                    rules[slug].name,
-                    rules[slug].description_ru,
-                    rules[slug].description_en,
-                ),
-            )
-            for slug in sorted(expected)
-            if (
-                rules[slug].name,
-                rules[slug].description_ru,
-                rules[slug].description_en,
-            )
-            != expected[slug]
-        ]
-        self.assertEqual([], metadata_mismatches)
-
-    def test_excluded_slugs_are_not_default_seeded(self) -> None:
+    def test_default_seed_covers_the_declared_rules(self) -> None:
         slugs = set(get_default_rule_slugs())
-        self.assertTrue(_DEFAULT_EXCLUDED_SLUGS.isdisjoint(slugs))
-        self.assertNotIn("welcome", slugs)
-        self.assertNotIn("regular-boar", slugs)
-        self.assertEqual(len(EXPECTED_LEGACY_RULES) - len(_DEFAULT_EXCLUDED_SLUGS), len(slugs))
+        self.assertTrue(set(_catalog_text()).issubset(slugs))
+        # Retired rules stay retired: they live on in workspaces that already
+        # have them, but the seed never puts them back.
+        for retired in ("welcome", "regular-boar", "my-strength-is-growing", "well-balanced"):
+            self.assertNotIn(retired, slugs)
 
 
 class TournamentFormatTests(TestCase):

@@ -16,7 +16,7 @@ import {
   SelectTrigger,
   SelectValue
 } from "@/components/ui/select";
-import { TONE_CLASS } from "@/components/admin/tone";
+import { TONE_CLASS } from "@/components/kit/tone";
 import { resolveDivisionFromRank } from "@/lib/division-grid";
 import { getRoleIconName, ROLE_ACCENT } from "@/lib/roles";
 import { cn } from "@/lib/utils";
@@ -27,7 +27,7 @@ import type { DivisionGrid } from "@/types/workspace.types";
 import { filterCaptainRows, type DraftCaptainSort } from "./setup-model";
 import type { DraftCaptainSetup } from "./setup-types";
 import { poolRegistrationSummary, registrationLabel } from "./setup-types";
-import { EmptyNote } from "@/components/admin/kit/EmptyNote";
+import { EmptyNote } from "@/components/kit/EmptyNote";
 
 interface DraftCaptainsStepProps {
   pool: AdminRegistration[];
@@ -39,7 +39,7 @@ interface DraftCaptainsStepProps {
   divisionGrid: DivisionGrid;
 }
 
-const FILTER_ROLES: DraftRole[] = ["tank", "dps", "support"];
+const FILTER_ROLES: DraftRole[] = ["tank", "damage", "support"];
 const SORTS: DraftCaptainSort[] = ["rank_desc", "rank_asc", "name"];
 
 export function DraftCaptainsStep({

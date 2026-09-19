@@ -62,7 +62,7 @@ def _role_slot_code(value: Any) -> Any:
     """Accept the domain's ``HeroClass`` next to the wire slot code.
 
     ``domain/draft`` thinks in ``HeroClass`` (``HeroClass.damage``), every read
-    model here carries the wire spelling (``dps``). Coercing in the field means
+    model here carries its slot code string (``damage``). Coercing in the field means
     a handler that hands a read model a domain role gets the right JSON instead
     of a ``ValidationError`` that turns the whole response into a 500 —
     ``HeroClass.flex`` still fails, since no pick can name it.
@@ -311,7 +311,7 @@ class DraftPlayerRead(BaseRead):
             role_top_heroes=roster.role_top_heroes if roster is not None else {},
             notes=roster.notes if roster is not None else None,
             # The player's OWN role under role slots -- a support main is not
-            # worth their dps rank on the pool card. ``slot_rank`` drops the role
+            # worth their damage rank on the pool card. ``slot_rank`` drops the role
             # itself under a role-less shape, where the maximum is the answer.
             effective_rank=slot_rank(roster, lead.role if lead is not None else None, shape),
             custom_fields=player_custom_fields(roster.custom_fields if roster is not None else None, custom_fields),

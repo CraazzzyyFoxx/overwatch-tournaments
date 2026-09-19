@@ -4,7 +4,7 @@ import { useId, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { ChevronDown, ChevronUp, Loader2 } from "lucide-react";
 
-import { EYEBROW_CLASS } from "@/components/admin/tone";
+import { EYEBROW_CLASS } from "@/components/kit/tone";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -35,7 +35,7 @@ import {
   tiebreakOrderForPreset,
   type SeedRanking,
   type StageProjection
-} from "../projection";
+} from "@/lib/bracket-projection";
 import type { StageForm } from "../stageForm";
 import { BracketPreview } from "./BracketPreview";
 

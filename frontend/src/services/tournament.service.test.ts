@@ -76,6 +76,11 @@ describe("tournamentService.getPublicOverview", () => {
               // slot line off it, so without the entity both fall back to
               // per-player roles — meaningless in a flex event.
               "roster_shape",
+              // Deliberate too, on a different ground: `rules` costs no query
+              // (a column on the row) but is gated on payload size, and this
+              // read is where the document is wanted — the shell decides the
+              // Rules tab's existence from it and the tab renders it.
+              "rules",
             ],
           },
         },

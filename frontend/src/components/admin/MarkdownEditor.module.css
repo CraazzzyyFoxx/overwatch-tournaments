@@ -1,0 +1,42 @@
+/* Vendor chrome corrections for `@uiw/react-md-editor`.
+ *
+ * Colours are handled by remapping the editor's own CSS variables onto our
+ * tokens (see `EDITOR_THEME` in MarkdownEditor.tsx); what cannot be expressed
+ * as a variable is here, scoped to this component — no global selector leaks.
+ *
+ * The one thing being fixed is size: the vendor ships 20px toolbar buttons
+ * around 12px icons, which is both under the 24x24 touch-target floor in
+ * DESIGN.md and visually half the scale of every other control on the page.
+ */
+.editor :global(.w-md-editor-toolbar) {
+  padding: 4px 6px;
+}
+
+.editor :global(.w-md-editor-toolbar li > button) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  min-width: 28px;
+  padding: 5px;
+  border-radius: 6px;
+}
+
+/* The icons carry `width="12"` as an ATTRIBUTE, which CSS overrides. */
+.editor :global(.w-md-editor-toolbar li > button svg) {
+  width: 16px;
+  height: 16px;
+}
+
+.editor :global(.w-md-editor-toolbar-divider) {
+  height: 20px;
+  margin: 0 6px !important;
+}
+
+/* Source text at the body role instead of the vendor's 14px/18px, which sets
+ * an authored document tighter than anything else the admin reads. */
+.editor :global(.w-md-editor-text) {
+  font-size: var(--text-body) !important;
+  line-height: 1.6 !important;
+  padding: 12px;
+}

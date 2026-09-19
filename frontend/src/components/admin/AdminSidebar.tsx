@@ -28,7 +28,7 @@ import {
   SidebarUserDropdown,
   SidebarWorkspaceLogoItem
 } from "@/components/admin/sidebar-shared";
-import { EYEBROW_CLASS } from "@/components/admin/tone";
+import { EYEBROW_CLASS } from "@/components/kit/tone";
 import { cn } from "@/lib/utils";
 
 /**

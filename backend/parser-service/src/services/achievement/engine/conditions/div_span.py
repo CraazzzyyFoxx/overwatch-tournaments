@@ -16,6 +16,7 @@ from typing import Any
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.models.achievements.achievement import AchievementGrain
 from src import models
 
 from ..context import EvalContext
@@ -23,7 +24,13 @@ from . import ResultSet, register
 from .stat_threshold import OPERATORS
 
 
-@register("div_span")
+@register(
+    "div_span",
+    grain=AchievementGrain.user,
+    description="Division climbed between first and last tournament",
+    required=("op", "value"),
+    depends_on=("analytics.player_shift", "tournament.player"),
+)
 async def execute_div_span(
     session: AsyncSession,
     params: dict[str, Any],

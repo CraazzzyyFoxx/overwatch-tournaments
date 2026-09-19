@@ -7,7 +7,7 @@ export type SlotLabelTranslator = (code: RosterSlotCode) => string;
  * "What this roster still needs", rendered from the structured `open_slots` map.
  *
  * The API also ships a ready-made `shortfall` string, built by the backend's
- * `RosterOccupancy.describe_shortfall()`, which reads `"1x dps, 2x support"` — raw
+ * `RosterOccupancy.describe_shortfall()`, which reads `"1x damage, 2x support"` — raw
  * slot codes in an English shape, and it was being interpolated verbatim into a
  * Russian sentence. Building it here fixes that.
  *

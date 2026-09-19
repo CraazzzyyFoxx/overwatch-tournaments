@@ -1,6 +1,6 @@
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
-import { TONE_TEXT, type Tone } from "./tone";
+import { TONE_TEXT, type Tone } from "@/components/kit/tone";
 import type { LucideIcon } from "lucide-react";
 
 /** Kept as the public prop name; maps onto the shared tone vocabulary. */

@@ -30,7 +30,7 @@ speaks HTTP to the outside world.
   `correlation_id`, an `x-deadline-ms` deadline, and a per-queue in-flight bulkhead
   (`GATEWAY_RPC_MAX_INFLIGHT`) that sheds with a 503 when a queue is saturated.
 - **Reverse proxy** — proxies non-API requests (`/`) to the Next.js frontend.
-- **Realtime hub** — a Redis→WebSocket hub at `/ws` and `/api/realtime/ws`, replaying
+- **Realtime hub** — a Redis→WebSocket hub at `/ws` and `/api/v1/realtime/ws`, replaying
   `realtime.workspace_event` rows from Postgres so reconnecting clients catch up.
 - **Response cache** — an in-process, in-memory cache of anonymous public reads
   (`respcache`, default 30s TTL), invalidated by workers' Redis pub/sub.
@@ -47,8 +47,34 @@ speaks HTTP to the outside world.
 internet → Traefik (TLS) → nginx :80 → gateway :8080 →
     ├─ RPC over RabbitMQ → headless workers (rpc.app.* / rpc.identity.* / rpc.tournament.* / rpc.parser.* / rpc.balancer.* / rpc.analytics.*)
     ├─ reverse proxy → frontend (Next.js)
-    └─ /ws + /api/realtime/ws → Redis→WebSocket hub (replay from realtime.workspace_event)
+    └─ /ws + /api/v1/realtime/ws → Redis→WebSocket hub (replay from realtime.workspace_event)
 ```
+
+## URL shape
+
+Every route is `/api/v{n}/<domain>/...` — one version axis, always the second segment, and no
+namespace beside it. `internal/apiver` normalises the inbound path onto that one table before
+routing, which is why there is a single `/api/v1/` 404 guard in `cmd/gateway/main.go` instead
+of one per namespace, and why `internal/respcache` and the OpenAPI specs only ever see
+canonical paths.
+
+| | |
+|---|---|
+| `/api/v1/...` | the contract: unwrapped, FastAPI-shaped JSON |
+| `/api/v2/...` | the same paths, handlers and statuses; body is the RPC envelope (`internal/apierr`) |
+| `/api/docs`, `/api/openapi*.json` | the generated reference — outside the version because it describes the versions |
+| `/api/health` | the frontend container's probe, proxied through |
+| `/bff/*` | the frontend's own cookie-authenticated endpoints, reverse-proxied to Next and never served here |
+
+`auth`, `analytics`, `balancer`, `streams`, `notifications` and `announcements` used to sit
+beside the version. Those spellings are still answered — the table is `apiver.LegacyPrefixes`,
+matched segment-wise so `/api/authx` is untouched — and every legacy response carries
+`Deprecation: true`, `Sunset: <apiver.SunsetDate>` and `Link: <canonical>; rel="successor-version"`.
+Deleting the table is the whole removal: the route tables already speak only canonical paths.
+
+The WebSocket is the one exception to the rewrite. `/ws`, `/api/realtime/ws` and
+`/api/v1/realtime/ws` are three registrations on the outer router, which sits outside `apiver`
+— a hijacked, hour-long connection gains nothing from passing through it.
 
 ## Authentication
 
@@ -58,7 +84,7 @@ route accepts either one.
 | | Session JWT | API key |
 |---|---|---|
 | Format | HS256 JWT | `aqt_sk_<public_id>_<secret>` |
-| Issued by | `POST /api/auth/login` (refreshed via `/api/auth/refresh`) | `POST /api/auth/api-keys` — the plaintext key is returned once and never again |
+| Issued by | `POST /api/v1/auth/login` (refreshed via `/api/v1/auth/refresh`) | `POST /api/v1/auth/api-keys` — the plaintext key is returned once and never again |
 | Lifetime | short, tied to a session that can be revoked | until its `expires_at`, or until revoked |
 | Reach | the caller's full RBAC — global roles/permissions and every workspace | one workspace, and only the permissions the key was scoped to |
 
@@ -90,13 +116,13 @@ reaches a second workspace, and a key with no scopes can do nothing. See
 
 ### Session-only surfaces
 
-`/api/auth` operations that act on the caller's own account or session — logout, session list
-and revoke, `/api/auth/me`, password changes, and creating/updating/revoking API keys — resolve
+`/api/v1/auth` operations that act on the caller's own account or session — logout, session list
+and revoke, `/api/v1/auth/me`, password changes, and creating/updating/revoking API keys — resolve
 the caller by JWT-decoding the bearer inside identity-svc, so an API key is rejected there with
 401. A key can therefore neither mint another key nor extend a session.
-`GET /api/auth/api-keys/self` is the inverse: it describes the calling key, so it needs one.
+`GET /api/v1/auth/api-keys/self` is the inverse: it describes the calling key, so it needs one.
 
-WebSocket connections (`/ws`, `/api/realtime/ws`) accept either credential, but a key
+WebSocket connections (`/ws`, `/api/v1/realtime/ws`) accept either credential, but a key
 authenticates the socket only if it holds at least one grant in its workspace; a zero-scope key
 connects anonymously and cannot subscribe to auth-gated topics.
 

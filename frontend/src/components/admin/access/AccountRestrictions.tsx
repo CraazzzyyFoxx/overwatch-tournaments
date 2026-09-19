@@ -8,7 +8,7 @@ import {
   PermissionPicker,
   type PermissionCatalogEntry
 } from "@/components/admin/access/PermissionPicker";
-import { EYEBROW_CLASS, TONE_CLASS } from "@/components/admin/tone";
+import { EYEBROW_CLASS, TONE_CLASS } from "@/components/kit/tone";
 import { Label } from "@/components/ui/label";
 import {
   Select,

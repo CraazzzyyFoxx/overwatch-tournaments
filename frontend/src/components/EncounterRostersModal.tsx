@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { Skeleton } from "@/components/ui/skeleton";
-import EncounterRosterPanel from "@/app/(site)/encounters/[id]/components/EncounterRosterPanel";
+import EncounterRosterPanel from "@/components/match/EncounterRosterPanel";
 import encounterService from "@/services/encounter.service";
 
 interface EncounterRostersModalProps {

@@ -3,7 +3,7 @@
 import { useId } from "react";
 import { useFormatter, useTranslations } from "next-intl";
 
-import { PANEL_CLASS } from "@/app/balancer/components/balancer-page-helpers";
+import { PANEL_CLASS } from "@/components/balancer/balancer-page-helpers";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import {
   Select,

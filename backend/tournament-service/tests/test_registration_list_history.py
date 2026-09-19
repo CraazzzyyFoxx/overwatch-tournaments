@@ -143,7 +143,7 @@ class BuildTournamentHistoryTests(IsolatedAsyncioTestCase):
         # Tournament 50 appears twice (e.g. main + substitution); 40 once. No rank.
         rows = [
             _row(50, 100, rank=None),
-            _row(50, 100, rank=None, role="dps"),
+            _row(50, 100, rank=None, role="damage"),
             _row(40, 100, rank=None),
         ]
 

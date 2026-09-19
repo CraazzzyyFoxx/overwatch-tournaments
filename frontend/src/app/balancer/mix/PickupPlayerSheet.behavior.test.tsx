@@ -38,7 +38,7 @@ vi.mock("@/components/DivisionIcon", () => ({ default: () => null }));
 vi.mock("@/components/RankHistory", () => ({ default: () => null }));
 // Drag itself is not what this pins, and dnd-kit resolves its own React copy
 // under pnpm, so the sortable wrapper and its hook render inertly here.
-vi.mock("@/app/balancer/components/SortableRows", () => ({
+vi.mock("@/components/kit/SortableRows", () => ({
   SortableRows: ({
     items,
     children,
@@ -71,9 +71,9 @@ function row(overrides: Partial<CustomGamePlayer> = {}): CustomGamePlayer {
     battle_tag: "Aria#1111",
     sort_order: 0,
     participation: "pool",
-    roles: ["tank", "dps"],
-    ranks: { tank: 3300, dps: 2700, support: 2900 },
-    rank_sources: { tank: "author", dps: "workspace", support: "ow" },
+    roles: ["tank", "damage"],
+    ranks: { tank: 3300, damage: 2700, support: 2900 },
+    rank_sources: { tank: "author", damage: "workspace", support: "ow" },
     author_ranks: { tank: 3300 },
     ...overrides,
   };
@@ -178,16 +178,16 @@ describe("PickupPlayerSheet ranks", () => {
     const [patch, rankChange] = onSave.mock.calls[0];
     expect(patch).toEqual({
       participation: "pool",
-      roles: ["tank", "dps"],
+      roles: ["tank", "damage"],
       is_flex: false,
     });
-    expect(rankChange).toEqual({ ranks: { dps: 3000 }, clear: [] });
+    expect(rankChange).toEqual({ ranks: { damage: 3000 }, clear: [] });
   });
 
   it("offers Clear only where the host has an entry of their own, and stages it for Save", async () => {
     const scope = await mount();
 
-    // Tank alone comes from the author's own book; dps/support are inherited, so
+    // Tank alone comes from the author's own book; damage/support are inherited, so
     // a Clear on either would drop nothing.
     const buttons = clearButtons(scope);
     expect(buttons).toHaveLength(1);
@@ -236,25 +236,25 @@ describe("PickupPlayerSheet ranks", () => {
 
 describe("PickupPlayerSheet priority", () => {
   it("keeps the host's stored role order instead of re-sorting by rank", async () => {
-    // Stored order says dps-then-tank; the ranks say the opposite (tank
-    // outranks dps). The order shown, and the order Save writes, must stay
+    // Stored order says damage-then-tank; the ranks say the opposite (tank
+    // outranks damage). The order shown, and the order Save writes, must stay
     // exactly what the host stored.
     const scope = await mount(
-      row({ roles: ["dps", "tank"], ranks: { tank: 3300, dps: 2700, support: 2900 } }),
+      row({ roles: ["damage", "tank"], ranks: { tank: 3300, damage: 2700, support: 2900 } }),
     );
 
     expect(rankFields(scope).map((node) => node.value)).toEqual(["2700", "3300", "2900"]);
 
     await click(findButton(scope, "Save"));
     const [patch] = onSave.mock.calls[0];
-    expect(patch.roles).toEqual(["dps", "tank"]);
+    expect(patch.roles).toEqual(["damage", "tank"]);
   });
 
   it("appends a role turned on to the end of the order, not a rank-sorted slot", async () => {
     // Support outranks both selected roles, but switching it on must not jump
     // it to the front.
     const scope = await mount(
-      row({ roles: ["tank", "dps"], ranks: { tank: 2000, dps: 2700, support: 4000 } }),
+      row({ roles: ["tank", "damage"], ranks: { tank: 2000, damage: 2700, support: 4000 } }),
     );
 
     const supportSwitch = scope.querySelector<HTMLElement>('[aria-label="Support for Aria#1111"]');
@@ -263,11 +263,11 @@ describe("PickupPlayerSheet priority", () => {
 
     await click(findButton(scope, "Save"));
     const [patch] = onSave.mock.calls[0];
-    expect(patch.roles).toEqual(["tank", "dps", "support"]);
+    expect(patch.roles).toEqual(["tank", "damage", "support"]);
   });
 
   it("drops a role turned off from the order without touching the rest", async () => {
-    const scope = await mount(row({ roles: ["tank", "dps"] }));
+    const scope = await mount(row({ roles: ["tank", "damage"] }));
 
     const tankSwitch = scope.querySelector<HTMLElement>('[aria-label="Tank for Aria#1111"]');
     if (!tankSwitch) throw new Error("Tank switch not found");
@@ -275,7 +275,7 @@ describe("PickupPlayerSheet priority", () => {
 
     await click(findButton(scope, "Save"));
     const [patch] = onSave.mock.calls[0];
-    expect(patch.roles).toEqual(["dps"]);
+    expect(patch.roles).toEqual(["damage"]);
   });
 });
 

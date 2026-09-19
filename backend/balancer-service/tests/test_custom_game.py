@@ -153,7 +153,7 @@ def _ranks(*member_ids: int) -> dict[tuple[int, str], ResolvedRank]:
     out: dict[tuple[int, str], ResolvedRank] = {}
     for member_id in member_ids:
         out[(member_id, "tank")] = ResolvedRank(2500, "workspace")
-        out[(member_id, "dps")] = ResolvedRank(2400, "workspace")
+        out[(member_id, "damage")] = ResolvedRank(2400, "workspace")
         out[(member_id, "support")] = ResolvedRank(2300, "workspace")
     return out
 
@@ -329,7 +329,7 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
         )
         self.games.get.return_value = source
         self.roster.list_for_game.return_value = [
-            _roster_row(1, 7, 0, participation=MixParticipation.BENCHED, roles=["tank", "dps"], is_flex=True),
+            _roster_row(1, 7, 0, participation=MixParticipation.BENCHED, roles=["tank", "damage"], is_flex=True),
             _roster_row(2, 8, 1, participation=MixParticipation.MUST_PLAY),
         ]
         self.roster.create_many = AsyncMock(side_effect=self._assign_roster_ids)
@@ -356,7 +356,7 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
             [MixRoleSelectionMode.EXPLICIT, MixRoleSelectionMode.ALL_RANKED],
         )
         self.assertEqual([row.is_flex for row in rows], [True, False])
-        self.player_roles.replace_for_player.assert_awaited_once_with(self.session, 101, ["tank", "dps"])
+        self.player_roles.replace_for_player.assert_awaited_once_with(self.session, 101, ["tank", "damage"])
         # No shape and no points knob travel: they are not the mix's to copy,
         # they live on the host's account and the new mix already reads them.
         self.assertEqual(
@@ -733,7 +733,7 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
         self.roster.list_for_game.return_value = [_roster_row(1, 7, 0)]
         self.ranks.resolve.return_value = {
             (7, "tank"): ResolvedRank(None, "none"),
-            (7, "dps"): ResolvedRank(None, "none"),
+            (7, "damage"): ResolvedRank(None, "none"),
             (7, "support"): ResolvedRank(None, "none"),
         }
         with self.assertRaises(HTTPException) as ctx:
@@ -744,7 +744,7 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
 
     async def test_balance_uses_role_order_as_priority(self) -> None:
         self.games.get.return_value = _game()
-        self.roster.list_for_game.return_value = [_roster_row(1, 7, 0, roles=["support", "dps"])]
+        self.roster.list_for_game.return_value = [_roster_row(1, 7, 0, roles=["support", "damage"])]
         self.ranks.resolve.return_value = _ranks(7)
         self.run_balance.return_value = {"teams": []}
 
@@ -752,12 +752,12 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
 
         classes = self.run_balance.await_args.args[0]["players"]["7"]["stats"]["classes"]
         self.assertEqual(classes["support"]["priority"], 1)
-        self.assertEqual(classes["dps"]["priority"], 2)
+        self.assertEqual(classes["damage"]["priority"], 2)
         self.assertNotIn("tank", classes)
 
     async def test_update_roster_keeps_surviving_row_state(self) -> None:
         game = _game()
-        keep = _roster_row(1, 7, 0, participation=MixParticipation.BENCHED, roles=["dps"])
+        keep = _roster_row(1, 7, 0, participation=MixParticipation.BENCHED, roles=["damage"])
         drop = _roster_row(2, 8, 1)
         self.games.get.return_value = game
         self.roster.list_for_game.return_value = [keep, drop]
@@ -770,7 +770,7 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
         created = self.roster.create_many.await_args.args[1]
         self.assertEqual([row.workspace_member_id for row in created], [9])
         self.assertEqual(keep.participation, MixParticipation.BENCHED)
-        self.assertEqual(keep.roles, ["dps"])
+        self.assertEqual(keep.roles, ["damage"])
         self.assertEqual(keep.sort_order, 1)
 
     async def test_update_roster_keeps_stored_balance(self) -> None:
@@ -812,7 +812,7 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
         self.assertEqual(sorted(seeded), [7, 8])
         self.assertEqual(seeded[7]["author_user_id"], 9)
         self.assertEqual(seeded[7]["workspace_id"], 1)
-        self.assertEqual(seeded[7]["ranks"], {"tank": 2500, "dps": 2400, "support": 2300})
+        self.assertEqual(seeded[7]["ranks"], {"tank": 2500, "damage": 2400, "support": 2300})
         kwargs = self.ranks.resolve.await_args.kwargs
         self.assertEqual(kwargs["order"], MIX_ORDER)
         self.assertEqual(kwargs["author_user_id"], 9)
@@ -822,7 +822,7 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
         """Re-adding somebody must not undo a correction the host already made."""
         self.ranks.resolve.return_value = {
             (7, "tank"): ResolvedRank(3000, "author"),
-            (7, "dps"): ResolvedRank(2400, "workspace"),
+            (7, "damage"): ResolvedRank(2400, "workspace"),
             (7, "support"): ResolvedRank(None, "none"),
         }
 
@@ -832,7 +832,7 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
 
         # Only the inherited role is copied; an unranked one stays unranked
         # rather than being invented from nothing.
-        self.assertEqual(self.ranks.set_ranks.await_args.kwargs["ranks"], {"dps": 2400})
+        self.assertEqual(self.ranks.set_ranks.await_args.kwargs["ranks"], {"damage": 2400})
 
     async def test_seeding_skips_a_player_with_no_rank_anywhere(self) -> None:
         self.ranks.resolve.return_value = {}
@@ -882,13 +882,13 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
                         {
                             "roster": {
                                 "tank": [self._seat("7", "Alpha", 3200, "tank")],
-                                "dps": [self._seat("8", "Bravo", 2900, "dps")],
+                                "damage": [self._seat("8", "Bravo", 2900, "damage")],
                             }
                         },
                         {
                             "roster": {
                                 "tank": [self._seat("9", "Charlie", 2600, "tank")],
-                                "dps": [self._seat("10", "Delta", 3000, "dps")],
+                                "damage": [self._seat("10", "Delta", 3000, "damage")],
                             }
                         },
                     ]
@@ -1135,7 +1135,7 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
                         {
                             "roster": {
                                 "tank": [self._seat("7", "Alpha", 3200, "tank")],
-                                "dps": [self._seat("8", "Bravo", 2900, "dps")],
+                                "damage": [self._seat("8", "Bravo", 2900, "damage")],
                             }
                         },
                         {"roster": {"tank": [self._seat("9", "Charlie", 2600, "tank")]}},
@@ -1149,7 +1149,7 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
         self.host_prefs.get_by_user.return_value = _prefs(points_per_win=25)
         # Member 9 has no author-layer entry yet -- the write must fall back to
         # their balance-time rating (2600) instead of dropping the adjustment.
-        self.ranks.list_layer = AsyncMock(return_value={(7, "tank"): 2500, (8, "dps"): 2800})
+        self.ranks.list_layer = AsyncMock(return_value={(7, "tank"): 2500, (8, "damage"): 2800})
 
         await self.service.record_outcome(
             self.session,
@@ -1168,7 +1168,7 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
             calls,
             {
                 (7, 9, (("tank", 2525),)),
-                (8, 9, (("dps", 2825),)),
+                (8, 9, (("damage", 2825),)),
                 (9, 9, (("tank", 2575),)),
             },
         )
@@ -1289,7 +1289,7 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
         self.host_prefs.get_by_user.return_value = _prefs(points_per_win=999)
         self.casual_matches.get_for_game.return_value = match
         self.casual_matches.newest_id_for_game.return_value = 501
-        self.ranks.list_layer = AsyncMock(return_value={(7, "tank"): 2525, (8, "dps"): 2825, (9, "tank"): 2575})
+        self.ranks.list_layer = AsyncMock(return_value={(7, "tank"): 2525, (8, "damage"): 2825, (9, "tank"): 2575})
 
         await self.service.undo_last_match(
             self.session, workspace_id=1, custom_game_id=11, match_id=501, actor_user_id=9
@@ -1303,7 +1303,7 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
             calls,
             {
                 (7, 9, (("tank", 2500),)),
-                (8, 9, (("dps", 2800),)),
+                (8, 9, (("damage", 2800),)),
                 (9, 9, (("tank", 2600),)),
             },
         )
@@ -1383,8 +1383,8 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
                     "win_rate": 1.0,
                     "streak": 1,
                     "last_played_at": played_at.isoformat(),
-                    # The canonical ``damage`` role reaches the wire as ``dps``.
-                    "by_role": {"dps": {"games": 1, "wins": 1, "losses": 0, "draws": 0}},
+                    # ``by_role`` is keyed by the canonical role code.
+                    "by_role": {"damage": {"games": 1, "wins": 1, "losses": 0, "draws": 0}},
                 },
                 {
                     "workspace_member_id": 8,
@@ -1872,7 +1872,7 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
         """The shape is the host's, so it wins over the workspace default -- and
         the source says which stored level it came from."""
         self.host_prefs.get_by_user.return_value = _prefs(role_slots_json={"flex": 6})
-        self.workspace_roster_slots.return_value = {"tank": 1, "dps": 2, "support": 2}
+        self.workspace_roster_slots.return_value = {"tank": 1, "damage": 2, "support": 2}
 
         shape = await self.service.roster_shape(self.session, workspace_id=1, host_user_id=9)
 
@@ -1891,7 +1891,7 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
     async def test_roster_shape_falls_back_to_the_builtin_default(self) -> None:
         shape = await self.service.roster_shape(self.session, workspace_id=1, host_user_id=9)
 
-        self.assertEqual(shape.slots, {"tank": 1, "dps": 2, "support": 2})
+        self.assertEqual(shape.slots, {"tank": 1, "damage": 2, "support": 2})
         self.assertEqual(shape.source, "default")
 
     async def test_roster_shape_of_a_hostless_mix_inherits(self) -> None:
@@ -1952,7 +1952,7 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
                             "average_mmr": 3050,
                             "roster": {
                                 "tank": [self._seat("p1", "Alpha", 3200, "tank")],
-                                "dps": [self._seat("p2", "Bravo", 2900, "dps")],
+                                "damage": [self._seat("p2", "Bravo", 2900, "damage")],
                             },
                         },
                         {
@@ -1960,7 +1960,7 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
                             "average_mmr": 2800,
                             "roster": {
                                 "tank": [self._seat("p3", "Charlie", 2600, "tank")],
-                                "dps": [self._seat("p4", "Delta", 3000, "dps")],
+                                "damage": [self._seat("p4", "Delta", 3000, "damage")],
                             },
                         },
                     ],
@@ -2041,9 +2041,9 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
 
     async def test_swap_seats_counts_off_role_after_the_move(self) -> None:
         result = self._two_team_result()
-        # Bravo actually prefers tank but was seated at dps -- already off-role
+        # Bravo actually prefers tank but was seated at damage -- already off-role
         # before the swap, and moving them must not silently "fix" that count.
-        result["variants"][0]["teams"][0]["roster"]["dps"][0]["role_preferences"] = ["tank", "dps"]
+        result["variants"][0]["teams"][0]["roster"]["damage"][0]["role_preferences"] = ["tank", "damage"]
         self.games.get.return_value = _game(balance_result_json=result)
 
         game = await self.service.swap_seats(
@@ -2160,7 +2160,7 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
 
         # players_per_team=2, pool of 3 -> exactly one seat short next map.
         self.games.get.return_value = _game()
-        self.host_prefs.get_by_user.return_value = _prefs(role_slots_json={"tank": 1, "dps": 1})
+        self.host_prefs.get_by_user.return_value = _prefs(role_slots_json={"tank": 1, "damage": 1})
         self.roster.list_for_game.return_value = [
             _roster_row(1, 7, 0, created_at=0),
             _roster_row(2, 8, 1, created_at=0),
@@ -2189,7 +2189,7 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
 
         # players_per_team=2, pool of 3 -> one seat short.
         self.games.get.return_value = _game()
-        self.host_prefs.get_by_user.return_value = _prefs(role_slots_json={"tank": 1, "dps": 1})
+        self.host_prefs.get_by_user.return_value = _prefs(role_slots_json={"tank": 1, "damage": 1})
         self.roster.list_for_game.return_value = [
             _roster_row(1, 7, 0, created_at=0),
             _roster_row(2, 8, 1, created_at=0),

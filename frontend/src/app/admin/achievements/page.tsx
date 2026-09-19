@@ -35,11 +35,11 @@ import {
 } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { AdminDataTable, adminColumnMeta } from "@/components/admin-data-table";
+import { AdminDataTable, adminColumnMeta } from "@/components/data-table";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { StatusIcon } from "@/components/admin/StatusIcon";
-import { EntityFormDialog } from "@/components/admin/EntityFormDialog";
-import { ConfirmDialog } from "@/components/admin/kit/ConfirmDialog";
+import { EntityFormDialog } from "@/components/kit/EntityFormDialog";
+import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
 import { AchievementCombobox } from "@/components/admin/achievements/AchievementCombobox";
 import { EvaluationRunSummary } from "@/components/admin/achievements/EvaluationRunSummary";
 import { TournamentCombobox } from "@/components/admin/TournamentCombobox";
@@ -105,7 +105,7 @@ import {
   MAX_ACHIEVEMENT_IMAGE_BYTES
 } from "@/lib/achievement-image";
 import { useWorkspaceStore } from "@/stores/workspace.store";
-import { EmptyNote } from "@/components/admin/kit/EmptyNote";
+import { EmptyNote } from "@/components/kit/EmptyNote";
 
 const CATEGORIES: AchievementCategory[] = ["overall", "hero", "division", "team", "standing", "match"];
 const SCOPES: AchievementScope[] = ["global", "tournament", "match"];

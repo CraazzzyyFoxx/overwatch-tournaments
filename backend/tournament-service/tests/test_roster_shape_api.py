@@ -75,6 +75,7 @@ def _tournament(
         # Plain columns the serializer reads: unset on a detached instance means
         # a refresh attempt, not NULL.
         cover_image_url=None,
+        rules=None,
         logo_url=None,
     )
     # Detached, so `_loaded_relationship` reports unloaded relationships instead
@@ -162,7 +163,7 @@ class RosterShapeResolutionTests(IsolatedAsyncioTestCase):
 
         assert read.roster_shape is not None
         self.assertEqual("default", read.roster_shape.source)
-        self.assertEqual({"tank": 1, "dps": 2, "support": 2}, read.roster_shape.slots)
+        self.assertEqual({"tank": 1, "damage": 2, "support": 2}, read.roster_shape.slots)
         self.assertEqual(5, read.roster_shape.team_size)
         self.assertEqual(4, read.roster_shape.draft_rounds)
         self.assertIs(True, read.roster_shape.has_role_slots)
@@ -172,24 +173,24 @@ class RosterShapeResolutionTests(IsolatedAsyncioTestCase):
         read, _ = await _read(
             _tournament(tournament_id=2),
             ["roster_shape"],
-            workspace_slots={"tank": 2, "dps": 2, "support": 2},
+            workspace_slots={"tank": 2, "damage": 2, "support": 2},
         )
 
         assert read.roster_shape is not None
         self.assertEqual("workspace", read.roster_shape.source)
-        self.assertEqual({"tank": 2, "dps": 2, "support": 2}, read.roster_shape.slots)
+        self.assertEqual({"tank": 2, "damage": 2, "support": 2}, read.roster_shape.slots)
         self.assertEqual(6, read.roster_shape.team_size)
 
     async def test_tournament_override_wins_over_workspace_default(self) -> None:
         read, _ = await _read(
-            _tournament(tournament_id=3, roster_slots_json={"tank": 1, "dps": 1, "support": 1}),
+            _tournament(tournament_id=3, roster_slots_json={"tank": 1, "damage": 1, "support": 1}),
             ["roster_shape"],
-            workspace_slots={"tank": 2, "dps": 2, "support": 2},
+            workspace_slots={"tank": 2, "damage": 2, "support": 2},
         )
 
         assert read.roster_shape is not None
         self.assertEqual("tournament", read.roster_shape.source)
-        self.assertEqual({"tank": 1, "dps": 1, "support": 1}, read.roster_shape.slots)
+        self.assertEqual({"tank": 1, "damage": 1, "support": 1}, read.roster_shape.slots)
         self.assertEqual(3, read.roster_shape.team_size)
 
     async def test_override_equal_to_workspace_default_still_reads_as_tournament(self) -> None:
@@ -197,7 +198,7 @@ class RosterShapeResolutionTests(IsolatedAsyncioTestCase):
         # admin must see the shape is pinned on the tournament rather than
         # inherited, otherwise editing the workspace default looks like it will
         # move this tournament -- and it will not.
-        slots = {"tank": 1, "dps": 2, "support": 2}
+        slots = {"tank": 1, "damage": 2, "support": 2}
         read, _ = await _read(
             _tournament(tournament_id=4, roster_slots_json=dict(slots)),
             ["roster_shape"],
@@ -261,7 +262,7 @@ class RosterShapeOptInTests(IsolatedAsyncioTestCase):
         # The raw override column is a plain column, not an entity: the admin
         # form needs to distinguish "no override" from "override equal to the
         # inherited value" without asking for the resolved shape.
-        override = {"tank": 2, "dps": 2, "support": 2}
+        override = {"tank": 2, "damage": 2, "support": 2}
         with_entity, _ = await _read(
             _tournament(tournament_id=9, roster_slots_json=dict(override)),
             ["roster_shape"],
@@ -330,11 +331,11 @@ class RosterShapeReadSchemaTests(IsolatedAsyncioTestCase):
         read = schemas.RosterShapeRead.from_shape(DEFAULT_ROSTER_SHAPE, source="default")
 
         payload = read.model_dump_json()
-        self.assertIn('"slots":{"tank":1,"dps":2,"support":2}', payload.replace(" ", ""))
+        self.assertIn('"slots":{"tank":1,"damage":2,"support":2}', payload.replace(" ", ""))
 
         dumped = read.model_dump(mode="json")
         self.assertIs(dict, type(dumped["slots"]))
-        self.assertEqual({"tank": 1, "dps": 2, "support": 2}, dumped["slots"])
+        self.assertEqual({"tank": 1, "damage": 2, "support": 2}, dumped["slots"])
 
     def test_source_is_constrained_to_the_three_levels(self) -> None:
         with self.assertRaises(ValueError):
@@ -347,7 +348,7 @@ class AdminTournamentSerializerTests(IsolatedAsyncioTestCase):
         # Without the entity it would render an empty roster form and nobody
         # would notice until a human opened the page.
         get_workspace = _workspace_level(None)
-        tournament = _tournament(tournament_id=12, roster_slots_json={"tank": 2, "dps": 2, "support": 2})
+        tournament = _tournament(tournament_id=12, roster_slots_json={"tank": 2, "damage": 2, "support": 2})
 
         with _patched(get_workspace):
             dumped = await registry.registry_service._ser_tournament(
@@ -356,9 +357,9 @@ class AdminTournamentSerializerTests(IsolatedAsyncioTestCase):
 
         self.assertIsNotNone(dumped["roster_shape"])
         self.assertEqual("tournament", dumped["roster_shape"]["source"])
-        self.assertEqual({"tank": 2, "dps": 2, "support": 2}, dumped["roster_shape"]["slots"])
+        self.assertEqual({"tank": 2, "damage": 2, "support": 2}, dumped["roster_shape"]["slots"])
         self.assertEqual(6, dumped["roster_shape"]["team_size"])
-        self.assertEqual({"tank": 2, "dps": 2, "support": 2}, dumped["roster_slots_json"])
+        self.assertEqual({"tank": 2, "damage": 2, "support": 2}, dumped["roster_slots_json"])
         # The Settings tab needs the lock alongside the shape: without it the
         # editor stays enabled and the block only surfaces as a 400 on save.
         self.assertIs(True, dumped["roster_locked_by_draft"])

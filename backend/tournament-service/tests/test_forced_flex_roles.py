@@ -76,16 +76,16 @@ class TestForcedFlexEnabled:
 
 class TestApplyAllRolesForced:
     def test_promotes_every_role_to_primary(self) -> None:
-        entries = [_role("dps", is_primary=True), _role("tank", is_primary=False)]
+        entries = [_role("damage", is_primary=True), _role("tank", is_primary=False)]
 
         result = _common.apply_all_roles(entries, force_primary=True)
 
         assert all(entry.is_primary for entry in result)
 
     def test_backfills_the_missing_roles(self) -> None:
-        result = _common.apply_all_roles([_role("dps", is_primary=True)], force_primary=True)
+        result = _common.apply_all_roles([_role("damage", is_primary=True)], force_primary=True)
 
-        assert {entry.role for entry in result} == {"tank", "dps", "support"}
+        assert {entry.role for entry in result} == {"tank", "damage", "support"}
 
     def test_keeps_the_submitted_order_and_renumbers_priority(self) -> None:
         entries = [_role("support", priority=0), _role("tank", priority=1)]
@@ -97,26 +97,26 @@ class TestApplyAllRolesForced:
 
     def test_does_not_touch_is_active_or_rank(self) -> None:
         """The max-rank policy is derived at read time; rows stay honest."""
-        entries = [_role("dps", is_primary=True, is_active=False, rank_value=3500)]
+        entries = [_role("damage", is_primary=True, is_active=False, rank_value=3500)]
 
         result = _common.apply_all_roles(entries, force_primary=True)
 
-        dps = next(entry for entry in result if entry.role == "dps")
-        assert dps.is_active is False
-        assert dps.rank_value == 3500
+        damage = next(entry for entry in result if entry.role == "damage")
+        assert damage.is_active is False
+        assert damage.rank_value == 3500
 
     def test_backfilled_roles_carry_no_rank(self) -> None:
-        result = _common.apply_all_roles([_role("dps", rank_value=3500)], force_primary=True)
+        result = _common.apply_all_roles([_role("damage", rank_value=3500)], force_primary=True)
 
-        assert [entry.rank_value for entry in result if entry.role != "dps"] == [None, None]
+        assert [entry.rank_value for entry in result if entry.role != "damage"] == [None, None]
 
     def test_backfilled_roles_carry_no_subrole(self) -> None:
-        result = _common.apply_all_roles([_role("dps", subrole="hitscan")], force_primary=True)
+        result = _common.apply_all_roles([_role("damage", subrole="hitscan")], force_primary=True)
 
-        assert [entry.subrole for entry in result if entry.role != "dps"] == [None, None]
+        assert [entry.subrole for entry in result if entry.role != "damage"] == [None, None]
 
     def test_is_idempotent(self) -> None:
-        once = _common.apply_all_roles([_role("dps", is_primary=True)], force_primary=True)
+        once = _common.apply_all_roles([_role("damage", is_primary=True)], force_primary=True)
         twice = _common.apply_all_roles(once, force_primary=True)
 
         assert [(entry.role, entry.priority, entry.is_primary) for entry in twice] == [
@@ -124,18 +124,18 @@ class TestApplyAllRolesForced:
         ]
 
     def test_a_full_submission_is_unchanged_apart_from_is_primary(self) -> None:
-        entries = [_role("tank", priority=0), _role("dps", priority=1), _role("support", priority=2)]
+        entries = [_role("tank", priority=0), _role("damage", priority=1), _role("support", priority=2)]
 
         result = _common.apply_all_roles(entries, force_primary=True)
 
         assert len(result) == 3
-        assert [entry.role for entry in result] == ["tank", "dps", "support"]
+        assert [entry.role for entry in result] == ["tank", "damage", "support"]
 
     def test_empty_input_yields_all_three_roles(self) -> None:
         """A forced-flex tournament has no notion of a registration without roles."""
         result = _common.apply_all_roles([], force_primary=True)
 
-        assert {entry.role for entry in result} == {"tank", "dps", "support"}
+        assert {entry.role for entry in result} == {"tank", "damage", "support"}
         assert all(entry.is_primary for entry in result)
 
 
@@ -157,26 +157,26 @@ class TestWritePathsHonourForcedFlex:
 
     def test_public_path_forced(self) -> None:
         entries = _service.build_registration_roles(
-            [self._PublicRole("dps", is_primary=True)],
+            [self._PublicRole("damage", is_primary=True)],
             mode="forced",
         )
 
-        assert {entry.role for entry in entries} == {"tank", "dps", "support"}
+        assert {entry.role for entry in entries} == {"tank", "damage", "support"}
         assert all(entry.is_primary for entry in entries)
 
     def test_public_path_optional_is_unchanged(self) -> None:
-        entries = _service.build_registration_roles([self._PublicRole("dps", is_primary=True)])
+        entries = _service.build_registration_roles([self._PublicRole("damage", is_primary=True)])
 
-        assert [entry.role for entry in entries] == ["dps"]
+        assert [entry.role for entry in entries] == ["damage"]
 
     def test_public_path_keeps_the_submitted_subrole(self) -> None:
         entries = _service.build_registration_roles(
-            [self._PublicRole("dps", is_primary=True, subrole="hitscan")],
+            [self._PublicRole("damage", is_primary=True, subrole="hitscan")],
             mode="forced",
         )
 
-        dps = next(entry for entry in entries if entry.role == "dps")
-        assert dps.subrole == "hitscan"
+        damage = next(entry for entry in entries if entry.role == "damage")
+        assert damage.subrole == "hitscan"
 
     def test_admin_path_forced(self) -> None:
         registration = _common.models.BalancerRegistration()
@@ -188,7 +188,7 @@ class TestWritePathsHonourForcedFlex:
             mode="forced",
         )
 
-        assert {entry.role for entry in registration.roles} == {"tank", "dps", "support"}
+        assert {entry.role for entry in registration.roles} == {"tank", "damage", "support"}
         assert all(entry.is_primary for entry in registration.roles)
 
     def test_admin_path_preserves_rank_and_is_active(self) -> None:
@@ -222,18 +222,18 @@ class TestWritePathsHonourForcedFlex:
     def test_admin_path_reuses_existing_rows(self) -> None:
         """Re-syncing must not orphan the row a rank was already attached to."""
         registration = _common.models.BalancerRegistration()
-        existing = _common.models.BalancerRegistrationRole(role="dps", rank_value=4100)
+        existing = _common.models.BalancerRegistrationRole(role="damage", rank_value=4100)
         registration.roles = [existing]
 
         _common.replace_registration_roles(
             registration,
-            [{"role": "dps", "is_primary": True, "rank_value": 4100}],
+            [{"role": "damage", "is_primary": True, "rank_value": 4100}],
             mode="forced",
         )
 
-        dps = next(entry for entry in registration.roles if entry.role == "dps")
-        assert dps is existing
-        assert dps.rank_value == 4100
+        damage = next(entry for entry in registration.roles if entry.role == "damage")
+        assert damage is existing
+        assert damage.rank_value == 4100
 
 
 class TestFlexRoleModeReader:
@@ -264,13 +264,13 @@ class TestApplyAllRolesWithoutForcing:
     """``all_roles`` normalizes the role SET but never the registrant's choice."""
 
     def test_backfills_the_missing_roles_as_non_primary(self) -> None:
-        result = _common.apply_all_roles([_role("dps", is_primary=True)], force_primary=False)
+        result = _common.apply_all_roles([_role("damage", is_primary=True)], force_primary=False)
 
-        assert {entry.role for entry in result} == {"tank", "dps", "support"}
-        assert [entry.role for entry in result if entry.is_primary] == ["dps"]
+        assert {entry.role for entry in result} == {"tank", "damage", "support"}
+        assert [entry.role for entry in result if entry.is_primary] == ["damage"]
 
     def test_leaves_a_flex_submission_flex(self) -> None:
-        entries = [_role(code, is_primary=True) for code in ("tank", "dps", "support")]
+        entries = [_role(code, is_primary=True) for code in ("tank", "damage", "support")]
 
         result = _common.apply_all_roles(entries, force_primary=False)
 
@@ -278,7 +278,7 @@ class TestApplyAllRolesWithoutForcing:
 
     def test_does_not_invent_a_priority_when_none_was_named(self) -> None:
         """The normalizer cannot guess; validation rejects this instead."""
-        result = _common.apply_all_roles([_role("dps")], force_primary=False)
+        result = _common.apply_all_roles([_role("damage")], force_primary=False)
 
         assert not any(entry.is_primary for entry in result)
 
@@ -292,7 +292,7 @@ class TestApplyAllRolesWithoutForcing:
             mode="all_roles",
         )
 
-        assert {entry.role for entry in registration.roles} == {"tank", "dps", "support"}
+        assert {entry.role for entry in registration.roles} == {"tank", "damage", "support"}
         assert [entry.role for entry in registration.roles if entry.is_primary] == ["tank"]
 
     def test_write_path_forced_still_promotes_everything(self) -> None:
@@ -320,5 +320,5 @@ class TestApplyAllRolesWithoutForcing:
             mode="all_roles",
         )
 
-        assert {entry.role for entry in entries} == {"tank", "dps", "support"}
+        assert {entry.role for entry in entries} == {"tank", "damage", "support"}
         assert [entry.role for entry in entries if entry.is_primary] == ["support"]

@@ -7,7 +7,7 @@ import type { AccountSession } from "@/types/auth.types";
 const ACCOUNT_SESSIONS_QUERY_KEY = ["account", "sessions"] as const;
 
 async function fetchSessions(): Promise<AccountSession[]> {
-  const response = await fetch("/api/account/sessions", {
+  const response = await fetch("/bff/account/sessions", {
     method: "GET",
     cache: "no-store",
   });
@@ -22,7 +22,7 @@ async function fetchSessions(): Promise<AccountSession[]> {
 }
 
 async function revokeSession(sessionId: string): Promise<void> {
-  const response = await fetch(`/api/account/sessions/${encodeURIComponent(sessionId)}`, {
+  const response = await fetch(`/bff/account/sessions/${encodeURIComponent(sessionId)}`, {
     method: "DELETE",
   });
 

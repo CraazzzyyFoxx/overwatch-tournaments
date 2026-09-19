@@ -65,18 +65,13 @@ def resolve_slot_role(role: str | None, *, on_unresolved: OnUnresolved) -> HeroC
 
     ``flex`` is a real slot, not bad input: a role-less roster assigns no game
     role and ``HeroClass.flex`` is how that survives the import.
-
-    ``"damage"`` is accepted alongside ``"dps"`` because balancer-service
-    tolerated both. It is unreachable through either current caller (both payload
-    schemas validate ``role`` against ``RosterSlotCode``), so keeping it changes
-    no behaviour and costs nothing.
     """
     if role is None:
         return None
     normalized = role.lower()
     if normalized == "tank":
         return HeroClass.tank
-    if normalized in {"dps", "damage"}:
+    if normalized == "damage":
         return HeroClass.damage
     if normalized == "support":
         return HeroClass.support

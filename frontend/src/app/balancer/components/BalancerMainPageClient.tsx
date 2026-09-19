@@ -34,7 +34,7 @@ import type {
   BalancerPlayerExportFormat,
   BalancerRoleCode
 } from "@/types/balancer-admin.types";
-import type { BalancerConfig } from "@/types/balancer.types";
+import type { BalancerConfig, BalancerConfigValue } from "@/types/balancer.types";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
@@ -67,7 +67,7 @@ import {
   upsertSavedVariant,
   buildBalancerPageCollections
 } from "./balancer-page-selectors";
-import { PRESET_LABELS } from "./balancer-page-helpers";
+import { PRESET_LABELS } from "@/components/balancer/balancer-page-helpers";
 import {
   buildTeamNamesText,
   buildVariantFromSavedBalance,
@@ -75,7 +75,7 @@ import {
   downloadPlayersExport,
   getPlayerValidationIssues,
   type BalanceVariant
-} from "./workspace-helpers";
+} from "@/components/balancer/workspace-helpers";
 
 const EXPORT_TO_TOURNAMENT_STEPS: BalancerOperationStepDefinition[] = [
   {
@@ -480,7 +480,7 @@ export function BalancerMainPageClient() {
     [balancerConfigQuery.data]
   );
 
-  const handleConfigFieldChange = useCallback((key: keyof BalancerConfig, value: unknown) => {
+  const handleConfigFieldChange = useCallback((key: string, value: BalancerConfigValue) => {
     setSelectedPreset(CUSTOM_PRESET);
     setDraftConfig((current) => sanitizeBalancerConfig({ ...current, [key]: value }));
   }, []);
@@ -639,7 +639,7 @@ export function BalancerMainPageClient() {
       await navigator.clipboard.writeText(buildTeamNamesText(activeVariant?.payload ?? null));
       notify.success("Team names copied");
     } catch {
-      notify.error("Clipboard unavailable");
+      notify.error("Unable to copy the team names. Your browser blocked clipboard access — copy them from the balance instead.");
     }
   }, [activeVariant]);
 
@@ -697,7 +697,7 @@ export function BalancerMainPageClient() {
         {
           onSuccess: (result) => {
             setJsonImportSummary(
-              `${result.teamCount} teams loaded from ${file.name}. Review the balance, then Save or Export to Tournament.`
+              `${result.teamCount} teams loaded from ${file.name}. Review the balance, then save or export it to the tournament.`
             );
           },
           onError: (error) => {
@@ -800,7 +800,12 @@ export function BalancerMainPageClient() {
     );
 
   const balancerContentElement = (
-    <div className="flex min-h-0 flex-col gap-3">
+    // `min-w-0`: same grid-item rule the two sidebars already carry. Without it
+    // this column keeps its min-content width (~1350px: the team-card grid's
+    // preferred three tracks) and the panel's own `overflow: hidden` clips the
+    // right-hand cards, the variant strip and the actions bar the moment the
+    // pool sidebar is widened.
+    <div className="flex min-h-0 min-w-0 flex-col gap-3">
       <PresetRunPanel
         counters={[
           { label: "Pool", value: poolPlayers.length, icon: Users },
@@ -920,7 +925,7 @@ export function BalancerMainPageClient() {
       <BalancerOperationDialog
         open={isTournamentExportOpen}
         onOpenChange={setIsTournamentExportOpen}
-        title="Export to Tournament"
+        title="Export to tournament"
         description="Save the selected balance and create tournament teams from it."
         steps={tournamentExportSteps}
         isRunning={exportToTournamentMutation.isPending}

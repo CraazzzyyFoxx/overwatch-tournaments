@@ -65,7 +65,7 @@ export async function fetchAccountApiKeys(
   if (args.order) params.set("order", args.order);
   if (args.search) params.set("search", args.search);
 
-  const response = await fetch(`/api/account/api-keys?${params.toString()}`, {
+  const response = await fetch(`/bff/account/api-keys?${params.toString()}`, {
     method: "GET",
     cache: "no-store",
   });
@@ -78,7 +78,7 @@ export async function fetchAccountApiKeys(
 }
 
 async function createApiKey(input: AccountApiKeyCreateInput): Promise<AccountApiKeyCreateResponse> {
-  const response = await fetch("/api/account/api-keys", {
+  const response = await fetch("/bff/account/api-keys", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
@@ -92,7 +92,7 @@ async function createApiKey(input: AccountApiKeyCreateInput): Promise<AccountApi
 }
 
 async function renameApiKey(input: { id: number; name: string }): Promise<AccountApiKey> {
-  const response = await fetch(`/api/account/api-keys/${input.id}`, {
+  const response = await fetch(`/bff/account/api-keys/${input.id}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ name: input.name }),
@@ -106,7 +106,7 @@ async function renameApiKey(input: { id: number; name: string }): Promise<Accoun
 }
 
 async function revokeApiKey(id: number): Promise<void> {
-  const response = await fetch(`/api/account/api-keys/${id}`, {
+  const response = await fetch(`/bff/account/api-keys/${id}`, {
     method: "DELETE",
   });
 
@@ -160,7 +160,7 @@ export function useRevokeAccountApiKey(workspaceId: number | null) {
  * `Error` would throw away.
  */
 export async function fetchApiKeyQuota(apiKeyId: number): Promise<QuotaUsage> {
-  const response = await fetch(`/api/account/api-keys/${apiKeyId}/quota`, {
+  const response = await fetch(`/bff/account/api-keys/${apiKeyId}/quota`, {
     method: "GET",
     cache: "no-store",
   });
@@ -186,7 +186,7 @@ export function useSetApiKeyQuota(workspaceId: number | null) {
 
   return useMutation({
     mutationFn: async (input: { id: number; limits: QuotaLimitsPayload }) => {
-      const response = await fetch(`/api/account/api-keys/${input.id}/quota`, {
+      const response = await fetch(`/bff/account/api-keys/${input.id}/quota`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ limits: input.limits }),

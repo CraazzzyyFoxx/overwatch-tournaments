@@ -68,7 +68,7 @@ def seeded(db):
     # Saved rank data on two registrations (one approved, one pending); the
     # role without rank_value must NOT count as ranked.
     db.add(BalancerRegistrationRole(registration_id=regs[0].id, role="tank", is_primary=True, rank_value=2500))
-    db.add(BalancerRegistrationRole(registration_id=regs[1].id, role="dps", is_primary=True, rank_value=None))
+    db.add(BalancerRegistrationRole(registration_id=regs[1].id, role="damage", is_primary=True, rank_value=None))
     db.add(BalancerRegistrationRole(registration_id=regs[3].id, role="support", is_primary=True, rank_value=1800))
     db.commit()
     try:

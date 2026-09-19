@@ -1,11 +1,14 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useId } from "react";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { LoaderCircle } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import { EmptyNote } from "@/components/admin/kit/EmptyNote";
+import { AdminTabs, type AdminTabItem } from "@/components/kit/AdminTabs";
+import { EmptyNote } from "@/components/kit/EmptyNote";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -15,16 +18,20 @@ import {
   CardTitle
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { usePermissions } from "@/hooks/usePermissions";
 import { notify } from "@/lib/notify";
-import { parseQuotaAboveInherited } from "@/lib/quota";
 import workspaceService from "@/services/workspace.service";
-import type { QuotaDimension, QuotaScope, QuotaScopeUsage } from "@/types/auth.types";
-import { EMPTY_QUOTA_LIMITS, hasQuotaOverride, type QuotaLimitsDraft } from "./dimensions";
+import type { QuotaScope, QuotaScopePolicy } from "@/types/auth.types";
+import { hasQuotaOverride } from "./dimensions";
 import { QuotaLimitFields } from "./QuotaLimitFields";
 import { QuotaUsagePanel } from "./QuotaUsagePanel";
+import { useQuotaDraft } from "./useQuotaDraft";
 
 /** In table order: the tenant pool first, then the two per-principal buckets. */
 const SCOPES: readonly QuotaScope[] = ["workspace", "key", "session"];
+
+/** `?tab=` like every other admin tab row, so one scope's form is linkable. */
+const SCOPE_PARAM = "tab";
 
 function workspaceQuotaKey(workspaceId: number) {
   return ["workspace", workspaceId, "quota", "usage"] as const;
@@ -40,71 +47,87 @@ function workspaceQuotaKey(workspaceId: number) {
 function WorkspaceQuotaScopeCard({
   workspaceId,
   scope,
-  effective
-}: Readonly<{ workspaceId: number; scope: QuotaScope; effective: QuotaScopeUsage | null }>) {
+  policy,
+  canRaise
+}: Readonly<{
+  workspaceId: number;
+  scope: QuotaScope;
+  policy: QuotaScopePolicy | null;
+  canRaise: boolean;
+}>) {
   const t = useTranslations("quota");
   const fieldPrefix = useId();
   const queryClient = useQueryClient();
-  const [draft, setDraft] = useState<QuotaLimitsDraft>(EMPTY_QUOTA_LIMITS);
-  const [errors, setErrors] = useState<Partial<Record<QuotaDimension, string>>>({});
+  const form = useQuotaDraft(policy);
 
   const save = useMutation({
-    mutationFn: (limits: QuotaLimitsDraft) => workspaceService.setQuota(workspaceId, scope, limits),
+    mutationFn: () => workspaceService.setQuota(workspaceId, scope, form.draft),
     onSuccess: async () => {
       notify.success(t("saved"));
       await queryClient.invalidateQueries({ queryKey: workspaceQuotaKey(workspaceId) });
     },
     onError: (error) => {
-      const rejection = parseQuotaAboveInherited(error);
-      if (!rejection) {
-        notify.apiError(error, { title: t("errors.saveFailed") });
-        return;
-      }
-      // The refusal names one dimension of one scope. Marking that input is the
-      // only rendering an admin can act on: "lower this number, or ask a
-      // superuser to raise the plan".
-      const dimension = t(`dimensions.${rejection.dimension}.label`);
-      setErrors({
-        [rejection.dimension]:
-          rejection.limit === null
-            ? t("errors.aboveInheritedUnlimited", { dimension })
-            : t("errors.aboveInherited", {
-                dimension,
-                limit: rejection.limit,
-                requested: rejection.requested ?? draft[rejection.dimension] ?? 0
-              })
-      });
+      if (!form.reject(error)) notify.apiError(error, { title: t("errors.saveFailed") });
     }
   });
 
+  // An all-null payload deletes the row, so the button says so — but only when
+  // there is a row to delete. A scope that already inherits must not offer to
+  // "stop overriding" something it never overrode.
+  const removing = form.overridden && !hasQuotaOverride(form.draft);
+  const blocked = form.raised.length > 0 && !canRaise;
+
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="text-base">{t(`scopes.${scope}.label`)}</CardTitle>
-        <CardDescription>{t(`scopes.${scope}.hint`)}</CardDescription>
+      <CardHeader className="flex-row items-start justify-between gap-3 space-y-0">
+        <div className="space-y-1.5">
+          <CardTitle className="text-base">{t(`scopes.${scope}.label`)}</CardTitle>
+          <CardDescription>{t(`scopes.${scope}.hint`)}</CardDescription>
+        </div>
+        {/* `info`, not `accent`: the light-theme primary is a near-black, which
+            makes an "overridden" chip look like the neutral "inherited" one at a
+            glance — the state has to be readable without reading. */}
+        <Badge tone={form.overridden ? "info" : "neutral"} className="shrink-0 font-normal">
+          {t(form.overridden ? "state.overridden" : "state.inherited")}
+        </Badge>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         <QuotaLimitFields
           idPrefix={fieldPrefix}
-          values={draft}
-          effective={effective}
-          errors={errors}
+          values={form.draft}
+          inherited={policy?.inherited}
+          raised={form.raised}
+          canRaise={canRaise}
+          errors={form.errors}
           disabled={save.isPending}
-          onChange={(dimension, value) => {
-            setDraft((current) => ({ ...current, [dimension]: value }));
-            setErrors((current) =>
-              current[dimension] ? { ...current, [dimension]: undefined } : current
-            );
-          }}
+          onChange={form.set}
         />
-        <div className="flex justify-end">
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          {/* Rendered even when clean: a button that vanishes under the caret
+              after its own click drops keyboard focus to the document body. */}
           <Button
             type="button"
             size="sm"
-            disabled={save.isPending}
+            variant="ghost"
+            disabled={!form.dirty || save.isPending}
+            onClick={form.reset}
+          >
+            {t("reset")}
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant={removing ? "destructive" : "default"}
+            // Only the no-op is disabled. A refused raise keeps the button live
+            // and sends focus to the number that has to move, which is the one
+            // thing the operator can act on.
+            disabled={!form.dirty || save.isPending}
             onClick={() => {
-              setErrors({});
-              save.mutate(draft);
+              if (blocked) {
+                document.getElementById(`${fieldPrefix}-${form.raised[0]}`)?.focus();
+                return;
+              }
+              save.mutate();
             }}
           >
             {save.isPending ? (
@@ -112,10 +135,10 @@ function WorkspaceQuotaScopeCard({
                 <LoaderCircle aria-hidden className="size-4 animate-spin" />
                 {t("saving")}
               </>
-            ) : hasQuotaOverride(draft) ? (
-              t("save")
-            ) : (
+            ) : removing ? (
               t("clearOverride")
+            ) : (
+              t("save")
             )}
           </Button>
         </div>
@@ -130,17 +153,36 @@ function WorkspaceQuotaScopeCard({
  */
 export function WorkspaceQuotaCard({ workspaceId }: Readonly<{ workspaceId: number }>) {
   const t = useTranslations("quota");
+  const { isSuperuser } = usePermissions();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const usageQuery = useQuery({
     queryKey: workspaceQuotaKey(workspaceId),
     queryFn: () => workspaceService.getQuotaUsage(workspaceId),
     staleTime: 0
   });
 
-  const workspaceScope =
-    usageQuery.data?.scopes.find((scope) => scope.scope === "workspace") ?? null;
+  // Routed like every other admin tab row, so one scope's form is linkable and
+  // survives a reload. An unknown `?tab=` falls back to the tenant pool rather
+  // than rendering nothing.
+  const requested = searchParams?.get(SCOPE_PARAM) ?? "";
+  const active = SCOPES.find((scope) => scope === requested) ?? SCOPES[0];
+  const policyOf = (scope: QuotaScope) =>
+    usageQuery.data?.policy?.find((row) => row.scope === scope) ?? null;
+
+  const tabs: AdminTabItem[] = SCOPES.map((scope) => ({
+    key: scope,
+    label: t(`scopes.${scope}.tab`),
+    href: `${pathname}?${SCOPE_PARAM}=${scope}`,
+    // Which scopes carry a row is the one thing tabbing away hides, so it rides
+    // on the tab itself instead of only inside the panel it belongs to.
+    dot: hasQuotaOverride(policyOf(scope)?.override ?? {})
+      ? { tone: "info" as const, label: t("state.overridden") }
+      : undefined
+  }));
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <Card>
         <CardHeader>
           <CardTitle className="text-base">{t("usageHeading")}</CardTitle>
@@ -157,19 +199,48 @@ export function WorkspaceQuotaCard({ workspaceId }: Readonly<{ workspaceId: numb
         </CardContent>
       </Card>
 
-      <div>
-        <h3 className="text-sm font-medium">{t("overrideHeading")}</h3>
-        <p className="mt-0.5 max-w-prose text-xs text-muted-foreground">{t("overrideHint")}</p>
-      </div>
+      {/* The heading sits closer to the tab row it owns than the gap that
+          separates it from the usage card above — the grouping is the spacing,
+          not a rule. */}
+      <section className="space-y-3">
+        <div className="space-y-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="text-sm font-medium">{t("overrideHeading")}</h3>
+            {isSuperuser ? (
+              <Badge tone="warning" className="font-normal">
+                {t("authority.badge")}
+              </Badge>
+            ) : null}
+          </div>
+          <p className="max-w-prose text-xs text-muted-foreground">{t("overrideHint")}</p>
+          <p className="max-w-prose text-xs text-muted-foreground">
+            {isSuperuser ? t("authority.superuser") : t("authority.admin")}
+          </p>
+        </div>
 
-      {SCOPES.map((scope) => (
-        <WorkspaceQuotaScopeCard
-          key={scope}
-          workspaceId={workspaceId}
-          scope={scope}
-          effective={scope === "workspace" ? workspaceScope : null}
-        />
-      ))}
+        {usageQuery.isPending ? (
+          <Skeleton className="h-72 w-full rounded-xl" />
+        ) : usageQuery.data ? (
+          <>
+            <AdminTabs items={tabs} activeKey={active} ariaLabel={t("overrideHeading")} />
+            {/* Every scope stays mounted and the inactive ones are hidden: a
+                half-typed override on another tab is unsaved work, and
+                unmounting it would drop it without a word. */}
+            {SCOPES.map((scope) => (
+              <div key={scope} hidden={scope !== active}>
+                <WorkspaceQuotaScopeCard
+                  workspaceId={workspaceId}
+                  scope={scope}
+                  policy={policyOf(scope)}
+                  canRaise={isSuperuser}
+                />
+              </div>
+            ))}
+          </>
+        ) : (
+          <EmptyNote size="sm">{t("loadFailed")}</EmptyNote>
+        )}
+      </section>
     </div>
   );
 }

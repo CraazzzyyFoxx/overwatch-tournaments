@@ -11,7 +11,7 @@ import type { SubroleCatalog } from "@/types/registration.types";
 
 import { MappingFieldRow } from "./MappingFieldRow";
 import { orderedRoleSubgroups, roleSubgroupId } from "./mappingConfig";
-import { EYEBROW_CLASS } from "@/components/admin/tone";
+import { EYEBROW_CLASS } from "@/components/kit/tone";
 import { cn } from "@/lib/utils";
 
 interface MappingRowHandlers {

@@ -27,18 +27,18 @@ import {
 } from "../_components/TournamentSkeletons";
 import { UpdatingBadge } from "../_components/UpdatingBadge";
 import { ViewSegment, readViewParam } from "../_components/ViewSegment";
-import { useTournamentQuery } from "../_hooks/useTournamentClientData";
+import { useTournamentQuery } from "@/hooks/useTournamentClientData";
 import { useTournamentMapPool } from "../_hooks/useTournamentMapPool";
 import { tournamentEncountersQueryOptions } from "./TournamentEncountersPage";
 import {
   getPublicPageQueryPresentation,
   type PublicPageQueryState
-} from "./publicPageQueryPresentation";
+} from "@/lib/public-page-query-presentation";
 
 type RoleKey = Exclude<PlayerRoleSlotCode, "flex">;
 type RoleFilter = "all" | RoleKey;
 
-const ROLE_ORDER: RoleKey[] = ["tank", "dps", "support"];
+const ROLE_ORDER: RoleKey[] = ["tank", "damage", "support"];
 
 export const getHeroesQueryPresentation = (state: PublicPageQueryState) =>
   getPublicPageQueryPresentation(state);
@@ -51,7 +51,7 @@ export function getHeroPlaytimeMetric(playtime: number) {
 
 function heroRole(playtime: HeroPlaytime): RoleKey {
   const slotCode = playerRoleSlotCode(normalizePlayerRole(playtime.hero.type ?? playtime.hero.role));
-  return slotCode === "flex" ? "dps" : slotCode;
+  return slotCode === "flex" ? "damage" : slotCode;
 }
 
 /** `heroes` first: hero play-time is what the section answered before maps joined it. */
@@ -120,7 +120,7 @@ function HeroesTab({
     [statsQuery.data]
   );
   const roleCounts = useMemo(() => {
-    const counts: Record<RoleKey, number> = { tank: 0, dps: 0, support: 0 };
+    const counts: Record<RoleKey, number> = { tank: 0, damage: 0, support: 0 };
     for (const hero of heroes) counts[heroRole(hero)] += 1;
     return counts;
   }, [heroes]);

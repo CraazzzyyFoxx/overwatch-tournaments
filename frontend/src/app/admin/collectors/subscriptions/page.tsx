@@ -4,7 +4,7 @@ import { SubscriptionHealthDashboard } from "@/components/admin/collectors/subsc
 import { SubscriptionTaskHistory } from "@/components/admin/collectors/subscription-history";
 import { SubscriptionSettingsPanel } from "@/components/admin/collectors/subscription-settings";
 import { useCollectorTab } from "@/components/admin/collectors/useCollectorTab";
-import { AdminTabs } from "@/components/admin/kit/AdminTabs";
+import { AdminTabs } from "@/components/kit/AdminTabs";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useInvalidation } from "@/hooks/useInvalidation";

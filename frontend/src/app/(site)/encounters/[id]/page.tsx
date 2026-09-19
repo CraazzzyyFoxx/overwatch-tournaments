@@ -12,12 +12,12 @@ import encounterService from "@/services/encounter.service";
 import { getEncounterState } from "@/lib/encounter-status";
 import EncounterScoreboard from "./components/EncounterScoreboard";
 import EncounterMapRow from "./components/EncounterMapRow";
-import EncounterRosterPanel from "./components/EncounterRosterPanel";
+import EncounterRosterPanel from "@/components/match/EncounterRosterPanel";
 import EncounterSeriesStats from "./components/EncounterSeriesStats";
 import EncounterCaptainReports from "./components/EncounterCaptainReports";
 import EncounterPregamePanel from "./components/EncounterPregamePanel";
 import { PregameRoomLink } from "./components/PregameRoomLink";
-import { Pill } from "./components/EncounterAtoms";
+import { Pill } from "@/components/match/EncounterAtoms";
 import {
   buildSeriesSlots,
   countMapWins,
@@ -26,8 +26,8 @@ import {
   getSeriesSeconds,
   getSeriesVerdict,
   getStageKind
-} from "./encounter-detail.helpers";
-import styles from "./EncounterDetail.module.css";
+} from "@/lib/encounter-detail";
+import styles from "@/components/match/EncounterDetail.module.css";
 
 export const dynamic = "force-dynamic";
 

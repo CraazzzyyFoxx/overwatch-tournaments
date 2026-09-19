@@ -7,6 +7,7 @@ from typing import Any
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.models.achievements.achievement import AchievementGrain
 from src import models
 from src.domain.achievement_stage_filters import standing_is_elimination, standing_is_groups
 
@@ -38,7 +39,14 @@ def _standing_base_query() -> sa.Select:
     )
 
 
-@register("standing_position")
+@register(
+    "standing_position",
+    grain=AchievementGrain.user_tournament,
+    description="Final standing position in the tournament",
+    required=("op", "value"),
+    optional=("include_groups",),
+    depends_on=("tournament.standing", "tournament.player"),
+)
 async def execute_position(
     session: AsyncSession,
     params: dict[str, Any],
@@ -71,7 +79,14 @@ async def execute_position(
     return {(row[0], row[1]) for row in result}
 
 
-@register("standing_record")
+@register(
+    "standing_record",
+    grain=AchievementGrain.user_tournament,
+    description="Win/loss/draw record on a standings row",
+    required=("field", "op", "value"),
+    optional=("groups_only", "include_groups"),
+    depends_on=("tournament.standing", "tournament.player"),
+)
 async def execute_record(
     session: AsyncSession,
     params: dict[str, Any],

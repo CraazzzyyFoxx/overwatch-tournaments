@@ -7,6 +7,7 @@ from typing import Any
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.models.achievements.achievement import AchievementGrain
 from src import models
 from src.domain.achievement_stage_filters import encounter_is_lower_bracket, encounter_is_upper_bracket
 
@@ -100,7 +101,13 @@ def _loser_teams_query(
     )
 
 
-@register("bracket_path")
+@register(
+    "bracket_path",
+    grain=AchievementGrain.user_tournament,
+    description="The team's route through the bracket",
+    optional=("lost_in_round", "min_lower_bracket_wins", "played_lower_bracket", "played_upper_bracket"),
+    depends_on=("tournament.encounter", "tournament.player"),
+)
 async def execute_bracket_path(
     session: AsyncSession,
     params: dict[str, Any],

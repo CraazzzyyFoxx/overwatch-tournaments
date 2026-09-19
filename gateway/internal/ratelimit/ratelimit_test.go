@@ -162,10 +162,10 @@ func TestIsAnonymous(t *testing.T) {
 	}
 }
 
-// wrapFailuresReq builds a POST /api/auth/refresh from a fixed client IP, the
+// wrapFailuresReq builds a POST /api/v1/auth/refresh from a fixed client IP, the
 // shape WrapFailures is wired for in main.go.
 func wrapFailuresReq(ip string) *http.Request {
-	r := httptest.NewRequest(http.MethodPost, "/api/auth/refresh", nil)
+	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/refresh", nil)
 	r.Header.Set("X-Real-IP", ip)
 	return r
 }

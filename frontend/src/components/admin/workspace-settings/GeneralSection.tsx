@@ -15,8 +15,8 @@ import {
   SelectValue
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { AuditTrailButton } from "@/components/admin/AuditTrailSheet";
-import { SaveBar } from "@/components/admin/kit/SaveBar";
+import { AuditTrailButton } from "@/components/kit/AuditTrailSheet";
+import { SaveBar } from "@/components/kit/SaveBar";
 import {
   WorkspaceOwnerControl,
   WorkspaceOwnerTransferControl,

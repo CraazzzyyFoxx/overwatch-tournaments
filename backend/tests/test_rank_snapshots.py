@@ -36,10 +36,10 @@ def _grid_with_ow_mapping() -> DivisionGrid:
 
 def test_maps_raw_ow_sr_to_tier_rank_min() -> None:
     grid = _grid_with_ow_mapping()
-    raw = {1: {"tank": 3200, "dps": 2100}}
+    raw = {1: {"tank": 3200, "damage": 2100}}
 
     # 3200 -> Diamond 5 (rank_min 3000); 2100 -> Gold 3 (rank_min 2000).
-    assert normalize_ow_ranks_to_grid(raw, grid) == {1: {"tank": 3000, "dps": 2000}}
+    assert normalize_ow_ranks_to_grid(raw, grid) == {1: {"tank": 3000, "damage": 2000}}
 
 
 def test_drops_ranks_outside_any_tier() -> None:

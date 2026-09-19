@@ -15,7 +15,7 @@ mock.module("next-intl", () => ({
 const { TeamRosters } = await import("./TeamRosters");
 
 const ROLE_SHAPE: RosterShape = {
-  slots: { tank: 1, dps: 2, support: 2 },
+  slots: { tank: 1, damage: 2, support: 2 },
   team_size: 5,
   flex_slots: 0,
   has_role_slots: true,
@@ -51,7 +51,7 @@ const GRID = {
   ]
 };
 
-// Drafted on support at 2800, but their best role is dps at 4000 — the two ranks
+// Drafted on support at 2800, but their best role is damage at 4000 — the two ranks
 // the shape has to choose between. `effective_rank` is what the roster engine
 // resolved for THIS draft.
 const drafted: DraftPlayer = {
@@ -67,9 +67,9 @@ const drafted: DraftPlayer = {
   status: "picked",
   is_captain: false,
   drafted_by_team_id: 1,
-  secondary_roles: ["dps"],
-  role_ranks: { support: 2800, dps: 4000 },
-  role_sources: { support: "registration", dps: "registration" },
+  secondary_roles: ["damage"],
+  role_ranks: { support: 2800, damage: 4000 },
+  role_sources: { support: "registration", damage: "registration" },
   role_top_heroes: {},
   notes: null,
   custom_fields: [],

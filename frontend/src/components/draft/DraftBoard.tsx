@@ -8,8 +8,8 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { HeroFrame } from "@/components/site/PageHero";
 import { Button } from "@/components/ui/button";
-import { DraftBoardSkeleton } from "@/app/draft/[id]/DraftRoomSkeleton";
-import { shouldShowInitialDraftSkeleton } from "@/app/draft/[id]/draft-loading-state";
+import { DraftBoardSkeleton } from "@/components/draft/DraftRoomSkeleton";
+import { shouldShowInitialDraftSkeleton } from "@/components/draft/draft-loading-state";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
 import { useDivisionGrid } from "@/hooks/useCurrentWorkspace";
 import type { Tournament } from "@/types/tournament.types";

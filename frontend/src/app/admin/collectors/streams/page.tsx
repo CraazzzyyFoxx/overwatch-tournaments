@@ -3,7 +3,7 @@
 import { StreamHealthDashboard } from "@/components/admin/collectors/stream-health";
 import { StreamSettingsPanel } from "@/components/admin/collectors/stream-settings";
 import { useCollectorTab } from "@/components/admin/collectors/useCollectorTab";
-import { AdminTabs } from "@/components/admin/kit/AdminTabs";
+import { AdminTabs } from "@/components/kit/AdminTabs";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { usePermissions } from "@/hooks/usePermissions";
 
@@ -15,7 +15,7 @@ import { usePermissions } from "@/hooks/usePermissions";
  *
  * Status is gated on `stream.read` and on the GLOBAL grant, not a
  * workspace-scoped one, because there is one poller and one Redis key behind
- * `GET /api/streams/health`; `canAccessPermission(..., null)` is what asks for
+ * `GET /api/v1/streams/health`; `canAccessPermission(..., null)` is what asks for
  * the global form, and `adminRoutePermissions` gates the route the same way.
  * That is also why this page has no workspace dimension: the numbers carry
  * none. Settings writes `stream.collection` through

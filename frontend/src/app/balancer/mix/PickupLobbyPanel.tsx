@@ -30,7 +30,7 @@ import {
   ICON_BUTTON_CLASS,
   PANEL_CLASS,
   splitBattleTag,
-} from "@/app/balancer/components/balancer-page-helpers";
+} from "@/components/balancer/balancer-page-helpers";
 import {
   CAPTION_CLASS,
   CARD_TITLE_CLASS,
@@ -312,7 +312,7 @@ export function PickupLobbyPanel({
                       : `${entry.supply} of ${entry.need}`}
                   </span>
                 </div>
-                <div className="mt-1.5 h-[3px] overflow-hidden rounded-full bg-white/[0.05]">
+                <div className="mt-1.5 h-[3px] overflow-hidden rounded-full bg-[color:var(--aqt-overlay-3)]">
                   <div
                     className={cn(
                       "h-full rounded-full",
@@ -437,7 +437,7 @@ function LineupColumn({
         "flex flex-col gap-1.5 rounded-xl border px-2.5 py-2.5 transition-colors",
         droppable.isOver
           ? "border-[color:var(--aqt-teal)] bg-[color:color-mix(in_srgb,var(--aqt-teal)_7%,transparent)]"
-          : "border-[color:var(--aqt-border-2)] bg-white/[0.012]",
+          : "border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-overlay-1)]",
       )}
     >
       <div className="flex items-baseline gap-1.5 px-0.5">
@@ -673,7 +673,7 @@ function LineupRow({
       }}
       className={cn(
         "flex items-center gap-2 rounded-lg border border-transparent px-2 py-2 transition-colors",
-        "hover:border-[color:var(--aqt-border-2)] hover:bg-white/[0.025]",
+        "hover:border-[color:var(--aqt-border-2)] hover:bg-[color:var(--aqt-overlay-2)]",
         canDrag && "touch-none active:cursor-grabbing",
         issue && "border-amber-400/35",
         draggable.isDragging ? "opacity-30" : dimmed && "opacity-60",
@@ -726,7 +726,7 @@ function LineupRow({
         type="button"
         onClick={onOpen}
         title="Advanced settings"
-        className="flex size-6 shrink-0 items-center justify-center rounded-md text-[color:var(--aqt-fg-faint)] transition-colors hover:bg-white/[0.05] hover:text-[color:var(--aqt-fg-muted)]"
+        className="flex size-6 shrink-0 items-center justify-center rounded-md text-[color:var(--aqt-fg-faint)] transition-colors hover:bg-[color:var(--aqt-overlay-3)] hover:text-[color:var(--aqt-fg-muted)]"
       >
         <SlidersHorizontal className="size-[15px]" aria-hidden="true" />
         <span className="sr-only">{`Advanced settings for ${label}`}</span>
@@ -738,7 +738,7 @@ function LineupRow({
             type="button"
             onClick={onRemove}
             title="Remove from this mix"
-            className="flex size-6 shrink-0 items-center justify-center rounded-md text-[color:var(--aqt-fg-faint)] transition-colors hover:bg-white/[0.05] hover:text-[color:var(--aqt-rose)]"
+            className="flex size-6 shrink-0 items-center justify-center rounded-md text-[color:var(--aqt-fg-faint)] transition-colors hover:bg-[color:var(--aqt-overlay-3)] hover:text-[color:var(--aqt-rose)]"
           >
             <X className="size-3.5" aria-hidden="true" />
             <span className="sr-only">{`Remove ${label} from this mix`}</span>

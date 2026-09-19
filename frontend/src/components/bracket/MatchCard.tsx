@@ -5,7 +5,7 @@ import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { ListChecks, Search } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import type { BracketMatch } from "@/components/bracket-view.helpers";
+import type { BracketMatch } from "@/lib/bracket-view";
 import { EncounterRostersModal } from "@/components/EncounterRostersModal";
 import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 import TeamName from "@/components/TeamName";

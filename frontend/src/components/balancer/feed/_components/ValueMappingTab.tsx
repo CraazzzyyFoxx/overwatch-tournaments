@@ -73,7 +73,7 @@ export function ValueMappingTab({
         />
         <ValueMapEditor
           title="Roles"
-          description="Map role text (e.g. “танк”, “heal”) to tank / dps / support."
+          description="Map role text (e.g. “танк”, “heal”) to tank / damage / support."
           kind="role"
           rows={valueState.roles}
           canSeed={Object.keys(roleDefaults).length > 0}

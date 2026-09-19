@@ -4,7 +4,7 @@ import { CheckCircle2, XCircle, Users, RefreshCw } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { useDiscordGuildInfo } from "@/hooks/useDiscordEntities";
-import { StatusPill } from "@/components/admin/kit/StatusPill";
+import { StatusPill } from "@/components/kit/StatusPill";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";

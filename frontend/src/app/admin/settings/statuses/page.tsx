@@ -6,16 +6,16 @@ import type { ColumnDef, Row } from "@tanstack/react-table";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import StatusMetaBadge from "@/components/status/StatusMetaBadge";
-import { AdminDataTable, type AdminDataTableGroup, adminColumnMeta, createKebabColumn } from "@/components/admin-data-table";
-import { AdminFilterBar } from "@/components/admin/kit/AdminFilterBar";
-import { ConfirmDialog, type ConfirmIntent } from "@/components/admin/kit/ConfirmDialog";
-import { useAdminFilters, type FilterDef } from "@/components/admin/kit/useAdminFilters";
+import { AdminDataTable, type AdminDataTableGroup, adminColumnMeta, createKebabColumn } from "@/components/data-table";
+import { AdminFilterBar } from "@/components/kit/AdminFilterBar";
+import { ConfirmDialog, type ConfirmIntent } from "@/components/kit/ConfirmDialog";
+import { useAdminFilters, type FilterDef } from "@/components/kit/useAdminFilters";
 import {
   EMPTY_STATUS_FORM,
   StatusForm,
   type StatusFormState
 } from "@/components/admin/statuses/StatusForm";
-import { StatusPill } from "@/components/admin/kit/StatusPill";
+import { StatusPill } from "@/components/kit/StatusPill";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,

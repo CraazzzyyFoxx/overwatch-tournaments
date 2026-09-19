@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useId, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useId, useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   ReactFlow,
   ReactFlowProvider,
@@ -29,7 +30,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { EYEBROW_CLASS } from "@/components/admin/tone";
+import { EYEBROW_CLASS } from "@/components/kit/tone";
+import adminService from "@/services/admin.service";
+import { useWorkspaceStore } from "@/stores/workspace.store";
+import type { ConditionTypeInfo } from "@/types/admin.types";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -41,35 +45,33 @@ const STATS = [
   "HeroTimePlayed", "UltimatesEarned", "Performance", "KD", "KDA",
 ];
 
-const CONDITION_TYPES = [
-  { value: "stat_threshold", label: "Stat threshold" },
-  { value: "match_criteria", label: "Match criteria" },
-  { value: "match_win", label: "Match win" },
-  { value: "standing_position", label: "Standing position" },
-  { value: "standing_record", label: "Standing record" },
-  { value: "div_change", label: "Division change" },
-  { value: "div_level", label: "Division level" },
-  { value: "is_captain", label: "Is captain" },
-  { value: "is_newcomer", label: "Is newcomer" },
-  { value: "tournament_type", label: "Tournament type" },
-  { value: "hero_kd_best", label: "Hero K/D best" },
-  { value: "hero_stat", label: "Hero stat" },
-  { value: "team_players_match", label: "Team players match" },
-  { value: "captain_property", label: "Captain property" },
-  { value: "player_role", label: "Player role" },
-  { value: "player_div", label: "Player division" },
-  { value: "encounter_score", label: "Encounter score" },
-  { value: "encounter_revenge", label: "Encounter revenge" },
-  { value: "bracket_path", label: "Bracket path" },
-  { value: "tournament_format", label: "Tournament format" },
-  { value: "match_mvp_check", label: "Match MVP check" },
-  { value: "global_stat_sum", label: "Global stat sum" },
-  { value: "tournament_count", label: "Tournament count" },
-  { value: "global_winrate", label: "Global winrate" },
-  { value: "distinct_count", label: "Distinct count" },
-  { value: "consecutive", label: "Consecutive" },
-  { value: "stable_streak", label: "Stable streak" },
-];
+/**
+ * Acronyms and shorthands a mechanical kebab→Title would mangle. Everything
+ * else derives from the node name itself, so a node added on the backend shows
+ * up here without an edit.
+ */
+const LABEL_TOKENS: Record<string, string> = {
+  kd: "K/D",
+  mvp: "MVP",
+  otp: "OTP",
+  div: "division",
+};
+
+function conditionLabel(name: string | undefined): string {
+  if (!name) return "condition";
+  const words = name.split("_").map((word) => LABEL_TOKENS[word] ?? word);
+  const sentence = words.join(" ");
+  return sentence.charAt(0).toUpperCase() + sentence.slice(1);
+}
+
+/**
+ * The node types the engine actually implements, served by
+ * `achievements/rules/condition-types`. The editor used to keep its own copy,
+ * which drifted eight nodes behind the backend; the palette now shows whatever
+ * the engine registered, and `required`/`optional` come from the same place the
+ * validator reads.
+ */
+const ConditionTypesContext = createContext<ConditionTypeInfo[]>([]);
 
 /**
  * React Flow paints edge strokes, minimap swatches and node borders straight
@@ -229,10 +231,7 @@ function TreeOutline({
           if (node.type === "logical") {
             description = `${path} ${node.logicalOp ?? "AND"} group`;
           } else {
-            const label =
-              CONDITION_TYPES.find((ct) => ct.value === node.conditionType)?.label ??
-              node.conditionType ??
-              "condition";
+            const label = conditionLabel(node.conditionType);
             const summary = formatParamsSummary(node.conditionType ?? "", node.params ?? {});
             description = summary ? `${path} ${label} · ${summary}` : `${path} ${label}`;
           }
@@ -493,6 +492,16 @@ function LeafNode({ data, id }: NodeProps) {
     onChangeParam?: (id: string, key: string, value: unknown) => void;
     onDelete?: (id: string) => void;
   };
+  const registry = useContext(ConditionTypesContext);
+  // Sub-condition-only predicates (`player_role`, `player_div`) are rejected at
+  // the top level by the validator, so they are not offered here. Before the
+  // query resolves the list is empty — keep the node's own type selectable so
+  // the control never renders blank.
+  const options = useMemo(() => {
+    const selectable = registry.filter((option) => !option.subcondition_only);
+    if (selectable.length > 0) return selectable;
+    return d.conditionType ? [{ name: d.conditionType } as ConditionTypeInfo] : [];
+  }, [registry, d.conditionType]);
   const params = d.params ?? {};
   const lostInRoundParam = params.lost_in_round;
   const lostInRound =
@@ -509,7 +518,7 @@ function LeafNode({ data, id }: NodeProps) {
       : 1;
 
   const setParam = (key: string, value: unknown) => d.onChangeParam?.(id, key, value);
-  const label = CONDITION_TYPES.find((ct) => ct.value === d.conditionType)?.label ?? d.conditionType;
+  const label = conditionLabel(d.conditionType);
   const path = d.path ?? "1";
   /**
    * Accessible name for one field inside this node. Thirty-odd param controls
@@ -551,8 +560,10 @@ function LeafNode({ data, id }: NodeProps) {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {CONDITION_TYPES.map((ct) => (
-              <SelectItem key={ct.value} value={ct.value}>{ct.label}</SelectItem>
+            {options.map((option) => (
+              <SelectItem key={option.name} value={option.name}>
+                {conditionLabel(option.name)}
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -1128,14 +1139,25 @@ function DragSidebar({ onAdd }: Readonly<{ onAdd: (item: SidebarItem) => void }>
 // ─── Main component ──────────────────────────────────────────────────────────
 
 export function ConditionFlowEditor(props: Readonly<ConditionFlowEditorProps>) {
-  if (props.readOnly) {
-    return <ConditionFlowEditorInner {...props} />;
-  }
-  return (
+  const workspaceId = useWorkspaceStore((s) => s.currentWorkspaceId);
+  // The registry only changes when the engine ships a new node, so it is cached
+  // for the session rather than refetched per editor mount.
+  const { data: conditionTypes } = useQuery({
+    queryKey: ["admin", "achievement-condition-types", workspaceId],
+    queryFn: () => adminService.getConditionTypes(workspaceId!),
+    enabled: !!workspaceId,
+    staleTime: Infinity
+  });
+  const registry = useMemo(() => conditionTypes ?? [], [conditionTypes]);
+
+  const editor = props.readOnly ? (
+    <ConditionFlowEditorInner {...props} />
+  ) : (
     <ReactFlowProvider>
       <ConditionFlowEditorInner {...props} />
     </ReactFlowProvider>
   );
+  return <ConditionTypesContext.Provider value={registry}>{editor}</ConditionTypesContext.Provider>;
 }
 
 function ConditionFlowEditorInner({ value, onChange, readOnly = false }: Readonly<ConditionFlowEditorProps>) {

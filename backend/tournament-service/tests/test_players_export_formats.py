@@ -35,7 +35,7 @@ from tests._rpc_fakes import CapturingBroker, FakeSessionMaker, make_identity  #
 
 SUBJECT = "rpc.tournament.sheet_players_export"
 TOURNAMENT_ID = 84
-SHAPE = parse_roster_slots({"tank": 1, "dps": 2, "support": 2})
+SHAPE = parse_roster_slots({"tank": 1, "damage": 2, "support": 2})
 GRID = DivisionGrid(version_id=7, tiers=())
 
 

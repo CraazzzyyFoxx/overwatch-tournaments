@@ -1,4 +1,4 @@
-import type { Tone } from "@/components/admin/tone";
+import type { Tone } from "@/components/kit/tone";
 
 /**
  * Single source of truth for how a tournament's lifecycle reads on the

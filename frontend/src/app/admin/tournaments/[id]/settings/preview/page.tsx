@@ -3,13 +3,13 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
-import { EYEBROW_CLASS } from "@/components/admin/tone";
-import { SaveBar } from "@/components/admin/kit/SaveBar";
+import { EYEBROW_CLASS } from "@/components/kit/tone";
+import { SaveBar } from "@/components/kit/SaveBar";
 import type { Tournament } from "@/types/tournament.types";
 import { TournamentPreviewAllowlist } from "../../components/TournamentPreviewAllowlist";
 import { SettingsSectionPage } from "../SettingsSection";
 import { useTournamentSettingsForm } from "../useTournamentSettingsForm";
-import { EmptyNote } from "@/components/admin/kit/EmptyNote";
+import { EmptyNote } from "@/components/kit/EmptyNote";
 
 export default function PreviewSettingsPage() {
   return (

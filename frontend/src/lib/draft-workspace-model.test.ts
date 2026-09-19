@@ -17,7 +17,7 @@ import {
 
 const players = [
   { id: 1, battle_tag: "Zeta#1", primary_role: "support", secondary_roles: [], effective_rank: 2700 },
-  { id: 2, battle_tag: "Alpha#2", primary_role: "tank", secondary_roles: ["dps"], effective_rank: 3100 }
+  { id: 2, battle_tag: "Alpha#2", primary_role: "tank", secondary_roles: ["damage"], effective_rank: 3100 }
 ] as DraftPlayer[];
 
 describe("draft workspace model", () => {
@@ -28,17 +28,17 @@ describe("draft workspace model", () => {
       draft_team_id: 5,
       options: [
         { player_id: 2, role: "tank", is_safe: true, reason_code: null, unmatched_slots: [], blocking_player_ids: [], suggestion_score: 2 },
-        { player_id: 2, role: "dps", is_safe: false, reason_code: "role_shortage", unmatched_slots: [], blocking_player_ids: [1], suggestion_score: null }
+        { player_id: 2, role: "damage", is_safe: false, reason_code: "role_shortage", unmatched_slots: [], blocking_player_ids: [1], suggestion_score: null }
       ]
     };
     expect(optionForSelection(response, 2, "tank")?.is_safe).toBe(true);
-    expect(optionForSelection(response, 2, "dps")?.reason_code).toBe("role_shortage");
+    expect(optionForSelection(response, 2, "damage")?.reason_code).toBe("role_shortage");
     expect(optionForSelection(response, 1, "support")).toBeNull();
   });
 
   it("filters and sorts the public pool with URL-safe values", () => {
     expect(filterDraftPlayers(players, { role: "all", sort: "name", query: "a" }).map((player) => player.id)).toEqual([2, 1]);
-    expect(filterDraftPlayers(players, { role: "dps", sort: "rank", query: "" }).map((player) => player.id)).toEqual([2]);
+    expect(filterDraftPlayers(players, { role: "damage", sort: "rank", query: "" }).map((player) => player.id)).toEqual([2]);
     expect(parseDraftViewParams(new URLSearchParams("role=oops&sort=name&view=team&q=abc"))).toEqual({
       role: "all",
       sort: "name",
@@ -48,7 +48,7 @@ describe("draft workspace model", () => {
   });
 
   it("derives role choices and rosters from the public board snapshot", () => {
-    expect(playerRoles(players[1])).toEqual(["tank", "dps"]);
+    expect(playerRoles(players[1])).toEqual(["tank", "damage"]);
     const rosters = buildRosterByTeam([
       { ...players[0], status: "picked", drafted_by_team_id: 5 },
       { ...players[1], status: "available", drafted_by_team_id: null }
@@ -83,23 +83,23 @@ describe("extended filterDraftPlayers search", () => {
     // pick the server rejected. A flex player ranked on all three still gets
     // all three, because all three land in primary + secondary_roles.
     const flex = mkPlayer({
-      id: 3, primary_role: "dps", secondary_roles: ["tank"], is_flex: true,
-      role_ranks: { dps: 3200, tank: 3000 },
+      id: 3, primary_role: "damage", secondary_roles: ["tank"], is_flex: true,
+      role_ranks: { damage: 3200, tank: 3000 },
     });
-    expect(playerRoles(flex)).toEqual(["dps", "tank"]);
+    expect(playerRoles(flex)).toEqual(["damage", "tank"]);
     expect(filterDraftPlayers([flex], { role: "support", sort: "rank", query: "" })).toEqual([]);
     const fullFlex = mkPlayer({
-      id: 5, primary_role: "dps", secondary_roles: ["tank", "support"], is_flex: true,
-      role_ranks: { dps: 3200, tank: 3000, support: 2900 },
+      id: 5, primary_role: "damage", secondary_roles: ["tank", "support"], is_flex: true,
+      role_ranks: { damage: 3200, tank: 3000, support: 2900 },
     });
-    expect(playerRoles(fullFlex)).toEqual(["dps", "tank", "support"]);
+    expect(playerRoles(fullFlex)).toEqual(["damage", "tank", "support"]);
     // Not flex: still exactly what was declared.
-    const strict = mkPlayer({ id: 4, primary_role: "dps", secondary_roles: ["tank"] });
-    expect(playerRoles(strict)).toEqual(["dps", "tank"]);
+    const strict = mkPlayer({ id: 4, primary_role: "damage", secondary_roles: ["tank"] });
+    expect(playerRoles(strict)).toEqual(["damage", "tank"]);
     expect(filterDraftPlayers([strict], { role: "support", sort: "rank", query: "" })).toEqual([]);
   });
   it("preselects the primary role when it is safe, not the server's first safe option", () => {
-    // The server emits options in tank, dps, support order, so a support main
+    // The server emits options in tank, damage, support order, so a support main
     // who also plays tank used to open on tank.
     const player = mkPlayer({ id: 5, primary_role: "support", secondary_roles: ["tank"] });
     const option = (role: DraftRole, is_safe: boolean): DraftPickOption => ({
@@ -148,10 +148,10 @@ const ALL_FLEX = { has_role_slots: false };
 
 describe("roster role/rank", () => {
   it("uses drafted target role over primary", () => {
-    const player = mkPlayer({ id: 5, primary_role: "support", role_ranks: { dps: 3500, support: 3000 } });
-    const picks = [{ id: 9, picked_player_id: 5, target_role: "dps" }] as DraftPick[];
-    expect(rosterRoleForPlayer(player, picks)).toBe("dps");
-    expect(slotRankForPlayer(player, "dps", ROLE_SLOTS)).toBe(3500);
+    const player = mkPlayer({ id: 5, primary_role: "support", role_ranks: { damage: 3500, support: 3000 } });
+    const picks = [{ id: 9, picked_player_id: 5, target_role: "damage" }] as DraftPick[];
+    expect(rosterRoleForPlayer(player, picks)).toBe("damage");
+    expect(slotRankForPlayer(player, "damage", ROLE_SLOTS)).toBe(3500);
   });
   it("falls back to the primary role and that role's own rank", () => {
     const player = mkPlayer({ id: 6, primary_role: "tank", role_ranks: { tank: 2800 } });
@@ -169,7 +169,7 @@ describe("roster role/rank", () => {
     const player = mkPlayer({
       id: 9,
       primary_role: "support",
-      role_ranks: { dps: 3500, support: 3000 },
+      role_ranks: { damage: 3500, support: 3000 },
       effective_rank: 3500
     });
     expect(slotRankForPlayer(player, null, ROLE_SLOTS)).toBe(3500);
@@ -178,7 +178,7 @@ describe("roster role/rank", () => {
     const player = mkPlayer({
       id: 7,
       primary_role: "support",
-      role_ranks: { dps: 3500, support: 3000 },
+      role_ranks: { damage: 3500, support: 3000 },
       effective_rank: 3500
     });
     expect(slotRankForPlayer(player, "support", ALL_FLEX)).toBe(3500);

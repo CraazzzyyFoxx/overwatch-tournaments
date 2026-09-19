@@ -78,7 +78,7 @@ vi.mock("@/lib/notify", () => ({
   notify: { success: vi.fn(), error: vi.fn(), apiError: vi.fn() }
 }));
 // The trail has its own behaviour suite and needs the layout's provider.
-vi.mock("@/components/admin/AuditTrailSheet", () => ({
+vi.mock("@/components/kit/AuditTrailSheet", () => ({
   AuditTrailButton: () => <button type="button">Change history</button>
 }));
 

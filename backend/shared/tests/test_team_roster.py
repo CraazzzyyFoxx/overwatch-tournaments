@@ -19,7 +19,7 @@ if str(BACKEND_ROOT) not in sys.path:
 from shared.domain.roster_shape import RosterShapeError, parse_roster_slots  # noqa: E402
 from shared.domain.team_roster import RosterMember, RosterOccupancy  # noqa: E402
 
-FIVE_STACK = parse_roster_slots({"tank": 1, "dps": 2, "support": 2})
+FIVE_STACK = parse_roster_slots({"tank": 1, "damage": 2, "support": 2})
 FLEX_SIX = parse_roster_slots({"flex": 6})
 
 
@@ -30,18 +30,18 @@ def _starters(*codes: str) -> tuple[RosterMember, ...]:
 class OpenSlotTests(TestCase):
     def test_an_empty_roster_needs_the_whole_shape(self) -> None:
         occupancy = RosterOccupancy(shape=FIVE_STACK)
-        self.assertEqual({"tank": 1, "dps": 2, "support": 2}, occupancy.open_slots)
+        self.assertEqual({"tank": 1, "damage": 2, "support": 2}, occupancy.open_slots)
         self.assertFalse(occupancy.is_complete)
 
     def test_accepted_members_consume_their_slots(self) -> None:
-        occupancy = RosterOccupancy(shape=FIVE_STACK, accepted=_starters("tank", "dps"))
-        self.assertEqual({"tank": 0, "dps": 1, "support": 2}, occupancy.open_slots)
-        self.assertEqual({"tank": 1, "dps": 1, "support": 0}, occupancy.filled_slots)
+        occupancy = RosterOccupancy(shape=FIVE_STACK, accepted=_starters("tank", "damage"))
+        self.assertEqual({"tank": 0, "damage": 1, "support": 2}, occupancy.open_slots)
+        self.assertEqual({"tank": 1, "damage": 1, "support": 0}, occupancy.filled_slots)
 
     def test_a_full_roster_is_complete(self) -> None:
         occupancy = RosterOccupancy(
             shape=FIVE_STACK,
-            accepted=_starters("tank", "dps", "dps", "support", "support"),
+            accepted=_starters("tank", "damage", "damage", "support", "support"),
         )
         self.assertTrue(occupancy.is_complete)
         self.assertEqual("roster complete", occupancy.describe_shortfall())
@@ -50,16 +50,16 @@ class OpenSlotTests(TestCase):
         """A bench player fills no starter slot — the same rule the export uses."""
         occupancy = RosterOccupancy(
             shape=FIVE_STACK,
-            accepted=(*_starters("tank", "dps", "dps", "support"), RosterMember("support", is_substitute=True)),
+            accepted=(*_starters("tank", "damage", "damage", "support"), RosterMember("support", is_substitute=True)),
             max_substitutes=2,
         )
         self.assertFalse(occupancy.is_complete)
-        self.assertEqual({"tank": 0, "dps": 0, "support": 1}, occupancy.open_slots)
+        self.assertEqual({"tank": 0, "damage": 0, "support": 1}, occupancy.open_slots)
         self.assertEqual(1, occupancy.accepted_substitutes)
 
     def test_shortfall_names_what_is_missing(self) -> None:
-        occupancy = RosterOccupancy(shape=FIVE_STACK, accepted=_starters("tank", "dps"))
-        self.assertEqual("1x dps, 2x support", occupancy.describe_shortfall())
+        occupancy = RosterOccupancy(shape=FIVE_STACK, accepted=_starters("tank", "damage"))
+        self.assertEqual("1x damage, 2x support", occupancy.describe_shortfall())
 
 
 class OfferVersusAcceptTests(TestCase):
@@ -67,7 +67,7 @@ class OfferVersusAcceptTests(TestCase):
         """Otherwise ten offers can be held open for one slot."""
         occupancy = RosterOccupancy(shape=FIVE_STACK, pending=_starters("tank"))
         self.assertFalse(occupancy.can_offer("tank"))
-        self.assertEqual({"tank": 0, "dps": 2, "support": 2}, occupancy.unoffered_slots)
+        self.assertEqual({"tank": 0, "damage": 2, "support": 2}, occupancy.unoffered_slots)
 
     def test_a_pending_invite_does_not_block_its_own_acceptance(self) -> None:
         """The mirror-image mistake: reserving on accept makes every invite
@@ -81,37 +81,37 @@ class OfferVersusAcceptTests(TestCase):
         self.assertFalse(occupancy.can_accept("tank"))
 
     def test_partially_offered_slots_still_offer(self) -> None:
-        occupancy = RosterOccupancy(shape=FIVE_STACK, pending=_starters("dps"))
-        self.assertTrue(occupancy.can_offer("dps"))
-        occupancy = RosterOccupancy(shape=FIVE_STACK, pending=_starters("dps", "dps"))
-        self.assertFalse(occupancy.can_offer("dps"))
+        occupancy = RosterOccupancy(shape=FIVE_STACK, pending=_starters("damage"))
+        self.assertTrue(occupancy.can_offer("damage"))
+        occupancy = RosterOccupancy(shape=FIVE_STACK, pending=_starters("damage", "damage"))
+        self.assertFalse(occupancy.can_offer("damage"))
 
 
 class SubstituteTests(TestCase):
     def test_substitutes_are_capped_independently_of_the_shape(self) -> None:
         occupancy = RosterOccupancy(shape=FIVE_STACK, max_substitutes=1)
-        self.assertTrue(occupancy.can_offer("dps", is_substitute=True))
+        self.assertTrue(occupancy.can_offer("damage", is_substitute=True))
         occupancy = RosterOccupancy(
             shape=FIVE_STACK,
-            accepted=(RosterMember("dps", is_substitute=True),),
+            accepted=(RosterMember("damage", is_substitute=True),),
             max_substitutes=1,
         )
-        self.assertFalse(occupancy.can_offer("dps", is_substitute=True))
-        self.assertFalse(occupancy.can_accept("dps", is_substitute=True))
+        self.assertFalse(occupancy.can_offer("damage", is_substitute=True))
+        self.assertFalse(occupancy.can_accept("damage", is_substitute=True))
 
     def test_zero_substitutes_allowed_by_default(self) -> None:
         occupancy = RosterOccupancy(shape=FIVE_STACK)
-        self.assertFalse(occupancy.can_offer("dps", is_substitute=True))
+        self.assertFalse(occupancy.can_offer("damage", is_substitute=True))
 
     def test_pending_substitute_invites_reserve_bench_capacity(self) -> None:
         occupancy = RosterOccupancy(
             shape=FIVE_STACK,
-            pending=(RosterMember("dps", is_substitute=True),),
+            pending=(RosterMember("damage", is_substitute=True),),
             max_substitutes=1,
         )
-        self.assertFalse(occupancy.can_offer("dps", is_substitute=True))
+        self.assertFalse(occupancy.can_offer("damage", is_substitute=True))
         # ...but the pending one can still be accepted.
-        self.assertTrue(occupancy.can_accept("dps", is_substitute=True))
+        self.assertTrue(occupancy.can_accept("damage", is_substitute=True))
 
     def test_a_substitute_may_sit_on_a_slot_that_is_already_full(self) -> None:
         """The bench is not a starter slot, so a full tank slot does not stop a

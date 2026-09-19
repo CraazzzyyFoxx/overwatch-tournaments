@@ -1,5 +1,5 @@
 /**
- * The inbox wire types (`GET /api/notifications`, `GET /api/announcements/active`).
+ * The inbox wire types (`GET /api/v1/notifications`, `GET /api/v1/announcements/active`).
  *
  * A row carries `kind` + a payload *snapshot*, never rendered text: the client
  * renders `t("notifications.kinds." + kind, payload)`, so a wording fix reaches

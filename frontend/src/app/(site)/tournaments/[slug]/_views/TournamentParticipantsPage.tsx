@@ -102,7 +102,7 @@ import { getStatusIcon } from "@/lib/status-icons";
 import { formatSubroleSlug } from "@/lib/roles";
 import { TournamentParticipantsSkeleton } from "../_components/TournamentSkeletons";
 import { TournamentPageState } from "../_components/TournamentPageState";
-import { useTournamentQuery } from "../_hooks/useTournamentClientData";
+import { useTournamentQuery } from "@/hooks/useTournamentClientData";
 import { ViewSegment } from "../_components/ViewSegment";
 import { usePermissions } from "@/hooks/usePermissions";
 import styles from "../TournamentDetail.module.css";
@@ -153,7 +153,7 @@ const ROLE_ACCENT_CLASSES: Record<string, { bg: string; text: string; border: st
     text: "text-[color:var(--aqt-tank)]",
     border: "border-[color:color-mix(in_srgb,var(--aqt-tank)_20%,transparent)]"
   },
-  dps: {
+  damage: {
     bg: "bg-[color:color-mix(in_srgb,var(--aqt-damage)_10%,transparent)]",
     text: "text-[color:var(--aqt-damage)]",
     border: "border-[color:color-mix(in_srgb,var(--aqt-damage)_20%,transparent)]"
@@ -172,7 +172,7 @@ const ROLE_ACCENT_CLASSES: Record<string, { bg: string; text: string; border: st
 
 const ROLE_TO_ICON: Record<string, string> = {
   tank: "Tank",
-  dps: "Damage",
+  damage: "Damage",
   support: "Support",
   flex: "Flex"
 };

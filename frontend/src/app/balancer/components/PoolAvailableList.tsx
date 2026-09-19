@@ -4,7 +4,7 @@ import { Plus } from "lucide-react";
 
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import type { BalancerApplication, BalancerRoleCode } from "@/types/balancer-admin.types";
-import { ROLE_LABELS, buildApplicationSearchIndex } from "@/app/balancer/components/workspace-helpers";
+import { ROLE_LABELS, buildApplicationSearchIndex } from "@/components/balancer/workspace-helpers";
 
 type PoolAvailableListProps = {
   applications: BalancerApplication[];
@@ -19,9 +19,8 @@ function normalizeApplicationRole(role: string | null | undefined): BalancerRole
   switch (role?.trim().toLowerCase()) {
     case "tank":
       return "tank";
-    case "dps":
     case "damage":
-      return "dps";
+      return "damage";
     case "support":
       return "support";
     default:
@@ -77,7 +76,7 @@ export function PoolAvailableList({
               type="button"
               disabled={disabled}
               onClick={() => onAddFromApplication(application)}
-              className="flex w-full items-center gap-2 rounded-xl border border-[color:var(--aqt-border)] bg-white/[0.02] px-2.5 py-2 text-left transition-colors hover:border-[color:var(--aqt-border-2)] hover:bg-white/[0.04] disabled:opacity-50"
+              className="flex w-full items-center gap-2 rounded-lg border border-[color:var(--aqt-border)] bg-[color:var(--aqt-overlay-1)] px-2.5 py-2 text-left transition-colors hover:border-[color:var(--aqt-border-2)] hover:bg-[color:var(--aqt-overlay-3)] disabled:opacity-50"
             >
               {roleCodes.length > 0 ? (
                 <span className="flex items-center gap-1">
@@ -90,7 +89,10 @@ export function PoolAvailableList({
               ) : (
                 <span className="text-label text-[color:var(--aqt-fg-dim)]">No roles</span>
               )}
-              <span className="min-w-0 flex-1 truncate text-caption font-medium text-[color:var(--aqt-fg)]">
+              <span
+                className="min-w-0 flex-1 truncate text-caption font-medium text-[color:var(--aqt-fg)]"
+                title={application.battle_tag}
+              >
                 {application.battle_tag}
               </span>
               <span className="flex shrink-0 items-center gap-1 text-label font-medium text-[color:var(--aqt-fg-dim)]">

@@ -4,7 +4,7 @@ import "sync"
 
 // ipCounter tracks the number of concurrent connections per client IP so the
 // handler can cap ANONYMOUS connections. /ws carries no auth and has no per-IP
-// rate limiter in front of it (unlike /api/auth/*), so without a cap a single
+// rate limiter in front of it (unlike /api/v1/auth/*), so without a cap a single
 // IP could open unbounded sockets. Authenticated connections are never counted
 // here — they are bounded by the account, not the IP.
 //

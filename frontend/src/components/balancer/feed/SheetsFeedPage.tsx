@@ -4,7 +4,7 @@ import { startTransition, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertCircle, Loader2 } from "lucide-react";
 
-import { SaveBar } from "@/components/admin/kit/SaveBar";
+import { SaveBar } from "@/components/kit/SaveBar";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { notify } from "@/lib/notify";
 import balancerAdminService from "@/services/balancer-admin.service";

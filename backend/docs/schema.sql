@@ -52,21 +52,25 @@ CREATE TABLE achievements.evaluation_result (
 	achievement_rule_id BIGINT NOT NULL, 
 	workspace_member_id BIGINT NOT NULL, 
 	tournament_id BIGINT, 
+	encounter_id BIGINT, 
 	match_id BIGINT, 
 	qualified_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
 	evidence_json JSON, 
 	rule_version INTEGER NOT NULL, 
 	run_id UUID, 
 	PRIMARY KEY (id), 
-	CONSTRAINT uq_eval_result_rule_user_tournament_match UNIQUE (achievement_rule_id, workspace_member_id, tournament_id, match_id), 
+	CONSTRAINT uq_eval_result_rule_user_tournament_match UNIQUE (achievement_rule_id, workspace_member_id, tournament_id, encounter_id, match_id), 
 	FOREIGN KEY(achievement_rule_id) REFERENCES achievements.rule (id) ON DELETE CASCADE, 
 	FOREIGN KEY(workspace_member_id) REFERENCES workspace_member (id) ON DELETE CASCADE, 
 	FOREIGN KEY(tournament_id) REFERENCES tournament.tournament (id) ON DELETE CASCADE, 
+	FOREIGN KEY(encounter_id) REFERENCES tournament.encounter (id) ON DELETE CASCADE, 
 	FOREIGN KEY(match_id) REFERENCES matches.match (id) ON DELETE CASCADE, 
 	FOREIGN KEY(run_id) REFERENCES achievements.evaluation_run (id) ON DELETE SET NULL
 );
 
 CREATE INDEX ix_achievements_evaluation_result_achievement_rule_id ON achievements.evaluation_result (achievement_rule_id);
+
+CREATE INDEX ix_achievements_evaluation_result_encounter_id ON achievements.evaluation_result (encounter_id) WHERE encounter_id IS NOT NULL;
 
 CREATE INDEX ix_achievements_evaluation_result_match_id ON achievements.evaluation_result (match_id) WHERE match_id IS NOT NULL;
 
@@ -2937,6 +2941,7 @@ CREATE TABLE tournament.tournament (
 	name VARCHAR NOT NULL, 
 	slug VARCHAR NOT NULL, 
 	description VARCHAR, 
+	rules TEXT, 
 	is_league BOOLEAN DEFAULT 'false' NOT NULL, 
 	is_finished BOOLEAN DEFAULT 'false' NOT NULL, 
 	is_hidden BOOLEAN DEFAULT 'false' NOT NULL, 

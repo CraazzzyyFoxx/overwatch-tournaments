@@ -1,7 +1,7 @@
 """Unit tests for registration role/sub-role validation and normalization.
 
 Covers the sub-role fixes: catalog-driven validation (P4/P5), unified write-path
-normalization (P3), and the shared dps<->damage catalog mapping (P6).
+normalization (P3), and the shared sub-role catalog keying (P6).
 """
 
 from __future__ import annotations
@@ -57,7 +57,7 @@ def _payload(roles: list[dict]) -> schemas.RegistrationCreate:
 
 CATALOG = {
     "tank": [{"slug": "main_tank", "label": "Main Tank"}],
-    "dps": [
+    "damage": [
         {"slug": "hitscan", "label": "Hitscan"},
         {"slug": "projectile", "label": "Projectile"},
     ],
@@ -75,19 +75,19 @@ class ValidateRolesTests(TestCase):
         assert exc.value.status_code == 422
 
     def test_subrole_not_in_config_rejected(self) -> None:
-        form = _form({"primary_role": {"enabled": True, "subroles": {"dps": ["hitscan"]}}})
+        form = _form({"primary_role": {"enabled": True, "subroles": {"damage": ["hitscan"]}}})
         with pytest.raises(HTTPException) as exc:
             validation.validate_registration_input(
                 form,
-                _payload([{"role": "dps", "subrole": "projectile", "is_primary": True}]),
+                _payload([{"role": "damage", "subrole": "projectile", "is_primary": True}]),
             )
         assert exc.value.status_code == 422
 
     def test_subrole_in_config_accepted(self) -> None:
-        form = _form({"primary_role": {"enabled": True, "subroles": {"dps": ["hitscan"]}}})
+        form = _form({"primary_role": {"enabled": True, "subroles": {"damage": ["hitscan"]}}})
         validation.validate_registration_input(
             form,
-            _payload([{"role": "dps", "subrole": "hitscan", "is_primary": True}]),
+            _payload([{"role": "damage", "subrole": "hitscan", "is_primary": True}]),
         )
 
     def test_subrole_falls_back_to_catalog(self) -> None:
@@ -95,14 +95,14 @@ class ValidateRolesTests(TestCase):
         # In catalog -> ok
         validation.validate_registration_input(
             form,
-            _payload([{"role": "dps", "subrole": "hitscan", "is_primary": True}]),
+            _payload([{"role": "damage", "subrole": "hitscan", "is_primary": True}]),
             subrole_catalog=CATALOG,
         )
         # Not in catalog -> rejected
         with pytest.raises(HTTPException) as exc:
             validation.validate_registration_input(
                 form,
-                _payload([{"role": "dps", "subrole": "burst", "is_primary": True}]),
+                _payload([{"role": "damage", "subrole": "burst", "is_primary": True}]),
                 subrole_catalog=CATALOG,
             )
         assert exc.value.status_code == 422
@@ -111,7 +111,7 @@ class ValidateRolesTests(TestCase):
         # Nothing configured anywhere -> accept any normalized sub-role.
         validation.validate_registration_input(
             _form({}),
-            _payload([{"role": "dps", "subrole": "whatever", "is_primary": True}]),
+            _payload([{"role": "damage", "subrole": "whatever", "is_primary": True}]),
         )
 
     def test_tank_subrole_via_catalog(self) -> None:
@@ -132,49 +132,49 @@ class ValidateRolesTests(TestCase):
     def test_additional_roles_use_additional_config(self) -> None:
         form = _form(
             {
-                "primary_role": {"enabled": True, "subroles": {"dps": ["hitscan"]}},
-                "additional_roles": {"enabled": True, "subroles": {"dps": ["projectile"]}},
+                "primary_role": {"enabled": True, "subroles": {"damage": ["hitscan"]}},
+                "additional_roles": {"enabled": True, "subroles": {"damage": ["projectile"]}},
             }
         )
-        # Secondary dps allows projectile (additional config), not hitscan.
+        # Secondary damage allows projectile (additional config), not hitscan.
         validation.validate_registration_input(
             form,
-            _payload([{"role": "dps", "subrole": "projectile", "is_primary": False}]),
+            _payload([{"role": "damage", "subrole": "projectile", "is_primary": False}]),
         )
         with pytest.raises(HTTPException):
             validation.validate_registration_input(
                 form,
-                _payload([{"role": "dps", "subrole": "hitscan", "is_primary": False}]),
+                _payload([{"role": "damage", "subrole": "hitscan", "is_primary": False}]),
             )
 
 
 class BuildRegistrationRolesTests(TestCase):
     def test_normalizes_subrole(self) -> None:
         entries = reg_service.build_registration_roles(
-            [schemas.RoleWithSubrole(role="dps", subrole="Main DPS", is_primary=True)]
+            [schemas.RoleWithSubrole(role="damage", subrole="Main Damage", is_primary=True)]
         )
         assert len(entries) == 1
-        assert entries[0].role == "dps"
-        assert entries[0].subrole == "main_dps"
+        assert entries[0].role == "damage"
+        assert entries[0].subrole == "main_damage"
 
     def test_filters_invalid_role(self) -> None:
         entries = reg_service.build_registration_roles(
             [
                 schemas.RoleWithSubrole(role="flex", is_primary=True),
-                schemas.RoleWithSubrole(role="dps", is_primary=True),
+                schemas.RoleWithSubrole(role="damage", is_primary=True),
             ]
         )
-        assert [entry.role for entry in entries] == ["dps"]
+        assert [entry.role for entry in entries] == ["damage"]
 
     def test_dedup_and_priority(self) -> None:
         entries = reg_service.build_registration_roles(
             [
-                schemas.RoleWithSubrole(role="dps", is_primary=True),
-                schemas.RoleWithSubrole(role="dps", is_primary=False),
+                schemas.RoleWithSubrole(role="damage", is_primary=True),
+                schemas.RoleWithSubrole(role="damage", is_primary=False),
                 schemas.RoleWithSubrole(role="support", is_primary=False),
             ]
         )
-        assert [entry.role for entry in entries] == ["dps", "support"]
+        assert [entry.role for entry in entries] == ["damage", "support"]
         assert [entry.priority for entry in entries] == [0, 1]
 
     def test_handles_none(self) -> None:
@@ -191,36 +191,36 @@ class TopHeroValidationTests(TestCase):
 
     def test_disabled_field_skips_hero_validation(self) -> None:
         # No top_heroes config -> heroes are ignored even when class would mismatch.
-        self._validate({}, [{"role": "dps", "is_primary": True, "top_heroes": ["ana"]}])
+        self._validate({}, [{"role": "damage", "is_primary": True, "top_heroes": ["ana"]}])
 
     def test_hero_class_must_match_non_flex_role(self) -> None:
         with pytest.raises(HTTPException) as exc:
-            self._validate(TOP_HEROES_ON, [{"role": "dps", "is_primary": True, "top_heroes": ["ana"]}])
+            self._validate(TOP_HEROES_ON, [{"role": "damage", "is_primary": True, "top_heroes": ["ana"]}])
         assert exc.value.status_code == 422
 
     def test_matching_class_accepted(self) -> None:
-        self._validate(TOP_HEROES_ON, [{"role": "dps", "is_primary": True, "top_heroes": ["ashe", "genji"]}])
+        self._validate(TOP_HEROES_ON, [{"role": "damage", "is_primary": True, "top_heroes": ["ashe", "genji"]}])
 
     def test_unknown_hero_rejected(self) -> None:
         with pytest.raises(HTTPException) as exc:
-            self._validate(TOP_HEROES_ON, [{"role": "dps", "is_primary": True, "top_heroes": ["nobody"]}])
+            self._validate(TOP_HEROES_ON, [{"role": "damage", "is_primary": True, "top_heroes": ["nobody"]}])
         assert exc.value.status_code == 422
 
     def test_duplicate_heroes_rejected(self) -> None:
         with pytest.raises(HTTPException) as exc:
-            self._validate(TOP_HEROES_ON, [{"role": "dps", "is_primary": True, "top_heroes": ["ashe", "ashe"]}])
+            self._validate(TOP_HEROES_ON, [{"role": "damage", "is_primary": True, "top_heroes": ["ashe", "ashe"]}])
         assert exc.value.status_code == 422
 
     def test_exceeding_configured_max_rejected(self) -> None:
         form = {"top_heroes": {"enabled": True, "max_heroes": 1}}
         with pytest.raises(HTTPException) as exc:
-            self._validate(form, [{"role": "dps", "is_primary": True, "top_heroes": ["ashe", "genji"]}])
+            self._validate(form, [{"role": "damage", "is_primary": True, "top_heroes": ["ashe", "genji"]}])
         assert exc.value.status_code == 422
 
     def test_default_max_is_five(self) -> None:
         many = ["ashe", "genji", "ashe", "genji", "ashe", "genji"]  # 6 items
         with pytest.raises(HTTPException) as exc:
-            self._validate(TOP_HEROES_ON, [{"role": "dps", "is_primary": True, "top_heroes": many}])
+            self._validate(TOP_HEROES_ON, [{"role": "damage", "is_primary": True, "top_heroes": many}])
         assert exc.value.status_code == 422
 
     def test_flex_accepts_any_class(self) -> None:
@@ -228,7 +228,7 @@ class TopHeroValidationTests(TestCase):
         self._validate(
             TOP_HEROES_ON,
             [
-                {"role": "dps", "is_primary": True, "top_heroes": ["ana", "reinhardt"]},
+                {"role": "damage", "is_primary": True, "top_heroes": ["ana", "reinhardt"]},
                 {"role": "tank", "is_primary": True},
                 {"role": "support", "is_primary": True},
             ],
@@ -237,12 +237,12 @@ class TopHeroValidationTests(TestCase):
     def test_required_without_heroes_rejected(self) -> None:
         form = {"top_heroes": {"enabled": True, "required": True}}
         with pytest.raises(HTTPException) as exc:
-            self._validate(form, [{"role": "dps", "is_primary": True}])
+            self._validate(form, [{"role": "damage", "is_primary": True}])
         assert exc.value.status_code == 422
 
     def test_required_with_heroes_accepted(self) -> None:
         form = {"top_heroes": {"enabled": True, "required": True}}
-        self._validate(form, [{"role": "dps", "is_primary": True, "top_heroes": ["ashe"]}])
+        self._validate(form, [{"role": "damage", "is_primary": True, "top_heroes": ["ashe"]}])
 
 
 class FlexGuardTests(TestCase):
@@ -254,7 +254,7 @@ class FlexGuardTests(TestCase):
                 _payload(
                     [
                         {"role": "tank", "is_primary": True},
-                        {"role": "dps", "is_primary": True},
+                        {"role": "damage", "is_primary": True},
                         {"role": "support", "is_primary": True},
                     ]
                 ),
@@ -265,7 +265,7 @@ class FlexGuardTests(TestCase):
         form = _form({"flex_role": {"enabled": False}})
         validation.validate_registration_input(
             form,
-            _payload([{"role": "dps", "is_primary": True}, {"role": "tank", "is_primary": False}]),
+            _payload([{"role": "damage", "is_primary": True}, {"role": "tank", "is_primary": False}]),
         )
 
     def test_flex_enabled_by_default(self) -> None:
@@ -274,7 +274,7 @@ class FlexGuardTests(TestCase):
             _payload(
                 [
                     {"role": "tank", "is_primary": True},
-                    {"role": "dps", "is_primary": True},
+                    {"role": "damage", "is_primary": True},
                     {"role": "support", "is_primary": True},
                 ]
             ),
@@ -301,7 +301,7 @@ class AdditionalRolesRequiredTests(TestCase):
     def test_secondary_role_satisfies_it(self) -> None:
         validation.validate_registration_input(
             _form(self.FORM),
-            _payload([{"role": "tank", "is_primary": True}, {"role": "dps", "is_primary": False}]),
+            _payload([{"role": "tank", "is_primary": True}, {"role": "damage", "is_primary": False}]),
         )
 
     def test_full_flex_satisfies_it(self) -> None:
@@ -310,7 +310,7 @@ class AdditionalRolesRequiredTests(TestCase):
             _payload(
                 [
                     {"role": "tank", "is_primary": True},
-                    {"role": "dps", "is_primary": True},
+                    {"role": "damage", "is_primary": True},
                     {"role": "support", "is_primary": True},
                 ]
             ),
@@ -333,7 +333,7 @@ class AllRolesModeGuardTests(TestCase):
             _payload(
                 [
                     {"role": "tank", "is_primary": True},
-                    {"role": "dps", "is_primary": False},
+                    {"role": "damage", "is_primary": False},
                     {"role": "support", "is_primary": False},
                 ]
             ),
@@ -345,7 +345,7 @@ class AllRolesModeGuardTests(TestCase):
             _payload(
                 [
                     {"role": "tank", "is_primary": True},
-                    {"role": "dps", "is_primary": True},
+                    {"role": "damage", "is_primary": True},
                     {"role": "support", "is_primary": True},
                 ]
             ),
@@ -358,7 +358,7 @@ class AllRolesModeGuardTests(TestCase):
                 _payload(
                     [
                         {"role": "tank", "is_primary": False},
-                        {"role": "dps", "is_primary": False},
+                        {"role": "damage", "is_primary": False},
                         {"role": "support", "is_primary": False},
                     ]
                 ),
@@ -372,7 +372,7 @@ class AllRolesModeGuardTests(TestCase):
                 _payload(
                     [
                         {"role": "tank", "is_primary": True},
-                        {"role": "dps", "is_primary": True},
+                        {"role": "damage", "is_primary": True},
                         {"role": "support", "is_primary": False},
                     ]
                 ),
@@ -386,7 +386,7 @@ class AllRolesModeGuardTests(TestCase):
             _payload(
                 [
                     {"role": "tank", "is_primary": True},
-                    {"role": "dps", "is_primary": True},
+                    {"role": "damage", "is_primary": True},
                 ]
             ),
         )
@@ -395,7 +395,7 @@ class AllRolesModeGuardTests(TestCase):
 class BuildRegistrationRoleHeroesTests(TestCase):
     def test_attaches_ordered_hero_entries(self) -> None:
         entries = reg_service.build_registration_roles(
-            [schemas.RoleWithSubrole(role="dps", is_primary=True, top_heroes=["ashe", "genji"])],
+            [schemas.RoleWithSubrole(role="damage", is_primary=True, top_heroes=["ashe", "genji"])],
             hero_catalog=HERO_CATALOG,
         )
         heroes = entries[0].hero_entries
@@ -403,7 +403,7 @@ class BuildRegistrationRoleHeroesTests(TestCase):
 
     def test_caps_dedups_and_drops_unknown(self) -> None:
         entries = reg_service.build_registration_roles(
-            [schemas.RoleWithSubrole(role="dps", is_primary=True, top_heroes=["ashe", "genji", "ashe", "nobody"])],
+            [schemas.RoleWithSubrole(role="damage", is_primary=True, top_heroes=["ashe", "genji", "ashe", "nobody"])],
             hero_catalog=HERO_CATALOG,
             max_heroes=2,
         )
@@ -411,31 +411,30 @@ class BuildRegistrationRoleHeroesTests(TestCase):
 
     def test_no_catalog_means_no_hero_entries(self) -> None:
         entries = reg_service.build_registration_roles(
-            [schemas.RoleWithSubrole(role="dps", is_primary=True, top_heroes=["ashe"])]
+            [schemas.RoleWithSubrole(role="damage", is_primary=True, top_heroes=["ashe"])]
         )
         assert list(entries[0].hero_entries) == []
 
 
 class SharedCatalogMappingTests(TestCase):
     def test_canonical_to_registration_role(self) -> None:
-        assert canonical_to_registration_role("damage") == "dps"
-        assert canonical_to_registration_role("dps") == "dps"
+        assert canonical_to_registration_role("damage") == "damage"
         assert canonical_to_registration_role("support") == "support"
         assert canonical_to_registration_role("tank") == "tank"
         assert canonical_to_registration_role("nonsense") is None
 
-    def test_build_catalog_maps_damage_to_dps(self) -> None:
+    def test_build_catalog_keys_by_registration_role_code(self) -> None:
         rows = [
             SimpleNamespace(role="damage", slug="hitscan", label="Hitscan"),
             SimpleNamespace(role="support", slug="main_heal", label="Main Heal"),
             SimpleNamespace(role="tank", slug="main_tank", label="Main Tank"),
         ]
         catalog = build_subrole_catalog(rows)
-        assert catalog["dps"] == [{"slug": "hitscan", "label": "Hitscan"}]
+        assert catalog["damage"] == [{"slug": "hitscan", "label": "Hitscan"}]
         assert catalog["support"] == [{"slug": "main_heal", "label": "Main Heal"}]
         assert catalog["tank"] == [{"slug": "main_tank", "label": "Main Tank"}]
 
     def test_build_catalog_always_returns_all_codes(self) -> None:
         catalog = build_subrole_catalog([])
-        assert set(catalog.keys()) == {"tank", "dps", "support"}
+        assert set(catalog.keys()) == {"tank", "damage", "support"}
         assert all(value == [] for value in catalog.values())

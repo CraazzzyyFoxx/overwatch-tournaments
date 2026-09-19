@@ -6,7 +6,7 @@ from json import JSONDecodeError
 
 from pydantic import ValidationError
 
-from src.services.balancer.config.public_contract import normalize_persisted_config_payload
+from src.services.balancer.config.public_contract import normalize_config_payload
 
 
 def _parse_json_bytes(content: bytes) -> dict:
@@ -41,7 +41,7 @@ class BalancerRequestParser:
             raise ValueError("'config_overrides' field must not contain a nested config_overrides object")
 
         try:
-            validated = normalize_persisted_config_payload(payload)
+            validated = normalize_config_payload(payload)
         except ValidationError as exc:
             raise ValueError(f"Invalid config overrides: {exc.errors()}") from exc
 

@@ -6,11 +6,11 @@ import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-q
 import { Archive } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
 
-import { AdminDataTable } from "@/components/admin-data-table";
+import { AdminDataTable } from "@/components/data-table";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
-import { AdminTabs } from "@/components/admin/kit/AdminTabs";
-import { ConfirmDialog, type ConfirmIntent } from "@/components/admin/kit/ConfirmDialog";
-import { EmptyNote } from "@/components/admin/kit/EmptyNote";
+import { AdminTabs } from "@/components/kit/AdminTabs";
+import { ConfirmDialog, type ConfirmIntent } from "@/components/kit/ConfirmDialog";
+import { EmptyNote } from "@/components/kit/EmptyNote";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";

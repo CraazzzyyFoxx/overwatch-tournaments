@@ -20,8 +20,8 @@ import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import type { PickBanKind } from "@/types/tournament.types";
-import { matchesItemName } from "../../components/pickBanConfig.helpers";
-import { EmptyNote } from "@/components/admin/kit/EmptyNote";
+import { matchesItemName } from "@/lib/pick-ban-config";
+import { EmptyNote } from "@/components/kit/EmptyNote";
 
 /** One selectable map or hero, flattened so both catalogues share one picker. */
 export interface CatalogueItem {

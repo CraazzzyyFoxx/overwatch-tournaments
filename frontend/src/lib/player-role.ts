@@ -19,14 +19,13 @@ export const PLAYER_ROLE_OPTIONS: PlayerRoleOption[] = ["Tank", "Damage", "Suppo
  * Case-insensitive alias table shared by every normalizer below, so every
  * caller resolves a stored role spelling identically instead of keeping its
  * own copy. Mirrors the backend's `HeroClass.parse` -- the canonical name,
- * lowercase, and the `dps` wire spelling for Damage. No other synonyms: a
- * caller needing free-text aliases (e.g. sheet-import value maps) owns that
- * mapping itself instead of this table silently widening it.
+ * lowercase. No other synonyms: a caller needing free-text aliases (e.g.
+ * sheet-import value maps) owns that mapping itself instead of this table
+ * silently widening it.
  */
 const ROLE_ALIASES: Record<string, "tank" | "damage" | "support" | "flex"> = {
   tank: "tank",
   damage: "damage",
-  dps: "damage",
   support: "support",
   flex: "flex"
 };
@@ -37,8 +36,8 @@ function resolveRoleAlias(role: string | null | undefined): "tank" | "damage" | 
 }
 
 /**
- * Coerce any stored/legacy role spelling (`dps`, `damage`, `TANK`, `flex`,
- * `null`) to a canonical option.
+ * Coerce any stored role spelling (`damage`, `TANK`, `flex`, `null`) to a
+ * canonical option.
  *
  * Unknown and absent values still fall back to `Damage`: `Damage` is the
  * historical default of every roster editor, and widening the fallback to
@@ -94,7 +93,7 @@ export function filterSubRoleOptions(
  */
 export const PLAYER_ROLE_LABEL_KEY = {
   Tank: "common.roles.tank",
-  Damage: "common.roles.dps",
+  Damage: "common.roles.damage",
   Support: "common.roles.support",
   Flex: "common.roles.flex"
 } as const satisfies Record<PlayerRoleOption, string>;
@@ -145,13 +144,15 @@ export function heroVariantFromRole(role: string | null | undefined): AqtRoleKey
 
 /**
  * Draft/balancer/registration wire spelling — mirrors the backend's
- * `HeroClass.slot_code` (`Damage` -> `dps`; everything else just lowercased).
+ * `HeroClass.slot_code`, which is now just the lowercased canonical name.
+ * Identical to {@link PlayerRoleTint} by construction; kept separate because
+ * one names a wire/storage contract and the other a CSS hue.
  */
-export type PlayerRoleSlotCode = "tank" | "dps" | "support" | "flex";
+export type PlayerRoleSlotCode = "tank" | "damage" | "support" | "flex";
 
 /** {@link PlayerRoleOption} -> {@link PlayerRoleSlotCode}. */
 export function playerRoleSlotCode(role: PlayerRoleOption): PlayerRoleSlotCode {
-  return role === "Damage" ? "dps" : (role.toLowerCase() as PlayerRoleSlotCode);
+  return role.toLowerCase() as PlayerRoleSlotCode;
 }
 
 /**

@@ -10,7 +10,8 @@ import type { SettingsSection } from "../tab-guards";
  */
 export const SETTINGS_SECTION_LABELS: Record<SettingsSection, string> = {
   general: "General",
-  rules: "Rules & scoring",
+  rules: "Rules",
+  scoring: "Scoring",
   schedule: "Schedule",
   roster: "Roster shape",
   registration: "Registration",
@@ -34,7 +35,7 @@ export const SETTINGS_SECTION_GROUPS: ReadonlyArray<{
   label?: string;
   sections: readonly SettingsSection[];
 }> = [
-  { sections: ["general", "rules", "schedule", "roster"] },
+  { sections: ["general", "rules", "scoring", "schedule", "roster"] },
   // The registration form used to hold all of this INSIDE the questionnaire
   // builder, under six groups whose titles had to be written with "and".
   // Splitting it in two names the two questions being answered: how entries are

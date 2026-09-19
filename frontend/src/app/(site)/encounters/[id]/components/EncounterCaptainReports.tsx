@@ -7,8 +7,8 @@ import { TriangleAlert } from "lucide-react";
 import { cn } from "@/lib/utils";
 import captainService from "@/services/captain.service";
 import type { CaptainReport, MatchReportForm } from "@/types/encounter.types";
-import { Pill, PillFact } from "./EncounterAtoms";
-import styles from "../EncounterDetail.module.css";
+import { Pill, PillFact } from "@/components/match/EncounterAtoms";
+import styles from "@/components/match/EncounterDetail.module.css";
 
 interface EncounterCaptainReportsProps {
   encounterId: number;

@@ -3,10 +3,10 @@
 import type { ElementType } from "react";
 import Link from "next/link";
 import { AlertTriangle, CheckCircle2, Circle, Lock, Minus } from "lucide-react";
-import { StatusPill } from "@/components/admin/kit/StatusPill";
+import { StatusPill } from "@/components/kit/StatusPill";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { EYEBROW_CLASS, type Tone } from "@/components/admin/tone";
+import { EYEBROW_CLASS, type Tone } from "@/components/kit/tone";
 import type { ChecklistItem, ChecklistPhase, ChecklistState } from "@/components/admin/tournament-checklist";
 
 const PHASE_TITLES: Record<ChecklistPhase, string> = {

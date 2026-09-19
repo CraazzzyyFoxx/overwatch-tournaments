@@ -50,12 +50,12 @@ export const mixPreferencesKeys = {
 
 export const mixPreferencesService = {
   get(): Promise<MixBalancerPreferencesRead> {
-    return apiFetch("/api/balancer/me/mix-preferences").then((r) => r.json());
+    return apiFetch("/api/v1/balancer/me/mix-preferences").then((r) => r.json());
   },
 
   /** Replaces the whole row: every knob travels, `null` clearing it back to the default. */
   update(preferences: MixBalancerPreferences): Promise<MixBalancerPreferencesRead> {
-    return apiFetch("/api/balancer/me/mix-preferences", {
+    return apiFetch("/api/v1/balancer/me/mix-preferences", {
       method: "PUT",
       body: preferences,
     }).then((r) => r.json());

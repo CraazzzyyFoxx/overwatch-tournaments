@@ -76,7 +76,7 @@ export const MIX_STATUS_CLASS: Record<CustomGameStatus, string> = {
  */
 export const ROLE_TILE_CLASS: Record<string, string> = {
   tank: "bg-[color:color-mix(in_srgb,var(--aqt-tank)_12%,transparent)] shadow-[inset_0_-2px_0_var(--aqt-tank)]",
-  dps: "bg-[color:color-mix(in_srgb,var(--aqt-damage)_12%,transparent)] shadow-[inset_0_-2px_0_var(--aqt-damage)]",
+  damage: "bg-[color:color-mix(in_srgb,var(--aqt-damage)_12%,transparent)] shadow-[inset_0_-2px_0_var(--aqt-damage)]",
   support:
     "bg-[color:color-mix(in_srgb,var(--aqt-support)_12%,transparent)] shadow-[inset_0_-2px_0_var(--aqt-support)]",
 };
@@ -84,7 +84,7 @@ export const ROLE_TILE_CLASS: Record<string, string> = {
 /** Same fill, no underline: a role the balancer may use, but not first. */
 export const ROLE_TINT_CLASS: Record<string, string> = {
   tank: "bg-[color:color-mix(in_srgb,var(--aqt-tank)_9%,transparent)]",
-  dps: "bg-[color:color-mix(in_srgb,var(--aqt-damage)_9%,transparent)]",
+  damage: "bg-[color:color-mix(in_srgb,var(--aqt-damage)_9%,transparent)]",
   support: "bg-[color:color-mix(in_srgb,var(--aqt-support)_9%,transparent)]",
 };
 
@@ -97,6 +97,6 @@ export const ROLE_TINT_CLASS: Record<string, string> = {
  */
 export const ROLE_ICON_COLOR: Record<string, string> = {
   tank: "var(--aqt-tank)",
-  dps: "var(--aqt-damage)",
+  damage: "var(--aqt-damage)",
   support: "var(--aqt-support)",
 };

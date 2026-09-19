@@ -124,15 +124,15 @@ describe("player inspector role ranks", () => {
   });
 
   test("the header shows the rank the server resolved for this draft, not the maximum", () => {
-    // A support main: 2814 on support, 3900 on dps. The header renders
+    // A support main: 2814 on support, 3900 on damage. The header renders
     // `effective_rank` — the ONE rank the roster engine resolved for this draft
     // — or it advertises a 3900 support.
     const html = render(
       player({
         primary_role: "support",
-        secondary_roles: ["dps"],
+        secondary_roles: ["damage"],
         effective_rank: 2814,
-        role_ranks: { support: 2814, dps: 3900 }
+        role_ranks: { support: 2814, damage: 3900 }
       }),
       GRID
     );

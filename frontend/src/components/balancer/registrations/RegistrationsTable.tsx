@@ -27,18 +27,18 @@ import {
   groupRegistrations,
   normalizeRegistrationGroupingMode
 } from "@/components/balancer/registrations/_components/registrationGrouping";
-import { AdminDataTable, type AdminDataTableGroup, type AdminTableFilters, createKebabColumn, type KebabAction } from "@/components/admin-data-table";
-import { useAuditTrail } from "@/components/admin/AuditTrailSheet";
-import { BulkBar } from "@/components/admin/BulkBar";
-import { EYEBROW_CLASS } from "@/components/admin/tone";
-import { AdminFilterBar } from "@/components/admin/kit/AdminFilterBar";
-import { AdminInspector } from "@/components/admin/kit/AdminInspector";
-import { ConfirmDialog } from "@/components/admin/kit/ConfirmDialog";
+import { AdminDataTable, type AdminDataTableGroup, type AdminTableFilters, createKebabColumn, type KebabAction } from "@/components/data-table";
+import { useAuditTrail } from "@/components/kit/AuditTrailSheet";
+import { BulkBar } from "@/components/kit/BulkBar";
+import { EYEBROW_CLASS } from "@/components/kit/tone";
+import { AdminFilterBar } from "@/components/kit/AdminFilterBar";
+import { AdminInspector } from "@/components/kit/AdminInspector";
+import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
 import {
   useAdminFilters,
   type FilterDef,
   type FilterValue
-} from "@/components/admin/kit/useAdminFilters";
+} from "@/components/kit/useAdminFilters";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -168,9 +168,8 @@ export default function RegistrationsTable({
   // public participants page, so they live in the message catalogue rather than
   // as English literals like the rest of this admin table.
   const t = useTranslations();
-  // `id` (the inspector) is navigation, not narrowing: it must not drop `page`
-  // the way a filter change does, or opening a row would rewind an infinite
-  // list to its first batch.
+  // `id` (the inspector) is navigation, not narrowing: it must not drop the
+  // filters the way a narrowing change does.
   const { searchParams, setParams } = useQueryParams({ resetOnChange: [] });
   const { canAccessPermission } = usePermissions();
   const { open: openAuditTrail } = useAuditTrail();
@@ -776,9 +775,7 @@ export default function RegistrationsTable({
           onFiltersChange={handleTableFiltersChange}
           filterKey={filters.filterKey}
           initialSort={{ field: "submitted", dir: "desc" }}
-          initialPageSize={25}
-          paging="infinite"
-          rowUnit="registrations"
+          paging="all"
           cellAlign="top"
           searchPlaceholder="Search registrations"
           emptyMessage="No registrations yet."

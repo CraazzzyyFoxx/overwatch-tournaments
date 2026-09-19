@@ -133,6 +133,6 @@ describe("Settings rail", () => {
     const current = [...container.querySelectorAll("nav a")].filter(
       (link) => link.getAttribute("aria-current") === "page"
     );
-    expect(current.map((link) => link.textContent)).toEqual(["Rules & scoring"]);
+    expect(current.map((link) => link.textContent)).toEqual(["Rules"]);
   });
 });

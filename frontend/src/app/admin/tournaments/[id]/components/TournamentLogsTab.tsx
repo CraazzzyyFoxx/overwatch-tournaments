@@ -17,14 +17,14 @@ import type { LucideIcon } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useDebounce } from "use-debounce";
 
-import { StatusPill } from "@/components/admin/kit/StatusPill";
-import { type Tone } from "@/components/admin/tone";
+import { StatusPill } from "@/components/kit/StatusPill";
+import { type Tone } from "@/components/kit/tone";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { InfiniteScrollFooter } from "@/components/ui/infinite-scroll";
 import { Skeleton } from "@/components/ui/skeleton";
-import { AdminFilterBar } from "@/components/admin/kit/AdminFilterBar";
-import { useAdminFilters, type FilterDef } from "@/components/admin/kit/useAdminFilters";
+import { AdminFilterBar } from "@/components/kit/AdminFilterBar";
+import { useAdminFilters, type FilterDef } from "@/components/kit/useAdminFilters";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useInvalidation } from "@/hooks/useInvalidation";
 import { notify } from "@/lib/notify";
@@ -40,8 +40,8 @@ import { TournamentLogUploadDialog } from "./TournamentLogUploadDialog";
 import {
   getTournamentWorkspaceQueryKeys,
   invalidateTournamentWorkspace
-} from "./tournamentWorkspace.queryKeys";
-import { EmptyNote } from "@/components/admin/kit/EmptyNote";
+} from "@/lib/tournament-workspace-query-keys";
+import { EmptyNote } from "@/components/kit/EmptyNote";
 
 const PAGE_SIZE = 25;
 /**

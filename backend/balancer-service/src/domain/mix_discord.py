@@ -35,7 +35,7 @@ _TRUNCATED = "…"
 #: Human labels for the slot codes a roster bucket resolves to -- the mix
 #: rosters are keyed by the solver's spelling (``Tank``/``Damage``/...), which
 #: is not what a host reads.
-_ROLE_LABELS = {"tank": "Tank", "dps": "DPS", "support": "Support", "flex": "Flex"}
+_ROLE_LABELS = {"tank": "Tank", "damage": "DPS", "support": "Support", "flex": "Flex"}
 
 
 def _role_label(bucket: str) -> str:

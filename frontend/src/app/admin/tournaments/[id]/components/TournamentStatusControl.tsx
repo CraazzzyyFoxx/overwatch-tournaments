@@ -3,7 +3,7 @@
 import { useId, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { ConfirmDialog } from "@/components/admin/kit/ConfirmDialog";
+import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -20,7 +20,7 @@ import {
 } from "@/lib/tournament-lifecycle";
 import adminService from "@/services/admin.service";
 import type { Tournament, TournamentStatus } from "@/types/tournament.types";
-import { invalidateTournamentWorkspace } from "./tournamentWorkspace.queryKeys";
+import { invalidateTournamentWorkspace } from "@/lib/tournament-workspace-query-keys";
 
 /**
  * The one place the tournament's status is changed.

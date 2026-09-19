@@ -9,8 +9,8 @@ import {
   AdminDetailTableShell,
   getAdminDetailTableStyles
 } from "@/components/admin/AdminDetailTable";
-import { ConfirmDialog, type ConfirmIntent } from "@/components/admin/kit/ConfirmDialog";
-import { EmptyNote } from "@/components/admin/kit/EmptyNote";
+import { ConfirmDialog, type ConfirmIntent } from "@/components/kit/ConfirmDialog";
+import { EmptyNote } from "@/components/kit/EmptyNote";
 import { Button } from "@/components/ui/button";
 import { DateTimePicker } from "@/components/ui/date-picker";
 import { Skeleton } from "@/components/ui/skeleton";

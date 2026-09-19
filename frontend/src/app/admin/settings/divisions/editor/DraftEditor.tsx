@@ -5,10 +5,10 @@ import { useRouter } from "next/navigation";
 import { useMutation, useQueries, useQueryClient } from "@tanstack/react-query";
 import { RotateCcw, Star, Trash2 } from "lucide-react";
 
-import { AdminTabs, type AdminTabItem } from "@/components/admin/kit/AdminTabs";
-import { ConfirmDialog, type ConfirmIntent } from "@/components/admin/kit/ConfirmDialog";
-import { EntityHubHeader } from "@/components/admin/kit/EntityHubHeader";
-import { SaveBar } from "@/components/admin/kit/SaveBar";
+import { AdminTabs, type AdminTabItem } from "@/components/kit/AdminTabs";
+import { ConfirmDialog, type ConfirmIntent } from "@/components/kit/ConfirmDialog";
+import { EntityHubHeader } from "@/components/kit/EntityHubHeader";
+import { SaveBar } from "@/components/kit/SaveBar";
 import { Button } from "@/components/ui/button";
 import { useQueryParams } from "@/hooks/useQueryParams";
 import { notify } from "@/lib/notify";

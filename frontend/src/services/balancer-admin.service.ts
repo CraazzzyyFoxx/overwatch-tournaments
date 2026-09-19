@@ -224,12 +224,12 @@ export default class balancerAdminService {
    * before the workspace store is aligned.
    */
   static async getTournamentSummary(tournamentId: number): Promise<BalancerTournamentSummary> {
-    const response = await apiFetch(`/api/balancer/tournaments/${tournamentId}/summary`);
+    const response = await apiFetch(`/api/v1/balancer/tournaments/${tournamentId}/summary`);
     return response.json();
   }
 
   static async getTournamentConfig(tournamentId: number): Promise<BalancerTournamentConfig | null> {
-    const response = await apiFetch(`/api/balancer/tournaments/${tournamentId}/config`
+    const response = await apiFetch(`/api/v1/balancer/tournaments/${tournamentId}/config`
     );
     return readJsonOrNull<BalancerTournamentConfig>(response);
   }
@@ -238,7 +238,7 @@ export default class balancerAdminService {
     tournamentId: number,
     data: BalancerTournamentConfigUpsertInput
   ): Promise<BalancerTournamentConfig> {
-    const response = await apiFetch(`/api/balancer/tournaments/${tournamentId}/config`,
+    const response = await apiFetch(`/api/v1/balancer/tournaments/${tournamentId}/config`,
       {
         method: "PUT",
         body: data
@@ -248,7 +248,7 @@ export default class balancerAdminService {
   }
 
   static async getWorkspaceBalancerConfig(workspaceId: number): Promise<WorkspaceBalancerConfig> {
-    const response = await apiFetch(`/api/balancer/workspaces/${workspaceId}/config`
+    const response = await apiFetch(`/api/v1/balancer/workspaces/${workspaceId}/config`
     );
     return response.json();
   }
@@ -257,7 +257,7 @@ export default class balancerAdminService {
     workspaceId: number,
     data: WorkspaceBalancerConfigUpsert
   ): Promise<WorkspaceBalancerConfig> {
-    const response = await apiFetch(`/api/balancer/workspaces/${workspaceId}/config`,
+    const response = await apiFetch(`/api/v1/balancer/workspaces/${workspaceId}/config`,
       {
         method: "PUT",
         body: data
@@ -267,13 +267,13 @@ export default class balancerAdminService {
   }
 
   static async getBalance(tournamentId: number): Promise<SavedBalance | null> {
-    const response = await apiFetch(`/api/balancer/tournaments/${tournamentId}/balance`
+    const response = await apiFetch(`/api/v1/balancer/tournaments/${tournamentId}/balance`
     );
     return readJsonOrNull<SavedBalance>(response);
   }
 
   static async saveBalance(tournamentId: number, data: BalanceSaveInput): Promise<SavedBalance> {
-    const response = await apiFetch(`/api/balancer/tournaments/${tournamentId}/balance`,
+    const response = await apiFetch(`/api/v1/balancer/tournaments/${tournamentId}/balance`,
       {
         method: "PUT",
         body: data
@@ -283,7 +283,7 @@ export default class balancerAdminService {
   }
 
   static async exportBalance(balanceId: number): Promise<BalanceExportResponse> {
-    const response = await apiFetch(`/api/balancer/balances/${balanceId}/export`, {
+    const response = await apiFetch(`/api/v1/balancer/balances/${balanceId}/export`, {
       method: "POST",
       body: {}
     });
@@ -292,7 +292,7 @@ export default class balancerAdminService {
 
   /** Refresh exported players' ranks from the saved balance; teams stay as they are. */
   static async exportBalanceRanks(balanceId: number): Promise<RanksExportResponse> {
-    const response = await apiFetch(`/api/balancer/balances/${balanceId}/export-ranks`, {
+    const response = await apiFetch(`/api/v1/balancer/balances/${balanceId}/export-ranks`, {
       method: "POST",
       body: {}
     });

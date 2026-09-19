@@ -48,7 +48,7 @@ ROLE_ORDER = REGISTRATION_ROLE_CODES
 class RoleSubroleEntry(TypedDict):
     """Structured role + optional sub-role token — mirrors Pydantic/SQL model shape."""
 
-    role: str  # "tank" | "dps" | "support" | "flex"
+    role: str  # "tank" | "damage" | "support" | "flex"
     subrole: str | None
 
 

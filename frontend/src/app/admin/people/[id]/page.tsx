@@ -7,14 +7,14 @@ import { ArrowRightLeft } from "lucide-react";
 
 import { PlayerProfileBody } from "@/components/admin/PlayerProfileDialog";
 import { UserMergeDialog } from "@/components/admin/UserMergeDialog";
-import { AdminTabs, type AdminTabItem } from "@/components/admin/kit/AdminTabs";
-import { EntityHubHeader } from "@/components/admin/kit/EntityHubHeader";
+import { AdminTabs, type AdminTabItem } from "@/components/kit/AdminTabs";
+import { EntityHubHeader } from "@/components/kit/EntityHubHeader";
 import { PersonAccountTab } from "@/components/admin/people/PersonAccountTab";
 import { PersonAchievementsTab } from "@/components/admin/people/PersonAchievementsTab";
 import { PersonParticipationsTab } from "@/components/admin/people/PersonParticipationsTab";
 import { RankPlayerPanel } from "@/components/admin/people/PersonRankPanel";
 import { SubscriptionPlayerPanel } from "@/components/admin/people/PersonSubscriptionPanel";
-import { EYEBROW_CLASS } from "@/components/admin/tone";
+import { EYEBROW_CLASS } from "@/components/kit/tone";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageStateCard } from "@/components/ui/page-state-card";

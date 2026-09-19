@@ -20,7 +20,7 @@ from shared.models.achievements.achievement import (
 from shared.models.catalog.hero import Hero
 from shared.repository.support import AchievementEvaluationResultRepository, AchievementRuleRepository
 from src.domain.achievement_catalog import _all_default_rules
-from src.domain.achievement_validation import infer_grain
+from src.domain.achievement_validation import derive_depends_on, infer_grain
 
 from .runner import AchievementEvaluationRunnerService, achievement_evaluation_runner_service
 
@@ -82,6 +82,7 @@ class AchievementSeederService:
                 removed += 1
 
         for rule in all_rules:
+            rule.depends_on = derive_depends_on(rule.condition_tree)
             if rule.condition_tree:
                 inferred_grain = infer_grain(rule.condition_tree)
                 if inferred_grain != rule.grain:

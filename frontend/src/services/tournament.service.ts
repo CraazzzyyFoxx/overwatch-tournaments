@@ -193,6 +193,12 @@ export default class tournamentService {
           // the slot line off it; without the entity the read says `null` and
           // both fall back to per-player roles — meaningless in a flex event.
           "roster_shape",
+          // The published regulations. Costs no query (it is a column on the
+          // row) but is gated all the same: it is a document, and the six
+          // schemas that nest TournamentRead must not carry a copy each. Read
+          // here because this one payload is the whole page shell — the Rules
+          // tab's presence AND its content both come off it.
+          "rules",
         ],
       },
     }).then((response) => response.json());

@@ -15,14 +15,14 @@ import {
   Trash2
 } from "lucide-react";
 
-import { AdminDataTable, adminColumnMeta, createKebabColumn } from "@/components/admin-data-table";
+import { AdminDataTable, adminColumnMeta, createKebabColumn } from "@/components/data-table";
 import { StatusIcon } from "@/components/admin/StatusIcon";
 import {
   entityFormError,
   onEntityDialogClose
 } from "@/components/admin/CatalogToolbarActions";
-import { ConfirmDialog } from "@/components/admin/kit/ConfirmDialog";
-import { EntityFormDialog } from "@/components/admin/EntityFormDialog";
+import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
+import { EntityFormDialog } from "@/components/kit/EntityFormDialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -47,7 +47,7 @@ import type {
   TournamentLinkUpdateInput
 } from "@/types/stream.types";
 import { primaryStreamLinkSortOrder } from "./tournamentLinks.helpers";
-import { EmptyNote } from "@/components/admin/kit/EmptyNote";
+import { EmptyNote } from "@/components/kit/EmptyNote";
 
 /** Mirrors `TOURNAMENT_LINK_KINDS` in `backend/shared/models/tournament/link.py`. */
 const LINK_KINDS: ReadonlyArray<{ value: TournamentLinkKind; label: string }> = [
@@ -249,9 +249,10 @@ export function TournamentLinksTab({
   });
 
   const repollMutation = useMutation({
-    // `POST /api/streams/tournament/{id}/repoll` already has a client in
+    // `POST /api/v1/streams/tournament/{id}/repoll` already has a client in
     // `stream.service`, so there is no admin-service twin of it. `workspace_id`
-    // rides along: `domainBehavior` injects it for every non-`/api/auth` domain,
+    // rides along: `domainBehavior` injects it for every domain outside
+    // `UNSCOPED_DOMAINS` (api-fetch.ts keys on the domain segment, not a prefix),
     // and the hub shell has already synced the store to this tournament's
     // workspace — which is exactly the scope the endpoint authorizes against.
     mutationFn: () => streamService.repollTournament(tournamentId),

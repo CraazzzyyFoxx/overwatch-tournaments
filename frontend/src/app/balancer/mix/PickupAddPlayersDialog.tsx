@@ -4,7 +4,7 @@ import { useCallback, useDeferredValue, useMemo, useRef, useState } from "react"
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, ChevronDown, CornerDownLeft, Loader2, Plus, Search, UserPlus, X } from "lucide-react";
 
-import { splitBattleTag } from "@/app/balancer/components/balancer-page-helpers";
+import { splitBattleTag } from "@/components/balancer/balancer-page-helpers";
 import {
   CAPTION_CLASS,
   CARD_TITLE_CLASS,
@@ -327,7 +327,7 @@ export function PickupAddPlayersDialog({
                   placeholder={"Type a name or BattleTag \u2014 \u2191\u2193 to move, Enter to add"}
                   aria-label="Search the workspace roster"
                   autoComplete="off"
-                  className="h-11 rounded-xl border-[color:var(--aqt-border-2)] bg-black/25 pl-10 pr-24 text-sm"
+                  className="h-11 rounded-xl border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-bg-2)] pl-10 pr-24 text-sm"
                 />
                 <span
                   className={cn(
@@ -380,7 +380,7 @@ export function PickupAddPlayersDialog({
                           "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border px-3 text-label transition-colors",
                           overflowActiveAuthor != null
                             ? "border-[color:color-mix(in_srgb,var(--aqt-teal)_38%,transparent)] bg-[color:color-mix(in_srgb,var(--aqt-teal)_12%,transparent)] text-[color:var(--aqt-teal)]"
-                            : "border-[color:var(--aqt-border)] bg-white/[0.02] text-[color:var(--aqt-fg-muted)] hover:bg-white/[0.05] hover:text-[color:var(--aqt-fg)]",
+                            : "border-[color:var(--aqt-border)] bg-[color:var(--aqt-overlay-1)] text-[color:var(--aqt-fg-muted)] hover:bg-[color:var(--aqt-overlay-3)] hover:text-[color:var(--aqt-fg)]",
                         )}
                       >
                         <span className="max-w-24 truncate">
@@ -406,7 +406,7 @@ export function PickupAddPlayersDialog({
                                 "flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-caption transition-colors",
                                 filter === author.user_id
                                   ? "bg-[color:color-mix(in_srgb,var(--aqt-teal)_14%,transparent)] text-[color:var(--aqt-teal)]"
-                                  : "text-[color:var(--aqt-fg-muted)] hover:bg-white/[0.05] hover:text-[color:var(--aqt-fg)]",
+                                  : "text-[color:var(--aqt-fg-muted)] hover:bg-[color:var(--aqt-overlay-3)] hover:text-[color:var(--aqt-fg)]",
                               )}
                             >
                               <span className="truncate">
@@ -465,7 +465,7 @@ export function PickupAddPlayersDialog({
                             aria-invalid={addError ? true : undefined}
                             // `min-w-0`: an `<input>` carries an intrinsic ~170px
                             // width that `min-width: auto` turns into a floor.
-                            className="h-9 min-w-0 rounded-lg border-[color:var(--aqt-border-2)] bg-black/20 text-sm"
+                            className="h-9 min-w-0 rounded-lg border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-bg-2)] text-sm"
                           />
                           {/* Enabled while empty on purpose: submit validates and says why. */}
                           <Button
@@ -498,7 +498,7 @@ export function PickupAddPlayersDialog({
 
             {/* Column head. The three glyphs sit over the pickers below, so a
                 host reads a rank column without a text label per row. */}
-            <div className="flex shrink-0 items-center gap-2.5 border-y border-[color:var(--aqt-border)] bg-white/[0.015] px-4 py-1.5">
+            <div className="flex shrink-0 items-center gap-2.5 border-y border-[color:var(--aqt-border)] bg-[color:var(--aqt-overlay-1)] px-4 py-1.5">
               <span aria-hidden="true" className="size-6 shrink-0" />
               <span className={cn(EYEBROW_CLASS, "min-w-0 flex-1")}>Player</span>
               <div aria-hidden="true" className="flex shrink-0 items-center gap-1.5">
@@ -622,7 +622,7 @@ export function PickupAddPlayersDialog({
                         ? `${ROLE_LABELS[entry.role]}: ${entry.supply} of ${entry.need} — short ${entry.short}`
                         : `${ROLE_LABELS[entry.role]}: ${entry.supply} of ${entry.need}`
                     }
-                    className="rounded-lg border border-[color:var(--aqt-border)] bg-black/20 px-2 pb-1.5 pt-1.5"
+                    className="rounded-lg border border-[color:var(--aqt-border)] bg-[color:var(--aqt-bg-2)] px-2 pb-1.5 pt-1.5"
                   >
                     <div className="flex items-center gap-1">
                       <PlayerRoleIcon role={icon} size={13} decorative />
@@ -637,7 +637,7 @@ export function PickupAddPlayersDialog({
                         {`${entry.supply}/${entry.need}`}
                       </span>
                     </div>
-                    <div className="mt-1 h-[3px] overflow-hidden rounded-full bg-white/[0.06]">
+                    <div className="mt-1 h-[3px] overflow-hidden rounded-full bg-[color:var(--aqt-overlay-3)]">
                       <div
                         className={cn(
                           "h-full rounded-full transition-[width] duration-200",
@@ -706,7 +706,7 @@ function FilterChip({
         "inline-flex h-8 shrink-0 items-center gap-2 rounded-full border px-3 text-label transition-colors",
         active
           ? "border-[color:color-mix(in_srgb,var(--aqt-teal)_38%,transparent)] bg-[color:color-mix(in_srgb,var(--aqt-teal)_12%,transparent)] text-[color:var(--aqt-teal)]"
-          : "border-[color:var(--aqt-border)] bg-white/[0.02] text-[color:var(--aqt-fg-muted)] hover:bg-white/[0.05] hover:text-[color:var(--aqt-fg)]",
+          : "border-[color:var(--aqt-border)] bg-[color:var(--aqt-overlay-1)] text-[color:var(--aqt-fg-muted)] hover:bg-[color:var(--aqt-overlay-3)] hover:text-[color:var(--aqt-fg)]",
       )}
     >
       <span className="truncate">{label}</span>
@@ -715,7 +715,7 @@ function FilterChip({
           "rounded px-1 text-label tabular-nums",
           active
             ? "bg-[color:color-mix(in_srgb,var(--aqt-teal)_18%,transparent)]"
-            : "bg-white/[0.05] text-[color:var(--aqt-fg-faint)]",
+            : "bg-[color:var(--aqt-overlay-3)] text-[color:var(--aqt-fg-faint)]",
         )}
       >
         {count ?? "\u2013"}
@@ -764,8 +764,8 @@ function RosterRowItem({
           // fought the rank crests for attention, and "already in" is a state, not
           // an emphasis.
           isInMix
-            ? "border-[color:var(--aqt-border)] bg-white/[0.02] before:absolute before:inset-y-1.5 before:left-0 before:w-[2px] before:rounded-full before:bg-[color:var(--aqt-teal)]"
-            : "border-transparent hover:border-[color:var(--aqt-border-2)] hover:bg-white/[0.025]",
+            ? "border-[color:var(--aqt-border)] bg-[color:var(--aqt-overlay-1)] before:absolute before:inset-y-1.5 before:left-0 before:w-[2px] before:rounded-full before:bg-[color:var(--aqt-teal)]"
+            : "border-transparent hover:border-[color:var(--aqt-border-2)] hover:bg-[color:var(--aqt-overlay-2)]",
           isCursor && "ring-1 ring-[color:color-mix(in_srgb,var(--aqt-teal)_45%,transparent)]",
           "disabled:cursor-default",
         )}
@@ -776,7 +776,7 @@ function RosterRowItem({
             "flex size-6 shrink-0 items-center justify-center rounded-md border transition-colors",
             isInMix
               ? "border-[color:color-mix(in_srgb,var(--aqt-teal)_45%,transparent)] bg-[color:color-mix(in_srgb,var(--aqt-teal)_18%,transparent)] text-[color:var(--aqt-teal)]"
-              : "border-[color:var(--aqt-border-2)] bg-black/20 text-[color:var(--aqt-fg-dim)]",
+              : "border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-bg-2)] text-[color:var(--aqt-fg-dim)]",
           )}
         >
           {isInMix ? <Check className="size-3.5" /> : <Plus className="size-3.5" />}
@@ -825,7 +825,7 @@ function RosterRowItem({
                 // identical, which is the exact mistake layered ranks exist
                 // to make visible.
                 className={cn(
-                  "flex size-8 items-center justify-center rounded-md border border-[color:var(--aqt-border)] bg-black/20",
+                  "flex size-8 items-center justify-center rounded-md border border-[color:var(--aqt-border)] bg-[color:var(--aqt-bg-2)]",
                   inherited != null && "opacity-45",
                 )}
               >
@@ -870,7 +870,7 @@ function LineupChip({
   return (
     <li
       className={cn(
-        "group flex items-center gap-2 rounded-lg px-2 py-1.5 transition-colors hover:bg-white/[0.035]",
+        "group flex items-center gap-2 rounded-lg px-2 py-1.5 transition-colors hover:bg-[color:var(--aqt-overlay-2)]",
         row.participation === "benched" && "opacity-55",
       )}
     >

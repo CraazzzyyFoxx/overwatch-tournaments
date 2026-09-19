@@ -11,6 +11,7 @@ from typing import Any
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.models.achievements.achievement import AchievementGrain
 from src import models
 
 from ..context import EvalContext
@@ -18,7 +19,12 @@ from . import ResultSet, register
 from .stat_threshold import OPERATORS
 
 
-@register("is_captain")
+@register(
+    "is_captain",
+    grain=AchievementGrain.user_tournament,
+    description="The player captained their team",
+    depends_on=("tournament.player", "tournament.team"),
+)
 async def execute_is_captain(
     session: AsyncSession,
     params: dict[str, Any],
@@ -46,7 +52,19 @@ async def execute_is_captain(
     return {(row[0], row[1]) for row in result}
 
 
-@register("is_newcomer")
+@register(
+    "is_newcomer",
+    grain=AchievementGrain.user_tournament,
+    description="First tournament ever, or a count of newcomer entries",
+    optional=("op", "value"),
+    depends_on=("tournament.player",),
+    subcondition_ok=True,
+    grain_for=lambda params: (
+        AchievementGrain.user
+        if params.get("op") is not None and params.get("value") is not None
+        else AchievementGrain.user_tournament
+    ),
+)
 async def execute_is_newcomer(
     session: AsyncSession,
     params: dict[str, Any],
@@ -108,7 +126,13 @@ async def execute_is_newcomer(
     return {(row[0], row[1]) for row in result}
 
 
-@register("tournament_type")
+@register(
+    "tournament_type",
+    grain=AchievementGrain.user_tournament,
+    description="Tournament flavour (league vs regular)",
+    optional=("is_league",),
+    depends_on=("tournament.player",),
+)
 async def execute_tournament_type(
     session: AsyncSession,
     params: dict[str, Any],
@@ -144,7 +168,14 @@ async def execute_tournament_type(
     return {(row[0], row[1]) for row in result}
 
 
-@register("tournament_count")
+@register(
+    "tournament_count",
+    grain=AchievementGrain.user,
+    description="How many tournaments the player entered",
+    required=("op", "value"),
+    optional=("is_league", "start_after", "start_before"),
+    depends_on=("tournament.player",),
+)
 async def execute_tournament_count(
     session: AsyncSession,
     params: dict[str, Any],

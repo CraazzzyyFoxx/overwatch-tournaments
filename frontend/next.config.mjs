@@ -40,19 +40,25 @@ const nextConfig = {
   async rewrites() {
     // Everything is one gateway behind one origin. In production the browser hits
     // nginx and /api/* never reaches Next, so these rewrites are only a fallback
-    // for hitting the Next dev server (:3000) directly: each gateway namespace is
-    // forwarded to the internal gateway. /api/auth/* route handlers and /api/account
-    // are filesystem routes and take precedence over these afterFiles rewrites.
+    // for hitting the Next dev server (:3000) directly.
+    //
+    // Two prefixes now, not six: auth/analytics/balancer/streams/notifications/
+    // announcements live inside the version. The legacy spellings are still
+    // forwarded so a `next dev` session can exercise the gateway's deprecation
+    // rewrite; they go away with it. `/api/health` is a filesystem route and
+    // `/bff/*` is this app's own surface — neither is forwarded.
     const gateway = process.env.NEXT_INTERNAL_API_URL?.replace(/\/$/, "");
     if (!gateway) return [];
-    return [
-      "/api/v1",
-      "/api/v2",
-      "/api/balancer",
+    const canonical = ["/api/v1", "/api/v2"];
+    const legacy = [
+      "/api/auth",
       "/api/analytics",
+      "/api/balancer",
       "/api/streams",
-      "/api/auth"
-    ].map((prefix) => ({
+      "/api/notifications",
+      "/api/announcements"
+    ];
+    return [...canonical, ...legacy].map((prefix) => ({
       source: `${prefix}/:path*`,
       destination: `${gateway}${prefix}/:path*`
     }));

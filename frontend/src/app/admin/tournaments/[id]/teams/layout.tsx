@@ -3,7 +3,7 @@
 import { useEffect, type ReactNode } from "react";
 import { useParams, usePathname, useRouter } from "next/navigation";
 
-import { AdminTabs, type AdminTabItem } from "@/components/admin/kit/AdminTabs";
+import { AdminTabs, type AdminTabItem } from "@/components/kit/AdminTabs";
 import { usePermissions } from "@/hooks/usePermissions";
 
 import { useHubTournamentQuery } from "../hubQueries";

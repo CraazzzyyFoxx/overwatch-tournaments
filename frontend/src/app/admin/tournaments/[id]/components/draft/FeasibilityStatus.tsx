@@ -6,7 +6,7 @@ import { useTranslations } from "next-intl";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { DraftFeasibility } from "@/types/draft.types";
-import { EmptyNote } from "@/components/admin/kit/EmptyNote";
+import { EmptyNote } from "@/components/kit/EmptyNote";
 
 interface FeasibilityStatusProps {
   feasibility: DraftFeasibility | null;

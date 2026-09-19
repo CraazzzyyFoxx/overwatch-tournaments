@@ -10,7 +10,7 @@ import type { TournamentHistoryEntry } from "@/types/registration.types";
 
 const ROLE_TO_ICON: Record<string, string> = {
   tank: "Tank",
-  dps: "Damage",
+  damage: "Damage",
   support: "Support",
   flex: "Flex",
 };
@@ -22,8 +22,8 @@ function getHistoryRoleLabel(
   switch (role.toLowerCase()) {
     case "tank":
       return t("common.roles.tank");
-    case "dps":
-      return t("common.roles.dps");
+    case "damage":
+      return t("common.roles.damage");
     case "support":
       return t("common.roles.support");
     case "flex":

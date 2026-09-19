@@ -16,6 +16,7 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.core.enums import EncounterStatus
+from shared.models.achievements.achievement import AchievementGrain
 from src import models
 
 from ..context import EvalContext
@@ -23,7 +24,13 @@ from . import ResultSet, register
 from .stat_threshold import OPERATORS
 
 
-@register("tournament_winrate")
+@register(
+    "tournament_winrate",
+    grain=AchievementGrain.user_tournament,
+    description="Series winrate inside one tournament",
+    required=("op", "value"),
+    depends_on=("tournament.encounter", "tournament.player"),
+)
 async def execute_tournament_winrate(
     session: AsyncSession,
     params: dict[str, Any],

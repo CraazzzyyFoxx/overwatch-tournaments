@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolveHost } from "@/lib/host";
 import { internalApiOrigin } from "@/lib/api-routes";
+import { zoneFromPathname } from "@/i18n/zones";
 
 // Small bounded TTL cache: the host->workspace map is tiny and rarely changes.
 const CACHE_TTL_MS = 60_000;
@@ -46,29 +47,37 @@ async function resolveWorkspace(origin: string, host: string): Promise<Lookup> {
   }
 }
 
+/**
+ * Scoping headers this middleware owns. Every one is deleted before it is set
+ * (and deleted outright on the platform host), so a client-supplied value can
+ * never survive even if the set logic below changes. The gateway strips the
+ * whole `x-owt-*` prefix at the edge as well — `gateway/internal/proxy` —
+ * making this the second of two independent barriers, not the only one.
+ */
+function scopedHeaders(request: NextRequest): Headers {
+  const headers = new Headers(request.headers);
+  headers.delete("x-owt-workspace-id");
+  headers.delete("x-owt-host-mode");
+  headers.delete("x-owt-zone");
+  // The i18n request config has no access to the pathname, and it needs one to
+  // ship a zone's messages instead of all 47 namespaces. See src/i18n/zones.ts.
+  headers.set("x-owt-zone", zoneFromPathname(request.nextUrl.pathname));
+  return headers;
+}
+
 export async function middleware(request: NextRequest) {
   const rawHost = request.headers.get("x-forwarded-host") ?? request.headers.get("host");
   const host = rawHost?.split(",")[0]?.trim() ?? null;
   const resolution = resolveHost(host);
 
   if (resolution.mode === "platform") {
-    // Defense-in-depth: strip any client-supplied workspace-scoping headers
-    // before letting the request through, so a caller can never spoof SSR
-    // workspace scope or white-label chrome on the platform (apex/www) host.
-    const headers = new Headers(request.headers);
-    headers.delete("x-owt-workspace-id");
-    headers.delete("x-owt-host-mode");
-    return NextResponse.next({ request: { headers } });
+    return NextResponse.next({ request: { headers: scopedHeaders(request) } });
   }
 
   const lookup = await resolveWorkspace(request.nextUrl.origin, resolution.host);
 
   if (lookup.status === "found") {
-    const headers = new Headers(request.headers);
-    // Delete before set so a client-supplied value can never survive even
-    // if the set logic below changes.
-    headers.delete("x-owt-workspace-id");
-    headers.delete("x-owt-host-mode");
+    const headers = scopedHeaders(request);
     headers.set("x-owt-workspace-id", String(lookup.id));
     headers.set("x-owt-host-mode", "tenant");
     return NextResponse.next({ request: { headers } });

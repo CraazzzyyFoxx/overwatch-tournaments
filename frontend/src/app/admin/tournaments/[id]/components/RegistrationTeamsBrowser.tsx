@@ -19,16 +19,16 @@ import {
 } from "lucide-react";
 import { useFormatter, useTranslations } from "next-intl";
 
-import { AdminCombobox, AdminComboboxCheck } from "@/components/admin/AdminCombobox";
-import { AdminDataTable, adminColumnMeta, createKebabColumn, type KebabAction } from "@/components/admin-data-table";
-import { BulkBar } from "@/components/admin/BulkBar";
-import { EntityFormDialog } from "@/components/admin/EntityFormDialog";
-import { AdminFilterBar } from "@/components/admin/kit/AdminFilterBar";
-import { AdminInspector } from "@/components/admin/kit/AdminInspector";
-import { ConfirmDialog, type ConfirmIntent } from "@/components/admin/kit/ConfirmDialog";
-import { StatusPill } from "@/components/admin/kit/StatusPill";
-import { useAdminFilters, type FilterDef } from "@/components/admin/kit/useAdminFilters";
-import { type Tone } from "@/components/admin/tone";
+import { AdminCombobox, AdminComboboxCheck } from "@/components/kit/AdminCombobox";
+import { AdminDataTable, adminColumnMeta, createKebabColumn, type KebabAction } from "@/components/data-table";
+import { BulkBar } from "@/components/kit/BulkBar";
+import { EntityFormDialog } from "@/components/kit/EntityFormDialog";
+import { AdminFilterBar } from "@/components/kit/AdminFilterBar";
+import { AdminInspector } from "@/components/kit/AdminInspector";
+import { ConfirmDialog, type ConfirmIntent } from "@/components/kit/ConfirmDialog";
+import { StatusPill } from "@/components/kit/StatusPill";
+import { useAdminFilters, type FilterDef } from "@/components/kit/useAdminFilters";
+import { type Tone } from "@/components/kit/tone";
 import RosterSlotGlyph from "@/components/registration/RosterSlotGlyph";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -67,7 +67,7 @@ import type {
   RegistrationTeamInvite,
   RegistrationTeamMember
 } from "@/types/registration-team.types";
-import { invalidateTournamentWorkspace } from "./tournamentWorkspace.queryKeys";
+import { invalidateTournamentWorkspace } from "@/lib/tournament-workspace-query-keys";
 
 /**
  * Organizer view of the registered teams (§8 of the team-registration design).

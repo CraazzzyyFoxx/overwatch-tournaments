@@ -35,7 +35,7 @@ function renderPool(headingId: string) {
     <PlayerPool
       players={[player]}
       totalPlayers={1}
-      roleCounts={{ tank: 0, dps: 0, support: 1 }}
+      roleCounts={{ tank: 0, damage: 0, support: 1 }}
       selectedPlayerId={null}
       shortlist={new Set<number>()}
       role="all"

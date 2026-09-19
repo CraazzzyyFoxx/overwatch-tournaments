@@ -4,7 +4,7 @@ import Link from "next/link";
 import { ArrowRight, Star } from "lucide-react";
 import { useFormatter } from "next-intl";
 
-import { StatusPill } from "@/components/admin/kit/StatusPill";
+import { StatusPill } from "@/components/kit/StatusPill";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { DivisionGridVersion } from "@/types/workspace.types";
