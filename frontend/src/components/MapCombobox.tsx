@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useState } from "react";
 
-import { AdminCombobox, AdminComboboxCheck } from "@/components/admin/AdminCombobox";
+import { AdminCombobox, AdminComboboxCheck } from "@/components/kit/AdminCombobox";
 import { CommandGroup, CommandItem } from "@/components/ui/command";
 import type { LookupItem } from "@/types/pagination.types";
 

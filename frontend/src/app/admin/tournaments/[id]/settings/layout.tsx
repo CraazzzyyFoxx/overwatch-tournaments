@@ -3,7 +3,7 @@
 import { useParams, usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 
-import { AdminSectionNav, type AdminSectionNavGroup } from "@/components/admin/kit/AdminSectionNav";
+import { AdminSectionNav, type AdminSectionNavGroup } from "@/components/kit/AdminSectionNav";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useHubTournamentQuery } from "../hubQueries";
 import { allowedSettingsSection, SETTINGS_SECTIONS, type TabAccess } from "../tab-guards";

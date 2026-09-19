@@ -5,12 +5,12 @@ import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, CheckCircle, LoaderCircle, Users } from "lucide-react";
 
-import { ConfirmDialog } from "@/components/admin/kit/ConfirmDialog";
-import { StatusPill } from "@/components/admin/kit/StatusPill";
+import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
+import { StatusPill } from "@/components/kit/StatusPill";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { EYEBROW_CLASS } from "@/components/admin/tone";
+import { EYEBROW_CLASS } from "@/components/kit/tone";
 import { DiscordChannelSelect } from "@/components/discord/DiscordChannelSelect";
 import { DISCORD_CLIENT_ID } from "@/config/site";
 import { useDiscordGuildInfo } from "@/hooks/useDiscordEntities";

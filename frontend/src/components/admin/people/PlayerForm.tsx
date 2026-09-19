@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 
-import { AdminCombobox, AdminComboboxCheck } from "@/components/admin/AdminCombobox";
+import { AdminCombobox, AdminComboboxCheck } from "@/components/kit/AdminCombobox";
 import { TeamCombobox } from "@/components/admin/TeamCombobox";
 import DivisionIcon from "@/components/DivisionIcon";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";

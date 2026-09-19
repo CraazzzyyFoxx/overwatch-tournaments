@@ -39,7 +39,7 @@ import type {
   RankMappingEntry,
   SettingRead
 } from "@/types/admin.types";
-import { EYEBROW_CLASS } from "@/components/admin/tone";
+import { EYEBROW_CLASS } from "@/components/kit/tone";
 
 const RANK_COLLECTION_KEY = "parser.rank_collection";
 const RANK_MAPPING_KEY = "parser.rank_mapping";

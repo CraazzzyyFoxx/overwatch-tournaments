@@ -2,7 +2,7 @@
 
 import { AlertTriangle, Check, Minus } from "lucide-react";
 
-import { TONE_CLASS, TONE_TEXT } from "@/components/admin/tone";
+import { TONE_CLASS, TONE_TEXT } from "@/components/kit/tone";
 import { cn } from "@/lib/utils";
 import type { AdminCaptainReport } from "@/types/admin.types";
 

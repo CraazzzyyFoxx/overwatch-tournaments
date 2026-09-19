@@ -25,7 +25,7 @@ import type {
   InternalBalancePlayer,
 } from "@/types/balancer-admin.types";
 
-import { BALANCE_ROSTER_KEYS } from "@/app/balancer/components/balancer-page-helpers";
+import { BALANCE_ROSTER_KEYS } from "@/components/balancer/balancer-page-helpers";
 
 import { BalanceEditorPlayerPreviewRow } from "./BalanceEditorPlayerRows";
 import { BalanceEditorTeamCard } from "./BalanceEditorTeamCard";

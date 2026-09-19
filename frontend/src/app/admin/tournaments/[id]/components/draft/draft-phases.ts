@@ -1,4 +1,4 @@
-import type { Phase } from "@/components/admin/kit/PhaseStrip";
+import type { Phase } from "@/components/kit/PhaseStrip";
 import type { DraftStatus } from "@/types/draft.types";
 
 const PHASES = [

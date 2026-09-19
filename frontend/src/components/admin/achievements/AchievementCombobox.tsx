@@ -3,7 +3,7 @@
 import { useCallback, useMemo, useState } from "react";
 
 import type { AchievementRule } from "@/types/admin.types";
-import { AdminCombobox, AdminComboboxCheck } from "@/components/admin/AdminCombobox";
+import { AdminCombobox, AdminComboboxCheck } from "@/components/kit/AdminCombobox";
 import { CommandGroup, CommandItem } from "@/components/ui/command";
 import { Badge } from "@/components/ui/badge";
 

@@ -10,7 +10,7 @@ import {
   buildRoundGroups,
   orderEliminationRounds,
   type RoundGroup
-} from "@/components/bracket-view.helpers";
+} from "@/lib/bracket-view";
 import { FilterChip } from "@/components/ui/filter-chip";
 import {
   Select,
@@ -36,10 +36,10 @@ import { TournamentPageState } from "../_components/TournamentPageState";
 import { TournamentMatchesSkeleton } from "../_components/TournamentSkeletons";
 import { UpdatingBadge } from "../_components/UpdatingBadge";
 import { readViewParam, ViewSegment } from "../_components/ViewSegment";
-import { useTournamentQuery } from "../_hooks/useTournamentClientData";
+import { useTournamentQuery } from "@/hooks/useTournamentClientData";
 import { useTournamentStreamsQuery } from "../_hooks/useTournamentStreams";
 import { buildLiveTeamStreams } from "../bracket/bracketLiveStreams";
-import { getPublicPageQueryPresentation } from "./publicPageQueryPresentation";
+import { getPublicPageQueryPresentation } from "@/lib/public-page-query-presentation";
 
 const MATCHES_VIEWS = ["round", "time"] as const;
 type MatchesView = (typeof MATCHES_VIEWS)[number];

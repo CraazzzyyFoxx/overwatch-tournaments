@@ -1,5 +1,5 @@
 import type { Tournament, TournamentStatus } from "@/types/tournament.types";
-import type { Tone } from "@/components/admin/tone";
+import type { Tone } from "@/components/kit/tone";
 import type { TournamentPhaseScheduleEntryInput, TournamentUpdateInput } from "@/types/admin.types";
 import { utcToZonedInput, zonedInputToUtc } from "@/lib/timezone";
 import {
@@ -8,7 +8,7 @@ import {
   type SchedulablePhase
 } from "@/lib/tournament-lifecycle";
 import type { RosterSlotMap } from "@/lib/roster-shape";
-import { normalizeSlots } from "@/components/roster-shape/roster-shape-editor.model";
+import { normalizeSlots } from "@/lib/roster-shape-editor-model";
 import { normalizeChallongeSlug } from "@/lib/challonge";
 
 export type PhaseScheduleFormState = Record<

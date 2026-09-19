@@ -87,7 +87,7 @@ vi.mock("next/link", () => ({
 }));
 
 // Partial: the section's query reads the real key factory from this module.
-vi.mock("../components/tournamentWorkspace.queryKeys", async (importOriginal) => ({
+vi.mock("@/lib/tournament-workspace-query-keys", async (importOriginal) => ({
   ...((await importOriginal()) as object),
   invalidateTournamentWorkspace: (...args: unknown[]) => invalidateWorkspace(...args)
 }));

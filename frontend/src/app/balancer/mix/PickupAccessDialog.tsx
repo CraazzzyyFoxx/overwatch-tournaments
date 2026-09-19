@@ -3,8 +3,8 @@
 import { useState } from "react";
 import { UserCog, X } from "lucide-react";
 
-import { AdminCombobox } from "@/components/admin/AdminCombobox";
-import { useSearchComboboxQuery } from "@/components/admin/useSearchComboboxQuery";
+import { AdminCombobox } from "@/components/kit/AdminCombobox";
+import { useSearchComboboxQuery } from "@/components/kit/useSearchComboboxQuery";
 import { Button } from "@/components/ui/button";
 import { CommandGroup, CommandItem } from "@/components/ui/command";
 import {

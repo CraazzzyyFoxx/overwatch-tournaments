@@ -5,15 +5,15 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, ClipboardCheck, Clock3, Gavel, ScrollText } from "lucide-react";
 
-import { AdminDataTable, adminColumnMeta } from "@/components/admin-data-table";
+import { AdminDataTable, adminColumnMeta } from "@/components/data-table";
 import { AdminReportPairCell } from "@/components/admin/AdminReportPairCell";
 import { ResolveResultDialog } from "@/components/admin/ResolveResultDialog";
 import { StatTile, StatTileGrid } from "@/components/admin/StatTile";
-import { AdminFilterBar } from "@/components/admin/kit/AdminFilterBar";
-import { AdminInspector } from "@/components/admin/kit/AdminInspector";
-import { useAdminFilters, type FilterDef } from "@/components/admin/kit/useAdminFilters";
-import { StatusPill } from "@/components/admin/kit/StatusPill";
-import { EYEBROW_CLASS, TONE_TEXT } from "@/components/admin/tone";
+import { AdminFilterBar } from "@/components/kit/AdminFilterBar";
+import { AdminInspector } from "@/components/kit/AdminInspector";
+import { useAdminFilters, type FilterDef } from "@/components/kit/useAdminFilters";
+import { StatusPill } from "@/components/kit/StatusPill";
+import { EYEBROW_CLASS, TONE_TEXT } from "@/components/kit/tone";
 import {
   TOURNAMENT_QUERY_PARAM,
   parseTournamentQueryParam
@@ -30,8 +30,8 @@ import type {
   EncounterReportsRow
 } from "@/types/admin.types";
 import type { ReportCustomFieldDefinition } from "@/types/encounter.types";
-import { invalidateTournamentWorkspace } from "@/app/admin/tournaments/[id]/components/tournamentWorkspace.queryKeys";
-import { EmptyNote } from "@/components/admin/kit/EmptyNote";
+import { invalidateTournamentWorkspace } from "@/lib/tournament-workspace-query-keys";
+import { EmptyNote } from "@/components/kit/EmptyNote";
 
 const PAGE_SIZE = 25;
 const DASH = "—";

@@ -8,9 +8,9 @@ import {
   getSeriesVerdict,
   type SeriesSide,
   type SeriesSlot
-} from "../encounter-detail.helpers";
-import { Pill, PillFact } from "./EncounterAtoms";
-import styles from "../EncounterDetail.module.css";
+} from "@/lib/encounter-detail";
+import { Pill, PillFact } from "@/components/match/EncounterAtoms";
+import styles from "@/components/match/EncounterDetail.module.css";
 
 /**
  * The series result, stated once and unambiguously.

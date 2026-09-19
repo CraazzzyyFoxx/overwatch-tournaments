@@ -30,7 +30,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { notify } from "@/lib/notify";
 import adminService from "@/services/admin.service";
 import type { EncounterReportsRow, EncounterSetResultInput } from "@/types/admin.types";
-import { EYEBROW_CLASS } from "@/components/admin/tone";
+import { EYEBROW_CLASS } from "@/components/kit/tone";
 import { cn } from "@/lib/utils";
 
 /**

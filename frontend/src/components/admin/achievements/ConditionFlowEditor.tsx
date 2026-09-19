@@ -29,7 +29,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { EYEBROW_CLASS } from "@/components/admin/tone";
+import { EYEBROW_CLASS } from "@/components/kit/tone";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 

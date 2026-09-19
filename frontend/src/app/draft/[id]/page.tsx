@@ -7,12 +7,12 @@ import type { ReactNode } from "react";
 
 import { DraftBoard } from "@/components/draft/DraftBoard";
 import { tournamentHref } from "@/lib/tournament-url";
-import { useTournamentQuery } from "@/app/(site)/tournaments/[slug]/_hooks/useTournamentClientData";
+import { useTournamentQuery } from "@/hooks/useTournamentClientData";
 import { Button } from "@/components/ui/button";
 
-import styles from "./DraftRoom.module.css";
-import { DraftRoomSkeleton } from "./DraftRoomSkeleton";
-import { shouldShowInitialDraftSkeleton } from "./draft-loading-state";
+import styles from "@/components/draft/DraftRoom.module.css";
+import { DraftRoomSkeleton } from "@/components/draft/DraftRoomSkeleton";
+import { shouldShowInitialDraftSkeleton } from "@/components/draft/draft-loading-state";
 
 export default function PublicDraftRoomPage() {
   const t = useTranslations("draftRedesign");

@@ -4,7 +4,7 @@ import { ArrowRight } from "lucide-react";
 
 import DivisionIcon from "@/components/DivisionIcon";
 
-import { ROLE_LABELS, type PlayerValidationIssue } from "./workspace-helpers";
+import { ROLE_LABELS, type PlayerValidationIssue } from "@/components/balancer/workspace-helpers";
 
 const CHIP_CLASS =
   "inline-flex shrink-0 items-center gap-1 rounded-full border border-amber-300/20 bg-amber-500/10 px-1.5 py-0.5 text-label font-medium text-amber-100/80";

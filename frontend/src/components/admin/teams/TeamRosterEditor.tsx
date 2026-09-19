@@ -8,7 +8,7 @@ import {
   AdminDetailTableShell,
   getAdminDetailTableStyles
 } from "@/components/admin/AdminDetailTable";
-import { ConfirmDialog } from "@/components/admin/kit/ConfirmDialog";
+import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
 import { UserSearchCombobox } from "@/components/admin/UserSearchCombobox";
 import DivisionIcon from "@/components/DivisionIcon";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";

@@ -20,9 +20,9 @@ import MatchLogIndicator from "@/components/match/MatchLogIndicator";
 import MatchStatsSection from "@/app/(site)/matches/[id]/components/MatchStatsSection";
 import encounterService from "@/services/encounter.service";
 import type { DivisionGridVersion } from "@/types/workspace.types";
-import { formatSeriesClock, getMatchWinner, type SeriesSlot } from "../encounter-detail.helpers";
-import { Pill } from "./EncounterAtoms";
-import styles from "../EncounterDetail.module.css";
+import { formatSeriesClock, getMatchWinner, type SeriesSlot } from "@/lib/encounter-detail";
+import { Pill } from "@/components/match/EncounterAtoms";
+import styles from "@/components/match/EncounterDetail.module.css";
 
 interface EncounterMapRowProps {
   slot: SeriesSlot;

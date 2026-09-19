@@ -6,10 +6,10 @@ import { useParams, useRouter } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Trash2, Trophy, Users } from "lucide-react";
 
-import { InlineEditText } from "@/components/admin/InlineEditText";
+import { InlineEditText } from "@/components/kit/InlineEditText";
 import { StatTile, StatTileGrid } from "@/components/admin/StatTile";
-import { ConfirmDialog } from "@/components/admin/kit/ConfirmDialog";
-import { EntityHubHeader } from "@/components/admin/kit/EntityHubHeader";
+import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
+import { EntityHubHeader } from "@/components/kit/EntityHubHeader";
 import { TeamRosterEditor } from "@/components/admin/teams/TeamRosterEditor";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";

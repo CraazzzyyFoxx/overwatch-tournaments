@@ -17,7 +17,7 @@ import {
   type BracketMatch,
   type RoundGroup,
   type SlotHint
-} from "@/components/bracket-view.helpers";
+} from "@/lib/bracket-view";
 
 /** The match-number strip down a card's left edge; part of `CARD_WIDTH`. */
 export const GUTTER_WIDTH = 26;

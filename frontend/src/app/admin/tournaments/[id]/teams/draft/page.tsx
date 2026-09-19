@@ -4,7 +4,7 @@ import dynamic from "next/dynamic";
 import { useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 
-import { PhaseStrip } from "@/components/admin/kit/PhaseStrip";
+import { PhaseStrip } from "@/components/kit/PhaseStrip";
 import { usePermissions } from "@/hooks/usePermissions";
 import { tournamentQueryKeys } from "@/lib/tournament-query-keys";
 import draftService from "@/services/draft.service";

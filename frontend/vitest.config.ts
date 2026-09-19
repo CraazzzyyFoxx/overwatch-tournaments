@@ -123,8 +123,15 @@ export default defineConfig({
       "src/components/balancer/feed/**/*.test.tsx",
       "src/components/admin/**/*.test.tsx",
       "src/components/admin/**/*.test.ts",
-      "src/components/admin-data-table/*.test.ts",
-      "src/components/admin-data-table/*.test.tsx",
+      "src/components/data-table/*.test.ts",
+      "src/components/data-table/*.test.tsx",
+      // `components/kit` is the cross-zone application kit promoted out of
+      // `components/admin`. Every test in it is a vitest behaviour test (it is
+      // all rendered UI), so a directory glob is safe — no bun:test file to drag
+      // in. `DraftRoomSkeleton.test.ts` is the reason `components/draft` below
+      // stays file-level instead.
+      "src/components/kit/**/*.test.ts",
+      "src/components/kit/**/*.test.tsx",
       // `include` is an allow-list, so a test under a directory absent from it
       // never runs and the suite still reports green.
       "src/components/discord/**/*.test.tsx",
@@ -203,6 +210,14 @@ export default defineConfig({
       "src/lib/tournament-status.test.ts",
       "src/lib/tournament-stages.test.ts",
       "src/lib/division-grid.test.ts",
+      // Promoted out of route/component trees so the zones stop importing each
+      // other (docs/frontend-zones.md). Same file-level treatment as the rest of
+      // `src/lib`, which holds both runners' tests — `bracket-view.test.ts`
+      // moved with them but speaks bun:test, so it is deliberately absent.
+      "src/lib/bracket-projection.test.ts",
+      "src/lib/encounter-score.test.ts",
+      "src/lib/pick-ban-config.test.ts",
+      "src/lib/roster-shape-editor-model.test.ts",
       "src/components/Header.mobile-layout.test.ts",
       "src/components/WorkspaceBootstrap.helpers.test.ts",
       // File-level: `src/components` holds both runners' tests, so a directory

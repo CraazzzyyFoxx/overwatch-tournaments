@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useFormatter, useTranslations } from "next-intl";
 import { useState } from "react";
 
-import { PANEL_CLASS } from "@/app/balancer/components/balancer-page-helpers";
+import { PANEL_CLASS } from "@/components/balancer/balancer-page-helpers";
 import { MIX_STATUS_CLASS } from "@/app/balancer/mix/pickup-chrome";
 import { FilterChip, FilterChipGroup } from "@/components/ui/filter-chip";
 import { PageStateCard } from "@/components/ui/page-state-card";

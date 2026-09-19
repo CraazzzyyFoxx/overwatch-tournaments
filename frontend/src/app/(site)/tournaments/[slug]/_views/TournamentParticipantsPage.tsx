@@ -102,7 +102,7 @@ import { getStatusIcon } from "@/lib/status-icons";
 import { formatSubroleSlug } from "@/lib/roles";
 import { TournamentParticipantsSkeleton } from "../_components/TournamentSkeletons";
 import { TournamentPageState } from "../_components/TournamentPageState";
-import { useTournamentQuery } from "../_hooks/useTournamentClientData";
+import { useTournamentQuery } from "@/hooks/useTournamentClientData";
 import { ViewSegment } from "../_components/ViewSegment";
 import { usePermissions } from "@/hooks/usePermissions";
 import styles from "../TournamentDetail.module.css";

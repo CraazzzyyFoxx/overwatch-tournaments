@@ -12,8 +12,8 @@ import {
   getPlayerValidationIssues,
   isRegistrationAvailableForBalancer,
   type BalanceVariant,
-} from "./workspace-helpers";
-import { type PlayerValidationState } from "./balancer-page-helpers";
+} from "@/components/balancer/workspace-helpers";
+import { type PlayerValidationState } from "@/components/balancer/balancer-page-helpers";
 
 export type BalancerPageCollections = {
   registrationsById: Map<number, AdminRegistration>;

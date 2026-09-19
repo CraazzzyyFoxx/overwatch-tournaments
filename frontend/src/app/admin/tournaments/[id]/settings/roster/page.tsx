@@ -3,10 +3,10 @@
 import { useId } from "react";
 import { useTranslations } from "next-intl";
 
-import { SaveBar } from "@/components/admin/kit/SaveBar";
-import { SettingGroup, SettingRow } from "@/components/admin/kit/SettingRow";
+import { SaveBar } from "@/components/kit/SaveBar";
+import { SettingGroup, SettingRow } from "@/components/kit/SettingRow";
 import { RosterShapeEditor } from "@/components/roster-shape/RosterShapeEditor";
-import { payloadTotalError } from "@/components/roster-shape/roster-shape-editor.model";
+import { payloadTotalError } from "@/lib/roster-shape-editor-model";
 import { Card, CardContent } from "@/components/ui/card";
 import { NumberInput } from "@/components/ui/number-input";
 import type { Tournament } from "@/types/tournament.types";

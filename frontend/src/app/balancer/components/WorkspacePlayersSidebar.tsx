@@ -18,7 +18,7 @@ import {
   PANEL_CLASS,
   ROLE_TEXT_ACCENTS,
   splitBattleTag,
-} from "@/app/balancer/components/balancer-page-helpers";
+} from "@/components/balancer/balancer-page-helpers";
 import {
   BattleTagContextMenuItems,
   BattleTagCopyButton,

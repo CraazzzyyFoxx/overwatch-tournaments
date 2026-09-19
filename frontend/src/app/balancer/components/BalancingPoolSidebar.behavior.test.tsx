@@ -4,7 +4,7 @@ import { createRoot } from "react-dom/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { BalancerApplication, BalancerPlayerRecord } from "@/types/balancer-admin.types";
-import type { PlayerValidationState } from "./balancer-page-helpers";
+import type { PlayerValidationState } from "@/components/balancer/balancer-page-helpers";
 import { BalancingPoolSidebar } from "./BalancingPoolSidebar";
 
 declare global {

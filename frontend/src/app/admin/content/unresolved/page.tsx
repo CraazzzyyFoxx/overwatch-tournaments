@@ -6,10 +6,10 @@ import { ColumnDef } from "@tanstack/react-table";
 import { Check, CheckCircle, EyeOff, LoaderCircle } from "lucide-react";
 import { useMutation, useQueries, useQueryClient } from "@tanstack/react-query";
 
-import { AdminDataTable } from "@/components/admin-data-table";
+import { AdminDataTable } from "@/components/data-table";
 import { StatusIcon } from "@/components/admin/StatusIcon";
-import { AdminFilterBar } from "@/components/admin/kit/AdminFilterBar";
-import { useAdminFilters, type FilterDef } from "@/components/admin/kit/useAdminFilters";
+import { AdminFilterBar } from "@/components/kit/AdminFilterBar";
+import { useAdminFilters, type FilterDef } from "@/components/kit/useAdminFilters";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import SearchableImageSelect, {

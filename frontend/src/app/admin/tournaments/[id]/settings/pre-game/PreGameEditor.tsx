@@ -24,9 +24,9 @@ import {
   SelectValue
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { ConfirmDialog } from "@/components/admin/kit/ConfirmDialog";
-import { SaveBar } from "@/components/admin/kit/SaveBar";
-import { stageRoundShape } from "@/components/bracket-view.helpers";
+import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
+import { SaveBar } from "@/components/kit/SaveBar";
+import { stageRoundShape } from "@/lib/bracket-view";
 import { useBracketRoundLabel } from "@/hooks/useBracketRoundLabel";
 import { hasUnsavedChanges } from "@/lib/form-change";
 import type {
@@ -67,7 +67,7 @@ import {
   type PickBanStepAction,
   type PickBanStepSide,
   type SeriesLength
-} from "../../components/pickBanConfig.helpers";
+} from "@/lib/pick-ban-config";
 import { CatalogueChips, CataloguePicker, type CatalogueItem } from "./CataloguePicker";
 import {
   PRE_GAME_STEPS,

@@ -4,10 +4,10 @@ import type { ReactNode } from "react";
 import { useParams, usePathname, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 
-import { AdminTabs, type AdminTabItem } from "@/components/admin/kit/AdminTabs";
+import { AdminTabs, type AdminTabItem } from "@/components/kit/AdminTabs";
 import { usePermissions } from "@/hooks/usePermissions";
 import adminService from "@/services/admin.service";
-import { getTournamentWorkspaceQueryKeys } from "../components/tournamentWorkspace.queryKeys";
+import { getTournamentWorkspaceQueryKeys } from "@/lib/tournament-workspace-query-keys";
 import { useHubTournamentQuery } from "../hubQueries";
 import { MATCHES_SUB_TABS, type MatchesSubTabKey } from "../tab-guards";
 

@@ -8,7 +8,7 @@ import {
 import {
   calculateTeamDiscomfortFromPayload,
   calculateTeamVarianceFromPayload,
-} from "@/app/balancer/components/balancer-page-helpers";
+} from "@/components/balancer/balancer-page-helpers";
 import type {
   BalancerRosterKey,
   InternalBalancePayload,

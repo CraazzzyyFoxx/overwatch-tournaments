@@ -32,7 +32,7 @@ import {
   TEAM_BADGE_ACCENTS,
   calculateTeamAverageFromPayload,
   calculateTeamTotalFromPayload
-} from "./balancer-page-helpers";
+} from "@/components/balancer/balancer-page-helpers";
 
 const TEAMS_PER_IMAGE = 10;
 const EXPORT_WIDTH = 1920;

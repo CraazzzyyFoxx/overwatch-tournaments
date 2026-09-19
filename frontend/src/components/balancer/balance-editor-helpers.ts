@@ -13,7 +13,7 @@ import {
   calculateTeamVarianceFromPayload,
   countTeamPlayers,
   sampleStdDev,
-} from "@/app/balancer/components/balancer-page-helpers";
+} from "@/components/balancer/balancer-page-helpers";
 
 /**
  * How many seats each bucket has, read off the payload itself: the solver fills

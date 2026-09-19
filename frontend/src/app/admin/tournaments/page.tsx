@@ -5,10 +5,10 @@ import { useRouter } from "next/navigation";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ColumnDef } from "@tanstack/react-table";
 import { Plus, Trash2, CheckCircle, CircleDot, Crown, EyeOff, Trophy } from "lucide-react";
-import { AdminDataTable, adminColumnMeta } from "@/components/admin-data-table";
+import { AdminDataTable, adminColumnMeta } from "@/components/data-table";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { StatusIcon } from "@/components/admin/StatusIcon";
-import { ConfirmDialog } from "@/components/admin/kit/ConfirmDialog";
+import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
 import {
   AlertDialog,
   AlertDialogAction,

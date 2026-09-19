@@ -13,7 +13,7 @@ import type { RealtimeEventEnvelope } from "@/types/realtime.types";
 
 import type { JobAction } from "./useBalancerJob";
 import { appendGeneratedVariants, type JobResultContext } from "./balancer-job-result";
-import type { BalanceVariant } from "./workspace-helpers";
+import type { BalanceVariant } from "@/components/balancer/workspace-helpers";
 
 /**
  * Tournament-scoped balancer topic. Access is gated by workspace membership in

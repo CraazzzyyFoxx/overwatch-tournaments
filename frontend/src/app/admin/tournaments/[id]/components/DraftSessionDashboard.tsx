@@ -15,7 +15,7 @@ import { useHubTournamentQuery } from "../hubQueries";
 import { AdminControlRoom } from "./draft/AdminControlRoom";
 import { DraftHistoryPanel } from "./draft/DraftHistoryPanel";
 import { DraftSetupWizard } from "./draft/DraftSetupWizard";
-import { EmptyNote } from "@/components/admin/kit/EmptyNote";
+import { EmptyNote } from "@/components/kit/EmptyNote";
 
 interface DraftSessionDashboardProps {
   tournamentId: number;

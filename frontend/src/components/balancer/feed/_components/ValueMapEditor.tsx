@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/select";
 import type { ValueMapRow } from "@/types/balancer-admin.types";
 import type { SubroleCatalog, SubroleOption } from "@/types/registration.types";
-import { EYEBROW_CLASS } from "@/components/admin/tone";
+import { EYEBROW_CLASS } from "@/components/kit/tone";
 
 type ValueEditorKind = "boolean" | "role" | "text" | "number" | "role_subrole" | "subrole";
 

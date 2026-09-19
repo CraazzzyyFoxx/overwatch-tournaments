@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 
-import { EntityFormDialog } from "@/components/admin/EntityFormDialog";
+import { EntityFormDialog } from "@/components/kit/EntityFormDialog";
 import { DateTimePicker } from "@/components/ui/date-picker";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";

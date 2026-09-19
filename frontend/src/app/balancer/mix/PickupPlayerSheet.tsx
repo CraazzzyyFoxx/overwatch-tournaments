@@ -9,8 +9,8 @@ import {
   ROLE_RANK_ACCENTS,
   RoleRankControls,
 } from "@/app/balancer/components/RoleRankControls";
-import { SortableGrip, SortableRows, useSortableRow } from "@/app/balancer/components/SortableRows";
-import { splitBattleTag } from "@/app/balancer/components/balancer-page-helpers";
+import { SortableGrip, SortableRows, useSortableRow } from "@/components/kit/SortableRows";
+import { splitBattleTag } from "@/components/balancer/balancer-page-helpers";
 import { CAPTION_CLASS, EYEBROW_CLASS } from "@/app/balancer/mix/pickup-chrome";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import RankHistory from "@/components/RankHistory";

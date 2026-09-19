@@ -2,7 +2,7 @@
 
 import { Card, CardContent } from "@/components/ui/card";
 import { MarkdownEditor } from "@/components/admin/MarkdownEditor";
-import { SaveBar } from "@/components/admin/kit/SaveBar";
+import { SaveBar } from "@/components/kit/SaveBar";
 import type { Tournament } from "@/types/tournament.types";
 import { SettingsSectionPage } from "../SettingsSection";
 import { useTournamentSettingsForm } from "../useTournamentSettingsForm";

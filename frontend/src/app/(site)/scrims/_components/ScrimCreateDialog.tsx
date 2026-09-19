@@ -38,7 +38,7 @@ import { getApiErrorMessage } from "@/lib/api-error";
 import { BEST_OF_OPTIONS, DEFAULT_BEST_OF } from "@/lib/best-of";
 import { notify } from "@/lib/notify";
 import { withReturnTo } from "@/lib/return-to";
-import { stageRoundShape } from "@/components/bracket-view.helpers";
+import { stageRoundShape } from "@/lib/bracket-view";
 import { useBracketRoundLabel } from "@/hooks/useBracketRoundLabel";
 import encounterService from "@/services/encounter.service";
 import scrimService from "@/services/scrim.service";
@@ -52,7 +52,7 @@ import {
   encodeScope,
   pickBanDraftToInput,
   stageRoundOptions
-} from "@/app/admin/tournaments/[id]/components/pickBanConfig.helpers";
+} from "@/lib/pick-ban-config";
 
 import {
   ScrimPoolEditor,

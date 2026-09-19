@@ -12,7 +12,7 @@ import {
   Trash2,
   X
 } from "lucide-react";
-import { SortableGrip, SortableRows, useSortableRow } from "./SortableRows";
+import { SortableGrip, SortableRows, useSortableRow } from "@/components/kit/SortableRows";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -61,8 +61,8 @@ import {
   fetchPlayerRankHistoryPreview,
   type PlayerRankHistoryPreview,
   type PlayerRankHistoryPreviewEntry
-} from "@/app/balancer/components/workspace-helpers";
-import { getRegistrationBattleTags } from "./balancer-page-helpers";
+} from "@/components/balancer/workspace-helpers";
+import { getRegistrationBattleTags } from "@/components/balancer/balancer-page-helpers";
 import { BattleTagCopyButton, SmurfTagStrip } from "./BattleTagCopyControls";
 import RankHistory from "@/components/RankHistory";
 import { ROLE_RANK_ACCENTS, RoleRankControls } from "./RoleRankControls";

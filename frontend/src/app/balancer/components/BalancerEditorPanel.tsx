@@ -6,9 +6,9 @@ import type { DivisionGrid } from "@/types/workspace.types";
 import { BalanceEditor } from "@/components/balancer/BalanceEditor";
 import { cn } from "@/lib/utils";
 
-import { PANEL_CLASS } from "./balancer-page-helpers";
+import { PANEL_CLASS } from "@/components/balancer/balancer-page-helpers";
 import { BalancerSetupChecklist } from "./BalancerSetupChecklist";
-import type { BalanceVariant } from "./workspace-helpers";
+import type { BalanceVariant } from "@/components/balancer/workspace-helpers";
 
 type BalancerEditorPanelProps = {
   activeVariant: BalanceVariant | null;

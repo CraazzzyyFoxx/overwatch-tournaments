@@ -1,4 +1,4 @@
-import { getTournamentWorkspaceQueryKeys } from "@/app/admin/tournaments/[id]/components/tournamentWorkspace.queryKeys";
+import { getTournamentWorkspaceQueryKeys } from "@/lib/tournament-workspace-query-keys";
 import { notificationQueryKeys } from "@/lib/notification-query-keys";
 import { tournamentQueryKeys } from "@/lib/tournament-query-keys";
 import { customGameKeys } from "@/services/custom-game.service";

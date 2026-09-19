@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 import { Markdown } from "@/components/Markdown";
 
 import { TournamentPageState } from "../_components/TournamentPageState";
-import { useTournamentQuery } from "../_hooks/useTournamentClientData";
+import { useTournamentQuery } from "@/hooks/useTournamentClientData";
 import styles from "../TournamentDetail.module.css";
 
 /**

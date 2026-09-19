@@ -2,8 +2,8 @@
 
 import { useMemo } from "react";
 
-import { StatusPill } from "@/components/admin/kit/StatusPill";
-import { EYEBROW_CLASS } from "@/components/admin/tone";
+import { StatusPill } from "@/components/kit/StatusPill";
+import { EYEBROW_CLASS } from "@/components/kit/tone";
 import {
   Select,
   SelectContent,

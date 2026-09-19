@@ -9,7 +9,7 @@ import teamService from "@/services/team.service";
 import tournamentService from "@/services/tournament.service";
 import workspaceService from "@/services/workspace.service";
 import type { DivisionGridEntity, DivisionGridVersion } from "@/types/workspace.types";
-import { getTournamentWorkspaceQueryKeys } from "./components/tournamentWorkspace.queryKeys";
+import { getTournamentWorkspaceQueryKeys } from "@/lib/tournament-workspace-query-keys";
 
 export const TOURNAMENT_WORKSPACE_REFRESH_INTERVAL_MS = 60_000;
 
@@ -25,7 +25,7 @@ export const tabFallback = (
  * Shared query hooks of the tournament hub (T5). Keys and options MUST stay
  * in lockstep between the shell (gate + header metrics) and the tab pages —
  * realtime patch-in-cache and workspace invalidation address these exact keys
- * (see components/tournamentWorkspace.queryKeys.ts). TanStack Query dedupes
+ * (see lib/tournament-workspace-query-keys.ts). TanStack Query dedupes
  * observers of the same key, so a tab page mounting a hook reuses the shell's
  * cache entry instead of refetching. The pre-T5 `enabled` tab conditions
  * (shouldLoadTeams = teams|matches, shouldLoadEncounters = matches|logs) are

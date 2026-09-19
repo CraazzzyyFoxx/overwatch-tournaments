@@ -30,7 +30,7 @@ import {
   Undo2
 } from "lucide-react";
 
-import { PANEL_CLASS } from "@/app/balancer/components/balancer-page-helpers";
+import { PANEL_CLASS } from "@/components/balancer/balancer-page-helpers";
 import { rollNextMap, rollableModes } from "@/app/balancer/mix/pickup-map-roll";
 import { PickupResultControls } from "@/app/balancer/mix/PickupResultControls";
 import {
@@ -54,8 +54,8 @@ import {
 import DivisionIcon from "@/components/DivisionIcon";
 import { MapCombobox } from "@/components/MapCombobox";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
-import { InlineEditText } from "@/components/admin/InlineEditText";
-import { formatRelative } from "@/components/admin/format-time";
+import { InlineEditText } from "@/components/kit/InlineEditText";
+import { formatRelative } from "@/components/kit/format-time";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { Skeleton } from "@/components/ui/skeleton";

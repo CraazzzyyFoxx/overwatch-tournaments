@@ -4,13 +4,13 @@ import { useMemo, useState, type FormEvent } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
 
-import { EntityFormDialog } from "@/components/admin/EntityFormDialog";
-import { StatusPill } from "@/components/admin/kit/StatusPill";
+import { EntityFormDialog } from "@/components/kit/EntityFormDialog";
+import { StatusPill } from "@/components/kit/StatusPill";
 import {
   SortableGrip,
   SortableRows,
   useSortableRow
-} from "@/app/balancer/components/SortableRows";
+} from "@/components/kit/SortableRows";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -38,7 +38,7 @@ import {
   normalizeMaxRounds,
   STAGE_TYPE_LABELS,
   type StageProgress
-} from "../projection";
+} from "@/lib/bracket-projection";
 
 interface StageListProps {
   tournamentId: number;

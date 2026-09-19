@@ -9,7 +9,7 @@ import { AccountRestrictions } from "@/components/admin/access/AccountRestrictio
 import { ProviderBadge } from "@/components/admin/OAuthProviderBadge";
 import { StatusIcon } from "@/components/admin/StatusIcon";
 import { UserSearchCombobox } from "@/components/admin/UserSearchCombobox";
-import { EYEBROW_CLASS } from "@/components/admin/tone";
+import { EYEBROW_CLASS } from "@/components/kit/tone";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";

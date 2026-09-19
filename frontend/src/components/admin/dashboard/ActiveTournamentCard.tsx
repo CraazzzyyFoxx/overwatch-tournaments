@@ -5,7 +5,7 @@ import { ArrowRight, Calendar } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardTitle } from "@/components/ui/card";
-import { StatusPill } from "@/components/admin/kit/StatusPill";
+import { StatusPill } from "@/components/kit/StatusPill";
 import { formatTournamentStages } from "@/lib/tournament-stages";
 import { PermissionHiddenNotice } from "./PermissionHiddenNotice";
 import { tournamentStatus } from "./tournament-status";

@@ -5,9 +5,9 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { ChevronsDown, ChevronsUp, ImagePlus, Scissors } from "lucide-react";
 import Image from "next/image";
 
-import { AdminDataTable, createKebabColumn } from "@/components/admin-data-table";
-import { InlineEditText } from "@/components/admin/InlineEditText";
-import { StatusPill } from "@/components/admin/kit/StatusPill";
+import { AdminDataTable, createKebabColumn } from "@/components/data-table";
+import { InlineEditText } from "@/components/kit/InlineEditText";
+import { StatusPill } from "@/components/kit/StatusPill";
 import { Button } from "@/components/ui/button";
 
 import {

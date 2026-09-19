@@ -7,7 +7,7 @@ import { skipToken, useQuery } from "@tanstack/react-query";
 
 import { AdminSidebar } from "@/components/admin/AdminSidebar";
 import AnnouncementBanner from "@/components/notifications/AnnouncementBanner";
-import { AuditTrailProvider } from "@/components/admin/AuditTrailSheet";
+import { AuditTrailProvider } from "@/components/kit/AuditTrailSheet";
 import { adminRouteAccessOptions } from "@/components/admin/admin-navigation";
 import {
   getBreadcrumbEntityRef,

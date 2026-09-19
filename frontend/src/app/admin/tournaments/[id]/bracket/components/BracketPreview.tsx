@@ -3,9 +3,9 @@
 import { useCallback, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { EYEBROW_CLASS, TONE_TEXT } from "@/components/admin/tone";
+import { EYEBROW_CLASS, TONE_TEXT } from "@/components/kit/tone";
 import { BracketView, type BracketSlotRef } from "@/components/bracket/BracketView";
-import type { BracketMatch } from "@/components/bracket-view.helpers";
+import type { BracketMatch } from "@/lib/bracket-view";
 import { notify } from "@/lib/notify";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
@@ -14,9 +14,9 @@ import type { StageBracketPreviewMatch } from "@/types/admin.types";
 import type { Team } from "@/types/team.types";
 import type { Stage } from "@/types/tournament.types";
 
-import { invalidateTournamentWorkspace } from "../../components/tournamentWorkspace.queryKeys";
+import { invalidateTournamentWorkspace } from "@/lib/tournament-workspace-query-keys";
 import { useHubEncountersQuery } from "../../hubQueries";
-import { BRACKET_STAGE_TYPES, type BracketTeamCountSource, type StageProjection } from "../projection";
+import { BRACKET_STAGE_TYPES, type BracketTeamCountSource, type StageProjection } from "@/lib/bracket-projection";
 
 const COUNT_SOURCE_NOTE: Record<BracketTeamCountSource, string> = {
   seeded: "from the teams already seeded into this stage",

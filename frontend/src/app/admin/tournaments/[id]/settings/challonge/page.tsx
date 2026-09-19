@@ -1,7 +1,7 @@
 "use client";
 
 import { Card, CardContent } from "@/components/ui/card";
-import { SaveBar } from "@/components/admin/kit/SaveBar";
+import { SaveBar } from "@/components/kit/SaveBar";
 import { hasChallongeSource } from "@/components/admin/tournament-checklist";
 import type { Tournament } from "@/types/tournament.types";
 import { ChallongeIntegrationSection } from "../../components/ChallongeIntegrationSection";

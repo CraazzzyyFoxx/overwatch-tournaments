@@ -2,7 +2,7 @@
 
 import { ChevronDown, ChevronUp } from "lucide-react";
 
-import { EYEBROW_CLASS } from "@/components/admin/tone";
+import { EYEBROW_CLASS } from "@/components/kit/tone";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 

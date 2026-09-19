@@ -11,7 +11,7 @@ import {
   buildRoundGroups,
   orderEliminationRounds,
   type RoundGroup
-} from "@/components/bracket-view.helpers";
+} from "@/lib/bracket-view";
 import RosterSlotGlyph from "@/components/registration/RosterSlotGlyph";
 import TeamName from "@/components/TeamName";
 import { useBracketRoundLabel } from "@/hooks/useBracketRoundLabel";
@@ -44,12 +44,12 @@ import {
 import { TournamentPageState } from "../_components/TournamentPageState";
 import { TournamentOverviewSkeleton } from "../_components/TournamentSkeletons";
 import { UpdatingBadge } from "../_components/UpdatingBadge";
-import { useTournamentQuery } from "../_hooks/useTournamentClientData";
+import { useTournamentQuery } from "@/hooks/useTournamentClientData";
 import { useTournamentStreamsQuery } from "../_hooks/useTournamentStreams";
 import { getBracketRefetchInterval } from "../bracket/bracketData";
 import { buildLiveTeamStreams } from "../bracket/bracketLiveStreams";
 import styles from "../TournamentDetail.module.css";
-import { getPublicPageQueryPresentation } from "./publicPageQueryPresentation";
+import { getPublicPageQueryPresentation } from "@/lib/public-page-query-presentation";
 import { RegistrationSummary, StatTile } from "./_components/RegistrationSummary";
 
 // ---------------------------------------------------------------------------

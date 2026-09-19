@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/context-menu";
 import { cn } from "@/lib/utils";
 import type { AdminRegistration, BalancerPlayerRecord } from "@/types/balancer-admin.types";
-import { ROLE_TEXT_ACCENTS, getRegistrationBattleTags, splitBattleTag } from "./balancer-page-helpers";
+import { ROLE_TEXT_ACCENTS, getRegistrationBattleTags, splitBattleTag } from "@/components/balancer/balancer-page-helpers";
 import { BalancerStatusContextMenuItems, BalancerStatusMenu, type StatusOptionGroups } from "./BalancerStatusMenu";
 import { BattleTagContextMenuItems, BattleTagCopyButton, SmurfTagStrip } from "./BattleTagCopyControls";
 import { IssueChip, issueChipKey } from "./IssueChip";
@@ -25,7 +25,7 @@ import {
   ROLE_LABELS,
   isRoleEntryActive,
   type PlayerValidationIssue,
-} from "@/app/balancer/components/workspace-helpers";
+} from "@/components/balancer/workspace-helpers";
 
 type PoolPlayerCompactListProps = {
   playerStates: Array<{

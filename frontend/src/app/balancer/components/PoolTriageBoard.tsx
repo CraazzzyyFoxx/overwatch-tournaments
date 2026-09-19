@@ -34,9 +34,9 @@ import {
   getRegistrationBattleTags,
   type PlayerValidationState,
   type PoolLane,
-} from "./balancer-page-helpers";
+} from "@/components/balancer/balancer-page-helpers";
 import { BattleTagContextMenuItems, BattleTagCopyButton, SmurfTagStrip } from "./BattleTagCopyControls";
-import { ROLE_LABELS, isRoleEntryActive } from "./workspace-helpers";
+import { ROLE_LABELS, isRoleEntryActive } from "@/components/balancer/workspace-helpers";
 import { IssueChip, issueChipKey } from "./IssueChip";
 
 import { BalancerStatusContextMenuItems, BalancerStatusMenu, type StatusOptionGroups } from "./BalancerStatusMenu";

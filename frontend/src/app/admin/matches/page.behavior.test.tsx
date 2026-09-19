@@ -91,7 +91,7 @@ vi.mock("@/services/admin.service", () => ({
 vi.mock("@/lib/notify", () => ({
   notify: { success: vi.fn(), error: vi.fn(), apiError: vi.fn() }
 }));
-vi.mock("@/components/admin/AuditTrailSheet", () => ({
+vi.mock("@/components/kit/AuditTrailSheet", () => ({
   AuditTrailButton: () => <button type="button">Change history</button>
 }));
 

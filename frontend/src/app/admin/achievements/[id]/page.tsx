@@ -35,8 +35,8 @@ import { ConditionFlowEditor } from "@/components/admin/achievements/ConditionFl
 import { notifyEvaluationRun } from "@/components/admin/achievements/EvaluationRunSummary";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { StatusIcon } from "@/components/admin/StatusIcon";
-import { ConfirmDialog } from "@/components/admin/kit/ConfirmDialog";
-import { EntityFormDialog } from "@/components/admin/EntityFormDialog";
+import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
+import { EntityFormDialog } from "@/components/kit/EntityFormDialog";
 import { TournamentCombobox } from "@/components/admin/TournamentCombobox";
 import { UserSearchCombobox } from "@/components/admin/UserSearchCombobox";
 import { Badge } from "@/components/ui/badge";

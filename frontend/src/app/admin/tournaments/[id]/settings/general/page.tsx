@@ -14,8 +14,8 @@ import {
   SelectValue
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { AuditTrailButton } from "@/components/admin/AuditTrailSheet";
-import { SaveBar } from "@/components/admin/kit/SaveBar";
+import { AuditTrailButton } from "@/components/kit/AuditTrailSheet";
+import { SaveBar } from "@/components/kit/SaveBar";
 import { MAX_AVATAR_BYTES } from "@/lib/avatar";
 import { notify } from "@/lib/notify";
 import adminService from "@/services/admin.service";
@@ -23,7 +23,7 @@ import type { Tournament, TournamentImageSlot } from "@/types/tournament.types";
 import { flattenDivisionGridVersions, useHubDivisionGridsQuery } from "../../hubQueries";
 import { SettingsSectionPage } from "../SettingsSection";
 import { useTournamentSettingsForm } from "../useTournamentSettingsForm";
-import { invalidateTournamentWorkspace } from "../../components/tournamentWorkspace.queryKeys";
+import { invalidateTournamentWorkspace } from "@/lib/tournament-workspace-query-keys";
 
 export default function GeneralSettingsPage() {
   return (

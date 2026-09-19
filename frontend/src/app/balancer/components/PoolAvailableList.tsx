@@ -4,7 +4,7 @@ import { Plus } from "lucide-react";
 
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import type { BalancerApplication, BalancerRoleCode } from "@/types/balancer-admin.types";
-import { ROLE_LABELS, buildApplicationSearchIndex } from "@/app/balancer/components/workspace-helpers";
+import { ROLE_LABELS, buildApplicationSearchIndex } from "@/components/balancer/workspace-helpers";
 
 type PoolAvailableListProps = {
   applications: BalancerApplication[];

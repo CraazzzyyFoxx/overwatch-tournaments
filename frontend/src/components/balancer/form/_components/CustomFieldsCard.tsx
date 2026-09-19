@@ -16,7 +16,7 @@ import { cn } from "@/lib/utils";
 import type { AdminCustomFieldDef } from "@/types/balancer-admin.types";
 
 import { FIELD_TYPE_OPTIONS, getCustomFieldDefaultValidation, supportsCustomFieldValidation } from "./formConfig";
-import { EmptyNote } from "@/components/admin/kit/EmptyNote";
+import { EmptyNote } from "@/components/kit/EmptyNote";
 
 export function CustomFieldsCard({
   customFields,

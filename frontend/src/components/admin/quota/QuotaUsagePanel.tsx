@@ -2,7 +2,7 @@
 
 import { useFormatter, useTranslations } from "next-intl";
 
-import { EmptyNote } from "@/components/admin/kit/EmptyNote";
+import { EmptyNote } from "@/components/kit/EmptyNote";
 import { useMinuteClock } from "@/hooks/useMinuteClock";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";

@@ -1,4 +1,4 @@
-import type { AdminSectionNavGroup } from "@/components/admin/kit/AdminSectionNav";
+import type { AdminSectionNavGroup } from "@/components/kit/AdminSectionNav";
 
 /**
  * Every section of the workspace settings hub (T5), in rail order.

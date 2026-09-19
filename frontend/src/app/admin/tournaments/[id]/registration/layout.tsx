@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { useEffect } from "react";
 import { useParams, usePathname, useRouter } from "next/navigation";
 
-import { AdminTabs, type AdminTabItem } from "@/components/admin/kit/AdminTabs";
+import { AdminTabs, type AdminTabItem } from "@/components/kit/AdminTabs";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useHubTournamentQuery } from "../hubQueries";
 import { REGISTRATION_SUB_TABS, type RegistrationSubTab } from "../tab-guards";

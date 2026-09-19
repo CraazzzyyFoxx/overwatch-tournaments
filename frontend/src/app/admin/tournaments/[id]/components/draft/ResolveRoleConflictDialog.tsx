@@ -39,7 +39,7 @@ import type {
 } from "@/types/draft.types";
 
 import { availableRolesForPlayer, canCommitRoleEdit, roleEditImpact } from "./admin-control-model";
-import { EYEBROW_CLASS } from "@/components/admin/tone";
+import { EYEBROW_CLASS } from "@/components/kit/tone";
 
 interface ResolveRoleConflictDialogProps {
   open: boolean;

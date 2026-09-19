@@ -4,8 +4,8 @@ import { AlertTriangle, CheckCircle2, Link2Off, ShieldAlert, Users, XCircle } fr
 import { useTranslations } from "next-intl";
 
 import { StatTile, StatTileGrid } from "@/components/admin/StatTile";
-import { StatusPill } from "@/components/admin/kit/StatusPill";
-import { TONE_CLASS } from "@/components/admin/tone";
+import { StatusPill } from "@/components/kit/StatusPill";
+import { TONE_CLASS } from "@/components/kit/tone";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";

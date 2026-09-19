@@ -51,7 +51,7 @@ vi.mock("@/hooks/usePermissions", () => ({
   })
 }));
 
-vi.mock("@/components/admin/AuditTrailSheet", () => ({ AuditTrailButton: () => null }));
+vi.mock("@/components/kit/AuditTrailSheet", () => ({ AuditTrailButton: () => null }));
 
 vi.mock("@/lib/notify", () => ({
   notify: { success: vi.fn(), error: vi.fn(), warning: vi.fn(), apiError: vi.fn() }

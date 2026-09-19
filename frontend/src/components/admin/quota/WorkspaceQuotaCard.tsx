@@ -6,8 +6,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { LoaderCircle } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import { AdminTabs, type AdminTabItem } from "@/components/admin/kit/AdminTabs";
-import { EmptyNote } from "@/components/admin/kit/EmptyNote";
+import { AdminTabs, type AdminTabItem } from "@/components/kit/AdminTabs";
+import { EmptyNote } from "@/components/kit/EmptyNote";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {

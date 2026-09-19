@@ -3,7 +3,7 @@
 import { StreamHealthDashboard } from "@/components/admin/collectors/stream-health";
 import { StreamSettingsPanel } from "@/components/admin/collectors/stream-settings";
 import { useCollectorTab } from "@/components/admin/collectors/useCollectorTab";
-import { AdminTabs } from "@/components/admin/kit/AdminTabs";
+import { AdminTabs } from "@/components/kit/AdminTabs";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { usePermissions } from "@/hooks/usePermissions";
 

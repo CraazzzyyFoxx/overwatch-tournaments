@@ -10,7 +10,7 @@ import {
   calculateTeamAverageValueFromPayload,
   calculateTeamDiscomfortFromPayload,
   calculateTeamVarianceFromPayload
-} from "./balancer-page-helpers";
+} from "@/components/balancer/balancer-page-helpers";
 import { recalculateBalanceStatistics } from "@/components/balancer/balance-editor-helpers";
 
 const FORMAT_HINT =

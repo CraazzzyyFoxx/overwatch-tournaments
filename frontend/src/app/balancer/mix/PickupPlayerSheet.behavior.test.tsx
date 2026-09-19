@@ -38,7 +38,7 @@ vi.mock("@/components/DivisionIcon", () => ({ default: () => null }));
 vi.mock("@/components/RankHistory", () => ({ default: () => null }));
 // Drag itself is not what this pins, and dnd-kit resolves its own React copy
 // under pnpm, so the sortable wrapper and its hook render inertly here.
-vi.mock("@/app/balancer/components/SortableRows", () => ({
+vi.mock("@/components/kit/SortableRows", () => ({
   SortableRows: ({
     items,
     children,

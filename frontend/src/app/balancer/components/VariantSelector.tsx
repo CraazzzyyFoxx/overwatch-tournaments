@@ -18,7 +18,7 @@ import {
   DialogHeader,
   DialogTitle
 } from "@/components/ui/dialog";
-import type { BalanceVariant } from "./workspace-helpers";
+import type { BalanceVariant } from "@/components/balancer/workspace-helpers";
 
 const INLINE_VARIANT_LIMIT = 8;
 

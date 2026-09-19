@@ -2,7 +2,7 @@
 
 import { AlertTriangle } from "lucide-react";
 
-import { PhaseStrip, type Phase } from "@/components/admin/kit/PhaseStrip";
+import { PhaseStrip, type Phase } from "@/components/kit/PhaseStrip";
 import { TOURNAMENT_STATUS_LABELS } from "@/lib/tournament-lifecycle";
 import type { Tournament } from "@/types/tournament.types";
 import { effectivePhases } from "./effective-phases";

@@ -30,7 +30,7 @@ import {
   ICON_BUTTON_CLASS,
   PANEL_CLASS,
   splitBattleTag,
-} from "@/app/balancer/components/balancer-page-helpers";
+} from "@/components/balancer/balancer-page-helpers";
 import {
   CAPTION_CLASS,
   CARD_TITLE_CLASS,

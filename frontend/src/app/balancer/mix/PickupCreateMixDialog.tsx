@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import { useFormatter, useTranslations } from "next-intl";
 import { Loader2 } from "lucide-react";
 
-import { AdminCombobox, AdminComboboxCheck } from "@/components/admin/AdminCombobox";
+import { AdminCombobox, AdminComboboxCheck } from "@/components/kit/AdminCombobox";
 import { Button } from "@/components/ui/button";
 import { CommandGroup, CommandItem } from "@/components/ui/command";
 import {

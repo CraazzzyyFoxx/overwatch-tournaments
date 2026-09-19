@@ -32,7 +32,7 @@ import {
   DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
 import type { BalancerPlayerExportFormat } from "@/types/balancer-admin.types";
-import { PANEL_CLASS, PRESET_LABELS, TOOLBAR_BUTTON_CLASS } from "./balancer-page-helpers";
+import { PANEL_CLASS, PRESET_LABELS, TOOLBAR_BUTTON_CLASS } from "@/components/balancer/balancer-page-helpers";
 import { WorkspaceCounter } from "./WorkspaceCounter";
 
 type CounterItem = {

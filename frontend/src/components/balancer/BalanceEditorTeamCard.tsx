@@ -4,7 +4,7 @@ import {
   TEAM_BADGE_ACCENTS,
   calculateTeamAverageFromPayload,
   calculateTeamTotalFromPayload,
-} from "@/app/balancer/components/balancer-page-helpers";
+} from "@/components/balancer/balancer-page-helpers";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,

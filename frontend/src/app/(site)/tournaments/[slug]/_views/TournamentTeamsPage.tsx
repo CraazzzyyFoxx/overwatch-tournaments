@@ -44,8 +44,8 @@ import { TournamentPageState } from "../_components/TournamentPageState";
 import { TournamentTeamsSkeleton } from "../_components/TournamentSkeletons";
 import { UpdatingBadge } from "../_components/UpdatingBadge";
 import { ViewSegment, readViewParam } from "../_components/ViewSegment";
-import { useTournamentQuery } from "../_hooks/useTournamentClientData";
-import { getPublicPageQueryPresentation } from "./publicPageQueryPresentation";
+import { useTournamentQuery } from "@/hooks/useTournamentClientData";
+import { getPublicPageQueryPresentation } from "@/lib/public-page-query-presentation";
 import { useHeroesMap } from "./_components/participantsColumns";
 
 const VIEWS = ["list", "cards"] as const;

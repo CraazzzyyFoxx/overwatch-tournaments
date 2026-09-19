@@ -4,7 +4,7 @@ import { useCallback, useDeferredValue, useMemo, useRef, useState } from "react"
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, ChevronDown, CornerDownLeft, Loader2, Plus, Search, UserPlus, X } from "lucide-react";
 
-import { splitBattleTag } from "@/app/balancer/components/balancer-page-helpers";
+import { splitBattleTag } from "@/components/balancer/balancer-page-helpers";
 import {
   CAPTION_CLASS,
   CARD_TITLE_CLASS,

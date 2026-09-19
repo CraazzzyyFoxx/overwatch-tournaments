@@ -17,12 +17,12 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { WizardShell, type WizardStep } from "@/components/admin/kit/WizardShell";
+import { WizardShell, type WizardStep } from "@/components/kit/WizardShell";
 import { useDivisionGrid } from "@/hooks/useCurrentWorkspace";
 import { notify } from "@/lib/notify";
 import type { RosterShape } from "@/lib/roster-shape";
 import { tournamentQueryKeys } from "@/lib/tournament-query-keys";
-import { EYEBROW_CLASS } from "@/components/admin/tone";
+import { EYEBROW_CLASS } from "@/components/kit/tone";
 import balancerAdminService from "@/services/balancer-admin.service";
 import draftService from "@/services/draft.service";
 import type {

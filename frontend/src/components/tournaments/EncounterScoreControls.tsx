@@ -2,7 +2,7 @@ import { Minus, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { EYEBROW_CLASS } from "@/components/admin/tone";
+import { EYEBROW_CLASS } from "@/components/kit/tone";
 import { cn } from "@/lib/utils";
 import { useTranslations } from "next-intl";
 import {
@@ -11,7 +11,7 @@ import {
   getScorePresetsForBestOf,
   type EncounterScore,
   type EncounterScorePreset,
-} from "@/components/admin/encounter-score";
+} from "@/lib/encounter-score";
 
 type EncounterScoreControlsProps = EncounterScore & {
   idPrefix: string;

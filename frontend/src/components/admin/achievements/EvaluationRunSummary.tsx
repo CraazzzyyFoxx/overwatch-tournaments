@@ -13,8 +13,8 @@ import {
   type LucideIcon
 } from "lucide-react";
 
-import { StatusPill } from "@/components/admin/kit/StatusPill";
-import { EYEBROW_CLASS, TONE_TEXT, type Tone } from "@/components/admin/tone";
+import { StatusPill } from "@/components/kit/StatusPill";
+import { EYEBROW_CLASS, TONE_TEXT, type Tone } from "@/components/kit/tone";
 import { Button } from "@/components/ui/button";
 import { notify } from "@/lib/notify";
 import { cn } from "@/lib/utils";

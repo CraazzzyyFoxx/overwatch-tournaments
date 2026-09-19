@@ -76,6 +76,13 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// the inbound headers here is the standard injection point.
 	r.Header.Del("traceparent")
 	r.Header.Del("tracestate")
+	// The `x-owt-*` family is server-authored scoping (workspace id, host mode,
+	// i18n zone). The frontend's proxy/middleware sets it per request and also
+	// deletes before setting, but the authoritative place to drop a spoofed
+	// value is the edge that owns the trust boundary — not the app being
+	// scoped. Strip the whole prefix so a header added later inherits the rule
+	// instead of needing a second patch here.
+	stripOwtScope(r.Header)
 	otel.GetTextMapPropagator().Inject(r.Context(), propagation.HeaderCarrier(r.Header))
 	for _, rt := range p.routes {
 		if matchPrefix(r.URL.Path, rt.prefix) {
@@ -84,6 +91,22 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	http.NotFound(w, r) // unreachable: "/" always matches
+}
+
+// owtScopePrefix is the canonical MIME prefix of the server-authored scoping
+// headers. Go canonicalises header keys on parse, so comparing against the
+// canonical form covers every casing a client can send.
+const owtScopePrefix = "X-Owt-"
+
+// stripOwtScope removes every client-supplied scoping header. Deleting while
+// ranging over a map is defined in Go (an entry removed mid-iteration is simply
+// not produced again), so no second slice of keys is needed.
+func stripOwtScope(h http.Header) {
+	for key := range h {
+		if strings.HasPrefix(key, owtScopePrefix) {
+			h.Del(key)
+		}
+	}
 }
 
 // matchPrefix does segment-aware prefix matching so "/api/v1" matches

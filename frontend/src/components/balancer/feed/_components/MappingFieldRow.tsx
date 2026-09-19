@@ -21,7 +21,7 @@ import type { SubroleCatalog } from "@/types/registration.types";
 import { HeaderCombobox } from "./HeaderCombobox";
 import { HeaderMultiCombobox } from "./HeaderMultiCombobox";
 import { ModeToggle } from "./ModeToggle";
-import { EYEBROW_CLASS } from "@/components/admin/tone";
+import { EYEBROW_CLASS } from "@/components/kit/tone";
 
 const AUTO_FIELD_MODES: MappingTargetMode[] = ["auto", "columns"];
 const STANDARD_FIELD_MODES: MappingTargetMode[] = ["columns", "constant", "disabled"];

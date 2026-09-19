@@ -19,13 +19,13 @@ import {
 } from "lucide-react";
 
 import TeamName from "@/components/TeamName";
-import { AdminCombobox, AdminComboboxCheck } from "@/components/admin/AdminCombobox";
+import { AdminCombobox, AdminComboboxCheck } from "@/components/kit/AdminCombobox";
 import {
   AdminDetailTableShell,
   getAdminDetailTableStyles
 } from "@/components/admin/AdminDetailTable";
 import { StatTile, StatTileGrid } from "@/components/admin/StatTile";
-import { WizardShell } from "@/components/admin/kit/WizardShell";
+import { WizardShell } from "@/components/kit/WizardShell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -54,8 +54,8 @@ import type {
 } from "@/types/admin.types";
 import type { Team } from "@/types/team.types";
 import { TOURNAMENT_DETAIL_PREVIEW_LIMIT } from "./tournamentWorkspace.helpers";
-import { invalidateTournamentWorkspace } from "./tournamentWorkspace.queryKeys";
-import { EmptyNote } from "@/components/admin/kit/EmptyNote";
+import { invalidateTournamentWorkspace } from "@/lib/tournament-workspace-query-keys";
+import { EmptyNote } from "@/components/kit/EmptyNote";
 
 interface TournamentTeamsTabProps {
   tournamentId: number;

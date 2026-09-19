@@ -5,11 +5,11 @@ import { useMemo } from "react";
 import { useTranslations } from "next-intl";
 import { LoaderCircle } from "lucide-react";
 
-import { stageRoundShape } from "@/components/bracket-view.helpers";
+import { stageRoundShape } from "@/lib/bracket-view";
 import { useBracketRoundLabel } from "@/hooks/useBracketRoundLabel";
 import { cn } from "@/lib/utils";
 import type { PickBanConfig, PickBanKind, Stage } from "@/types/tournament.types";
-import type { PickBanScopeEncounter } from "../../components/pickBanConfig.helpers";
+import type { PickBanScopeEncounter } from "@/lib/pick-ban-config";
 import { useStageRounds } from "./useStageRounds";
 import {
   encodePreGameScope,

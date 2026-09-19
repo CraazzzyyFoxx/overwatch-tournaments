@@ -1,7 +1,7 @@
 import type { ElementType } from "react";
 
 import { cn } from "@/lib/utils";
-import { EYEBROW_CLASS, TONE_CLASS, type Tone } from "./tone";
+import { EYEBROW_CLASS, TONE_CLASS, type Tone } from "@/components/kit/tone";
 
 interface StatTileProps {
   /** Uppercase eyebrow naming what is measured. */

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { ArrowLeft, Trash2, UserCog, UserPlus } from "lucide-react";
 
-import { PANEL_CLASS } from "@/app/balancer/components/balancer-page-helpers";
+import { PANEL_CLASS } from "@/components/balancer/balancer-page-helpers";
 import { EYEBROW_CLASS } from "@/app/balancer/mix/pickup-chrome";
 import {
   AlertDialog,

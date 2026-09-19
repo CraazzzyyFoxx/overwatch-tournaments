@@ -1,8 +1,8 @@
 import { cn } from "@/lib/utils";
 
 import { BalanceActionsBar } from "./BalanceActionsBar";
-import { PANEL_CLASS } from "./balancer-page-helpers";
-import { downloadPayload, type BalanceVariant } from "./workspace-helpers";
+import { PANEL_CLASS } from "@/components/balancer/balancer-page-helpers";
+import { downloadPayload, type BalanceVariant } from "@/components/balancer/workspace-helpers";
 
 type BalancerActionsPanelProps = {
   activeVariant: BalanceVariant | null;

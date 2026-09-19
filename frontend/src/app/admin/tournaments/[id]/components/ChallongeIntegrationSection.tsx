@@ -3,8 +3,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { ArrowDownToLine, ArrowUpFromLine, ExternalLink, Loader2, Users } from "lucide-react";
-import { StatusPill } from "@/components/admin/kit/StatusPill";
-import { EYEBROW_CLASS, TONE_TEXT, type Tone } from "@/components/admin/tone";
+import { StatusPill } from "@/components/kit/StatusPill";
+import { EYEBROW_CLASS, TONE_TEXT, type Tone } from "@/components/kit/tone";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,8 +13,8 @@ import { cn } from "@/lib/utils";
 import { notify } from "@/lib/notify";
 import adminService from "@/services/admin.service";
 import type { ChallongeSyncLogEntry } from "@/types/admin.types";
-import { invalidateTournamentWorkspace } from "./tournamentWorkspace.queryKeys";
-import { EmptyNote } from "@/components/admin/kit/EmptyNote";
+import { invalidateTournamentWorkspace } from "@/lib/tournament-workspace-query-keys";
+import { EmptyNote } from "@/components/kit/EmptyNote";
 
 interface ChallongeIntegrationSectionProps {
   tournamentId: number;

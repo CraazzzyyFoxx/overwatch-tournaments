@@ -6,7 +6,7 @@ import { LoaderCircle } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { SaveBar } from "@/components/admin/kit/SaveBar";
+import { SaveBar } from "@/components/kit/SaveBar";
 import { notify } from "@/lib/notify";
 import { toRegistrationFormUpsert } from "@/lib/registration-form-upsert";
 import { ROLES, canonicalToRegistrationRole } from "@/lib/roles";

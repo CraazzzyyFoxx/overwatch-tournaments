@@ -67,7 +67,7 @@ import {
   upsertSavedVariant,
   buildBalancerPageCollections
 } from "./balancer-page-selectors";
-import { PRESET_LABELS } from "./balancer-page-helpers";
+import { PRESET_LABELS } from "@/components/balancer/balancer-page-helpers";
 import {
   buildTeamNamesText,
   buildVariantFromSavedBalance,
@@ -75,7 +75,7 @@ import {
   downloadPlayersExport,
   getPlayerValidationIssues,
   type BalanceVariant
-} from "./workspace-helpers";
+} from "@/components/balancer/workspace-helpers";
 
 const EXPORT_TO_TOURNAMENT_STEPS: BalancerOperationStepDefinition[] = [
   {

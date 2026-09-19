@@ -3,7 +3,7 @@
 import { useCallback, useMemo, useState } from "react";
 
 import type { Team } from "@/types/team.types";
-import { AdminCombobox, AdminComboboxCheck } from "@/components/admin/AdminCombobox";
+import { AdminCombobox, AdminComboboxCheck } from "@/components/kit/AdminCombobox";
 import TeamName from "@/components/TeamName";
 import { CommandGroup, CommandItem } from "@/components/ui/command";
 

@@ -18,7 +18,7 @@ import { reachedAtLeast } from "@/lib/tournament-lifecycle";
 import { cn, formatDateRange } from "@/lib/utils";
 import { useInvalidation } from "@/hooks/useInvalidation";
 import { createTrailingCoalescer } from "@/lib/realtime-coalesce";
-import { useTournamentQuery } from "../_hooks/useTournamentClientData";
+import { useTournamentQuery } from "@/hooks/useTournamentClientData";
 import { TournamentRouteProvider } from "../_hooks/useTournamentId";
 import { useSyncActiveWorkspace } from "@/hooks/useSyncActiveWorkspace";
 import { useTournamentStreamsQuery } from "../_hooks/useTournamentStreams";

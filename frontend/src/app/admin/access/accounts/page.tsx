@@ -5,13 +5,13 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { BadgeCheck, CheckCircle, ShieldAlert, Trash2, UserRound, XCircle } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { AdminDataTable, adminColumnMeta, createKebabColumn } from "@/components/admin-data-table";
+import { AdminDataTable, adminColumnMeta, createKebabColumn } from "@/components/data-table";
 import { StatusIcon } from "@/components/admin/StatusIcon";
 import { AccountInspector } from "@/components/admin/access/AccountInspector";
-import { AdminFilterBar } from "@/components/admin/kit/AdminFilterBar";
-import { AdminInspector } from "@/components/admin/kit/AdminInspector";
-import { ConfirmDialog } from "@/components/admin/kit/ConfirmDialog";
-import { useAdminFilters, type FilterDef } from "@/components/admin/kit/useAdminFilters";
+import { AdminFilterBar } from "@/components/kit/AdminFilterBar";
+import { AdminInspector } from "@/components/kit/AdminInspector";
+import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
+import { useAdminFilters, type FilterDef } from "@/components/kit/useAdminFilters";
 import { Badge } from "@/components/ui/badge";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useQueryParams } from "@/hooks/useQueryParams";

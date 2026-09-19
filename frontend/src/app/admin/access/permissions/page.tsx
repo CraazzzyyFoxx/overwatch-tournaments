@@ -4,11 +4,11 @@ import { useMemo } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { useQuery } from "@tanstack/react-query";
 
-import { AdminDataTable, adminColumnMeta } from "@/components/admin-data-table";
-import { AdminFilterBar } from "@/components/admin/kit/AdminFilterBar";
-import { AdminInspector } from "@/components/admin/kit/AdminInspector";
-import { useAdminFilters, type FilterDef } from "@/components/admin/kit/useAdminFilters";
-import { EYEBROW_CLASS } from "@/components/admin/tone";
+import { AdminDataTable, adminColumnMeta } from "@/components/data-table";
+import { AdminFilterBar } from "@/components/kit/AdminFilterBar";
+import { AdminInspector } from "@/components/kit/AdminInspector";
+import { useAdminFilters, type FilterDef } from "@/components/kit/useAdminFilters";
+import { EYEBROW_CLASS } from "@/components/kit/tone";
 import { Badge } from "@/components/ui/badge";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { useQueryParams } from "@/hooks/useQueryParams";

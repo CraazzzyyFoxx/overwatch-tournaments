@@ -4,7 +4,7 @@ import { RankHealthDashboard } from "@/components/admin/collectors/rank-health";
 import { RankTaskHistory } from "@/components/admin/collectors/rank-history";
 import { RankSettingsPanel } from "@/components/admin/collectors/rank-settings";
 import { useCollectorTab } from "@/components/admin/collectors/useCollectorTab";
-import { AdminTabs } from "@/components/admin/kit/AdminTabs";
+import { AdminTabs } from "@/components/kit/AdminTabs";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { usePermissions } from "@/hooks/usePermissions";
 

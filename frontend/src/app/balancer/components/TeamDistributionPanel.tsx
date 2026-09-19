@@ -2,9 +2,9 @@ import { useMemo, type ReactNode } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLocalStorageState } from "@/hooks/useLocalStorageState";
-import { PANEL_CLASS, TEAM_BADGE_ACCENTS } from "./balancer-page-helpers";
-import { calculateTeamAverageFromPayload } from "./balancer-page-helpers";
-import type { BalanceVariant } from "./workspace-helpers";
+import { PANEL_CLASS, TEAM_BADGE_ACCENTS } from "@/components/balancer/balancer-page-helpers";
+import { calculateTeamAverageFromPayload } from "@/components/balancer/balancer-page-helpers";
+import type { BalanceVariant } from "@/components/balancer/workspace-helpers";
 
 type TeamDistributionPanelProps = {
   variant: BalanceVariant;

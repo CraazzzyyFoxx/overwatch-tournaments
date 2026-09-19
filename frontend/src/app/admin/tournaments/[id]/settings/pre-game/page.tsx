@@ -7,7 +7,7 @@ import { AlertTriangle } from "lucide-react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { MasterDetail } from "@/components/admin/kit/MasterDetail";
+import { MasterDetail } from "@/components/kit/MasterDetail";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -28,7 +28,7 @@ import type { PickBanConfig, PickBanKind } from "@/types/tournament.types";
 import {
   pickBanDraftToInput,
   type PickBanDraft
-} from "../../components/pickBanConfig.helpers";
+} from "@/lib/pick-ban-config";
 import { useHubEncountersQuery, useHubStagesQuery } from "../../hubQueries";
 import { SettingsSectionPage } from "../SettingsSection";
 import { PreGameEditor } from "./PreGameEditor";

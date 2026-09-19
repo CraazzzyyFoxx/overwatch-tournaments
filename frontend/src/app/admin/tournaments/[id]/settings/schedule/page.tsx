@@ -6,8 +6,8 @@ import { DateTimePicker } from "@/components/ui/date-picker";
 import { Field, FieldLabel } from "@/components/ui/field";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { EYEBROW_CLASS } from "@/components/admin/tone";
-import { SaveBar } from "@/components/admin/kit/SaveBar";
+import { EYEBROW_CLASS } from "@/components/kit/tone";
+import { SaveBar } from "@/components/kit/SaveBar";
 import { getUtcOffsetLabel } from "@/lib/timezone";
 import {
   SCHEDULABLE_PHASES,

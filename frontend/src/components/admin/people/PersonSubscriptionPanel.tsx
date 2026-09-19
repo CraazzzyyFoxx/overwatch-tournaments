@@ -26,7 +26,7 @@ import {
   formatDate,
   formatRelative
 } from "@/components/admin/collectors/subscription-shared";
-import { EmptyNote } from "@/components/admin/kit/EmptyNote";
+import { EmptyNote } from "@/components/kit/EmptyNote";
 
 interface SelectUser {
   (userId: number, label: string): void;

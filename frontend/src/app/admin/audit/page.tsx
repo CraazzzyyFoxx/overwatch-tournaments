@@ -6,9 +6,9 @@ import { useQuery } from "@tanstack/react-query";
 import { Globe, Lock } from "lucide-react";
 import { useFormatter } from "next-intl";
 
-import { AdminDataTable } from "@/components/admin-data-table";
+import { AdminDataTable } from "@/components/data-table";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
-import { AuditFieldDiff } from "@/components/admin/AuditTrail";
+import { AuditFieldDiff } from "@/components/kit/AuditTrail";
 import {
   AUDIT_ENTITY_TYPES,
   auditDiffRows,
@@ -21,11 +21,11 @@ import {
   formatAuditTarget,
   formatAuditTimestamp,
   isMachineActor,
-} from "@/components/admin/audit-log";
-import { AdminFilterBar } from "@/components/admin/kit/AdminFilterBar";
-import { AdminInspector } from "@/components/admin/kit/AdminInspector";
-import { useAdminFilters, type FilterDef } from "@/components/admin/kit/useAdminFilters";
-import { EYEBROW_CLASS } from "@/components/admin/tone";
+} from "@/components/kit/audit-log";
+import { AdminFilterBar } from "@/components/kit/AdminFilterBar";
+import { AdminInspector } from "@/components/kit/AdminInspector";
+import { useAdminFilters, type FilterDef } from "@/components/kit/useAdminFilters";
+import { EYEBROW_CLASS } from "@/components/kit/tone";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -35,7 +35,7 @@ import { cn } from "@/lib/utils";
 import adminService from "@/services/admin.service";
 import { useWorkspaceStore } from "@/stores/workspace.store";
 import type { AuditLogRead, AuditSortField } from "@/types/admin.types";
-import { EmptyNote } from "@/components/admin/kit/EmptyNote";
+import { EmptyNote } from "@/components/kit/EmptyNote";
 
 /** Server caps `per_page` at 200, so the selector must not offer more. */
 const PAGE_SIZE = 25;

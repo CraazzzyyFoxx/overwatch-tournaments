@@ -14,7 +14,7 @@ import { useCurrentWorkspaceId } from "@/hooks/useCurrentWorkspace";
 import { apiFetch } from "@/lib/api-fetch";
 import { cn } from "@/lib/utils";
 import adminService from "@/services/admin.service";
-import { getTournamentWorkspaceQueryKeys } from "@/app/admin/tournaments/[id]/components/tournamentWorkspace.queryKeys";
+import { getTournamentWorkspaceQueryKeys } from "@/lib/tournament-workspace-query-keys";
 import tournamentService from "@/services/tournament.service";
 import type { PaginatedResponse } from "@/types/pagination.types";
 import type { Tournament } from "@/types/tournament.types";

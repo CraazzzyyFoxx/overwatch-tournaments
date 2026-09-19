@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "bun:test";
 
 import type { Stage } from "@/types/tournament.types";
-import { getPublicPageQueryPresentation } from "./publicPageQueryPresentation";
+import { getPublicPageQueryPresentation } from "@/lib/public-page-query-presentation";
 
 type QueryPresentation = {
   initialState: "skeleton" | "error" | null;

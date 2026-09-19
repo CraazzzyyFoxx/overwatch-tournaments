@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 
-import { EYEBROW_CLASS } from "@/components/admin/tone";
+import { EYEBROW_CLASS } from "@/components/kit/tone";
 import { cn } from "@/lib/utils";
 
 import { bandRangeLabel, diffBands, type Band } from "./draftReducer";

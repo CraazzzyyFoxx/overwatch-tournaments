@@ -17,7 +17,7 @@ import {
   DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
 import type { InternalBalancePayload } from "@/types/balancer-admin.types";
-import { MUTED_BUTTON_CLASS } from "./balancer-page-helpers";
+import { MUTED_BUTTON_CLASS } from "@/components/balancer/balancer-page-helpers";
 import { BalanceStatsRow, type VariantStats } from "./BalanceStatsRow";
 
 type BalanceActionsBarProps = {

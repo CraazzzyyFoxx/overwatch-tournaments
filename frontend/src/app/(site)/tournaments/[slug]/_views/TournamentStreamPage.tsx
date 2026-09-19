@@ -21,7 +21,7 @@ import { TournamentStreamSkeleton } from "../_components/TournamentSkeletons";
 import { UpdatingBadge } from "../_components/UpdatingBadge";
 import { useTournamentStreamsQuery } from "../_hooks/useTournamentStreams";
 import styles from "../TournamentDetail.module.css";
-import { getPublicPageQueryPresentation } from "./publicPageQueryPresentation";
+import { getPublicPageQueryPresentation } from "@/lib/public-page-query-presentation";
 
 /**
  * Who is streaming this tournament right now — and a player to watch them in.

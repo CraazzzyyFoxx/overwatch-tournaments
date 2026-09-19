@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, UserMinus } from "lucide-react";
-import { AdminCombobox } from "@/components/admin/AdminCombobox";
+import { AdminCombobox } from "@/components/kit/AdminCombobox";
 import { Button } from "@/components/ui/button";
 import { CommandGroup, CommandItem } from "@/components/ui/command";
 import { notify } from "@/lib/notify";

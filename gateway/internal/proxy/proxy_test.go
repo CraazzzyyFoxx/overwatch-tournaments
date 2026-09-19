@@ -84,6 +84,49 @@ func TestMatchPrefix(t *testing.T) {
 	}
 }
 
+// A spoofed `x-owt-workspace-id` would make the frontend render another
+// tenant's white-label chrome and scope its SSR reads to that workspace, so the
+// edge must drop the whole family regardless of casing.
+func TestProxy_StripsClientSuppliedScopeHeaders(t *testing.T) {
+	var seen http.Header
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen = r.Header.Clone()
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer upstream.Close()
+
+	p, err := New(config.Upstreams{Frontend: upstream.URL})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	srv := httptest.NewServer(p)
+	defer srv.Close()
+
+	req, err := http.NewRequest(http.MethodGet, srv.URL+"/tournaments/5", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("x-owt-workspace-id", "999")
+	req.Header.Set("X-OWT-Host-Mode", "tenant")
+	req.Header.Set("x-owt-zone", "admin")
+	req.Header.Set("Accept-Language", "ru")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	for _, key := range []string{"X-Owt-Workspace-Id", "X-Owt-Host-Mode", "X-Owt-Zone"} {
+		if got := seen.Get(key); got != "" {
+			t.Fatalf("upstream saw %s=%q; the edge must strip client-supplied scope headers", key, got)
+		}
+	}
+	if got := seen.Get("Accept-Language"); got != "ru" {
+		t.Fatalf("unrelated header dropped: Accept-Language=%q, want %q", got, "ru")
+	}
+}
+
 func TestNew_InvalidUpstream(t *testing.T) {
 	_, err := New(config.Upstreams{Parser: "://bad", Frontend: "y"})
 	if err == nil {

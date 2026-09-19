@@ -1,7 +1,7 @@
 
 import { cn } from "@/lib/utils";
 import { HeroFrame } from "@/components/site/PageHero";
-import styles from "./EncounterDetail.module.css";
+import styles from "@/components/match/EncounterDetail.module.css";
 
 /**
  * Mirrors the real layout: hero (breadcrumb, title, meta pills, four KPI stats),

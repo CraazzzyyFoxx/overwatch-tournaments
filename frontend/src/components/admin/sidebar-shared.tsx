@@ -25,7 +25,7 @@ import { logout } from "@/lib/logout";
 import { WorkspaceAvatar } from "@/components/WorkspaceSwitcher";
 import { filterAccessibleWorkspaces, useWorkspaceStore } from "@/stores/workspace.store";
 import { SITE_FAVICON, SITE_NAME } from "@/config/site";
-import { EYEBROW_CLASS } from "@/components/admin/tone";
+import { EYEBROW_CLASS } from "@/components/kit/tone";
 import { cn } from "@/lib/utils";
 
 // Role names come from two RBAC scopes: global roles ("admin",

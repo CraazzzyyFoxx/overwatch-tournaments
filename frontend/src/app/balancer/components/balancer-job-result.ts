@@ -2,8 +2,8 @@ import type React from "react";
 
 import type { BalanceJobResult, BalancerConfig } from "@/types/balancer.types";
 
-import { createVariantLabel } from "./balancer-page-helpers";
-import { convertBalanceResponseToInternalPayload, type BalanceVariant } from "./workspace-helpers";
+import { createVariantLabel } from "@/components/balancer/balancer-page-helpers";
+import { convertBalanceResponseToInternalPayload, type BalanceVariant } from "@/components/balancer/workspace-helpers";
 
 export type JobResultContext = {
   /** Pool players excluded from the run (shown as a badge on the first variant). */

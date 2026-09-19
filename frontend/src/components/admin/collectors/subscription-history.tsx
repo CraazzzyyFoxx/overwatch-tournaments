@@ -26,7 +26,7 @@ import {
   StateBadge,
   formatDate
 } from "./subscription-shared";
-import { EmptyNote } from "@/components/admin/kit/EmptyNote";
+import { EmptyNote } from "@/components/kit/EmptyNote";
 
 const STATE_FILTERS = ["all", "active", "inactive", "unknown", "error"];
 const SOURCE_FILTERS = ["all", "scheduled", "registration", "check_in", "manual", "redeem"];

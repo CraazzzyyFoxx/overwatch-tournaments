@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { notify } from "@/lib/notify";
 import { cn } from "@/lib/utils";
-import { formatBattleTagsForClipboard, formatSmurfCount } from "./balancer-page-helpers";
+import { formatBattleTagsForClipboard, formatSmurfCount } from "@/components/balancer/balancer-page-helpers";
 
 type BattleTagCopyButtonProps = {
   battleTag: string;

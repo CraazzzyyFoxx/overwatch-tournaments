@@ -5,8 +5,8 @@ import { useTranslations } from "next-intl";
 
 import DivisionIcon from "@/components/DivisionIcon";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
-import { StatusPill } from "@/components/admin/kit/StatusPill";
-import { EYEBROW_CLASS, TONE_CLASS, TONE_TEXT } from "@/components/admin/tone";
+import { StatusPill } from "@/components/kit/StatusPill";
+import { EYEBROW_CLASS, TONE_CLASS, TONE_TEXT } from "@/components/kit/tone";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useDivisionGrid } from "@/hooks/useCurrentWorkspace";
 import { resolveDivisionFromRank } from "@/lib/division-grid";

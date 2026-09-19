@@ -4,13 +4,13 @@ import { useMemo, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
 
-import { EntityFormDialog } from "@/components/admin/EntityFormDialog";
+import { EntityFormDialog } from "@/components/kit/EntityFormDialog";
 import { RoleEditor } from "@/components/admin/access/RoleEditor";
 import { RoleList } from "@/components/admin/access/RoleList";
-import { AdminFilterBar } from "@/components/admin/kit/AdminFilterBar";
-import { ConfirmDialog } from "@/components/admin/kit/ConfirmDialog";
-import { MasterDetail } from "@/components/admin/kit/MasterDetail";
-import { useAdminFilters, type FilterDef } from "@/components/admin/kit/useAdminFilters";
+import { AdminFilterBar } from "@/components/kit/AdminFilterBar";
+import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
+import { MasterDetail } from "@/components/kit/MasterDetail";
+import { useAdminFilters, type FilterDef } from "@/components/kit/useAdminFilters";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";

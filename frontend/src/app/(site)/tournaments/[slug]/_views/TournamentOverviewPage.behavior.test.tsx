@@ -98,7 +98,7 @@ vi.mock("next/link", () => ({
 
 let tournament: Tournament;
 
-vi.mock("../_hooks/useTournamentClientData", () => ({
+vi.mock("@/hooks/useTournamentClientData", () => ({
   useTournamentQuery: () => ({ data: tournament, isError: false, refetch: () => {} })
 }));
 

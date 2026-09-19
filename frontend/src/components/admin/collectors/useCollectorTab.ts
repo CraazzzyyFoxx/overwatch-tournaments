@@ -1,6 +1,6 @@
 "use client";
 
-import type { AdminTabItem } from "@/components/admin/kit/AdminTabs";
+import type { AdminTabItem } from "@/components/kit/AdminTabs";
 import { useQueryParams } from "@/hooks/useQueryParams";
 
 export interface CollectorSlot {

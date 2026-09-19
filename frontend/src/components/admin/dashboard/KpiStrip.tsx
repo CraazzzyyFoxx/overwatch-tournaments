@@ -1,7 +1,7 @@
 import { ClipboardList, ScrollText, Swords, Trophy, type LucideIcon } from "lucide-react";
 
 import { StatTile, StatTileGrid } from "@/components/admin/StatTile";
-import type { Tone } from "@/components/admin/tone";
+import type { Tone } from "@/components/kit/tone";
 
 /**
  * Column class for `count` KPI tiles. Exported so the dashboard's loading

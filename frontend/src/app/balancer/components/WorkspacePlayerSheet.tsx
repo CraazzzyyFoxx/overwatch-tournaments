@@ -1,7 +1,7 @@
 "use client";
 
 import { BattleTagCopyButton } from "@/app/balancer/components/BattleTagCopyControls";
-import { splitBattleTag } from "@/app/balancer/components/balancer-page-helpers";
+import { splitBattleTag } from "@/components/balancer/balancer-page-helpers";
 import {
   NEUTRAL_RANK_ACCENT,
   ROLE_RANK_ACCENTS,

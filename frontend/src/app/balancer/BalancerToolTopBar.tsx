@@ -7,7 +7,7 @@ import { ArrowLeft, Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { TOOLBAR_BUTTON_CLASS } from "@/app/balancer/components/balancer-page-helpers";
+import { TOOLBAR_BUTTON_CLASS } from "@/components/balancer/balancer-page-helpers";
 import { cn } from "@/lib/utils";
 import type { BalancerTournamentSummary } from "@/types/balancer-admin.types";
 

@@ -18,7 +18,7 @@ import { act, forwardRef, useEffect, useState, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { AuditTrailProvider } from "@/components/admin/AuditTrailSheet";
+import { AuditTrailProvider } from "@/components/kit/AuditTrailSheet";
 import type { AdminRegistration } from "@/types/balancer-admin.types";
 import RegistrationLayout from "../layout";
 import RegistrationEntriesPage from "./page";

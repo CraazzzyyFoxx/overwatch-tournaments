@@ -18,7 +18,7 @@ import adminService from "@/services/admin.service";
 import { useWorkspaceStore } from "@/stores/workspace.store";
 
 import { StatusBadge, formatDate } from "./rank-shared";
-import { EmptyNote } from "@/components/admin/kit/EmptyNote";
+import { EmptyNote } from "@/components/kit/EmptyNote";
 
 const STATUS_FILTERS = ["all", "ok", "private", "not_found", "error", "rate_limited"];
 const SOURCE_FILTERS = ["all", "scheduled", "registration", "manual"];

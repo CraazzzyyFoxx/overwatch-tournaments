@@ -182,7 +182,7 @@ describe("tournament overview server contract", () => {
       (declaration) => declaration.name?.text === "TournamentOverviewBoundary"
     );
 
-    expect(importedNames(sourceFile, "./_queries/tournamentOverview")).toContain(
+    expect(importedNames(sourceFile, "@/lib/tournament-overview-query")).toContain(
       "tournamentOverviewQueryOptions"
     );
     expect(calledIdentifiers(sourceFile)).toContain("getTournamentOverviewState");

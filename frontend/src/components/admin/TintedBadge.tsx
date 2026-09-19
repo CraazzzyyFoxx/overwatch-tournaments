@@ -1,5 +1,5 @@
-import { StatusPill } from "@/components/admin/kit/StatusPill";
-import type { Tone } from "./tone";
+import { StatusPill } from "@/components/kit/StatusPill";
+import type { Tone } from "@/components/kit/tone";
 
 interface TintedBadgeProps {
   /** Machine value the badge represents; `null`/`undefined` renders `fallback`. */

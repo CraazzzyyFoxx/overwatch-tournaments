@@ -4,13 +4,13 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
 
-import { AdminDataTable } from "@/components/admin-data-table";
+import { AdminDataTable } from "@/components/data-table";
 import { ParsedMatchDetail } from "@/components/admin/ParsedMatchDetail";
-import { AdminFilterBar } from "@/components/admin/kit/AdminFilterBar";
-import { AdminInspector } from "@/components/admin/kit/AdminInspector";
-import { useAdminFilters, type FilterDef } from "@/components/admin/kit/useAdminFilters";
-import { StatusPill } from "@/components/admin/kit/StatusPill";
-import { type Tone } from "@/components/admin/tone";
+import { AdminFilterBar } from "@/components/kit/AdminFilterBar";
+import { AdminInspector } from "@/components/kit/AdminInspector";
+import { useAdminFilters, type FilterDef } from "@/components/kit/useAdminFilters";
+import { StatusPill } from "@/components/kit/StatusPill";
+import { type Tone } from "@/components/kit/tone";
 import {
   TOURNAMENT_QUERY_PARAM,
   parseTournamentQueryParam
@@ -21,7 +21,7 @@ import adminService from "@/services/admin.service";
 import mapService from "@/services/map.service";
 import tournamentService from "@/services/tournament.service";
 import type { AdminMatchRow, LogProcessingStatus } from "@/types/admin.types";
-import { EmptyNote } from "@/components/admin/kit/EmptyNote";
+import { EmptyNote } from "@/components/kit/EmptyNote";
 
 const PAGE_SIZE = 25;
 

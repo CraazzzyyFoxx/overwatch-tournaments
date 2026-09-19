@@ -18,7 +18,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { notify } from "@/lib/notify";
 import { cn } from "@/lib/utils";
-import { EYEBROW_CLASS, TONE_TEXT } from "@/components/admin/tone";
+import { EYEBROW_CLASS, TONE_TEXT } from "@/components/kit/tone";
 import balancerAdminService from "@/services/balancer-admin.service";
 import type {
   RegistrationRankAutofillRequest,

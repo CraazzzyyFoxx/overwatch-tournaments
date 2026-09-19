@@ -17,7 +17,7 @@ import { createRoleSelections, isFlexSelection, type FlexMode } from "./types";
 import type { User } from "@/types/user.types";
 import type { AdminRegistration } from "@/types/balancer-admin.types";
 
-import { AuthUserSearchCombobox, type AuthUserOption } from "@/components/admin/AuthUserSearchCombobox";
+import { AuthUserSearchCombobox, type AuthUserOption } from "@/components/kit/AuthUserSearchCombobox";
 import { rbacService } from "@/services/rbac.service";
 import StepIndicator from "@/components/registration/StepIndicator";
 import AccountStep from "@/components/registration/AccountStep";

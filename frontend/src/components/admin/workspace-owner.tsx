@@ -3,8 +3,8 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { AuthUserSearchCombobox, type AuthUserOption } from "@/components/admin/AuthUserSearchCombobox";
-import { ConfirmDialog } from "@/components/admin/kit/ConfirmDialog";
+import { AuthUserSearchCombobox, type AuthUserOption } from "@/components/kit/AuthUserSearchCombobox";
+import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
 import { Button } from "@/components/ui/button";
 import { notify } from "@/lib/notify";
 import workspaceService from "@/services/workspace.service";

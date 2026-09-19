@@ -14,7 +14,8 @@
     "test:split": "node scripts/test-runner-split.mjs",
     "lint": "eslint .",
     "format": "prettier --write './**/*.{js,jsx,ts,tsx,css,md,json}' --config ./.prettierrc",
-    "lint:design": "node scripts/check-design-compliance.mjs"
+    "lint:design": "node scripts/check-design-compliance.mjs",
+    "lint:zones": "node scripts/check-zone-boundaries.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

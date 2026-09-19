@@ -8,8 +8,8 @@ import {
   PermissionPicker,
   type PermissionCatalogEntry
 } from "@/components/admin/access/PermissionPicker";
-import { SaveBar } from "@/components/admin/kit/SaveBar";
-import { TONE_CLASS } from "@/components/admin/tone";
+import { SaveBar } from "@/components/kit/SaveBar";
+import { TONE_CLASS } from "@/components/kit/tone";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {

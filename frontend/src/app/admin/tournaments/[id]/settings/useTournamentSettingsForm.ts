@@ -15,7 +15,7 @@ import {
   getTournamentUpdatePayload,
   type TournamentFormState
 } from "../components/tournamentWorkspace.helpers";
-import { invalidateTournamentWorkspace } from "../components/tournamentWorkspace.queryKeys";
+import { invalidateTournamentWorkspace } from "@/lib/tournament-workspace-query-keys";
 
 /**
  * Which tournament fields each settings section owns.

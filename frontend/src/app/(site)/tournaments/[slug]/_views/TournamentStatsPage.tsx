@@ -27,13 +27,13 @@ import {
 } from "../_components/TournamentSkeletons";
 import { UpdatingBadge } from "../_components/UpdatingBadge";
 import { ViewSegment, readViewParam } from "../_components/ViewSegment";
-import { useTournamentQuery } from "../_hooks/useTournamentClientData";
+import { useTournamentQuery } from "@/hooks/useTournamentClientData";
 import { useTournamentMapPool } from "../_hooks/useTournamentMapPool";
 import { tournamentEncountersQueryOptions } from "./TournamentEncountersPage";
 import {
   getPublicPageQueryPresentation,
   type PublicPageQueryState
-} from "./publicPageQueryPresentation";
+} from "@/lib/public-page-query-presentation";
 
 type RoleKey = Exclude<PlayerRoleSlotCode, "flex">;
 type RoleFilter = "all" | RoleKey;

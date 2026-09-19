@@ -1,4 +1,4 @@
-import type { Tone } from "@/components/admin/tone";
+import type { Tone } from "@/components/kit/tone";
 import type { StreamPollHealth, StreamPollStatus } from "@/types/admin.types";
 
 /**

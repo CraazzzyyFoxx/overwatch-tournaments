@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { usePathname } from "next/navigation";
 
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
-import { AdminTabs, type AdminTabItem } from "@/components/admin/kit/AdminTabs";
+import { AdminTabs, type AdminTabItem } from "@/components/kit/AdminTabs";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import {
   accessApiKeysPermissions,

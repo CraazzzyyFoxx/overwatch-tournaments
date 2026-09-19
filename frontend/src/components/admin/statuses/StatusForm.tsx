@@ -4,7 +4,7 @@ import { createElement, useId, useMemo, useState } from "react";
 import { Check, ChevronsUpDown, Pipette } from "lucide-react";
 
 import StatusMetaBadge from "@/components/status/StatusMetaBadge";
-import { EYEBROW_CLASS } from "@/components/admin/tone";
+import { EYEBROW_CLASS } from "@/components/kit/tone";
 import { Button } from "@/components/ui/button";
 import {
   Command,

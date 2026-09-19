@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import { useParams } from "next/navigation";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { MasterDetail } from "@/components/admin/kit/MasterDetail";
+import { MasterDetail } from "@/components/kit/MasterDetail";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useQueryParams } from "@/hooks/useQueryParams";
@@ -13,7 +13,7 @@ import { usePermissions } from "@/hooks/usePermissions";
 import adminService from "@/services/admin.service";
 import teamService from "@/services/team.service";
 
-import { invalidateTournamentWorkspace } from "../components/tournamentWorkspace.queryKeys";
+import { invalidateTournamentWorkspace } from "@/lib/tournament-workspace-query-keys";
 import { StageEditor } from "./components/StageEditor";
 import { StageList } from "./components/StageList";
 

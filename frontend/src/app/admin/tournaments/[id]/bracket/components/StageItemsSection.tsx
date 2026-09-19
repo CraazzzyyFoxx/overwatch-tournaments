@@ -28,7 +28,7 @@ import {
   X
 } from "lucide-react";
 
-import { InlineEditText } from "@/components/admin/InlineEditText";
+import { InlineEditText } from "@/components/kit/InlineEditText";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -53,8 +53,8 @@ import {
   getInputDisplayLabel,
   STAGE_ITEM_TYPE_LABELS,
   type StageProgress
-} from "../projection";
-import { EmptyNote } from "@/components/admin/kit/EmptyNote";
+} from "@/lib/bracket-projection";
+import { EmptyNote } from "@/components/kit/EmptyNote";
 
 /**
  * The `updateStageItemInput` calls that move `source`'s team into `target`'s slot.
