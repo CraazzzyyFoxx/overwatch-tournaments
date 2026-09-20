@@ -30,6 +30,15 @@ from shared.domain.forms.schema import (
     default_schema,
     schema_from_form,
 )
+from shared.domain.forms.validate import (
+    ErrorCode,
+    FieldError,
+    NormalizedAnswers,
+    evaluate_condition,
+    normalize_answers,
+    raise_field_errors,
+    visible_fields,
+)
 
 __all__ = (
     "BUILTIN_KEYS",
@@ -42,20 +51,27 @@ __all__ = (
     "BuiltinSpec",
     "Condition",
     "ConditionOp",
+    "ErrorCode",
+    "FieldError",
     "FieldKind",
     "FieldValidation",
     "FormField",
     "FormSchema",
     "FormSection",
     "IdentityParams",
+    "NormalizedAnswers",
     "RolesParams",
     "TopHeroesParams",
     "Visibility",
     "builtin_spec",
     "default_pattern",
     "default_schema",
+    "evaluate_condition",
     "identity_key",
     "identity_provider",
     "is_builtin_key",
+    "normalize_answers",
+    "raise_field_errors",
     "schema_from_form",
+    "visible_fields",
 )

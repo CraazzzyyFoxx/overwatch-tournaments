@@ -12,6 +12,8 @@ __all__ = (
 class ApiExc(BaseModel):
     msg: str
     code: str
+    #: The answer key (or schema path) the error is about, when there is one.
+    field: str | None = None
 
 
 class BaseAPIException(Exception):
