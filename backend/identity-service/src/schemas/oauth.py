@@ -10,6 +10,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from shared.core import pagination
+from shared.core.social import oauth_handle
 
 from .auth import Token
 
@@ -129,6 +130,16 @@ class OAuthUserInfo(BaseModel):
     raw_data: dict = Field(default_factory=dict)
 
     model_config = ConfigDict(from_attributes=True)
+
+    @property
+    def handle(self) -> str:
+        """The handle to store as this account's social username.
+
+        Derived from the provider catalog rather than taken from ``username``:
+        BattleNet's ``username`` is an account name, while the handle players
+        know each other by lives in ``raw_data['battletag']``.
+        """
+        return oauth_handle(self.provider.value, self.username, self.raw_data)
 
 
 class OAuthConnectionRead(BaseModel):

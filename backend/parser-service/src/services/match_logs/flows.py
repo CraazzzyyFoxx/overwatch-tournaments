@@ -21,9 +21,9 @@ from shared.schemas.events import (
     EncounterCompletedEvent,
     TournamentStandingsInvalidatedEvent,
 )
-from shared.services import social_identity
 from shared.services.newcomer_status import load_prior_participation
 from shared.services.realtime import Resource, Scope, emit, enqueue_invalidation_outbox
+from shared.services.social_identity import social_identity_service
 from src import models
 from src.core import enums, errors, pagination
 from src.core.config import settings
@@ -1295,7 +1295,7 @@ class MatchLogProcessor:
                 )
 
                 if user_to_update:
-                    await social_identity.upsert_social_account(
+                    await social_identity_service.upsert(
                         session,
                         user_id=user_to_update.id,
                         provider=SocialProvider.BATTLENET,

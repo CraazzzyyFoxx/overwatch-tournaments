@@ -31,10 +31,10 @@ from shared.repository import (
     UserRepository,
     get_or_create_workspace_member,
 )
-from shared.services import social_identity
 from shared.services.admission import AdmissionConfig, AdmissionEvaluation
 from shared.services.admission.resolve import resolve_admission
 from shared.services.realtime import Resource, Scope, emit
+from shared.services.social_identity import social_identity_service
 from shared.services.subscriptions.wiring import build_resolver
 from src import models
 from src.core.broker import optional_broker
@@ -286,7 +286,7 @@ class RegistrationService:
         return result.scalar_one_or_none()
 
     async def _find_user_by_battle_tag(self, session: AsyncSession, battle_tag: str) -> models.User | None:
-        user_id = await social_identity.find_player_id_by_handle(
+        user_id = await social_identity_service.find_player_id_by_handle(
             session, provider=SocialProvider.BATTLENET, username=battle_tag
         )
         if user_id is None:
@@ -317,9 +317,11 @@ class RegistrationService:
         converge on ``target`` instead of re-splitting the identity. Idempotent;
         flushes only, caller commits.
         """
-        accounts = await social_identity.list_social_accounts(session, shadow.id, providers=[SocialProvider.BATTLENET])
+        accounts = await social_identity_service.list_for_player(
+            session, shadow.id, providers=[SocialProvider.BATTLENET]
+        )
         for account in accounts:
-            existing = await social_identity.find_by_handle(
+            existing = await social_identity_service.find_by_handle(
                 session, provider=SocialProvider.BATTLENET, username=account.username, user_id=target.id
             )
             if existing is not None:
@@ -359,7 +361,7 @@ class RegistrationService:
         if "#" not in battle_tag:
             return
         # Idempotent on (user, battlenet, normalized handle); seeds global visibility.
-        await social_identity.upsert_social_account(
+        await social_identity_service.upsert(
             session, user_id=user.id, provider=SocialProvider.BATTLENET, username=battle_tag
         )
 

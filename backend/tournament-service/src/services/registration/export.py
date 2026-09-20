@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.core.social import SocialProvider, normalize_social_handle
 from shared.repository import BalancerRegistrationRepository, SocialAccountRepository, UserRepository
-from shared.services import social_identity
+from shared.services.social_identity import social_identity_service
 from src import models
 from src.domain.registration.utils import BATTLE_TAG_SCAN_RE
 from src.services.registration.lifecycle import RegistrationLifecycleService, lifecycle_service
@@ -68,7 +68,7 @@ class RegistrationExportService:
         self.lifecycle = lifecycle
 
     async def _find_user_by_battle_tag(self, session: AsyncSession, battle_tag: str) -> models.User | None:
-        user_id = await social_identity.find_player_id_by_handle(
+        user_id = await social_identity_service.find_player_id_by_handle(
             session, provider=SocialProvider.BATTLENET, username=battle_tag
         )
         if user_id is None:
@@ -78,7 +78,7 @@ class RegistrationExportService:
     async def _ensure_user_battle_tag(self, session: AsyncSession, user: models.User, battle_tag: str) -> None:
         if "#" not in battle_tag:
             return
-        await social_identity.upsert_social_account(
+        await social_identity_service.upsert(
             session, user_id=user.id, provider=SocialProvider.BATTLENET, username=battle_tag
         )
 
@@ -120,7 +120,7 @@ class RegistrationExportService:
                 if key in known_handles:
                     continue
                 known_handles.add(key)
-            await social_identity.upsert_social_account(session, user_id=user.id, provider=provider, username=handle)
+            await social_identity_service.upsert(session, user_id=user.id, provider=provider, username=handle)
 
     async def export_registrations_to_users(
         self,

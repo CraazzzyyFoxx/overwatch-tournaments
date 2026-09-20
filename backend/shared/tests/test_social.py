@@ -144,15 +144,33 @@ def test_oauth_handle_prefers_the_providers_own_handle_field() -> None:
 
 
 def test_oauth_handle_candidates_union_every_field_that_names_the_account() -> None:
+    """Unioned, not ranked: the question is "does this connection prove this
+    handle", and any field naming it is proof."""
     assert oauth_handle_candidates(
         SocialProvider.DISCORD,
         username="CoolGuy",
-        display_name=None,
-        provider_data={"global_name": "Cool Guy Display", "username": "coolguy"},
-    ) == {"coolguy", "cool guy display"}
+        display_name="Cool Guy",
+        provider_data={"username": "coolguy_raw", "global_name": "CoolGlobal"},
+    ) == {"coolguy", "cool guy", "coolguy_raw", "coolglobal"}
     assert oauth_handle_candidates(
+        SocialProvider.TWITCH,
+        username="StreamerX",
+        display_name=None,
+        provider_data={"login": "streamerx"},
+    ) == {"streamerx"}
+
+
+def test_battlenet_candidates_normalize_tag_spacing() -> None:
+    """A stored ``player#1234`` must match a connection reporting ``Player # 1234``."""
+    assert "player#1234" in oauth_handle_candidates(
         SocialProvider.BATTLENET,
-        username="account-name",
+        username="Player#1234",
         display_name=None,
         provider_data={"battletag": "Player # 1234"},
-    ) == {"account-name", "player#1234"}
+    )
+
+
+def test_candidates_survive_a_provider_response_carrying_nothing_extra() -> None:
+    assert oauth_handle_candidates(SocialProvider.DISCORD, username="Solo", display_name=None, provider_data=None) == {
+        "solo"
+    }

@@ -19,14 +19,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.core import http_status as status
 from shared.core.errors import BaseAPIException as HTTPException
-from shared.core.social import normalize_social_handle, oauth_handle, social_provider_for_oauth
+from shared.core.social import normalize_social_handle, social_provider_for_oauth
 from shared.repository import (
     AuthUserRepository,
     OAuthConnectionRepository,
     SocialAccountRepository,
     UserRepository,
 )
-from shared.services import social_identity
+from shared.services.social_identity import SocialHandleConflict
+from shared.services.social_identity import social_identity_service as socials_writer
 from src import models, schemas
 from src.services.auth_users import AuthUserService, auth_users
 from src.services.oauth_providers import OAuthProviderRegistry, oauth_providers
@@ -186,15 +187,6 @@ class OAuthAccountService:
             )
         return False
 
-    @staticmethod
-    def _oauth_handle(oauth_info: schemas.OAuthUserInfo) -> str:
-        """The provider's canonical handle to store as the verified social username."""
-        return oauth_handle(
-            oauth_info.provider.value,
-            oauth_info.username,
-            oauth_info.raw_data,
-        )
-
     async def _attach_verified_social_account(
         self,
         session: AsyncSession,
@@ -250,15 +242,15 @@ class OAuthAccountService:
                     return
 
         try:
-            await social_identity.upsert_social_account(
+            await socials_writer.upsert(
                 session,
                 user_id=player.id,
                 provider=provider,
-                username=self._oauth_handle(oauth_info),
+                username=oauth_info.handle,
                 provider_user_id=oauth_info.provider_user_id,
                 is_verified=True,
             )
-        except social_identity.SocialHandleConflict:
+        except SocialHandleConflict:
             # LOGIN path: this provider_user_id is verified on a different player
             # (a shared/reassigned OAuth account). Marking verification is
             # best-effort here -- the login itself must not fail over it. Under
@@ -294,7 +286,7 @@ class OAuthAccountService:
         provider = social_provider_for_oauth(oauth_info.provider.value)
         if provider is None:
             return None
-        normalized = normalize_social_handle(provider, self._oauth_handle(oauth_info))
+        normalized = normalize_social_handle(provider, oauth_info.handle)
         if not normalized:
             return None
 
@@ -573,7 +565,7 @@ class OAuthAccountService:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=(
-                    f"This {oauth_info.provider.value.title()} account ({self._oauth_handle(oauth_info)}) is "
+                    f"This {oauth_info.provider.value.title()} account ({oauth_info.handle}) is "
                     "already linked to a different account here. Sign in with it to reach that account, "
                     "delete the account in Account settings, then link it again."
                 ),

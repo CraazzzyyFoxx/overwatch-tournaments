@@ -75,7 +75,6 @@ PENDING_REPOSITORY_MIGRATION = {
     "identity-service/src/services/sessions.py",
     "shared/services/audit.py",
     "shared/services/encounter/result_audit.py",
-    "shared/services/social_identity.py",
     "shared/services/subscriptions/store.py",
     "shared/services/tournament/computation.py",
     "tournament-service/src/services/encounter/captain.py",

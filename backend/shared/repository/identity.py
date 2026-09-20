@@ -146,6 +146,89 @@ class SocialAccountRepository(BaseRepository[models.SocialAccount]):
             filters["user_id"] = user_id
         return await self.get_by(session, **filters)
 
+    async def get_owned(
+        self,
+        session: AsyncSession,
+        *,
+        account_id: int,
+        user_id: int,
+    ) -> models.SocialAccount | None:
+        """One account, but only if ``user_id`` owns it.
+
+        Ownership is part of the lookup rather than a check the caller does
+        after: every mutation of a social identity is scoped to its player, and
+        a fetch-then-compare leaves room for a caller to forget the compare.
+        """
+        return await self.get_by(session, id=account_id, user_id=user_id)
+
+    async def has_any_for_provider(self, session: AsyncSession, *, user_id: int, provider: str) -> bool:
+        """Whether the player already carries an account for this provider.
+
+        Decides ``is_primary`` on insert: the first account of a provider is
+        the primary one.
+        """
+        return await self.exists(session, user_id=user_id, provider=provider)
+
+    async def find_handle_clash(
+        self,
+        session: AsyncSession,
+        *,
+        user_id: int,
+        provider: str,
+        username_normalized: str,
+        exclude_id: int,
+    ) -> int | None:
+        """Id of the player's OTHER account already holding this handle, if any."""
+        return await session.scalar(
+            sa.select(models.SocialAccount.id).where(
+                models.SocialAccount.user_id == user_id,
+                models.SocialAccount.provider == provider,
+                models.SocialAccount.username_normalized == username_normalized,
+                models.SocialAccount.id != exclude_id,
+            )
+        )
+
+    async def oldest_for_provider(
+        self,
+        session: AsyncSession,
+        *,
+        user_id: int,
+        provider: str,
+    ) -> models.SocialAccount | None:
+        """The player's longest-held account for a provider — the primary heir."""
+        result = await session.execute(
+            self.select()
+            .where(models.SocialAccount.user_id == user_id, models.SocialAccount.provider == provider)
+            .order_by(models.SocialAccount.created_at, models.SocialAccount.id)
+            .limit(1)
+        )
+        return result.scalars().first()
+
+    async def clear_primary_except(
+        self,
+        session: AsyncSession,
+        *,
+        user_id: int,
+        provider: str,
+        keep_id: int,
+    ) -> None:
+        """Demote every other primary of this (player, provider).
+
+        A set-based update, not a read-then-write loop: "at most one primary"
+        is the invariant, and doing it in one statement means no window where
+        two rows claim it.
+        """
+        await session.execute(
+            sa.update(models.SocialAccount)
+            .where(
+                models.SocialAccount.user_id == user_id,
+                models.SocialAccount.provider == provider,
+                models.SocialAccount.id != keep_id,
+                models.SocialAccount.is_primary.is_(True),
+            )
+            .values(is_primary=False)
+        )
+
     async def list_handles(
         self,
         session: AsyncSession,
@@ -262,6 +345,17 @@ class SocialAccountVisibilityRepository(BaseRepository[models.SocialAccountVisib
             )
         )
         return result.scalars().all()
+
+    async def get_for_scope(
+        self,
+        session: AsyncSession,
+        *,
+        account_id: int,
+        workspace_id: int | None,
+    ) -> models.SocialAccountVisibility | None:
+        """The row for one (account, scope). ``workspace_id=None`` is the global
+        scope and matches ``IS NULL``, not "any workspace"."""
+        return await self.get_by(session, account_id=account_id, workspace_id=workspace_id)
 
 
 class AuthUserRepository(BaseRepository[models.AuthUser]):
