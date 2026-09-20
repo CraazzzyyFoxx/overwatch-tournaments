@@ -23,6 +23,7 @@ from shared.domain.roster import PlayerRoster
 from shared.models.balancer.draft import DraftAuditEvent, DraftPlayer, DraftSession
 from shared.models.registration.registration import BalancerRegistrationRole
 from shared.repository.draft import DraftAuditEventRepository, DraftPlayerRepository
+from shared.repository.registration import BalancerRegistrationRoleRepository
 from src.domain.draft import rules
 from src.domain.draft.entities import DraftFeasibilityReport, RoleEditPreview, RoleEditResult
 from src.services.draft import loaders
@@ -39,11 +40,13 @@ class DraftRoleEditService:
         *,
         players_repo: DraftPlayerRepository = DraftPlayerRepository(),
         audit_repo: DraftAuditEventRepository = DraftAuditEventRepository(),
+        roles_repo: BalancerRegistrationRoleRepository = BalancerRegistrationRoleRepository(),
         feasibility: DraftFeasibilityService = feasibility_service,
         rosters: DraftRosterService = draft_rosters,
     ) -> None:
         self.players_repo = players_repo
         self.audit_repo = audit_repo
+        self.roles_repo = roles_repo
         self.feasibility = feasibility
         self.rosters = rosters
 
@@ -113,7 +116,8 @@ class DraftRoleEditService:
                 )
             )
         ) + 1
-        session.add(
+        await self.roles_repo.create(
+            session,
             BalancerRegistrationRole(
                 registration_id=registration_id,
                 role=role.slot_code,
@@ -121,7 +125,7 @@ class DraftRoleEditService:
                 priority=next_priority,
                 rank_value=rank_value,
                 is_active=True,
-            )
+            ),
         )
 
     async def apply_role_edit(

@@ -30,6 +30,7 @@ from shared.repository import (
     CustomGamePlayerRoleRepository,
     CustomGameRepository,
     CustomGameTeamNameRepository,
+    MapRepository,
     UserBalancerConfigRepository,
 )
 from shared.schemas.roster_slots import RosterShapeRead
@@ -283,6 +284,7 @@ class CustomGameService:
         casual_matches: CasualMatchRepository = CasualMatchRepository(),
         casual_teams: CasualTeamRepository = CasualTeamRepository(),
         casual_players: CasualPlayerRepository = CasualPlayerRepository(),
+        maps: MapRepository = MapRepository(),
         host_prefs: UserBalancerConfigRepository = UserBalancerConfigRepository(),
         ranks: MemberRankService | None = None,
         load_roster=list_roster,
@@ -298,6 +300,7 @@ class CustomGameService:
         self.casual_matches = casual_matches
         self.casual_teams = casual_teams
         self.casual_players = casual_players
+        self.maps = maps
         self.host_prefs = host_prefs
         self.ranks = ranks if ranks is not None else member_rank_service
         self.load_roster = load_roster
@@ -810,7 +813,7 @@ class CustomGameService:
         game = await self._writable(
             session, workspace_id=workspace_id, custom_game_id=custom_game_id, actor_user_id=actor_user_id
         )
-        if map_id is not None and await session.get(models.Map, map_id) is None:
+        if map_id is not None and await self.maps.get(session, map_id) is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Map not found")
         game.next_map_id = map_id
         await session.flush()
@@ -1137,7 +1140,7 @@ class CustomGameService:
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="winner must be 1, 2 or null")
         if map_id is None:
             map_id = game.next_map_id
-        elif await session.get(models.Map, map_id) is None:
+        elif await self.maps.get(session, map_id) is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Map not found")
 
         result = game.balance_result_json if isinstance(game.balance_result_json, dict) else {}
@@ -1302,8 +1305,7 @@ class CustomGameService:
 
         # Teams and seats go with it: both hang off the match by ``ON DELETE
         # CASCADE``, so there is nothing left to clean up by hand.
-        await session.delete(match)
-        await session.flush()
+        await self.casual_matches.delete(session, match)
         return game
 
     async def list_matches(

@@ -23,7 +23,9 @@ full rpc → services → domain → repository → models stack described in
 
 - `APPROVED_DIRECT_WRITE_FILES` — access that is intentionally not CRUD: outbox
   draining, bracket advancement internals, analytics materialization, bulk
-  association-table updates.
+  association-table updates, append-only journals (`realtime/emit.py`,
+  `notifications.py`), executemany ingest (`match_logs/flows.py`), and
+  synchronous ORM collection replacement (`stage_common.py`).
 - `PENDING_REPOSITORY_MIGRATION` — direct writes that predate their repository.
   Every entry is a line to delete once the repository method exists, not a
   pattern to copy.
@@ -33,3 +35,9 @@ exists — fails the suite, so finishing a migration forces the line out. Withou
 that ratchet the list rotted unnoticed into twelve entries for files deleted
 with `auth-service` and the old `tournament-service` HTTP routes, while the
 services that replaced them went unscanned.
+
+The ratchet only guards entries that exist. It does NOT fail a file that starts
+writing directly and is in neither list — `test_new_direct_db_writes_go_through_shared_repositories`
+does, and that is the test to keep green: nine files had accumulated there
+unnoticed, and while it was red it guarded nothing. A red boundary suite is the
+same as no boundary suite.

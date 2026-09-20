@@ -39,6 +39,22 @@ SHAPE = parse_roster_slots({"tank": 1, "damage": 2, "support": 2})
 GRID = DivisionGrid(version_id=7, tiers=())
 
 
+class _FakeResult:
+    """Just enough of a SQLAlchemy ``Result`` for a single-row repository read."""
+
+    def __init__(self, row) -> None:
+        self._row = row
+
+    def unique(self):
+        return self
+
+    def scalars(self):
+        return self
+
+    def first(self):
+        return self._row
+
+
 def _roster() -> PlayerRoster:
     return PlayerRoster(
         registration_id=1,
@@ -85,7 +101,7 @@ class PlayersExportFormatsTests(IsolatedAsyncioTestCase):
             return 3
 
         session = SimpleNamespace(
-            get=self._fake_get,
+            execute=self._fake_execute,
             scalar=self._fake_scalar,
             add=lambda _row: None,
         )
@@ -103,8 +119,8 @@ class PlayersExportFormatsTests(IsolatedAsyncioTestCase):
                 None,
             )
 
-    async def _fake_get(self, _model, _pk):
-        return SimpleNamespace(id=TOURNAMENT_ID, name="OWT #12", workspace_id=3)
+    async def _fake_execute(self, _query):
+        return _FakeResult(SimpleNamespace(id=TOURNAMENT_ID, name="OWT #12", workspace_id=3))
 
     async def _fake_scalar(self, _query):
         # No registration form row -> the flex mode falls back to "optional".

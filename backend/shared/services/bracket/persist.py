@@ -7,11 +7,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from shared.core import enums
 from shared.models.tournament.encounter import Encounter
 from shared.models.tournament.stage import Stage
+from shared.repository import EncounterRepository
 from shared.services.bracket.advancement import persist_advancement_edges
 from shared.services.bracket.types import BracketSkeleton
 from shared.services.encounter_naming import build_encounter_name_from_ids
 
 __all__ = ("persist_skeleton",)
+
+_encounters = EncounterRepository()
 
 
 async def persist_skeleton(
@@ -55,11 +58,13 @@ async def persist_skeleton(
             stage_item_id=item_id,
             status=enums.EncounterStatus.OPEN,
         )
-        session.add(encounter)
         encounters.append(encounter)
         local_to_encounter[pairing.local_id] = encounter
 
-    await session.flush()
+    # One ``add_all`` + one flush for the whole skeleton: a per-pairing create
+    # would cost a round trip per encounter, and the advancement edges below
+    # need every id at once anyway.
+    await _encounters.create_many(session, encounters)
     await persist_advancement_edges(
         session,
         edges=skeleton.advancement_edges,
