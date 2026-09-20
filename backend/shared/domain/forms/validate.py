@@ -72,13 +72,10 @@ _BOOLS = {"true": True, "false": False}
 #: encoding arrives as the string ``"false"``, which is not a truthy answer.
 _FALSE_STRINGS = frozenset({"", "false", "0"})
 _BOOL_KEYS = frozenset({"stream_pov"})
-_TEXT_KEYS = frozenset({"public_notes", "organizer_notes"})
-_TEXT_KINDS = frozenset({"text", "textarea", "url"})
 
 
 def _err(field: str, code: ErrorCode, msg: str, **params: Any) -> FieldError:
-    # ``code`` is stored as a plain ``str``: ``StrEnum`` hashes by member name,
-    # so an enum member in a set/dict key would not match its own wire value.
+    # ``FieldError.code`` is declared ``str``: it holds the plain wire string.
     return FieldError(field=field, code=code.value, msg=msg, params=MappingProxyType(params))
 
 
@@ -116,20 +113,27 @@ def _battle_tag_candidate(value: str) -> str:
 
 
 def _coerce_number(key: str, raw: Any) -> tuple[Any, FieldError | None]:
+    bad = _err(key, ErrorCode.INVALID_TYPE, "Expected a number.")
     # ``bool`` is an ``int`` in Python; a checkbox is not an answer to a number.
     if isinstance(raw, bool):
-        return None, _err(key, ErrorCode.INVALID_TYPE, "Expected a number.")
-    if isinstance(raw, (int, float)):
-        number = float(raw)
-    elif isinstance(raw, str):
-        text = raw.strip()
-        if not text:
-            return "", None
-        if not _NUMBER.fullmatch(text):
-            return None, _err(key, ErrorCode.INVALID_TYPE, "Expected a number.")
-        number = float(text.replace(",", "."))
-    else:
-        return None, _err(key, ErrorCode.INVALID_TYPE, "Expected a number.")
+        return None, bad
+    # An ``int`` is returned untouched: above 2**53 a float round-trip corrupts it.
+    if isinstance(raw, int):
+        return raw, None
+    if isinstance(raw, float):
+        return (int(raw) if raw.is_integer() else raw), None
+    if not isinstance(raw, str):
+        return None, bad
+    text = raw.strip()
+    if not text:
+        return "", None
+    if not _NUMBER.fullmatch(text):
+        return None, bad
+    text = text.replace(",", ".")
+    try:
+        return int(text), None
+    except ValueError:
+        number = float(text)
     return (int(number) if number.is_integer() else number), None
 
 
@@ -280,6 +284,10 @@ def _check_pattern(field: FormField, value: Any) -> FieldError | None:
     targets = _pattern_targets(field, value)
     if not targets:
         return None
+    # Defence in depth only: `FormSchema` refuses an uncompilable `validation.regex`
+    # at save time (where `field` is the schema path, as the design says). This
+    # branch catches a row stored before that invariant existed, so all it can name
+    # is the answer key.
     try:
         compiled = compile_handle_pattern(pattern)
     except InvalidHandlePattern as exc:

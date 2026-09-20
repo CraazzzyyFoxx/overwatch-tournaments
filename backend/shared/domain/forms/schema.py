@@ -14,6 +14,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, ValidationError, model_validator
 
+from shared.core.social import InvalidHandlePattern, compile_handle_pattern
 from shared.domain.forms.builtins import IDENTITY_KEY_PREFIX, builtin_spec, is_builtin_key
 
 __all__ = (
@@ -133,6 +134,14 @@ class FormSchema(BaseModel):
                     target = field.visible_when.field
                     if target == field.key or target not in seen_fields:
                         raise ValueError(f"{path}.visible_when: must reference an earlier field")
+                regex = field.validation.regex if field.validation else None
+                if regex:
+                    # Compiled here, at save time, so a pattern that cannot run --
+                    # or is long enough to be a ReDoS -- never reaches a submission.
+                    try:
+                        compile_handle_pattern(regex)
+                    except InvalidHandlePattern as exc:
+                        raise ValueError(f"{path}.validation.regex: {exc}") from exc
                 seen_fields[field.key] = order
                 order += 1
         return self

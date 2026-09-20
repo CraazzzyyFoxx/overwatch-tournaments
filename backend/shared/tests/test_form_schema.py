@@ -140,6 +140,13 @@ def test_visible_when_may_not_reference_itself():
         _schema(FormField(key="phone", kind="text", label="P", visible_when={"field": "phone", "op": "truthy"}))
 
 
+def test_an_uncompilable_validation_regex_is_refused_when_the_schema_is_saved():
+    with pytest.raises(ValidationError, match=r"validation\.regex"):
+        _schema(FormField(key="phone", kind="text", label="P", validation={"regex": "^[a-"}))
+    with pytest.raises(ValidationError, match=r"validation\.regex"):
+        _schema(FormField(key="phone", kind="text", label="P", validation={"regex": "a" * 257}))
+
+
 def _s(*fields):
     return FormSchema(sections=[FormSection(key="s", fields=list(fields))])
 
@@ -165,6 +172,10 @@ def test_number_checkbox_multi_select_and_date_are_coerced_to_typed_values():
         ("days", "invalid_option"),
         ("born", "invalid_type"),
     }
+    # A float round-trip would round an integer above 2**53 into a different number.
+    big = 12345678901234567890
+    assert normalize_answers(schema, {"age": big}).values["age"] == big
+    assert normalize_answers(schema, {"age": str(big)}).values["age"] == big
 
 
 def test_required_checkbox_must_be_true_and_required_reports_every_missing_field():
