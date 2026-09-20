@@ -10,7 +10,6 @@ can back off and RabbitMQ can retry.
 from __future__ import annotations
 
 import logging
-import re
 from typing import Any
 from urllib.parse import quote
 
@@ -18,17 +17,18 @@ import httpx
 
 from shared.clients.http_client import ResilientHttpClient
 from shared.core import enums
-from src.core.config import settings
+from shared.core.social import PROVIDERS, SocialProvider, compile_handle_pattern
 from src.domain.overwatch_rank import ParsedRank, RankFetchResult
 
 logger = logging.getLogger(__name__)
 
-# Reuse the project's canonical battletag shape (``Name#1234``) as the source of
-# truth. Anchored with ``fullmatch`` so no extra path characters (``/``, ``..``,
-# whitespace, query separators) can survive validation and be spliced into the
-# outbound OverFast request path (review MEDIUM: BattleTag not validated before
-# URL interpolation).
-_BATTLE_TAG_RE = re.compile(settings.battle_tag_regex)
+# The project's canonical battletag grammar (``shared.core.social``) is the
+# source of truth. Matched against the RAW handle, not the normalized one: the
+# very same string is interpolated into the outbound OverFast path, so what is
+# validated must be what is sent. The canon forbids whitespace and a second
+# ``#``, which is the property this guard needs (review MEDIUM: BattleTag not
+# validated before URL interpolation).
+_BATTLE_TAG_RE = compile_handle_pattern(PROVIDERS[SocialProvider.BATTLENET].handle_pattern)
 
 INVALID_BATTLE_TAG_ERROR = "invalid battle tag"
 """``fetch_log.error`` written when the stored handle is not a battletag. Shared

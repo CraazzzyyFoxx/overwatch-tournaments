@@ -33,7 +33,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Final
 
 from shared.core.errors import ApiExc, ApiHTTPException
-from shared.core.social import SocialProvider
+from shared.core.social import PROVIDERS
 from shared.services.admission.requirements import open_profile, subscription
 from shared.services.admission.types import AdmissionEvaluation, AdmissionStage, RequirementVerdict
 
@@ -42,13 +42,6 @@ if TYPE_CHECKING:
     from shared.services.subscriptions import SubscriptionRequirement
 
 __all__ = ("assert_admitted", "describe_requirement")
-
-#: Display names for the refusal message. Falls back to the raw provider key so a
-#: provider added later is still named, just less prettily.
-_PROVIDER_LABELS: Final[dict[str, str]] = {
-    SocialProvider.BOOSTY: "Boosty",
-    SocialProvider.TWITCH: "Twitch",
-}
 
 #: The gate being refused at, in the genitive the sentences below need. Indexed
 #: rather than ``.get``-ed: :class:`AdmissionStage` has two members and both are
@@ -75,7 +68,8 @@ def describe_requirement(requirement: SubscriptionRequirement) -> str:
     """
     parts = []
     for req in requirement.requirements:
-        label = _PROVIDER_LABELS.get(req.provider, req.provider)
+        spec = PROVIDERS.get(req.provider)
+        label = spec.label if spec is not None else req.provider
         # A threshold of 1 is "any paid tier" — spelling it out reads like a
         # restriction that is not there.
         parts.append(f"{label} уровень {req.min_tier_rank}" if req.min_tier_rank > 1 else label)

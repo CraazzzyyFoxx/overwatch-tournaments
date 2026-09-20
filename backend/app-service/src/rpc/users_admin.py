@@ -48,7 +48,7 @@ from faststream.rabbit import RabbitMessage
 from shared.clients.s3 import upload_avatar
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.core.pagination import paginated_dump
-from shared.core.social import SOCIAL_PROVIDERS, SocialProvider
+from shared.core.social import PROVIDERS, SOCIAL_PROVIDERS, matches_handle_pattern
 from shared.rpc.identity import ensure_workspace_permission
 from shared.rpc.query import build_query_model
 from shared.services.audit import record_admin_audit
@@ -270,8 +270,12 @@ def register(broker: Any, logger: Any) -> None:
             raise HTTPException(status_code=400, detail=f"Unknown provider: {payload.provider}")
         if not payload.username.strip():
             raise HTTPException(status_code=400, detail="username is required")
-        if payload.provider == SocialProvider.BATTLENET and "#" not in payload.username:
-            raise HTTPException(status_code=400, detail="Invalid BattleTag format. Expected 'Name#1234'.")
+        # The canonical grammar, not a hand-rolled "has a '#'" check: an admin
+        # adding an identity must produce the same shape self-registration does,
+        # or the two paths disagree about what the platform considers a handle.
+        if not matches_handle_pattern(payload.provider, payload.username):
+            spec = PROVIDERS[payload.provider]
+            raise HTTPException(status_code=400, detail=f"Invalid {spec.label} handle: {payload.username!r}")
 
     @broker.subscriber("rpc.app.users.social_add")
     async def _social_add(data: dict, msg: RabbitMessage) -> dict:

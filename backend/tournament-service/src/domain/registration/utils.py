@@ -38,8 +38,14 @@ MIN_SYNC_INTERVAL_SECONDS = 30
 DEFAULT_SYNC_INTERVAL_SECONDS = 300
 """Default interval (seconds) between automatic Google Sheet feed syncs."""
 
-BATTLE_TAG_RE = re.compile(r"[\w][\w ]{0,30}#[0-9]{3,}", re.UNICODE)
-"""Battle tag pattern shared by registration/audit and the sheet-mapping parser."""
+BATTLE_TAG_SCAN_RE = re.compile(r"[\w][\w ]{0,30}#[0-9]{3,}", re.UNICODE)
+"""Loose SCANNER that finds battletag-shaped substrings in free-form sheet text.
+
+Deliberately NOT the canonical grammar (``shared.core.social``): its job is to
+pull candidates out of a pasted Google Sheets cell — where a tag routinely
+arrives padded, wrapped in prose or joined to a neighbour — not to decide
+whether a handle is acceptable. Validation happens later, against the canon.
+"""
 
 VALID_ROLES = set(REGISTRATION_ROLE_CODES)
 ROLE_ORDER = REGISTRATION_ROLE_CODES

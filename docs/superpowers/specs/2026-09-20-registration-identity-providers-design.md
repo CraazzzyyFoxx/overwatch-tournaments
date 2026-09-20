@@ -106,7 +106,14 @@ Discord/Twitch/Boosty второго аккаунта указать нельз�
 
 ### 3.1 Реестр провайдеров
 
-`backend/shared/domain/identity/providers.py` — единственный источник истины.
+`backend/shared/core/social.py` — единственный источник истины.
+
+> **Реализовано (фаза 0).** Дизайн предполагал новый модуль
+> `shared/domain/identity/providers.py`. Каталог положен в уже существующий
+> `shared/core/social.py`, чей докстринг и так объявлял его «single source of
+> truth for the set of social providers»: это сняло 36 правок импортов, не
+> создало ребра `core → domain` (обратного принятому в репозитории направлению)
+> и оставило каталог модулем без зависимостей.
 
 ```python
 @dataclass(frozen=True, slots=True)
@@ -125,6 +132,12 @@ class ProviderSpec:
 
     default_max_count: int = 1           # battlenet: 5 (бывшие смурфы)
     profile_url: str | None = None       # 'https://twitch.tv/{handle}'
+
+    # Поля сырого OAuth-ответа: чем ЗАПИСАТЬ хэндл и чем его можно НАЗВАТЬ.
+    # Раньше эти две формы жили в трёх местах (oauth_accounts._oauth_handle,
+    # social_identity._oauth_handle_candidates, players._verify_ownership).
+    oauth_primary_fields: tuple[str, ...] = ()
+    oauth_alias_fields: tuple[str, ...] = ()
 ```
 
 Начальное наполнение:
@@ -132,11 +145,16 @@ class ProviderSpec:
 | id | pattern | normalize | oauth | subscription | default_max_count |
 |---|---|---|---|---|---|
 | `battlenet` | `[^#\s]{2,12}#\d{4,}` | `battletag` | да | нет | 5 |
-| `discord` | `[a-z0-9_.]{2,32}` | `casefold` | да | да | 1 |
-| `twitch` | `[a-zA-Z0-9_]{4,25}` | `casefold` | да | да | 1 |
+| `discord` | `[a-z0-9_.]{2,32}(?:#\d{4})?` | `casefold` | да | да | 1 |
+| `twitch` | `[a-z0-9_]{4,25}` | `casefold` | да | да | 1 |
 | `boosty` | `[^#\s]{2,50}` | `casefold` | нет | да | 1 |
-| `vk` | `[a-zA-Z0-9_.]{3,32}` | `casefold` | нет | нет | 1 |
-| `youtube` | `@?[a-zA-Z0-9_.\-]{3,30}` | `casefold` | нет | нет | 1 |
+| `vk` | `[a-z0-9_.]{3,32}` | `casefold` | нет | нет | 1 |
+| `youtube` | `@?[a-z0-9_.\-]{3,30}` | `casefold` | нет | нет | 1 |
+
+Грамматики записаны в нижнем регистре и матчатся против НОРМАЛИЗОВАННОГО
+хэндла — см. ниже. Хвост `(?:#\d{4})?` у Discord — снятый в 2023 дискриминатор:
+аккаунты, зарегистрированные до миграции, до сих пор носят `name#0001`, и
+грамматика без него отвергала бы существующие регистрации.
 
 Якоря (`\A…\Z` / `^(?:…)$`) навешивает один валидатор на каждой стороне —
 паттерны в реестре и в пользовательских override хранятся без якорей. Сегодня
@@ -145,25 +163,37 @@ class ProviderSpec:
 
 ### 3.2 Что выводится из реестра и перестаёт существовать
 
-| Удаляется | Чем заменяется |
-|---|---|
-| `shared/core/social.py:33` `SOCIAL_PROVIDERS` | `frozenset(PROVIDERS)` |
-| `shared/core/social.py:45` `OAUTH_PROVIDERS` | `{p.id for p in PROVIDERS.values() if p.supports_oauth}` |
-| `shared/core/social.py:48` `OAUTH_TO_SOCIAL` | тождество, не нужно |
-| `shared/core/social.py:72` ветка battlenet | диспатч по `spec.normalize` |
-| `tournament-service/.../validation.py:29,34,39` | итерация по реестру |
-| `tournament-service/.../validation.py:180` `_canonicalize_battle_tag` | `normalize_social_handle` |
-| `tournament-service/.../validation.py:347` кортеж полей | итерация по реестру |
-| `tournament-service/.../export.py:37` `_registration_identity_handles` | цикл по `registration_identity` |
-| `shared/services/admission/gates.py:48` `_PROVIDER_LABELS` | `PROVIDERS[id].label` |
-| `app-service/src/core/config.py:9`, `parser-service/src/core/config.py:10` `battle_tag_regex` | `PROVIDERS["battlenet"].handle_pattern` |
-| `frontend/src/lib/oauth-providers.ts` целиком | `lib/identity-providers.ts` |
-| `frontend/src/lib/subscription-requirement.ts:27` `PROVIDER_LABELS` | то же |
-| `frontend/.../subscription-shared.tsx:47` `PROVIDER_LABELS` | то же |
-| `frontend/.../OAuthProviderBadge.tsx:7` `PROVIDER_META` | то же |
-| `frontend/src/lib/social-providers.ts:39` (семантическая половина) | то же; иконка и цвет остаются локально |
-| `frontend/.../formConfig.ts:30-33` четыре regex | сервер присылает готовый |
-| `frontend/.../registration/validation.ts:24,30,39,44,146` | сервер присылает готовый |
+| Удаляется | Чем заменяется | Фаза |
+|---|---|---|
+| `shared/core/social.py:33` `SOCIAL_PROVIDERS` | `frozenset(PROVIDERS)` | 0 ✅ |
+| `shared/core/social.py:45` `OAUTH_PROVIDERS` | `{p.id for p in PROVIDERS.values() if p.supports_oauth}` | 0 ✅ |
+| `shared/core/social.py:48` `OAUTH_TO_SOCIAL` | `social_provider_for_oauth()` — тот же guard «не всякий OAuth-вход даёт social-идентичность», без второй таблицы | 0 ✅ |
+| `shared/core/social.py:72` ветка battlenet | диспатч по `spec.normalize` | 0 ✅ |
+| `tournament-service/.../validation.py:29,34,39` | один `_IDENTITY_FIELDS` (колонка → провайдер + label), остальное выводится | 0 ✅ |
+| `tournament-service/.../validation.py:180` `_canonicalize_battle_tag` | `normalize_social_handle` | 0 ✅ |
+| `tournament-service/.../validation.py:347` кортеж полей | итерация по `_IDENTITY_FIELDS` + `_FREE_TEXT_FIELDS` | 0 ✅ |
+| `identity-service/.../oauth_accounts.py:190` `_oauth_handle` | `oauth_handle()` | 0 ✅ |
+| `shared/services/social_identity.py:313` per-provider ветки | `oauth_handle_candidates()` | 0 ✅ |
+| `app-service/.../users_admin.py:273` проверка «есть `#`» | `matches_handle_pattern()` — админский путь и самозапись дают одну форму | 0 ✅ |
+| `shared/services/admission/gates.py:48` `_PROVIDER_LABELS` | `PROVIDERS[id].label` | 0 ✅ |
+| `app-service/src/core/config.py:9`, `parser-service/src/core/config.py:10` `battle_tag_regex` | `PROVIDERS["battlenet"].handle_pattern` | 0 ✅ |
+| `tournament-service/.../export.py:37` `_registration_identity_handles` | цикл по `registration_identity` | 2c |
+| `frontend/src/lib/oauth-providers.ts` целиком | `lib/identity-providers.ts` | 1 |
+| `frontend/src/lib/subscription-requirement.ts:27` `PROVIDER_LABELS` | то же | 1 |
+| `frontend/.../subscription-shared.tsx:47` `PROVIDER_LABELS` | то же | 1 |
+| `frontend/.../OAuthProviderBadge.tsx:7` `PROVIDER_META` | то же | 1 |
+| `frontend/src/lib/social-providers.ts:39` (семантическая половина) | то же; иконка и цвет остаются локально | 1 |
+| `frontend/.../formConfig.ts:30-33` четыре regex | сервер присылает готовый | 1 |
+| `frontend/.../registration/validation.ts:24,30,39,44,146` | сервер присылает готовый | 1 |
+
+Фаза 0 добавила то, чего в дизайне не было и что вылезло при реализации:
+
+- **Организаторский regex стал ограниченным и кешируемым.** `compile_handle_pattern`
+  режет паттерны длиннее 256 символов и поднимает `InvalidHandlePattern`;
+  `validation.py` превращает это в 422 «форма настроена неверно» вместо 500.
+  Раньше паттерн компилировался заново на каждом сабмите и падал `re.error`.
+- **Грамматика применяется к нормализованному хэндлу.** Иначе каждая грамматика
+  обязана заново кодировать правила нормализатора — именно так они и разошлись.
 
 `tournament-service/src/domain/registration/utils.py:41` `BATTLE_TAG_RE`
 переименовывается в `BATTLE_TAG_SCAN_RE` и остаётся как есть: это сканер
@@ -511,7 +541,7 @@ reg.identities()           -> Mapping[str, tuple[str, ...]]
 
 | # | Содержание | Схема | Отгружается |
 |---|---|---|---|
-| 0 | Реестр в коде, деривация констант, канон BattleTag, переименование `BATTLE_TAG_SCAN_RE` | — | да |
+| 0 | Реестр, деривация констант, канон BattleTag, `BATTLE_TAG_SCAN_RE` | — | **сделано** |
 | 1 | `GET /identity/providers`, `lib/identity-providers.ts`, снос шести фронтовых таблиц и шести regex | — | да |
 | 2a | `registration_identity` + бэкфилл + двойная запись | +1 таблица | да |
 | 2b | Читатели → `handles()`/`primary()` | — | да |
@@ -534,18 +564,35 @@ reg.identities()           -> Mapping[str, tuple[str, ...]]
 
 ## 9. Риски и что замерить до старта
 
-### 9.1 Новый канон BattleTag строже фронтового
+### 9.1 Канон BattleTag — снят
 
-`[^#]{2,12}` → `[^#\s]{2,12}`: теги с пробелом станут невалидны. Перед фазой 0:
+Замер на живой БД выполнить не удалось (`95.179.157.197:5432` недоступен с
+рабочей станции), но риск оказался мнимым и без него: грамматика применяется к
+**нормализованному** хэндлу, а нормализатор BattleTag и так удаляет все
+пробелы. `[^#]{2,12}` и `[^#\s]{2,12}` на строке без пробелов — одна и та же
+грамматика, так что `Player # 1234` принимался и принимается.
+
+Реально канон только **мягче** прежнего серверного `[\w0-9]{2,12}`: ники с
+точкой (`co.ol#1234`) и другие не-`\w` символы начнут проходить `app-service`.
+Это исправление, не регрессия.
+
+Осталось проверить на данных, когда база будет доступна, — не канон, а
+**новые** грамматики Discord/Twitch/Boosty, которых на сервере раньше не было
+вовсе:
 
 ```sql
-SELECT count(*) FROM balancer.registration
-WHERE deleted_at IS NULL AND battle_tag ~ '\s';
+SELECT count(*) FILTER (WHERE lower(discord_nick) !~ '^[a-z0-9_.]{2,32}(#[0-9]{4})?$') AS bad_discord,
+       count(*) FILTER (WHERE lower(twitch_nick)  !~ '^[a-z0-9_]{4,25}$')              AS bad_twitch,
+       count(*) FILTER (WHERE lower(boosty_nick)  !~ '^[^#[:space:]]{2,50}$')          AS bad_boosty
+FROM balancer.registration
+WHERE deleted_at IS NULL;
 ```
 
-Ненулевой результат — повод пересмотреть канон, а не ломать данные. Обратная
-сторона: канон **мягче** серверного `[\w0-9]`, кириллические ники начнут
-проходить `app-service`. Это исправление, не регрессия.
+Эти поля валидируются сервером впервые: до фазы 0 бэк знал только тот regex,
+который организатор случайно сохранил в конфиге формы. Существующие строки не
+трогаются — проверка срабатывает лишь при следующей отправке или правке, — но
+ненулевой результат означает, что кто-то не сможет пересохранить свою
+регистрацию, пока грамматику не расширят.
 
 ### 9.2 Уникальность на турнир расширяется на всех провайдеров
 

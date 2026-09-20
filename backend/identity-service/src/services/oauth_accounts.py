@@ -19,7 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.core import http_status as status
 from shared.core.errors import BaseAPIException as HTTPException
-from shared.core.social import OAUTH_TO_SOCIAL, normalize_social_handle
+from shared.core.social import normalize_social_handle, oauth_handle, social_provider_for_oauth
 from shared.repository import (
     AuthUserRepository,
     OAuthConnectionRepository,
@@ -90,7 +90,7 @@ class OAuthAccountService:
         association is only available through the explicit, ownership-checked
         player-link flow (``players``).
         """
-        provider = OAUTH_TO_SOCIAL.get(oauth_info.provider.value)
+        provider = social_provider_for_oauth(oauth_info.provider.value)
         if provider is None:
             return None
 
@@ -189,10 +189,11 @@ class OAuthAccountService:
     @staticmethod
     def _oauth_handle(oauth_info: schemas.OAuthUserInfo) -> str:
         """The provider's canonical handle to store as the verified social username."""
-        raw = oauth_info.raw_data or {}
-        if oauth_info.provider == schemas.OAuthProvider.BATTLENET:
-            return raw.get("battletag") or raw.get("battle_tag") or oauth_info.username
-        return oauth_info.username
+        return oauth_handle(
+            oauth_info.provider.value,
+            oauth_info.username,
+            oauth_info.raw_data,
+        )
 
     async def _attach_verified_social_account(
         self,
@@ -220,7 +221,7 @@ class OAuthAccountService:
         reported success while the linking user's profile gained nothing, with
         no error anywhere to explain it.
         """
-        provider = OAUTH_TO_SOCIAL.get(oauth_info.provider.value)
+        provider = social_provider_for_oauth(oauth_info.provider.value)
         if provider is None:
             return
 
@@ -290,7 +291,7 @@ class OAuthAccountService:
         already owned by another auth account (that is a merge conflict), and it
         refuses to guess when more than one player carries the same handle.
         """
-        provider = OAUTH_TO_SOCIAL.get(oauth_info.provider.value)
+        provider = social_provider_for_oauth(oauth_info.provider.value)
         if provider is None:
             return None
         normalized = normalize_social_handle(provider, self._oauth_handle(oauth_info))

@@ -17,7 +17,7 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared import models
-from shared.core.social import OAUTH_PROVIDERS, SocialProvider, normalize_social_handle
+from shared.core.social import OAUTH_PROVIDERS, normalize_social_handle, oauth_handle_candidates
 
 __all__ = (
     "list_social_accounts",
@@ -311,24 +311,18 @@ class SocialAccountNotOAuthLinked(Exception):
 
 
 def _oauth_handle_candidates(provider: str, connection: models.OAuthConnection) -> set[str]:
-    """Every handle-shaped string this OAuth connection's provider response could
-    have named the account by, normalized for direct comparison against
-    ``social_account.username_normalized``.
+    """Every handle this OAuth connection could have named the account by.
 
-    Mirrors the per-provider field shapes identity-svc's OAuth providers
-    actually populate (Discord/BattleNet/Twitch): a display
-    username/display_name plus provider-specific raw fields stashed in
-    ``provider_data``.
+    Thin adapter over the catalog: the per-provider field shapes live in
+    ``ProviderSpec.oauth_alias_fields`` so identity-service's storing side and
+    this matching side read the same list.
     """
-    data = connection.provider_data or {}
-    raw: set[str | None] = {connection.username, connection.display_name}
-    if provider == SocialProvider.BATTLENET:
-        raw |= {data.get("battletag"), data.get("battle_tag"), data.get("preferred_username")}
-    elif provider == SocialProvider.DISCORD:
-        raw |= {data.get("username"), data.get("global_name")}
-    elif provider == SocialProvider.TWITCH:
-        raw |= {data.get("login")}
-    return {normalize_social_handle(provider, value) for value in raw if value}
+    return oauth_handle_candidates(
+        provider,
+        username=connection.username,
+        display_name=connection.display_name,
+        provider_data=connection.provider_data,
+    )
 
 
 async def verify_social_account(session: AsyncSession, *, account_id: int, user_id: int) -> models.SocialAccount | None:

@@ -23,7 +23,7 @@ from src.domain.registration.mapping_catalog import (
     target_spec_map,
 )
 from src.domain.registration.utils import (
-    BATTLE_TAG_RE,
+    BATTLE_TAG_SCAN_RE,
     DEFAULT_BOOLEAN_TRUE_VALUES,
     ROLE_ORDER,
     VALID_ROLES,
@@ -57,7 +57,7 @@ def parse_boolean(value: str | None, value_mapping: dict[str, Any]) -> bool:
 
 
 def extract_battle_tags(value: str | None) -> list[str]:
-    return _extract_battle_tags(value, BATTLE_TAG_RE)
+    return _extract_battle_tags(value, BATTLE_TAG_SCAN_RE)
 
 
 def map_role_token(value: str | None, value_mapping: dict[str, Any]) -> str | None:

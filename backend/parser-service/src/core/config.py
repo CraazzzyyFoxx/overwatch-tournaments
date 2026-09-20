@@ -7,7 +7,6 @@ class AppConfig(BaseServiceSettings):
     project_name: str = "OWT"
     debug: bool = False
     project_url: str
-    battle_tag_regex: str = r"([\w0-9]{2,12}#[0-9]{4,})"
     port: int = 8002
 
     # Match-log ingestion safety caps (defense-in-depth against oversized or

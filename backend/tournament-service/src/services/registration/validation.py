@@ -11,7 +11,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from shared.core import enums
 from shared.core import http_status as status
 from shared.core.errors import BaseAPIException as HTTPException
-from shared.core.social import SocialProvider, normalize_social_handle
+from shared.core.social import (
+    InvalidHandlePattern,
+    SocialProvider,
+    compile_handle_pattern,
+    handle_pattern_for,
+    is_oauth_provider,
+    normalize_social_handle,
+)
 from shared.domain.player_sub_roles import (
     REGISTRATION_ROLE_CODES,
     REGISTRATION_TO_CANONICAL,
@@ -26,20 +33,32 @@ from src.schemas.registration import (
     RegistrationUpdate,
 )
 
-BATTLE_TAG_FIELDS = {"battle_tag", "smurf_tags"}
 TEXTUAL_CUSTOM_FIELD_TYPES = {"text", "number", "url"}
 
-# Identity registration fields that can require an OAuth-verified social account,
-# mapped to the canonical social provider their submitted handle must match.
-VERIFIED_FIELD_PROVIDERS: dict[str, str] = {
-    "battle_tag": SocialProvider.BATTLENET,
-    "discord_nick": SocialProvider.DISCORD,
-    "twitch_nick": SocialProvider.TWITCH,
+#: Legacy per-provider registration columns → the provider whose grammar,
+#: normalizer and OAuth capability govern them, plus the field's own label.
+#:
+#: The only place left that knows a column belongs to a provider; it dies with
+#: the columns in the ``registration_identity`` cutover. The label is per FIELD,
+#: not per provider — ``smurf_tags`` is Battle.net's grammar under a different
+#: name — which is exactly why it cannot be read off the catalog.
+_IDENTITY_FIELDS: dict[str, tuple[str, str]] = {
+    "battle_tag": (SocialProvider.BATTLENET, "BattleTag"),
+    "smurf_tags": (SocialProvider.BATTLENET, "Smurf Accounts"),
+    "discord_nick": (SocialProvider.DISCORD, "Discord"),
+    "twitch_nick": (SocialProvider.TWITCH, "Twitch"),
+    "boosty_nick": (SocialProvider.BOOSTY, "Boosty"),
 }
-_VERIFIED_FIELD_LABELS = {
-    "battle_tag": "BattleTag",
-    "discord_nick": "Discord",
-    "twitch_nick": "Twitch",
+
+#: Built-ins that carry free text, not a handle: organizer regex only, no
+#: canonical grammar and no normalization (casefolding a note would break a
+#: case-sensitive organizer pattern).
+_FREE_TEXT_FIELDS: tuple[tuple[str, str], ...] = (("notes", "Notes"),)
+
+# Identity fields that can require an OAuth-verified social account. Derived:
+# a field is verifiable exactly when its provider can prove ownership.
+VERIFIED_FIELD_PROVIDERS: dict[str, str] = {
+    field: provider for field, (provider, _) in _IDENTITY_FIELDS.items() if is_oauth_provider(provider)
 }
 
 _ROLE_LABELS = {"tank": "Tank", "damage": "DPS", "support": "Support"}
@@ -177,10 +196,23 @@ def _validate_role_heroes(
         _validation_error("Select at least one top hero.")
 
 
-def _canonicalize_battle_tag(value: str | None) -> str:
-    text = (value or "").strip()
-    text = re.sub(r"\s*#\s*", "#", text)
-    return text.replace(" ", "").strip()
+def _compile_pattern(pattern: str | None) -> re.Pattern[str] | None:
+    """Compile an organizer-supplied pattern, or ``None`` when there is none.
+
+    Routed through the catalog's bounded, cached compiler: these patterns come
+    from whoever can edit a registration form and are run on every submission,
+    so an unbounded one is a ReDoS. A malformed one is reported as a
+    configuration error instead of escaping as a 500.
+    """
+    if pattern is None:
+        return None
+    normalized = pattern.strip()
+    if not normalized:
+        return None
+    try:
+        return compile_handle_pattern(normalized)
+    except InvalidHandlePattern as exc:
+        _validation_error(f"This registration form has an invalid validation rule: {exc}")
 
 
 def _coerce_built_in_field_config(value: Any) -> BuiltInFieldConfig:
@@ -195,13 +227,20 @@ def _coerce_custom_field_definition(value: Any) -> CustomFieldDefinition:
     return CustomFieldDefinition.model_validate(value or {})
 
 
-def _compile_fullmatch_pattern(pattern: str | None) -> re.Pattern[str] | None:
-    if pattern is None:
-        return None
-    normalized = pattern.strip()
-    if not normalized:
-        return None
-    return re.compile(normalized)
+def _resolve_pattern(
+    config: BuiltInFieldConfig | CustomFieldDefinition,
+    provider: str | None,
+) -> re.Pattern[str] | None:
+    """The grammar to enforce: the organizer's override, else the provider canon.
+
+    ``provider is None`` (free text, custom fields) means override-only — there
+    is no canonical shape for a note.
+    """
+    validation = config.validation
+    override = validation.regex if validation else None
+    if provider is None:
+        return _compile_pattern(override)
+    return _compile_pattern(handle_pattern_for(provider, override))
 
 
 def _validation_error(
@@ -241,22 +280,29 @@ def _validate_string_pattern(
     value: str | None,
     config: BuiltInFieldConfig | CustomFieldDefinition,
     label: str,
-    normalize_battle_tag: bool = False,
+    provider: str | None = None,
 ) -> None:
+    """Enforce the field's grammar on one value.
+
+    Identity fields are matched against the NORMALIZED handle — the same string
+    that ends up in ``social_account.username_normalized`` — so the grammar
+    never has to re-encode the normalizer's rules. Free-text fields are matched
+    verbatim.
+    """
     raw_value = (value or "").strip()
     if not raw_value:
         return
 
-    validation = config.validation
-    pattern = _compile_fullmatch_pattern(validation.regex if validation else None)
+    pattern = _resolve_pattern(config, provider)
     if pattern is None:
         return
 
-    candidate = _canonicalize_battle_tag(raw_value) if normalize_battle_tag else raw_value
+    candidate = normalize_social_handle(provider, raw_value) if provider else raw_value
     if _matches_pattern(pattern, candidate):
         return
 
-    _validation_error(validation.error_message or f"{label} format is invalid.")
+    validation = config.validation
+    _validation_error((validation.error_message if validation else None) or f"{label} format is invalid.")
 
 
 def _validate_list_pattern(
@@ -264,20 +310,21 @@ def _validate_list_pattern(
     values: list[str] | None,
     config: BuiltInFieldConfig,
     label: str,
+    provider: str | None,
 ) -> None:
     if not values:
         return
 
-    validation = config.validation
-    pattern = _compile_fullmatch_pattern(validation.regex if validation else None)
+    pattern = _resolve_pattern(config, provider)
     if pattern is None:
         return
 
+    validation = config.validation
     for value in values:
-        candidate = _canonicalize_battle_tag(value)
+        candidate = normalize_social_handle(provider, value)
         if candidate and _matches_pattern(pattern, candidate):
             continue
-        _validation_error(validation.error_message or f"{label} format is invalid.")
+        _validation_error((validation.error_message if validation else None) or f"{label} format is invalid.")
 
 
 def _validate_checkbox_requirement(
@@ -344,14 +391,14 @@ def validate_registration_input(
         "roles": getattr(payload, "roles", None),
     }
 
-    for field_key, label in (
-        ("battle_tag", "BattleTag"),
-        ("smurf_tags", "Smurf Accounts"),
-        ("discord_nick", "Discord"),
-        ("twitch_nick", "Twitch"),
-        ("boosty_nick", "Boosty"),
-        ("notes", "Notes"),
-    ):
+    # Identity fields first (catalog order), then free text — the order a
+    # registrant reads the form in, so the first complaint is the topmost one.
+    field_specs: tuple[tuple[str, str, str | None], ...] = (
+        *((key, label, provider) for key, (provider, label) in _IDENTITY_FIELDS.items()),
+        *((key, label, None) for key, label in _FREE_TEXT_FIELDS),
+    )
+
+    for field_key, label, provider in field_specs:
         config = built_in_fields.get(field_key)
         if config is None or not config.enabled:
             continue
@@ -359,21 +406,17 @@ def validate_registration_input(
             continue
 
         value = built_in_payload_values[field_key]
+        is_list_field = field_key == "smurf_tags"
         if config.required:
-            if field_key == "smurf_tags":
+            if is_list_field:
                 _validate_required_list(values=value, label=label)
             else:
                 _validate_required_text(value=value, label=label)
 
-        if field_key == "smurf_tags":
-            _validate_list_pattern(values=value, config=config, label=label)
+        if is_list_field:
+            _validate_list_pattern(values=value, config=config, label=label, provider=provider)
         else:
-            _validate_string_pattern(
-                value=value,
-                config=config,
-                label=label,
-                normalize_battle_tag=field_key in BATTLE_TAG_FIELDS,
-            )
+            _validate_string_pattern(value=value, config=config, label=label, provider=provider)
 
     primary_role_config = built_in_fields.get("primary_role")
     if primary_role_config and primary_role_config.enabled and primary_role_config.required:
@@ -478,7 +521,7 @@ class RegistrationValidationService:
                 continue
             if partial and provided_fields is not None and field_key not in provided_fields:
                 continue
-            label = _VERIFIED_FIELD_LABELS[field_key]
+            label = _IDENTITY_FIELDS[field_key][1]
             value = getattr(payload, field_key, None)
             if not value or not str(value).strip():
                 _validation_error(f"{label} must be provided and verified via OAuth.")
@@ -510,7 +553,7 @@ class RegistrationValidationService:
                 verified_by_provider.setdefault(provider, set()).add(normalized)
 
         for field_key, provider, value in required:
-            label = _VERIFIED_FIELD_LABELS[field_key]
+            label = _IDENTITY_FIELDS[field_key][1]
             if normalize_social_handle(provider, value) not in verified_by_provider.get(provider, set()):
                 _validation_error(f"{label} must match an OAuth-verified account linked to your profile.")
 

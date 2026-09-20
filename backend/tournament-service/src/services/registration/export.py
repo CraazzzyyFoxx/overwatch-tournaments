@@ -18,7 +18,7 @@ from shared.core.social import SocialProvider, normalize_social_handle
 from shared.repository import BalancerRegistrationRepository, SocialAccountRepository, UserRepository
 from shared.services import social_identity
 from src import models
-from src.domain.registration.utils import BATTLE_TAG_RE
+from src.domain.registration.utils import BATTLE_TAG_SCAN_RE
 from src.services.registration.lifecycle import RegistrationLifecycleService, lifecycle_service
 
 logger = logging.getLogger(__name__)
@@ -40,7 +40,7 @@ def _registration_identity_handles(registration: models.BalancerRegistration) ->
     if registration.battle_tag:
         handles.append((SocialProvider.BATTLENET, registration.battle_tag))
         for smurf in registration.smurf_tags_json or []:
-            if BATTLE_TAG_RE.match(smurf):
+            if BATTLE_TAG_SCAN_RE.match(smurf):
                 handles.append((SocialProvider.BATTLENET, smurf))
     if registration.discord_nick:
         handles.append((SocialProvider.DISCORD, registration.discord_nick))
