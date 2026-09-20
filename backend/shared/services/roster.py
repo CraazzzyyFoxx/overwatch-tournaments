@@ -64,6 +64,8 @@ def registration_load_options() -> list[Any]:
         .selectinload(BalancerRegistrationRole.hero_entries)
         .selectinload(BalancerRegistrationRoleHero.hero),
         selectinload(BalancerRegistration.workspace_member).selectinload(WorkspaceMember.player),
+        selectinload(BalancerRegistration.identities),
+        selectinload(BalancerRegistration.form_version),
     ]
 
 
@@ -372,7 +374,7 @@ class RosterEngine:
             workspace_member_id=reg.workspace_member_id,
             roles=tuple(entries),
             is_full_flex=is_full_flex,
-            notes=reg.notes,
+            public_notes=reg.public_notes,
             admin_notes=reg.admin_notes,
             custom_fields=dict(reg.custom_fields_json or {}),
             status=reg.status,
@@ -382,9 +384,7 @@ class RosterEngine:
             registration_team_id=reg.registration_team_id,
             team_slot_code=reg.team_slot_code,
             is_substitute=bool(reg.is_substitute),
-            discord_nick=reg.discord_nick,
-            twitch_nick=reg.twitch_nick,
-            boosty_nick=reg.boosty_nick,
+            identities={identity.provider: identity.handle for identity in reg.identities},
             stream_pov=bool(reg.stream_pov),
             smurf_tags=tuple(reg.smurf_tags_json or ()),
         )
@@ -485,13 +485,11 @@ class RosterEngine:
             }
             if include_private:
                 owt["private"] = {
-                    "notes": roster.notes,
+                    "public_notes": roster.public_notes,
                     "admin_notes": roster.admin_notes,
                     "exclude_reason": roster.exclude_reason,
                     "custom_fields": dict(roster.custom_fields),
-                    "discord_nick": roster.discord_nick,
-                    "twitch_nick": roster.twitch_nick,
-                    "boosty_nick": roster.boosty_nick,
+                    "identities": dict(roster.identities),
                     "stream_pov": roster.stream_pov,
                     "smurf_tags": list(roster.smurf_tags),
                 }

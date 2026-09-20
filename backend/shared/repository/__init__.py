@@ -81,6 +81,8 @@ from .registration import (
     GoogleSheetBindingRepository,
     GoogleSheetFeedRepository,
     RegistrationFormRepository,
+    RegistrationFormTemplateRepository,
+    RegistrationFormVersionRepository,
     RegistrationStatusRepository,
 )
 from .scrim import ScrimRoomRepository
@@ -244,6 +246,8 @@ __all__ = (
     "RankSnapshotRepository",
     "RefreshTokenRepository",
     "RegistrationFormRepository",
+    "RegistrationFormTemplateRepository",
+    "RegistrationFormVersionRepository",
     "RegistrationStatusRepository",
     "RoleRepository",
     "ScrimRoomRepository",

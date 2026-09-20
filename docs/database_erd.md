@@ -1381,11 +1381,10 @@ erDiagram
         varchar(255) battle_tag "nullable"
         varchar(255) battle_tag_normalized "nullable"
         json smurf_tags_json "nullable"
-        varchar(255) discord_nick "nullable"
-        varchar(255) twitch_nick "nullable"
-        varchar(255) boosty_nick "nullable"
         boolean stream_pov
-        text notes "nullable"
+        bigint form_version_id FK "nullable"
+        text public_notes "nullable"
+        text organizer_notes "nullable"
         varchar(64) exclude_reason "nullable"
         text admin_notes "nullable"
         json custom_fields_json "nullable"
@@ -1413,8 +1412,7 @@ erDiagram
         bigint workspace_id FK
         boolean is_open
         boolean auto_approve
-        json built_in_fields_json
-        json custom_fields_json
+        bigint current_version_id FK "nullable"
         boolean require_open_profile
         varchar(8) open_profile_scope
         boolean show_ranks
@@ -1429,6 +1427,24 @@ erDiagram
         int team_max_rank_spread "nullable"
         boolean team_unique_identity
         boolean team_require_discord_guild
+    }
+    BALANCER_REGISTRATION_FORM_TEMPLATE {
+        bigint id PK
+        timestamptz created_at
+        timestamptz updated_at "nullable"
+        bigint workspace_id FK
+        varchar(64) name
+        json schema_json
+        bigint created_by FK "nullable"
+    }
+    BALANCER_REGISTRATION_FORM_VERSION {
+        bigint id PK
+        timestamptz created_at
+        timestamptz updated_at "nullable"
+        bigint form_id FK
+        int number
+        json schema_json
+        bigint created_by FK "nullable"
     }
     BALANCER_REGISTRATION_GOOGLE_SHEET_BINDING {
         bigint id PK
@@ -1459,6 +1475,15 @@ erDiagram
         timestamptz last_synced_at "nullable"
         varchar(32) last_sync_status "nullable"
         text last_error "nullable"
+    }
+    BALANCER_REGISTRATION_IDENTITY {
+        bigint id PK
+        timestamptz created_at
+        timestamptz updated_at "nullable"
+        bigint registration_id FK
+        varchar(32) provider
+        varchar(255) handle
+        varchar(255) handle_normalized
     }
     BALANCER_REGISTRATION_ROLE {
         bigint id PK
@@ -1548,6 +1573,8 @@ erDiagram
     AUTH_USER |o--o{ BALANCER_REGISTRATION : "checked_in_by"
     AUTH_USER |o--o{ BALANCER_REGISTRATION : "deleted_by"
     AUTH_USER |o--o{ BALANCER_REGISTRATION : "reviewed_by"
+    AUTH_USER |o--o{ BALANCER_REGISTRATION_FORM_TEMPLATE : "created_by"
+    AUTH_USER |o--o{ BALANCER_REGISTRATION_FORM_VERSION : "created_by"
     AUTH_USER |o--o{ BALANCER_REGISTRATION_TEAM : "deleted_by"
     AUTH_USER |o--o{ BALANCER_REGISTRATION_TEAM : "invite_cap_reset_by"
     AUTH_USER |o--o{ BALANCER_REGISTRATION_TEAM : "roster_locked_by"
@@ -1557,8 +1584,12 @@ erDiagram
     AUTH_USER |o--o{ BALANCER_REGISTRATION_TEAM_INVITE : "target_auth_user_id"
     BALANCER_REGISTRATION |o--o{ BALANCER_REGISTRATION_TEAM : "captain_registration_id"
     BALANCER_REGISTRATION |o--o{ BALANCER_REGISTRATION_TEAM_INVITE : "accepted_registration_id"
+    BALANCER_REGISTRATION ||--o{ BALANCER_REGISTRATION_IDENTITY : "registration_id"
     BALANCER_REGISTRATION ||--o{ BALANCER_REGISTRATION_ROLE : "registration_id"
     BALANCER_REGISTRATION ||--o| BALANCER_REGISTRATION_GOOGLE_SHEET_BINDING : "registration_id"
+    BALANCER_REGISTRATION_FORM ||--o{ BALANCER_REGISTRATION_FORM_VERSION : "form_id"
+    BALANCER_REGISTRATION_FORM_VERSION |o--o{ BALANCER_REGISTRATION : "form_version_id"
+    BALANCER_REGISTRATION_FORM_VERSION |o--o{ BALANCER_REGISTRATION_FORM : "current_version_id"
     BALANCER_REGISTRATION_GOOGLE_SHEET_FEED ||--o{ BALANCER_REGISTRATION_GOOGLE_SHEET_BINDING : "feed_id"
     BALANCER_REGISTRATION_ROLE ||--o{ BALANCER_REGISTRATION_ROLE_HERO : "role_id"
     BALANCER_REGISTRATION_TEAM |o--o{ BALANCER_REGISTRATION : "registration_team_id"
@@ -1566,6 +1597,7 @@ erDiagram
     OVERWATCH_HERO ||--o{ BALANCER_REGISTRATION_ROLE_HERO : "hero_id"
     PUBLIC_WORKSPACE |o--o{ BALANCER_REGISTRATION_STATUS : "workspace_id"
     PUBLIC_WORKSPACE ||--o{ BALANCER_REGISTRATION_FORM : "workspace_id"
+    PUBLIC_WORKSPACE ||--o{ BALANCER_REGISTRATION_FORM_TEMPLATE : "workspace_id"
     PUBLIC_WORKSPACE ||--o{ BALANCER_REGISTRATION_TEAM : "workspace_id"
     PUBLIC_WORKSPACE_MEMBER |o--o{ BALANCER_REGISTRATION : "workspace_member_id"
     TOURNAMENT_TEAM |o--o{ BALANCER_REGISTRATION_TEAM : "exported_team_id"
@@ -1577,7 +1609,9 @@ erDiagram
 
 Composite unique keys:
 
+- `BALANCER_REGISTRATION_FORM_VERSION` unique on (`form_id`, `number`)
 - `BALANCER_REGISTRATION_GOOGLE_SHEET_BINDING` unique on (`feed_id`, `source_record_key`)
+- `BALANCER_REGISTRATION_IDENTITY` unique on (`registration_id`, `provider`)
 - `BALANCER_REGISTRATION_ROLE` unique on (`registration_id`, `role`)
 - `BALANCER_REGISTRATION_ROLE_HERO` unique on (`role_id`, `hero_id`)
 - `BALANCER_REGISTRATION_ROLE_HERO` unique on (`role_id`, `priority`)

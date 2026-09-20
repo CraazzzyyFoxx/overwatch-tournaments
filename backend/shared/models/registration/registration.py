@@ -2,7 +2,19 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from shared.core import db, enums
@@ -16,8 +28,11 @@ if TYPE_CHECKING:
 __all__ = (
     "BalancerRegistration",
     "BalancerRegistrationForm",
+    "BalancerRegistrationFormTemplate",
+    "BalancerRegistrationFormVersion",
     "BalancerRegistrationGoogleSheetBinding",
     "BalancerRegistrationGoogleSheetFeed",
+    "BalancerRegistrationIdentity",
     "BalancerRegistrationRole",
     "BalancerRegistrationRoleHero",
     "BalancerRegistrationStatus",
@@ -39,11 +54,13 @@ class BalancerRegistrationForm(db.TimeStampIntegerMixin):
     workspace_id: Mapped[int] = mapped_column(ForeignKey("workspace.id", ondelete="CASCADE"), index=True)
     is_open: Mapped[bool] = mapped_column(Boolean(), nullable=False, server_default="false", default=False)
     auto_approve: Mapped[bool] = mapped_column(Boolean(), nullable=False, server_default="false", default=False)
-    built_in_fields_json: Mapped[dict[str, Any]] = mapped_column(
-        JSON, nullable=False, server_default="{}", default=dict
-    )
-    custom_fields_json: Mapped[list[dict[str, Any]]] = mapped_column(
-        JSON, nullable=False, server_default="[]", default=list
+    #: The schema the form currently asks. NULLABLE ON PURPOSE: ``registration_form``
+    #: and ``registration_form_version`` point at each other, and PostgreSQL never
+    #: defers a NOT NULL check, so a NOT NULL pointer could not be written for a
+    #: version row that needs the form's id first. The service creates the form and
+    #: version #1 in one flush; readers treat NULL as "not configured".
+    current_version_id: Mapped[int | None] = mapped_column(
+        ForeignKey("balancer.registration_form_version.id", ondelete="SET NULL"), nullable=True
     )
     require_open_profile: Mapped[bool] = mapped_column(Boolean(), nullable=False, server_default="false", default=False)
     open_profile_scope: Mapped[str] = mapped_column(String(8), nullable=False, server_default="main", default="main")
@@ -113,6 +130,53 @@ class BalancerRegistrationForm(db.TimeStampIntegerMixin):
 
     tournament: Mapped[Tournament] = relationship()
     workspace: Mapped[Workspace] = relationship()
+    #: Never lazy-loaded in async code: readers wanting the schema must eager-load
+    #: it (the same standing rule as ``BalancerRegistration.workspace_member``).
+    #: ``post_update`` breaks the insert cycle -- the form row is inserted first,
+    #: then UPDATEd with the id of the version it just created.
+    current_version: Mapped[BalancerRegistrationFormVersion | None] = relationship(
+        foreign_keys=[current_version_id], post_update=True
+    )
+
+
+class BalancerRegistrationFormVersion(db.TimeStampIntegerMixin):
+    """One immutable snapshot of a form's schema. Append-only: a save whose
+    canonical JSON differs from the current version inserts number+1."""
+
+    __tablename__ = "registration_form_version"
+    __table_args__ = (
+        UniqueConstraint("form_id", "number", name="uq_balancer_registration_form_version_number"),
+        {"schema": "balancer"},
+    )
+
+    form_id: Mapped[int] = mapped_column(ForeignKey("balancer.registration_form.id", ondelete="CASCADE"), index=True)
+    number: Mapped[int] = mapped_column(Integer(), nullable=False)
+    schema_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("auth.user.id", ondelete="SET NULL"), nullable=True)
+
+
+class BalancerRegistrationFormTemplate(db.TimeStampIntegerMixin):
+    """A workspace-level named schema, copied into a tournament's form on apply.
+
+    Copy-on-apply: nothing links the tournament back to the template afterwards,
+    so editing a template never rewrites a live form.
+    """
+
+    __tablename__ = "registration_form_template"
+    __table_args__ = (
+        Index(
+            "uq_balancer_registration_form_template_name",
+            "workspace_id",
+            text("lower(name)"),
+            unique=True,
+        ),
+        {"schema": "balancer"},
+    )
+
+    workspace_id: Mapped[int] = mapped_column(ForeignKey("workspace.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(64), nullable=False)
+    schema_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("auth.user.id", ondelete="SET NULL"), nullable=True)
 
 
 class BalancerRegistrationStatus(db.TimeStampIntegerMixin):
@@ -207,11 +271,16 @@ class BalancerRegistration(db.TimeStampIntegerMixin):
     battle_tag: Mapped[str | None] = mapped_column(String(255), nullable=True)
     battle_tag_normalized: Mapped[str | None] = mapped_column(String(255), nullable=True)
     smurf_tags_json: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
-    discord_nick: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    twitch_nick: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    boosty_nick: Mapped[str | None] = mapped_column(String(255), nullable=True)
     stream_pov: Mapped[bool] = mapped_column(Boolean(), nullable=False, server_default="false", default=False)
-    notes: Mapped[str | None] = mapped_column(Text(), nullable=True)
+    #: The schema version this registration's answers were validated against;
+    #: NULL for legacy/manual rows, which fall back to the form's current version.
+    form_version_id: Mapped[int | None] = mapped_column(
+        ForeignKey("balancer.registration_form_version.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    #: Player → everyone. Published on the public roster.
+    public_notes: Mapped[str | None] = mapped_column(Text(), nullable=True)
+    #: Player → organizers. Never leaves an organizer context.
+    organizer_notes: Mapped[str | None] = mapped_column(Text(), nullable=True)
     # Reason note for the current status, populated when balancer_status ==
     # "excluded" (why the registration was manually pulled from the pool).
     exclude_reason: Mapped[str | None] = mapped_column(String(64), nullable=True)
@@ -276,6 +345,31 @@ class BalancerRegistration(db.TimeStampIntegerMixin):
         back_populates="members",
         foreign_keys=[registration_team_id],
     )
+    # Never lazy-loaded in async code: readers wanting the social handles or the
+    # schema version must eager-load them (the same standing rule as
+    # ``workspace_member`` above); ``registration_load_options`` does.
+    identities: Mapped[list[BalancerRegistrationIdentity]] = relationship(
+        back_populates="registration", cascade="all, delete-orphan"
+    )
+    form_version: Mapped[BalancerRegistrationFormVersion | None] = relationship(foreign_keys=[form_version_id])
+
+
+class BalancerRegistrationIdentity(db.TimeStampIntegerMixin):
+    """A social handle the registrant typed for one provider (``identity_<provider>``)."""
+
+    __tablename__ = "registration_identity"
+    __table_args__ = (
+        UniqueConstraint("registration_id", "provider", name="uq_balancer_registration_identity_provider"),
+        Index("ix_balancer_registration_identity_handle", "provider", "handle_normalized"),
+        {"schema": "balancer"},
+    )
+
+    registration_id: Mapped[int] = mapped_column(ForeignKey("balancer.registration.id", ondelete="CASCADE"), index=True)
+    provider: Mapped[str] = mapped_column(String(32), nullable=False)
+    handle: Mapped[str] = mapped_column(String(255), nullable=False)
+    handle_normalized: Mapped[str] = mapped_column(String(255), nullable=False)
+
+    registration: Mapped[BalancerRegistration] = relationship(back_populates="identities")
 
 
 class BalancerRegistrationRole(db.TimeStampIntegerMixin):

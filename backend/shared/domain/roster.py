@@ -123,7 +123,7 @@ class PlayerRoster:
     #: never from raw registration rows, which count inactive/unranked ones.
     is_full_flex: bool
     #: Registration answers the draft board and the admin table both read.
-    notes: str | None = None
+    public_notes: str | None = None
     admin_notes: str | None = None
     custom_fields: Mapping[str, Any] = field(default_factory=dict)
     # ── Registration workflow, carried so a pool export is a full snapshot ──
@@ -140,9 +140,9 @@ class PlayerRoster:
     team_slot_code: str | None = None
     is_substitute: bool = False
     # ── Contact/private answers ─────────────────────────────────────────────
-    discord_nick: str | None = None
-    twitch_nick: str | None = None
-    boosty_nick: str | None = None
+    #: ``provider -> handle`` from ``registration_identity``; absent provider =
+    #: the registrant answered nothing for it.
+    identities: Mapping[str, str] = field(default_factory=dict)
     stream_pov: bool = False
     smurf_tags: tuple[str, ...] = ()
 

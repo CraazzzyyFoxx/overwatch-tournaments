@@ -70,6 +70,52 @@ class RegistrationFormRepository(BaseRepository[models.BalancerRegistrationForm]
         return await self.get_by(session, tournament_id=tournament_id)
 
 
+class RegistrationFormVersionRepository(BaseRepository[models.BalancerRegistrationFormVersion]):
+    """``registration_form_version`` — append-only schema snapshots of one form."""
+
+    def __init__(self) -> None:
+        super().__init__(models.BalancerRegistrationFormVersion)
+
+    async def latest_number(self, session: AsyncSession, form_id: int) -> int:
+        """The highest version number on ``form_id``; ``0`` when it has none yet,
+        so a caller writes ``number = latest_number + 1`` without a branch."""
+        result = await session.execute(
+            sa.select(sa.func.max(models.BalancerRegistrationFormVersion.number)).where(
+                models.BalancerRegistrationFormVersion.form_id == form_id
+            )
+        )
+        return result.scalar_one_or_none() or 0
+
+
+class RegistrationFormTemplateRepository(BaseRepository[models.BalancerRegistrationFormTemplate]):
+    """``registration_form_template`` — workspace-level named schemas, copied on apply."""
+
+    def __init__(self) -> None:
+        super().__init__(models.BalancerRegistrationFormTemplate)
+
+    async def list_for_workspace(
+        self,
+        session: AsyncSession,
+        workspace_id: int,
+    ) -> Sequence[models.BalancerRegistrationFormTemplate]:
+        result = await session.execute(
+            sa.select(models.BalancerRegistrationFormTemplate)
+            .where(models.BalancerRegistrationFormTemplate.workspace_id == workspace_id)
+            .order_by(models.BalancerRegistrationFormTemplate.name.asc())
+        )
+        return result.scalars().all()
+
+    async def get_for_workspace(
+        self,
+        session: AsyncSession,
+        workspace_id: int,
+        template_id: int,
+    ) -> models.BalancerRegistrationFormTemplate | None:
+        """Scoped by workspace on purpose: a bare id lookup would let one
+        workspace read or overwrite another's template."""
+        return await self.get_by(session, id=template_id, workspace_id=workspace_id)
+
+
 class RegistrationStatusRepository(BaseRepository[models.BalancerRegistrationStatus]):
     def __init__(self) -> None:
         super().__init__(models.BalancerRegistrationStatus)
