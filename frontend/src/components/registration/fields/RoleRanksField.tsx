@@ -5,8 +5,7 @@ import { useId } from "react";
 import DivisionIcon from "@/components/DivisionIcon";
 import type { FieldRendererProps } from "@/components/forms/types";
 import { NumberInput } from "@/components/ui/number-input";
-import { useDivisionGrid } from "@/hooks/useCurrentWorkspace";
-import { getDivisionLabel, resolveDivisionFromRank } from "@/lib/division-grid";
+import { getDivisionLabel, OW_REFERENCE_GRID, resolveDivisionFromRank } from "@/lib/division-grid";
 import { ROLES } from "@/lib/roles";
 import { cn } from "@/lib/utils";
 
@@ -45,6 +44,11 @@ function storedRank(stored: unknown): number | null {
  * The number is what gets stored, not the division: a division covers an SR
  * range, so a picker over the ladder would round every answer to its tier and
  * the crest beside the field already says which tier that is.
+ *
+ * The crest is read off the PLATFORM's grid (`OW_REFERENCE_GRID`), never the
+ * workspace's: what the registrant types is their Overwatch SR, and 3200 is
+ * Diamond 3 on the ladder no matter what a workspace calls its 14th division.
+ * A workspace grid here would rename the number under the registrant.
  */
 export default function RoleRanksField({
   field,
@@ -54,7 +58,6 @@ export default function RoleRanksField({
 }: Readonly<FieldRendererProps>) {
   const id = useId();
   const errorId = `${id}-error`;
-  const grid = useDivisionGrid();
   const ranks = ranksOf(value);
 
   const setRank = (role: string, rank: number | null) => {
@@ -77,7 +80,7 @@ export default function RoleRanksField({
         {ROLES.map((role) => {
           const controlId = `${id}-${role.code}`;
           const rank = storedRank(ranks[role.code]);
-          const division = resolveDivisionFromRank(grid, rank);
+          const division = resolveDivisionFromRank(OW_REFERENCE_GRID, rank);
           return (
             <div key={role.code} className="space-y-2">
               <FieldLabel label={role.display} htmlFor={controlId} />
@@ -100,10 +103,11 @@ export default function RoleRanksField({
                 {division != null ? (
                   <span
                     className="pointer-events-none absolute inset-y-0 right-2 flex items-center"
-                    title={getDivisionLabel(grid, division) ?? undefined}
+                    title={getDivisionLabel(OW_REFERENCE_GRID, division) ?? undefined}
                   >
                     <DivisionIcon
                       division={division}
+                      tournamentGrid={OW_REFERENCE_GRID}
                       width={22}
                       height={22}
                       className="size-[22px] object-contain"
