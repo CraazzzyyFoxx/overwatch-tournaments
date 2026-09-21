@@ -26,18 +26,24 @@ sheet_sync = importlib.import_module("src.services.registration.sheet_sync")
 
 from shared.domain.forms import FieldValidation, FormField  # noqa: E402
 
-# The canonical built-in target set as it existed before the catalog refactor.
-LEGACY_BUILTIN_TARGETS = {
+# The canonical built-in target set. The three ``*_nick`` targets became one
+# ``identity_<provider>`` per ``IDENTITY_PROVIDERS`` and ``notes`` became
+# ``public_notes`` + ``organizer_notes`` — the same renames migration
+# ``regform01`` applied to every saved ``mapping_config_json``.
+BUILTIN_TARGETS = {
     "source_record_key",
     "display_name",
     "battle_tag",
     "submitted_at",
     "smurf_tags",
-    "discord_nick",
-    "twitch_nick",
-    "boosty_nick",
+    "identity_discord",
+    "identity_twitch",
+    "identity_boosty",
+    "identity_vk",
+    "identity_youtube",
     "stream_pov",
-    "notes",
+    "public_notes",
+    "organizer_notes",
     "source_roles.primary",
     "source_roles.additional",
     "is_flex",
@@ -64,15 +70,20 @@ LEGACY_BUILTIN_TARGETS = {
 # ---------------------------------------------------------------------------
 
 
-def test_builtin_specs_match_legacy_target_set():
+def test_builtin_specs_match_the_target_set():
     keys = {spec.key for spec in catalog.build_target_specs([])}
-    assert keys == LEGACY_BUILTIN_TARGETS
+    assert keys == BUILTIN_TARGETS
 
 
 def test_catalog_default_targets_alias_matches_admin():
     # The admin module should expose the same target set (post-refactor import).
-    assert set(catalog.DEFAULT_MAPPING_TARGETS) == LEGACY_BUILTIN_TARGETS
-    assert set(catalog.DEFAULT_MAPPING_TARGETS) == LEGACY_BUILTIN_TARGETS
+    assert set(catalog.DEFAULT_MAPPING_TARGETS) == BUILTIN_TARGETS
+
+
+def test_every_answer_target_is_a_mappable_builtin():
+    # ``parse_sheet_row_detailed`` routes exactly these into ``answers``; a key
+    # with no spec would silently never be parsed.
+    assert set(catalog.ANSWER_TARGET_KEYS) <= BUILTIN_TARGETS
 
 
 def test_custom_field_specs_added_with_type_parsers():
@@ -338,7 +349,7 @@ def test_parse_sheet_row_writes_custom_fields():
         custom_fields=custom,
     )
     assert result.fields is not None
-    assert result.fields["custom_fields"] == {"age": 25, "region": "EU"}
+    assert result.fields["answers"] == {"battle_tag": "Player#1", "age": 25, "region": "EU"}
 
 
 def test_parse_sheet_row_omits_unmapped_custom_fields():
@@ -360,7 +371,7 @@ def test_parse_sheet_row_omits_unmapped_custom_fields():
         custom_fields=custom,
     )
     assert result.fields is not None
-    assert "custom_fields" not in result.fields or result.fields["custom_fields"] == {}
+    assert result.fields["answers"] == {"battle_tag": "Player#1"}
 
 
 def test_parse_sheet_row_collects_custom_field_error():

@@ -81,7 +81,7 @@ class ParticipantMergeTests(IsolatedAsyncioTestCase):
     async def test_verified_wins_a_login_collision(self) -> None:
         """Same channel from both sources: keep the one carrying a stable id."""
         service = _service(
-            self_declared=[SelfDeclaredChannelRow(tournament_id=7, player_id=11, twitch_nick="CasterOne")],
+            self_declared=[SelfDeclaredChannelRow(tournament_id=7, player_id=11, twitch_login="CasterOne")],
             verified=[
                 VerifiedChannelRow(
                     tournament_id=7,
@@ -102,7 +102,7 @@ class ParticipantMergeTests(IsolatedAsyncioTestCase):
 
     async def test_self_declared_survives_without_a_verified_twin(self) -> None:
         service = _service(
-            self_declared=[SelfDeclaredChannelRow(tournament_id=7, player_id=11, twitch_nick=" SoloCaster ")],
+            self_declared=[SelfDeclaredChannelRow(tournament_id=7, player_id=11, twitch_login=" SoloCaster ")],
         )
 
         result = await service.participant_channels_bulk(object(), [7])
@@ -112,12 +112,11 @@ class ParticipantMergeTests(IsolatedAsyncioTestCase):
         self.assertEqual(channel.login, "solocaster")
         self.assertIsNone(channel.provider_user_id)
 
-    async def test_blank_nicks_are_dropped(self) -> None:
+    async def test_a_whitespace_only_login_is_dropped(self) -> None:
+        """``registration_identity.handle`` is NOT NULL, so a useless answer
+        arrives as blank text rather than as a missing value."""
         service = _service(
-            self_declared=[
-                SelfDeclaredChannelRow(tournament_id=7, player_id=11, twitch_nick="   "),
-                SelfDeclaredChannelRow(tournament_id=7, player_id=12, twitch_nick=None),
-            ],
+            self_declared=[SelfDeclaredChannelRow(tournament_id=7, player_id=11, twitch_login="   ")],
         )
 
         result = await service.participant_channels_bulk(object(), [7])
@@ -137,8 +136,8 @@ class ParticipantMergeTests(IsolatedAsyncioTestCase):
         """A channel from tournament 8 must never leak into tournament 7's plan."""
         service = _service(
             self_declared=[
-                SelfDeclaredChannelRow(tournament_id=7, player_id=11, twitch_nick="alice"),
-                SelfDeclaredChannelRow(tournament_id=8, player_id=12, twitch_nick="bob"),
+                SelfDeclaredChannelRow(tournament_id=7, player_id=11, twitch_login="alice"),
+                SelfDeclaredChannelRow(tournament_id=8, player_id=12, twitch_login="bob"),
             ],
         )
 

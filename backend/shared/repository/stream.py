@@ -18,7 +18,8 @@ channel a player deliberately hid from their profile.
 
 Two consented channel sources, deliberately no third:
 
-- **self-declared** — ``registration.twitch_nick`` behind ``stream_pov``, the
+- **self-declared** — the registrant's ``identity_twitch`` answer (a
+  ``registration_identity`` row) behind ``stream_pov``, the
   per-tournament "yes, show my POV" checkbox players already tick;
 - **verified** — an OAuth-proven ``social_account`` that is globally visible.
 
@@ -68,9 +69,16 @@ class TournamentPollTarget(NamedTuple):
 
 
 class SelfDeclaredChannelRow(NamedTuple):
+    """One registrant's self-declared Twitch channel.
+
+    ``twitch_login`` is the ``identity_twitch`` answer verbatim, and never
+    ``NULL``: it comes from a ``registration_identity`` row, whose ``handle``
+    is NOT NULL, so "no answer" is an absent row rather than an empty one.
+    """
+
     tournament_id: int
     player_id: int
-    twitch_nick: str | None
+    twitch_login: str
 
 
 class VerifiedChannelRow(NamedTuple):
@@ -169,11 +177,22 @@ class StreamTargetRepository:
         if not tournament_ids:
             return []
         registration = models.BalancerRegistration
+        identity = models.BalancerRegistrationIdentity
         member = models.WorkspaceMember
         user = models.User
         stmt = (
-            sa.select(registration.tournament_id, member.player_id, registration.twitch_nick)
+            sa.select(registration.tournament_id, member.player_id, identity.handle)
             .select_from(registration)
+            # The Twitch answer is one row of the registration's identity set;
+            # inner-joined on the provider so a registration that answered
+            # nothing for Twitch simply has no channel to declare.
+            .join(
+                identity,
+                sa.and_(
+                    identity.registration_id == registration.id,
+                    identity.provider == SocialProvider.TWITCH,
+                ),
+            )
             .join(member, registration.workspace_member_id == member.id)
             # PRIVACY: joined only to reach ``stream_visible``. Inner, so a player
             # row that vanished cannot smuggle a channel through on the
@@ -183,15 +202,14 @@ class StreamTargetRepository:
                 *self._approved_registration_filters(tournament_ids),
                 *self._stream_veto_filters(),
                 registration.stream_pov.is_(True),
-                registration.twitch_nick.isnot(None),
                 member.player_id.isnot(None),
             )
             .distinct()
         )
         rows = (await session.execute(stmt)).all()
         return [
-            SelfDeclaredChannelRow(tournament_id=int(tid), player_id=int(player_id), twitch_nick=nick)
-            for tid, player_id, nick in rows
+            SelfDeclaredChannelRow(tournament_id=int(tid), player_id=int(player_id), twitch_login=login)
+            for tid, player_id, login in rows
         ]
 
     async def list_verified_channels(

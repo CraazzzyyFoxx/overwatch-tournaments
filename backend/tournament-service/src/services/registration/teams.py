@@ -310,11 +310,15 @@ class RegistrationTeamService:
 
     async def _roster_members(self, session: AsyncSession, team_id: int) -> list[models.BalancerRegistration]:
         result = await session.scalars(
-            self.registration_repo.select().where(
+            self.registration_repo.select()
+            .where(
                 models.BalancerRegistration.registration_team_id == team_id,
                 models.BalancerRegistration.deleted_at.is_(None),
                 models.BalancerRegistration.status.notin_(_SLOT_RELEASING_STATUSES),
             )
+            # The team eligibility rules read each member's Discord handle off
+            # the identity rows, never lazy-loadable in async code.
+            .options(selectinload(models.BalancerRegistration.identities))
         )
         return list(result)
 

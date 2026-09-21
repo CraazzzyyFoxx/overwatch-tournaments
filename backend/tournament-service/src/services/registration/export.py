@@ -42,12 +42,7 @@ def _registration_identity_handles(registration: models.BalancerRegistration) ->
         for smurf in registration.smurf_tags_json or []:
             if BATTLE_TAG_SCAN_RE.match(smurf):
                 handles.append((SocialProvider.BATTLENET, smurf))
-    if registration.discord_nick:
-        handles.append((SocialProvider.DISCORD, registration.discord_nick))
-    if registration.twitch_nick:
-        handles.append((SocialProvider.TWITCH, registration.twitch_nick))
-    if registration.boosty_nick:
-        handles.append((SocialProvider.BOOSTY, registration.boosty_nick))
+    handles.extend((identity.provider, identity.handle) for identity in registration.identities if identity.handle)
     return handles
 
 

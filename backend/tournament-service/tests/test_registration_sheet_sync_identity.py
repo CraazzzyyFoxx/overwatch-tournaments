@@ -76,12 +76,12 @@ class SheetSyncIdentityWiringTests(IsolatedAsyncioTestCase):
             last_error=None,
         )
         tournament = SimpleNamespace(id=77, workspace_id=1)
-        rows = [["BattleTag"], ["Existing#111"]]
+        rows = [["BattleTag"], ["Existing#1111"]]
         parsed = SimpleNamespace(
             fields={
                 "source_record_key": "k1",
-                "battle_tag": "Existing#111",
                 "display_name": "Existing",
+                "answers": {"battle_tag": "Existing#1111"},
             },
             errors=[],
         )
@@ -118,7 +118,7 @@ class SheetSyncIdentityWiringTests(IsolatedAsyncioTestCase):
             call_session, call_registration = identity_mock.await_args.args
             self.assertIs(call_session, session)
             self.assertIsInstance(call_registration, reg_admin.models.BalancerRegistration)
-            self.assertEqual(call_registration.battle_tag, "Existing#111")
+            self.assertEqual(call_registration.battle_tag, "Existing#1111")
             # The sync passes the tournament's workspace so the member anchor
             # is created in the right workspace without an extra query.
             self.assertEqual(

@@ -19,7 +19,8 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
-from shared.domain.forms import FormField
+from shared.core.social import SocialProvider
+from shared.domain.forms import IDENTITY_PROVIDERS, FormField, identity_key
 from shared.domain.player_sub_roles import catalog_slugs, normalize_sub_role
 from src.domain.registration.utils import (
     normalize_header,
@@ -28,6 +29,30 @@ from src.domain.registration.utils import (
 )
 
 ROLE_CODES = ("tank", "damage", "support")
+
+#: Targets that are FORM ANSWERS: they reach the registration through the
+#: answer pipeline instead of straight onto a column. Everything else a sheet
+#: can map -- ``display_name``, ``admin_notes``, ``submitted_at`` and the
+#: role/rank targets -- is organizer state the form never asks a player about.
+ANSWER_TARGET_KEYS: tuple[str, ...] = (
+    "battle_tag",
+    "smurf_tags",
+    *(identity_key(provider) for provider in IDENTITY_PROVIDERS),
+    "stream_pov",
+    "public_notes",
+    "organizer_notes",
+)
+
+#: Label and header aliases for each identity provider the form can ask about.
+#: Data, not branches: a new provider in ``IDENTITY_PROVIDERS`` only needs a row
+#: here to become mappable (and is mappable without one, minus the suggester).
+_IDENTITY_HEADERS: dict[str, tuple[str, tuple[str, ...]]] = {
+    SocialProvider.DISCORD: ("Discord", ("discord", "дискорд", "дискор")),
+    SocialProvider.TWITCH: ("Twitch", ("twitch", "твич")),
+    SocialProvider.BOOSTY: ("Boosty", ("boosty", "бусти")),
+    SocialProvider.VK: ("VK", ("vk", "вконтакте")),
+    SocialProvider.YOUTUBE: ("YouTube", ("youtube", "ютуб")),
+}
 
 # Parser identifiers understood by ``parse_target_value`` in admin.py.
 PARSER_STRING = "string"
@@ -101,6 +126,24 @@ def _role_label(role_code: str) -> str:
     return {"tank": "Tank", "damage": "Damage", "support": "Support"}[role_code]
 
 
+def _identity_specs() -> list[MappingTargetSpec]:
+    """One mappable target per identity provider the form can ask about."""
+    specs: list[MappingTargetSpec] = []
+    for provider in IDENTITY_PROVIDERS:
+        label, aliases = _IDENTITY_HEADERS.get(provider, (provider.title(), ()))
+        specs.append(
+            MappingTargetSpec(
+                key=identity_key(provider),
+                label=label,
+                group="profile",
+                accepted_parsers=(PARSER_STRING,),
+                default_parser=PARSER_STRING,
+                aliases=aliases,
+            )
+        )
+    return specs
+
+
 def _build_builtin_specs() -> tuple[MappingTargetSpec, ...]:
     specs: list[MappingTargetSpec] = [
         MappingTargetSpec(
@@ -145,30 +188,7 @@ def _build_builtin_specs() -> tuple[MappingTargetSpec, ...]:
             multi_column=True,
             aliases=("smurf", "alt", "смурф"),
         ),
-        MappingTargetSpec(
-            key="discord_nick",
-            label="Discord",
-            group="profile",
-            accepted_parsers=(PARSER_STRING,),
-            default_parser=PARSER_STRING,
-            aliases=("discord", "дискорд", "дискор"),
-        ),
-        MappingTargetSpec(
-            key="twitch_nick",
-            label="Twitch",
-            group="profile",
-            accepted_parsers=(PARSER_STRING,),
-            default_parser=PARSER_STRING,
-            aliases=("twitch", "твич"),
-        ),
-        MappingTargetSpec(
-            key="boosty_nick",
-            label="Boosty",
-            group="profile",
-            accepted_parsers=(PARSER_STRING,),
-            default_parser=PARSER_STRING,
-            aliases=("boosty", "бусти"),
-        ),
+        *_identity_specs(),
         MappingTargetSpec(
             key="stream_pov",
             label="Stream POV",
@@ -178,13 +198,23 @@ def _build_builtin_specs() -> tuple[MappingTargetSpec, ...]:
             aliases=("stream", "pov", "стрим"),
         ),
         MappingTargetSpec(
-            key="notes",
+            key="public_notes",
             label="Notes",
             group="profile",
             accepted_parsers=(PARSER_JOIN_LINES, PARSER_STRING),
             default_parser=PARSER_JOIN_LINES,
             multi_column=True,
             aliases=("note", "comment", "примеч", "любая доп."),
+        ),
+        MappingTargetSpec(
+            # Deliberately alias-free: an organizers-only answer must be mapped
+            # on purpose, never guessed off a header a player filled in.
+            key="organizer_notes",
+            label="Organizer notes",
+            group="profile",
+            accepted_parsers=(PARSER_JOIN_LINES, PARSER_STRING),
+            default_parser=PARSER_JOIN_LINES,
+            multi_column=True,
         ),
         MappingTargetSpec(
             key="is_flex",

@@ -173,7 +173,7 @@ def test_player_read_carries_registration_notes_and_never_the_organizer_ones() -
         roster(
             120,
             ranks={"support": 2800},
-            notes="registration note shown to captains",
+            public_notes="registration note shown to captains",
             admin_notes="organizer only",
             custom_fields={"phone": "+70000000000"},
         ),
@@ -393,33 +393,41 @@ def test_seed_diff_builder_reports_before_and_after_counts() -> None:
     )
 
 
+def _schema(*fields: dict) -> dict:
+    """A form-version ``schema_json`` holding ``fields`` in one section."""
+    return {"schema_version": 1, "sections": [{"key": "extra", "fields": list(fields)}]}
+
+
 class _FormSession:
-    """Answers the single ``custom_fields_json`` scalar read the board makes."""
+    """Answers the single ``schema_json`` scalar read the board makes."""
 
-    def __init__(self, custom_fields_json: list | None) -> None:
-        self._custom_fields_json = custom_fields_json
+    def __init__(self, schema_json: dict | None) -> None:
+        self._schema_json = schema_json
 
-    async def scalar(self, _statement) -> list | None:
-        return self._custom_fields_json
+    async def scalar(self, _statement) -> dict | None:
+        return self._schema_json
 
 
 def test_visible_custom_fields_takes_only_flagged_definitions_in_form_order() -> None:
     session = _FormSession(
-        [
-            {"key": "vk", "label": "VK profile", "type": "url", "show_in_draft": True},
-            {"key": "age", "label": "Age", "type": "number"},
-            {"key": "rules", "label": "", "show_in_draft": True},
-            {"label": "keyless", "show_in_draft": True},
+        _schema(
+            {"key": "vk", "label": "VK profile", "kind": "url", "show_in_draft": True, "visibility": "public"},
+            {"key": "age", "label": "Age", "kind": "number", "visibility": "public"},
+            {"key": "rules", "label": "", "kind": "checkbox", "show_in_draft": True, "visibility": "public"},
+            # A builtin never reaches the custom-answer strip.
+            {"key": "battle_tag", "kind": "builtin", "show_in_draft": True, "visibility": "public"},
+            # show_in_draft on an organizers-only question must not leak.
+            {"key": "phone", "label": "Phone", "kind": "text", "show_in_draft": True, "visibility": "organizers"},
             "not a definition",
-        ]
+        )
     )
 
     fields = asyncio.run(board.board_service.visible_custom_fields(session, 7))  # type: ignore[arg-type]
 
     assert fields == [
         board.VisibleCustomField(key="vk", label="VK profile", type="url"),
-        # Missing label falls back to the key; missing type to the form default.
-        board.VisibleCustomField(key="rules", label="rules", type="text"),
+        # A missing label falls back to the key.
+        board.VisibleCustomField(key="rules", label="rules", type="checkbox"),
     ]
 
 
@@ -468,13 +476,13 @@ class _BoardSession:
     """Answers ``build_board``'s reads in call order, with no DB behind them.
 
     ``scalar``: max(WorkspaceEvent.id) over the draft AND bracket topics, then
-    the form's ``custom_fields_json`` (read only when some registration
+    the form version's ``schema_json`` (read only when some registration
     actually answered one).
     ``execute``: teams, picks, players (repository ``list_by_session`` reads).
     """
 
-    def __init__(self, *, custom_fields_json: list, players: list) -> None:
-        self._scalar = [None, custom_fields_json]
+    def __init__(self, *, schema_json: dict | None, players: list) -> None:
+        self._scalar = [None, schema_json]
         self._results = [[], [], players]
 
     async def scalar(self, _statement):
@@ -549,17 +557,17 @@ def test_board_projects_flagged_answers_and_never_ships_the_rest(monkeypatch) ->
                     120,
                     ranks={"support": 3000},
                     battle_tag="Ana#1",
-                    notes="prefers Ana",
+                    public_notes="prefers Ana",
                     custom_fields={"vk": "vk.com/ana", "phone": "+70000000000"},
                 )
             }
         ),
     )
     session = _BoardSession(
-        custom_fields_json=[
-            {"key": "vk", "label": "VK profile", "type": "url", "show_in_draft": True},
-            {"key": "phone", "label": "Phone", "type": "text"},
-        ],
+        schema_json=_schema(
+            {"key": "vk", "label": "VK profile", "kind": "url", "show_in_draft": True, "visibility": "public"},
+            {"key": "phone", "label": "Phone", "kind": "text", "visibility": "public"},
+        ),
         players=[player],
     )
 
@@ -593,7 +601,7 @@ def test_board_ranks_a_player_on_their_own_role_under_role_slots(monkeypatch) ->
     monkeypatch.setattr(feasibility_service, "resolve_shape", _role_shape)
     role_slots = asyncio.run(
         board.board_service.build_board(  # type: ignore[arg-type]
-            _BoardSession(custom_fields_json=[], players=[player]), _live_draft(session_id=91)
+            _BoardSession(schema_json=None, players=[player]), _live_draft(session_id=91)
         )
     )
     assert role_slots.players[0].effective_rank == 2800
@@ -609,7 +617,7 @@ def test_board_ranks_a_player_on_their_own_role_under_role_slots(monkeypatch) ->
     monkeypatch.setattr(feasibility_service, "resolve_shape", _flex_shape)
     all_flex = asyncio.run(
         board.board_service.build_board(  # type: ignore[arg-type]
-            _BoardSession(custom_fields_json=[], players=[player]), _live_draft(session_id=92)
+            _BoardSession(schema_json=None, players=[player]), _live_draft(session_id=92)
         )
     )
     assert all_flex.players[0].effective_rank == 4000
@@ -627,7 +635,7 @@ def test_board_renders_a_seat_whose_registration_resolved_to_nothing(monkeypatch
 
     snapshot = asyncio.run(
         board.board_service.build_board(  # type: ignore[arg-type]
-            _BoardSession(custom_fields_json=[], players=[_seat(22)]), _live_draft(session_id=93)
+            _BoardSession(schema_json=None, players=[_seat(22)]), _live_draft(session_id=93)
         )
     )
 

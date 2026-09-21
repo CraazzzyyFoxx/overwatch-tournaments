@@ -83,7 +83,7 @@ def roster(
     subroles: Mapping[str, str] | None = None,
     sources: Mapping[str, str] | None = None,
     top_heroes: Mapping[str, tuple[HeroRef, ...]] | None = None,
-    notes: str | None = None,
+    public_notes: str | None = None,
     admin_notes: str | None = None,
     custom_fields: Mapping[str, Any] | None = None,
 ) -> PlayerRoster:
@@ -118,7 +118,7 @@ def roster(
             for priority, (code, rank) in enumerate(entries.items())
         ),
         is_full_flex=flex,
-        notes=notes,
+        public_notes=public_notes,
         admin_notes=admin_notes,
         custom_fields=dict(custom_fields or {}),
     )

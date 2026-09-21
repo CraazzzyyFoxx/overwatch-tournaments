@@ -10,8 +10,9 @@ channel's two consent sources merge when they name the same login.
 
 Two consented sources, deliberately no third:
 
-- **self-declared** — ``registration.twitch_nick`` behind ``stream_pov``, the
-  per-tournament "yes, show my POV" checkbox players already tick;
+- **self-declared** — the registrant's ``identity_twitch`` answer behind
+  ``stream_pov``, the per-tournament "yes, show my POV" checkbox players
+  already tick;
 - **verified** — an OAuth-proven ``social_account`` that is globally visible.
 
 Verified wins a login collision: it carries ``provider_user_id``, which survives
@@ -172,7 +173,7 @@ class StreamTargetsService:
         by_tournament: dict[int, dict[str, ParticipantChannel]] = {tid: {} for tid in tournament_ids}
 
         for self_declared in await self.targets.list_self_declared_channels(session, tournament_ids):
-            login = str(self_declared.twitch_nick or "").strip().casefold()
+            login = str(self_declared.twitch_login or "").strip().casefold()
             if not login:
                 continue
             by_tournament.setdefault(self_declared.tournament_id, {})[login] = ParticipantChannel(

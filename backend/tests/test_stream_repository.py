@@ -166,17 +166,28 @@ class ParticipantVisibilityTests(IsolatedAsyncioTestCase):
 
 
 class ParticipantSelfDeclaredTests(IsolatedAsyncioTestCase):
-    async def _self_declared_sql(self) -> str:
+    async def _self_declared_stmt(self) -> Any:
         session = _CapturingSession([])
         repo = StreamTargetRepository()
         await repo.list_self_declared_channels(session, [7])
-        return _compiled(session.statements[0])
+        return session.statements[0]
+
+    async def _self_declared_sql(self) -> str:
+        return _compiled(await self._self_declared_stmt())
 
     async def test_requires_the_explicit_stream_pov_opt_in(self) -> None:
         sql = await self._self_declared_sql()
 
         self.assertIn("balancer.registration.stream_pov IS true", sql)
-        self.assertIn("balancer.registration.twitch_nick IS NOT NULL", sql)
+
+    async def test_the_channel_comes_from_the_twitch_identity_answer(self) -> None:
+        """An inner join on the provider: no identity row, no declared channel."""
+        stmt = await self._self_declared_stmt()
+        compiled = stmt.compile(dialect=postgresql.dialect())
+
+        self.assertIn("JOIN balancer.registration_identity ON", str(compiled))
+        self.assertIn("balancer.registration_identity.provider =", str(compiled))
+        self.assertIn("twitch", compiled.params.values())
 
     async def test_excludes_withdrawn_and_deleted_registrations(self) -> None:
         sql = await self._self_declared_sql()

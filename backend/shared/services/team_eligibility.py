@@ -14,6 +14,7 @@ from typing import Any
 
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from shared import models
 from shared.core.social import SocialProvider
@@ -43,7 +44,14 @@ def _slot_role(slot_code: str | None, shape: Any) -> str | None:
 
 def _identity_keys(registration: models.BalancerRegistration, discord_ids: Sequence[str]) -> set[str]:
     keys: set[str] = set()
-    nick = (registration.discord_nick or "").strip().casefold()
+    nick = next(
+        (
+            identity.handle_normalized
+            for identity in registration.identities
+            if identity.provider == SocialProvider.DISCORD and identity.handle_normalized
+        ),
+        "",
+    )
     if nick:
         keys.add(f"discord_nick:{nick}")
     for snowflake in discord_ids:
@@ -94,13 +102,17 @@ async def _taken_identity_keys(
 ) -> set[str]:
     others = list(
         await session.scalars(
-            sa.select(models.BalancerRegistration).where(
+            sa.select(models.BalancerRegistration)
+            .where(
                 models.BalancerRegistration.tournament_id == tournament_id,
                 models.BalancerRegistration.registration_team_id.is_not(None),
                 models.BalancerRegistration.registration_team_id != exclude_team_id,
                 models.BalancerRegistration.deleted_at.is_(None),
                 models.BalancerRegistration.status.notin_(_SLOT_RELEASING),
             )
+            # ``_identity_keys`` reads the Discord handle off the identity rows,
+            # which are never lazy-loadable in async code.
+            .options(selectinload(models.BalancerRegistration.identities))
         )
     )
     discord_ids = await _discord_ids_by_registration(session, others)
