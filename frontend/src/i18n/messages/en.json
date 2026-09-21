@@ -5842,6 +5842,7 @@
     }
   },
   "forms": {
+    "organizersOnly": "Only the organizers see this answer. It is never shown on the public roster.",
     "errors": {
       "required": "This field is required.",
       "invalid_format": "This value does not match the required format.",

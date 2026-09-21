@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, type ReactNode } from "react";
+import { EyeOff } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 import StepIndicator from "@/components/registration/StepIndicator";
 import { validateAnswer } from "@/lib/forms/validate";
@@ -78,6 +80,7 @@ export default function SchemaForm({
   readOnly = false,
   footer,
 }: Readonly<SchemaFormProps>) {
+  const t = useTranslations("forms");
   const steps = schemaSteps(schema, answers);
   const index = Math.min(Math.max(step, 0), Math.max(steps.length - 1, 0));
   const section = steps[index] as FormSection | undefined;
@@ -122,15 +125,30 @@ export default function SchemaForm({
           const error =
             serverErrors[field.key] ??
             (showErrors ? validateAnswer(field, answers[field.key], context.t) : null);
-          return (
+          const control = (
             <Renderer
-              key={field.key}
               field={field}
               value={answers[field.key]}
               onChange={(value) => onChange(field.key, value)}
               error={error}
               context={context}
             />
+          );
+          // The registrant answers organizers-only questions like any other —
+          // `visibility` is about who READS the answer. Saying so is the whole
+          // difference they can perceive, so it is said once, here, rather than
+          // in each of the eight renderers.
+          if (field.visibility !== "organizers" || context.mode === "admin") {
+            return <div key={field.key}>{control}</div>;
+          }
+          return (
+            <div key={field.key} className="grid gap-1.5">
+              {control}
+              <p className="inline-flex items-center gap-1.5 text-label text-[color:var(--aqt-fg-dim)]">
+                <EyeOff className="size-3 shrink-0" aria-hidden />
+                {t("organizersOnly")}
+              </p>
+            </div>
           );
         })}
       </fieldset>

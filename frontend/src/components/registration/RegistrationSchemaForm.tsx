@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, ArrowRight, BadgeInfo, Loader2, UserRound } from "lucide-react";
 import { useTranslations } from "next-intl";
@@ -113,22 +113,15 @@ const BALANCER_STATUS_OPTIONS = [
 ];
 
 /**
- * The schema as the REGISTRANT sees it.
- *
- * The public form read ships the whole document, organizers-only questions
- * included — the server strips those from a public *answer* read, not from the
- * schema itself. Rendering one would ask the registrant a question that is not
- * theirs, and the server refuses the answer.
+ * NOTE ON `visibility`: it decides who may READ an answer, never who is ASKED
+ * the question. `organizer_notes` is the pair of `public_notes` — the player
+ * writes both, and only the audience of the stored answer differs (design §1
+ * decisions 7 and 8). The public form read ships the whole document
+ * deliberately, the server accepts an `organizers` answer from the registrant,
+ * and `public_keys()` strips it on the way back out. So the registrant renders
+ * the same schema the organizer does; `SchemaForm` marks the questions whose
+ * answers are not published.
  */
-function publicSchema(schema: FormSchema): FormSchema {
-  return {
-    ...schema,
-    sections: schema.sections.map((section) => ({
-      ...section,
-      fields: section.fields.filter((field) => field.visibility !== "organizers"),
-    })),
-  };
-}
 
 function allFields(schema: FormSchema): FormField[] {
   return schema.sections.flatMap((section) => section.fields);
@@ -225,10 +218,7 @@ export default function RegistrationSchemaForm({
   const openAccountSettings = useAccountSettingsModalStore((s) => s.open);
   const isAdmin = mode === "admin";
 
-  const schema = useMemo(
-    () => (isAdmin ? form.form_schema : publicSchema(form.form_schema)),
-    [isAdmin, form.form_schema],
-  );
+  const schema = form.form_schema;
   const adminInitial = initial && "admin_notes" in initial ? initial : null;
 
   const [answers, setAnswers] = useState<Answers>(() =>
