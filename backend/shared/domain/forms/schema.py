@@ -179,9 +179,14 @@ def default_schema() -> FormSchema:
     )
 
 
+def schema_from_version(version: Any) -> FormSchema | None:
+    """The schema stored on one ``registration_form_version`` row; ``None`` when
+    there is no version or it carries no document."""
+    raw = getattr(version, "schema_json", None) if version is not None else None
+    return FormSchema.model_validate(raw) if raw else None
+
+
 def schema_from_form(form: Any) -> FormSchema | None:
     """The current schema of a ``BalancerRegistrationForm`` (or any object with
     ``current_version.schema_json``); ``None`` when there is no form/version."""
-    version = getattr(form, "current_version", None) if form is not None else None
-    raw = getattr(version, "schema_json", None)
-    return FormSchema.model_validate(raw) if raw else None
+    return schema_from_version(getattr(form, "current_version", None) if form is not None else None)

@@ -78,6 +78,7 @@ from src.schemas.registration_build import (
     AdmissionChips,
     _public_rosters,
     _reg_to_read,
+    _resolve_top_heroes_config,
     _resolve_tournament_workspace,
 )
 from src.schemas.registration_team import (
@@ -108,15 +109,12 @@ from src.services.registration import service as reg_service
 from src.services.registration import subscription_config
 from src.services.registration import teams as team_service
 from src.services.registration.admission import assert_admitted_at
+from src.services.registration.answers import answer_service
 from src.services.registration.serializers import serialize_registration_form
 from src.services.registration.subscription_codes import redeem_challenge_code
 from src.services.registration.subscription_status import (
     assert_redeem_attempt_allowed,
     subscription_status_for_user,
-)
-from src.services.registration.validation import (
-    validate_registration_input,
-    validation_service,
 )
 from src.services.registration.windows import windows_service
 
@@ -478,6 +476,9 @@ def register(broker: Any, logger: Any) -> None:
                     subscription_verdicts=chips.subscription_verdicts,
                     roster=(await _public_rosters(session, [reg])).get(reg.id),
                     queue=await reg_service.registration_service.queue_position(session, reg),
+                    # The registrant's OWN card: no public-key filter (they wrote
+                    # every answer), but it must say when the questions moved on.
+                    current_version_id=form.current_version_id if form is not None else None,
                 )
             )
 
@@ -499,22 +500,29 @@ def register(broker: Any, logger: Any) -> None:
             if reg is None:
                 raise HTTPException(status_code=404, detail="No registration found")
 
-            validate_registration_input(form, body, partial=True)
-            await validation_service.validate_verified_identity(
+            schema = reg_service._require_current_schema(form, body.form_version_id)
+            hero_catalog, _ = await _resolve_top_heroes_config(session, form)
+            values = await answer_service.validate(
                 session,
-                form=form,
-                payload=body,
+                schema=schema,
+                answers=body.answers,
+                partial=True,
+                enforce_required=True,
                 # get_registration eager-loads workspace_member (the
                 # registration's only identity anchor since dbarch02).
                 player_id=reg.workspace_member.player_id if reg.workspace_member is not None else None,
-                partial=True,
+                workspace_id=form.workspace_id,
+                hero_catalog=hero_catalog,
             )
 
             # update_registration commits internally.
             updated = await reg_service.registration_service.update_registration(
                 session,
                 reg,
-                **body.model_dump(exclude_unset=True),
+                values=values,
+                schema=schema,
+                hero_catalog=hero_catalog,
+                form_version_id=form.current_version_id,
             )
             status_meta_map = await get_status_metas_map(session, workspace_id=form.workspace_id)
             return _dump(
@@ -525,6 +533,7 @@ def register(broker: Any, logger: Any) -> None:
                     show_ranks=form.show_ranks,
                     roster=(await _public_rosters(session, [updated])).get(updated.id),
                     queue=await reg_service.registration_service.queue_position(session, updated),
+                    current_version_id=form.current_version_id,
                 )
             )
 
@@ -598,6 +607,7 @@ def register(broker: Any, logger: Any) -> None:
                     show_ranks=form.show_ranks if form else False,
                     roster=(await _public_rosters(session, [checked_in])).get(checked_in.id),
                     queue=await reg_service.registration_service.queue_position(session, checked_in),
+                    current_version_id=form.current_version_id if form is not None else None,
                 )
             )
 

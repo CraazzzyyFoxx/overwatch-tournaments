@@ -1,15 +1,14 @@
 """Public participants list visibility contract for ``_reg_to_read``.
 
-The roster renders a column per built-in field and per organizer-defined custom
-field, so every one of them has to survive serialization for an anonymous
-caller. Smurf tags are declared alternate battle tags (anti-smurf transparency,
-same class as the public ``battle_tag``); free-text notes are a
-participant-facing form field; custom fields are questions the organizer chose
-to ask on a public sign-up form.
+The roster renders a column per question the organizer chose to ask, so every
+PUBLIC answer has to survive serialization for an anonymous caller — smurf tags
+(declared alternate battle tags, the anti-smurf transparency the roster exists
+for), the participant-facing notes, and the organizer's own custom questions.
 
-``custom_fields_json`` used to be stripped behind an ``include_private`` flag,
-which left every custom column on the roster permanently empty under a header
-that advertised it. The flag is gone -- one read model, one visibility rule.
+The rule is now the schema's, not this module's: ``_reg_to_read`` filters the
+flat ``answers`` document to the ``public_keys`` its caller resolved from the
+version the registration answered. ``public_keys=None`` is the organizer context
+(and the registrant reading their own row) and filters nothing.
 """
 
 from datetime import datetime
@@ -20,6 +19,11 @@ from types import SimpleNamespace
 from shared.core.enums import HeroClass  # noqa: E402
 from shared.domain.roster import PlayerRoster, RosterRole  # noqa: E402
 from src.schemas.registration_build import _reg_to_read  # noqa: E402
+
+#: What a form that asks the four public questions publishes. ``organizer_notes``
+#: is fixed-visibility ``organizers`` in the builtin catalog, and ``staff_note``
+#: stands for an organizer-only CUSTOM question.
+PUBLIC_KEYS = frozenset({"battle_tag", "smurf_tags", "stream_pov", "public_notes", "roles", "vk"})
 
 
 def _roster(rank: int | None, source: str = "registration", *extra: RosterRole) -> PlayerRoster:
@@ -53,13 +57,16 @@ def _reg_stub() -> SimpleNamespace:
         workspace_member=SimpleNamespace(player_id=42),
         battle_tag="Player#1234",
         smurf_tags_json=["Alt#1111", "Alt#2222"],
-        discord_nick="player",
-        twitch_nick="player_tv",
-        boosty_nick="player_boosty",
+        identities=[
+            SimpleNamespace(provider="discord", handle="player"),
+            SimpleNamespace(provider="twitch", handle="player_tv"),
+        ],
         stream_pov=False,
         roles=[],
-        notes="anything you'd like organizers to know",
-        custom_fields_json={"vk": "vk.com/player"},
+        public_notes="anything you'd like organizers to know",
+        organizer_notes="please seed me low",
+        custom_fields_json={"vk": "vk.com/player", "staff_note": "watch this one"},
+        form_version_id=9,
         status="approved",
         balancer_status="ready",
         checked_in=False,
@@ -68,24 +75,51 @@ def _reg_stub() -> SimpleNamespace:
     )
 
 
-def test_the_roster_read_carries_every_column_it_renders():
-    read = _reg_to_read(_reg_stub(), workspace_id=1)
+def test_the_roster_read_carries_every_public_answer_it_renders():
+    read = _reg_to_read(_reg_stub(), workspace_id=1, public_keys=PUBLIC_KEYS)
 
     # Anti-smurf transparency data (the roster's whole point).
-    assert read.smurf_tags_json == ["Alt#1111", "Alt#2222"]
+    assert read.answers["smurf_tags"] == ["Alt#1111", "Alt#2222"]
     # Notes are a roster column.
-    assert read.notes == "anything you'd like organizers to know"
+    assert read.answers["public_notes"] == "anything you'd like organizers to know"
     # The custom columns are built from the form's definitions, so their
     # answers have to arrive or the header lies.
-    assert read.custom_fields_json == {"vk": "vk.com/player"}
-    # Every identity handle the form collects gets its own column.
-    assert read.discord_nick == "player"
-    assert read.twitch_nick == "player_tv"
-    assert read.boosty_nick == "player_boosty"
+    assert read.answers["vk"] == "vk.com/player"
+    # The BattleTag stays top-level: every surface renders it.
+    assert read.battle_tag == "Player#1234"
     # Balancer progress is public: the roster shows it and the registrant's
     # own card renders the balancing step from it.
     assert read.balancer_status == "ready"
     assert read.balancer_status_meta is not None
+
+
+def test_an_anonymous_read_drops_the_answers_the_organizer_kept_to_themselves():
+    read = _reg_to_read(_reg_stub(), workspace_id=1, public_keys=PUBLIC_KEYS)
+
+    assert "organizer_notes" not in read.answers
+    assert "staff_note" not in read.answers
+    # An identity question this form does not publish is not published either.
+    assert "identity_discord" not in read.answers
+
+
+def test_no_public_key_set_is_the_organizer_context_and_filters_nothing():
+    read = _reg_to_read(_reg_stub(), workspace_id=1)
+
+    assert read.answers["organizer_notes"] == "please seed me low"
+    assert read.answers["staff_note"] == "watch this one"
+    assert read.answers["identity_discord"] == "player"
+    assert read.answers["identity_twitch"] == "player_tv"
+
+
+def test_a_registration_answered_against_an_older_version_reads_stale():
+    stale = _reg_to_read(_reg_stub(), workspace_id=1, current_version_id=11)
+    current = _reg_to_read(_reg_stub(), workspace_id=1, current_version_id=9)
+
+    assert (stale.form_version_id, stale.form_version_stale) == (9, True)
+    assert current.form_version_stale is False
+    # An unknown current version is never reported as stale: the read simply
+    # does not know, and a false badge would nag every reader forever.
+    assert _reg_to_read(_reg_stub(), workspace_id=1).form_version_stale is False
 
 
 def test_ranks_stay_hidden_unless_the_form_publishes_them():

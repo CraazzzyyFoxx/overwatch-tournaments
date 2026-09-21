@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-import re
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
@@ -15,17 +14,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from shared.balancer_registration_statuses import get_status_metas_map
-from shared.balancer_subrole_catalog import resolve_subrole_catalog
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.core.social import SocialProvider, normalize_social_handle
-from shared.domain.player_sub_roles import REGISTRATION_ROLE_CODES, normalize_sub_role
-from shared.domain.roster import FlexRoleMode, flex_role_mode
-from shared.hero_catalog import DEFAULT_MAX_TOP_HEROES, HeroCatalog, build_hero_entries
+from shared.domain.forms import ErrorCode, FieldError, FormSchema, raise_field_errors, schema_from_form
+from shared.hero_catalog import HeroCatalog
 from shared.rbac import assign_workspace_system_role
 from shared.repository import (
     BalancerRegistrationRepository,
-    BalancerRegistrationRoleRepository,
-    RegistrationFormRepository,
     SocialAccountRepository,
     TournamentRepository,
     UserRepository,
@@ -53,108 +48,49 @@ from src.schemas.registration_build import (
     _reg_to_read,
     _resolve_top_heroes_config,
     _resolve_tournament_workspace,
+    registration_public_keys,
     registration_read_loaders,
 )
 from src.services.registration._common import (
     _common_service,
-    apply_all_roles,
 )
-from src.services.registration.validation import validate_registration_input, validation_service
+from src.services.registration.answers import answer_service
 from src.services.registration.windows import is_check_in_window_active, is_registration_open
 from src.services.tournament.events import enqueue_registration_approved
 
 __all__ = (
     "RegistrationService",
     "TeamPlacement",
-    "build_registration_roles",
     "registration_service",
 )
 
 
-def _clean_battle_tag(value: str | None) -> str | None:
-    if not value:
-        return None
-    text = value.strip()
-    text = re.sub(r"\s*#\s*", "#", text)
-    return text.replace(" ", "").strip()
+#: The body of a team-flow acceptance may be absent (an invitee who already
+#: registered has nothing left to answer); a NEW invitee has no such excuse.
+_ANSWERS_REQUIRED = "This tournament's registration form has to be answered."
+
+_FORM_VERSION_STALE = "The registration form changed; reload and try again."
 
 
-def _normalize_battle_tag(value: str | None) -> str | None:
-    cleaned = _clean_battle_tag(value)
-    if not cleaned:
-        return None
-    return cleaned.lower()
+def _require_current_schema(
+    form: models.BalancerRegistrationForm,
+    submitted_version_id: int | None,
+) -> FormSchema:
+    """The form's CURRENT schema, refusing a submission aimed at another version.
 
-
-def _build_hero_entries(
-    slugs: list[str] | None,
-    *,
-    hero_catalog: HeroCatalog,
-    max_heroes: int,
-) -> list[models.BalancerRegistrationRoleHero]:
-    return build_hero_entries(slugs, hero_catalog=hero_catalog, max_heroes=max_heroes)
-
-
-def build_registration_roles(
-    roles: list[Any] | None,
-    *,
-    hero_catalog: HeroCatalog | None = None,
-    max_heroes: int | None = None,
-    mode: FlexRoleMode = "optional",
-) -> list[models.BalancerRegistrationRole]:
-    """Build normalized role entries, mirroring the admin write path.
-
-    Filters to valid registration role codes (tank/damage/support), de-duplicates,
-    normalizes the sub-role slug, and assigns sequential priority. Keeps the
-    public and admin/Google-Sheets paths consistent so a sub-role like
-    ``main_damage`` is stored identically regardless of entry point.
-
-    When ``hero_catalog`` is provided (the top-heroes field is enabled), the
-    ordered ``top_heroes`` slugs on each role are attached as
-    ``registration_role_hero`` rows.
+    The server never validates against the version the client happened to hold
+    (design §4): a stale ``form_version_id`` is ``409 form_version_stale``, which
+    is the client's cue to reload the questions rather than have its answers
+    judged by rules the registrant never saw. A form with no version at all
+    cannot be answered and lands in the same branch.
     """
-    resolved_max = max_heroes if max_heroes and max_heroes > 0 else DEFAULT_MAX_TOP_HEROES
-    entries: list[models.BalancerRegistrationRole] = []
-    seen: set[str] = set()
-    for role in roles or []:
-        role_code = getattr(role, "role", None)
-        if role_code not in REGISTRATION_ROLE_CODES or role_code in seen:
-            continue
-        seen.add(role_code)
-        entry = models.BalancerRegistrationRole(
-            role=role_code,
-            subrole=normalize_sub_role(getattr(role, "subrole", None)),
-            is_primary=bool(getattr(role, "is_primary", False)),
-            priority=len(entries),
+    schema = schema_from_form(form)
+    if schema is None or submitted_version_id != form.current_version_id:
+        raise_field_errors(
+            [FieldError("form_version_id", ErrorCode.FORM_VERSION_STALE.value, _FORM_VERSION_STALE)],
+            status_code=409,
         )
-        if hero_catalog is not None:
-            entry.hero_entries = _build_hero_entries(
-                getattr(role, "top_heroes", None),
-                hero_catalog=hero_catalog,
-                max_heroes=resolved_max,
-            )
-        entries.append(entry)
-    if mode in ("all_roles", "forced"):
-        entries = apply_all_roles(entries, force_primary=mode == "forced")
-    return entries
-
-
-# ``RegistrationUpdate`` field -> ORM column for the public self-service PATCH.
-#
-# Explicit because the previous implementation did ``setattr(registration, key,
-# value)`` straight off the payload keys: every key whose name did not happen to
-# match a mapped column landed in the instance ``__dict__`` and died with the
-# session. ``custom_fields`` (the column is ``custom_fields_json``) and the long
-# removed ``primary_role`` were both silently dropped that way.
-_SELF_UPDATE_COLUMNS: dict[str, str] = {
-    "battle_tag": "battle_tag",
-    "discord_nick": "discord_nick",
-    "twitch_nick": "twitch_nick",
-    "boosty_nick": "boosty_nick",
-    "stream_pov": "stream_pov",
-    "notes": "notes",
-    "custom_fields": "custom_fields_json",
-}
+    return schema
 
 
 @dataclass(frozen=True)
@@ -225,20 +161,14 @@ class RegistrationService:
         self,
         *,
         registration_repo: BalancerRegistrationRepository = BalancerRegistrationRepository(),
-        role_repo: BalancerRegistrationRoleRepository = BalancerRegistrationRoleRepository(),
-        form_repo: RegistrationFormRepository = RegistrationFormRepository(),
         tournament_repo: TournamentRepository = TournamentRepository(),
         user_repo: UserRepository = UserRepository(),
         social_account_repo: SocialAccountRepository = SocialAccountRepository(),
-        validation: Any = validation_service,
     ) -> None:
         self.registration_repo = registration_repo
-        self.role_repo = role_repo
-        self.form_repo = form_repo
         self.tournament_repo = tournament_repo
         self.user_repo = user_repo
         self.social_account_repo = social_account_repo
-        self.validation = validation
 
     async def _registration_changed(
         self,
@@ -581,27 +511,32 @@ class RegistrationService:
         tournament_id: int,
         workspace_id: int,
         auth_user_id: int,
-        battle_tag: str | None,
-        smurf_tags: list[str] | None,
-        discord_nick: str | None,
-        twitch_nick: str | None,
-        boosty_nick: str | None,
-        stream_pov: bool,
-        notes: str | None,
-        custom_fields: dict[str, Any] | None,
+        values: Mapping[str, Any],
+        schema: FormSchema,
+        hero_catalog: HeroCatalog | None = None,
+        form_version_id: int | None = None,
         auto_approve: bool = False,
         auth_user: models.AuthUser | None = None,
+        commit: bool = True,
     ) -> models.BalancerRegistration:
         """Create a self-service registration and auto-enroll the registrant.
+
+        ``values`` is an already-validated answer document (see
+        :meth:`RegistrationAnswerService.validate`); every column, identity row
+        and role row it produces is written by the answer service, so this method
+        owns only what an answer cannot say: the gate, the review state and the
+        enrolment.
 
         ``auth_user`` is the gateway-rehydrated identity (carrying the cached RBAC
         deny overlay) for the registering account, used to gate on the
         ``registration.self_register`` capability. It is ``None`` only for
         non-self-service callers (there are none today — sheet/CSV imports and
-        admin-created rows go through ``create_manual_registration`` instead,
-        which has no auth_user and is intentionally untouched here); when absent,
-        the gate and auto-enroll are both skipped since there's no account to
-        enroll or deny.
+        admin-created rows go through ``create_manual_registration`` instead);
+        when absent, the gate and auto-enroll are both skipped since there's no
+        account to enroll or deny.
+
+        ``commit=False`` flushes instead, so a caller that must land this row
+        together with something else (the team flows) really can.
         """
         if auth_user is not None and not auth_user.can_capability(
             "registration", "self_register", workspace_id=workspace_id
@@ -611,29 +546,19 @@ class RegistrationService:
                 detail="Registration is not allowed for this user in this workspace",
             )
 
-        cleaned_battle_tag = _clean_battle_tag(battle_tag)
-        cleaned_smurf_tags = [_clean_battle_tag(tag) for tag in (smurf_tags or [])]
-        cleaned_smurf_tags = [tag for tag in cleaned_smurf_tags if tag]
-
-        registration = await self.registration_repo.create(
-            session,
-            models.BalancerRegistration(
-                tournament_id=tournament_id,
-                display_name=cleaned_battle_tag,
-                battle_tag=cleaned_battle_tag,
-                battle_tag_normalized=_normalize_battle_tag(cleaned_battle_tag),
-                smurf_tags_json=cleaned_smurf_tags or None,
-                discord_nick=discord_nick,
-                twitch_nick=twitch_nick,
-                boosty_nick=boosty_nick,
-                stream_pov=stream_pov,
-                notes=notes,
-                custom_fields_json=custom_fields,
-                status="approved" if auto_approve else "pending",
-                submitted_at=datetime.now(UTC),
-                reviewed_at=datetime.now(UTC) if auto_approve else None,
-            ),
+        registration = models.BalancerRegistration(
+            tournament_id=tournament_id,
+            form_version_id=form_version_id,
+            status="approved" if auto_approve else "pending",
+            submitted_at=datetime.now(UTC),
+            reviewed_at=datetime.now(UTC) if auto_approve else None,
         )
+        # Before the INSERT: the answers carry the BattleTag the row is named
+        # after, and ``ensure_player_identity`` below resolves the domain player
+        # from it.
+        answer_service.apply(registration, values, schema=schema, hero_catalog=hero_catalog)
+        registration.display_name = registration.battle_tag
+        registration = await self.registration_repo.create(session, registration)
         # Provision the domain player identity so first-time registrants are picked
         # up by rank collection / the open-profile gate. Done before the approval
         # event so it carries the resolved player. ensure_player_identity itself
@@ -686,35 +611,34 @@ class RegistrationService:
                 scope=Scope.tournament(tournament_id),
                 invalidates=[Resource.TOURNAMENT_REGISTRATIONS],
             )
-        await session.commit()
-        await session.refresh(registration)
+        if commit:
+            await session.commit()
+            await session.refresh(registration)
+        else:
+            await session.flush()
         return registration
 
     async def update_registration(
         self,
         session: AsyncSession,
         registration: models.BalancerRegistration,
-        **kwargs: Any,
+        *,
+        values: Mapping[str, Any],
+        schema: FormSchema,
+        hero_catalog: HeroCatalog | None = None,
+        form_version_id: int | None = None,
     ) -> models.BalancerRegistration:
+        """Apply a validated PARTIAL answer document to an existing registration.
+
+        Only the questions the document mentions move; the registration's
+        ``form_version_id`` advances to the version it was validated against, so
+        the stale badge and the read-side public-key set follow the edit.
+        """
         if registration.status != "pending":
             raise HTTPException(status_code=400, detail="Cannot update a registration that is not pending")
-        for key, value in kwargs.items():
-            column = _SELF_UPDATE_COLUMNS.get(key)
-            if column is None:
-                # A schema field with no column mapping is a bug in this module, not
-                # a client error — raise instead of dropping the value on the floor.
-                raise ValueError(f"update_registration: unmapped payload field {key!r}")
-            if value is None:
-                continue
-            if key == "battle_tag":
-                value = _clean_battle_tag(value)
-                registration.battle_tag_normalized = _normalize_battle_tag(value)
-            elif key == "custom_fields":
-                # Merged, not replaced: ``_validate_custom_field`` skips definitions
-                # the payload omits when ``partial=True``, i.e. a subset is a legal
-                # PATCH body — replacing wholesale would wipe the omitted answers.
-                value = {**(registration.custom_fields_json or {}), **value}
-            setattr(registration, column, value)
+        answer_service.apply(registration, values, schema=schema, hero_catalog=hero_catalog)
+        if form_version_id is not None:
+            registration.form_version_id = form_version_id
         await self._registration_changed(session, registration)
         await session.commit()
         await session.refresh(registration)
@@ -798,15 +722,20 @@ class RegistrationService:
         *,
         tournament_id: int,
         auth_user: models.AuthUser,
-        body: RegistrationSubmit,
+        body: RegistrationSubmit | None,
         team_placement: TeamPlacement | None = None,
         commit: bool = True,
     ) -> RegistrationRead:
         """Full public self-registration use-case.
 
-        Validates form state, subrole/hero catalogs and verified-identity fields,
-        rejects duplicates, creates the registration + role rows and returns the
-        serialized read model.
+        Validates the answers against the form's CURRENT version, rejects
+        duplicates, writes the registration with its identity and role rows and
+        returns the serialized read model.
+
+        ``body is None`` is the team-invite shape: an invitee who already
+        registered sends no form, and that branch never reaches here. A NEW
+        invitee reaching this call with nothing to submit is refused rather than
+        written as a blank row.
 
         ``team_placement`` binds the new registration to a registering team's roster
         slot. The caller owns the slot decision and must already hold the team's row
@@ -826,15 +755,24 @@ class RegistrationService:
         # nothing to submit against. Openness itself is now purely the schedule.
         if form is None or tournament is None or not is_registration_open(tournament):
             raise HTTPException(status_code=400, detail="Registration is not open for this tournament")
+        if body is None:
+            raise_field_errors([FieldError("answers", ErrorCode.REQUIRED.value, _ANSWERS_REQUIRED)])
 
         workspace_id = form.workspace_id
+        schema = _require_current_schema(form, body.form_version_id)
+        hero_catalog, _ = await _resolve_top_heroes_config(session, form)
 
-        subrole_catalog = await resolve_subrole_catalog(session, workspace_id)
-        hero_catalog, max_heroes = await _resolve_top_heroes_config(session, form)
-        validate_registration_input(
-            form,
-            body,
-            subrole_catalog=subrole_catalog,
+        # Resolved before validation, not after: the ``require_verified`` gate
+        # matches the submitted handles against THIS player's OAuth rows.
+        user_player_id: int | None = await self.user_repo.get_id_by_auth_user_id(session, auth_user.id)
+        values = await answer_service.validate(
+            session,
+            schema=schema,
+            answers=body.answers,
+            partial=False,
+            enforce_required=True,
+            player_id=user_player_id,
+            workspace_id=workspace_id,
             hero_catalog=hero_catalog,
         )
 
@@ -844,58 +782,27 @@ class RegistrationService:
                 raise HTTPException(status_code=409, detail="Withdrawn registrations cannot be submitted again")
             raise HTTPException(status_code=409, detail="Already registered for this tournament")
 
-        # Resolve player profile from auth_user (explicit query to avoid lazy load).
-        # Only needed for the verified-identity validation below —
-        # create_registration/ensure_player_identity re-resolve the owned player
-        # from auth_user_id themselves when anchoring the workspace_member.
-        user_player_id: int | None = await self.user_repo.get_id_by_auth_user_id(session, auth_user.id)
-
-        # Identity fields flagged ``require_verified`` must match an
-        # OAuth-verified social account on the registrant's player profile.
-        await self.validation.validate_verified_identity(
-            session,
-            form=form,
-            payload=body,
-            player_id=user_player_id,
-        )
-
-        role_entries = build_registration_roles(
-            body.roles,
-            hero_catalog=hero_catalog,
-            max_heroes=max_heroes,
-            mode=flex_role_mode(form),
-        )
-
         try:
             registration = await self.create_registration(
                 session,
                 tournament_id=tournament_id,
                 workspace_id=workspace_id,
                 auth_user_id=auth_user.id,
-                battle_tag=body.battle_tag,
-                smurf_tags=body.smurf_tags,
-                discord_nick=body.discord_nick,
-                twitch_nick=body.twitch_nick,
-                boosty_nick=body.boosty_nick,
-                stream_pov=body.stream_pov,
-                notes=body.notes,
-                custom_fields=body.custom_fields,
+                values=values,
+                schema=schema,
+                hero_catalog=hero_catalog,
+                form_version_id=form.current_version_id,
                 auto_approve=form.auto_approve,
                 auth_user=auth_user,
+                # One transaction for the row, its answers and (below) its team
+                # slot: a registration with a team_id but no slot_code would be
+                # counted by the roster reader and placed nowhere.
+                commit=False,
             )
-
             if team_placement is not None:
-                # Set before the commit that also writes the roles, so a team member's
-                # registration can never be visible without its slot: a row with a
-                # team_id but no slot_code would be counted by the roster reader and
-                # placed nowhere.
                 registration.registration_team_id = team_placement.registration_team_id
                 registration.team_slot_code = team_placement.slot_code
                 registration.is_substitute = team_placement.is_substitute
-            # Write normalized roles
-            for entry in role_entries:
-                entry.registration_id = registration.id
-            await self.role_repo.create_many(session, role_entries)
             if commit:
                 await session.commit()
             else:
@@ -922,6 +829,7 @@ class RegistrationService:
             show_ranks=form.show_ranks,
             roster=rosters.get(registration.id),
             queue=await self.queue_position(session, registration),
+            current_version_id=form.current_version_id,
         )
 
     async def resolve_admission_list(
@@ -1124,6 +1032,10 @@ class RegistrationService:
             workspace_id,
         )
 
+        # Anonymous surface: the organizer chose what is public, per version, and
+        # the payload is cached per tournament with no viewer in its key.
+        public_keys_for = registration_public_keys(form)
+        current_version_id = form.current_version_id if form is not None else None
         registrations_read = []
         for r in registrations:
             chips = AdmissionChips.of(admissions.get(r.id))
@@ -1137,6 +1049,8 @@ class RegistrationService:
                 subscription_outcome=chips.subscription_outcome,
                 subscription_verdicts=chips.subscription_verdicts,
                 roster=rosters.get(r.id),
+                public_keys=public_keys_for(r),
+                current_version_id=current_version_id,
             )
             # ``dict(read)``, not ``model_dump()``: the nested reads stay model
             # instances, which pydantic accepts as-is instead of dumping them to

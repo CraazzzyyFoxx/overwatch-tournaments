@@ -178,6 +178,33 @@ def test_number_checkbox_multi_select_and_date_are_coerced_to_typed_values():
     assert normalize_answers(schema, {"age": str(big)}).values["age"] == big
 
 
+def test_an_unanswered_optional_number_or_date_is_not_a_type_error():
+    """Every other coercer reads a missing answer as "nothing"; these two read it
+    as a wrong type, so a full submission to a form that merely OFFERS an optional
+    number or date was rejected for both of them."""
+    schema = _s(
+        FormField(key="age", kind="number", label="A"),
+        FormField(key="born", kind="date", label="B"),
+    )
+
+    result = normalize_answers(schema, {})
+
+    assert result.errors == [] and result.values == {}
+
+
+def test_a_battle_tag_is_matched_in_its_canonical_form():
+    """The grammar has no room for the spacing humans type around the ``#``, so
+    the pattern runs on the provider's canonical form -- the same one the column
+    and the verified-identity lookup use."""
+    schema = _s(FormField(key="battle_tag", kind="builtin"), FormField(key="smurf_tags", kind="builtin"))
+
+    result = normalize_answers(schema, {"battle_tag": "Player # 1234", "smurf_tags": ["Alt # 1111"]})
+
+    assert result.errors == []
+    # Stored as typed; only the pattern check is canonicalised.
+    assert result.values == {"battle_tag": "Player # 1234", "smurf_tags": ["Alt # 1111"]}
+
+
 def test_required_checkbox_must_be_true_and_required_reports_every_missing_field():
     schema = _s(
         FormField(key="rules", kind="checkbox", label="R", required=True),

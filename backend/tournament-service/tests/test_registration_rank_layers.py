@@ -95,7 +95,8 @@ def _registration(
         workspace_member=SimpleNamespace(player_id=77, player=None) if member_id is not None else None,
         battle_tag="Player#1234",
         display_name="Player",
-        notes=None,
+        public_notes=None,
+        organizer_notes=None,
         admin_notes=None,
         custom_fields_json=None,
         status="approved",
@@ -105,11 +106,9 @@ def _registration(
         registration_team_id=None,
         team_slot_code=None,
         is_substitute=False,
-        discord_nick=None,
-        twitch_nick=None,
-        boosty_nick=None,
         stream_pov=False,
         smurf_tags_json=None,
+        identities=[],
         roles=[
             SimpleNamespace(
                 id=index,

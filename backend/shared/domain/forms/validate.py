@@ -24,7 +24,12 @@ from types import MappingProxyType
 from typing import Any, NoReturn
 
 from shared.core.errors import ApiExc, ApiHTTPException
-from shared.core.social import InvalidHandlePattern, compile_handle_pattern, normalize_social_handle
+from shared.core.social import (
+    InvalidHandlePattern,
+    SocialProvider,
+    compile_handle_pattern,
+    normalize_social_handle,
+)
 from shared.domain.forms.builtins import default_pattern, identity_provider
 from shared.domain.forms.schema import Condition, FormField, FormSchema
 
@@ -106,14 +111,19 @@ def visible_fields(schema: FormSchema, answers: Mapping[str, Any]) -> list[FormF
 
 
 def _battle_tag_candidate(value: str) -> str:
-    """The canonical form a BattleTag pattern is matched against: the name is
-    case-insensitive, the discriminator is not part of it."""
-    head, _, tail = value.partition("#")
-    return f"{head.casefold()}#{tail}"
+    """The canonical form a BattleTag pattern is matched against.
+
+    The provider's own rule, not a second copy of it: the name is
+    case-insensitive, the discriminator is not part of it, and the spacing a
+    human types around the ``#`` is not either.
+    """
+    return normalize_social_handle(SocialProvider.BATTLENET, value)
 
 
 def _coerce_number(key: str, raw: Any) -> tuple[Any, FieldError | None]:
     bad = _err(key, ErrorCode.INVALID_TYPE, "Expected a number.")
+    if raw is None:
+        return None, None
     # ``bool`` is an ``int`` in Python; a checkbox is not an answer to a number.
     if isinstance(raw, bool):
         return None, bad
@@ -153,6 +163,8 @@ def _coerce_bool(key: str, raw: Any) -> tuple[Any, FieldError | None]:
 
 
 def _coerce_date(key: str, raw: Any) -> tuple[Any, FieldError | None]:
+    if raw is None:
+        return None, None
     if isinstance(raw, date):
         return raw.isoformat(), None
     if not isinstance(raw, str):

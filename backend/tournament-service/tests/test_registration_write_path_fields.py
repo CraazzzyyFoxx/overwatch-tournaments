@@ -1,31 +1,27 @@
-"""Every field a registration form collects has to reach a column.
+"""Every answer a registration form collects has to reach the database.
 
 Four write paths accept a registration payload (public create, public self
 PATCH, admin manual create, admin profile PATCH) and each of them used to drop
 part of it on the floor -- silently, because a value that is never passed on and
 a value assigned to an attribute SQLAlchemy does not map both look exactly like
-success:
+success: ``create_registration`` had no ``boosty_nick`` parameter, so a Boosty
+handle the form could mark *required* was validated and then discarded;
+``update_registration`` did ``setattr`` straight off the payload keys, so
+``custom_fields`` died with the session.
 
-- ``create_registration`` had no ``boosty_nick`` parameter at all, so a Boosty
-  handle the form could mark *required* was validated and then discarded.
-- ``update_registration`` did ``setattr(registration, key, value)`` straight off
-  the payload keys, so ``custom_fields`` (the column is ``custom_fields_json``)
-  and the long-removed ``primary_role`` landed in the instance ``__dict__`` and
-  died with the session.
-- ``create_manual_registration`` hard-coded ``status="approved"`` and knew
-  nothing about custom fields, so the admin editor's status choice and every
-  custom-field answer were dropped.
-- ``update_registration_profile`` had no ``custom_fields_json`` parameter.
-
-The parity tests below are the general guard: a new field on a request schema
-that no writer accepts fails the suite instead of the next registrant.
+That whole class of bug is gone by construction: there is no keyword per
+question any more. One flat ``answers`` document goes through one writer
+(:class:`RegistrationAnswerService`), so a new question needs no writer change
+at all -- which is why the two "every request field is a writer parameter"
+parity guards this module used to carry were deleted rather than re-pinned.
+What is still worth pinning is that each of the four paths hands its answers to
+that writer, and what each of them means by "the registrant left this out".
 
 Runs under stdlib unittest -- no pytest-asyncio in this repo.
 """
 
 from __future__ import annotations
 
-import inspect
 import sys
 from pathlib import Path
 from typing import Any
@@ -36,15 +32,37 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from shared.core.enums import HeroClass  # noqa: E402
 from shared.core.errors import BaseAPIException as HTTPException  # noqa: E402
+from shared.domain.forms import FormField, FormSchema, FormSection  # noqa: E402
 from shared.domain.roster import PlayerRoster, RosterRole  # noqa: E402
 from shared.services.roster import roster_engine  # noqa: E402
-from src import (
-    models,  # noqa: E402
-    schemas,  # noqa: E402
-)
-from src.schemas.registration import RegistrationSubmit, RegistrationUpdate  # noqa: E402
+from src import models  # noqa: E402
 from src.services.registration import lifecycle as reg_lifecycle  # noqa: E402
 from src.services.registration import service as reg_service  # noqa: E402
+
+
+def _schema() -> FormSchema:
+    """A form asking a BattleTag, one identity, roles, both notes and one custom
+    question -- enough for every branch the writers have."""
+    return FormSchema(
+        sections=[
+            FormSection(
+                key="all",
+                fields=[
+                    FormField(key="battle_tag", kind="builtin"),
+                    FormField(key="identity_discord", kind="builtin"),
+                    FormField(key="smurf_tags", kind="builtin"),
+                    FormField(key="roles", kind="builtin"),
+                    FormField(key="public_notes", kind="builtin"),
+                    FormField(key="organizer_notes", kind="builtin", visibility="organizers"),
+                    FormField(key="vk", kind="text", label="VK"),
+                    FormField(key="tg", kind="text", label="Telegram"),
+                ],
+            )
+        ]
+    )
+
+
+SCHEMA = _schema()
 
 
 class _RecordingSession:
@@ -130,23 +148,9 @@ async def _noop(*_args: Any, **_kwargs: Any) -> None:
     return None
 
 
-class TestPublicCreatePersistsEveryHandle(IsolatedAsyncioTestCase):
-    async def _create(self, **overrides: Any) -> models.BalancerRegistration:
+class TestPublicCreatePersistsEveryAnswer(IsolatedAsyncioTestCase):
+    async def _create(self, answers: dict[str, Any]) -> models.BalancerRegistration:
         session = _RecordingSession()
-        payload: dict[str, Any] = {
-            "tournament_id": 7,
-            "workspace_id": 1,
-            "auth_user_id": None,
-            "battle_tag": "Player#1234",
-            "smurf_tags": None,
-            "discord_nick": "player",
-            "twitch_nick": "player_tv",
-            "boosty_nick": "player_boosty",
-            "stream_pov": False,
-            "notes": None,
-            "custom_fields": None,
-            **overrides,
-        }
         patches = _wp_patches()
         with (
             mock.patch.object(reg_service.registration_service, "ensure_player_identity", _noop),
@@ -155,87 +159,120 @@ class TestPublicCreatePersistsEveryHandle(IsolatedAsyncioTestCase):
             patches[0],
             patches[1],
         ):
-            return await reg_service.registration_service.create_registration(session, **payload)
+            return await reg_service.registration_service.create_registration(
+                session,
+                tournament_id=7,
+                workspace_id=1,
+                auth_user_id=None,
+                values=answers,
+                schema=SCHEMA,
+                form_version_id=3,
+            )
 
-    async def test_boosty_nick_reaches_the_column(self) -> None:
-        registration = await self._create()
-
-        assert registration.boosty_nick == "player_boosty"
-
-    async def test_the_other_handles_still_land(self) -> None:
-        registration = await self._create()
+    async def test_the_battle_tag_lands_in_both_of_its_columns(self) -> None:
+        registration = await self._create({"battle_tag": "Player # 1234"})
 
         assert registration.battle_tag == "Player#1234"
-        assert registration.discord_nick == "player"
-        assert registration.twitch_nick == "player_tv"
+        assert registration.battle_tag_normalized == "player#1234"
+        # The row is named after the tag, as it always was.
+        assert registration.display_name == "Player#1234"
 
-    async def test_custom_field_answers_reach_the_json_column(self) -> None:
-        registration = await self._create(custom_fields={"vk": "vk.com/player"})
+    async def test_an_identity_answer_becomes_a_provider_row(self) -> None:
+        registration = await self._create({"battle_tag": "Player#1234", "identity_discord": "Player"})
+
+        assert [(row.provider, row.handle, row.handle_normalized) for row in registration.identities] == [
+            ("discord", "Player", "player")
+        ]
+
+    async def test_custom_answers_reach_the_json_column(self) -> None:
+        registration = await self._create({"battle_tag": "Player#1234", "vk": "vk.com/player"})
 
         assert registration.custom_fields_json == {"vk": "vk.com/player"}
 
-    def test_every_create_field_is_a_writer_parameter(self) -> None:
-        """Parity guard for the whole class of bug ``boosty_nick`` belonged to."""
-        # ``roles`` is written as its own normalized rows by
-        # submit_public_registration, not as a column on this call.
-        written_elsewhere = {"roles"}
-        parameters = set(inspect.signature(reg_service.registration_service.create_registration).parameters)
+    async def test_the_two_note_questions_land_in_their_own_columns(self) -> None:
+        registration = await self._create(
+            {"battle_tag": "Player#1234", "public_notes": "hi", "organizer_notes": "seed me low"}
+        )
 
-        missing = set(RegistrationSubmit.model_fields) - written_elsewhere - parameters
+        assert registration.public_notes == "hi"
+        assert registration.organizer_notes == "seed me low"
 
-        assert missing == set(), f"RegistrationSubmit fields no writer accepts: {sorted(missing)}"
+    async def test_the_answered_version_is_stamped_on_the_row(self) -> None:
+        registration = await self._create({"battle_tag": "Player#1234"})
+
+        assert registration.form_version_id == 3
 
 
-class TestSelfUpdateColumnMapping(IsolatedAsyncioTestCase):
+class TestSelfUpdateAppliesAnswers(IsolatedAsyncioTestCase):
     def _registration(self, **kwargs: Any) -> models.BalancerRegistration:
         return models.BalancerRegistration(id=1, tournament_id=7, status="pending", **kwargs)
 
-    async def test_custom_fields_land_in_the_json_column(self) -> None:
-        registration = self._registration()
-
+    async def _update(self, registration: models.BalancerRegistration, values: dict[str, Any]) -> None:
         await reg_service.registration_service.update_registration(
-            _RecordingSession(), registration, custom_fields={"vk": "vk.com/player"}
+            _RecordingSession(), registration, values=values, schema=SCHEMA, form_version_id=5
         )
 
-        assert registration.custom_fields_json == {"vk": "vk.com/player"}
-
-    async def test_custom_fields_merge_with_the_stored_answers(self) -> None:
-        """``_validate_custom_field`` skips definitions a partial body omits, so
-        a subset is a legal PATCH -- replacing wholesale would wipe the rest."""
+    async def test_custom_answers_merge_with_the_stored_ones(self) -> None:
+        """A PATCH names only the questions it changes; replacing wholesale would
+        wipe the answers it did not mention."""
         registration = self._registration(custom_fields_json={"vk": "old", "tg": "kept"})
 
-        await reg_service.registration_service.update_registration(
-            _RecordingSession(), registration, custom_fields={"vk": "new"}
-        )
+        await self._update(registration, {"vk": "new"})
 
         assert registration.custom_fields_json == {"vk": "new", "tg": "kept"}
+
+    async def test_a_blank_custom_answer_removes_the_key(self) -> None:
+        registration = self._registration(custom_fields_json={"vk": "old", "tg": "kept"})
+
+        await self._update(registration, {"vk": None})
+
+        assert registration.custom_fields_json == {"tg": "kept"}
+
+    async def test_an_unmentioned_question_is_left_alone(self) -> None:
+        registration = self._registration(public_notes="kept", custom_fields_json={"vk": "kept"})
+
+        await self._update(registration, {"battle_tag": "Player#1234"})
+
+        assert registration.public_notes == "kept"
+        assert registration.custom_fields_json == {"vk": "kept"}
 
     async def test_battle_tag_is_cleaned_and_normalized(self) -> None:
         registration = self._registration()
 
-        await reg_service.registration_service.update_registration(
-            _RecordingSession(), registration, battle_tag="Player # 1234"
-        )
+        await self._update(registration, {"battle_tag": "Player # 1234"})
 
         assert registration.battle_tag == "Player#1234"
         assert registration.battle_tag_normalized == "player#1234"
 
-    async def test_an_unmapped_field_raises_instead_of_vanishing(self) -> None:
-        with self.assertRaises(ValueError):
-            await reg_service.registration_service.update_registration(
-                _RecordingSession(), self._registration(), primary_role="tank"
-            )
+    async def test_the_edit_moves_the_row_onto_the_version_it_answered(self) -> None:
+        registration = self._registration(form_version_id=4)
 
-    def test_every_update_field_is_mapped_to_a_column(self) -> None:
-        unmapped = set(RegistrationUpdate.model_fields) - set(reg_service._SELF_UPDATE_COLUMNS)
+        await self._update(registration, {"battle_tag": "Player#1234"})
 
-        assert unmapped == set(), f"RegistrationUpdate fields with no column: {sorted(unmapped)}"
+        assert registration.form_version_id == 5
 
-    def test_every_mapped_column_exists_on_the_model(self) -> None:
-        """The mapping is only worth having if it is checked against the mapper."""
-        mapped = set(models.BalancerRegistration.__mapper__.columns.keys())
+    async def test_a_settled_registration_cannot_be_edited(self) -> None:
+        registration = models.BalancerRegistration(id=1, tournament_id=7, status="approved")
 
-        assert set(reg_service._SELF_UPDATE_COLUMNS.values()) <= mapped
+        with self.assertRaises(HTTPException) as caught:
+            await self._update(registration, {"battle_tag": "Player#1234"})
+
+        assert caught.exception.status_code == 400
+
+
+class _FormStub:
+    """A form whose ``current_version`` carries ``SCHEMA`` -- the shape
+    ``schema_from_form`` reads, without a database behind it."""
+
+    workspace_id = 1
+    current_version_id = 12
+    auto_approve = False
+    show_ranks = False
+
+    def __init__(self) -> None:
+        from types import SimpleNamespace
+
+        self.current_version = SimpleNamespace(id=12, schema_json=SCHEMA.model_dump(mode="json"))
 
 
 class TestManualCreateHonorsTheEditor(IsolatedAsyncioTestCase):
@@ -249,12 +286,8 @@ class TestManualCreateHonorsTheEditor(IsolatedAsyncioTestCase):
         payload: dict[str, Any] = {
             "tournament_id": 7,
             "display_name": None,
-            "battle_tag": "Player#1234",
-            "smurf_tags_json": None,
-            "discord_nick": None,
-            "twitch_nick": None,
-            "notes": None,
             "admin_notes": None,
+            "answers": {"battle_tag": "Player#1234"},
             "roles": [],
             **overrides,
         }
@@ -262,8 +295,11 @@ class TestManualCreateHonorsTheEditor(IsolatedAsyncioTestCase):
         with (
             mock.patch.object(reg_lifecycle.lifecycle_service, "ensure_unique_battle_tag", _noop),
             mock.patch.object(
-                reg_lifecycle.lifecycle_service.common, "get_registration_form", mock.AsyncMock(return_value=None)
+                reg_lifecycle.lifecycle_service.common,
+                "get_registration_form",
+                mock.AsyncMock(return_value=_FormStub()),
             ),
+            mock.patch.object(reg_lifecycle, "_resolve_top_heroes_config", mock.AsyncMock(return_value=(None, None))),
             mock.patch.object(reg_lifecycle.lifecycle_service, "validate_registration_status_value", _noop),
             mock.patch.object(reg_lifecycle, "enqueue_registration_approved", _approved),
             mock.patch.object(
@@ -309,33 +345,27 @@ class TestManualCreateHonorsTheEditor(IsolatedAsyncioTestCase):
 
         assert registration.balancer_status == "excluded"
 
-    async def test_custom_field_answers_are_written(self) -> None:
-        registration, _ = await self._create(custom_fields_json={"vk": "vk.com/player"})
+    async def test_the_organizers_answers_are_written(self) -> None:
+        registration, _ = await self._create(
+            answers={"battle_tag": "Player#1234", "vk": "vk.com/player", "organizer_notes": "walk-in"}
+        )
 
         assert registration.custom_fields_json == {"vk": "vk.com/player"}
+        assert registration.organizer_notes == "walk-in"
 
-    def test_every_admin_create_field_is_a_writer_parameter(self) -> None:
-        # ``roles`` arrives as dicts under the same name; ``auth_user_id`` too.
-        renamed = {"status": "status_value", "balancer_status": "balancer_status_value"}
-        parameters = set(inspect.signature(reg_lifecycle.lifecycle_service.create_manual_registration).parameters)
+    async def test_a_required_question_left_blank_is_not_an_error_for_an_organizer(self) -> None:
+        """``enforce_required=False``: an organizer enters what they know."""
+        registration, _ = await self._create(answers={})
 
-        missing = {
-            renamed.get(name, name) for name in schemas.BalancerRegistrationCreateRequest.model_fields
-        } - parameters
-
-        assert missing == set(), f"create request fields no writer accepts: {sorted(missing)}"
+        assert registration.battle_tag is None
 
 
-class TestAdminProfileUpdateCustomFields(IsolatedAsyncioTestCase):
+class TestAdminProfileUpdateAnswers(IsolatedAsyncioTestCase):
     async def _update(self, registration: models.BalancerRegistration, **overrides: Any) -> None:
         payload: dict[str, Any] = {
             "display_name": None,
-            "battle_tag": None,
-            "smurf_tags_json": None,
-            "discord_nick": None,
-            "twitch_nick": None,
-            "notes": None,
             "admin_notes": None,
+            "answers": {},
             "status_value": None,
             "balancer_status_value": None,
             "roles": None,
@@ -346,6 +376,14 @@ class TestAdminProfileUpdateCustomFields(IsolatedAsyncioTestCase):
                 reg_lifecycle.lifecycle_service, "get_registration_by_id", mock.AsyncMock(return_value=registration)
             ),
             mock.patch.object(
+                reg_lifecycle.lifecycle_service.common,
+                "get_registration_form",
+                mock.AsyncMock(return_value=_FormStub()),
+            ),
+            mock.patch.object(reg_lifecycle, "_resolve_top_heroes_config", mock.AsyncMock(return_value=(None, None))),
+            mock.patch.object(reg_lifecycle.lifecycle_service, "ensure_unique_battle_tag", _noop),
+            mock.patch.object(reg_lifecycle.lifecycle_service.registrations, "ensure_player_identity", _noop),
+            mock.patch.object(
                 reg_lifecycle.lifecycle_service.common, "_register_registration_changed", mock.AsyncMock()
             ),
         ):
@@ -353,35 +391,36 @@ class TestAdminProfileUpdateCustomFields(IsolatedAsyncioTestCase):
                 _RecordingSession(), registration.id, **payload
             )
 
-    async def test_custom_fields_replace_the_stored_answers(self) -> None:
-        """The admin editor renders every definition on the form, so its payload
-        is the complete answer set -- clearing a field there must clear it here."""
-        registration = models.BalancerRegistration(
-            id=1, tournament_id=7, status="approved", custom_fields_json={"vk": "old", "tg": "dropped"}
-        )
+    def _registration(self, **kwargs: Any) -> models.BalancerRegistration:
+        registration = models.BalancerRegistration(id=1, tournament_id=7, status="approved", **kwargs)
+        registration.tournament = mock.Mock(workspace_id=1)
+        return registration
 
-        await self._update(registration, custom_fields_json={"vk": "new"})
+    async def test_the_editor_clears_an_answer_by_sending_it_blank(self) -> None:
+        """The admin editor round-trips every definition on the form, so a field
+        it sends empty is a deletion -- that is what makes its save a replace."""
+        registration = self._registration(custom_fields_json={"vk": "old", "tg": "dropped"})
+
+        await self._update(registration, answers={"vk": "new", "tg": ""})
 
         assert registration.custom_fields_json == {"vk": "new"}
 
     async def test_omitting_them_leaves_the_stored_answers_alone(self) -> None:
-        registration = models.BalancerRegistration(
-            id=1, tournament_id=7, status="approved", custom_fields_json={"vk": "kept"}
-        )
+        registration = self._registration(custom_fields_json={"vk": "kept"})
 
         await self._update(registration)
 
         assert registration.custom_fields_json == {"vk": "kept"}
 
-    def test_every_admin_update_field_is_a_writer_parameter(self) -> None:
-        renamed = {"status": "status_value", "balancer_status": "balancer_status_value"}
-        parameters = set(inspect.signature(reg_lifecycle.lifecycle_service.update_registration_profile).parameters)
+    async def test_a_blank_identity_answer_deletes_its_row(self) -> None:
+        registration = self._registration()
+        registration.identities.append(
+            models.BalancerRegistrationIdentity(provider="discord", handle="old", handle_normalized="old")
+        )
 
-        missing = {
-            renamed.get(name, name) for name in schemas.BalancerRegistrationUpdateRequest.model_fields
-        } - parameters
+        await self._update(registration, answers={"identity_discord": ""})
 
-        assert missing == set(), f"update request fields no writer accepts: {sorted(missing)}"
+        assert registration.identities == []
 
 
 class TestAdminProfileUpdateAutoManagedBalancerStatus(IsolatedAsyncioTestCase):
@@ -394,12 +433,8 @@ class TestAdminProfileUpdateAutoManagedBalancerStatus(IsolatedAsyncioTestCase):
     async def _update(self, registration: models.BalancerRegistration, **overrides: Any) -> None:
         payload: dict[str, Any] = {
             "display_name": None,
-            "battle_tag": None,
-            "smurf_tags_json": None,
-            "discord_nick": None,
-            "twitch_nick": None,
-            "notes": None,
             "admin_notes": None,
+            "answers": {},
             "status_value": None,
             "balancer_status_value": None,
             "roles": None,
@@ -414,6 +449,10 @@ class TestAdminProfileUpdateAutoManagedBalancerStatus(IsolatedAsyncioTestCase):
                 reg_lifecycle.lifecycle_service, "get_registration_by_id", mock.AsyncMock(return_value=registration)
             ),
             mock.patch.object(
+                reg_lifecycle.lifecycle_service.common, "get_registration_form", mock.AsyncMock(return_value=None)
+            ),
+            mock.patch.object(reg_lifecycle.lifecycle_service.registrations, "ensure_player_identity", _noop),
+            mock.patch.object(
                 reg_lifecycle.lifecycle_service.common, "_register_registration_changed", mock.AsyncMock()
             ),
             mock.patch.object(roster_engine, "for_tournament", _rosters),
@@ -422,8 +461,13 @@ class TestAdminProfileUpdateAutoManagedBalancerStatus(IsolatedAsyncioTestCase):
                 _RecordingSession(), registration.id, **payload
             )
 
+    def _registration(self, **kwargs: Any) -> models.BalancerRegistration:
+        registration = models.BalancerRegistration(id=1, tournament_id=7, status="approved", **kwargs)
+        registration.tournament = mock.Mock(workspace_id=1)
+        return registration
+
     async def test_resaving_a_ready_registration_recomputes_instead_of_rejecting(self) -> None:
-        registration = models.BalancerRegistration(id=1, tournament_id=7, status="approved", balancer_status="ready")
+        registration = self._registration(balancer_status="ready")
         registration.roles = [models.BalancerRegistrationRole(role="tank", is_active=True, rank_value=2500)]
 
         # Must not raise -- the old behaviour 400ed on this exact resend.
@@ -432,9 +476,7 @@ class TestAdminProfileUpdateAutoManagedBalancerStatus(IsolatedAsyncioTestCase):
         assert registration.balancer_status == "ready"
 
     async def test_resaving_an_incomplete_registration_stays_incomplete(self) -> None:
-        registration = models.BalancerRegistration(
-            id=1, tournament_id=7, status="approved", balancer_status="incomplete"
-        )
+        registration = self._registration(balancer_status="incomplete")
         registration.roles = [models.BalancerRegistrationRole(role="tank", is_active=True, rank_value=None)]
 
         await self._update(registration, balancer_status_value="incomplete")

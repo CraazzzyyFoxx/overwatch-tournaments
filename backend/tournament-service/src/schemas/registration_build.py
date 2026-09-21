@@ -8,7 +8,7 @@ envelope. This module must NOT import fastapi.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -18,7 +18,7 @@ from sqlalchemy.orm import selectinload
 
 from shared.balancer_registration_statuses import build_unknown_status_meta
 from shared.division_grid import DivisionGrid, load_runtime_grid
-from shared.domain.forms import RolesParams, schema_from_form
+from shared.domain.forms import RolesParams, schema_from_form, schema_from_version
 from shared.domain.roster import PlayerRoster
 from shared.hero_catalog import HeroCatalog, resolve_hero_catalog
 from shared.services.admission.requirements.open_profile import KEY as OPEN_PROFILE_KEY
@@ -39,6 +39,7 @@ from src.schemas.registration import (
     RegistrationTeamBrief,
     TournamentHistoryEntry,
 )
+from src.services.registration.answers import answer_service
 
 
 @dataclass(frozen=True, slots=True)
@@ -166,6 +167,40 @@ async def _resolve_top_heroes_config(
     return await resolve_hero_catalog(session), top_heroes.max
 
 
+def registration_public_keys(
+    form: models.BalancerRegistrationForm | None,
+) -> Callable[[Any], frozenset[str]]:
+    """A ``registration -> answer keys an anonymous reader may see`` function.
+
+    Per REGISTRATION, not per form: answers were given under the visibility rules
+    of the version they answered, and a question the organizer later flipped to
+    public must not retroactively publish what was collected in confidence.
+
+    Memoised by version id -- one tournament's rows overwhelmingly share one
+    version, so this parses the schema once rather than once per row. Requires
+    ``form_version`` to be eager-loaded (``registration_load_options``); a row
+    without it falls back to the form's current public keys, which is exactly the
+    legacy/manual case where ``form_version_id`` is NULL.
+    """
+    current = schema_from_form(form)
+    fallback = current.public_keys() if current is not None else frozenset()
+    cache: dict[int, frozenset[str]] = {}
+    if form is not None and form.current_version_id is not None:
+        cache[form.current_version_id] = fallback
+
+    def keys_for(reg: Any) -> frozenset[str]:
+        version = reg.__dict__.get("form_version")
+        if version is None:
+            return fallback
+        cached = cache.get(version.id)
+        if cached is None:
+            schema = schema_from_version(version)
+            cached = cache[version.id] = schema.public_keys() if schema is not None else frozenset()
+        return cached
+
+    return keys_for
+
+
 @dataclass(frozen=True, slots=True)
 class QueuePlace:
     """Where one registration sits in the queue it is waiting in.
@@ -201,19 +236,22 @@ def _reg_to_read(
     #: Only the caller's own registration reads pass this; see
     #: ``RegistrationRead.queue_position``.
     queue: QueuePlace | None = None,
+    #: The answer keys this reader may see. ``None`` is the ORGANIZER context
+    #: (and the registrant reading their own row): everything. The anonymous
+    #: participants list passes the registration's own version's
+    #: ``public_keys()``.
+    public_keys: frozenset[str] | None = None,
+    #: The form's current version, so the read can say whether these answers
+    #: were given against it. Unknown (``None``) is never reported as stale.
+    current_version_id: int | None = None,
 ) -> RegistrationRead:
     """Serialize a registration for public API responses.
 
     Everything the registration form collects is roster data: the participants
-    table renders a column per built-in field and per organizer-defined custom
-    field, and the organizer chooses what to ask. ``custom_fields_json`` used to
-    be stripped here for anonymous callers, which left every custom column on
-    the public roster permanently empty while the header advertised it.
-
-    Free-text ``notes`` and smurf tags are public for the same reason: notes are
-    the participant-facing "anything you'd like organizers to know" field, and
-    declared alternate battle tags are the anti-smurf transparency the roster
-    exists to surface.
+    table renders a column per question, and the organizer chooses what to ask
+    AND who may read it. ``public_keys`` is that choice, resolved from the
+    version the registration answered -- not from the form's current one, which
+    could re-publish an answer given when the question was organizers-only.
 
     ``admission`` defaults to ``AdmissionRead.unknown()`` rather than staying
     ``None``: the single-registration write paths (create, self-update) return a
@@ -271,6 +309,10 @@ def _reg_to_read(
         else None
     )
 
+    answers = answer_service.answers_of(reg)
+    if public_keys is not None:
+        answers = {key: value for key, value in answers.items() if key in public_keys}
+
     return RegistrationRead(
         id=reg.id,
         tournament_id=reg.tournament_id,
@@ -279,14 +321,10 @@ def _reg_to_read(
         # workspace_member anchor (callers eager-load it; see helper).
         user_id=_registration_player_id(reg),
         battle_tag=reg.battle_tag,
-        smurf_tags_json=reg.smurf_tags_json,
-        discord_nick=reg.discord_nick,
-        twitch_nick=reg.twitch_nick,
-        boosty_nick=getattr(reg, "boosty_nick", None),
-        stream_pov=reg.stream_pov,
+        answers=answers,
         roles=roles,
-        notes=reg.notes,
-        custom_fields_json=reg.custom_fields_json,
+        form_version_id=reg.form_version_id,
+        form_version_stale=current_version_id is not None and reg.form_version_id != current_version_id,
         status=reg.status,
         status_meta=(status_meta_map["registration"].get(reg.status) if status_meta_map is not None else None)
         or build_unknown_status_meta("registration", reg.status),

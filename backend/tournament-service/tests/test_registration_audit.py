@@ -98,11 +98,10 @@ def _registration(**overrides: Any) -> SimpleNamespace:
         "display_name": "Ferz",
         "battle_tag": "Ferz#2100",
         "smurf_tags_json": None,
-        "discord_nick": "ferz",
-        "twitch_nick": None,
-        "boosty_nick": None,
+        "identities": [SimpleNamespace(provider="discord", handle="ferz")],
         "stream_pov": False,
-        "notes": None,
+        "public_notes": None,
+        "organizer_notes": None,
         "admin_notes": None,
         "custom_fields_json": None,
         "status": "pending",
@@ -119,9 +118,11 @@ def _update_payload(**overrides: Any) -> dict[str, Any]:
     """The whole form, the way the admin editor submits it on every save."""
     payload: dict[str, Any] = {
         "display_name": "Ferz",
-        "battle_tag": "Ferz#2100",
-        "discord_nick": "ferz",
-        "stream_pov": False,
+        "answers": {
+            "battle_tag": "Ferz#2100",
+            "identity_discord": "ferz",
+            "stream_pov": False,
+        },
         "status": "pending",
         "balancer_status": "not_in_balancer",
         "roles": [
@@ -251,7 +252,9 @@ class RegistrationAuditTests(IsolatedAsyncioTestCase):
             {
                 "identity": IDENTITY,
                 "id": REGISTRATION_ID,
-                "payload": _update_payload(battle_tag="Ferz #2100"),
+                "payload": _update_payload(
+                    answers={"battle_tag": "Ferz #2100", "identity_discord": "ferz", "stream_pov": False}
+                ),
             },
             stored=_registration(),
             service_attr="update_registration_profile",
@@ -259,6 +262,54 @@ class RegistrationAuditTests(IsolatedAsyncioTestCase):
 
         self.assertTrue(envelope["ok"], envelope)
         self.assertEqual([], session.rows)
+
+    async def test_an_answer_change_is_recorded_under_its_own_key(self):
+        """The feed names the QUESTION, not the column: the wire says
+        ``public_notes``/``identity_discord``, and an identity is diffed against
+        the row for its provider rather than against a nick column that is gone."""
+        _, session, _ = await self._invoke(
+            "rpc.tournament.reg_update",
+            {
+                "identity": IDENTITY,
+                "id": REGISTRATION_ID,
+                "payload": _update_payload(
+                    answers={
+                        "battle_tag": "Ferz#2100",
+                        "identity_discord": "ferz_new",
+                        "public_notes": "please seed me low",
+                        "stream_pov": False,
+                    }
+                ),
+            },
+            stored=_registration(),
+            service_attr="update_registration_profile",
+        )
+
+        row = session.rows[0]
+        self.assertEqual({"identity_discord", "public_notes"}, set(row.after_json))
+        self.assertEqual("ferz", row.before_json["identity_discord"])
+        self.assertEqual("ferz_new", row.after_json["identity_discord"])
+        self.assertIsNone(row.before_json["public_notes"])
+
+    async def test_a_custom_answer_is_diffed_against_the_merged_document(self):
+        """A PATCH names only the questions it changes, so the image has to be the
+        document the writer will actually store -- not the fragment that arrived."""
+        _, session, _ = await self._invoke(
+            "rpc.tournament.reg_update",
+            {
+                "identity": IDENTITY,
+                "id": REGISTRATION_ID,
+                "payload": _update_payload(
+                    answers={"battle_tag": "Ferz#2100", "identity_discord": "ferz", "stream_pov": False, "vk": "new"}
+                ),
+            },
+            stored=_registration(custom_fields_json={"vk": "old", "tg": "kept"}),
+            service_attr="update_registration_profile",
+        )
+
+        row = session.rows[0]
+        self.assertEqual({"vk": "old", "tg": "kept"}, row.before_json["custom_fields_json"])
+        self.assertEqual({"vk": "new", "tg": "kept"}, row.after_json["custom_fields_json"])
 
     async def test_row_is_staged_before_the_service_commits(self):
         _, _, trace = await self._invoke(

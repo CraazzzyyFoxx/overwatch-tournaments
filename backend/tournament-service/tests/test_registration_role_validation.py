@@ -25,7 +25,7 @@ sys.path.insert(0, str(backend_root / "tournament-service"))
 os.environ["DEBUG"] = "true"
 
 roles_rules = importlib.import_module("src.services.registration.roles_rules")
-reg_service = importlib.import_module("src.services.registration.service")
+reg_common = importlib.import_module("src.services.registration._common")
 
 from shared.core import enums  # noqa: E402
 from shared.domain.forms.schema import FormField  # noqa: E402
@@ -149,7 +149,7 @@ class ValidateRolesTests(TestCase):
 
 class BuildRegistrationRolesTests(TestCase):
     def test_normalizes_subrole(self) -> None:
-        entries = reg_service.build_registration_roles(
+        entries = reg_common.build_registration_roles(
             [_role_input(role="damage", subrole="Main Damage", is_primary=True)]
         )
         assert len(entries) == 1
@@ -157,7 +157,7 @@ class BuildRegistrationRolesTests(TestCase):
         assert entries[0].subrole == "main_damage"
 
     def test_filters_invalid_role(self) -> None:
-        entries = reg_service.build_registration_roles(
+        entries = reg_common.build_registration_roles(
             [
                 _role_input(role="flex", is_primary=True),
                 _role_input(role="damage", is_primary=True),
@@ -166,7 +166,7 @@ class BuildRegistrationRolesTests(TestCase):
         assert [entry.role for entry in entries] == ["damage"]
 
     def test_dedup_and_priority(self) -> None:
-        entries = reg_service.build_registration_roles(
+        entries = reg_common.build_registration_roles(
             [
                 _role_input(role="damage", is_primary=True),
                 _role_input(role="damage", is_primary=False),
@@ -177,7 +177,7 @@ class BuildRegistrationRolesTests(TestCase):
         assert [entry.priority for entry in entries] == [0, 1]
 
     def test_handles_none(self) -> None:
-        assert reg_service.build_registration_roles(None) == []
+        assert reg_common.build_registration_roles(None) == []
 
 
 class TopHeroValidationTests(TestCase):
@@ -324,7 +324,7 @@ class AllRolesModeGuardTests(TestCase):
 
 class BuildRegistrationRoleHeroesTests(TestCase):
     def test_attaches_ordered_hero_entries(self) -> None:
-        entries = reg_service.build_registration_roles(
+        entries = reg_common.build_registration_roles(
             [_role_input(role="damage", is_primary=True, top_heroes=["ashe", "genji"])],
             hero_catalog=HERO_CATALOG,
         )
@@ -332,7 +332,7 @@ class BuildRegistrationRoleHeroesTests(TestCase):
         assert [(h.hero_id, h.priority) for h in heroes] == [(3, 1), (4, 2)]
 
     def test_caps_dedups_and_drops_unknown(self) -> None:
-        entries = reg_service.build_registration_roles(
+        entries = reg_common.build_registration_roles(
             [_role_input(role="damage", is_primary=True, top_heroes=["ashe", "genji", "ashe", "nobody"])],
             hero_catalog=HERO_CATALOG,
             max_heroes=2,
@@ -340,7 +340,7 @@ class BuildRegistrationRoleHeroesTests(TestCase):
         assert [h.hero_id for h in entries[0].hero_entries] == [3, 4]
 
     def test_no_catalog_means_no_hero_entries(self) -> None:
-        entries = reg_service.build_registration_roles(
+        entries = reg_common.build_registration_roles(
             [_role_input(role="damage", is_primary=True, top_heroes=["ashe"])]
         )
         assert list(entries[0].hero_entries) == []

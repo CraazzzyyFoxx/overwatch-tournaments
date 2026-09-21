@@ -51,6 +51,7 @@ sys.path.insert(0, str(backend_root))
 sys.path.insert(0, str(backend_root / "tournament-service"))
 
 from shared.core import enums  # noqa: E402
+from shared.domain.forms import FormField, FormSchema, FormSection  # noqa: E402
 from shared.models.identity.auth_user import AuthUser  # noqa: E402
 from shared.models.identity.rbac import user_roles  # noqa: E402
 from shared.models.tenancy.workspace import Workspace, WorkspaceMember  # noqa: E402
@@ -60,6 +61,13 @@ from shared.services.division_grid.access import get_default_division_grid_versi
 from shared.testing import real_db_sessionmaker as _db_sessions  # noqa: E402
 from src.services.registration import service as reg_service  # noqa: E402
 from src.services.registration import windows  # noqa: E402
+
+#: The one question these tests answer: the BattleTag every identity anchor is
+#: resolved through. The gate and the enrolment are what is under test, not the
+#: form.
+_SCHEMA = FormSchema(
+    sections=[FormSection(key="accounts", fields=[FormField(key="battle_tag", kind="builtin", required=True)])]
+)
 
 
 async def _make_workspace(session) -> Workspace:
@@ -145,14 +153,8 @@ def test_first_registration_creates_member_and_player_role() -> None:
                         tournament_id=tournament_id,
                         workspace_id=workspace_id,
                         auth_user_id=auth_user_id,
-                        battle_tag=f"SelfReg{suffix}#111",
-                        smurf_tags=None,
-                        discord_nick=None,
-                        twitch_nick=None,
-                        boosty_nick=None,
-                        stream_pov=False,
-                        notes=None,
-                        custom_fields=None,
+                        values={"battle_tag": f"SelfReg{suffix}#111"},
+                        schema=_SCHEMA,
                         auto_approve=False,
                         auth_user=actor,
                     )
@@ -218,14 +220,8 @@ def test_workspace_scoped_self_register_deny_returns_403() -> None:
                             tournament_id=tournament_id,
                             workspace_id=workspace_id,
                             auth_user_id=auth_user_id,
-                            battle_tag=f"Denied{suffix}#222",
-                            smurf_tags=None,
-                            discord_nick=None,
-                            twitch_nick=None,
-                            boosty_nick=None,
-                            stream_pov=False,
-                            notes=None,
-                            custom_fields=None,
+                            values={"battle_tag": f"Denied{suffix}#222"},
+                            schema=_SCHEMA,
                             auto_approve=False,
                             auth_user=actor,
                         )
@@ -273,14 +269,8 @@ def test_second_registration_does_not_duplicate_member() -> None:
                         tournament_id=tournament_a_id,
                         workspace_id=workspace_id,
                         auth_user_id=auth_user_id,
-                        battle_tag=f"Dup{suffix}#333",
-                        smurf_tags=None,
-                        discord_nick=None,
-                        twitch_nick=None,
-                        boosty_nick=None,
-                        stream_pov=False,
-                        notes=None,
-                        custom_fields=None,
+                        values={"battle_tag": f"Dup{suffix}#333"},
+                        schema=_SCHEMA,
                         auto_approve=False,
                         auth_user=actor,
                     )
@@ -291,14 +281,8 @@ def test_second_registration_does_not_duplicate_member() -> None:
                         tournament_id=tournament_b_id,
                         workspace_id=workspace_id,
                         auth_user_id=auth_user_id,
-                        battle_tag=f"Dup{suffix}#333",
-                        smurf_tags=None,
-                        discord_nick=None,
-                        twitch_nick=None,
-                        boosty_nick=None,
-                        stream_pov=False,
-                        notes=None,
-                        custom_fields=None,
+                        values={"battle_tag": f"Dup{suffix}#333"},
+                        schema=_SCHEMA,
                         auto_approve=False,
                         auth_user=actor,
                     )

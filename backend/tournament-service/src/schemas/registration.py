@@ -82,14 +82,17 @@ class RegistrationRead(BaseModel):
     workspace_id: int
     user_id: int | None = None
     battle_tag: str | None = None
-    smurf_tags_json: list[str] | None = None
-    discord_nick: str | None = None
-    twitch_nick: str | None = None
-    boosty_nick: str | None = None
-    stream_pov: bool = False
+    #: Every answer this registration carries that the READER may see: the
+    #: public participants list passes the form version's ``public_keys()``, an
+    #: organizer context passes nothing and gets everything. ``battle_tag`` and
+    #: ``roles`` stay top-level because every surface renders them.
+    answers: dict[str, Any] = Field(default_factory=dict)
     roles: list[RegistrationRoleRead] = Field(default_factory=list)
-    notes: str | None = None
-    custom_fields_json: dict[str, Any] | None = None
+    #: The schema version these answers were validated against, and whether the
+    #: form has moved on since. ``form_version_stale`` is what tells the
+    #: registrant's own card to ask them to answer the new questions.
+    form_version_id: int | None = None
+    form_version_stale: bool = False
     status: str = "pending"
     status_meta: dict[str, Any] | None = None
     balancer_status: str = "not_in_balancer"

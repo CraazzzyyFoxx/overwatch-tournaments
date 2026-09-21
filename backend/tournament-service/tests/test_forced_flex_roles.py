@@ -29,7 +29,6 @@ os.environ["DEBUG"] = "true"
 
 
 _common = importlib.import_module("src.services.registration._common")
-_service = importlib.import_module("src.services.registration.service")
 
 
 def _role(role: str, **kwargs: Any) -> Any:
@@ -123,7 +122,7 @@ class TestWritePathsHonourForcedFlex:
             self.top_heroes = None
 
     def test_public_path_forced(self) -> None:
-        entries = _service.build_registration_roles(
+        entries = _common.build_registration_roles(
             [self._PublicRole("damage", is_primary=True)],
             mode="forced",
         )
@@ -132,12 +131,12 @@ class TestWritePathsHonourForcedFlex:
         assert all(entry.is_primary for entry in entries)
 
     def test_public_path_optional_is_unchanged(self) -> None:
-        entries = _service.build_registration_roles([self._PublicRole("damage", is_primary=True)])
+        entries = _common.build_registration_roles([self._PublicRole("damage", is_primary=True)])
 
         assert [entry.role for entry in entries] == ["damage"]
 
     def test_public_path_keeps_the_submitted_subrole(self) -> None:
-        entries = _service.build_registration_roles(
+        entries = _common.build_registration_roles(
             [self._PublicRole("damage", is_primary=True, subrole="hitscan")],
             mode="forced",
         )
@@ -258,7 +257,7 @@ class TestApplyAllRolesWithoutForcing:
                 self.subrole = None
                 self.top_heroes = None
 
-        entries = _service.build_registration_roles(
+        entries = _common.build_registration_roles(
             [_PublicRole("support", True)],
             mode="all_roles",
         )

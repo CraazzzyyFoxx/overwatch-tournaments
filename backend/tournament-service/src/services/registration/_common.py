@@ -25,13 +25,14 @@ from shared.division_grid import DivisionGrid, load_runtime_grid
 from shared.domain.forms import FormField, schema_from_form
 from shared.domain.player_sub_roles import REGISTRATION_ROLE_CODES, normalize_sub_role
 from shared.domain.roster import FlexRoleMode, PlayerRoster
-from shared.hero_catalog import HeroCatalog
+from shared.hero_catalog import DEFAULT_MAX_TOP_HEROES, HeroCatalog, build_hero_entries
 from shared.repository import RegistrationFormRepository, TournamentRepository
 from shared.services.realtime import Resource, Scope, emit
 from shared.services.roster import roster_engine
 from src import models
 from src.domain.registration.utils import DEFAULT_SORT_PRIORITY_SENTINEL
 from src.services.registration.form_service import form_service
+from src.services.registration.roles_rules import role_value
 
 VALID_REGISTRATION_STATUSES = get_builtin_status_values("registration")
 VALID_BALANCER_STATUSES = get_builtin_status_values("balancer")
@@ -84,7 +85,7 @@ def apply_all_roles(
     primary (yielding ``PlayerRoster.is_full_flex``), ``all_roles`` leaves the registrant's
     own choice alone and backfills the missing roles as non-primary. It cannot
     invent that choice, so a payload naming no priority stays invalid — see
-    ``validation.py``.
+    ``roles_rules.validate_roles``.
 
     Only the role SET and (under ``force_primary``) ``is_primary`` are touched.
     ``is_active`` and ``rank_value`` stay exactly as the calling path set them:
@@ -104,6 +105,50 @@ def apply_all_roles(
             entry.is_primary = True
         entry.priority = priority
     return result
+
+
+def build_registration_roles(
+    roles: list[Any] | None,
+    *,
+    hero_catalog: HeroCatalog | None = None,
+    max_heroes: int | None = None,
+    mode: FlexRoleMode = "optional",
+) -> list[models.BalancerRegistrationRole]:
+    """Build normalized role entries from a submitted ``roles`` answer.
+
+    Filters to valid registration role codes (tank/damage/support), de-duplicates,
+    normalizes the sub-role slug, and assigns sequential priority. Detached rows:
+    the caller decides whether they are new or merged over existing ones
+    (:meth:`RegistrationAnswerService.apply` does the latter, so an organizer's
+    ``rank_value`` survives a player editing their roles).
+
+    When ``hero_catalog`` is provided (the top-heroes ask is enabled), the ordered
+    ``top_heroes`` slugs on each role are attached as ``registration_role_hero`` rows.
+    """
+    resolved_max = max_heroes if max_heroes and max_heroes > 0 else DEFAULT_MAX_TOP_HEROES
+    entries: list[models.BalancerRegistrationRole] = []
+    seen: set[str] = set()
+    for role in roles or []:
+        role_code = role_value(role, "role")
+        if role_code not in REGISTRATION_ROLE_CODES or role_code in seen:
+            continue
+        seen.add(role_code)
+        entry = models.BalancerRegistrationRole(
+            role=role_code,
+            subrole=normalize_sub_role(role_value(role, "subrole")),
+            is_primary=bool(role_value(role, "is_primary", False)),
+            priority=len(entries),
+        )
+        if hero_catalog is not None:
+            entry.hero_entries = build_hero_entries(
+                role_value(role, "top_heroes"),
+                hero_catalog=hero_catalog,
+                max_heroes=resolved_max,
+            )
+        entries.append(entry)
+    if mode in ("all_roles", "forced"):
+        entries = apply_all_roles(entries, force_primary=mode == "forced")
+    return entries
 
 
 def replace_registration_roles(

@@ -29,7 +29,7 @@ from shared.domain.player_sub_roles import (
 )
 from shared.hero_catalog import DEFAULT_MAX_TOP_HEROES, HeroCatalog
 
-__all__ = ("SubroleCatalog", "is_flex_submission", "validate_roles")
+__all__ = ("SubroleCatalog", "is_flex_submission", "role_value", "validate_roles")
 
 #: The one field key these errors are reported against.
 FIELD = "roles"
@@ -48,7 +48,7 @@ def _err(code: str, msg: str, **params: Any) -> FieldError:
     return FieldError(field=FIELD, code=code, msg=msg, params=MappingProxyType(params))
 
 
-def _value(role: Any, key: str, default: Any = None) -> Any:
+def role_value(role: Any, key: str, default: Any = None) -> Any:
     """One submitted role row's field.
 
     Rows arrive as dicts from the answer pipeline; ``serializers.py`` reads the
@@ -99,7 +99,7 @@ def is_flex_submission(roles: list[dict[str, Any]]) -> bool:
     registration) is *not* treated as flex — only the wizard's full-flex
     submission (all roles, each primary) qualifies.
     """
-    return len(roles) > 1 and all(_value(role, "is_primary", False) for role in roles)
+    return len(roles) > 1 and all(role_value(role, "is_primary", False) for role in roles)
 
 
 def _resolve_max_heroes(params: RolesParams) -> int:
@@ -118,12 +118,12 @@ def _role_errors(
     """Role codes and sub-roles, one verdict per submitted row."""
     errors: list[FieldError] = []
     for role in roles:
-        role_code = _value(role, "role")
+        role_code = role_value(role, "role")
         if role_code not in REGISTRATION_ROLE_CODES:
             errors.append(_err("roles.unknown_role", f"Invalid role: {role_code}.", role=role_code))
             continue
 
-        subrole = normalize_sub_role(_value(role, "subrole"))
+        subrole = normalize_sub_role(role_value(role, "subrole"))
         if subrole is None:
             continue
 
@@ -162,11 +162,11 @@ def _hero_errors(
     any_selected = False
 
     for role in roles:
-        slugs = _value(role, "top_heroes")
+        slugs = role_value(role, "top_heroes")
         if not slugs:
             continue
         any_selected = True
-        role_code = _value(role, "role")
+        role_code = role_value(role, "role")
 
         if len(slugs) > max_heroes:
             errors.append(
@@ -228,13 +228,15 @@ def validate_roles(
     params = RolesParams.model_validate(field.params)
     errors: list[FieldError] = []
 
-    if params.primary_required and not any(_value(role, "is_primary", False) for role in roles):
+    if params.primary_required and not any(role_value(role, "is_primary", False) for role in roles):
         errors.append(_err("roles.primary_required", "Primary Role is required."))
 
     if params.additional_required:
         # "Covers more than the priority role": either an explicit non-primary
         # row, or a full-flex submission (>1 role, every one primary).
-        covers_additional = is_flex_submission(roles) or any(not _value(role, "is_primary", False) for role in roles)
+        covers_additional = is_flex_submission(roles) or any(
+            not role_value(role, "is_primary", False) for role in roles
+        )
         if not covers_additional:
             errors.append(_err("roles.additional_required", "At least one additional role is required."))
 
@@ -251,7 +253,7 @@ def validate_roles(
     # — the write-path normalizer backfills the role SET but cannot invent
     # which role the registrant meant.
     if params.flex_mode == "all_roles":
-        primary_count = sum(1 for role in roles if _value(role, "is_primary", False))
+        primary_count = sum(1 for role in roles if role_value(role, "is_primary", False))
         if primary_count not in (1, len(REGISTRATION_ROLE_CODES)):
             errors.append(_err("roles.one_priority_or_flex", "Choose one priority role, or Flex."))
 

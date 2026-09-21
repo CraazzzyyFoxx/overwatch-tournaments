@@ -52,7 +52,6 @@ from src.schemas.registration_team import (  # noqa: E402
     serialize_registration_team,
 )
 from src.services.registration import teams  # noqa: E402
-from src.services.registration.service import registration_service  # noqa: E402
 
 FIVE_STACK = parse_roster_slots({"tank": 1, "damage": 2, "support": 2})
 
@@ -759,13 +758,12 @@ class AcceptPayloadTests(TestCase):
 
         self.assertIsNone(request.registration)
 
-    def test_the_default_cannot_smuggle_a_blank_registration_through(self) -> None:
-        """The permissive default is only safe because the registration form's own
-        validation runs downstream. If that ever stopped gating, a new invitee could
-        accept into a row with no battle tag."""
-        source = _code_of(registration_service.submit_public_registration)
-
-        self.assertIn("validate_registration_input(", source)
+    # The other half of that permissive default -- a NEW invitee arriving with no
+    # answers at all -- is refused by ``submit_public_registration`` itself, and
+    # pinned where it is enforced:
+    # ``test_registration_answers.test_a_new_invitee_with_no_form_answers_is_refused``.
+    # It used to be a substring check on that function's source, which passed for
+    # a whole task while the function actually raised ``AttributeError``.
 
     def test_exactly_one_reference_is_still_required(self) -> None:
         """A bearer token and a targeted id together leave which one authorized the

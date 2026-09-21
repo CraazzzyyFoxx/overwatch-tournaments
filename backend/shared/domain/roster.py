@@ -36,6 +36,7 @@ __all__ = (
     "PlayerRoster",
     "RosterRole",
     "flex_role_mode",
+    "flex_role_mode_from_schema",
 )
 
 #: The ``flex_mode`` of the form schema's ``roles`` builtin.
@@ -47,23 +48,28 @@ FlexRoleMode = str
 FLEX_ROLE_MODES: tuple[str, ...] = ("optional", "all_roles", "forced")
 
 
+def flex_role_mode_from_schema(schema: Any | None) -> str:
+    """The flex mode of an already-parsed ``FormSchema``.
+
+    ``flex_allowed=False`` bans the flex field outright and therefore wins over any
+    ``flex_mode`` left behind in the schema -- a form cannot force every role playable
+    through a field it does not show.
+    """
+    roles = schema.builtin("roles") if schema is not None else None
+    if roles is None:
+        return "optional"
+    params = RolesParams.model_validate(roles.params)
+    return params.flex_mode if params.flex_allowed else "optional"
+
+
 def flex_role_mode(form: Any | None) -> str:
     """The tournament's flex mode, normalized. A form without a schema is ``optional``.
 
     THE reader of the ``roles`` builtin's ``flex_mode``: tournament-service used to
     own one copy for the write path and balancer-service another for the draft,
     synchronized only by parity tests (see the deleted ``rules.all_roles_required``).
-
-    ``flex_allowed=False`` bans the flex field outright and therefore wins over any
-    ``flex_mode`` left behind in the schema -- a form cannot force every role playable
-    through a field it does not show.
     """
-    schema = schema_from_form(form)
-    roles = schema.builtin("roles") if schema is not None else None
-    if roles is None:
-        return "optional"
-    params = RolesParams.model_validate(roles.params)
-    return params.flex_mode if params.flex_allowed else "optional"
+    return flex_role_mode_from_schema(schema_from_form(form))
 
 
 @dataclass(frozen=True, slots=True)

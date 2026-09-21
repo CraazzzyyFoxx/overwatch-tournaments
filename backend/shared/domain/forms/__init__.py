@@ -29,6 +29,7 @@ from shared.domain.forms.schema import (
     Visibility,
     default_schema,
     schema_from_form,
+    schema_from_version,
 )
 from shared.domain.forms.validate import (
     ErrorCode,
@@ -73,5 +74,6 @@ __all__ = (
     "normalize_answers",
     "raise_field_errors",
     "schema_from_form",
+    "schema_from_version",
     "visible_fields",
 )
