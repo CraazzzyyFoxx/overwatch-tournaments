@@ -38,6 +38,18 @@ Conversion rules:
   ``MAX_HANDLE_PATTERN_LENGTH``, is DROPPED rather than copied: ``FormSchema``
   refuses such a pattern at load time, so carrying it through would make the
   form's own version #1 unreadable.
+* Nothing ever validated ``custom_fields_json``, so a legacy custom field can
+  carry a key ``FormSchema`` refuses (reserved, digit-leading, >32 characters,
+  duplicated), an unknown type, or an empty/repeating option list -- and ONE
+  such row would make that tournament's version #1 unloadable for every later
+  read. Each is repaired rather than dropped: the key is re-slugified, a
+  reserved base escaped at the front (``battle_tag`` -> ``f_battle_tag``, the
+  same shape as the shipped builder's ``makeUniqueFieldKey``) and duplicates
+  numbered inside the 32-character cap; an unknown type becomes ``text``; blank
+  and repeated options are dropped, and a ``select`` left with none degrades to
+  ``text``. A repaired key takes the registrations' stored answers with it
+  (``custom_key_renames`` + ``rename_answer_keys``), because an answer nothing
+  asks for is the same data loss as a dropped question.
 """
 
 from __future__ import annotations
@@ -124,6 +136,27 @@ MAX_HANDLE_PATTERN_LENGTH = 256
 #: Custom field kinds the legacy list could express; anything else degrades to
 #: ``text`` on downgrade.
 LEGACY_CUSTOM_KINDS = frozenset({"text", "number", "select", "checkbox", "url"})
+
+#: ``FormSchema.KEY_PATTERN`` is ``^[a-z][a-z0-9_]{0,31}$``.
+MAX_KEY_LENGTH = 32
+
+#: Keys a CUSTOM field may not take: every builtin (``builtins.BUILTIN_KEYS``,
+#: copied) plus the whole ``identity_`` prefix, which the model reserves as a
+#: namespace rather than key by key.
+IDENTITY_KEY_PREFIX = "identity_"
+RESERVED_CUSTOM_KEYS = frozenset(
+    {"battle_tag", "smurf_tags", "roles", "stream_pov", "public_notes", "organizer_notes"}
+    | {IDENTITY_KEY_PREFIX + provider for provider in ("discord", "twitch", "boosty", "vk", "youtube")}
+)
+
+#: ``FieldKind`` minus ``builtin``: what a converted custom field may carry.
+#: Anything else the legacy list held degrades to ``text`` (the mirror of
+#: ``LEGACY_CUSTOM_KINDS`` on the way back down).
+SCHEMA_CUSTOM_KINDS = frozenset({"text", "textarea", "number", "select", "multi_select", "checkbox", "url", "date"})
+
+#: The kinds that require a non-empty, duplicate-free ``options`` list -- and
+#: the only ones allowed to carry one at all.
+OPTION_KINDS = frozenset({"select", "multi_select"})
 
 #: Every legacy builtin key, so ``schema_to_legacy`` can write an explicit
 #: ``{"enabled": false}`` for the ones the schema no longer carries (absence
@@ -234,26 +267,145 @@ def _roles_params(built_in: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
-def _custom_field(raw: Any) -> dict[str, Any] | None:
-    if not isinstance(raw, Mapping):
+def _slug_key(value: str) -> str:
+    """A legacy key (or label) reshaped to ``KEY_PATTERN``.
+
+    The frontend's ``slugifyKey`` (``frontend/src/lib/forms/keys.ts``) in Python,
+    so a key repaired here and a key the builder would mint for the same text
+    agree. ``f_`` is the same escape the browser uses for a slug that cannot
+    start a key.
+    """
+    slug = re.sub(r"^_+|_+$", "", re.sub(r"[^a-z0-9]+", "_", value.lower()))[:MAX_KEY_LENGTH]
+    if not slug:
+        return ""
+    return slug if "a" <= slug[0] <= "z" else f"f_{slug}"[:MAX_KEY_LENGTH]
+
+
+def _repair_key(raw_key: str, label: str, taken: set[str]) -> str:
+    """The key version #1 asks this legacy question under; never empty, never
+    reserved, never a duplicate.
+
+    Nothing validated ``custom_fields_json`` before this revision, so it can hold
+    a key ``FormSchema`` refuses -- and one such row would make the tournament's
+    version #1 unloadable for EVERY later read. Repaired rather than dropped:
+    losing an organizer's question silently is the worse failure.
+    """
+    base = _slug_key(raw_key) or _slug_key(label) or "field"
+    # Escaped at the FRONT, like ``makeUniqueFieldKey``: numbering a reserved key
+    # would never get out of the reserved ``identity_`` namespace.
+    if base in RESERVED_CUSTOM_KEYS or base.startswith(IDENTITY_KEY_PREFIX):
+        base = f"f_{base}"[:MAX_KEY_LENGTH]
+    candidate = base
+    index = 1
+    while candidate in taken:
+        index += 1
+        suffix = f"_{index}"
+        # The suffix fits INSIDE the cap: appending past it would produce a key
+        # longer than 32 characters, which is the bug being fixed.
+        candidate = base[: MAX_KEY_LENGTH - len(suffix)] + suffix
+    taken.add(candidate)
+    return candidate
+
+
+def _options(raw: Any) -> list[str]:
+    """Legacy options, blanks dropped and duplicates collapsed (``FormSchema``
+    refuses an empty or repeating option list). Values are otherwise untouched:
+    they are what the stored answers were matched against."""
+    out: list[str] = []
+    for option in raw if isinstance(raw, (list, tuple)) else ():
+        # A JSON ``null`` is a blank option, not the four letters ``str`` makes of it.
+        text = "" if option is None else str(option)
+        if text.strip() and text not in out:
+            out.append(text)
+    return out
+
+
+def _custom_keys(custom: Any) -> list[tuple[Mapping[str, Any], str]]:
+    """Each legacy custom field paired with its repaired key, deduplicated across
+    the WHOLE document (a duplicate anywhere is rejected, not per section)."""
+    # Only the custom keys need collecting: a builtin key is escaped out of the
+    # way by ``_repair_key`` before it can ever collide with a builtin field.
+    taken: set[str] = set()
+    out: list[tuple[Mapping[str, Any], str]] = []
+    for raw in custom if isinstance(custom, (list, tuple)) else ():
+        if not isinstance(raw, Mapping):
+            continue
+        raw_key = raw.get("key")
+        label = raw.get("label")
+        out.append(
+            (
+                raw,
+                _repair_key(
+                    raw_key if isinstance(raw_key, str) else "",
+                    label if isinstance(label, str) else "",
+                    taken,
+                ),
+            )
+        )
+    return out
+
+
+def custom_key_renames(custom: Any) -> dict[str, str]:
+    """``legacy key -> repaired key`` for every custom field whose key had to move.
+
+    The stored answers are filed under the LEGACY key, so the upgrade replays
+    this over ``registration.custom_fields_json``; an answer left behind is the
+    same data loss as a dropped question. Two legacy fields sharing one key
+    cannot both own the single stored answer: the first keeps it.
+    """
+    renames: dict[str, str] = {}
+    seen: set[str] = set()
+    for raw, key in _custom_keys(custom):
+        old = raw.get("key")
+        if not isinstance(old, str) or old in seen:
+            continue
+        seen.add(old)
+        if old != key:
+            renames[old] = key
+    return renames
+
+
+def rename_answer_keys(answers: Any, renames: Mapping[str, str]) -> dict[str, Any] | None:
+    """One registration's answers re-filed under the repaired keys; ``None`` when
+    nothing moves, so the upgrade can skip the row."""
+    if not isinstance(answers, Mapping) or not renames:
         return None
-    key = raw.get("key")
-    if not isinstance(key, str) or not key:
-        return None
+    targets = set(renames.values())
+    # A stale answer already sitting on a target key loses to the one being
+    # moved: the moved one belongs to a question the form still asks.
+    out = {key: value for key, value in answers.items() if key not in renames and key not in targets}
+    for old, new in renames.items():
+        if old in answers:
+            out[new] = answers[old]
+    return out if out != dict(answers) else None
+
+
+def _custom_field(raw: Mapping[str, Any], key: str) -> dict[str, Any]:
     label = raw.get("label")
+    label = label.strip() if isinstance(label, str) and label.strip() else None
+    raw_key = raw.get("key")
+    kind = str(raw.get("type") or "text")
+    if kind not in SCHEMA_CUSTOM_KINDS:
+        kind = "text"
+    options = _options(raw.get("options")) if kind in OPTION_KINDS else []
+    if kind in OPTION_KINDS and not options:
+        # A select with nothing to select is refused; degrading to free text
+        # keeps the question askable instead of breaking the whole form.
+        kind = "text"
     field: dict[str, Any] = {
         "key": key,
-        "kind": str(raw.get("type") or "text"),
-        "label": label if isinstance(label, str) and label.strip() else key,
+        "kind": kind,
+        # A custom field must carry a label. The legacy key is the closest thing
+        # to the organizer's own words when it does not.
+        "label": label or (raw_key.strip() if isinstance(raw_key, str) and raw_key.strip() else key),
         "required": bool(raw.get("required", False)),
         "visibility": "public",
     }
     placeholder = raw.get("placeholder")
     if isinstance(placeholder, str) and placeholder:
         field["placeholder"] = placeholder
-    options = raw.get("options")
-    if isinstance(options, (list, tuple)) and options:
-        field["options"] = [str(option) for option in options]
+    if options:
+        field["options"] = options
     validation = _validation(raw.get("validation"))
     if validation is not None:
         field["validation"] = validation
@@ -286,10 +438,8 @@ def legacy_to_schema(built_in: dict, custom: list) -> dict:
     for legacy_key, schema_key in DETAIL_FIELDS:
         if _enabled(built_in, legacy_key):
             details.append(_builtin_field(schema_key, _config(built_in, legacy_key)))
-    for raw in custom:
-        field = _custom_field(raw)
-        if field is not None:
-            details.append(field)
+    for raw, key in _custom_keys(custom):
+        details.append(_custom_field(raw, key))
 
     sections = [
         {"key": key, "fields": fields}
@@ -558,6 +708,12 @@ def upgrade() -> None:
             sa.text("UPDATE balancer.registration SET form_version_id = :version WHERE tournament_id = :tournament"),
             {"version": version_id, "tournament": form["tournament_id"]},
         )
+        # A repaired key leaves its stored answers behind unless they move with
+        # it: ``custom_fields_json`` is keyed by the LEGACY key, and an answer no
+        # question asks for any more is the same loss as a dropped question.
+        renames = custom_key_renames(form["custom_fields_json"] or [])
+        if renames:
+            _rewrite_answers(bind, form["tournament_id"], renames)
 
     registrations = bind.execute(
         sa.text(
@@ -605,6 +761,22 @@ def _rewrite_sheet_targets(bind: Any, convert: Any) -> None:
         converted = convert(current)
         if converted != current:
             bind.execute(update, {"mapping": json.dumps(converted), "feed_id": feed["id"]})
+
+
+def _rewrite_answers(bind: Any, tournament_id: int, renames: Mapping[str, str]) -> None:
+    """Re-file one tournament's stored custom answers under the repaired keys."""
+    rows = bind.execute(
+        sa.text(
+            "SELECT id, custom_fields_json FROM balancer.registration"
+            " WHERE tournament_id = :tournament AND custom_fields_json IS NOT NULL ORDER BY id"
+        ),
+        {"tournament": tournament_id},
+    ).mappings()
+    update = sa.text("UPDATE balancer.registration SET custom_fields_json = CAST(:answers AS json) WHERE id = :id")
+    for row in rows.all():
+        moved = rename_answer_keys(row["custom_fields_json"], renames)
+        if moved is not None:
+            bind.execute(update, {"answers": json.dumps(moved), "id": row["id"]})
 
 
 def downgrade() -> None:

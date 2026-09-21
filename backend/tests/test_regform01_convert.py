@@ -221,3 +221,96 @@ def test_a_regex_too_long_to_compile_safely_is_dropped():
     raw = mod.legacy_to_schema({"battle_tag": {"enabled": True, "validation": {"regex": long_pattern}}}, [])
     FormSchema.model_validate(raw)
     assert "validation" not in raw["sections"][0]["fields"][0]
+
+
+# ── hostile legacy input ────────────────────────────────────────────────────
+
+#: Nothing validated ``custom_fields_json`` before this revision: the deleted
+#: builder slugified a LABEL into a key, so a question labelled "Battle Tag"
+#: reached the column as the reserved builtin key, a digit-leading label as a
+#: ``KEY_PATTERN`` violation and a long label as a >32-character key. A single
+#: such row would make version #1 unloadable for every later read.
+HOSTILE_CUSTOM = [
+    {"key": "battle_tag", "label": "Battle Tag", "type": "text"},
+    {"key": "identity_discord", "label": "Discord", "type": "text"},
+    {"key": "2024_team", "label": "Team in 2024", "type": "text"},
+    {"key": "a" * 40, "label": "Very long", "type": "text"},
+    {"key": "vk", "label": "VK", "type": "url"},
+    {"key": "vk", "label": "VK again", "type": "text"},
+    {"key": "region", "label": "Region", "type": "select", "options": ["", "   ", None]},
+    {"key": "server", "label": "Server", "type": "select", "options": ["EU", "EU", "NA"]},
+    {"key": "mood", "label": "Mood", "type": "telepathy"},
+    {"key": "colour", "label": "Colour", "type": "text", "options": ["red"]},
+    {"key": "", "label": "No key at all", "type": "text"},
+]
+
+
+def test_hostile_legacy_custom_fields_still_convert_to_a_schema_the_model_accepts():
+    raw = mod.legacy_to_schema(LEGACY_DEFAULT_BUILTINS, HOSTILE_CUSTOM)
+    # THE guarantee: the converter may not emit a document ``FormSchema`` refuses,
+    # because a refused version #1 breaks every later read of that tournament.
+    schema = FormSchema.model_validate(raw)
+
+    assert [f.key for f in schema.fields() if not f.is_builtin] == [
+        # Reserved keys are escaped at the FRONT, like the shipped builder's
+        # ``makeUniqueFieldKey``: suffixing ``identity_discord`` would never
+        # leave the reserved prefix.
+        "f_battle_tag",
+        "f_identity_discord",
+        "f_2024_team",
+        "a" * 32,
+        "vk",
+        # Deduplicated across the WHOLE document, and the suffix fits inside the
+        # 32-character cap rather than being appended past it.
+        "vk_2",
+        "region",
+        "server",
+        "mood",
+        "colour",
+        "no_key_at_all",
+    ]
+    # Repaired, never dropped: the organizer's question survives under a new key.
+    assert schema.field("f_battle_tag").label == "Battle Tag"
+    assert schema.builtin("battle_tag") is not None
+    # A select with nothing left to select degrades to free text instead of
+    # being emitted invalid.
+    assert (schema.field("region").kind, schema.field("region").options) == ("text", None)
+    assert schema.field("server").options == ["EU", "NA"]
+    # A kind outside ``FieldKind``, and options on a kind that takes none.
+    assert schema.field("mood").kind == "text"
+    assert schema.field("colour").options is None
+
+
+def test_a_long_or_blank_key_is_repaired_inside_the_cap():
+    raw = mod.legacy_to_schema({}, [{"key": "a" * 40, "label": "One"}, {"key": "a" * 40, "label": "Two"}])
+    keys = [f["key"] for f in raw["sections"][-1]["fields"] if f["kind"] != "builtin"]
+    assert keys == ["a" * 32, "a" * 30 + "_2"]
+    FormSchema.model_validate(raw)
+
+
+def test_a_repaired_key_carries_its_stored_answers_over():
+    """A rename that left the answers behind would be the same data loss by
+    another route, so the upgrade moves them with the key."""
+    renames = mod.custom_key_renames(HOSTILE_CUSTOM)
+    assert renames == {
+        "battle_tag": "f_battle_tag",
+        "identity_discord": "f_identity_discord",
+        "2024_team": "f_2024_team",
+        "a" * 40: "a" * 32,
+        "": "no_key_at_all",
+    }
+    # The second "vk" is a DIFFERENT question sharing one legacy key: one stored
+    # answer cannot belong to both, so it stays with the first and ``vk_2``
+    # starts empty.
+    assert "vk" not in renames
+
+    moved = mod.rename_answer_keys(
+        {"battle_tag": "Ferz#2155", "2024_team": "Owls", "vk": "vk.com/p", "gone": 1},
+        renames,
+    )
+    assert moved == {"f_battle_tag": "Ferz#2155", "f_2024_team": "Owls", "vk": "vk.com/p", "gone": 1}
+    # A stale answer already sitting on the new key loses to the one being moved.
+    assert mod.rename_answer_keys({"battle_tag": "new", "f_battle_tag": "stale"}, renames) == {"f_battle_tag": "new"}
+    # Nothing to move: the upgrade must not rewrite the row at all.
+    assert mod.rename_answer_keys({"vk": "vk.com/p"}, renames) is None
+    assert mod.rename_answer_keys({"a": 1}, {}) is None

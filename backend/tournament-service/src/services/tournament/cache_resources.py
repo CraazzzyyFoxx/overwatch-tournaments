@@ -74,11 +74,13 @@ RESOURCE_CACHE_PATTERNS: dict[str, Callable[[int], Sequence[str]]] = {
         *_with_prefixes(f"*registration_list:{tid}:*"),
         *_detail(tid),
     ),
-    # Uncached BY DESIGN, and it must stay that way: the form has exactly one
-    # reader (`_common_service.get_registration_form`) and a stale form is
-    # either a false refusal or a false admission — see
-    # services/registration/admission.py's module docstring.
-    Resource.TOURNAMENT_REGISTRATION_FORM: lambda _tid: (),
+    # The form itself is uncached (one reader, and a stale form is either a false
+    # refusal or a false admission — see services/registration/admission.py).
+    # The public list is not: a registration whose `form_version_id` is NULL —
+    # the manual/sheet rows of a tournament that had no form yet — falls back to
+    # the CURRENT schema's public keys (`registration_public_keys`), so
+    # redacting a field to `organizers` changes that payload and must drop it.
+    Resource.TOURNAMENT_REGISTRATION_FORM: lambda tid: _with_prefixes(f"*registration_list:{tid}:*"),
     # Stream reads live in stream-service; nothing of them is cached here.
     Resource.TOURNAMENT_STREAMS: lambda _tid: (),
 }
