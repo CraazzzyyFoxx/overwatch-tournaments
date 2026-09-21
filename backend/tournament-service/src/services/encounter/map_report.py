@@ -36,7 +36,7 @@ from shared.models.tournament.pick_ban import PickBanEntry, PickBanSession
 from shared.models.tournament.team import Team
 from shared.models.tournament.tournament import Tournament
 from shared.repository import EncounterMapReportRepository, PickBanEntryRepository
-from shared.services import pick_ban_engine as engine
+from shared.domain import pick_ban_engine as engine
 from shared.services.bracket.usability import is_encounter_live
 from shared.services.notifications import notify
 from shared.services.realtime import Resource, Scope, emit

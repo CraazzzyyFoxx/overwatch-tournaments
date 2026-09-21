@@ -1606,9 +1606,9 @@ class RegistrationTeamService:
             from src.core.broker import optional_broker
             from src.core.config import settings
             from src.schemas.registration_team import TeamEligibilityIssueRead
-            from src.services.registration.team_eligibility import evaluate_team_eligibility
+            from src.services.registration.team_eligibility import team_eligibility
 
-            raw_issues = await evaluate_team_eligibility(
+            raw_issues = await team_eligibility.evaluate(
                 session,
                 team,
                 roster,

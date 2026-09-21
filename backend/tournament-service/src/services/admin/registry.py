@@ -22,7 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.rpc.crud import CrudDispatcher, EntityConfig
-from shared.services.player_sub_role import player_sub_role_entity
+from shared.rpc.player_sub_role import player_sub_role_entity
 from src import schemas
 from src.core import auth, db
 from src.core.workspace import get_division_grid

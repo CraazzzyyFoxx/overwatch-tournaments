@@ -46,6 +46,7 @@ from shared.models.registration.registration import (
 )
 from shared.models.tenancy.workspace import WorkspaceMember
 from shared.models.tournament import Tournament
+from shared.repository import TournamentRepository
 from shared.services.division_grid.access import get_effective_division_grid
 from shared.services.member_rank import TOURNAMENT_ORDER, MemberRankService, member_rank_service
 
@@ -84,8 +85,14 @@ def _parse_role(code: str | None) -> HeroClass | None:
 
 
 class RosterEngine:
-    def __init__(self, *, ranks: MemberRankService = member_rank_service) -> None:
+    def __init__(
+        self,
+        *,
+        ranks: MemberRankService = member_rank_service,
+        tournaments: TournamentRepository = TournamentRepository(),
+    ) -> None:
         self.ranks = ranks
+        self.tournaments = tournaments
 
     # -- entry points --------------------------------------------------------
 
@@ -104,7 +111,7 @@ class RosterEngine:
         (approved, not deleted, and a ``balancer_status`` that does not exclude) --
         this is what the draft seeds from and what the balance job balances.
         """
-        workspace_id = await session.scalar(sa.select(Tournament.workspace_id).where(Tournament.id == tournament_id))
+        workspace_id = await self.tournaments.get_workspace_id(session, tournament_id)
         query = (
             sa.select(BalancerRegistration)
             .where(BalancerRegistration.tournament_id == tournament_id)

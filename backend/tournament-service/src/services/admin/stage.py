@@ -35,7 +35,7 @@ from shared.services.bracket.swiss_settings import (
     swiss_bye_team_ids,
 )
 from shared.services.bracket.types import BracketSkeleton, Pairing
-from shared.services.encounter_naming import build_encounter_name_from_ids
+from shared.domain.encounter_naming import build_encounter_name_from_ids
 from src import models, schemas
 from src.domain.admin.best_of import parse_best_of_config, resolve_best_of
 from src.domain.stage.lifecycle import stage_lifecycle

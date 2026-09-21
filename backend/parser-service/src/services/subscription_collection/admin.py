@@ -19,7 +19,7 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.core.enums import SubscriptionCheckState, SubscriptionCollectionSource
-from shared.services import settings_provider
+from shared.services.settings_provider import settings_provider
 from shared.services.subscriptions import parse_requirement
 from shared.services.subscriptions.wiring import build_resolver
 from src import models

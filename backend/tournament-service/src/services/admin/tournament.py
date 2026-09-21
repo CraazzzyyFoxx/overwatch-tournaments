@@ -24,8 +24,9 @@ from shared.services.draft_guards import assert_no_active_draft_session
 from shared.services.realtime import Resource, Scope, emit
 from shared.services.registration_team_guards import assert_no_registered_teams
 from shared.services.roster_shape_access import invalidate_roster_shape_cache
+from shared.domain.tournament_slug import slugify
 from shared.services.tournament.computation import request_bracket_job
-from shared.services.tournament.slug import generate_unique_tournament_slug, slugify
+from shared.services.tournament.slug import generate_unique_tournament_slug
 from src import models, schemas
 from src.clients.challonge import challonge_client
 from src.services.admin.stage import stage_service

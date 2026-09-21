@@ -17,7 +17,7 @@ from __future__ import annotations
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.schemas.settings import DEFAULT_RANK_MAPPING_VERSION
-from shared.services import settings_provider
+from shared.services.settings_provider import settings_provider
 from src.domain.overwatch_rank import RankLookup, build_default_lookup, map_division_tier_to_rank_value
 
 # ``build_default_lookup``/``map_division_tier_to_rank_value`` now live in

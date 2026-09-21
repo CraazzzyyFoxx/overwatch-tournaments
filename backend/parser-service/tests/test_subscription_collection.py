@@ -12,6 +12,7 @@ sys.path.insert(0, str(backend_root / "parser-service"))
 
 from shared.core.enums import SubscriptionCollectionSource  # noqa: E402
 from shared.schemas.settings import SubscriptionCollectionConfig  # noqa: E402
+from shared.services.settings_provider import settings_provider  # noqa: E402
 
 BOOSTY_ONLY = {"mode": "all", "requirements": [{"provider": "boosty", "min_tier_rank": 2}]}
 BOTH = {
@@ -174,8 +175,9 @@ class SchedulerTests(IsolatedAsyncioTestCase):
                 AsyncMock(return_value=token),
             ),
             patch("src.services.subscription_collection.scheduler.release_distributed_lock", release),
-            patch(
-                "shared.services.settings_provider.get_subscription_collection_config",
+            patch.object(
+                settings_provider,
+                "get_subscription_collection_config",
                 AsyncMock(return_value=SubscriptionCollectionConfig(enabled=True)),
             ),
             patch.object(
@@ -208,8 +210,9 @@ class SchedulerTests(IsolatedAsyncioTestCase):
                 AsyncMock(return_value=token),
             ),
             patch("src.services.subscription_collection.scheduler.release_distributed_lock", release),
-            patch(
-                "shared.services.settings_provider.get_subscription_collection_config",
+            patch.object(
+                settings_provider,
+                "get_subscription_collection_config",
                 AsyncMock(return_value=cfg),
             ),
             patch.object(
@@ -238,8 +241,9 @@ class SchedulerTests(IsolatedAsyncioTestCase):
                 AsyncMock(return_value=token),
             ),
             patch("src.services.subscription_collection.scheduler.release_distributed_lock", AsyncMock()),
-            patch(
-                "shared.services.settings_provider.get_subscription_collection_config",
+            patch.object(
+                settings_provider,
+                "get_subscription_collection_config",
                 AsyncMock(return_value=cfg),
             ),
             patch.object(
@@ -265,8 +269,9 @@ class SchedulerTests(IsolatedAsyncioTestCase):
                 AsyncMock(return_value=token),
             ),
             patch("src.services.subscription_collection.scheduler.release_distributed_lock", AsyncMock()),
-            patch(
-                "shared.services.settings_provider.get_subscription_collection_config",
+            patch.object(
+                settings_provider,
+                "get_subscription_collection_config",
                 AsyncMock(return_value=SubscriptionCollectionConfig(enabled=False)),
             ),
             patch.object(

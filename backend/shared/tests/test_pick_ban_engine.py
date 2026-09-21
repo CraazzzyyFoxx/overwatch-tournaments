@@ -1,4 +1,4 @@
-"""Unit tests for the generic pick-ban engine (``shared.services.pick_ban_engine``).
+"""Unit tests for the generic pick-ban engine (``shared.domain.pick_ban_engine``).
 
 Pure-function tests, no DB — see the module docstring for why. Covers the
 behavior that is NEW relative to the existing map-veto engine: ledger
@@ -11,7 +11,7 @@ from types import SimpleNamespace
 import pytest
 
 from shared.core import enums
-from shared.services import pick_ban_engine as engine
+from shared.domain import pick_ban_engine as engine
 
 
 def entry(

@@ -26,7 +26,7 @@ from src.core.config import settings
 from src.domain.registration.utils import normalize_battle_tag, normalize_battle_tag_key
 from src.services.registration._common import replace_registration_roles
 from src.services.registration.subscription_codes import redeem_challenge_code
-from src.services.registration.team_eligibility import evaluate_team_eligibility
+from src.services.registration.team_eligibility import team_eligibility
 from src.services.registration.windows import is_check_in_window_active
 
 __all__ = ("install_team_actions",)
@@ -126,7 +126,7 @@ def install_team_actions(cls: type) -> None:
     ) -> None:
         form = await _form(self, session, team.tournament_id)
         workspace = await _workspace(self, session, team.workspace_id)
-        issues = await evaluate_team_eligibility(
+        issues = await team_eligibility.evaluate(
             session,
             team,
             members,

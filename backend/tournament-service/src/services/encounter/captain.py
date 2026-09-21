@@ -48,7 +48,7 @@ from shared.services.bracket import advancement
 from shared.services.bracket.usability import is_encounter_live
 from shared.services.challonge_refs import resolve_encounter_challonge
 from shared.services.encounter.result_audit import record_result_transition
-from shared.services.pick_ban_engine import series_decided
+from shared.domain.pick_ban_engine import series_decided
 from shared.services.scrim_scope import is_scrim_container
 from src import models, schemas
 from src.services.challonge.sync import sync_service

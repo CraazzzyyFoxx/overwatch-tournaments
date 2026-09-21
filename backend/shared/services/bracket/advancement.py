@@ -28,7 +28,7 @@ from shared.models.tournament.stage import Stage
 from shared.models.tournament.team import Team
 from shared.services.bracket.types import AdvancementEdge
 from shared.services.encounter.result_audit import record_result_transition
-from shared.services.encounter_naming import build_encounter_name_from_ids
+from shared.domain.encounter_naming import build_encounter_name_from_ids
 
 __all__ = (
     "persist_advancement_edges",

@@ -34,7 +34,7 @@ from shared.core.errors import BaseAPIException as HTTPException
 from shared.repository import TournamentRepository
 from shared.rpc.identity import ensure_workspace_permission
 from shared.services.audit import record_audit
-from shared.services.settings_provider import get_stream_collection_config
+from shared.services.settings_provider import settings_provider
 from src.core import db
 from src.core.config import settings
 from src.schemas.stream import StreamPollHealthRead, StreamRepollRead
@@ -58,7 +58,7 @@ async def health(session: AsyncSession, data: dict[str, Any]) -> StreamPollHealt
     if not user.has_permission("stream", "read"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied: stream.read required")
 
-    cfg = await get_stream_collection_config(session)
+    cfg = await settings_provider.get_stream_collection_config(session)
 
     recorded = await StreamStateStore(realtime_redis).read_poll_status() or {}
     ran_at = recorded.get("ran_at")

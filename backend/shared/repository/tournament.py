@@ -775,6 +775,26 @@ class TournamentComputationJobRepository(BaseRepository[models.TournamentComputa
             query = query.with_for_update()
         return await session.scalar(query)
 
+    async def lock_idempotency(self, session: AsyncSession, idempotency_key: str) -> None:
+        """Serialize concurrent creates for the same logical job for this transaction."""
+        await session.execute(sa.select(sa.func.pg_advisory_xact_lock(sa.func.hashtext(idempotency_key))))
+
+    async def get_active_by_idempotency(
+        self,
+        session: AsyncSession,
+        idempotency_key: str,
+        statuses: Sequence[str],
+    ) -> models.TournamentComputationJob | None:
+        return await session.scalar(
+            self.select()
+            .where(
+                models.TournamentComputationJob.idempotency_key == idempotency_key,
+                models.TournamentComputationJob.status.in_(tuple(statuses)),
+            )
+            .order_by(models.TournamentComputationJob.id.desc())
+            .limit(1)
+        )
+
     async def list_jobs(
         self,
         session: AsyncSession,

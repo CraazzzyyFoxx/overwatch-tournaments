@@ -27,6 +27,7 @@ from shared import models
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.division_grid import DivisionGrid
 from shared.models.division_grid import DivisionGridVersion
+from shared.repository import TournamentRepository
 from shared.services.division_grid.access import (
     build_workspace_division_grid_normalizer,
     get_effective_division_grid,
@@ -51,6 +52,8 @@ __all__ = (
     "get_division_grid_version",
     "get_tournament_workspace_id",
 )
+
+_tournaments = TournamentRepository()
 
 
 class _AllWorkspaces(Enum):
@@ -254,7 +257,7 @@ async def get_tournament_workspace_id(
     RBAC-facing ``get_tournament_workspace_id`` in ``shared.rbac.workspace_lookup``,
     which raises ``404`` because it gates access rather than scoping a read.
     """
-    return await session.scalar(sa.select(models.Tournament.workspace_id).where(models.Tournament.id == tournament_id))
+    return await _tournaments.get_workspace_id(session, tournament_id)
 
 
 async def get_division_grid(

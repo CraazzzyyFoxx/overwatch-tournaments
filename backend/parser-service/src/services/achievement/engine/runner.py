@@ -31,7 +31,7 @@ from shared.services.division_grid.normalization import (
     DivisionGridNormalizationError,
     DivisionGridNormalizer,
 )
-from shared.services.workspace_tier import is_verified_or_trusted
+from shared.domain.workspace_tier import is_verified_or_trusted
 from src import models
 from src.core.broker import require_broker
 from src.domain.achievement_eval_context import EvalContext

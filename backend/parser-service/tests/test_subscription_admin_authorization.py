@@ -20,6 +20,7 @@ sys.path.insert(0, str(backend_root / "parser-service"))
 
 from shared.core.errors import BaseAPIException  # noqa: E402
 from shared.rbac.catalog import PERMISSION_CATALOG, permission_names_for_workspace_role  # noqa: E402
+from shared.services.settings_provider import settings_provider  # noqa: E402
 
 WORKSPACE = 7
 OTHER_WORKSPACE = 9
@@ -204,8 +205,9 @@ class ScopingTests(IsolatedAsyncioTestCase):
 
         sweep = AsyncMock(return_value=3)
         with (
-            patch(
-                "shared.services.settings_provider.get_subscription_collection_config",
+            patch.object(
+                settings_provider,
+                "get_subscription_collection_config",
                 AsyncMock(return_value=SubscriptionCollectionConfig(enabled=True)),
             ),
             patch.object(admin.service, "collect_subscriptions_for_active_tournaments", sweep),

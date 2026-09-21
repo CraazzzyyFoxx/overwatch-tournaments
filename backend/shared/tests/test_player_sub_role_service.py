@@ -8,7 +8,8 @@ from unittest.mock import AsyncMock, patch
 
 from shared.core.errors import BaseAPIException
 from shared.domain.player_sub_roles import build_subrole_catalog
-from shared.services.player_sub_role import PlayerSubRoleService, player_sub_role_entity
+from shared.rpc.player_sub_role import player_sub_role_entity
+from shared.services.player_sub_role import PlayerSubRoleService
 
 
 class _Row(SimpleNamespace):
@@ -67,7 +68,7 @@ class EntityConfigTests(IsolatedAsyncioTestCase):
         )
         session = object()
         with patch(
-            "shared.services.player_sub_role.player_sub_role_service.list_sub_roles",
+            "shared.rpc.player_sub_role.player_sub_role_service.list_sub_roles",
             AsyncMock(return_value=[row]),
         ) as listed:
             result = await cfg.list_fn(

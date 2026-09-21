@@ -22,7 +22,7 @@ from loguru import logger
 from shared import models
 from shared.core.enums import SubscriptionCollectionSource
 from shared.observability import observe_scheduled_job
-from shared.services import settings_provider
+from shared.services.settings_provider import settings_provider
 from shared.services.distributed_lock import (
     DistributedLockUnavailable,
     acquire_distributed_lock,

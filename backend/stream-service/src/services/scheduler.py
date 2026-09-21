@@ -22,7 +22,7 @@ from typing import Any
 from loguru import logger
 
 from shared.observability import observe_scheduled_job
-from shared.services import settings_provider
+from shared.services.settings_provider import settings_provider
 from shared.services.distributed_lock import (
     DistributedLockUnavailable,
     acquire_distributed_lock,

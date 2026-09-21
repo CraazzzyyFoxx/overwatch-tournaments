@@ -10,7 +10,7 @@ from shared.models.tournament.stage import Stage
 from shared.repository import EncounterRepository
 from shared.services.bracket.advancement import persist_advancement_edges
 from shared.services.bracket.types import BracketSkeleton
-from shared.services.encounter_naming import build_encounter_name_from_ids
+from shared.domain.encounter_naming import build_encounter_name_from_ids
 
 __all__ = ("persist_skeleton",)
 

@@ -3,17 +3,19 @@ from __future__ import annotations
 from typing import Any, Literal
 from uuid import uuid4
 
-import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.messaging.config import TOURNAMENT_COMPUTE_EXCHANGE
 from shared.messaging.outbox import enqueue_outbox_event
 from shared.models.tournament.computation import TournamentComputationJob
+from shared.repository import TournamentComputationJobRepository
 
 JobKind = Literal["bracket", "standings"]
 BracketOperation = Literal["generate_stage", "activate_and_generate", "generate_next_swiss_round"]
 
 ACTIVE_STATUSES = ("pending", "running")
+
+_jobs = TournamentComputationJobRepository()
 
 
 def _routing_key(kind: JobKind) -> str:
@@ -24,15 +26,7 @@ async def _active_job(
     session: AsyncSession,
     idempotency_key: str,
 ) -> TournamentComputationJob | None:
-    return await session.scalar(
-        sa.select(TournamentComputationJob)
-        .where(
-            TournamentComputationJob.idempotency_key == idempotency_key,
-            TournamentComputationJob.status.in_(ACTIVE_STATUSES),
-        )
-        .order_by(TournamentComputationJob.id.desc())
-        .limit(1)
-    )
+    return await _jobs.get_active_by_idempotency(session, idempotency_key, ACTIVE_STATUSES)
 
 
 async def dispatch_job(
@@ -61,9 +55,7 @@ async def create_job(
     requested_by_user_id: int | None,
     idempotency_key: str,
 ) -> TournamentComputationJob:
-    # Serialize concurrent requests for the same logical job before checking
-    # the partial unique index. The lock is released with the transaction.
-    await session.execute(sa.select(sa.func.pg_advisory_xact_lock(sa.func.hashtext(idempotency_key))))
+    await _jobs.lock_idempotency(session, idempotency_key)
     active = await _active_job(session, idempotency_key)
     if active is not None:
         return active
@@ -79,8 +71,7 @@ async def create_job(
         idempotency_key=idempotency_key,
         status="pending",
     )
-    session.add(job)
-    await session.flush()
+    job = await _jobs.create(session, job)
     await dispatch_job(session, job)
     return job
 

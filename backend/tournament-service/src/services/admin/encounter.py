@@ -17,7 +17,7 @@ from shared.repository import (
 )
 from shared.services.bracket.advancement import reset_encounter_result
 from shared.services.bracket.swiss_settings import remove_swiss_bye_round
-from shared.services.encounter_naming import build_encounter_name
+from shared.domain.encounter_naming import build_encounter_name
 from src import models, schemas
 from src.core import enums
 from src.services.encounter.pick_ban_session import pick_ban_session_service

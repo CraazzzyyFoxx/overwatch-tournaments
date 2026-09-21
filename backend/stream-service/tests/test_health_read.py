@@ -109,7 +109,7 @@ class _HealthCase(IsolatedAsyncioTestCase):
         async def _cfg(_session: Any) -> StreamCollectionConfig:
             return self.cfg
 
-        cfg_patcher = patch.object(admin, "get_stream_collection_config", _cfg)
+        cfg_patcher = patch.object(admin.settings_provider, "get_stream_collection_config", _cfg)
         cfg_patcher.start()
         self.addCleanup(cfg_patcher.stop)
 
