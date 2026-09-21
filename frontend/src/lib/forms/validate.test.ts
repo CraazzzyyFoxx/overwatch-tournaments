@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 
 import type { FormErrorCode, Translate } from "@/lib/forms/form-errors";
-import { validateAnswer } from "@/lib/forms/validate";
+import { normalizeAnswerText, validateAnswer } from "@/lib/forms/validate";
 import type { FormField } from "@/types/forms.types";
 
 /**
@@ -61,29 +61,55 @@ describe("validateAnswer — patterns", () => {
     expect(validateAnswer(battleTag, "Player#1234 and more", t)).toBe("invalid_format");
   });
 
-  it("checks every tag of a list answer", () => {
+  it("matches a BattleTag in its canonical form, spacing and all", () => {
+    // A BattleTag pasted out of a chat client arrives as "Player # 1234"; the
+    // server normalizes the `#` spacing away before matching and accepts it, so
+    // refusing it here would block a submission the server would have taken.
+    const battleTag = field({ key: "battle_tag", kind: "builtin" });
+    expect(validateAnswer(battleTag, "Player # 1234", t)).toBeNull();
+    expect(validateAnswer(battleTag, "  PLAYER#1234  ", t)).toBeNull();
+  });
+
+  it("checks every tag of a list answer, each in canonical form", () => {
     const smurfs = field({ key: "smurf_tags", kind: "builtin" });
     expect(validateAnswer(smurfs, ["Alt#1111", "Alt2#2222"], t)).toBeNull();
+    expect(validateAnswer(smurfs, ["Alt #1111", "Alt2# 2222"], t)).toBeNull();
     expect(validateAnswer(smurfs, ["Alt#1111", "nope"], t)).toBe("invalid_format");
+  });
+
+  it("casefolds an identity handle before matching, like the server", () => {
+    // `[a-z0-9_.]` may be written lowercase-only precisely because the value is
+    // already casefolded by the time the pattern runs.
+    expect(validateAnswer(discord, "CoolGuy", t)).toBeNull();
+    expect(validateAnswer(discord, " CoolGuy ", t)).toBeNull();
+  });
+
+  it("does NOT casefold anything else: only trims", () => {
+    // The server runs a custom field's answer through `_coerce_text` (trim) and
+    // matches that, so an organizer's uppercase grammar stays meaningful.
+    const rules = field({ key: "invite_code", kind: "text", validation: { regex: "^[A-Z]+$" } });
+    expect(validateAnswer(rules, " ABC ", t)).toBeNull();
+    expect(validateAnswer(rules, "abc", t)).toBe("invalid_format");
   });
 
   it("prefers the field's own error_message over the generic one", () => {
     const rules = field({
       key: "identity_discord",
       kind: "builtin",
-      validation: { error_message: "Discord handles are lowercase." },
+      validation: { error_message: "Discord handles have no spaces." },
     });
-    expect(validateAnswer(rules, "Bad Name!", t)).toBe("Discord handles are lowercase.");
+    expect(validateAnswer(rules, "Bad Name!", t)).toBe("Discord handles have no spaces.");
   });
 
   it("uses an explicit regex instead of the default", () => {
     const rules = field({
       key: "identity_discord",
       kind: "builtin",
-      validation: { regex: String.raw`^[A-Z]+$` },
+      validation: { regex: String.raw`^[a-z]{3}$` },
     });
-    expect(validateAnswer(rules, "ABC", t)).toBeNull();
-    expect(validateAnswer(rules, "abc", t)).toBe("invalid_format");
+    expect(validateAnswer(rules, "abc", t)).toBeNull();
+    // Passes the DEFAULT discord pattern, so only the override can reject it.
+    expect(validateAnswer(rules, "abcd", t)).toBe("invalid_format");
   });
 
   it("stays silent when the stored regex cannot compile", () => {
@@ -124,5 +150,25 @@ describe("validateAnswer — kinds", () => {
     const rules = field({ key: "vod", kind: "url" });
     expect(validateAnswer(rules, "https://twitch.tv/x", t)).toBeNull();
     expect(validateAnswer(rules, "twitch.tv/x", t)).toBe("invalid_format");
+  });
+});
+
+describe("normalizeAnswerText", () => {
+  it("canonicalizes a BattleTag without touching its display casing", () => {
+    // The server stores the BattleTag as typed (trimmed) and casefolds only to
+    // match, so the input must not lowercase what the user sees.
+    const battleTag = field({ key: "battle_tag", kind: "builtin" });
+    expect(normalizeAnswerText(battleTag, "  Player # 1234 ")).toBe("Player#1234");
+    expect(normalizeAnswerText(battleTag, "Player#1234")).toBe("Player#1234");
+  });
+
+  it("casefolds an identity handle, which is what the server stores", () => {
+    const discord = field({ key: "identity_discord", kind: "builtin" });
+    expect(normalizeAnswerText(discord, " CoolGuy ")).toBe("coolguy");
+  });
+
+  it("only trims everything else", () => {
+    const custom = field({ key: "invite_code", kind: "text" });
+    expect(normalizeAnswerText(custom, "  ABC 123  ")).toBe("ABC 123");
   });
 });

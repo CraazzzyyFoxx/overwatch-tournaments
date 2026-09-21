@@ -11,6 +11,7 @@
  * "the server will accept this".
  */
 
+import { identityProvider } from "@/lib/forms/builtin-keys";
 import type { Translate } from "@/lib/forms/form-errors";
 import type { FormField } from "@/types/forms.types";
 
@@ -32,12 +33,57 @@ const DEFAULT_PATTERNS: Record<string, string> = {
 const NUMBER = /^-?\d+(?:[.,]\d+)?$/;
 const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
 
-/** The strings a pattern actually runs on: a list answer is matched tag by tag. */
-function patternTargets(value: unknown): string[] {
-  if (Array.isArray(value)) {
-    return value.filter((item): item is string => typeof item === "string").map((i) => i.trim());
+/** `\s*#\s*` around a BattleTag's separator, as `shared.core.social` spells it. */
+const BATTLE_TAG_HASH = /\s*#\s*/g;
+
+/**
+ * The canonical form of a text answer — what the SERVER STORES for this field.
+ *
+ * The one copy of the rule, for input handling as well as matching: the
+ * BattleTag and identity inputs canonicalize what they commit to `answers` with
+ * this, so the value the user sees is the value the server keeps.
+ *
+ * Mirrors `_coerce`'s text path: `identity_*` is trimmed and casefolded
+ * (`normalize_social_handle`), `battle_tag`/`smurf_tags` lose the spacing a
+ * human types around the `#` but KEEP their display casing — the server stores
+ * them as typed and casefolds only to match — and everything else is trimmed.
+ */
+export function normalizeAnswerText(field: FormField, value: string): string {
+  const trimmed = value.trim();
+  if (field.key === "battle_tag" || field.key === "smurf_tags") {
+    // `replace(" ", "")`, not `\s+`: this is `shared.core.social` character for
+    // character.
+    return trimmed.replace(BATTLE_TAG_HASH, "#").replaceAll(" ", "").trim();
   }
-  return typeof value === "string" ? [value.trim()] : [];
+  return identityProvider(field.key) ? trimmed.toLowerCase() : trimmed;
+}
+
+/**
+ * The canonical form the answer is MATCHED in — never the raw input.
+ *
+ * `shared/core/social.py` owns this rule and states the invariant: a grammar is
+ * written once against the normalized handle, which is why `identity_discord`
+ * may say `[a-z0-9_.]` without refusing `CoolGuy`. The only thing matching adds
+ * to the stored form is the BattleTag casefold that `_battle_tag_candidate`
+ * applies inside `_pattern_targets`.
+ *
+ * Everything else — `url`, custom text, an organizer's own regex — is matched
+ * case-SENSITIVELY, because the server only trims those.
+ */
+function normalizeTarget(field: FormField, raw: string): string {
+  const normalized = normalizeAnswerText(field, raw);
+  const isBattleTag = field.key === "battle_tag" || field.key === "smurf_tags";
+  return isBattleTag ? normalized.toLowerCase() : normalized;
+}
+
+/** The strings a pattern actually runs on: a list answer is matched tag by tag. */
+function patternTargets(field: FormField, value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value
+      .filter((item): item is string => typeof item === "string")
+      .map((item) => normalizeTarget(field, item));
+  }
+  return typeof value === "string" ? [normalizeTarget(field, value)] : [];
 }
 
 /**
@@ -123,7 +169,7 @@ export function validateAnswer(field: FormField, value: unknown, t: Translate): 
 
   const compiled = compilePattern(field);
   if (compiled) {
-    const bad = patternTargets(value).some((target) => !compiled.test(target));
+    const bad = patternTargets(field, value).some((target) => !compiled.test(target));
     if (bad) return field.validation?.error_message || t("invalid_format");
   }
   return null;

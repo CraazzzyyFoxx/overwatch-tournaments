@@ -70,13 +70,21 @@ describe("fieldErrorsFrom", () => {
     expect(result.form).toBe("ru:template_name_taken");
   });
 
-  it("flags a 409 form_version_stale", () => {
+  it("flags a 409 form_version_stale and shows it at the form level", () => {
+    // The real payload names `form_version_id` as its field — a REQUEST key,
+    // never an answer key, so it must not be filed under `fields` where no
+    // renderer looks for it.
     const result = fieldErrorsFrom(
-      apiError(409, { code: "form_version_stale", msg: "The form changed." }),
+      apiError(409, {
+        code: "form_version_stale",
+        msg: "The form changed.",
+        field: "form_version_id",
+      }),
       t,
     );
     expect(result.stale).toBe(true);
     expect(result.form).toBe("ru:form_version_stale");
+    expect(result.fields).toEqual({});
   });
 
   it("still reports something when the failure is not an ApiError", () => {

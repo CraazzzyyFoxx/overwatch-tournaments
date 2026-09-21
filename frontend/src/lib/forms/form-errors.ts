@@ -95,7 +95,15 @@ export function fieldErrorsFrom(error: unknown, t: Translate): FormErrors {
     const code = detail.code as FormErrorCode;
     const translatable = typeof t.has === "function" ? t.has(code) : KNOWN_CODES[code] === true;
     const message = translatable ? t(code) : detail.msg;
-    if (code === "form_version_stale") result.stale = true;
+    // `form_version_stale` names `form_version_id` as its field, which is a
+    // request key and never an answer key — filing it under `fields` would put
+    // "the form changed, reload it" where no renderer looks. It is a rejection
+    // of the whole write, so it reads as one.
+    if (code === "form_version_stale") {
+      result.stale = true;
+      result.form ??= message;
+      continue;
+    }
     if (detail.field) {
       result.fields[detail.field] ??= message;
     } else {
