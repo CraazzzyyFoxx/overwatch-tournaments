@@ -21,12 +21,10 @@ sys.path.insert(0, str(backend_root / "tournament-service"))
 os.environ["DEBUG"] = "true"
 
 catalog = importlib.import_module("src.domain.registration.mapping_catalog")
-schemas = importlib.import_module("src.schemas.registration")
 sheet_parsing = importlib.import_module("src.domain.registration.sheet_parsing")
 sheet_sync = importlib.import_module("src.services.registration.sheet_sync")
 
-CustomFieldDefinition = schemas.CustomFieldDefinition
-FieldValidationConfig = schemas.FieldValidationConfig
+from shared.domain.forms import FieldValidation, FormField  # noqa: E402
 
 # The canonical built-in target set as it existed before the catalog refactor.
 LEGACY_BUILTIN_TARGETS = {
@@ -79,10 +77,10 @@ def test_catalog_default_targets_alias_matches_admin():
 
 def test_custom_field_specs_added_with_type_parsers():
     custom = [
-        CustomFieldDefinition(key="age", label="Age", type="number"),
-        CustomFieldDefinition(key="region", label="Region", type="select", options=["EU", "NA"]),
-        CustomFieldDefinition(key="agree", label="Agree", type="checkbox"),
-        CustomFieldDefinition(key="bio", label="Bio", type="text"),
+        FormField(key="age", label="Age", kind="number"),
+        FormField(key="region", label="Region", kind="select", options=["EU", "NA"]),
+        FormField(key="agree", label="Agree", kind="checkbox"),
+        FormField(key="bio", label="Bio", kind="text"),
     ]
     specs = catalog.target_spec_map(custom)
     assert specs["custom_fields.age"].default_parser == catalog.PARSER_INTEGER
@@ -121,7 +119,7 @@ def test_mapping_catalog_merges_saved_value_maps():
 
 
 def test_coerce_number_ok_and_blank_and_bad():
-    field_def = CustomFieldDefinition(key="age", label="Age", type="number")
+    field_def = FormField(key="age", label="Age", kind="number")
     assert catalog.coerce_custom_field_value(field_def, "42").value == 42
     assert catalog.coerce_custom_field_value(field_def, "  ").value is None
     bad = catalog.coerce_custom_field_value(field_def, "abc")
@@ -130,7 +128,7 @@ def test_coerce_number_ok_and_blank_and_bad():
 
 
 def test_coerce_checkbox_uses_boolean_defaults_and_value_map():
-    field_def = CustomFieldDefinition(key="agree", label="Agree", type="checkbox")
+    field_def = FormField(key="agree", label="Agree", kind="checkbox")
     assert catalog.coerce_custom_field_value(field_def, "да").value is True
     assert catalog.coerce_custom_field_value(field_def, "no").value is False
     # Custom boolean mapping wins.
@@ -141,7 +139,7 @@ def test_coerce_checkbox_uses_boolean_defaults_and_value_map():
 
 
 def test_coerce_select_warns_outside_options():
-    field_def = CustomFieldDefinition(key="region", label="Region", type="select", options=["EU", "NA"])
+    field_def = FormField(key="region", label="Region", kind="select", options=["EU", "NA"])
     ok = catalog.coerce_custom_field_value(field_def, "EU")
     assert ok.value == "EU" and ok.warning is None
     outside = catalog.coerce_custom_field_value(field_def, "ASIA")
@@ -149,11 +147,11 @@ def test_coerce_select_warns_outside_options():
 
 
 def test_coerce_text_regex_warning():
-    field_def = CustomFieldDefinition(
+    field_def = FormField(
         key="code",
         label="Code",
-        type="text",
-        validation=FieldValidationConfig(regex=r"\d{3}", error_message="need 3 digits"),
+        kind="text",
+        validation=FieldValidation(regex=r"\d{3}", error_message="need 3 digits"),
     )
     assert catalog.coerce_custom_field_value(field_def, "123").warning is None
     bad = catalog.coerce_custom_field_value(field_def, "ab")
@@ -291,7 +289,7 @@ def test_suggest_disabled_targets_present_as_hints():
 
 
 def test_suggest_mapping_matches_custom_field_label_case_insensitively():
-    custom = [CustomFieldDefinition(key="favorite_map", label="Favorite Map", type="text")]
+    custom = [FormField(key="favorite_map", label="Favorite Map", kind="text")]
     mapping = sheet_parsing.suggest_mapping_from_headers(["FAVORITE MAP"], custom_fields=custom)
     assert mapping["targets"]["custom_fields.favorite_map"]["mode"] == "columns"
 
@@ -328,8 +326,8 @@ def test_parse_sheet_row_writes_custom_fields():
         }
     }
     custom = [
-        CustomFieldDefinition(key="age", label="Age", type="number"),
-        CustomFieldDefinition(key="region", label="Region", type="select", options=["EU", "NA"]),
+        FormField(key="age", label="Age", kind="number"),
+        FormField(key="region", label="Region", kind="select", options=["EU", "NA"]),
     ]
     result = sheet_parsing.parse_sheet_row_detailed(
         headers=headers,
@@ -352,7 +350,7 @@ def test_parse_sheet_row_omits_unmapped_custom_fields():
             "custom_fields.age": {"mode": "disabled", "parser": "integer"},
         }
     }
-    custom = [CustomFieldDefinition(key="age", label="Age", type="number")]
+    custom = [FormField(key="age", label="Age", kind="number")]
     result = sheet_parsing.parse_sheet_row_detailed(
         headers=headers,
         row=row,
@@ -374,7 +372,7 @@ def test_parse_sheet_row_collects_custom_field_error():
             "custom_fields.age": {"mode": "columns", "columns": ["Age"], "parser": "integer"},
         }
     }
-    custom = [CustomFieldDefinition(key="age", label="Age", type="number")]
+    custom = [FormField(key="age", label="Age", kind="number")]
     result = sheet_parsing.parse_sheet_row_detailed(
         headers=headers,
         row=row,

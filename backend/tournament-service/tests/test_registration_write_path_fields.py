@@ -42,7 +42,7 @@ from src import (
     models,  # noqa: E402
     schemas,  # noqa: E402
 )
-from src.schemas.registration import RegistrationCreate, RegistrationUpdate  # noqa: E402
+from src.schemas.registration import RegistrationSubmit, RegistrationUpdate  # noqa: E402
 from src.services.registration import lifecycle as reg_lifecycle  # noqa: E402
 from src.services.registration import service as reg_service  # noqa: E402
 
@@ -181,9 +181,9 @@ class TestPublicCreatePersistsEveryHandle(IsolatedAsyncioTestCase):
         written_elsewhere = {"roles"}
         parameters = set(inspect.signature(reg_service.registration_service.create_registration).parameters)
 
-        missing = set(RegistrationCreate.model_fields) - written_elsewhere - parameters
+        missing = set(RegistrationSubmit.model_fields) - written_elsewhere - parameters
 
-        assert missing == set(), f"RegistrationCreate fields no writer accepts: {sorted(missing)}"
+        assert missing == set(), f"RegistrationSubmit fields no writer accepts: {sorted(missing)}"
 
 
 class TestSelfUpdateColumnMapping(IsolatedAsyncioTestCase):

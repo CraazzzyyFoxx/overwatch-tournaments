@@ -25,7 +25,6 @@ os.environ["DEBUG"] = "true"
 
 validation = importlib.import_module("src.services.registration.validation")
 reg_service = importlib.import_module("src.services.registration.service")
-schemas = importlib.import_module("src.schemas.registration")
 
 from shared.core import enums  # noqa: E402
 from shared.domain.player_sub_roles import (  # noqa: E402
@@ -51,8 +50,18 @@ HERO_CATALOG = {
 TOP_HEROES_ON = {"top_heroes": {"enabled": True}}
 
 
-def _payload(roles: list[dict]) -> schemas.RegistrationCreate:
-    return schemas.RegistrationCreate(roles=[schemas.RoleWithSubrole(**role) for role in roles])
+def _role_input(**spec) -> SimpleNamespace:
+    """One submitted role row. The validator and the role builder both read these
+    by attribute, so a namespace is the whole contract."""
+    return SimpleNamespace(**{"role": None, "subrole": None, "is_primary": False, "top_heroes": None, **spec})
+
+
+def _payload(roles: list[dict]) -> SimpleNamespace:
+    return SimpleNamespace(
+        roles=[_role_input(**role) for role in roles],
+        custom_fields=None,
+        model_fields_set={"roles"},
+    )
 
 
 CATALOG = {
@@ -151,7 +160,7 @@ class ValidateRolesTests(TestCase):
 class BuildRegistrationRolesTests(TestCase):
     def test_normalizes_subrole(self) -> None:
         entries = reg_service.build_registration_roles(
-            [schemas.RoleWithSubrole(role="damage", subrole="Main Damage", is_primary=True)]
+            [_role_input(role="damage", subrole="Main Damage", is_primary=True)]
         )
         assert len(entries) == 1
         assert entries[0].role == "damage"
@@ -160,8 +169,8 @@ class BuildRegistrationRolesTests(TestCase):
     def test_filters_invalid_role(self) -> None:
         entries = reg_service.build_registration_roles(
             [
-                schemas.RoleWithSubrole(role="flex", is_primary=True),
-                schemas.RoleWithSubrole(role="damage", is_primary=True),
+                _role_input(role="flex", is_primary=True),
+                _role_input(role="damage", is_primary=True),
             ]
         )
         assert [entry.role for entry in entries] == ["damage"]
@@ -169,9 +178,9 @@ class BuildRegistrationRolesTests(TestCase):
     def test_dedup_and_priority(self) -> None:
         entries = reg_service.build_registration_roles(
             [
-                schemas.RoleWithSubrole(role="damage", is_primary=True),
-                schemas.RoleWithSubrole(role="damage", is_primary=False),
-                schemas.RoleWithSubrole(role="support", is_primary=False),
+                _role_input(role="damage", is_primary=True),
+                _role_input(role="damage", is_primary=False),
+                _role_input(role="support", is_primary=False),
             ]
         )
         assert [entry.role for entry in entries] == ["damage", "support"]
@@ -395,7 +404,7 @@ class AllRolesModeGuardTests(TestCase):
 class BuildRegistrationRoleHeroesTests(TestCase):
     def test_attaches_ordered_hero_entries(self) -> None:
         entries = reg_service.build_registration_roles(
-            [schemas.RoleWithSubrole(role="damage", is_primary=True, top_heroes=["ashe", "genji"])],
+            [_role_input(role="damage", is_primary=True, top_heroes=["ashe", "genji"])],
             hero_catalog=HERO_CATALOG,
         )
         heroes = entries[0].hero_entries
@@ -403,7 +412,7 @@ class BuildRegistrationRoleHeroesTests(TestCase):
 
     def test_caps_dedups_and_drops_unknown(self) -> None:
         entries = reg_service.build_registration_roles(
-            [schemas.RoleWithSubrole(role="damage", is_primary=True, top_heroes=["ashe", "genji", "ashe", "nobody"])],
+            [_role_input(role="damage", is_primary=True, top_heroes=["ashe", "genji", "ashe", "nobody"])],
             hero_catalog=HERO_CATALOG,
             max_heroes=2,
         )
@@ -411,7 +420,7 @@ class BuildRegistrationRoleHeroesTests(TestCase):
 
     def test_no_catalog_means_no_hero_entries(self) -> None:
         entries = reg_service.build_registration_roles(
-            [schemas.RoleWithSubrole(role="damage", is_primary=True, top_heroes=["ashe"])]
+            [_role_input(role="damage", is_primary=True, top_heroes=["ashe"])]
         )
         assert list(entries[0].hero_entries) == []
 

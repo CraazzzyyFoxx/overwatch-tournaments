@@ -19,13 +19,13 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
+from shared.domain.forms import FormField
 from shared.domain.player_sub_roles import catalog_slugs, normalize_sub_role
 from src.domain.registration.utils import (
     normalize_header,
     parse_boolean_value,
     parse_integer,
 )
-from src.schemas.registration import CustomFieldDefinition
 
 ROLE_CODES = ("tank", "damage", "support")
 
@@ -295,12 +295,12 @@ def custom_field_target_key(field_key: str) -> str:
 
 
 def custom_field_target_specs(
-    custom_fields: list[CustomFieldDefinition] | None,
+    custom_fields: list[FormField] | None,
 ) -> tuple[MappingTargetSpec, ...]:
     """Build a mapping target spec for each dynamic custom field on the form."""
     specs: list[MappingTargetSpec] = []
     for definition in custom_fields or []:
-        parser = _CUSTOM_FIELD_PARSER_BY_TYPE.get(definition.type, PARSER_STRING)
+        parser = _CUSTOM_FIELD_PARSER_BY_TYPE.get(definition.kind, PARSER_STRING)
         specs.append(
             MappingTargetSpec(
                 key=custom_field_target_key(definition.key),
@@ -316,14 +316,14 @@ def custom_field_target_specs(
 
 
 def build_target_specs(
-    custom_fields: list[CustomFieldDefinition] | None = None,
+    custom_fields: list[FormField] | None = None,
 ) -> tuple[MappingTargetSpec, ...]:
     """Built-in targets plus the form's dynamic custom-field targets."""
     return BUILTIN_TARGET_SPECS + custom_field_target_specs(custom_fields)
 
 
 def target_spec_map(
-    custom_fields: list[CustomFieldDefinition] | None = None,
+    custom_fields: list[FormField] | None = None,
 ) -> dict[str, MappingTargetSpec]:
     return {spec.key: spec for spec in build_target_specs(custom_fields)}
 
@@ -360,7 +360,7 @@ def _compile_regex(pattern: str | None) -> re.Pattern[str] | None:
 
 
 def coerce_custom_field_value(
-    field_def: CustomFieldDefinition,
+    field_def: FormField,
     raw: str | None,
     *,
     value_mapping: dict[str, Any] | None = None,
@@ -370,13 +370,13 @@ def coerce_custom_field_value(
     if not text:
         return CoercionResult(value=None)
 
-    if field_def.type == "number":
+    if field_def.kind == "number":
         parsed = parse_integer(text)
         if parsed is None:
             return CoercionResult(value=None, error=f"'{text}' is not a valid number")
         return CoercionResult(value=parsed)
 
-    if field_def.type == "checkbox":
+    if field_def.kind == "checkbox":
         custom_booleans = {
             normalize_header(key): bool(mapped) for key, mapped in ((value_mapping or {}).get("booleans") or {}).items()
         }
@@ -384,7 +384,7 @@ def coerce_custom_field_value(
         value = custom_booleans.get(normalized, parse_boolean_value(text))
         return CoercionResult(value=value)
 
-    if field_def.type == "select":
+    if field_def.kind == "select":
         if field_def.options and text not in field_def.options:
             return CoercionResult(value=text, warning=f"'{text}' is not one of the configured options")
         return CoercionResult(value=text)

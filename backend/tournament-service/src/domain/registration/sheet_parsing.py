@@ -14,6 +14,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from shared.division_grid import DivisionGrid
+from shared.domain.forms import FormField
 from shared.domain.player_sub_roles import catalog_slugs, normalize_sub_role
 from src.domain.registration.mapping_catalog import (
     ParsedRowResult,
@@ -41,7 +42,6 @@ from src.domain.registration.utils import (
 from src.domain.registration.utils import (
     extract_battle_tags as _extract_battle_tags,
 )
-from src.schemas.registration import CustomFieldDefinition
 
 
 def parse_boolean(value: str | None, value_mapping: dict[str, Any]) -> bool:
@@ -229,7 +229,7 @@ def default_mapping_target(parser: str, mode: str = "disabled") -> dict[str, Any
 def suggest_mapping_from_headers(
     headers: list[str],
     *,
-    custom_fields: list[CustomFieldDefinition] | None = None,
+    custom_fields: list[FormField] | None = None,
 ) -> dict[str, Any]:
     """Suggest a starting mapping by matching headers against target aliases.
 
@@ -362,7 +362,7 @@ def parse_sheet_row_detailed(
     mapping_config: dict[str, Any] | None,
     value_mapping: dict[str, Any] | None,
     grid: DivisionGrid,
-    custom_fields: list[CustomFieldDefinition] | None = None,
+    custom_fields: list[FormField] | None = None,
     subrole_catalog: dict[str, list[dict[str, str]]] | None = None,
 ) -> ParsedRowResult:
     """Parse one sheet row into the structured registration payload.
@@ -478,7 +478,7 @@ def parse_sheet_row(
     mapping_config: dict[str, Any] | None,
     value_mapping: dict[str, Any] | None,
     grid: DivisionGrid,
-    custom_fields: list[CustomFieldDefinition] | None = None,
+    custom_fields: list[FormField] | None = None,
     subrole_catalog: dict[str, list[dict[str, str]]] | None = None,
 ) -> dict[str, Any] | None:
     return parse_sheet_row_detailed(

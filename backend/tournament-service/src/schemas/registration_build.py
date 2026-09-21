@@ -18,6 +18,7 @@ from sqlalchemy.orm import selectinload
 
 from shared.balancer_registration_statuses import build_unknown_status_meta
 from shared.division_grid import DivisionGrid, load_runtime_grid
+from shared.domain.forms import RolesParams, schema_from_form
 from shared.domain.roster import PlayerRoster
 from shared.hero_catalog import HeroCatalog, resolve_hero_catalog
 from shared.services.admission.requirements.open_profile import KEY as OPEN_PROFILE_KEY
@@ -33,7 +34,6 @@ from src import models
 from src.schemas.admission import AdmissionRead
 from src.schemas.division_grid import DivisionGridVersionRead
 from src.schemas.registration import (
-    RegistrationFormRead,
     RegistrationRead,
     RegistrationRoleRead,
     RegistrationTeamBrief,
@@ -150,55 +150,20 @@ async def _resolve_top_heroes_config(
     session: AsyncSession,
     form: models.BalancerRegistrationForm,
 ) -> tuple[HeroCatalog | None, int | None]:
-    """Resolve ``(hero_catalog, max_heroes)`` when the top-heroes field is enabled.
+    """Resolve ``(hero_catalog, max_heroes)`` when the top-heroes ask is enabled.
 
-    Returns ``(None, None)`` when the field is absent or disabled, so heroes are
-    neither validated nor persisted for that tournament.
+    Returns ``(None, None)`` when the ``roles`` builtin is absent or its
+    ``top_heroes`` params are off, so heroes are neither validated nor persisted
+    for that tournament.
     """
-    config = (form.built_in_fields_json or {}).get("top_heroes")
-    if not config or config.get("enabled", True) is False:
+    schema = schema_from_form(form)
+    roles = schema.builtin("roles") if schema is not None else None
+    if roles is None:
         return None, None
-    raw_max = config.get("max_heroes")
-    max_heroes = raw_max if isinstance(raw_max, int) and raw_max > 0 else None
-    hero_catalog = await resolve_hero_catalog(session)
-    return hero_catalog, max_heroes
-
-
-def _form_to_read(
-    form: models.BalancerRegistrationForm,
-    *,
-    is_open: bool,
-    subrole_catalog: dict[str, list[dict[str, str]]] | None = None,
-    subscription_requirement: dict[str, Any] | None = None,
-) -> RegistrationFormRead:
-    """``subscription_requirement`` is the WORKSPACE's rule, passed in by the caller.
-
-    An argument rather than a lookup because this stays sync and must not issue a
-    second round trip per call; the async RPC handler already has the session and
-    fetches it once alongside the sub-role catalog.
-
-    ``is_open`` is passed in for the same reason, and is now DERIVED from the
-    tournament's REGISTRATION schedule window rather than read off the form.
-    """
-    return RegistrationFormRead(
-        id=form.id,
-        tournament_id=form.tournament_id,
-        workspace_id=form.workspace_id,
-        is_open=is_open,
-        auto_approve=form.auto_approve,
-        require_open_profile=form.require_open_profile,
-        open_profile_scope=form.open_profile_scope,
-        show_ranks=form.show_ranks,
-        hide_registrations=form.hide_registrations,
-        max_participants=form.max_participants,
-        max_substitutes=form.max_substitutes,
-        require_subscription=form.require_subscription,
-        subscription_stage=form.subscription_stage,
-        subscription_requirement_json=subscription_requirement or {},
-        built_in_fields=form.built_in_fields_json or {},
-        custom_fields=form.custom_fields_json or [],
-        subrole_catalog=subrole_catalog or {},
-    )
+    top_heroes = RolesParams.model_validate(roles.params).top_heroes
+    if not top_heroes.enabled:
+        return None, None
+    return await resolve_hero_catalog(session), top_heroes.max
 
 
 @dataclass(frozen=True, slots=True)

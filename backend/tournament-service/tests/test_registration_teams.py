@@ -753,11 +753,11 @@ class AcceptPayloadTests(TestCase):
     def test_an_attaching_free_agent_need_not_resend_a_form(self) -> None:
         """It used to be required-but-ignored, and the client expressed that by
         casting an empty object — a lie the type system could not catch. An invitee
-        who already registered has nothing left to answer."""
+        who already registered has nothing left to answer, and a submission now
+        carries the form version it answered, so there is no blank to default to."""
         request = RegistrationTeamAcceptRequest.model_validate({"invite_id": 1})
 
-        self.assertIsNotNone(request.registration)
-        self.assertIsNone(request.registration.battle_tag)
+        self.assertIsNone(request.registration)
 
     def test_the_default_cannot_smuggle_a_blank_registration_through(self) -> None:
         """The permissive default is only safe because the registration form's own

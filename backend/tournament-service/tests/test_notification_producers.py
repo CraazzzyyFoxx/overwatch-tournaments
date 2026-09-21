@@ -54,7 +54,6 @@ from shared.domain.roster_shape import parse_roster_slots  # noqa: E402
 from shared.models.platform.notification import Notification  # noqa: E402
 from shared.testing import install_postgres_type_shims  # noqa: E402
 from src import models  # noqa: E402
-from src.schemas.registration import RegistrationCreate  # noqa: E402
 from src.services.encounter import map_report as map_report_module  # noqa: E402
 from src.services.registration import lifecycle as lifecycle_module  # noqa: E402
 from src.services.registration import teams as teams_module  # noqa: E402
@@ -372,10 +371,12 @@ class TeamInviteAnsweredTests(_ProducerTestCase):
         self.addCleanup(shape.stop)
 
     async def test_accept_notifies_the_captain(self) -> None:
+        # ``registration`` is optional on an accept: an invitee who already
+        # registered is attaching, and the service ignores anything sent here.
         await teams_module.teams_service.accept_invite(
             self.fx.shim,
             auth_user=_auth_user(INVITEE_AUTH, "rook"),
-            body=RegistrationCreate(),
+            body=None,
             invite_id=self.invite.id,
         )
 

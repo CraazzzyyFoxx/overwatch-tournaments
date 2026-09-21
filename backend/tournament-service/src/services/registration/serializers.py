@@ -10,10 +10,11 @@ from shared.balancer_registration_statuses import (
     build_status_meta_from_model,
     build_unknown_status_meta,
 )
+from shared.domain.forms import schema_from_form
 from shared.domain.roster import PlayerRoster, RosterRole
 from src import models, schemas
 from src.schemas.admission import AdmissionRead
-from src.schemas.registration import RegistrationFormRead
+from src.schemas.registration_form import RegistrationFormRead
 from src.services.registration.validation import is_flex_submission
 
 
@@ -153,6 +154,8 @@ def serialize_registration_form(
     *,
     is_open: bool,
     subscription_requirement: dict[str, Any] | None = None,
+    subrole_catalog: dict[str, list[dict[str, str]]] | None = None,
+    stale_registrations: int | None = None,
 ) -> RegistrationFormRead:
     """``subscription_requirement`` is the WORKSPACE's rule, passed in by the caller.
 
@@ -163,7 +166,14 @@ def serialize_registration_form(
     ``is_open`` is passed in for the same reason, and is now DERIVED from the
     tournament's REGISTRATION schedule window rather than read off the form — the
     form no longer has a say in whether registration is open.
+
+    ``stale_registrations`` is the organizer-only count of registrations still on
+    an older version; the public read leaves it ``None`` rather than paying for it.
     """
+    version = form.current_version
+    schema = schema_from_form(form)
+    if version is None or schema is None:
+        raise RuntimeError(f"registration form {form.id} has no current version")
     return RegistrationFormRead(
         id=form.id,
         tournament_id=form.tournament_id,
@@ -185,8 +195,11 @@ def serialize_registration_form(
         team_unique_identity=bool(getattr(form, "team_unique_identity", False)),
         team_require_discord_guild=bool(getattr(form, "team_require_discord_guild", False)),
         subscription_requirement_json=subscription_requirement or {},
-        built_in_fields=form.built_in_fields_json or {},
-        custom_fields=form.custom_fields_json or [],
+        form_schema=schema,
+        version_id=version.id,
+        version_number=version.number,
+        stale_registrations=stale_registrations,
+        subrole_catalog=subrole_catalog or {},
     )
 
 

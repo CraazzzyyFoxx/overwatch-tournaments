@@ -30,6 +30,7 @@ from shared.balancer_subrole_catalog import resolve_subrole_catalog
 from shared.core import http_status as status
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.core.social import SocialProvider
+from shared.domain.forms import FormField
 from shared.domain.roster import FlexRoleMode, flex_role_mode
 from shared.repository import (
     BalancerRegistrationRepository,
@@ -65,7 +66,6 @@ from src.domain.registration.utils import (
     normalize_battle_tag_key,
     row_to_json,
 )
-from src.schemas.registration import CustomFieldDefinition
 from src.services.registration._common import (
     RegistrationCommonService,
     _common_service,
@@ -112,7 +112,7 @@ async def _resolve_header_keys(
 
 
 def build_mapping_catalog(
-    custom_fields: list[CustomFieldDefinition],
+    custom_fields: list[FormField],
     *,
     value_mapping: dict[str, Any] | None = None,
     header_keys: list[str] | None = None,

@@ -40,7 +40,8 @@ os.environ["DEBUG"] = "false"
 
 from shared.core.enums import HERO_TYPE_CLASSES, HeroClass  # noqa: E402
 from shared.division_grid import DEFAULT_GRID  # noqa: E402
-from shared.domain.roster import PlayerRoster, flex_role_mode  # noqa: E402
+from shared.domain.forms import FormField, FormSchema, FormSection  # noqa: E402
+from shared.domain.roster import PlayerRoster  # noqa: E402
 from shared.models.registration.registration import (  # noqa: E402
     BalancerRegistration,
     BalancerRegistrationRole,
@@ -50,9 +51,14 @@ from shared.services.roster import roster_engine  # noqa: E402
 ALL_ROLE_VALUES = {role.slot_code for role in HERO_TYPE_CLASSES}
 
 
-def _form(built_in: dict[str, Any] | None) -> Any:
-    """The one thing the engine reads a registration form for: the flex mode."""
-    return SimpleNamespace(built_in_fields_json=built_in)
+def _form(roles_params: dict[str, Any] | None) -> Any:
+    """The one thing the engine reads a registration form for: the flex mode.
+
+    ``None`` is a form that asks no ``roles`` question at all.
+    """
+    fields = [] if roles_params is None else [FormField(key="roles", kind="builtin", params=roles_params)]
+    schema = FormSchema(sections=[FormSection(key="roles", fields=fields)])
+    return SimpleNamespace(current_version=SimpleNamespace(schema_json=schema.model_dump(mode="json")))
 
 
 def _role(
@@ -90,43 +96,16 @@ def _resolve(roles: list[BalancerRegistrationRole], *, mode: str | None = None) 
             [registration],
             workspace_id=None,
             tournament_id=1,
-            form=_form(None if mode is None else {"flex_role": {"mode": mode}}),
+            form=_form(None if mode is None else {"flex_mode": mode}),
             grid=DEFAULT_GRID,
         )
     )
     return rosters[1]
 
 
-class TestFlexRoleMode:
-    """THE reader of ``flex_role.mode``, now shared by the write path and the draft."""
-
-    def test_forced(self) -> None:
-        assert flex_role_mode(_form({"flex_role": {"mode": "forced"}})) == "forced"
-
-    def test_all_roles(self) -> None:
-        assert flex_role_mode(_form({"flex_role": {"mode": "all_roles"}})) == "all_roles"
-
-    def test_optional_is_explicit(self) -> None:
-        assert flex_role_mode(_form({"flex_role": {"mode": "optional"}})) == "optional"
-
-    def test_absent_config_is_optional(self) -> None:
-        assert flex_role_mode(_form({})) == "optional"
-
-    def test_missing_form_fails_closed(self) -> None:
-        assert flex_role_mode(None) == "optional"
-
-    def test_unreadable_config_is_optional(self) -> None:
-        assert flex_role_mode(_form({"flex_role": "yes"})) == "optional"
-        assert flex_role_mode(_form(None)) == "optional"
-
-    def test_a_disabled_field_outranks_the_mode_left_in_the_json(self) -> None:
-        # A form cannot force every role playable through a field it does not
-        # show. ``enabled: false`` therefore wins over a stale ``mode``.
-        assert flex_role_mode(_form({"flex_role": {"enabled": False, "mode": "forced"}})) == "optional"
-        assert flex_role_mode(_form({"flex_role": {"enabled": False, "mode": "all_roles"}})) == "optional"
-
-    def test_an_unknown_mode_is_optional(self) -> None:
-        assert flex_role_mode(_form({"flex_role": {"mode": "whatever"}})) == "optional"
+# ``flex_role_mode`` itself is unit-tested where it lives, in
+# ``shared/tests/test_flex_role_mode.py``. What follows is what the ENGINE does
+# with the answer.
 
 
 class TestEveryRoleModeMakesEveryRolePlayable:

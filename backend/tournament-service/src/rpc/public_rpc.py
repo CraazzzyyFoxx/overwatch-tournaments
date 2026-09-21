@@ -69,14 +69,13 @@ from src.schemas.captain import (
     resolve_optional_viewer_side,
 )
 from src.schemas.registration import (
-    RegistrationCreate,
     RegistrationStatusResponse,
+    RegistrationSubmit,
     RegistrationUpdate,
     SubscriptionRedeemRequest,
 )
 from src.schemas.registration_build import (
     AdmissionChips,
-    _form_to_read,
     _public_rosters,
     _reg_to_read,
     _resolve_tournament_workspace,
@@ -109,6 +108,7 @@ from src.services.registration import service as reg_service
 from src.services.registration import subscription_config
 from src.services.registration import teams as team_service
 from src.services.registration.admission import assert_admitted_at
+from src.services.registration.serializers import serialize_registration_form
 from src.services.registration.subscription_codes import redeem_challenge_code
 from src.services.registration.subscription_status import (
     assert_redeem_attempt_allowed,
@@ -395,11 +395,12 @@ def register(broker: Any, logger: Any) -> None:
             )
             is_open = await windows_service.load_registration_open(session, tournament_id)
             return _dump(
-                _form_to_read(
+                serialize_registration_form(
                     form,
                     is_open=is_open,
                     subrole_catalog=subrole_catalog,
                     subscription_requirement=requirement,
+                    stale_registrations=None,
                 )
             )
 
@@ -411,7 +412,7 @@ def register(broker: Any, logger: Any) -> None:
             user = _identity(data)
             tournament_id = _path_int(data, "tournament_id")
             await assert_tournament_viewable(session, user, tournament_id)
-            body = RegistrationCreate.model_validate(_payload(data))
+            body = RegistrationSubmit.model_validate(_payload(data))
 
             # Admission gate, sign-up stage. Every requirement the tournament armed
             # at `registration` is asked here, in one call; a requirement staged at

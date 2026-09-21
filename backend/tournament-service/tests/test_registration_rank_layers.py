@@ -32,13 +32,35 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from shared.core.enums import HeroClass  # noqa: E402
 from shared.division_grid import load_runtime_grid  # noqa: E402
+from shared.domain.forms import FormField, FormSchema, FormSection  # noqa: E402
 from shared.domain.member_rank import ResolvedRank  # noqa: E402
 from shared.services.member_rank import TOURNAMENT_ORDER  # noqa: E402
 from shared.services.roster import roster_engine  # noqa: E402
 
 _GRID = load_runtime_grid(None)
+
+
+def _flex_form(mode: str, *, enabled: bool = True) -> SimpleNamespace:
+    """A form whose ``roles`` builtin carries the flex params under test."""
+    schema = FormSchema(
+        sections=[
+            FormSection(
+                key="roles",
+                fields=[
+                    FormField(
+                        key="roles",
+                        kind="builtin",
+                        params={"flex_allowed": enabled, "flex_mode": mode},
+                    )
+                ],
+            )
+        ]
+    )
+    return SimpleNamespace(current_version=SimpleNamespace(schema_json=schema.model_dump(mode="json")))
+
+
 #: An ``optional``-mode form, passed in so the engine never queries for one.
-_FORM = SimpleNamespace(built_in_fields_json={})
+_FORM = _flex_form("optional")
 
 
 class _Rows:
@@ -102,10 +124,6 @@ def _registration(
             for index, (role, value) in enumerate(roles.items())
         ],
     )
-
-
-def _flex_form(mode: str, *, enabled: bool = True) -> SimpleNamespace:
-    return SimpleNamespace(built_in_fields_json={"flex_role": {"enabled": enabled, "mode": mode}})
 
 
 async def _resolve(

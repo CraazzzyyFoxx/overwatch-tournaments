@@ -22,6 +22,7 @@ from shared.balancer_registration_statuses import get_builtin_status_values, is_
 from shared.core import http_status as status
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.division_grid import DivisionGrid, load_runtime_grid
+from shared.domain.forms import FormField, schema_from_form
 from shared.domain.player_sub_roles import REGISTRATION_ROLE_CODES, normalize_sub_role
 from shared.domain.roster import FlexRoleMode, PlayerRoster
 from shared.hero_catalog import HeroCatalog
@@ -30,7 +31,7 @@ from shared.services.realtime import Resource, Scope, emit
 from shared.services.roster import roster_engine
 from src import models
 from src.domain.registration.utils import DEFAULT_SORT_PRIORITY_SENTINEL
-from src.schemas.registration import CustomFieldDefinition
+from src.services.registration.form_service import form_service
 
 VALID_REGISTRATION_STATUSES = get_builtin_status_values("registration")
 VALID_BALANCER_STATUSES = get_builtin_status_values("balancer")
@@ -58,16 +59,12 @@ def get_tournament_grid_from_rows(
 
 def form_custom_field_defs(
     form: models.BalancerRegistrationForm | None,
-) -> list[CustomFieldDefinition]:
-    """Coerce a form's stored custom-field JSON into typed definitions."""
-    raw = getattr(form, "custom_fields_json", None) or []
-    defs: list[CustomFieldDefinition] = []
-    for value in raw:
-        if isinstance(value, CustomFieldDefinition):
-            defs.append(value)
-        else:
-            defs.append(CustomFieldDefinition.model_validate(value or {}))
-    return defs
+) -> list[FormField]:
+    """The organizer-defined (non-builtin) questions of a form's current schema."""
+    schema = schema_from_form(form)
+    if schema is None:
+        return []
+    return [field for field in schema.fields() if not field.is_builtin]
 
 
 def apply_all_roles(
@@ -294,13 +291,19 @@ class RegistrationCommonService:
         session: AsyncSession,
         tournament_id: int,
     ) -> models.BalancerRegistrationForm | None:
-        return await self.form_repo.get_by_tournament(session, tournament_id)
+        """The form WITH its current schema version eager-loaded.
+
+        Delegated so there is one definition of "a usable form": every reader
+        here goes on to ask the schema something, and ``current_version`` is
+        never lazy-loadable in async code.
+        """
+        return await form_service.get_form(session, tournament_id)
 
     async def get_form_custom_field_defs(
         self,
         session: AsyncSession,
         tournament_id: int,
-    ) -> list[CustomFieldDefinition]:
+    ) -> list[FormField]:
         form = await self.get_registration_form(session, tournament_id)
         return form_custom_field_defs(form)
 

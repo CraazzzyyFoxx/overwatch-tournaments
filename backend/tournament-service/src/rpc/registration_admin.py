@@ -63,11 +63,11 @@ from src.core import auth
 from src.domain.registration.ow_rank_selection import select_main_account_ow_ranks
 from src.rpc._helpers import _bool, _dump, _identity, _path_int, _payload, _q1, _require_id, _run
 from src.schemas.registration import (
-    RegistrationFormUpsert,
     SubscriptionProviderConfigUpsert,
     WorkspaceSubscriptionRequirementUpsert,
 )
 from src.schemas.registration_build import AdmissionChips
+from src.schemas.registration_form import RegistrationFormUpsert
 from src.schemas.registration_team import (
     RegistrationTeamAdmissionRequest,
     RegistrationTeamAttachAdminRequest,
@@ -89,6 +89,7 @@ from src.services.registration import (
 )
 from src.services.registration import service as reg_svc
 from src.services.registration import teams as team_service
+from src.services.registration.form_service import form_service, parse_form_schema
 from src.services.registration.realtime import emit_balancer_registrations_changed
 from src.services.registration.serializers import (
     serialize_registration,
@@ -265,7 +266,7 @@ def register(broker: Any, logger: Any) -> None:
     async def _reg_form_get(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
             ctx = await _tournament_ctx(session, data, "read", resource="registration_form")
-            form = await reg_common._common_service.get_registration_form(session, ctx.id)
+            form = await form_service.get_form(session, ctx.id)
             if form is None:
                 return None
             # The rule is the workspace's now; one scalar read feeds the sync serializer.
@@ -273,7 +274,14 @@ def register(broker: Any, logger: Any) -> None:
                 session, ctx.ws_id
             )
             is_open = await windows_service.load_registration_open(session, ctx.id)
-            return _dump(serialize_registration_form(form, is_open=is_open, subscription_requirement=requirement))
+            return _dump(
+                serialize_registration_form(
+                    form,
+                    is_open=is_open,
+                    subscription_requirement=requirement,
+                    stale_registrations=await form_service.stale_count(session, form),
+                )
+            )
 
         return await _run(logger, op)
 
@@ -283,17 +291,27 @@ def register(broker: Any, logger: Any) -> None:
     async def _reg_form_upsert(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
             ctx = await _tournament_ctx(session, data, "update", resource="registration_form")
-            body = RegistrationFormUpsert.model_validate(_payload(data))
+            payload = _payload(data)
+            # The schema is validated first and on its own so a malformed question
+            # set answers with per-path ``schema_invalid`` field errors rather than
+            # one English sentence about the whole body.
+            schema = parse_form_schema(payload.get("form_schema"))
+            body = RegistrationFormUpsert.model_validate({**payload, "form_schema": schema})
             # _tournament_ctx already 404s on a missing tournament;
-            # upsert_registration_form commits internally.
-            form = await reg_svc.registration_service.upsert_registration_form(
-                session, ctx.id, body, workspace_id=ctx.ws_id
-            )
+            # form_service.upsert commits internally.
+            form = await form_service.upsert(session, ctx.id, body, workspace_id=ctx.ws_id, actor_user_id=ctx.user.id)
             requirement = await subscription_config.subscription_config_service.load_workspace_requirement_blob(
                 session, ctx.ws_id
             )
             is_open = await windows_service.load_registration_open(session, ctx.id)
-            return _dump(serialize_registration_form(form, is_open=is_open, subscription_requirement=requirement))
+            return _dump(
+                serialize_registration_form(
+                    form,
+                    is_open=is_open,
+                    subscription_requirement=requirement,
+                    stale_registrations=await form_service.stale_count(session, form),
+                )
+            )
 
         return await _run(logger, op)
 

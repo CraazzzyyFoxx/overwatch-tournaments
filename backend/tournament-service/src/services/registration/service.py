@@ -40,11 +40,10 @@ from src import models
 from src.core.broker import optional_broker
 from src.core.config import settings
 from src.schemas.registration import (
-    RegistrationCreate,
-    RegistrationFormUpsert,
     RegistrationListRead,
     RegistrationListResponse,
     RegistrationRead,
+    RegistrationSubmit,
 )
 from src.schemas.registration_build import (
     AdmissionChips,
@@ -799,7 +798,7 @@ class RegistrationService:
         *,
         tournament_id: int,
         auth_user: models.AuthUser,
-        body: RegistrationCreate,
+        body: RegistrationSubmit,
         team_placement: TeamPlacement | None = None,
         commit: bool = True,
     ) -> RegistrationRead:
@@ -1156,85 +1155,6 @@ class RegistrationService:
             role_counts=_role_counts(registrations),
             max_participants=max_participants,
         )
-
-    async def upsert_registration_form(
-        self,
-        session: AsyncSession,
-        tournament_id: int,
-        body: RegistrationFormUpsert,
-        *,
-        workspace_id: int,
-    ) -> models.BalancerRegistrationForm:
-        """Create-or-update the tournament's registration form. Commits internally.
-
-        ``workspace_id`` is the tournament's already-resolved workspace (the RPC
-        handler resolves it for the permission check anyway).
-
-        ``require_subscription`` is written here because the toggle is the tournament's
-        decision; the rule itself belongs to the workspace and is written through
-        ``subscription_config.upsert_workspace_requirement``.
-        """
-        form = await _common_service.get_registration_form(session, tournament_id)
-        built_in_fields_json = {key: value.model_dump(exclude_none=True) for key, value in body.built_in_fields.items()}
-        custom_fields_json = [field.model_dump(exclude_none=True) for field in body.custom_fields]
-
-        if form is None:
-            form = await self.form_repo.create(
-                session,
-                models.BalancerRegistrationForm(
-                    tournament_id=tournament_id,
-                    workspace_id=workspace_id,
-                    auto_approve=body.auto_approve,
-                    require_open_profile=body.require_open_profile,
-                    open_profile_scope=body.open_profile_scope,
-                    show_ranks=body.show_ranks,
-                    hide_registrations=body.hide_registrations,
-                    max_participants=body.max_participants,
-                    require_subscription=body.require_subscription,
-                    subscription_stage=body.subscription_stage.value,
-                    subscription_scope=body.subscription_scope,
-                    team_rank_min=body.team_rank_min,
-                    team_rank_max=body.team_rank_max,
-                    team_max_rank_spread=body.team_max_rank_spread,
-                    team_unique_identity=body.team_unique_identity,
-                    team_require_discord_guild=body.team_require_discord_guild,
-                    max_substitutes=body.max_substitutes,
-                    built_in_fields_json=built_in_fields_json,
-                    custom_fields_json=custom_fields_json,
-                ),
-            )
-        else:
-            form.auto_approve = body.auto_approve
-            form.require_open_profile = body.require_open_profile
-            form.open_profile_scope = body.open_profile_scope
-            form.show_ranks = body.show_ranks
-            form.hide_registrations = body.hide_registrations
-            form.max_participants = body.max_participants
-            form.require_subscription = body.require_subscription
-            form.subscription_stage = body.subscription_stage.value
-            form.subscription_scope = body.subscription_scope
-            form.team_rank_min = body.team_rank_min
-            form.team_rank_max = body.team_rank_max
-            form.team_max_rank_spread = body.team_max_rank_spread
-            form.team_unique_identity = body.team_unique_identity
-            form.team_require_discord_guild = body.team_require_discord_guild
-            form.max_substitutes = body.max_substitutes
-            form.built_in_fields_json = built_in_fields_json
-            form.custom_fields_json = custom_fields_json
-
-        # Staged before the commit that owns the write: the rail persists the
-        # row in this transaction and publishes it from after_commit. Until this
-        # existed a form edit emitted nothing at all, so open tabs only learned
-        # about it by accident, riding along with the next unrelated
-        # registration event.
-        await emit(
-            session,
-            scope=Scope.tournament(tournament_id),
-            invalidates=[Resource.TOURNAMENT_REGISTRATION_FORM],
-        )
-        await session.commit()
-        await session.refresh(form)
-        return form
 
 
 registration_service = RegistrationService()

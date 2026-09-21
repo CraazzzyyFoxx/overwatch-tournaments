@@ -38,6 +38,7 @@ from typing import Any
 
 import sqlalchemy as sa
 from faststream.rabbit.annotations import RabbitMessage
+from sqlalchemy.orm import selectinload
 
 from shared import quota
 from shared.core.errors import BaseAPIException as HTTPException
@@ -142,7 +143,11 @@ async def _owt_player_export(
     workspace_id = tournament.workspace_id
     shape = await get_effective_roster_shape(session, tournament_id=tournament_id, workspace_id=workspace_id)
     form = await session.scalar(
-        sa.select(models.BalancerRegistrationForm).where(models.BalancerRegistrationForm.tournament_id == tournament_id)
+        sa.select(models.BalancerRegistrationForm)
+        # ``flex_role_mode`` reads the schema off the current version, which is
+        # never lazy-loadable in async code.
+        .options(selectinload(models.BalancerRegistrationForm.current_version))
+        .where(models.BalancerRegistrationForm.tournament_id == tournament_id)
     )
     grid = await get_effective_division_grid(session, workspace_id, tournament_id)
     return roster_engine.full_export(

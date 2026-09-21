@@ -159,7 +159,11 @@ class RosterEngine:
             tournament_id = next((reg.tournament_id for reg in registrations), None)
         if form is None and tournament_id is not None:
             form = await session.scalar(
-                sa.select(BalancerRegistrationForm).where(BalancerRegistrationForm.tournament_id == tournament_id)
+                sa.select(BalancerRegistrationForm)
+                # ``flex_role_mode`` reads the schema off the current version,
+                # which is never lazy-loadable in async code.
+                .options(selectinload(BalancerRegistrationForm.current_version))
+                .where(BalancerRegistrationForm.tournament_id == tournament_id)
             )
         mode = flex_role_mode(form)
         if grid is None:

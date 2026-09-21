@@ -17,6 +17,7 @@ from src import schemas
 from src.schemas import captain as captain_schemas
 from src.schemas import encounter_report_form as report_form_schemas
 from src.schemas import registration as reg_schemas
+from src.schemas import registration_form as reg_form_schemas
 from src.schemas import registration_team as reg_team_schemas
 
 # Reusable ad-hoc query params (handlers read these via _q/_q1, no query model).
@@ -228,9 +229,9 @@ OPERATIONS: dict[str, Op] = {
         ),
     ),
     # ── registration admin ─────────────────────────────────────────────────
-    "rpc.tournament.reg_form_get": Op(response=reg_schemas.RegistrationFormRead),
+    "rpc.tournament.reg_form_get": Op(response=reg_form_schemas.RegistrationFormRead),
     "rpc.tournament.reg_form_upsert": Op(
-        request=reg_schemas.RegistrationFormUpsert, response=reg_schemas.RegistrationFormRead
+        request=reg_form_schemas.RegistrationFormUpsert, response=reg_form_schemas.RegistrationFormRead
     ),
     "rpc.tournament.reg_list": Op(response=schemas.BalancerRegistrationRead, response_array=True),
     "rpc.tournament.reg_create_manual": Op(
@@ -288,7 +289,7 @@ OPERATIONS: dict[str, Op] = {
         response=reg_schemas.WorkspaceSubscriptionRequirementRead,
     ),
     # ── public registration (captain/self-service) ─────────────────────────
-    "rpc.tournament.reg_pub_create": Op(request=reg_schemas.RegistrationCreate, response=reg_schemas.RegistrationRead),
+    "rpc.tournament.reg_pub_create": Op(request=reg_schemas.RegistrationSubmit, response=reg_schemas.RegistrationRead),
     "rpc.tournament.reg_pub_update_me": Op(
         request=reg_schemas.RegistrationUpdate, response=reg_schemas.RegistrationRead
     ),

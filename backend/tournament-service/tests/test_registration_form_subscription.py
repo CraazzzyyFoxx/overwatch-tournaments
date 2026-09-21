@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -21,13 +22,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from shared.core.enums import SubscriptionEnforcementStage  # noqa: E402
+from shared.domain.forms import default_schema  # noqa: E402
 from shared.services.subscriptions import Outcome, parse_requirement  # noqa: E402
-from src.schemas.registration import (  # noqa: E402
-    RegistrationFormRead,
-    RegistrationFormUpsert,
-    WorkspaceSubscriptionRequirementUpsert,
-)
+from src.schemas.registration import WorkspaceSubscriptionRequirementUpsert  # noqa: E402
+from src.schemas.registration_form import RegistrationFormRead, RegistrationFormUpsert  # noqa: E402
 from src.services.registration.serializers import serialize_registration_form  # noqa: E402
+
+DEFAULT_SCHEMA = default_schema()
 
 ANY_BOOSTY_OR_TWITCH = {
     "mode": "any",
@@ -52,8 +53,7 @@ class _FormRow:
         self.show_ranks = False
         self.hide_registrations = False
         self.max_participants = None
-        self.built_in_fields_json = {}
-        self.custom_fields_json = []
+        self.current_version = SimpleNamespace(id=31, number=1, schema_json=DEFAULT_SCHEMA.model_dump(mode="json"))
         self.max_substitutes = 0
         self.require_subscription = False
         self.subscription_stage = "check_in"
@@ -61,22 +61,27 @@ class _FormRow:
             setattr(self, key, value)
 
 
+def _upsert(**overrides) -> RegistrationFormUpsert:
+    """The upsert is full-replace, so ``form_schema`` is always sent."""
+    return RegistrationFormUpsert(form_schema=DEFAULT_SCHEMA, **overrides)
+
+
 class TestFormUpsertSchema:
     def test_the_toggle_defaults_off(self):
         """A tournament that never configures this must not start enforcing."""
-        assert RegistrationFormUpsert().require_subscription is False
+        assert _upsert().require_subscription is False
 
     def test_the_stage_defaults_to_check_in(self):
         """The looser stage. A client that never sends the field -- or an older one that
         cannot -- must not arm a sign-up wall by omission."""
-        assert RegistrationFormUpsert().subscription_stage == SubscriptionEnforcementStage.check_in
+        assert _upsert().subscription_stage == SubscriptionEnforcementStage.check_in
 
     def test_max_substitutes_defaults_to_zero(self):
-        assert RegistrationFormUpsert().max_substitutes == 0
+        assert _upsert().max_substitutes == 0
 
     def test_max_substitutes_rejects_a_negative(self):
         try:
-            RegistrationFormUpsert(max_substitutes=-1)
+            _upsert(max_substitutes=-1)
         except ValueError:
             pass
         else:
@@ -85,7 +90,7 @@ class TestFormUpsertSchema:
     def test_the_stage_rejects_a_value_outside_the_enum(self):
         """Better a 422 on save than a stored typo that silently reads as check-in."""
         try:
-            RegistrationFormUpsert(subscription_stage="whenever")
+            _upsert(subscription_stage="whenever")
         except ValueError:
             pass
         else:
@@ -100,12 +105,13 @@ class TestFormUpsertSchema:
         succeeds (200, not 422). That tolerance is deliberate (see the model), so it is
         pinned here rather than left to be discovered.
         """
-        assert not hasattr(RegistrationFormUpsert(), "subscription_requirement_json")
+        assert not hasattr(_upsert(), "subscription_requirement_json")
 
         body = RegistrationFormUpsert.model_validate(
             {
                 "is_open": True,
                 "require_subscription": True,
+                "form_schema": DEFAULT_SCHEMA.model_dump(mode="json"),
                 "subscription_requirement_json": {
                     "mode": "all",
                     "requirements": [{"provider": "boosty", "min_tier_rank": 2}],
@@ -165,10 +171,20 @@ class TestWorkspaceRequirementUpsertSchema:
 
 class TestReadSchema:
     def test_defaults_are_off(self):
-        form = RegistrationFormRead(id=1, tournament_id=1, workspace_id=1, is_open=False)
+        form = RegistrationFormRead(
+            id=1,
+            tournament_id=1,
+            workspace_id=1,
+            is_open=False,
+            form_schema=DEFAULT_SCHEMA,
+            version_id=1,
+            version_number=1,
+        )
         assert form.require_subscription is False
         assert form.subscription_requirement_json == {}
         assert form.max_substitutes == 0
+        # Organizer-only, so the public read is free to leave it unanswered.
+        assert form.stale_registrations is None
 
 
 class TestSerializer:
@@ -196,6 +212,14 @@ class TestSerializer:
     def test_carries_max_substitutes(self):
         read = serialize_registration_form(_FormRow(max_substitutes=2), is_open=True)
         assert read.max_substitutes == 2
+
+    def test_carries_the_version_the_schema_came_from(self):
+        """The wizard posts this id back on submit; a read that lost it would make
+        every submission look stale."""
+        read = serialize_registration_form(_FormRow(), is_open=True, stale_registrations=4)
+        assert (read.version_id, read.version_number) == (31, 1)
+        assert read.form_schema.canonical_json() == DEFAULT_SCHEMA.canonical_json()
+        assert read.stale_registrations == 4
 
 
 class TestRoundTrip:

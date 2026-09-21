@@ -26,6 +26,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from shared.core.enums import HeroClass
+from shared.domain.forms import RolesParams, schema_from_form
 from shared.domain.member_rank import RankSource
 
 __all__ = (
@@ -37,7 +38,7 @@ __all__ = (
     "flex_role_mode",
 )
 
-#: ``registration_form.built_in_fields_json.flex_role.mode``.
+#: The ``flex_mode`` of the form schema's ``roles`` builtin.
 #:
 #: ``optional``   -- the registrant names the roles they play (default)
 #: ``all_roles``  -- every role is playable; the registrant still names a priority
@@ -47,25 +48,22 @@ FLEX_ROLE_MODES: tuple[str, ...] = ("optional", "all_roles", "forced")
 
 
 def flex_role_mode(form: Any | None) -> str:
-    """The tournament's flex mode, normalized. An unreadable form is ``optional``.
+    """The tournament's flex mode, normalized. A form without a schema is ``optional``.
 
-    THE reader of ``flex_role.mode``: tournament-service used to own one copy for
-    the write path and balancer-service another for the draft, synchronized only
-    by parity tests (see the deleted ``rules.all_roles_required``).
+    THE reader of the ``roles`` builtin's ``flex_mode``: tournament-service used to
+    own one copy for the write path and balancer-service another for the draft,
+    synchronized only by parity tests (see the deleted ``rules.all_roles_required``).
 
-    ``enabled: false`` bans the flex field outright and therefore wins over any
-    ``mode`` left behind in the JSON -- a form cannot force every role playable
+    ``flex_allowed=False`` bans the flex field outright and therefore wins over any
+    ``flex_mode`` left behind in the schema -- a form cannot force every role playable
     through a field it does not show.
     """
-    if form is None:
+    schema = schema_from_form(form)
+    roles = schema.builtin("roles") if schema is not None else None
+    if roles is None:
         return "optional"
-    config = (getattr(form, "built_in_fields_json", None) or {}).get("flex_role")
-    if not isinstance(config, Mapping):
-        return "optional"
-    if str(config.get("enabled", True)).strip().lower() in ("false", "0"):
-        return "optional"
-    mode = config.get("mode")
-    return mode if mode in ("all_roles", "forced") else "optional"
+    params = RolesParams.model_validate(roles.params)
+    return params.flex_mode if params.flex_allowed else "optional"
 
 
 @dataclass(frozen=True, slots=True)

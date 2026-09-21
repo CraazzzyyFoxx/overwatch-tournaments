@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import re
-from typing import Any, NoReturn
+from typing import Any, Literal, NoReturn
 
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -26,14 +27,40 @@ from shared.domain.player_sub_roles import (
 )
 from shared.hero_catalog import DEFAULT_MAX_TOP_HEROES, HeroCatalog
 from shared.models.identity.social import SocialAccount
-from src.schemas.registration import (
-    BuiltInFieldConfig,
-    CustomFieldDefinition,
-    RegistrationCreate,
-    RegistrationUpdate,
-)
 
 TEXTUAL_CUSTOM_FIELD_TYPES = {"text", "number", "url"}
+
+
+# The legacy per-field configuration this module validates against. It lived in
+# ``schemas/registration.py`` until the form's ``built_in_fields_json`` /
+# ``custom_fields_json`` collapsed into one versioned ``FormSchema``; the only
+# reader left is this file, which Task 8 deletes together with the whole
+# pre-schema write path. Local rather than shared so nothing new can adopt it.
+class _FieldValidationConfig(BaseModel):
+    regex: str | None = None
+    error_message: str | None = None
+
+
+class BuiltInFieldConfig(BaseModel):
+    enabled: bool = True
+    required: bool = False
+    subroles: dict[str, list[str]] | None = None
+    validation: _FieldValidationConfig | None = None
+    max_heroes: int | None = None
+    require_verified: bool = False
+    mode: Literal["optional", "all_roles", "forced"] | None = None
+
+
+class CustomFieldDefinition(BaseModel):
+    key: str
+    label: str
+    type: Literal["text", "number", "select", "checkbox", "url"] = "text"
+    required: bool = False
+    placeholder: str | None = None
+    options: list[str] | None = None
+    validation: _FieldValidationConfig | None = None
+    show_in_draft: bool = False
+
 
 #: Legacy per-provider registration columns → the provider whose grammar,
 #: normalizer and OAuth capability govern them, plus the field's own label.
@@ -365,7 +392,7 @@ def _validate_custom_field(
 
 def validate_registration_input(
     form: Any,
-    payload: RegistrationCreate | RegistrationUpdate,
+    payload: Any,
     *,
     partial: bool = False,
     subrole_catalog: SubroleCatalog | None = None,
@@ -494,7 +521,7 @@ class RegistrationValidationService:
         session: AsyncSession,
         *,
         form: Any,
-        payload: RegistrationCreate | RegistrationUpdate,
+        payload: Any,
         player_id: int | None,
         partial: bool = False,
     ) -> None:

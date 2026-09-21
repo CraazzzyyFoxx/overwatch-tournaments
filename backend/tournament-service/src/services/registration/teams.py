@@ -49,7 +49,7 @@ from shared.services.notifications import notify
 from shared.services.realtime import Resource, Scope, emit
 from shared.services.roster_shape_access import get_tournament_roster_slots, get_workspace_roster_slots
 from src import models
-from src.schemas.registration import RegistrationCreate, RegistrationRead
+from src.schemas.registration import RegistrationRead, RegistrationSubmit
 from src.schemas.registration_team import (
     RegistrationFreeAgentRead,
     RegistrationTeamInviteHistoryEntry,
@@ -366,7 +366,7 @@ class RegistrationTeamService:
         auth_user: models.AuthUser,
         name: str,
         slot_code: str,
-        body: RegistrationCreate,
+        body: RegistrationSubmit,
     ) -> tuple[models.BalancerRegistrationTeam, RegistrationRead]:
         """Register a new team, with the caller as captain occupying one slot.
 
@@ -1003,7 +1003,7 @@ class RegistrationTeamService:
         session: AsyncSession,
         *,
         auth_user: models.AuthUser,
-        body: RegistrationCreate,
+        body: RegistrationSubmit | None,
         token: str | None = None,
         invite_id: int | None = None,
     ) -> tuple[models.BalancerRegistrationTeam, int]:
