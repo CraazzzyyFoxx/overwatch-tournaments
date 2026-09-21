@@ -17,6 +17,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
+import { ApiError } from "@/lib/api-error";
 import { notify } from "@/lib/notify";
 import { translateRegistrationTeamError } from "@/lib/registration-team-errors";
 import { ROLES, type RoleCode } from "@/lib/roles";
@@ -105,7 +106,15 @@ export default function InviteAcceptWizard({
       await invalidate();
       onClose();
     },
-    onError: (err: unknown) => setError(translateRegistrationTeamError(tErrors, err)),
+    // A field-scoped rejection is already rendered under its own control by
+    // `RegistrationSchemaForm`; the banner is for invite-level failures
+    // (`invite_expired`, `slot_taken`, …), which name no field. The
+    // already-registered branch submits no answers at all, so it can only ever
+    // produce the field-less kind.
+    onError: (err: unknown) => {
+      if (err instanceof ApiError && err.details.some((detail) => detail.field)) return;
+      setError(translateRegistrationTeamError(tErrors, err));
+    },
   });
 
   const declineMutation = useMutation({

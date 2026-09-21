@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
 import { useAuthProfile } from "@/hooks/useAuthProfile";
-import { getApiErrorMessage } from "@/lib/api-error";
+import { ApiError, getApiErrorMessage } from "@/lib/api-error";
 import registrationService from "@/services/registration.service";
 import meService from "@/services/me.service";
 import type { RegistrationForm, RegistrationSubmitInput } from "@/types/registration.types";
@@ -52,7 +52,15 @@ export default function RegistrationWizard({
       });
       onClose();
     },
-    onError: (err: unknown) => setError(getApiErrorMessage(err)),
+    // `RegistrationSchemaForm` renders every field-scoped rejection under the
+    // control it belongs to (and toasts the stale-version one, which names
+    // `form_version_id`), so a banner here would be a second copy of the same
+    // message. The banner is for what the form has no surface for: a failure
+    // that names no field at all.
+    onError: (err: unknown) => {
+      if (err instanceof ApiError && err.details.some((detail) => detail.field)) return;
+      setError(getApiErrorMessage(err));
+    },
   });
 
   return (

@@ -93,9 +93,25 @@ export default function SchemaForm({
     if (step !== index) onStepChange(index);
   }, [step, index, onStepChange]);
 
+  /**
+   * The client's objection to one answer, or `null`.
+   *
+   * `required` is a rule for the REGISTRANT. An organizer enters what they
+   * know — the server runs the organizer write paths with
+   * `enforce_required=False` for exactly that reason — so a blank required
+   * field must not lock them out of an unrelated fix on a row that predates
+   * the question. Asking `validateAnswer` about a not-required copy of the
+   * field drops that one rule and keeps every other: a malformed BattleTag is
+   * still malformed when an organizer types it.
+   */
+  const objectionTo = (field: FormField): string | null => {
+    const rule = context.mode === "admin" && field.required ? { ...field, required: false } : field;
+    return validateAnswer(rule, answers[field.key], context.t);
+  };
+
   let stepError: string | null = null;
   for (const field of fields) {
-    const objection = validateAnswer(field, answers[field.key], context.t);
+    const objection = objectionTo(field);
     if (objection) {
       stepError = objection;
       break;
@@ -122,9 +138,7 @@ export default function SchemaForm({
 
         {fields.map((field) => {
           const Renderer = renderers[field.key] ?? renderers[field.kind] ?? GenericField;
-          const error =
-            serverErrors[field.key] ??
-            (showErrors ? validateAnswer(field, answers[field.key], context.t) : null);
+          const error = serverErrors[field.key] ?? (showErrors ? objectionTo(field) : null);
           const control = (
             <Renderer
               field={field}

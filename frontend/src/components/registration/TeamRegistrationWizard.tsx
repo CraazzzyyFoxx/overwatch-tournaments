@@ -8,6 +8,7 @@ import { EditableAvatar } from "@/components/ui/editable-avatar";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
+import { ApiError } from "@/lib/api-error";
 import { MAX_AVATAR_BYTES } from "@/lib/avatar";
 import { notify } from "@/lib/notify";
 import { translateRegistrationTeamError } from "@/lib/registration-team-errors";
@@ -140,7 +141,13 @@ export default function TeamRegistrationWizard({
       ]);
       onClose();
     },
-    onError: (err: unknown) => setError(translateRegistrationTeamError(tErrors, err)),
+    // A field-scoped rejection is already rendered under its own control by
+    // `RegistrationSchemaForm`; the banner is for team-level failures
+    // (`slot_taken`, `team_name_taken`, …), which name no field.
+    onError: (err: unknown) => {
+      if (err instanceof ApiError && err.details.some((detail) => detail.field)) return;
+      setError(translateRegistrationTeamError(tErrors, err));
+    },
   });
 
   const avatarLabels = {

@@ -91,6 +91,9 @@ const SCHEMA: FormSchema = {
       fields: [
         field({ key: "reveal", kind: "checkbox" }),
         field({ key: "vk", kind: "text", required: true }),
+        // Optional, so it never wins the "first objection" race on an empty
+        // form — it is here to prove a non-`required` rule still bites.
+        field({ key: "pick", kind: "select", options: ["S", "M"] }),
       ],
     },
     {
@@ -121,48 +124,64 @@ const CONTEXT: FieldRendererContext = {
 let container = testWindow.document.createElement("div");
 let root = createRoot(container as unknown as Element);
 
+/** The step the harness stands on, published to the DOM so a blocked Next is
+ *  observable without a side effect during render. */
+const reachedStep = () =>
+  Number(container.querySelector("[data-step]")?.getAttribute("data-step") ?? -1);
+
 function Harness({
   serverErrors = {},
   initial = {},
+  mode = "public",
 }: {
   serverErrors?: Record<string, string>;
   initial?: Answers;
+  mode?: "public" | "admin";
 }) {
   const [answers, setAnswers] = useState<Answers>(initial);
   const [step, setStep] = useState(0);
   const [showErrors, setShowErrors] = useState(false);
   return (
-    <SchemaForm
-      schema={SCHEMA}
-      answers={answers}
-      onChange={(key, value) => setAnswers((prev) => ({ ...prev, [key]: value }))}
-      renderers={{}}
-      context={CONTEXT}
-      serverErrors={serverErrors}
-      step={step}
-      onStepChange={setStep}
-      showErrors={showErrors}
-      footer={({ isLast, stepError }) => (
-        <button
-          type="button"
-          data-next
-          onClick={() => {
-            if (stepError) {
-              setShowErrors(true);
-              return;
-            }
-            if (!isLast) setStep((current) => current + 1);
-          }}
-        >
-          next
-        </button>
-      )}
-    />
+    <>
+      <span data-step={step} />
+      <SchemaForm
+        schema={SCHEMA}
+        answers={answers}
+        onChange={(key, value) => setAnswers((prev) => ({ ...prev, [key]: value }))}
+        renderers={{}}
+        context={{ ...CONTEXT, mode }}
+        serverErrors={serverErrors}
+        step={step}
+        onStepChange={setStep}
+        showErrors={showErrors}
+        footer={({ isLast, stepError }) => (
+          <button
+            type="button"
+            data-next
+            onClick={() => {
+              if (stepError) {
+                setShowErrors(true);
+                return;
+              }
+              if (!isLast) setStep((current) => current + 1);
+            }}
+          >
+            next
+          </button>
+        )}
+      />
+    </>
   );
 }
 
 /** Each case needs its own root: re-rendering into one keeps the previous state. */
-function mount(props: { serverErrors?: Record<string, string>; initial?: Answers } = {}) {
+function mount(
+  props: {
+    serverErrors?: Record<string, string>;
+    initial?: Answers;
+    mode?: "public" | "admin";
+  } = {},
+) {
   container = testWindow.document.createElement("div");
   testWindow.document.body.appendChild(container);
   root = createRoot(container as unknown as Element);
@@ -228,6 +247,34 @@ describe("SchemaForm", () => {
     // Still on the first step: the gated second section was never a step, and a
     // blocked advance must not move anyway.
     expect(container.querySelector('[role="switch"]')).not.toBeNull();
+  });
+
+  it("lets an organizer past a blank required field", () => {
+    // `required` is a rule for the REGISTRANT. The server runs the organizer
+    // write paths with `enforce_required=False`, and the deleted
+    // `UnifiedRegistrationForm` guarded the same thing: an organizer editing a
+    // row that predates the question must not be locked out of unrelated fixes.
+    mount({ mode: "admin", initial: { reveal: true } });
+    expect(reachedStep()).toBe(0);
+
+    click("[data-next]");
+
+    expect(reachedStep()).toBe(1);
+    expect(container.querySelector('[aria-invalid="true"]')).toBeNull();
+  });
+
+  it("still blocks an organizer on a malformed answer", () => {
+    // Only `required` is waived. A value that breaks the field's own rules is
+    // wrong whoever typed it — here a `select` answer outside its options.
+    mount({ mode: "admin", initial: { reveal: true, vk: "x", pick: "XL" } });
+
+    click("[data-next]");
+
+    expect(reachedStep()).toBe(0);
+    const control = container.querySelector('[aria-invalid="true"]');
+    expect(control).not.toBeNull();
+    const describedBy = control?.getAttribute("aria-describedby");
+    expect(container.querySelector(`#${describedBy}`)?.textContent).toBe("invalid_option");
   });
 });
 
