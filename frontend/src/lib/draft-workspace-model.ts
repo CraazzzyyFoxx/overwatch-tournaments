@@ -9,7 +9,8 @@ import type {
 
 export type DraftPoolRoleFilter = DraftRole | "all";
 export type DraftPoolSort = "rank" | "name";
-export type DraftMobileView = "pool" | "team" | "order";
+export const DRAFT_MOBILE_VIEWS = ["pool", "team", "order"] as const;
+export type DraftMobileView = (typeof DRAFT_MOBILE_VIEWS)[number];
 
 export interface DraftViewParams {
   role: DraftPoolRoleFilter;
@@ -60,6 +61,27 @@ export function filterDraftPlayers(
       }
       return (right.effective_rank ?? -1) - (left.effective_rank ?? -1) || left.id - right.id;
     });
+}
+
+export interface DraftPoolView {
+  available: DraftPlayer[];
+  filtered: DraftPlayer[];
+  roleCounts: Record<DraftRole, number>;
+}
+
+/** The pool as both workspaces show it: still-pickable players, filtered. */
+export function draftPoolView(
+  players: DraftPlayer[],
+  filters: Pick<DraftViewParams, "role" | "sort" | "query">
+): DraftPoolView {
+  const available = players.filter((player) => player.status === "available");
+  const roleCounts: Record<DraftRole, number> = { tank: 0, damage: 0, support: 0 };
+  for (const player of available) {
+    for (const role of playerRoles(player)) {
+      roleCounts[role] += 1;
+    }
+  }
+  return { available, filtered: filterDraftPlayers(available, filters), roleCounts };
 }
 
 export function optionForSelection(

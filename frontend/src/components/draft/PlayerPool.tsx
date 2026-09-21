@@ -40,20 +40,22 @@ const POOL_ROLES: DraftRole[] = ["tank", "damage", "support"];
 const SEGMENT_CLASS =
   "inline-flex min-h-8 items-center justify-center gap-1 rounded-md px-2.5 text-xs font-medium text-[color:var(--aqt-fg-muted)] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)]";
 const SEGMENT_ACTIVE = "bg-[color:var(--aqt-card)] text-[color:var(--aqt-fg)]";
+const EMPTY_SHORTLIST: ReadonlySet<number> = new Set();
 
 interface PlayerPoolProps {
   players: DraftPlayer[];
   totalPlayers: number;
   roleCounts: Record<DraftRole, number>;
-  selectedPlayerId: number | null;
-  shortlist: ReadonlySet<number>;
+  selectedPlayerId?: number | null;
+  shortlist?: ReadonlySet<number>;
   role: DraftPoolRoleFilter;
   sort: DraftPoolSort;
   query: string;
-  options: DraftPickOptionsResponse | null;
-  safetyRequired: boolean;
-  onSelect: (player: DraftPlayer, role: DraftRole | null) => void;
-  onToggleShortlist: (playerId: number) => void;
+  options?: DraftPickOptionsResponse | null;
+  safetyRequired?: boolean;
+  /** Omit both for spectators: the rows then carry no captain affordances. */
+  onSelect?: (player: DraftPlayer, role: DraftRole | null) => void;
+  onToggleShortlist?: (playerId: number) => void;
   onFiltersChange: (patch: Partial<{ role: DraftPoolRoleFilter; sort: DraftPoolSort; query: string }>) => void;
   onResetFilters: () => void;
   divisionGrid: DivisionGrid;
@@ -65,13 +67,13 @@ export function PlayerPool({
   players,
   totalPlayers,
   roleCounts,
-  selectedPlayerId,
-  shortlist,
+  selectedPlayerId = null,
+  shortlist = EMPTY_SHORTLIST,
   role,
   sort,
   query,
-  options,
-  safetyRequired,
+  options = null,
+  safetyRequired = false,
   onSelect,
   onToggleShortlist,
   onFiltersChange,
@@ -207,7 +209,11 @@ export function PlayerPool({
         </Popover>
       </div>
 
-      {visiblePlayers.length === 0 ? (
+      {totalPlayers === 0 ? (
+        // An exhausted pool is not a filter miss: offering "reset filters"
+        // here promises players that no longer exist.
+        <p className="py-12 text-center text-sm text-[color:var(--aqt-fg-muted)]">{t("poolExhausted")}</p>
+      ) : visiblePlayers.length === 0 ? (
         <div className="py-12 text-center">
           <Search className="mx-auto h-7 w-7 text-[color:var(--aqt-fg-faint)]" />
           <p className="mt-3 font-medium">{t("noFilterResults")}</p>
@@ -246,7 +252,6 @@ export function PlayerPool({
             const primaryRole = player.primary_role;
             const heroes = primaryRole ? roleTopHeroes(player, primaryRole) : [];
             const profileSlug = player.battle_tag ? getPlayerSlug(player.battle_tag) : null;
-            const selectPlayer = () => onSelect(player, safeRole ?? roles[0] ?? null);
             return (
               <article
                 key={player.id}
@@ -256,19 +261,22 @@ export function PlayerPool({
                 )}
                 style={{ borderLeftColor: isSelected && primaryRole ? ROLE_ACCENT[primaryRole] : "transparent" }}
               >
-                {/* Full-row select target. A real button with a short name, so the
-                    profile link below is a sibling instead of nested interactive
-                    content that would swallow the accessible name. */}
-                <button
-                  type="button"
-                  onClick={selectPlayer}
-                  aria-pressed={isSelected}
-                  aria-label={t("selectPlayer", { player: player.battle_tag ?? `#${player.id}` })}
-                  className="absolute inset-0 z-0 cursor-pointer rounded-md outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[color:var(--aqt-teal)]"
-                />
+                {/* Full-row select target, captains only. A real button with a
+                    short name, so the profile link below is a sibling instead
+                    of nested interactive content that would swallow the
+                    accessible name. */}
+                {onSelect ? (
+                  <button
+                    type="button"
+                    onClick={() => onSelect(player, safeRole ?? roles[0] ?? null)}
+                    aria-pressed={isSelected}
+                    aria-label={t("selectPlayer", { player: player.battle_tag ?? `#${player.id}` })}
+                    className="absolute inset-0 z-0 cursor-pointer rounded-md outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[color:var(--aqt-teal)]"
+                  />
+                ) : null}
                 {/* pointer-events-none lets clicks fall through to the select
                     button above; elements that carry a `title` opt back in. */}
-                <div className="pointer-events-none relative z-10 min-w-0">
+                <div className={cn("relative z-10 min-w-0", onSelect && "pointer-events-none")}>
                   <span className="flex items-center gap-2">
                     {profileSlug ? (
                       <Link
@@ -329,17 +337,19 @@ export function PlayerPool({
                       block, so it must never be dimmed with the row. */}
                   {blocked && <span className="mt-1 block text-xs text-[color:var(--aqt-live)]">{t("unsafePlayerReason")}</span>}
                 </div>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="relative z-10 h-11 w-11"
-                  onClick={() => onToggleShortlist(player.id)}
-                  aria-pressed={bookmarked}
-                  aria-label={bookmarked ? t("removeShortlist") : t("addShortlist")}
-                >
-                  {bookmarked ? <BookmarkCheck className="h-4 w-4 text-[color:var(--aqt-teal)]" /> : <Bookmark className="h-4 w-4" />}
-                </Button>
+                {onToggleShortlist ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="relative z-10 h-11 w-11"
+                    onClick={() => onToggleShortlist(player.id)}
+                    aria-pressed={bookmarked}
+                    aria-label={bookmarked ? t("removeShortlist") : t("addShortlist")}
+                  >
+                    {bookmarked ? <BookmarkCheck className="h-4 w-4 text-[color:var(--aqt-teal)]" /> : <Bookmark className="h-4 w-4" />}
+                  </Button>
+                ) : null}
               </article>
             );
           })}

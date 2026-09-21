@@ -1,57 +1,36 @@
 "use client";
 
-import type { ReactNode } from "react";
-
 import { ArrowLeft, Eye, Pause, Radio, ShieldAlert } from "lucide-react";
 import Link from "next/link";
-import { useLocale, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
 
 import { ConnectionIndicator } from "@/components/realtime/ConnectionIndicator";
-import { HeroFrame } from "@/components/site/PageHero";
-import { cn, formatDateRange } from "@/lib/utils";
-import type { DraftBoard, DraftPresenceState, DraftTeam } from "@/types/draft.types";
+import { cn } from "@/lib/utils";
+import type { DraftBoard, DraftPresenceState } from "@/types/draft.types";
 import type { RealtimeConnectionState } from "@/types/realtime.types";
 import type { Tournament } from "@/types/tournament.types";
-
-import { teamCrest } from "@/lib/draft-crest";
-
-const MAX_CAPTAIN_TILES = 6;
 
 interface DraftPageHeroProps {
   tournament: Tournament;
   board: DraftBoard;
-  /** Kept for API parity with the workspace switch; the compact hero renders identically for both. */
-  mode: "captain" | "spectator";
   presence: DraftPresenceState;
   connectionState: RealtimeConnectionState;
-  currentUserId: number | null;
 }
 
+/**
+ * Identification only: where am I, what is the draft doing, am I connected.
+ * Everything about the current turn lives in `CurrentPick`, captain presence
+ * in the `TeamRosters` cards, and pool size in the pool heading — repeating
+ * any of it here is what made the old header 380px tall on a phone.
+ */
 export function DraftPageHero({
   tournament,
   board,
   presence,
-  connectionState,
-  currentUserId
+  connectionState
 }: Readonly<DraftPageHeroProps>) {
   const t = useTranslations("draftRedesign");
-  const tc = useTranslations("common");
-  const locale = useLocale();
   const session = board.session;
-  const current = board.current_pick;
-  const onClockTeam = current
-    ? board.teams.find((candidate) => candidate.id === current.draft_team_id) ?? null
-    : null;
-  const completed = board.picks.filter((pick) =>
-    ["completed", "autopicked", "skipped"].includes(pick.status)
-  ).length;
-  const available = board.players.filter((player) => player.status === "available").length;
-
-  const captainTeams = board.teams.filter((team) => team.captain_auth_user_id != null);
-  const onlineCaptains = captainTeams.filter(
-    (team) => presence.users[team.captain_auth_user_id as number] != null
-  ).length;
-
   const isLive = session.status === "live";
   const StateIcon = session.blocked_reason
     ? ShieldAlert
@@ -60,200 +39,46 @@ export function DraftPageHero({
       : Radio;
 
   return (
-    <HeroFrame>
-      <div className="flex flex-col gap-2.5 px-7 py-3.5">
-        {/* Top row: breadcrumb + presence */}
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-          <Link
-            href={`/tournaments/${tournament.id}`}
-            aria-label={t("room.back")}
-            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-[color:var(--aqt-fg-muted)] outline-none transition-colors hover:bg-[color:var(--aqt-card-2)] hover:text-[color:var(--aqt-fg)] focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)]"
-          >
-            <ArrowLeft className="h-4 w-4" />
-          </Link>
-          <div className="flex flex-wrap items-center gap-2 text-xs tracking-[0.05em] text-[color:var(--aqt-fg-faint)]">
-            <Link href="/tournaments" className="transition-colors hover:text-[color:var(--aqt-teal)]">
-              {tc("tournaments")}
-            </Link>
-            <span aria-hidden className="opacity-45">
-              /
-            </span>
-            <span>{formatDateRange(tournament.start_date, tournament.end_date, locale)}</span>
-          </div>
-
-          {/* No live region on the cluster: the viewer counter ticks on its own
-              and would re-announce every captain tile with it. Only the
-              connection state below is worth announcing. */}
-          <div className="ml-auto flex flex-wrap items-center gap-3">
-            <span className="text-label uppercase tracking-label text-[color:var(--aqt-fg-faint)]">
-              {t("captain")}
-            </span>
-            <div className="flex">
-              {captainTeams.slice(0, MAX_CAPTAIN_TILES).map((team, index) => (
-                <CaptainTile
-                  key={team.id}
-                  team={team}
-                  index={index}
-                  online={presence.users[team.captain_auth_user_id as number] != null}
-                  isYou={currentUserId != null && team.captain_auth_user_id === currentUserId}
-                  onlineLabel={t("captainOnline")}
-                  offlineLabel={t("captainOffline")}
-                  youLabel={t("you")}
-                />
-              ))}
-              {captainTeams.length > MAX_CAPTAIN_TILES ? (
-                <span className="-ml-1.5 grid h-[22px] w-[22px] place-items-center rounded-lg bg-[color:var(--aqt-card-2)] text-label text-[color:var(--aqt-fg-muted)] ring-2 ring-[color:var(--aqt-bg)]">
-                  +{captainTeams.length - MAX_CAPTAIN_TILES}
-                </span>
-              ) : null}
-            </div>
-            <span className="text-xs text-[color:var(--aqt-fg-muted)]">
-              {t("onlineCount", { n: onlineCaptains, total: captainTeams.length })}
-            </span>
-
-            <span aria-hidden className="h-4 w-px bg-[color:var(--aqt-border-2)]" />
-
-            <span className="inline-flex items-center gap-1.5 text-xs text-[color:var(--aqt-fg-muted)]">
-              <Eye className="h-3.5 w-3.5 text-[color:var(--aqt-teal)]" aria-hidden />
-              {t("anonymousViewers", { count: presence.anonymous_viewer_count })}
-            </span>
-
-            <span aria-hidden className="h-4 w-px bg-[color:var(--aqt-border-2)]" />
-
-            <ConnectionIndicator connectionState={connectionState} />
-          </div>
-        </div>
-
-        {/* Main row: title + meta on the left, compact stats on the right */}
-        <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
-          <div className="flex min-w-0 flex-wrap items-center gap-x-3.5 gap-y-2">
-            <h1 className="aqt-hero-title min-w-0 font-onest text-[clamp(1.5rem,2.4vw,2.05rem)] font-semibold leading-[1.05] tracking-[-0.02em]">
-              {tournament.name}
-            </h1>
-            <div className="flex flex-wrap gap-1.5">
-              <span
-                className={cn(
-                  "inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-label font-bold uppercase tracking-label",
-                  isLive
-                    ? "border-[color:var(--aqt-teal)]/35 bg-[color:var(--aqt-teal)]/12 text-[color:var(--aqt-teal)]"
-                    : "border-[color:var(--aqt-border-2)] text-[color:var(--aqt-amber)]"
-                )}
-              >
-                {isLive ? (
-                  <span
-                    aria-hidden
-                    className="h-1.5 w-1.5 rounded-full bg-[color:var(--aqt-teal)] animate-pulse motion-reduce:animate-none"
-                    style={{ boxShadow: "0 0 8px var(--aqt-teal)" }}
-                  />
-                ) : (
-                  <StateIcon className="h-3.5 w-3.5" aria-hidden />
-                )}
-                {t(`status.${session.status}`)}
-              </span>
-              <MetaPill label={t("format")} value={session.format} />
-              <MetaPill label={t("teams")} value={board.teams.length} />
-              <MetaPill label={t("rosterSize")} value={session.roster_shape.team_size} />
-            </div>
-          </div>
-
-          <div className="ml-auto flex items-center gap-6">
-            <HStat label={t("availablePool")} value={available} />
-            <HStat label={t("progress")} value={`${completed}/${board.picks.length}`} />
-            <HStat
-              label={t("onClock")}
-              value={onClockTeam?.name ?? "—"}
-              title={onClockTeam?.name}
-              valueClassName="inline-block max-w-[9rem] truncate align-bottom text-heading text-[color:var(--aqt-teal)]"
-            />
-          </div>
-        </div>
-      </div>
-    </HeroFrame>
-  );
-}
-
-function CaptainTile({
-  team,
-  index,
-  online,
-  isYou,
-  onlineLabel,
-  offlineLabel,
-  youLabel
-}: Readonly<{
-  team: DraftTeam;
-  index: number;
-  online: boolean;
-  isYou: boolean;
-  onlineLabel: string;
-  offlineLabel: string;
-  youLabel: string;
-}>) {
-  const { initial, hue } = teamCrest(team);
-  const label = `${team.name}${isYou ? ` (${youLabel})` : ""} — ${online ? onlineLabel : offlineLabel}`;
-  return (
-    <span
-      role="img"
-      title={label}
-      aria-label={label}
-      className={cn(
-        "relative grid h-[22px] w-[22px] place-items-center rounded-lg text-label font-bold ring-2 ring-[color:var(--aqt-bg)]",
-        index > 0 && "-ml-1.5",
-        !online && "opacity-45"
-      )}
-      style={{ background: `hsl(${hue} 55% 22%)`, color: `hsl(${hue} 70% 72%)` }}
-    >
-      {initial}
+    <header className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-[color:var(--aqt-border)] bg-[color:var(--aqt-card)] px-2 py-2 sm:px-3">
+      <Link
+        href={`/tournaments/${tournament.id}`}
+        aria-label={t("room.back")}
+        className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-[color:var(--aqt-fg-muted)] outline-none transition-colors hover:bg-[color:var(--aqt-card-2)] hover:text-[color:var(--aqt-fg)] focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)]"
+      >
+        <ArrowLeft className="h-4 w-4" />
+      </Link>
+      <h1 className="min-w-0 truncate font-onest text-lg font-semibold leading-tight tracking-[-0.01em] sm:text-xl">
+        {tournament.name}
+      </h1>
       <span
-        aria-hidden
-        className="absolute -bottom-0.5 -right-0.5 h-2 w-2 rounded-full border border-[color:var(--aqt-bg)]"
-        style={
-          online
-            ? { background: "var(--aqt-support)", boxShadow: "0 0 5px var(--aqt-support)" }
-            : { background: "var(--aqt-fg-faint)" }
-        }
-      />
-    </span>
-  );
-}
-
-function MetaPill({ label, value }: Readonly<{ label: ReactNode; value: ReactNode }>) {
-  return (
-    <span className="inline-flex items-center gap-1.5 rounded-md border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-overlay-2)] px-2.5 py-1 text-label text-[color:var(--aqt-fg-muted)]">
-      <span className="text-label uppercase tracking-label text-[color:var(--aqt-fg-faint)]">
-        {label}
-      </span>
-      <span className="font-semibold text-[color:var(--aqt-fg)]">{value}</span>
-    </span>
-  );
-}
-
-function HStat({
-  label,
-  value,
-  title,
-  valueClassName
-}: Readonly<{
-  label: ReactNode;
-  value: ReactNode;
-  /** Recovers the full text when `valueClassName` truncates it. */
-  title?: string;
-  valueClassName?: string;
-}>) {
-  return (
-    <div className="flex flex-col gap-0.5">
-      <span className="text-label font-bold uppercase tracking-[0.13em] text-[color:var(--aqt-fg-faint)]">
-        {label}
-      </span>
-      <span
-        title={title}
         className={cn(
-          "text-title font-semibold leading-none tabular-nums text-[color:var(--aqt-fg)]",
-          valueClassName
+          "inline-flex shrink-0 items-center gap-1.5 rounded-md border px-2 py-1 text-label font-bold uppercase tracking-label",
+          isLive
+            ? "border-[color:var(--aqt-teal)]/35 bg-[color:var(--aqt-teal)]/12 text-[color:var(--aqt-teal)]"
+            : "border-[color:var(--aqt-border-2)] text-[color:var(--aqt-amber)]"
         )}
       >
-        {value}
+        {isLive ? (
+          <span
+            aria-hidden
+            className="h-1.5 w-1.5 rounded-full bg-[color:var(--aqt-teal)] animate-pulse motion-reduce:animate-none"
+          />
+        ) : (
+          <StateIcon className="h-3.5 w-3.5" aria-hidden />
+        )}
+        {t(`status.${session.status}`)}
       </span>
-    </div>
+
+      {/* No live region: the viewer counter ticks on its own. Only the
+          connection state below announces itself. */}
+      <div className="ml-auto flex shrink-0 items-center gap-3">
+        <span className="inline-flex items-center gap-1.5 text-xs text-[color:var(--aqt-fg-muted)]">
+          <Eye className="h-3.5 w-3.5 text-[color:var(--aqt-teal)]" aria-hidden />
+          {t("anonymousViewers", { count: presence.anonymous_viewer_count })}
+        </span>
+        <span aria-hidden className="h-4 w-px bg-[color:var(--aqt-border-2)]" />
+        <ConnectionIndicator connectionState={connectionState} />
+      </div>
+    </header>
   );
 }
