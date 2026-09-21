@@ -169,6 +169,35 @@ def test_every_stage_reports_before_anything_is_raised() -> None:
     assert by_field["identity_discord"] == "not_verified"
 
 
+def test_an_unreadable_gated_answer_gets_one_verdict_not_two() -> None:
+    """A handle that fails its grammar is absent from ``values`` for a reason
+    already reported. The gate must not read that absence as "answered blank"
+    and stack ``not_verified`` on top of ``invalid_format`` -- the old validator
+    was fail-fast, so collecting every stage is exactly what made this possible."""
+    schema = _schema(discord_params={"require_verified": True})
+
+    with pytest.raises(ApiHTTPException) as caught:
+        _validate(
+            {"battle_tag": "Player#1234", "identity_discord": "Bad Name!"},
+            schema=schema,
+            session=_FakeSession([("discord", "bad name!")]),
+        )
+
+    assert [(e["field"], e["code"]) for e in _errors(caught.value)] == [("identity_discord", "invalid_format")]
+
+
+def test_a_gated_answer_left_blank_is_still_not_verified() -> None:
+    """The other half: ``require_verified`` implies the field is required, so a
+    genuinely blank answer must keep failing the gate even though the field
+    itself is optional and normalisation therefore said nothing about it."""
+    schema = _schema(discord_params={"require_verified": True})
+
+    with pytest.raises(ApiHTTPException) as caught:
+        _validate({"battle_tag": "Player#1234", "identity_discord": ""}, schema=schema, session=_FakeSession([]))
+
+    assert [(e["field"], e["code"]) for e in _errors(caught.value)] == [("identity_discord", "not_verified")]
+
+
 def test_a_gated_identity_matching_a_verified_account_passes() -> None:
     schema = _schema(discord_params={"require_verified": True})
 

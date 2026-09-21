@@ -187,6 +187,12 @@ class RegistrationAnswerService:
                     values=values,
                     partial=partial,
                     player_id=player_id,
+                    # A key that failed stage one is absent from ``values`` for a
+                    # reason that is already reported. Without this the gate reads
+                    # that absence as "answered blank" and adds a second, wrong
+                    # verdict on the same field: ``invalid_format`` AND
+                    # ``not_verified`` for one malformed handle.
+                    errored_keys={error.field for error in normalized.errors},
                 )
             )
 
@@ -205,6 +211,7 @@ class RegistrationAnswerService:
         values: Mapping[str, Any],
         partial: bool,
         player_id: int | None,
+        errored_keys: frozenset[str] | set[str] = frozenset(),
     ) -> list[FieldError]:
         """``require_verified`` fields checked against the registrant's OAuth rows.
 
@@ -212,12 +219,16 @@ class RegistrationAnswerService:
         identity-service), so a submission with no linked player cannot satisfy a
         gated field at all. ``require_verified`` implies the field is required:
         gated-and-blank is ``not_verified``, not a silent pass.
+
+        ``errored_keys`` are the fields normalisation already refused. They are
+        skipped, not re-judged: an unreadable answer is not evidence about who
+        owns it, and the registrant gets one verdict per field.
         """
         gated: list[tuple[str, str, str]] = []
         errors: list[FieldError] = []
         for field in visible_fields(schema, answers):
             provider = _verified_provider(field)
-            if provider is None or (partial and field.key not in answers):
+            if provider is None or field.key in errored_keys or (partial and field.key not in answers):
                 continue
             handle = values.get(field.key)
             if not handle:
