@@ -34,20 +34,21 @@ export default function TournamentRulesPage({ slug }: Readonly<{ slug: string }>
       {rules ? (
         // No card: a regulation is a page of prose, and boxing it adds a border
         // around text that nothing else on the page is competing with. The
-        // measure cap is the only layout it needs — prose run to the full width
-        // of a desktop viewport passes the ~75-character line every readability
-        // guide draws the limit at. Tables inside still scroll on their own.
+        // measure cap is the only layout it needs. Tables inside still scroll
+        // on their own.
         //
-        // 42rem, the step `/docs` (`docs.module.css`) and `/terms`
-        // (`LegalDocument`) already read at, so every prose surface on the site
-        // is one width. Measured in Inter at 16px: 672px ≈ 78 Cyrillic
-        // characters per line. The next step up (48rem) crosses 85 and is where
-        // the eye starts losing the line it is on.
+        // 48rem — one step WIDER than the 42rem `/docs` and `/terms` read at,
+        // chosen deliberately so the document fills more of a desktop tab.
+        // Measured in Inter at 16px: 768px ≈ 89 Cyrillic characters per line,
+        // above the 75 every readability guide draws the limit at. The price is
+        // paid in line tracking on the widest viewports; `leading-relaxed`
+        // (1.625) on every paragraph is what keeps that survivable, so do not
+        // tighten it here.
         //
         // Centred, because the cap cannot be spent instead: on a wide desktop
-        // the column leaves half the tab empty, and empty space on ONE side
-        // reads as a layout that broke rather than a document that ends.
-        <Markdown source={rules} className="mx-auto max-w-2xl py-2" />
+        // the column still leaves the tab's sides empty, and empty space on ONE
+        // side reads as a layout that broke rather than a document that ends.
+        <Markdown source={rules} className="mx-auto max-w-3xl py-2" />
       ) : (
         // Reachable by a direct link after an organizer clears the document:
         // the tab is gone from the rail, the URL still resolves.
