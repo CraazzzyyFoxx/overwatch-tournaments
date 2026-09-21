@@ -12,7 +12,7 @@ schema name — `ranks/` writes to `overwatch_rank`, `ingestion/` to `log_proces
 > `--check` and fails on drift, so the diagrams cannot fall behind the models again.
 
 <!-- ERD:auto _alembic_head -->
-Alembic head: **`achenc01`** (70 revisions in `backend/migrations/versions/`).
+Alembic head: **`chat01`** (72 revisions in `backend/migrations/versions/`).
 <!-- /ERD:auto -->
 
 **Reading the diagrams**
@@ -2648,6 +2648,35 @@ erDiagram
         varchar(45) ip_address "nullable"
         varchar(255) user_agent "nullable"
         varchar(64) correlation_id "nullable"
+    }
+    PUBLIC_CHAT_MESSAGE {
+        bigint id PK
+        varchar(16) room_kind
+        bigint room_ref_id
+        bigint auth_user_id
+        text author_name
+        varchar(16) author_role
+        text body
+        timestamptz created_at
+        timestamptz deleted_at "nullable"
+        bigint deleted_by_auth_user_id "nullable"
+    }
+    PUBLIC_CHAT_MUTE {
+        varchar(16) room_kind PK
+        bigint room_ref_id PK
+        bigint auth_user_id PK
+        timestamptz muted_until "nullable"
+        text reason "nullable"
+        bigint created_by_auth_user_id
+        timestamptz created_at
+    }
+    PUBLIC_CHAT_ROOM_SETTINGS {
+        varchar(16) room_kind PK
+        bigint room_ref_id PK
+        boolean spectators_can_read
+        bigint updated_by_auth_user_id
+        timestamptz created_at
+        timestamptz updated_at "nullable"
     }
     PUBLIC_EVENT_OUTBOX {
         bigint id PK
