@@ -21,6 +21,7 @@ type WorkspaceResolver interface {
 // rules below need.
 type MembershipChecker interface {
 	IsWorkspaceMember(ctx context.Context, userID, workspaceID int64) (bool, error)
+	IsWorkspaceOrganizer(ctx context.Context, userID, workspaceID int64) (bool, error)
 	IsEncounterCaptain(ctx context.Context, authUserID, encounterID int64) (bool, error)
 	IsDraftSessionCaptain(ctx context.Context, authUserID, sessionID int64) (bool, error)
 }
@@ -239,8 +240,14 @@ func (r *Registry) allowDraftChat(ctx context.Context, user *auth.User, groups [
 }
 
 // allowRoomChat is the tail both chat rules share once the caller is known not
-// to be a participant: the organizing workspace's members get in (they moderate
+// to be a participant: the organizing workspace's STAFF get in (they moderate
 // the room), then the spectator branch.
+//
+// Staff, not "any workspace member": a workspace_member row — and the baseline
+// `member` role it autofills — is created for every tournament registrant, so
+// membership would admit every player of the workspace to a room the organizer
+// closed to spectators, live, while REST 403s them. IsWorkspaceOrganizer
+// mirrors the resolver's has_admin_panel_access(workspace_id) gate.
 //
 // The spectator branch is two gates in series and the ORDER is the rule: the
 // per-room toggle first, then the unchanged hidden-tournament gate. The toggle
@@ -255,11 +262,11 @@ func (r *Registry) allowRoomChat(ctx context.Context, user *auth.User, roomKind 
 			return false, err
 		}
 		if found {
-			member, err := r.members.IsWorkspaceMember(ctx, user.ID, workspaceID)
+			organizer, err := r.members.IsWorkspaceOrganizer(ctx, user.ID, workspaceID)
 			if err != nil {
 				return false, err
 			}
-			if member {
+			if organizer {
 				return true, nil
 			}
 		}

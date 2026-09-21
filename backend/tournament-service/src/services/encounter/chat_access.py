@@ -68,9 +68,17 @@ class EncounterChatAccess:
             )
 
         workspace_id = await auth.get_encounter_workspace_id(session, encounter.id)
-        # Membership already answers superuser (AuthUser.is_workspace_member
-        # short-circuits on it); chat needs no capability of its own.
-        if auth_user.is_workspace_member(workspace_id):
+        # Organizer staff, NOT the workspace roster. ``workspace_member`` rows --
+        # and the baseline ``member`` role they autofill -- are created for every
+        # registrant (``RegistrationService._anchor_registration_member``), and
+        # the token's ``workspaces`` list is built from exactly those rows, so
+        # ``is_workspace_member`` handed moderation (and a closed room's lobby
+        # code) to every player who ever signed up in this workspace.
+        # ``has_admin_panel_access`` is the scoped organizer predicate already
+        # used as the admin gate: superuser, a global admin-panel role, or any
+        # non-read grant in THIS workspace -- a read-only ``member``/``player``
+        # and a mix ``host`` are excluded.
+        if auth_user.has_admin_panel_access(workspace_id):
             return ChatMembership(
                 role="staff",
                 display_name=await self._display_name(session, auth_user),

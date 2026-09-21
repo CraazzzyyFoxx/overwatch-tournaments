@@ -79,9 +79,14 @@ class DraftChatAccess:
                 can_moderate=False,
             )
 
-        # Membership already answers superuser (AuthUser.is_workspace_member
-        # short-circuits on it); chat needs no capability of its own.
-        if auth_user.is_workspace_member(draft.workspace_id):
+        # Organizer staff, NOT the workspace roster: ``workspace_member`` rows
+        # (and the baseline ``member`` role they autofill) exist for every
+        # registrant, and the token's ``workspaces`` list is built from them, so
+        # ``is_workspace_member`` handed moderation to every player of the
+        # workspace. ``has_admin_panel_access`` is the scoped organizer
+        # predicate: superuser, a global admin-panel role, or any non-read grant
+        # in THIS workspace.
+        if auth_user.has_admin_panel_access(draft.workspace_id):
             return ChatMembership(
                 role="staff",
                 display_name=await self._display_name(session, auth_user),
