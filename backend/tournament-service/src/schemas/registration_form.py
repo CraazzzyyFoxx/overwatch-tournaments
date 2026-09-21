@@ -111,3 +111,15 @@ class RegistrationFormTemplateRead(BaseModel):
 class RegistrationFormTemplateUpsert(BaseModel):
     name: str = Field(min_length=1, max_length=64)
     form_schema: FormSchema
+
+
+class RegistrationFormTemplateApply(BaseModel):
+    """Which workspace template to copy onto the tournament in the path."""
+
+    template_id: int
+
+
+class RegistrationFormTemplateSave(BaseModel):
+    """The name to file the tournament's current questions under."""
+
+    name: str = Field(min_length=1, max_length=64)

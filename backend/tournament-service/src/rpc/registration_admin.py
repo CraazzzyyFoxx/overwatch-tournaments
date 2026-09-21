@@ -67,7 +67,12 @@ from src.schemas.registration import (
     WorkspaceSubscriptionRequirementUpsert,
 )
 from src.schemas.registration_build import AdmissionChips
-from src.schemas.registration_form import RegistrationFormUpsert
+from src.schemas.registration_form import (
+    RegistrationFormTemplateApply,
+    RegistrationFormTemplateSave,
+    RegistrationFormTemplateUpsert,
+    RegistrationFormUpsert,
+)
 from src.schemas.registration_team import (
     RegistrationTeamAdmissionRequest,
     RegistrationTeamAttachAdminRequest,
@@ -94,8 +99,10 @@ from src.services.registration.realtime import emit_balancer_registrations_chang
 from src.services.registration.serializers import (
     serialize_registration,
     serialize_registration_form,
+    serialize_registration_form_template,
     serialize_status,
 )
+from src.services.registration.templates import template_service
 from src.services.registration.windows import windows_service
 
 # --- helpers -----------------------------------------------------------------
@@ -312,6 +319,131 @@ def register(broker: Any, logger: Any) -> None:
                     stale_registrations=await form_service.stale_count(session, form),
                 )
             )
+
+        return await _run(logger, op)
+
+    # ── workspace form templates ──────────────────────────────────────────
+    #
+    # Workspace-level named question sets, copied onto a tournament's form on
+    # apply. The two tournament-scoped ops below authorize against the
+    # TOURNAMENT and then scope the template lookup by the workspace that
+    # resolved to — a template id is global, this permission is not.
+
+    # GET /ws/{workspace_id}/registration-form-templates
+    #   require_workspace_permission("registration_form", "read")
+    @broker.subscriber("rpc.tournament.regform_template_list")
+    async def _regform_template_list(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            ctx = _workspace_ctx(data, "read", resource="registration_form")
+            templates = await template_service.list(session, workspace_id=ctx.ws_id)
+            return [_dump(serialize_registration_form_template(template)) for template in templates]
+
+        return await _run(logger, op)
+
+    # POST /ws/{workspace_id}/registration-form-templates  (201)
+    #   require_workspace_permission("registration_form", "update")
+    @broker.subscriber("rpc.tournament.regform_template_create")
+    async def _regform_template_create(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            ctx = _workspace_ctx(data, "update", resource="registration_form")
+            payload = _payload(data)
+            # Schema first and on its own, exactly as the form upsert does: a
+            # malformed question set answers per-path ``schema_invalid`` field
+            # errors rather than one English sentence about the whole body.
+            schema = parse_form_schema(payload.get("form_schema"))
+            body = RegistrationFormTemplateUpsert.model_validate({**payload, "form_schema": schema})
+            template = await template_service.create(
+                session,
+                workspace_id=ctx.ws_id,
+                body=body,
+                actor_user_id=ctx.user.id,
+            )
+            return _dump(serialize_registration_form_template(template))
+
+        return await _run(logger, op)
+
+    # PUT /ws/{workspace_id}/registration-form-templates/{template_id}
+    #   require_workspace_permission("registration_form", "update")
+    @broker.subscriber("rpc.tournament.regform_template_update")
+    async def _regform_template_update(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            ctx = _workspace_ctx(data, "update", resource="registration_form")
+            template_id = _path_int(data, "template_id")
+            payload = _payload(data)
+            schema = parse_form_schema(payload.get("form_schema"))
+            body = RegistrationFormTemplateUpsert.model_validate({**payload, "form_schema": schema})
+            template = await template_service.update(
+                session,
+                workspace_id=ctx.ws_id,
+                template_id=template_id,
+                body=body,
+                actor_user_id=ctx.user.id,
+            )
+            return _dump(serialize_registration_form_template(template))
+
+        return await _run(logger, op)
+
+    # DELETE /ws/{workspace_id}/registration-form-templates/{template_id}  (204)
+    #   require_workspace_permission("registration_form", "update")
+    @broker.subscriber("rpc.tournament.regform_template_delete")
+    async def _regform_template_delete(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            ctx = _workspace_ctx(data, "update", resource="registration_form")
+            await template_service.delete(
+                session,
+                workspace_id=ctx.ws_id,
+                template_id=_path_int(data, "template_id"),
+            )
+            return None
+
+        return await _run(logger, op)
+
+    # POST /balancer/tournaments/{tournament_id}/registration-form/apply-template
+    #   require_tournament_permission("registration_form", "update")
+    @broker.subscriber("rpc.tournament.regform_template_apply")
+    async def _regform_template_apply(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            ctx = await _tournament_ctx(session, data, "update", resource="registration_form")
+            body = RegistrationFormTemplateApply.model_validate(_payload(data))
+            # Copy-on-apply: this is an ordinary schema save (a new version by the
+            # common rule), and the form does not remember where it came from.
+            form = await template_service.apply(
+                session,
+                workspace_id=ctx.ws_id,
+                tournament_id=ctx.id,
+                template_id=body.template_id,
+                actor_user_id=ctx.user.id,
+            )
+            requirement = await subscription_config.subscription_config_service.load_workspace_requirement_blob(
+                session, ctx.ws_id
+            )
+            is_open = await windows_service.load_registration_open(session, ctx.id)
+            return _dump(
+                serialize_registration_form(
+                    form,
+                    is_open=is_open,
+                    subscription_requirement=requirement,
+                    stale_registrations=await form_service.stale_count(session, form),
+                )
+            )
+
+        return await _run(logger, op)
+
+    # POST /balancer/tournaments/{tournament_id}/registration-form/save-template  (201)
+    #   require_tournament_permission("registration_form", "update")
+    @broker.subscriber("rpc.tournament.regform_template_save_from_form")
+    async def _regform_template_save_from_form(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            ctx = await _tournament_ctx(session, data, "update", resource="registration_form")
+            body = RegistrationFormTemplateSave.model_validate(_payload(data))
+            template = await template_service.save_from_form(
+                session,
+                workspace_id=ctx.ws_id,
+                tournament_id=ctx.id,
+                name=body.name,
+                actor_user_id=ctx.user.id,
+            )
+            return _dump(serialize_registration_form_template(template))
 
         return await _run(logger, op)
 

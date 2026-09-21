@@ -233,6 +233,25 @@ OPERATIONS: dict[str, Op] = {
     "rpc.tournament.reg_form_upsert": Op(
         request=reg_form_schemas.RegistrationFormUpsert, response=reg_form_schemas.RegistrationFormRead
     ),
+    "rpc.tournament.regform_template_list": Op(
+        response=reg_form_schemas.RegistrationFormTemplateRead, response_array=True
+    ),
+    "rpc.tournament.regform_template_create": Op(
+        request=reg_form_schemas.RegistrationFormTemplateUpsert,
+        response=reg_form_schemas.RegistrationFormTemplateRead,
+    ),
+    "rpc.tournament.regform_template_update": Op(
+        request=reg_form_schemas.RegistrationFormTemplateUpsert,
+        response=reg_form_schemas.RegistrationFormTemplateRead,
+    ),
+    "rpc.tournament.regform_template_apply": Op(
+        request=reg_form_schemas.RegistrationFormTemplateApply,
+        response=reg_form_schemas.RegistrationFormRead,
+    ),
+    "rpc.tournament.regform_template_save_from_form": Op(
+        request=reg_form_schemas.RegistrationFormTemplateSave,
+        response=reg_form_schemas.RegistrationFormTemplateRead,
+    ),
     "rpc.tournament.reg_list": Op(response=schemas.BalancerRegistrationRead, response_array=True),
     "rpc.tournament.reg_create_manual": Op(
         request=schemas.BalancerRegistrationCreateRequest, response=schemas.BalancerRegistrationRead

@@ -700,6 +700,30 @@ DOCS: dict[str, dict] = {
         "summary": "Upsert registration form",
         "description": "Permission: workspace `registration_form.update` on the tournament's workspace. Creates or replaces a tournament's registration form config (built-in and custom fields).",
     },
+    "rpc.tournament.regform_template_list": {
+        "summary": "List registration form templates",
+        "description": "Permission: workspace `registration_form.read` on the workspace in the path. Lists that workspace's named registration-form question sets, ordered by name.",
+    },
+    "rpc.tournament.regform_template_create": {
+        "summary": "Create registration form template",
+        "description": "Permission: workspace `registration_form.update` on the workspace in the path. Stores a named question set for the workspace (201 Created). Names are unique per workspace, case-insensitively: a collision is 409 `template_name_taken` on field `name`.",
+    },
+    "rpc.tournament.regform_template_update": {
+        "summary": "Update registration form template",
+        "description": "Permission: workspace `registration_form.update` on the workspace in the path. Replaces a template's name and question set wholesale. 404 `template_not_found` when the id belongs to another workspace; 409 `template_name_taken` on a case-insensitive name collision.",
+    },
+    "rpc.tournament.regform_template_delete": {
+        "summary": "Delete registration form template",
+        "description": "Permission: workspace `registration_form.update` on the workspace in the path. Deletes a template by id (204 no body). Nothing references a template -- applying one copies it -- so no tournament form changes.",
+    },
+    "rpc.tournament.regform_template_apply": {
+        "summary": "Apply template to registration form",
+        "description": "Permission: workspace `registration_form.update` on the tournament's workspace. Copies the template's question set onto the tournament's registration form and returns the form. An ordinary schema save: a changed question set appends a new version, an identical one appends nothing. The form is NOT linked to the template afterwards, so editing the template later never rewrites a live form. The template must belong to the tournament's workspace (else 404 `template_not_found`).",
+    },
+    "rpc.tournament.regform_template_save_from_form": {
+        "summary": "Save registration form as template",
+        "description": "Permission: workspace `registration_form.update` on the tournament's workspace. Snapshots the tournament form's CURRENT question set into a new workspace template under the given name (201 Created). A snapshot, not a link: later edits to either side are invisible to the other. 404 `form_not_configured` when the tournament has no form yet; 409 `template_name_taken` on a case-insensitive name collision.",
+    },
     "rpc.tournament.reg_list": {
         "summary": "List registrations (admin)",
         "description": "Permission: workspace `registration.read` on the tournament's workspace. Lists a tournament's registrations with status metadata and per-registration OW-rank snapshots, filtered by status/inclusion/source and optionally including deleted.",

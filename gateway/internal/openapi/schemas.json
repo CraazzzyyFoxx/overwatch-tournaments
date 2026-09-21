@@ -8645,7 +8645,7 @@
       "description": "Permission: authenticated user; self-service \u2014 the caller registers only themselves. Lets a user self-register for a tournament (201 Created) after validating the form is open and the input; rejects duplicates with 409, refuses with 400 only when the form's subscription_stage is 'registration' and a required subscription is confirmed missing by an automatic check (a verdict a challenge code could still change is deferred to check-in, and an undetermined verdict fails open). With the default stage 'check_in' sign-up is never refused on a subscription.",
       "request": {
         "array": false,
-        "ref": "tournament.RegistrationCreate"
+        "ref": "tournament.RegistrationSubmit"
       },
       "response": {
         "array": false,
@@ -8764,6 +8764,66 @@
         "ref": "tournament.BalancerRegistrationRead"
       },
       "summary": "Withdraw registration (admin)"
+    },
+    "rpc.tournament.regform_template_apply": {
+      "description": "Permission: workspace `registration_form.update` on the tournament's workspace. Copies the template's question set onto the tournament's registration form and returns the form. An ordinary schema save: a changed question set appends a new version, an identical one appends nothing. The form is NOT linked to the template afterwards, so editing the template later never rewrites a live form. The template must belong to the tournament's workspace (else 404 `template_not_found`).",
+      "request": {
+        "array": false,
+        "ref": "tournament.RegistrationFormTemplateApply"
+      },
+      "response": {
+        "array": false,
+        "ref": "tournament.RegistrationFormRead"
+      },
+      "summary": "Apply template to registration form"
+    },
+    "rpc.tournament.regform_template_create": {
+      "description": "Permission: workspace `registration_form.update` on the workspace in the path. Stores a named question set for the workspace (201 Created). Names are unique per workspace, case-insensitively: a collision is 409 `template_name_taken` on field `name`.",
+      "request": {
+        "array": false,
+        "ref": "tournament.RegistrationFormTemplateUpsert"
+      },
+      "response": {
+        "array": false,
+        "ref": "tournament.RegistrationFormTemplateRead"
+      },
+      "summary": "Create registration form template"
+    },
+    "rpc.tournament.regform_template_delete": {
+      "description": "Permission: workspace `registration_form.update` on the workspace in the path. Deletes a template by id (204 no body). Nothing references a template -- applying one copies it -- so no tournament form changes.",
+      "summary": "Delete registration form template"
+    },
+    "rpc.tournament.regform_template_list": {
+      "description": "Permission: workspace `registration_form.read` on the workspace in the path. Lists that workspace's named registration-form question sets, ordered by name.",
+      "response": {
+        "array": true,
+        "ref": "tournament.RegistrationFormTemplateRead"
+      },
+      "summary": "List registration form templates"
+    },
+    "rpc.tournament.regform_template_save_from_form": {
+      "description": "Permission: workspace `registration_form.update` on the tournament's workspace. Snapshots the tournament form's CURRENT question set into a new workspace template under the given name (201 Created). A snapshot, not a link: later edits to either side are invisible to the other. 404 `form_not_configured` when the tournament has no form yet; 409 `template_name_taken` on a case-insensitive name collision.",
+      "request": {
+        "array": false,
+        "ref": "tournament.RegistrationFormTemplateSave"
+      },
+      "response": {
+        "array": false,
+        "ref": "tournament.RegistrationFormTemplateRead"
+      },
+      "summary": "Save registration form as template"
+    },
+    "rpc.tournament.regform_template_update": {
+      "description": "Permission: workspace `registration_form.update` on the workspace in the path. Replaces a template's name and question set wholesale. 404 `template_not_found` when the id belongs to another workspace; 409 `template_name_taken` on a case-insensitive name collision.",
+      "request": {
+        "array": false,
+        "ref": "tournament.RegistrationFormTemplateUpsert"
+      },
+      "response": {
+        "array": false,
+        "ref": "tournament.RegistrationFormTemplateRead"
+      },
+      "summary": "Update registration form template"
     },
     "rpc.tournament.regstatus_builtin_reset": {
       "description": "Permission: workspace `registration_status.update` on the workspace in the path. Removes that workspace's override for a built-in registration status (204 no body), reverting to defaults.",
@@ -30805,6 +30865,11 @@
           "default": null,
           "title": "Admin Notes"
         },
+        "answers": {
+          "additionalProperties": true,
+          "title": "Answers",
+          "type": "object"
+        },
         "auth_user_id": {
           "anyOf": [
             {
@@ -30829,55 +30894,6 @@
           "default": null,
           "title": "Balancer Status"
         },
-        "battle_tag": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Battle Tag"
-        },
-        "boosty_nick": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Boosty Nick"
-        },
-        "custom_fields_json": {
-          "anyOf": [
-            {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Custom Fields Json"
-        },
-        "discord_nick": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Discord Nick"
-        },
         "display_name": {
           "anyOf": [
             {
@@ -30890,39 +30906,12 @@
           "default": null,
           "title": "Display Name"
         },
-        "notes": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Notes"
-        },
         "roles": {
           "items": {
             "$ref": "#/components/schemas/tournament.BalancerRegistrationRoleInput"
           },
           "title": "Roles",
           "type": "array"
-        },
-        "smurf_tags_json": {
-          "anyOf": [
-            {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Smurf Tags Json"
         },
         "status": {
           "anyOf": [
@@ -30935,23 +30924,6 @@
           ],
           "default": null,
           "title": "Status"
-        },
-        "stream_pov": {
-          "default": false,
-          "title": "Stream Pov",
-          "type": "boolean"
-        },
-        "twitch_nick": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Twitch Nick"
         }
       },
       "title": "BalancerRegistrationCreateRequest",
@@ -31444,6 +31416,11 @@
         "admission": {
           "$ref": "#/components/schemas/tournament.AdmissionRead"
         },
+        "answers": {
+          "additionalProperties": true,
+          "title": "Answers",
+          "type": "object"
+        },
         "balancer_profile_overridden_at": {
           "anyOf": [
             {
@@ -31501,18 +31478,6 @@
           "default": null,
           "title": "Best Rank"
         },
-        "boosty_nick": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Boosty Nick"
-        },
         "checked_in": {
           "default": false,
           "title": "Checked In",
@@ -31543,19 +31508,6 @@
           "default": null,
           "title": "Checked In By Username"
         },
-        "custom_fields_json": {
-          "anyOf": [
-            {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Custom Fields Json"
-        },
         "deleted_at": {
           "anyOf": [
             {
@@ -31568,18 +31520,6 @@
           ],
           "default": null,
           "title": "Deleted At"
-        },
-        "discord_nick": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Discord Nick"
         },
         "display_name": {
           "anyOf": [
@@ -31613,18 +31553,6 @@
           "default": false,
           "title": "Is Flex",
           "type": "boolean"
-        },
-        "notes": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Notes"
         },
         "profiles_open": {
           "anyOf": [
@@ -31670,13 +31598,6 @@
           "title": "Roles",
           "type": "array"
         },
-        "smurf_tags_json": {
-          "items": {
-            "type": "string"
-          },
-          "title": "Smurf Tags Json",
-          "type": "array"
-        },
         "source": {
           "enum": [
             "manual",
@@ -31703,11 +31624,6 @@
         },
         "status_meta": {
           "$ref": "#/components/schemas/tournament.StatusMetaRead"
-        },
-        "stream_pov": {
-          "default": false,
-          "title": "Stream Pov",
-          "type": "boolean"
         },
         "submitted_at": {
           "anyOf": [
@@ -31737,18 +31653,6 @@
         "tournament_id": {
           "title": "Tournament Id",
           "type": "integer"
-        },
-        "twitch_nick": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Twitch Nick"
         },
         "user_id": {
           "anyOf": [
@@ -32217,6 +32121,11 @@
           "default": null,
           "title": "Admin Notes"
         },
+        "answers": {
+          "additionalProperties": true,
+          "title": "Answers",
+          "type": "object"
+        },
         "auth_user_id": {
           "anyOf": [
             {
@@ -32241,59 +32150,10 @@
           "default": null,
           "title": "Balancer Status"
         },
-        "battle_tag": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Battle Tag"
-        },
-        "boosty_nick": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Boosty Nick"
-        },
         "clear_pin": {
           "default": false,
           "title": "Clear Pin",
           "type": "boolean"
-        },
-        "custom_fields_json": {
-          "anyOf": [
-            {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Custom Fields Json"
-        },
-        "discord_nick": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Discord Nick"
         },
         "display_name": {
           "anyOf": [
@@ -32318,18 +32178,6 @@
           ],
           "default": null,
           "title": "Exclude Reason"
-        },
-        "notes": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Notes"
         },
         "pin": {
           "anyOf": [
@@ -32358,21 +32206,6 @@
           "default": null,
           "title": "Roles"
         },
-        "smurf_tags_json": {
-          "anyOf": [
-            {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Smurf Tags Json"
-        },
         "status": {
           "anyOf": [
             {
@@ -32384,112 +32217,9 @@
           ],
           "default": null,
           "title": "Status"
-        },
-        "stream_pov": {
-          "anyOf": [
-            {
-              "type": "boolean"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Stream Pov"
-        },
-        "twitch_nick": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Twitch Nick"
         }
       },
       "title": "BalancerRegistrationUpdateRequest",
-      "type": "object"
-    },
-    "tournament.BuiltInFieldConfig": {
-      "properties": {
-        "enabled": {
-          "default": true,
-          "title": "Enabled",
-          "type": "boolean"
-        },
-        "max_heroes": {
-          "anyOf": [
-            {
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Max Heroes"
-        },
-        "mode": {
-          "anyOf": [
-            {
-              "enum": [
-                "optional",
-                "all_roles",
-                "forced"
-              ],
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Mode"
-        },
-        "require_verified": {
-          "default": false,
-          "title": "Require Verified",
-          "type": "boolean"
-        },
-        "required": {
-          "default": false,
-          "title": "Required",
-          "type": "boolean"
-        },
-        "subroles": {
-          "anyOf": [
-            {
-              "additionalProperties": {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              "type": "object"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Subroles"
-        },
-        "validation": {
-          "anyOf": [
-            {
-              "$ref": "#/components/schemas/tournament.FieldValidationConfig"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        }
-      },
-      "title": "BuiltInFieldConfig",
       "type": "object"
     },
     "tournament.BulkApproveResponse": {
@@ -33536,82 +33266,32 @@
       "title": "CheckInRequest",
       "type": "object"
     },
-    "tournament.CustomFieldDefinition": {
+    "tournament.Condition": {
       "properties": {
-        "key": {
-          "title": "Key",
+        "field": {
+          "title": "Field",
           "type": "string"
         },
-        "label": {
-          "title": "Label",
-          "type": "string"
-        },
-        "options": {
-          "anyOf": [
-            {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Options"
-        },
-        "placeholder": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Placeholder"
-        },
-        "required": {
-          "default": false,
-          "title": "Required",
-          "type": "boolean"
-        },
-        "show_in_draft": {
-          "default": false,
-          "title": "Show In Draft",
-          "type": "boolean"
-        },
-        "type": {
-          "default": "text",
+        "op": {
           "enum": [
-            "text",
-            "number",
-            "select",
-            "checkbox",
-            "url"
+            "eq",
+            "neq",
+            "in",
+            "truthy"
           ],
-          "title": "Type",
+          "title": "Op",
           "type": "string"
         },
-        "validation": {
-          "anyOf": [
-            {
-              "$ref": "#/components/schemas/tournament.FieldValidationConfig"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
+        "value": {
+          "default": null,
+          "title": "Value"
         }
       },
       "required": [
-        "key",
-        "label"
+        "field",
+        "op"
       ],
-      "title": "CustomFieldDefinition",
+      "title": "Condition",
       "type": "object"
     },
     "tournament.DivisionGridActivationReadiness": {
@@ -37060,7 +36740,7 @@
       "title": "EncounterUpdate",
       "type": "object"
     },
-    "tournament.FieldValidationConfig": {
+    "tournament.FieldValidation": {
       "properties": {
         "error_message": {
           "anyOf": [
@@ -37087,7 +36767,7 @@
           "title": "Regex"
         }
       },
-      "title": "FieldValidationConfig",
+      "title": "FieldValidation",
       "type": "object"
     },
     "tournament.FirstBanRotation": {
@@ -37107,6 +36787,266 @@
       ],
       "title": "FirstPickRule",
       "type": "string"
+    },
+    "tournament.FormField": {
+      "properties": {
+        "help": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Help"
+        },
+        "key": {
+          "title": "Key",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "builtin",
+            "text",
+            "textarea",
+            "number",
+            "select",
+            "multi_select",
+            "checkbox",
+            "url",
+            "date"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Label"
+        },
+        "options": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Options"
+        },
+        "params": {
+          "additionalProperties": true,
+          "title": "Params",
+          "type": "object"
+        },
+        "placeholder": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Placeholder"
+        },
+        "required": {
+          "default": false,
+          "title": "Required",
+          "type": "boolean"
+        },
+        "show_in_draft": {
+          "default": false,
+          "title": "Show In Draft",
+          "type": "boolean"
+        },
+        "validation": {
+          "anyOf": [
+            {
+              "$ref": "#/components/schemas/tournament.FieldValidation"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "visibility": {
+          "default": "public",
+          "enum": [
+            "public",
+            "organizers"
+          ],
+          "title": "Visibility",
+          "type": "string"
+        },
+        "visible_when": {
+          "anyOf": [
+            {
+              "$ref": "#/components/schemas/tournament.Condition"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "key",
+        "kind"
+      ],
+      "title": "FormField",
+      "type": "object"
+    },
+    "tournament.FormSchema-Input": {
+      "properties": {
+        "schema_version": {
+          "const": 1,
+          "default": 1,
+          "title": "Schema Version",
+          "type": "integer"
+        },
+        "sections": {
+          "items": {
+            "$ref": "#/components/schemas/tournament.FormSection-Input"
+          },
+          "minItems": 1,
+          "title": "Sections",
+          "type": "array"
+        }
+      },
+      "required": [
+        "sections"
+      ],
+      "title": "FormSchema",
+      "type": "object"
+    },
+    "tournament.FormSchema-Output": {
+      "properties": {
+        "schema_version": {
+          "const": 1,
+          "default": 1,
+          "title": "Schema Version",
+          "type": "integer"
+        },
+        "sections": {
+          "items": {
+            "$ref": "#/components/schemas/tournament.FormSection-Output"
+          },
+          "minItems": 1,
+          "title": "Sections",
+          "type": "array"
+        }
+      },
+      "required": [
+        "sections"
+      ],
+      "title": "FormSchema",
+      "type": "object"
+    },
+    "tournament.FormSection-Input": {
+      "properties": {
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "fields": {
+          "items": {
+            "$ref": "#/components/schemas/tournament.FormField"
+          },
+          "title": "Fields",
+          "type": "array"
+        },
+        "key": {
+          "title": "Key",
+          "type": "string"
+        },
+        "title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Title"
+        }
+      },
+      "required": [
+        "key"
+      ],
+      "title": "FormSection",
+      "type": "object"
+    },
+    "tournament.FormSection-Output": {
+      "properties": {
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "fields": {
+          "items": {
+            "$ref": "#/components/schemas/tournament.FormField"
+          },
+          "title": "Fields",
+          "type": "array"
+        },
+        "key": {
+          "title": "Key",
+          "type": "string"
+        },
+        "title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Title"
+        }
+      },
+      "required": [
+        "key"
+      ],
+      "title": "FormSection",
+      "type": "object"
     },
     "tournament.GamemodeRead": {
       "properties": {
@@ -37651,6 +37591,18 @@
     },
     "tournament.MappingPreviewFieldError": {
       "properties": {
+        "code": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Code"
+        },
         "column": {
           "anyOf": [
             {
@@ -39522,120 +39474,6 @@
       "title": "PlayerWithMatchStats",
       "type": "object"
     },
-    "tournament.RegistrationCreate": {
-      "properties": {
-        "battle_tag": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Battle Tag"
-        },
-        "boosty_nick": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Boosty Nick"
-        },
-        "custom_fields": {
-          "anyOf": [
-            {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Custom Fields"
-        },
-        "discord_nick": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Discord Nick"
-        },
-        "notes": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Notes"
-        },
-        "roles": {
-          "anyOf": [
-            {
-              "items": {
-                "$ref": "#/components/schemas/tournament.RoleWithSubrole"
-              },
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Roles"
-        },
-        "smurf_tags": {
-          "anyOf": [
-            {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Smurf Tags"
-        },
-        "stream_pov": {
-          "default": false,
-          "title": "Stream Pov",
-          "type": "boolean"
-        },
-        "twitch_nick": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Twitch Nick"
-        }
-      },
-      "title": "RegistrationCreate",
-      "type": "object"
-    },
     "tournament.RegistrationFormRead": {
       "properties": {
         "auto_approve": {
@@ -39643,19 +39481,8 @@
           "title": "Auto Approve",
           "type": "boolean"
         },
-        "built_in_fields": {
-          "additionalProperties": {
-            "$ref": "#/components/schemas/tournament.BuiltInFieldConfig"
-          },
-          "title": "Built In Fields",
-          "type": "object"
-        },
-        "custom_fields": {
-          "items": {
-            "$ref": "#/components/schemas/tournament.CustomFieldDefinition"
-          },
-          "title": "Custom Fields",
-          "type": "array"
+        "form_schema": {
+          "$ref": "#/components/schemas/tournament.FormSchema-Output"
         },
         "hide_registrations": {
           "default": false,
@@ -39708,6 +39535,18 @@
           "default": false,
           "title": "Show Ranks",
           "type": "boolean"
+        },
+        "stale_registrations": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Stale Registrations"
         },
         "subrole_catalog": {
           "additionalProperties": {
@@ -39790,6 +39629,14 @@
           "title": "Tournament Id",
           "type": "integer"
         },
+        "version_id": {
+          "title": "Version Id",
+          "type": "integer"
+        },
+        "version_number": {
+          "title": "Version Number",
+          "type": "integer"
+        },
         "workspace_id": {
           "title": "Workspace Id",
           "type": "integer"
@@ -39799,9 +39646,94 @@
         "id",
         "tournament_id",
         "workspace_id",
-        "is_open"
+        "is_open",
+        "form_schema",
+        "version_id",
+        "version_number"
       ],
       "title": "RegistrationFormRead",
+      "type": "object"
+    },
+    "tournament.RegistrationFormTemplateApply": {
+      "description": "Which workspace template to copy onto the tournament in the path.",
+      "properties": {
+        "template_id": {
+          "title": "Template Id",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "template_id"
+      ],
+      "title": "RegistrationFormTemplateApply",
+      "type": "object"
+    },
+    "tournament.RegistrationFormTemplateRead": {
+      "properties": {
+        "form_schema": {
+          "$ref": "#/components/schemas/tournament.FormSchema-Output"
+        },
+        "id": {
+          "title": "Id",
+          "type": "integer"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "updated_at": {
+          "format": "date-time",
+          "title": "Updated At",
+          "type": "string"
+        },
+        "workspace_id": {
+          "title": "Workspace Id",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "workspace_id",
+        "name",
+        "form_schema",
+        "updated_at"
+      ],
+      "title": "RegistrationFormTemplateRead",
+      "type": "object"
+    },
+    "tournament.RegistrationFormTemplateSave": {
+      "description": "The name to file the tournament's current questions under.",
+      "properties": {
+        "name": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "RegistrationFormTemplateSave",
+      "type": "object"
+    },
+    "tournament.RegistrationFormTemplateUpsert": {
+      "properties": {
+        "form_schema": {
+          "$ref": "#/components/schemas/tournament.FormSchema-Input"
+        },
+        "name": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "form_schema"
+      ],
+      "title": "RegistrationFormTemplateUpsert",
       "type": "object"
     },
     "tournament.RegistrationFormUpsert": {
@@ -39811,19 +39743,8 @@
           "title": "Auto Approve",
           "type": "boolean"
         },
-        "built_in_fields": {
-          "additionalProperties": {
-            "$ref": "#/components/schemas/tournament.BuiltInFieldConfig"
-          },
-          "title": "Built In Fields",
-          "type": "object"
-        },
-        "custom_fields": {
-          "items": {
-            "$ref": "#/components/schemas/tournament.CustomFieldDefinition"
-          },
-          "title": "Custom Fields",
-          "type": "array"
+        "form_schema": {
+          "$ref": "#/components/schemas/tournament.FormSchema-Input"
         },
         "hide_registrations": {
           "default": false,
@@ -39932,6 +39853,9 @@
           "type": "boolean"
         }
       },
+      "required": [
+        "form_schema"
+      ],
       "title": "RegistrationFormUpsert",
       "type": "object"
     },
@@ -39984,6 +39908,11 @@
         "admission": {
           "$ref": "#/components/schemas/tournament.AdmissionRead"
         },
+        "answers": {
+          "additionalProperties": true,
+          "title": "Answers",
+          "type": "object"
+        },
         "balancer_status": {
           "default": "not_in_balancer",
           "title": "Balancer Status",
@@ -40014,63 +39943,31 @@
           "default": null,
           "title": "Battle Tag"
         },
-        "boosty_nick": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Boosty Nick"
-        },
         "checked_in": {
           "default": false,
           "title": "Checked In",
           "type": "boolean"
         },
-        "custom_fields_json": {
+        "form_version_id": {
           "anyOf": [
             {
-              "additionalProperties": true,
-              "type": "object"
+              "type": "integer"
             },
             {
               "type": "null"
             }
           ],
           "default": null,
-          "title": "Custom Fields Json"
+          "title": "Form Version Id"
         },
-        "discord_nick": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Discord Nick"
+        "form_version_stale": {
+          "default": false,
+          "title": "Form Version Stale",
+          "type": "boolean"
         },
         "id": {
           "title": "Id",
           "type": "integer"
-        },
-        "notes": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Notes"
         },
         "profiles_open": {
           "anyOf": [
@@ -40164,21 +40061,6 @@
           "title": "Roles",
           "type": "array"
         },
-        "smurf_tags_json": {
-          "anyOf": [
-            {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Smurf Tags Json"
-        },
         "status": {
           "default": "pending",
           "title": "Status",
@@ -40196,11 +40078,6 @@
           ],
           "default": null,
           "title": "Status Meta"
-        },
-        "stream_pov": {
-          "default": false,
-          "title": "Stream Pov",
-          "type": "boolean"
         },
         "submitted_at": {
           "anyOf": [
@@ -40254,18 +40131,6 @@
         "tournament_id": {
           "title": "Tournament Id",
           "type": "integer"
-        },
-        "twitch_nick": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Twitch Nick"
         },
         "user_id": {
           "anyOf": [
@@ -40364,8 +40229,27 @@
       "title": "RegistrationStatusResponse",
       "type": "object"
     },
+    "tournament.RegistrationSubmit": {
+      "description": "A sign-up: the version the registrant answered, and the answers.\n\nFlat ``{field key -> value}`` rather than a column per built-in, so adding a\nquestion costs an organizer a schema edit and nothing else. The server always\nvalidates against the form's CURRENT version and refuses a stale\n``form_version_id`` with ``form_version_stale`` (409).",
+      "properties": {
+        "answers": {
+          "additionalProperties": true,
+          "title": "Answers",
+          "type": "object"
+        },
+        "form_version_id": {
+          "title": "Form Version Id",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "form_version_id"
+      ],
+      "title": "RegistrationSubmit",
+      "type": "object"
+    },
     "tournament.RegistrationTeamAcceptRequest": {
-      "description": "Redeem an invite by token or by id.\n\nExactly one reference must be given. Accepting both would leave which one\nauthorizes the acceptance ambiguous \u2014 and since a link invite is bearer while a\ntargeted one is not, the ambiguity is a privilege question, not a cosmetic one.\n\n``registration`` is OPTIONAL because an invitee who already has a live\nregistration is a free agent *attaching*: the service reuses their existing row\nand ignores anything sent here, so demanding a payload would make them re-answer\na form they already filled. Required-but-ignored is what it used to be, and the\nclient expressed that by casting an empty object \u2014 a lie the type system had no\nway to catch.\n\nA genuinely new invitee who sends nothing is still rejected, by the registration\nform's own validation downstream. This default cannot create a blank row.",
+      "description": "Redeem an invite by token or by id.\n\nExactly one reference must be given. Accepting both would leave which one\nauthorizes the acceptance ambiguous \u2014 and since a link invite is bearer while a\ntargeted one is not, the ambiguity is a privilege question, not a cosmetic one.\n\n``registration`` is OPTIONAL because an invitee who already has a live\nregistration is a free agent *attaching*: the service reuses their existing row\nand ignores anything sent here, so demanding a payload would make them re-answer\na form they already filled. Required-but-ignored is what it used to be, and the\nclient expressed that by casting an empty object \u2014 a lie the type system had no\nway to catch.\n\nA genuinely new invitee who sends nothing is still rejected, by the registration\nform's own validation downstream. ``None`` rather than an empty default: a\nsubmission carries the ``form_version_id`` it answered, and there is no honest\nvalue to invent for someone who answered nothing.",
       "properties": {
         "invite_id": {
           "anyOf": [
@@ -40380,7 +40264,15 @@
           "title": "Invite Id"
         },
         "registration": {
-          "$ref": "#/components/schemas/tournament.RegistrationCreate"
+          "anyOf": [
+            {
+              "$ref": "#/components/schemas/tournament.RegistrationSubmit"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "token": {
           "anyOf": [
@@ -40516,7 +40408,7 @@
           "type": "string"
         },
         "registration": {
-          "$ref": "#/components/schemas/tournament.RegistrationCreate"
+          "$ref": "#/components/schemas/tournament.RegistrationSubmit"
         },
         "slot_code": {
           "enum": [
@@ -41343,93 +41235,21 @@
       "type": "object"
     },
     "tournament.RegistrationUpdate": {
+      "description": "A partial edit: only the keys present in ``answers`` are validated and written.",
       "properties": {
-        "battle_tag": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Battle Tag"
+        "answers": {
+          "additionalProperties": true,
+          "title": "Answers",
+          "type": "object"
         },
-        "boosty_nick": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Boosty Nick"
-        },
-        "custom_fields": {
-          "anyOf": [
-            {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Custom Fields"
-        },
-        "discord_nick": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Discord Nick"
-        },
-        "notes": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Notes"
-        },
-        "stream_pov": {
-          "anyOf": [
-            {
-              "type": "boolean"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Stream Pov"
-        },
-        "twitch_nick": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Twitch Nick"
+        "form_version_id": {
+          "title": "Form Version Id",
+          "type": "integer"
         }
       },
+      "required": [
+        "form_version_id"
+      ],
       "title": "RegistrationUpdate",
       "type": "object"
     },
@@ -41608,51 +41428,6 @@
         "role_id"
       ],
       "title": "RoleTierUpsert",
-      "type": "object"
-    },
-    "tournament.RoleWithSubrole": {
-      "properties": {
-        "is_primary": {
-          "default": false,
-          "title": "Is Primary",
-          "type": "boolean"
-        },
-        "role": {
-          "title": "Role",
-          "type": "string"
-        },
-        "subrole": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Subrole"
-        },
-        "top_heroes": {
-          "anyOf": [
-            {
-              "items": {
-                "type": "string"
-              },
-              "type": "array"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Top Heroes"
-        }
-      },
-      "required": [
-        "role"
-      ],
-      "title": "RoleWithSubrole",
       "type": "object"
     },
     "tournament.RosterShapeRead": {

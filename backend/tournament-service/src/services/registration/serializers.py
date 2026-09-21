@@ -10,11 +10,11 @@ from shared.balancer_registration_statuses import (
     build_status_meta_from_model,
     build_unknown_status_meta,
 )
-from shared.domain.forms import schema_from_form
+from shared.domain.forms import FormSchema, schema_from_form
 from shared.domain.roster import PlayerRoster, RosterRole
 from src import models, schemas
 from src.schemas.admission import AdmissionRead
-from src.schemas.registration_form import RegistrationFormRead
+from src.schemas.registration_form import RegistrationFormRead, RegistrationFormTemplateRead
 from src.services.registration.answers import answer_service
 from src.services.registration.roles_rules import is_flex_submission
 
@@ -195,6 +195,24 @@ def serialize_registration_form(
         version_number=version.number,
         stale_registrations=stale_registrations,
         subrole_catalog=subrole_catalog or {},
+    )
+
+
+def serialize_registration_form_template(
+    template: models.BalancerRegistrationFormTemplate,
+) -> RegistrationFormTemplateRead:
+    """A template is its questions and its name -- no toggles, no tournament.
+
+    ``schema_json`` is re-validated rather than passed through: a document
+    written by an older schema version must reach the client in today's shape,
+    the same normalization ``apply`` relies on before comparing canonical JSON.
+    """
+    return RegistrationFormTemplateRead(
+        id=template.id,
+        workspace_id=template.workspace_id,
+        name=template.name,
+        form_schema=FormSchema.model_validate(template.schema_json),
+        updated_at=template.updated_at,
     )
 
 
