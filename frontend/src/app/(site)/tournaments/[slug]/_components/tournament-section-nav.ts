@@ -314,3 +314,17 @@ export function observeTournamentRail(
     }
   };
 }
+
+/**
+ * The collapsed rail's title. A long name loses its tail at a sentence break
+ * rather than a random half-word to the ellipsis: "Турнир Тхао #5. Анти-вантрик
+ * турнир" reads as "Турнир Тхао #5", which is what the series is called anyway.
+ *
+ * Only for names that would not fit regardless (the lead caps at ~34rem), and
+ * only when the head is long enough to identify the tournament — "Cup. The long
+ * subtitle" must not collapse to "Cup". The full name stays in `title`.
+ */
+export function collapsedRailTitle(name: string): string {
+  const cut = name.indexOf(". ");
+  return name.length > 28 && cut >= 8 ? name.slice(0, cut) : name;
+}

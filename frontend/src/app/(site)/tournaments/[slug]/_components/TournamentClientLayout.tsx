@@ -26,6 +26,7 @@ import type { Tournament } from "@/types/tournament.types";
 
 import { useTranslations, useLocale } from "next-intl";
 import TournamentSectionNav from "./TournamentSectionNav";
+import { collapsedRailTitle } from "./tournament-section-nav";
 import { TournamentShellSkeleton } from "./TournamentSkeletons";
 import TournamentShellError from "../TournamentShellError";
 import { PageHero, HeroCoord, HeroStamp } from "@/components/site/PageHero";
@@ -291,7 +292,9 @@ export default function TournamentClientLayout({
         hasStreams={(streams?.official.length ?? 0) > 0 || (streams?.participants.length ?? 0) > 0}
         hasRules={Boolean(tournament.rules?.trim())}
         collapsed={heroScrolledPast}
-        collapsedTitle={<span title={tournament.name}>{tournament.name}</span>}
+        collapsedTitle={
+          <span title={tournament.name}>{collapsedRailTitle(tournament.name)}</span>
+        }
         collapsedActions={
           <>
             {nextPhaseChip}

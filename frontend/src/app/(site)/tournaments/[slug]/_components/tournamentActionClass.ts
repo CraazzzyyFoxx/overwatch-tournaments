@@ -11,13 +11,24 @@
  * Deliberately not a `globals.css` rule like `.meta-pill`: these boxes are
  * Tailwind-sized, and a CSS class would express one look in two languages.
  */
-export const TOURNAMENT_ACTION_CLASS =
+const ACTION_BOX =
   "inline-flex items-center gap-2 rounded-lg border border-[color:var(--aqt-border-2)] " +
   "bg-[color:var(--aqt-overlay-2)] px-4 py-2 text-sm font-medium " +
-  "text-[color:var(--aqt-fg-muted)] no-underline outline-none transition-colors " +
+  "text-[color:var(--aqt-fg-muted)]";
+
+export const TOURNAMENT_ACTION_CLASS =
+  ACTION_BOX +
+  " no-underline outline-none transition-colors " +
   "hover:bg-[color:var(--aqt-overlay-3)] hover:text-[color:var(--aqt-fg)] " +
   "focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)] " +
   "focus-visible:ring-offset-2 focus-visible:ring-offset-[color:var(--aqt-bg)]";
+
+/**
+ * A STATE, not a control: "registration closed" is a `<div>`, so it takes the
+ * action box's geometry and palette without the hover affordance that would
+ * promise a click nothing handles.
+ */
+export const TOURNAMENT_STATUS_BOX_CLASS = ACTION_BOX + " text-[color:var(--aqt-fg-dim)]";
 
 export const TOURNAMENT_PRIMARY_ACTION_CLASS =
   "inline-flex items-center gap-2 rounded-lg bg-[color:var(--aqt-teal)] px-4 py-2 text-sm font-medium " +

@@ -174,10 +174,11 @@ export default function TournamentSectionNav({
             <div ref={railRef} className={styles.rail}>
               {items.map((item) => {
                 const Icon = icons[item.id];
+                const label = t(item.labelKey);
                 const content = (
                   <>
                     <Icon className={styles.itemIcon} aria-hidden="true" />
-                    <span>{t(item.labelKey)}</span>
+                    <span className={styles.itemLabel}>{label}</span>
                     {item.id === "bracket" && (status === "live" || status === "playoffs") ? (
                       <span className={styles.liveTag} aria-hidden="true" />
                     ) : null}
@@ -199,7 +200,7 @@ export default function TournamentSectionNav({
                           )}
                           aria-current={item.active ? "page" : undefined}
                           aria-disabled={!item.available || undefined}
-                          title={reason}
+                          title={collapsed ? `${label} — ${reason}` : reason}
                           onClick={(event) => event.preventDefault()}
                         >
                           {content}
@@ -217,6 +218,7 @@ export default function TournamentSectionNav({
                     ref={item.active ? setActiveRef : undefined}
                     href={item.href}
                     className={cn(styles.navItem, item.active && styles.active)}
+                    title={collapsed && !item.active ? label : undefined}
                     aria-current={item.active ? "page" : undefined}
                   >
                     {content}
