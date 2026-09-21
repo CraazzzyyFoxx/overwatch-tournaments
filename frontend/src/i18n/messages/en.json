@@ -322,6 +322,8 @@
       "vk": "VK",
       "youtube": "YouTube",
       "boostyPlaceholder": "nickname",
+      "vkPlaceholder": "id or short name",
+      "youtubePlaceholder": "@handle",
       "verified": "Verified",
       "noAccountsHint": "You don't have any linked accounts yet.",
       "noAccountsHintDesc": "Link your Battle.net, Discord or Twitch in profile settings to autofill and verify them.",

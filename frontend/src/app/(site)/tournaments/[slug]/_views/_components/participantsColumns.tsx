@@ -658,11 +658,19 @@ export function buildParticipantColumns(
   // them: the schema IS the layout now, not a JSON blob whose key order was an
   // accident. Questions only organizers may read are skipped — a public read
   // carries none of their answers, so the column would be permanently empty.
-  const publicFields = (form?.form_schema?.sections ?? [])
+  //
+  // The fallback below is for "this tournament HAS no form", not for "its form
+  // asks the public nothing". The second is reachable — no invariant makes
+  // `battle_tag` mandatory and every question may be organizers-only — and it
+  // must render an empty roster rather than five columns the organizer never
+  // asked for. Only `battle_tag` and the notes column survive that, and both
+  // for reasons of their own, below.
+  const schema = form?.form_schema ?? null;
+  const publicFields = (schema?.sections ?? [])
     .flatMap((section) => section.fields)
     .filter((field) => field.visibility === "public");
 
-  if (publicFields.length > 0) {
+  if (schema) {
     for (const field of publicFields) {
       if (BUILT_IN_FIELD_DEFS[field.key]) {
         const def = BUILT_IN_FIELD_DEFS[field.key];

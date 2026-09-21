@@ -22,11 +22,19 @@ export function identityKey<P extends string>(provider: P): `identity_${P}` {
   return `${IDENTITY_KEY_PREFIX}${provider}`;
 }
 
-/** The provider an identity key names, or `null` when the key is not one. */
-export function identityProvider(key: string): string | null {
+/**
+ * The provider an identity key names, or `null` when the key is not one.
+ *
+ * Returns the literal union, not `string`: a caller that localises a provider
+ * (`registration.accounts.${provider}`) is checked against the message
+ * catalogue only if the five names are known here, which is exactly how a
+ * sixth provider added without its two strings becomes a compile error rather
+ * than a question labelled `identity_vk`.
+ */
+export function identityProvider(key: string): IdentityProvider | null {
   if (!key.startsWith(IDENTITY_KEY_PREFIX)) return null;
-  const provider = key.slice(IDENTITY_KEY_PREFIX.length);
-  return (IDENTITY_PROVIDERS as readonly string[]).includes(provider) ? provider : null;
+  const provider = key.slice(IDENTITY_KEY_PREFIX.length) as IdentityProvider;
+  return IDENTITY_PROVIDERS.includes(provider) ? provider : null;
 }
 
 /** Spread as a typed tuple rest so `BuiltinFieldKey` stays a union of the ELEVEN

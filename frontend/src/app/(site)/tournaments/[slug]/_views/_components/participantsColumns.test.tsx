@@ -94,6 +94,26 @@ describe("participant column model", () => {
     expect(ids).not.toContain("budget");
   });
 
+  it("invents no columns for a form that asks the public nothing", () => {
+    // No invariant makes `battle_tag` mandatory and every question may be
+    // organizers-only, so this is a configured form with an empty public side
+    // — not the "no form at all" case, and it must not be given that case's
+    // roles/heroes/smurfs columns.
+    const ids = buildParticipantColumns(
+      form([field("organizer_notes", { visibility: "organizers" })]),
+      t,
+    ).map((column) => column.id);
+
+    for (const invented of ["roles", "top_heroes", "smurf_tags"]) {
+      expect(ids).not.toContain(invented);
+    }
+    // The roster's own identity column and the notes column stay: the first is
+    // a registration column rather than an answer, the second may hold what a
+    // sheet import wrote.
+    expect(ids).toContain("battle_tag");
+    expect(ids).toContain("public_notes");
+  });
+
   it("builds one column per organizer-defined question and reads its stored answer", () => {
     const columns = buildParticipantColumns(
       form([field("vk", { kind: "text", label: "VK profile" })]),

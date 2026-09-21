@@ -3,6 +3,8 @@ import { Window } from "happy-dom";
 import { act, type ReactNode } from "react";
 
 import type { FormField, FormSchema } from "@/types/forms.types";
+import en from "@/i18n/messages/en.json";
+import { IDENTITY_PROVIDERS, identityKey } from "@/lib/forms/builtin-keys";
 import type { RegistrationForm } from "@/types/registration.types";
 
 const testWindow = new Window({ url: "http://localhost:3000/", width: 900, height: 900 });
@@ -157,6 +159,52 @@ describe("RegistrationSchemaForm", () => {
     expect(submitted).not.toBeNull();
     expect(submitted?.answers.organizer_notes).toBe("for the organizers only");
     expect(submitted?.answers.public_notes).toBe(null);
+  });
+
+  it("words every identity question, including the providers with no brand icon", async () => {
+    // A builtin carries no label of its own, so the renderer must have copy for
+    // each provider `IDENTITY_PROVIDERS` offers — otherwise the builder lets an
+    // organizer add VK and the registrant is asked "identity_vk".
+    container = testWindow.document.createElement("div");
+    testWindow.document.body.appendChild(container);
+    root = createRoot(container as unknown as Element);
+    act(() => {
+      root.render(
+        <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+          <RegistrationSchemaForm
+            mode="public"
+            form={
+              {
+                ...FORM,
+                form_schema: {
+                  schema_version: 1,
+                  sections: [
+                    {
+                      key: "accounts",
+                      fields: IDENTITY_PROVIDERS.map((provider) =>
+                        field({ key: identityKey(provider), kind: "builtin", label: null }),
+                      ),
+                    },
+                  ],
+                },
+              } as unknown as RegistrationForm
+            }
+            tournamentId={7}
+            onSubmit={async () => {}}
+            onCancel={() => {}}
+          />
+        </QueryClientProvider>,
+      );
+    });
+
+    for (const provider of IDENTITY_PROVIDERS) {
+      // `useTranslations` is mocked to echo the key, so this asserts WHICH
+      // message the field asks for…
+      expect(container.textContent).toContain(`registration.accounts.${provider}`);
+      expect(container.textContent).not.toContain(identityKey(provider));
+      // …and this asserts the catalogue actually has it.
+      expect(en.registration.accounts[provider as keyof typeof en.registration.accounts]).toBeTruthy();
+    }
   });
 });
 

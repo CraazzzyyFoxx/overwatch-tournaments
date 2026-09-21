@@ -232,6 +232,13 @@ export default function RegistrationsTable({
     [roleForm]
   );
 
+  // Whether the tournament's real schema is in hand. NOT `schemaFields.length`:
+  // a schema may legitimately ask nothing (a section is allowed to be empty),
+  // and the inspector must still be able to say that a stale answer's question
+  // is gone. `data` rather than a loading flag, so a failed form query also
+  // reads as "unknown" instead of "asks nothing".
+  const schemaLoaded = publicFormQuery.data != null;
+
   const customStatusesQuery = useQuery({
     queryKey: ["balancer-admin", "status-catalog", workspaceId],
     queryFn: () => balancerAdminService.listStatusCatalog(workspaceId as number),
@@ -903,6 +910,7 @@ export default function RegistrationsTable({
             registration={inspected}
             catalog={subroleCatalog}
             schemaFields={schemaFields}
+            schemaKnown={schemaLoaded}
             t={t}
           />
         ) : null}
@@ -998,21 +1006,22 @@ function RegistrationInspectorBody({
   registration,
   catalog,
   schemaFields,
+  schemaKnown,
   t
 }: Readonly<{
   registration: AdminRegistration;
   catalog?: SubroleCatalog;
   schemaFields: FormField[];
+  /** Whether the tournament's schema has actually been read. While it has not,
+   *  no answer may be called dropped — there is nothing to have dropped it. */
+  schemaKnown: boolean;
   t: AdmissionTranslator;
 }>) {
   // Answered questions of the CURRENT schema, then whatever the row still
   // carries that the current schema no longer asks. The second list is the
   // whole reason a stale registration is readable at all: its answers were
   // filed against an older version, and the table has no column for a question
-  // that version asked and this one does not. Until the form query resolves
-  // there is no schema to compare against, so every answer lands in the second
-  // list and none of them is labelled as dropped.
-  const schemaKnown = schemaFields.length > 0;
+  // that version asked and this one does not.
   const asked = schemaFields.filter(
     (field) =>
       field.key !== "battle_tag" &&

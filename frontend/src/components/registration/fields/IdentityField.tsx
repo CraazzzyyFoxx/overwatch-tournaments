@@ -24,25 +24,23 @@ export function accountProviderFor(key: string): SocialProvider | null {
   return identityProvider(key) as SocialProvider | null;
 }
 
-/** Copy and iconography for the providers the UI has words for. VK and YouTube
- *  have none, so they fall back to the organizer's own field label. */
-const PROVIDER_COPY = {
-  discord: {
-    label: "registration.accounts.discord",
-    placeholder: "registration.accounts.discordPlaceholder",
-    icon: "/discord-white.svg",
-  },
-  twitch: {
-    label: "registration.accounts.twitch",
-    placeholder: "registration.accounts.twitchPlaceholder",
-    icon: "/twitch.png",
-  },
-  boosty: {
-    label: "registration.accounts.boosty",
-    placeholder: "registration.accounts.boostyPlaceholder",
-    icon: "/boosty.svg",
-  },
-} as const;
+/**
+ * Copy and iconography per provider.
+ *
+ * A builtin field carries no label of its own — the server owns the question,
+ * each client words it — so EVERY provider `IDENTITY_PROVIDERS` offers must have
+ * an entry here or the registrant is asked a question titled `identity_vk`.
+ * The i18n keys are derived from the provider name rather than listed twice:
+ * `registration.accounts.<provider>` and `…<provider>Placeholder` exist for all
+ * five, and a sixth provider added to the catalog gets its label from the same
+ * rule the moment its two strings are translated. Only the brand icons are a
+ * table, because only three of them are in `public/`.
+ */
+const PROVIDER_ICONS: Record<string, string> = {
+  discord: "/discord-white.svg",
+  twitch: "/twitch.png",
+  boosty: "/boosty.svg",
+};
 
 /** Providers whose subscription standing is shown under the handle. */
 const SUBSCRIPTION_LABELS: Record<string, string> = { twitch: "Twitch", boosty: "Boosty" };
@@ -56,9 +54,12 @@ export default function IdentityField({
 }: Readonly<FieldRendererProps>) {
   const t = useTranslations();
   const provider = accountProviderFor(field.key);
+  // `battle_tag` answers a Battle.net handle but is NOT worded here (it has its
+  // own renderer), and there is no `registration.accounts.battlenet` string, so
+  // the copy is keyed on the identity provider only.
+  const copyProvider = identityProvider(field.key);
   const current = typeof value === "string" ? value : "";
-  const copy = provider ? PROVIDER_COPY[provider as keyof typeof PROVIDER_COPY] : undefined;
-  const label = field.label || (copy ? t(copy.label) : field.key);
+  const label = field.label || (copyProvider ? t(`registration.accounts.${copyProvider}`) : field.key);
 
   // `require_verified` is enforced server-side; here it only decides WHICH
   // control to render, and only for the registrant — an organizer editing
@@ -79,13 +80,16 @@ export default function IdentityField({
     ) : (
       <AccountCombobox
         label={label}
-        placeholder={field.placeholder || (copy ? t(copy.placeholder) : "")}
+        placeholder={
+          field.placeholder ||
+          (copyProvider ? t(`registration.accounts.${copyProvider}Placeholder`) : "")
+        }
         value={current}
         onChange={onChange}
         suggestions={context.accounts
           .filter((account) => account.provider === provider)
           .map((account) => account.username)}
-        icon={copy?.icon}
+        icon={provider ? PROVIDER_ICONS[provider] : undefined}
         required={field.required}
         field={field}
         error={error}

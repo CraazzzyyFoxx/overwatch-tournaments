@@ -322,6 +322,8 @@
       "vk": "VK",
       "youtube": "YouTube",
       "boostyPlaceholder": "никнейм",
+      "vkPlaceholder": "id или короткое имя",
+      "youtubePlaceholder": "@ник",
       "verified": "Подтверждён",
       "noAccountsHint": "У вас пока нет привязанных аккаунтов.",
       "noAccountsHintDesc": "Привяжите Battle.net, Discord или Twitch в настройках профиля, чтобы автозаполнить и подтвердить их.",
