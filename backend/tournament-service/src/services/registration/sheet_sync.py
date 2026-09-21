@@ -32,7 +32,7 @@ from shared.core import http_status as status
 from shared.core.errors import ApiHTTPException
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.core.social import SocialProvider
-from shared.domain.forms import FormField, FormSchema, default_schema, schema_from_form
+from shared.domain.forms import FormSchema, default_schema, schema_from_form
 from shared.domain.roster import FlexRoleMode, flex_role_mode_from_schema
 from shared.repository import (
     BalancerRegistrationRepository,
@@ -46,6 +46,7 @@ from src.domain.registration.mapping_catalog import (
     PARSER_CATALOG,
     build_target_specs,
     classify_row_disposition,
+    schema_custom_fields,
     target_spec_map,
     validate_mapping_config,
     validate_value_mapping_subroles,
@@ -115,14 +116,14 @@ async def _resolve_header_keys(
 
 
 def build_mapping_catalog(
-    custom_fields: list[FormField],
+    schema: FormSchema | None,
     *,
     value_mapping: dict[str, Any] | None = None,
     header_keys: list[str] | None = None,
     subrole_catalog: dict[str, list[dict[str, str]]] | None = None,
 ) -> dict[str, Any]:
     """Assemble the frontend mapping catalog (targets, parsers, value maps)."""
-    specs = build_target_specs(custom_fields)
+    specs = build_target_specs(schema)
     default_value_mapping = build_default_value_mapping()
     saved_value_mapping = value_mapping or {}
     effective_value_mapping = {
@@ -160,7 +161,7 @@ def build_mapping_catalog(
             {"category": category, "entries": effective_value_mapping.get(category) or {}}
             for category in ("booleans", "roles", "subroles", "role_subroles", "divisions")
         ],
-        "custom_fields": [field_def.model_dump() for field_def in custom_fields],
+        "custom_fields": [field_def.model_dump() for field_def in schema_custom_fields(schema)],
         "header_keys": header_keys or [],
         "subrole_catalog": subrole_catalog or {code: [] for code in ("tank", "damage", "support")},
     }
@@ -226,6 +227,21 @@ class SheetSyncService:
         self.registration_repo = registration_repo
         self.common = common
 
+    async def _registration_schema(self, session: AsyncSession, tournament_id: int) -> FormSchema:
+        """THE schema every sheet operation is written against.
+
+        One resolver, because the mapping catalog, the config validation, the
+        suggester, the preview and the sync must agree on which targets exist:
+        a catalog that offers a target the validator rejects, or a validator
+        that accepts one the sync ignores, is worse than either rule alone.
+
+        A tournament with no form (or no version yet) falls back to
+        ``default_schema()``, matching ``lifecycle._validated_answers`` — before
+        the schema existed the sheet wrote its columns unconditionally, and
+        dropping every battle tag on such a tournament is not a fix.
+        """
+        return schema_from_form(await self.common.get_registration_form(session, tournament_id)) or default_schema()
+
     async def get_google_sheet_feed(
         self,
         session: AsyncSession,
@@ -255,8 +271,8 @@ class SheetSyncService:
     ) -> None:
         tournament = await self.common.ensure_tournament_exists(session, tournament_id)
         catalog = await resolve_subrole_catalog(session, tournament.workspace_id)
-        custom_fields = await self.common.get_form_custom_field_defs(session, tournament_id)
-        target_specs = target_spec_map(custom_fields)
+        schema = await self._registration_schema(session, tournament_id)
+        target_specs = target_spec_map(schema)
         header_keys = await _resolve_header_keys(source_url, existing_feed)
         issues = []
         if mapping_config_json is not None:
@@ -349,8 +365,8 @@ class SheetSyncService:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Google Sheets URL is required")
         rows = await fetch_google_sheet_rows(url)
         headers = rows[0]
-        custom_fields = await self.common.get_form_custom_field_defs(session, tournament_id)
-        return feed, headers, suggest_mapping_from_headers(headers, custom_fields=custom_fields)
+        schema = await self._registration_schema(session, tournament_id)
+        return feed, headers, suggest_mapping_from_headers(headers, schema=schema)
 
     async def get_mapping_catalog(
         self,
@@ -361,7 +377,7 @@ class SheetSyncService:
     ) -> dict[str, Any]:
         tournament = await self.common.ensure_tournament_exists(session, tournament_id)
         feed = await self.get_google_sheet_feed(session, tournament_id)
-        custom_fields = await self.common.get_form_custom_field_defs(session, tournament_id)
+        schema = await self._registration_schema(session, tournament_id)
         header_keys: list[str] | None = None
         if include_headers and feed is not None:
             if feed.header_row_json:
@@ -369,7 +385,7 @@ class SheetSyncService:
             elif feed.source_url:
                 header_keys = await _resolve_header_keys(feed.source_url, feed)
         return build_mapping_catalog(
-            custom_fields,
+            schema,
             value_mapping=feed.value_mapping_json if feed else None,
             header_keys=header_keys,
             subrole_catalog=await resolve_subrole_catalog(session, tournament.workspace_id),
@@ -396,7 +412,7 @@ class SheetSyncService:
         header_keys = build_header_keys(headers)
         data_rows = rows[1 : 1 + limit]
         grid = await self.common.get_tournament_grid(session, tournament_id)
-        custom_fields = await self.common.get_form_custom_field_defs(session, tournament_id)
+        schema = await self._registration_schema(session, tournament_id)
         effective_mapping = mapping_config_json or (feed.mapping_config_json if feed else None)
         effective_value_mapping = value_mapping_json or (feed.value_mapping_json if feed else None)
         tournament = await self.common.ensure_tournament_exists(session, tournament_id)
@@ -415,7 +431,7 @@ class SheetSyncService:
                 mapping_config=effective_mapping,
                 value_mapping=effective_value_mapping,
                 grid=grid,
-                custom_fields=custom_fields,
+                schema=schema,
                 subrole_catalog=subrole_catalog,
             )
             fields = result.fields
@@ -495,7 +511,6 @@ class SheetSyncService:
         parsed_fields: dict[str, Any],
         *,
         schema: FormSchema,
-        declared: frozenset[str],
         workspace_id: int,
     ) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
         """One row's answers validated against the form, or ``None`` + its errors.
@@ -504,15 +519,17 @@ class SheetSyncService:
         mapped-and-empty cell clears), requirements off, and no OAuth gate --
         nobody's proof backs what a spreadsheet says.
 
-        Answers the form no longer declares are DROPPED rather than reported.
-        A mapping left pointing at a deleted question is a feed-configuration
-        fault, which ``validate_mapping_config`` reports once; raising it per
-        row would stop every row of every sync until someone re-mapped the sheet.
-        Errors that ARE the row's own (a malformed handle, a value outside a
-        select) come back for the caller's per-row error list, and that row is
-        left unwritten rather than half-written.
+        The answers arrive already restricted to questions the schema declares,
+        because the target set the parser works from IS derived from that schema
+        (``mapping_catalog.build_target_specs``). Nothing is filtered here: a key
+        this rejects as unknown would be a genuine disagreement between the two,
+        and the row error it raises is the right way to hear about it.
+
+        A row whose answers do not normalise comes back as ``None`` plus its
+        field errors, and the caller leaves it unwritten rather than
+        half-written.
         """
-        answers = {key: value for key, value in (parsed_fields.get("answers") or {}).items() if key in declared}
+        answers = parsed_fields.get("answers") or {}
         try:
             values = await answer_service.validate(
                 session,
@@ -548,10 +565,10 @@ class SheetSyncService:
         # A feed can be configured before anyone opens the form builder. The
         # shipped default question set then stands in as the sheet's answer
         # vocabulary, so an import still lands the battle tag -- the row's own
-        # identity -- instead of writing nothing at all.
+        # identity -- instead of writing nothing at all. Same fallback as
+        # ``_registration_schema``, spelled out because the sync needs the form
+        # row itself for ``current_version_id``.
         schema = schema_from_form(form) or default_schema()
-        declared = frozenset(field_def.key for field_def in schema.fields())
-        custom_fields: list[FormField] = [field_def for field_def in schema.fields() if not field_def.is_builtin]
         # The sheet sync is the one role-write path that never read the form. In a
         # non-optional flex mode a sheet row must land with the same role set as any
         # other, so the mode is resolved once per sync rather than per row.
@@ -561,9 +578,7 @@ class SheetSyncService:
         try:
             rows = await fetch_google_sheet_rows(feed.source_url, sheet_id=feed.sheet_id, gid=feed.gid)
             headers = rows[0]
-            mapping_config = feed.mapping_config_json or suggest_mapping_from_headers(
-                headers, custom_fields=custom_fields
-            )
+            mapping_config = feed.mapping_config_json or suggest_mapping_from_headers(headers, schema=schema)
             value_mapping = feed.value_mapping_json or build_default_value_mapping()
             subrole_catalog = await resolve_subrole_catalog(session, tournament.workspace_id)
 
@@ -577,7 +592,7 @@ class SheetSyncService:
                     mapping_config=mapping_config,
                     value_mapping=value_mapping,
                     grid=grid,
-                    custom_fields=custom_fields,
+                    schema=schema,
                     subrole_catalog=subrole_catalog,
                 )
                 for entry in result.errors:
@@ -670,7 +685,6 @@ class SheetSyncService:
                     session,
                     parsed_fields,
                     schema=schema,
-                    declared=declared,
                     workspace_id=tournament.workspace_id,
                 )
                 if values is None:

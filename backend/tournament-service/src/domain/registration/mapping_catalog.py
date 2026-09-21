@@ -20,7 +20,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from shared.core.social import SocialProvider
-from shared.domain.forms import IDENTITY_PROVIDERS, FormField, identity_key
+from shared.domain.forms import IDENTITY_PROVIDERS, FormField, FormSchema, identity_key
 from shared.domain.player_sub_roles import catalog_slugs, normalize_sub_role
 from src.domain.registration.utils import (
     normalize_header,
@@ -306,10 +306,9 @@ def _build_builtin_specs() -> tuple[MappingTargetSpec, ...]:
     return tuple(specs)
 
 
-BUILTIN_TARGET_SPECS: tuple[MappingTargetSpec, ...] = _build_builtin_specs()
-
-# Derived alias preserved for backward compatibility with any external reference.
-DEFAULT_MAPPING_TARGETS: tuple[str, ...] = tuple(spec.key for spec in BUILTIN_TARGET_SPECS)
+#: Every builtin target the engine knows HOW to parse. Not what a given
+#: tournament may bind: see :func:`builtin_target_specs`.
+_ALL_BUILTIN_SPECS: tuple[MappingTargetSpec, ...] = _build_builtin_specs()
 
 _CUSTOM_FIELD_PARSER_BY_TYPE: dict[str, str] = {
     "text": PARSER_STRING,
@@ -345,17 +344,37 @@ def custom_field_target_specs(
     return tuple(specs)
 
 
-def build_target_specs(
-    custom_fields: list[FormField] | None = None,
-) -> tuple[MappingTargetSpec, ...]:
-    """Built-in targets plus the form's dynamic custom-field targets."""
-    return BUILTIN_TARGET_SPECS + custom_field_target_specs(custom_fields)
+def schema_custom_fields(schema: FormSchema | None) -> list[FormField]:
+    """The organizer-defined (non-builtin) questions of a schema."""
+    return [field_def for field_def in schema.fields() if not field_def.is_builtin] if schema is not None else []
 
 
-def target_spec_map(
-    custom_fields: list[FormField] | None = None,
-) -> dict[str, MappingTargetSpec]:
-    return {spec.key: spec for spec in build_target_specs(custom_fields)}
+def builtin_target_specs(schema: FormSchema | None) -> tuple[MappingTargetSpec, ...]:
+    """The builtin targets THIS form can receive, in catalog order.
+
+    An answer target (:data:`ANSWER_TARGET_KEYS`) is offered only when the
+    schema declares that question, exactly as a custom-field target exists only
+    while its question does. Otherwise binding a column to, say,
+    ``identity_boosty`` on a form that never asks for Boosty would pass
+    :func:`validate_mapping_config` -- the key is a permanent member of the
+    catalog -- and then be dropped by every sync with nothing said anywhere.
+
+    Everything else stays unconditional: ``source_record_key``,
+    ``display_name``, ``submitted_at``, ``admin_notes`` and the role/rank
+    targets are organizer state, which no form asks about and the answer
+    pipeline never touches.
+    """
+    declared = {field_def.key for field_def in schema.fields()} if schema is not None else set()
+    return tuple(spec for spec in _ALL_BUILTIN_SPECS if spec.key not in ANSWER_TARGET_KEYS or spec.key in declared)
+
+
+def build_target_specs(schema: FormSchema | None = None) -> tuple[MappingTargetSpec, ...]:
+    """Every target this form can bind: its builtins plus its custom questions."""
+    return builtin_target_specs(schema) + custom_field_target_specs(schema_custom_fields(schema))
+
+
+def target_spec_map(schema: FormSchema | None = None) -> dict[str, MappingTargetSpec]:
+    return {spec.key: spec for spec in build_target_specs(schema)}
 
 
 # ---------------------------------------------------------------------------

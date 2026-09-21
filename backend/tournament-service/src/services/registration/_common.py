@@ -22,7 +22,6 @@ from shared.balancer_registration_statuses import get_builtin_status_values, is_
 from shared.core import http_status as status
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.division_grid import DivisionGrid, load_runtime_grid
-from shared.domain.forms import FormField, schema_from_form
 from shared.domain.player_sub_roles import REGISTRATION_ROLE_CODES, normalize_sub_role
 from shared.domain.roster import FlexRoleMode, PlayerRoster
 from shared.hero_catalog import DEFAULT_MAX_TOP_HEROES, HeroCatalog, build_hero_entries
@@ -56,16 +55,6 @@ def get_tournament_grid_from_rows(
     if workspace_row and workspace_row.default_division_grid_version is not None:
         return load_runtime_grid(workspace_row.default_division_grid_version)
     return load_runtime_grid(fallback_version)
-
-
-def form_custom_field_defs(
-    form: models.BalancerRegistrationForm | None,
-) -> list[FormField]:
-    """The organizer-defined (non-builtin) questions of a form's current schema."""
-    schema = schema_from_form(form)
-    if schema is None:
-        return []
-    return [field for field in schema.fields() if not field.is_builtin]
 
 
 def apply_all_roles(
@@ -343,14 +332,6 @@ class RegistrationCommonService:
         never lazy-loadable in async code.
         """
         return await form_service.get_form(session, tournament_id)
-
-    async def get_form_custom_field_defs(
-        self,
-        session: AsyncSession,
-        tournament_id: int,
-    ) -> list[FormField]:
-        form = await self.get_registration_form(session, tournament_id)
-        return form_custom_field_defs(form)
 
 
 _common_service = RegistrationCommonService()

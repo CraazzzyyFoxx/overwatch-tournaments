@@ -14,7 +14,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from shared.division_grid import DivisionGrid
-from shared.domain.forms import FormField
+from shared.domain.forms import FormSchema
 from shared.domain.player_sub_roles import catalog_slugs, normalize_sub_role
 from src.domain.registration.mapping_catalog import (
     ANSWER_TARGET_KEYS,
@@ -22,6 +22,7 @@ from src.domain.registration.mapping_catalog import (
     build_target_specs,
     coerce_custom_field_value,
     custom_field_target_key,
+    schema_custom_fields,
     target_spec_map,
 )
 from src.domain.registration.utils import (
@@ -230,7 +231,7 @@ def default_mapping_target(parser: str, mode: str = "disabled") -> dict[str, Any
 def suggest_mapping_from_headers(
     headers: list[str],
     *,
-    custom_fields: list[FormField] | None = None,
+    schema: FormSchema | None = None,
 ) -> dict[str, Any]:
     """Suggest a starting mapping by matching headers against target aliases.
 
@@ -241,7 +242,7 @@ def suggest_mapping_from_headers(
     """
     header_keys = build_header_keys(headers)
     normalized_headers = [normalize_header(header) for header in headers]
-    specs = build_target_specs(custom_fields)
+    specs = build_target_specs(schema)
     targets: dict[str, Any] = {
         spec.key: default_mapping_target(spec.default_parser, spec.default_mode) for spec in specs
     }
@@ -363,7 +364,7 @@ def parse_sheet_row_detailed(
     mapping_config: dict[str, Any] | None,
     value_mapping: dict[str, Any] | None,
     grid: DivisionGrid,
-    custom_fields: list[FormField] | None = None,
+    schema: FormSchema | None = None,
     subrole_catalog: dict[str, list[dict[str, str]]] | None = None,
 ) -> ParsedRowResult:
     """Parse one sheet row into the structured registration payload.
@@ -376,11 +377,15 @@ def parse_sheet_row_detailed(
     ``display_name``/``admin_notes``/``submitted_at`` and the role targets stay
     top level: they are organizer state, not questions.
 
+    Every target offered here is one ``schema`` declares (or one of the
+    organizer-state targets no form asks about), so a key that reaches
+    ``answers`` is always a question the form can answer for.
+
     Collects per-target ``errors`` and ``warnings`` (chiefly from custom-field
     coercion) so a single bad cell never aborts the whole row. Returns
     ``fields=None`` when the row produces no identity key (caller skips it).
     """
-    effective_mapping = mapping_config or suggest_mapping_from_headers(headers, custom_fields=custom_fields)
+    effective_mapping = mapping_config or suggest_mapping_from_headers(headers, schema=schema)
     targets = effective_mapping.get("targets") or {}
     row_json = row_to_json(headers, row)
     effective_value_mapping = {**build_default_value_mapping(), **(value_mapping or {})}
@@ -389,7 +394,7 @@ def parse_sheet_row_detailed(
 
     flat_values: dict[str, Any] = {}
     mapped: set[str] = set()
-    for target_key, spec in target_spec_map(custom_fields).items():
+    for target_key, spec in target_spec_map(schema).items():
         if spec.group == "custom_fields":
             continue
         target_config = targets.get(target_key)
@@ -467,7 +472,7 @@ def parse_sheet_row_detailed(
         },
     }
 
-    for field_def in custom_fields or []:
+    for field_def in schema_custom_fields(schema):
         target_key = custom_field_target_key(field_def.key)
         values = get_selector_values(targets.get(target_key), row_json)
         if not values:
@@ -482,27 +487,6 @@ def parse_sheet_row_detailed(
             answers[field_def.key] = result.value
 
     return ParsedRowResult(fields=parsed, errors=errors, warnings=warnings)
-
-
-def parse_sheet_row(
-    *,
-    headers: list[str],
-    row: list[str],
-    mapping_config: dict[str, Any] | None,
-    value_mapping: dict[str, Any] | None,
-    grid: DivisionGrid,
-    custom_fields: list[FormField] | None = None,
-    subrole_catalog: dict[str, list[dict[str, str]]] | None = None,
-) -> dict[str, Any] | None:
-    return parse_sheet_row_detailed(
-        headers=headers,
-        row=row,
-        mapping_config=mapping_config,
-        value_mapping=value_mapping,
-        grid=grid,
-        custom_fields=custom_fields,
-        subrole_catalog=subrole_catalog,
-    ).fields
 
 
 def build_registration_role_payloads(parsed_fields: dict[str, Any]) -> list[dict[str, Any]]:

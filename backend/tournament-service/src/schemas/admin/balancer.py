@@ -152,6 +152,10 @@ class MappingPreviewFieldError(BaseModel):
     column: str | None = None
     message: str
     row_index: int | None = None
+    #: Stable ``ErrorCode`` for the answer-validation failures the sync reports
+    #: per row (``invalid_format``, ``invalid_option``, ``unknown_field``, …).
+    #: ``None`` for a parser/coercion error, which has no code to give.
+    code: str | None = None
 
 
 class MappingValidationError(BaseModel):

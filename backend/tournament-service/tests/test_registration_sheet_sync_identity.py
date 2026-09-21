@@ -8,20 +8,28 @@ stays empty. Since dbarch02 dropped ``registration.user_id``, the anchor is
 ``workspace_member_id`` (member.player_id IS the domain player id).
 
 These tests verify (1) the sync now wires ``ensure_player_identity`` per
-registration (passing the tournament's workspace), and (2) that helper's
+registration (passing the tournament's workspace), (2) that helper's
 link-existing / create-new / member-anchoring / idempotent semantics that the
-fix relies on.
+fix relies on, and (3) — against a real database — that a row whose answers do
+not validate is skipped WHOLE: it reports its field errors and writes nothing,
+while the rest of the sheet still lands.
 """
 
 from __future__ import annotations
 
+import asyncio
 import importlib
 import os
 import sys
+import uuid
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 from unittest import IsolatedAsyncioTestCase
 from unittest.mock import AsyncMock, Mock, patch
+
+import sqlalchemy as sa
+from sqlalchemy.orm import selectinload
 
 backend_root = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(backend_root))
@@ -38,6 +46,17 @@ os.environ["DEBUG"] = "true"
 # singleton that sheet_sync imports.
 reg_admin = importlib.import_module("src.services.registration.sheet_sync")
 reg_service = importlib.import_module("src.services.registration.service")
+
+from shared.core import enums  # noqa: E402
+from shared.domain.forms import FormField, FormSchema, FormSection  # noqa: E402
+from shared.models.registration.registration import (  # noqa: E402
+    BalancerRegistrationForm,
+    BalancerRegistrationFormVersion,
+    BalancerRegistrationGoogleSheetFeed,
+)
+from shared.models.tenancy.workspace import Workspace  # noqa: E402
+from shared.models.tournament import Tournament  # noqa: E402
+from src import models  # noqa: E402
 
 
 def _fake_sync_session() -> SimpleNamespace:
@@ -96,7 +115,6 @@ class SheetSyncIdentityWiringTests(IsolatedAsyncioTestCase):
             # Injected ``_common_service`` collaborator.
             patch.object(sheet_sync_service.common, "get_tournament_grid", AsyncMock(return_value=Mock())),
             patch.object(sheet_sync_service.common, "ensure_tournament_exists", AsyncMock(return_value=tournament)),
-            patch.object(sheet_sync_service.common, "get_form_custom_field_defs", AsyncMock(return_value=[])),
             patch.object(sheet_sync_service.common, "get_registration_form", AsyncMock(return_value=None)),
             # Still plain module globals of sheet_sync.
             patch.multiple(
@@ -406,3 +424,119 @@ class EnsurePlayerIdentitySemanticsTests(IsolatedAsyncioTestCase):
 
         self.assertEqual(resolved, 7)
         self.assertIsNone(registration.workspace_member_id)
+
+
+# ── one bad row must not be written, and must not stop the sheet ────────────
+#
+# Against a real database on purpose. The claim is about what reaches the
+# TABLES -- no registration, no identity row, no half-written columns -- which
+# a fake session cannot witness: it would only show which methods were called.
+
+_ATOMIC_SCHEMA = FormSchema(
+    sections=[
+        FormSection(
+            key="accounts",
+            fields=[
+                FormField(key="battle_tag", kind="builtin", required=True),
+                FormField(key="identity_discord", kind="builtin"),
+                FormField(key="public_notes", kind="builtin"),
+            ],
+        )
+    ]
+)
+
+_ATOMIC_HEADERS = ["BattleTag", "Discord", "Note"]
+_ATOMIC_MAPPING = {
+    "targets": {
+        "source_record_key": {"mode": "columns", "columns": ["BattleTag"], "parser": "battle_tag"},
+        "battle_tag": {"mode": "columns", "columns": ["BattleTag"], "parser": "battle_tag"},
+        "identity_discord": {"mode": "columns", "columns": ["Discord"], "parser": "string"},
+        "public_notes": {"mode": "columns", "columns": ["Note"], "parser": "join_lines"},
+    }
+}
+
+
+async def _seed_feed(session: Any) -> dict[str, int]:
+    suffix = uuid.uuid4().hex[:12]
+    workspace = Workspace(slug=f"sheetatomic-{suffix}", name=f"Sheet atomic {suffix}")
+    session.add(workspace)
+    await session.flush()
+    tournament = Tournament(
+        workspace_id=workspace.id,
+        name=f"Sheet atomic {suffix}",
+        slug=f"sheetatomic-{suffix}",
+        status=enums.TournamentStatus.REGISTRATION,
+    )
+    session.add(tournament)
+    await session.flush()
+    form = BalancerRegistrationForm(tournament_id=tournament.id, workspace_id=workspace.id)
+    session.add(form)
+    await session.flush()
+    form.current_version = BalancerRegistrationFormVersion(
+        form_id=form.id, number=1, schema_json=_ATOMIC_SCHEMA.model_dump(mode="json")
+    )
+    await session.flush()
+    session.add(
+        BalancerRegistrationGoogleSheetFeed(
+            tournament_id=tournament.id,
+            source_url="http://sheet.example/atomic",
+            sheet_id="sheet-atomic",
+            mapping_config_json=_ATOMIC_MAPPING,
+        )
+    )
+    await session.commit()
+    return {"workspace_id": workspace.id, "tournament_id": tournament.id}
+
+
+def test_a_row_whose_answers_do_not_validate_is_skipped_whole(db_session, monkeypatch) -> None:
+    """The bad row writes NOTHING and the good row still lands.
+
+    Ordering matters: the failing row is first, so a sync that created the
+    registration before validating its answers -- or that let the first bad row
+    abort the pass -- fails here on the row count.
+    """
+
+    async def _run() -> None:
+        seeded = await _seed_feed(db_session)
+
+        async def _fetch(*_args, **_kwargs):
+            return [
+                _ATOMIC_HEADERS,
+                # ``identity_discord`` has a DEFAULT_PATTERNS grammar; spaces and
+                # bangs are not in it.
+                ["Bad#1111", "NOT A HANDLE!!", "bad note"],
+                ["Good#2222", "gooddiscord", "good note"],
+            ]
+
+        monkeypatch.setattr(reg_admin, "fetch_google_sheet_rows", _fetch)
+
+        result = await reg_admin.sheet_sync_service.sync_google_sheet_feed(db_session, seeded["tournament_id"])
+
+        assert result.created == 1
+        assert result.skipped == 1
+        assert [(error["target"], error["code"], error["row_index"]) for error in result.errors] == [
+            ("identity_discord", "invalid_format", 0)
+        ]
+
+        rows = (
+            (
+                await db_session.execute(
+                    sa.select(models.BalancerRegistration)
+                    .where(models.BalancerRegistration.tournament_id == seeded["tournament_id"])
+                    .options(selectinload(models.BalancerRegistration.identities))
+                )
+            )
+            .unique()
+            .scalars()
+            .all()
+        )
+        # The bad row left no registration at all -- not an empty one, not one
+        # with only the columns validated before the failure.
+        assert [row.battle_tag for row in rows] == ["Good#2222"]
+        assert rows[0].public_notes == "good note"
+        assert [(i.provider, i.handle) for i in rows[0].identities] == [("discord", "gooddiscord")]
+
+        await db_session.execute(sa.delete(Workspace).where(Workspace.id == seeded["workspace_id"]))
+        await db_session.commit()
+
+    asyncio.run(_run())
