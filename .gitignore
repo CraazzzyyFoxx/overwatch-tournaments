@@ -49,6 +49,9 @@ backend/.cache/
 .import_linter_cache/
 # graft's local graph cache — regenerable, not committed (run `graft build`).
 /graft/
+# Local scratch for agent skills — currently a pre-migration database dump, so
+# it is data, never repo content.
+/.superpowers/
 
 # Logs
 logs/
