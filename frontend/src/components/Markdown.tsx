@@ -1,4 +1,5 @@
 import ReactMarkdown, { type Components } from "react-markdown";
+import remarkBreaks from "remark-breaks";
 import remarkGfm from "remark-gfm";
 
 import { headingText, slugifyHeading } from "@/lib/markdown-toc";
@@ -9,11 +10,17 @@ import { cn } from "@/lib/utils";
  * exactly what an organizer's regulations document reaches for (a tiebreaker
  * table, a checklist of requirements).
  *
+ * `remark-breaks` on top of that, because a regulations document is pasted from
+ * Discord, not authored in Markdown: CommonMark folds a single newline into a
+ * space, so a pasted draft order collapses into one paragraph of running text.
+ * Here one newline is one line break, which is what the author saw when they
+ * wrote it. Blank-line paragraphs are unaffected.
+ *
  * Exported because the admin editor's preview pane renders through the SAME
  * pipeline and the same component map: a preview that parses differently from
  * the public page is a preview that lies about what will be published.
  */
-export const MARKDOWN_REMARK_PLUGINS = [remarkGfm];
+export const MARKDOWN_REMARK_PLUGINS = [remarkGfm, remarkBreaks];
 
 /**
  * No sanitizer, and none is needed: `react-markdown` renders to React elements

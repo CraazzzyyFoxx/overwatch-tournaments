@@ -8,7 +8,9 @@
 //     (react-markdown's default `urlTransform`), and real links keep
 //     `rel="noreferrer noopener"` since every destination is third-party;
 //  3. GFM is actually wired: a pipe table renders as a table, which is how
-//     tiebreakers get written.
+//     tiebreakers get written;
+//  4. a single newline is a line break, because these documents are pasted from
+//     Discord and CommonMark would fold them into running text.
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -79,5 +81,19 @@ describe("Markdown", () => {
     expect(html.querySelector("h1")).toBeNull();
     expect(html.querySelector("h2")?.textContent).toBe("Format");
     expect(html.querySelector("h3")?.textContent).toBe("Tiebreakers");
+  });
+
+  it("keeps a pasted document's single newlines as line breaks", () => {
+    const html = render("Очередность драфта:\n1 раунд - слабейший.\n2 раунд - слабейший.");
+
+    expect(html.querySelectorAll("p")).toHaveLength(1);
+    expect(html.querySelectorAll("br")).toHaveLength(2);
+  });
+
+  it("still splits paragraphs on a blank line", () => {
+    const html = render("Выбор команд.\n\nДрафт пройдёт 30 сентября.");
+
+    expect(html.querySelectorAll("p")).toHaveLength(2);
+    expect(html.querySelectorAll("br")).toHaveLength(0);
   });
 });
