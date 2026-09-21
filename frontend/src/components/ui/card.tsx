@@ -3,20 +3,28 @@ import { Slot } from "@radix-ui/react-slot"
 
 import { cn } from "@/lib/utils"
 
+/**
+ * Card surface. Renders a `<div>` by default; pass `asChild` with the element
+ * the card actually is wherever it belongs in the page outline — the same
+ * escape hatch `CardTitle` has: `<Card asChild><section aria-label="…">`.
+ */
 const Card = React.forwardRef<
   HTMLDivElement,
-  React.HTMLAttributes<HTMLDivElement>
->(({ className, ...props }, ref) => (
-  <div
-    ref={ref}
-    data-ui="card"
-    className={cn(
-      "rounded-xl border bg-card text-card-foreground shadow",
-      className
-    )}
-    {...props}
-  />
-))
+  React.HTMLAttributes<HTMLDivElement> & { asChild?: boolean }
+>(({ className, asChild, ...props }, ref) => {
+  const Comp = asChild ? Slot : "div"
+  return (
+    <Comp
+      ref={ref}
+      data-ui="card"
+      className={cn(
+        "rounded-xl border bg-card text-card-foreground shadow",
+        className
+      )}
+      {...props}
+    />
+  )
+})
 Card.displayName = "Card"
 
 const CardHeader = React.forwardRef<
