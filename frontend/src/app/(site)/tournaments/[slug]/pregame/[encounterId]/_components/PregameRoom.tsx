@@ -522,27 +522,12 @@ function PregameRoomBody({ encounterId, seriesReport = true }: Readonly<PregameR
   }
 
   if (phase === "done") {
-    // Without a report to file, the closing screen still owes the captains the
-    // one thing they came for: who won. Read off the encounter's own series
-    // score, which `submit_map_report` advances map by map — no extra request,
-    // and it is the same number the header's filmstrip adds up.
-    const home = encounter.score?.home ?? 0;
-    const away = encounter.score?.away ?? 0;
-    const outcome =
-      home === away
-        ? t("seriesDone.drawn", { home, away })
-        : t("seriesDone.won", {
-            team: sideNameOf(home > away ? "home" : "away"),
-            home,
-            away
-          });
     return (
       <div className="flex flex-col gap-4">
         <PregameFinalReport
           encounter={encounter}
           viewerSide={mapState.viewer_side ?? viewerSide}
           reportable={seriesReport}
-          outcome={outcome}
           heroRounds={heroRounds}
           homeName={sideNameOf("home")}
           awayName={sideNameOf("away")}

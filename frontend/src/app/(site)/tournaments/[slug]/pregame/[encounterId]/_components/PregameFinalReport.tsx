@@ -21,18 +21,10 @@ interface PregameFinalReportProps {
   /**
    * Whether a series report exists to be filed at all. False for a scrim room:
    * it publishes no result, and the form is built from a per-tournament config
-   * the scrims container does not have. Behaves like the settled state a
-   * spectator already sees, with its own closing line — "the result is with the
-   * organizers now" would name a role a scrim has nobody in.
+   * the scrims container does not have — so the closing screen carries nothing
+   * but the header and the series' own ban record.
    */
   reportable?: boolean;
-  /**
-   * One line naming who won the series, shown only when there is no report to
-   * file. Built by the room, which already has both team names and the
-   * encounter's running score — the closing screen would otherwise end a
-   * finished series without saying how it ended.
-   */
-  outcome?: string | null;
   /**
    * Every map's hero bans, in play order — the series' own record, kept on the
    * screen that closes it. Nothing else here names what the maps were played
@@ -54,11 +46,11 @@ interface PregameFinalReportProps {
  * SERIES report. That is the one carrying the match codes, the closeness rating
  * and whatever custom fields the organizer configured.
  *
- * This used to be a dead end ("nothing left to decide") that sent captains back
- * to the encounter page to hunt for the report dialog. The form is the same one
- * (`MatchReportForm`), mounted here instead, arriving prefilled: every map the
- * room just collected a result for is counted into the encounter's score
- * (backend `map_report.submit_map_report`) and named in the code slots.
+ * Anyone with nothing to file — a spectator, an admin who captains neither
+ * side, a scrim captain, or a captain whose result the organizers already
+ * confirmed — gets no notice card at all: the header above already carries the
+ * score, the completed mark and the back arrow, so a "nothing left to decide"
+ * panel only repeated it and pushed the ban record down.
  *
  * Filing it returns the viewer to `returnTo` rather than the encounter page —
  * mid-tournament the room is opened from the bracket, and that is where the
@@ -68,7 +60,6 @@ export function PregameFinalReport({
   encounter,
   viewerSide,
   reportable = true,
-  outcome = null,
   heroRounds = [],
   homeName,
   awayName,
@@ -80,8 +71,8 @@ export function PregameFinalReport({
 
   const confirmed = encounter.result_status === "confirmed";
   // Nothing for a spectator (or an admin who captains neither side) to file, and
-  // nothing to file once the organizers have confirmed the result: for them the
-  // series really is settled and the old copy is the honest answer.
+  // nothing to file once the organizers have confirmed the result or when the
+  // room belongs to a scrim: those viewers get the header and the ban record.
   const settled = confirmed || viewerSide == null || !reportable;
 
   const back = (
@@ -97,23 +88,12 @@ export function PregameFinalReport({
     <Card>
       <CardContent className="flex flex-col gap-5 p-5">
         {header}
-        <section className="flex flex-col gap-2 rounded-xl border border-[color:var(--aqt-border)] p-4">
-          <h2 className="font-onest text-lg font-semibold">
-            {settled ? t("seriesDone.title") : t("finalReport.title")}
-          </h2>
-          {settled && !reportable && outcome ? (
-            <p className="font-onest text-base font-semibold">{outcome}</p>
-          ) : null}
-          <p className="text-sm leading-relaxed text-[color:var(--aqt-fg-muted)]">
-            {!settled
-              ? t("finalReport.hint")
-              : reportable
-                ? t("seriesDone.hint")
-                : t("seriesDone.hintNoReport")}
-          </p>
-          {settled ? (
-            <div className="mt-1">{back}</div>
-          ) : (
+        {settled ? null : (
+          <section className="flex flex-col gap-2 rounded-xl border border-[color:var(--aqt-border)] p-4">
+            <h2 className="font-onest text-lg font-semibold">{t("finalReport.title")}</h2>
+            <p className="text-sm leading-relaxed text-[color:var(--aqt-fg-muted)]">
+              {t("finalReport.hint")}
+            </p>
             <MatchReportForm
               key={matchReportDraftKey(encounter)}
               encounter={encounter}
@@ -121,8 +101,8 @@ export function PregameFinalReport({
               cancelAction={back}
               fieldsClassName="mt-2"
             />
-          )}
-        </section>
+          </section>
+        )}
 
         {/* Below the report, not above it: the report is what the captain came
             to file, and a Bo5's worth of ban blocks between the header and the

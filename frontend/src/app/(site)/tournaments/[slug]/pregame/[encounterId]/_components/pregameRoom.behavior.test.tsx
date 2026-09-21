@@ -1192,9 +1192,9 @@ describe("phase selection", () => {
   }
 
   it("asks a captain for the series report once nothing is left to pick or ban", async () => {
-    // The room used to end on "nothing left to decide" and send captains off to
-    // hunt for the report dialog elsewhere. The form belongs here, prefilled
-    // with the score the room itself just collected map by map.
+    // The room used to end on a "nothing left to decide" notice and send
+    // captains off to hunt for the report dialog elsewhere. The form belongs
+    // here, prefilled with the score the room itself just collected map by map.
     getEncounter.mockResolvedValue({
       ...encounter(),
       best_of: 1,
@@ -1204,7 +1204,6 @@ describe("phase selection", () => {
     await render();
 
     expect(document.body.textContent).toContain(ROOM.finalReport.title);
-    expect(document.body.textContent).not.toContain(ROOM.seriesDone.title);
     // Prefilled from the encounter's own series score, not left at 0:0.
     const score = (label: string) =>
       document.body.querySelector<HTMLInputElement>(`input[aria-label="Score for ${label}"]`)
@@ -1214,22 +1213,21 @@ describe("phase selection", () => {
     expect(document.body.textContent).toContain(en.matchReport.submit);
   });
 
-  it("keeps the settled notice for anyone who captains neither side", async () => {
+  it("closes with nothing but the header for anyone who captains neither side", async () => {
     // A spectator, or an admin who is not a captain, has no report to file: the
-    // captain report is per-team.
+    // captain report is per-team. Nothing is rendered in its place — the header
+    // already carries the score, the completed mark and the way back.
     settledSeries(null);
     await render();
 
-    expect(document.body.textContent).toContain(ROOM.seriesDone.title);
     expect(document.body.textContent).not.toContain(ROOM.finalReport.title);
+    expect(document.body.querySelector('input[aria-label="Score for Bright Wolves"]')).toBeNull();
   });
 
   it("never asks a scrim captain for a series report", async () => {
     // A scrim publishes no result, and the report form is built from a
     // per-tournament config the scrims container does not have — so a captain who
-    // WOULD be asked in a tournament gets the closing notice instead, with its
-    // own line: "the result is with the organizers now" names a role a scrim has
-    // nobody in.
+    // WOULD be asked in a tournament is asked for nothing at all.
     getEncounter.mockResolvedValue({
       ...encounter(),
       best_of: 1,
@@ -1238,29 +1236,10 @@ describe("phase selection", () => {
     settledSeries("home");
     await render({ seriesReport: false });
 
-    expect(document.body.textContent).toContain(ROOM.seriesDone.title);
-    expect(document.body.textContent).toContain(ROOM.seriesDone.hintNoReport);
     expect(document.body.textContent).not.toContain(ROOM.finalReport.title);
-    expect(document.body.textContent).not.toContain(ROOM.seriesDone.hint);
     // The form itself is gone, not merely hidden behind a heading.
     expect(document.body.textContent).not.toContain(en.matchReport.submit);
     expect(document.body.querySelector('input[aria-label="Score for Bright Wolves"]')).toBeNull();
-  });
-
-  it("names the winner on the closing screen when there is no report to file", async () => {
-    // "Who won and that's it" is the whole point of a scrim's closing screen:
-    // ending a finished series without saying how it ended is what made the room
-    // feel broken once the report was removed. Read off the encounter's own
-    // running score, which the per-map reports advance.
-    getEncounter.mockResolvedValue({
-      ...encounter(),
-      best_of: 3,
-      score: { home: 2, away: 1 }
-    } as unknown as Encounter);
-    settledSeries("home");
-    await render({ seriesReport: false });
-
-    expect(document.body.textContent).toContain("Bright Wolves won the series 2:1");
   });
 
   it("replays every map's hero bans on the closing screen", async () => {
@@ -1371,7 +1350,6 @@ describe("phase selection", () => {
     );
     await render();
 
-    expect(document.body.textContent).toContain(ROOM.seriesDone.title);
     expect(document.body.textContent).not.toContain(ROOM.heroBans.seriesTitle);
     expect(document.body.querySelector("[data-hero-bans]")).toBeNull();
   });
@@ -1489,7 +1467,7 @@ describe("phase selection", () => {
     await render();
 
     expect(document.body.textContent).toContain(ROOM.mapResult.pickMap);
-    expect(document.body.textContent).not.toContain(ROOM.seriesDone.title);
+    expect(document.body.textContent).not.toContain(ROOM.finalReport.title);
   });
 
   it("holds the hero phase closed until the map it bans for is known", async () => {

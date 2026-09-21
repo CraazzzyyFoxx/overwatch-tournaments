@@ -3204,13 +3204,6 @@
         "pointless": "The opponent has already banned this role — protecting it changes nothing",
         "repeat": "Your side already banned this earlier in the series"
       },
-      "seriesDone": {
-        "title": "Nothing left to decide",
-        "hint": "Every map of this series has been picked, banned and reported. The result is with the organizers now.",
-        "hintNoReport": "Every map of this series has been picked, banned and reported. A scrim keeps no result, so there is nothing to file.",
-        "won": "{team} won the series {home}:{away}",
-        "drawn": "The series ended {home}:{away}"
-      },
       "finalReport": {
         "title": "Report the match",
         "hint": "Pick and ban are done. This is the tournament's match report: confirm the series score, add the match codes and anything else the organizers asked for. Filing it takes you back where you came from."
