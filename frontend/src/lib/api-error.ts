@@ -113,10 +113,45 @@ function normalizeDetailItem(item: unknown): ApiErrorDetail[] {
   return [{ msg: "Unknown error", code: "unknown" }];
 }
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+/**
+ * The structured error entries a worker reported, wherever the transport put
+ * them: the v1 gateway body spreads the envelope's `details` next to
+ * `detail`/`code`, v2 nests the whole envelope under `error.details`.
+ *
+ * This is where an `ApiHTTPException([ApiExc(msg, code, field), …])` keeps its
+ * per-item `code`/`field`. `detail` only carries the human texts joined into
+ * one string, which no renderer can attach to an input.
+ */
+export function errorBodyFields(body: unknown): Record<string, unknown>[] {
+  const root = asRecord(body);
+  if (!root) return [];
+  const candidates = [
+    root.fields,
+    asRecord(root.details)?.fields,
+    asRecord(asRecord(root.error)?.details)?.fields,
+    asRecord(root.detail)?.fields,
+  ];
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate)) {
+      return candidate.map(asRecord).filter((entry): entry is Record<string, unknown> => !!entry);
+    }
+  }
+  return [];
+}
+
 /**
  * Parse a non-ok Response into an ApiError.
  *
- * Expected backend shapes (see backend/shared/core/errors.py & middleware.py):
+ * Expected backend shapes (see backend/shared/core/errors.py & middleware.py,
+ * and backend/shared/rpc/common.py::http_error for the RPC path):
+ *   { "detail": "…", "code": "…", "fields": [{ "msg", "code", "field" }] }
+ *                                                          – relayed RPC error
  *   { "detail": [{ "msg": "…", "code": "…" }] }            – business error
  *   { "detail": [{ "msg": [pydantic…], "code": "…" }] }    – 422 validation
  *   { "detail": ["some string"] } / { "detail": "string" } – wrapped HTTPException
@@ -129,7 +164,10 @@ export async function parseApiError(response: Response): Promise<ApiError> {
   try {
     const body = await response.json();
     parsed = body;
-    const raw = body?.detail ?? body?.message;
+    // Only entries that look like an error item: a `fields` key also exists on
+    // unrelated bodies, and one without a `msg` says nothing a user can read.
+    const fields = errorBodyFields(body).filter((entry) => typeof entry.msg === "string");
+    const raw = fields.length > 0 ? fields : (body?.detail ?? body?.message);
 
     if (Array.isArray(raw)) {
       details = raw.flatMap(normalizeDetailItem);

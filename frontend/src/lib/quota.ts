@@ -1,4 +1,4 @@
-import { ApiError } from "@/lib/api-error";
+import { ApiError, errorBodyFields } from "@/lib/api-error";
 import { QUOTA_DIMENSIONS, type QuotaDimension } from "@/types/auth.types";
 
 /**
@@ -19,34 +19,6 @@ const IS_DIMENSION: Record<string, true> = Object.fromEntries(
   QUOTA_DIMENSIONS.map((dimension) => [dimension, true])
 );
 
-function asRecord(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null;
-}
-
-/**
- * The structured error entries a worker reported, wherever the transport put
- * them: the v1 gateway body spreads the envelope's `details` next to
- * `detail`/`code`, v2 nests the whole envelope under `error.details`.
- */
-function errorFields(body: unknown): Record<string, unknown>[] {
-  const root = asRecord(body);
-  if (!root) return [];
-  const candidates = [
-    root.fields,
-    asRecord(root.details)?.fields,
-    asRecord(asRecord(root.error)?.details)?.fields,
-    asRecord(root.detail)?.fields
-  ];
-  for (const candidate of candidates) {
-    if (Array.isArray(candidate)) {
-      return candidate.map(asRecord).filter((entry): entry is Record<string, unknown> => !!entry);
-    }
-  }
-  return [];
-}
-
 /**
  * Read a `quota_above_inherited` rejection off a thrown value, so the screen can
  * mark the offending input instead of showing a toast that says nothing about
@@ -58,7 +30,7 @@ function errorFields(body: unknown): Record<string, unknown>[] {
 export function parseQuotaAboveInherited(error: unknown): QuotaAboveInherited | null {
   if (!(error instanceof ApiError) || error.status !== 422) return null;
 
-  for (const field of errorFields(error.body)) {
+  for (const field of errorBodyFields(error.body)) {
     if (field.code !== "quota_above_inherited") continue;
     const dimension = field.limit_name;
     if (typeof dimension !== "string" || !IS_DIMENSION[dimension]) return null;

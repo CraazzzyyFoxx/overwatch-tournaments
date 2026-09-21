@@ -1,7 +1,10 @@
 """Shared helpers for tournament-service RPC subscriber modules.
 
 Param decoding is ``shared.rpc.common`` — the same helpers every other
-typed-RPC worker uses. ``_run``/``_read`` stay local: they do not dump
+typed-RPC worker uses, including the exception→envelope mapping
+(``http_error``/``validation_error``), so an ``ApiHTTPException``'s per-item
+``code``/``field`` reaches clients under ``details["fields"]`` instead of being
+flattened into a Python repr. ``_run``/``_read`` stay local: they do not dump
 (``_run``) or do not map ``MissingIdentityError`` (``_read``), which
 ``shared.rpc.common.envelope`` would change.
 """
@@ -19,6 +22,8 @@ from shared.rpc.common import (
 )
 from shared.rpc.common import (
     dump,
+    http_error,
+    validation_error,
 )
 from shared.rpc.common import (
     payload as _payload,
@@ -80,9 +85,11 @@ async def _run(logger: Any, op: Callable[[Any], Awaitable[Any]]) -> dict[str, An
     except MissingIdentityError as exc:
         return rpc_error("unauthorized", str(exc) or "Not authenticated")
     except HTTPException as exc:
-        return rpc_error(status_to_code(exc.status_code), str(exc.detail))
+        message, details = http_error(exc)
+        return rpc_error(status_to_code(exc.status_code), message, details)
     except ValidationError as exc:
-        return rpc_error("unprocessable", str(exc))
+        message, details = validation_error(exc)
+        return rpc_error("unprocessable", message, details)
     except Exception:  # pragma: no cover - defensive worker guard
         logger.exception("tournament rpc failed")
         return rpc_error("internal", "internal error")
@@ -99,9 +106,11 @@ async def _read(logger: Any, op: Callable[[Any], Awaitable[Any]], *, exclude_non
         async with db.async_session_maker() as session:
             return rpc_ok(_dump(await op(session), exclude_none=exclude_none))
     except HTTPException as exc:
-        return rpc_error(status_to_code(exc.status_code), str(exc.detail))
+        message, details = http_error(exc)
+        return rpc_error(status_to_code(exc.status_code), message, details)
     except ValidationError as exc:
-        return rpc_error("unprocessable", str(exc))
+        message, details = validation_error(exc)
+        return rpc_error("unprocessable", message, details)
     except Exception:  # pragma: no cover - defensive worker guard
         logger.exception("tournament read rpc failed")
         return rpc_error("internal", "internal error")

@@ -250,10 +250,10 @@ class RegistrationTeamImageSubjects(IsolatedAsyncioTestCase):
 
         self.assertFalse(envelope["ok"], envelope)
         self.assertEqual("forbidden", envelope["error"]["code"])
-        # ``_run`` flattens ApiHTTPException.detail into the message string, so
-        # the machine code the frontend translates rides there rather than in a
-        # structured field. Matched on containment, not the exact repr.
-        self.assertIn("not_captain", envelope["error"]["message"])
+        # ``_run`` maps ApiHTTPException through ``shared.rpc.common.http_error``:
+        # the message is the human text and the machine code the frontend
+        # translates rides ``details["fields"]``, which the gateway relays.
+        self.assertEqual("not_captain", envelope["error"]["details"]["fields"][0]["code"])
         self.assertEqual([], self.set_image_calls)
         # upload_avatar deletes the previous object before writing the new one,
         # so reaching S3 at all would let a stranger destroy the crest.
@@ -287,7 +287,7 @@ class RegistrationTeamImageSubjects(IsolatedAsyncioTestCase):
 
         self.assertFalse(envelope["ok"], envelope)
         self.assertEqual("conflict", envelope["error"]["code"])
-        self.assertIn("team_already_exported", envelope["error"]["message"])
+        self.assertEqual("team_already_exported", envelope["error"]["details"]["fields"][0]["code"])
 
 
 class GateSignature(TestCase):
