@@ -21,7 +21,7 @@ export interface RoleDef {
 
 export const ROLES: readonly RoleDef[] = [
   { code: "tank", display: "Tank", icon: "Tank" },
-  { code: "damage", display: "DPS", icon: "Damage" },
+  { code: "damage", display: "Damage", icon: "Damage" },
   { code: "support", display: "Support", icon: "Support" },
 ] as const;
 

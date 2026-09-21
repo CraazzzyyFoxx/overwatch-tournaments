@@ -109,12 +109,13 @@ export function RoleMatrixRow({
           </span>
           <Select
             value={selection.subrole || ANY_SUBROLE}
+            disabled={!active}
             onValueChange={(next) => onSubroleChange(next === ANY_SUBROLE ? "" : next)}
           >
             <SelectTrigger
               id={subroleId}
               aria-label={t("registration.roles.roleSpecialization", { role: roleLabel })}
-              className="h-9 border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-overlay-2)] text-label text-[color:var(--aqt-fg)]"
+              className="h-9 border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-overlay-2)] text-label text-[color:var(--aqt-fg)] disabled:cursor-not-allowed disabled:opacity-50"
             >
               <SelectValue />
             </SelectTrigger>
@@ -143,6 +144,7 @@ export function RoleMatrixRow({
             heroes={heroes}
             selected={selection.topHeroes}
             max={maxHeroes}
+            disabled={!active}
             onChange={onHeroesChange}
           />
         </div>

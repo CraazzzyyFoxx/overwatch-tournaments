@@ -74,6 +74,10 @@ export default function RoleStep({
   lockedRole = null,
 }: Readonly<RoleStepProps>) {
   const t = useTranslations();
+  // The same translated slot vocabulary the roster shortfall, the invite chips
+  // and the slot picker speak, so the matrix never labels `damage` "DPS" beside
+  // a chip that reads "Дамаг".
+  const tSlots = useTranslations("rosterShape.slotCodes");
   const isLocked = lockedRole != null;
   // `flex_allowed: false` is the old `flex_role.enabled: false` — no flex at all.
   const flexMode: FlexMode = params.flex_allowed ? params.flex_mode : "off";
@@ -170,8 +174,9 @@ export default function RoleStep({
   };
 
   const setSubrole = (roleCode: RoleCode, subrole: string) => {
-    // Choosing a specialization for a role marked "off" is a clear intent to
-    // play it; promote instead of dropping the input on the floor.
+    // Only reachable in the priority-less modes (forced/all_roles/locked): where
+    // the priority control is shown, an "off" row's cells are disabled. There a
+    // specialization on an "off" role is a clear intent to play it, so promote.
     const priority = selections[roleCode].priority === "off" ? "fallback" : selections[roleCode].priority;
     onChange(
       normalize({ ...selections, [roleCode]: { ...selections[roleCode], subrole, priority } }, roleCode),
@@ -227,7 +232,7 @@ export default function RoleStep({
   const priorityOptions: readonly SegmentedOption<RoleCode | "flex">[] = [
     ...ROLES.map((role) => ({
       value: role.code as RoleCode | "flex",
-      label: role.display,
+      label: tSlots(role.code),
       selectedClassName: (ROLE_ACCENTS[role.code] ?? ROLE_ACCENTS.flex).tile,
     })),
     {
@@ -311,7 +316,7 @@ export default function RoleStep({
           <RoleMatrixRow
             key={role.code}
             roleCode={role.code}
-            roleLabel={role.display}
+            roleLabel={tSlots(role.code)}
             selection={selections[role.code]}
             subroleOptions={subroleOptionsFor(role.code)}
             heroes={heroesForRole(role.code)}
