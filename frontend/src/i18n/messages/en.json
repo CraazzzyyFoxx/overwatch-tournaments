@@ -389,7 +389,8 @@
       "reserve": "Reserve",
       "reserveLabel": "Call me in if a replacement is needed",
       "notes": "Notes",
-      "notesPlaceholder": "Anything you'd like organizers to know"
+      "notesPlaceholder": "Anything the players and captains should know",
+      "organizerNotesPlaceholder": "Anything you'd like organizers to know"
     },
     "button": {
       "closed": "Registration closed",

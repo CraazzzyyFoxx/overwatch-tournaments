@@ -28,12 +28,17 @@ export default function NotesField({
       label={field.label || (internal ? "Organizer Notes" : t("registration.details.notes"))}
       required={field.required}
       icon={internal ? <BadgeInfo className="size-3.5 opacity-50" /> : undefined}
-      // The registrant writes this one too — only the READER differs — so the
-      // placeholder must not read as an organizer's private scratchpad.
-      // `SchemaForm` states the audience beneath the control.
+      // Both are written by the REGISTRANT; only the reader differs, so each
+      // placeholder names its own audience: the public one is what the roster
+      // shows to players and captains, the internal one is the line to the
+      // organizers. `SchemaForm` states the audience beneath the control.
       placeholder={
         field.placeholder ??
-        (internal ? "" : t("registration.details.notesPlaceholder"))
+        t(
+          internal
+            ? "registration.details.organizerNotesPlaceholder"
+            : "registration.details.notesPlaceholder"
+        )
       }
       value={typeof value === "string" ? value : ""}
       onChange={onChange}
