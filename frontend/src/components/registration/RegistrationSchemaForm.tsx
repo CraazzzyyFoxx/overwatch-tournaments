@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, ArrowRight, BadgeInfo, Loader2, UserRound } from "lucide-react";
 import { useTranslations } from "next-intl";
@@ -191,6 +191,46 @@ function initialRanks(roles: readonly StoredRole[] | undefined): Record<string, 
 }
 
 /**
+ * Where a registrant's unsubmitted answers live between mounts.
+ *
+ * Closing the dialog UNMOUNTS this form, so an accidental Esc or backdrop click
+ * used to throw the whole answer document away. Keyed per tournament and NOT
+ * per form version: a schema bump mid-typing must keep what was typed, the same
+ * reason the stale-version recovery in `submit` refetches instead of resetting.
+ *
+ * Admin mode has no draft — it would belong to whichever registration row the
+ * organizer happened to have open, and reinstate it over the next one.
+ */
+function draftKeyFor(mode: "public" | "admin", tournamentId: number): string | null {
+  return mode === "public" ? `aqt:registration-draft:${tournamentId}` : null;
+}
+
+function readDraft(key: string, lockedRole: RoleCode | null): Answers | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const parsed: unknown = JSON.parse(window.localStorage.getItem(key) ?? "null");
+    if (!parsed || typeof parsed !== "object") return null;
+    const draft = parsed as Answers;
+    // The host dictates the slot (an invite names it, a captain picks it above
+    // the form), so a draft saved under a different one must not reinstate it.
+    if (lockedRole) delete draft.roles;
+    return draft;
+  } catch {
+    // Unparseable or unreadable storage is just an absent draft.
+    return null;
+  }
+}
+
+function dropDraft(key: string | null): void {
+  if (!key) return;
+  try {
+    window.localStorage.removeItem(key);
+  } catch {
+    // Private mode / blocked storage: nothing was ever written.
+  }
+}
+
+/**
  * The registration form, public and admin alike, rendered from the schema.
  *
  * Everything the tournament asks is a field of `form.form_schema`; this
@@ -221,9 +261,14 @@ export default function RegistrationSchemaForm({
   const schema = form.form_schema;
   const adminInitial = initial && "admin_notes" in initial ? initial : null;
 
-  const [answers, setAnswers] = useState<Answers>(() =>
-    initialAnswers(schema, mode, initial, userProfile, lockedRole),
-  );
+  const draftKey = draftKeyFor(mode, tournamentId);
+  // The draft is read at INIT, not in an effect: every host mounts this form
+  // client-side only (the invite page waits for the URL fragment, the two
+  // dialogs for a click), so there is no server render to diverge from.
+  const [answers, setAnswers] = useState<Answers>(() => ({
+    ...initialAnswers(schema, mode, initial, userProfile, lockedRole),
+    ...(draftKey ? readDraft(draftKey, lockedRole) : null),
+  }));
   const [step, setStep] = useState(0);
   // Objections stay hidden until the registrant tries to advance: the form used
   // to open with a red "BattleTag is required" and a dead Next button.
@@ -240,6 +285,17 @@ export default function RegistrationSchemaForm({
   const [ranks, setRanks] = useState<Record<string, string>>(() => initialRanks(initial?.roles));
   const [authUserId, setAuthUserId] = useState<number | undefined>(undefined);
   const [authUserLabel, setAuthUserLabel] = useState<string | undefined>(undefined);
+
+  // Persisting is the only thing left for an effect: writing the document out
+  // to storage is exactly the "sync React state to an external system" case.
+  useEffect(() => {
+    if (!draftKey) return;
+    try {
+      window.localStorage.setItem(draftKey, JSON.stringify(answers));
+    } catch {
+      // Quota or blocked storage: a lost draft must not break registering.
+    }
+  }, [draftKey, answers]);
 
   const rolesField = allFields(schema).find((field) => field.key === "roles");
   const topHeroesEnabled = rolesField ? rolesParams(rolesField).top_heroes.enabled : false;
@@ -361,6 +417,9 @@ export default function RegistrationSchemaForm({
 
     try {
       await onSubmit(payload);
+      // Submitted answers are no longer a draft. Deliberately not cleared on
+      // cancel: from here an accidental close is indistinguishable from one.
+      dropDraft(draftKey);
     } catch (error) {
       const mapped = fieldErrorsFrom(error, tErrors);
       if (mapped.stale) {
@@ -417,7 +476,7 @@ export default function RegistrationSchemaForm({
         Organizer
       </h3>
 
-      <div className="space-y-1.5">
+      <div className="space-y-2">
         <FieldLabel label="Linked Site Account" />
         <AuthUserSearchCombobox
           value={authUserId}
@@ -628,7 +687,7 @@ function AdminStatusSelect({
   custom: Array<{ value: string; name: string }>;
 }>) {
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-2">
       <FieldLabel label={label} icon={<BadgeInfo className="size-3.5 opacity-50" />} />
       <Select value={value} onValueChange={onChange}>
         <SelectTrigger className={cn(fieldControlClass, "h-9")}>

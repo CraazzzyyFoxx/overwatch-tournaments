@@ -206,6 +206,55 @@ describe("RegistrationSchemaForm", () => {
       expect(en.registration.accounts[provider as keyof typeof en.registration.accounts]).toBeTruthy();
     }
   });
+
+  it("keeps the answers a registrant typed when the form is closed, until it submits", async () => {
+    // Closing the dialog unmounts the form, and an accidental Esc looks exactly
+    // like Cancel from in here — so the answer document has to outlive the mount.
+    testWindow.localStorage.clear();
+    let submitted = false;
+
+    const mount = () => {
+      container = testWindow.document.createElement("div");
+      testWindow.document.body.appendChild(container);
+      root = createRoot(container as unknown as Element);
+      act(() => {
+        root.render(
+          <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+            <RegistrationSchemaForm
+              mode="public"
+              form={FORM}
+              tournamentId={7}
+              onSubmit={async () => {
+                submitted = true;
+              }}
+              onCancel={() => {}}
+            />
+          </QueryClientProvider>,
+        );
+      });
+    };
+
+    mount();
+    type(container.querySelectorAll("textarea")[0], "half an answer");
+    act(() => root.unmount());
+
+    mount();
+    expect(container.querySelectorAll("textarea")[0].value).toBe("half an answer");
+
+    const buttons = container.querySelectorAll("button");
+    await act(async () => {
+      buttons[buttons.length - 1].dispatchEvent(
+        new testWindow.MouseEvent("click", { bubbles: true }) as unknown as Event,
+      );
+    });
+    expect(submitted).toBe(true);
+    expect(testWindow.localStorage.getItem("aqt:registration-draft:7")).toBeNull();
+
+    // …and a fresh registration after that one opens empty.
+    act(() => root.unmount());
+    mount();
+    expect(container.querySelectorAll("textarea")[0].value).toBe("");
+  });
 });
 
 afterAll(() => {
