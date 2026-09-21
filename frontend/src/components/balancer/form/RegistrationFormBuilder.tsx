@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type ReactNode } from "react";
+import { useId, useMemo, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   DndContext,
@@ -17,7 +17,7 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy
 } from "@dnd-kit/sortable";
-import { LoaderCircle, Trash2 } from "lucide-react";
+import { AlertCircle, Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import SchemaForm from "@/components/forms/SchemaForm";
@@ -25,12 +25,14 @@ import type { FieldRendererContext } from "@/components/forms/types";
 import { SaveBar } from "@/components/kit/SaveBar";
 import { EmptyNote } from "@/components/kit/EmptyNote";
 import { SortableGrip, useSortableRow } from "@/components/kit/SortableRows";
+import { EYEBROW_CLASS } from "@/components/kit/tone";
 import { registrationRenderers } from "@/components/registration/registrationRenderers";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PageStateCard } from "@/components/ui/page-state-card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { defaultFormSchema } from "@/lib/forms/default-schema";
 import { fieldErrorsFrom } from "@/lib/forms/form-errors";
@@ -90,41 +92,43 @@ function FieldRow({
   const { ref, style, handleProps, isDragging } = useSortableRow(`${FIELD_DRAG_PREFIX}${field.key}`);
 
   return (
-    <div
+    <li
       ref={ref}
       style={style}
       className={cn(
         "flex items-center gap-2 rounded-lg border px-2 py-1.5",
-        selected ? "border-primary/40 bg-primary/5" : "border-border/60",
-        invalid && "border-destructive/50",
+        selected ? "border-primary/40 bg-primary/10" : "border-border/60",
+        invalid && "border-destructive/50 bg-destructive/5",
         isDragging && "opacity-90"
       )}
     >
       <SortableGrip handleProps={handleProps} label={t("reorderField", { field: label })} />
-      <button type="button" onClick={onSelect} className="min-w-0 flex-1 text-left">
+      {/* The save bar says "fix the highlighted questions", so the highlight
+          cannot be a border tint alone — colour is never the only cue. */}
+      {invalid && (
+        <AlertCircle
+          role="img"
+          aria-label={t("needsFix")}
+          className="size-3.5 shrink-0 text-destructive"
+        />
+      )}
+      <button
+        type="button"
+        onClick={onSelect}
+        aria-current={selected ? "true" : undefined}
+        className="min-w-0 flex-1 text-left"
+      >
         <span className="block truncate text-sm font-medium">{label}</span>
         <span className="flex flex-wrap items-center gap-1.5 pt-0.5">
           <span className="font-mono text-xs text-muted-foreground">{field.key}</span>
           {field.kind === "builtin" ? null : (
-            <Badge variant="outline" className="text-[10px]">
-              {tKinds(field.kind)}
-            </Badge>
+            <Badge variant="outline">{tKinds(field.kind)}</Badge>
           )}
-          {field.required && (
-            <Badge variant="outline" className="text-[10px]">
-              {t("requiredBadge")}
-            </Badge>
-          )}
+          {field.required && <Badge variant="outline">{t("requiredBadge")}</Badge>}
           {field.visibility === "organizers" && (
-            <Badge variant="outline" className="text-[10px]">
-              {t("organizersBadge")}
-            </Badge>
+            <Badge variant="outline">{t("organizersBadge")}</Badge>
           )}
-          {field.visible_when && (
-            <Badge variant="outline" className="text-[10px]">
-              {t("conditionalBadge")}
-            </Badge>
-          )}
+          {field.visible_when && <Badge variant="outline">{t("conditionalBadge")}</Badge>}
         </span>
       </button>
       <Button
@@ -136,7 +140,7 @@ function FieldRow({
       >
         <Trash2 className="size-3.5" aria-hidden />
       </Button>
-    </div>
+    </li>
   );
 }
 
@@ -178,6 +182,7 @@ export function SchemaEditor({
   const t = useTranslations("registrationFormAdmin.builder");
   const tBuiltins = useTranslations("registrationFormAdmin.builtins");
   const tFormErrors = useTranslations("forms.errors");
+  const panelIds = useId();
 
   const [sectionKey, setSectionKey] = useState<string | null>(null);
   const [fieldKey, setFieldKey] = useState<string | null>(null);
@@ -196,7 +201,6 @@ export function SchemaEditor({
   const field = section?.fields.find((entry) => entry.key === fieldKey) ?? null;
   const usedKeys = useMemo(() => new Set(flatFields(schema).map((entry) => entry.key)), [schema]);
   const invalidKeys = useMemo(() => blockedFieldKeys(schema), [schema]);
-
 
   /** Apply an edit; `prune` for the structural ones, which can strand a condition. */
   const commit = (next: FormSchema, prune = false) => {
@@ -342,7 +346,15 @@ export function SchemaEditor({
       </div>
 
       <TabsContent value="edit" className="m-0">
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+        {/* An explicit `id`: without one dnd-kit numbers its keyboard
+            instructions from a module counter that server and client disagree
+            on, and every grip's `aria-describedby` ends up dangling. */}
+        <DndContext
+          id={panelIds}
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={handleDragEnd}
+        >
           <div className="flex flex-col gap-4 md:flex-row md:items-start">
             <SectionList
               sections={schema.sections}
@@ -388,9 +400,12 @@ export function SchemaEditor({
                   </div>
 
                   <div className="flex items-center justify-between gap-2">
-                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                      {t("fieldCount", { count: section.fields.length })}
-                    </p>
+                    <h3 className={cn(EYEBROW_CLASS, "flex flex-wrap items-baseline gap-x-2")}>
+                      {t("questions")}
+                      <span className="font-normal normal-case tracking-normal">
+                        {t("fieldCount", { count: section.fields.length })}
+                      </span>
+                    </h3>
                     <AddFieldMenu
                       usedKeys={usedKeys}
                       onAddBuiltin={addBuiltin}
@@ -402,7 +417,7 @@ export function SchemaEditor({
                     items={section.fields.map((entry) => `${FIELD_DRAG_PREFIX}${entry.key}`)}
                     strategy={verticalListSortingStrategy}
                   >
-                    <div className="flex flex-col gap-1.5">
+                    <ul role="list" className="flex flex-col gap-1.5">
                       {section.fields.map((entry) => (
                         <FieldRow
                           key={entry.key}
@@ -414,7 +429,7 @@ export function SchemaEditor({
                           onDelete={() => deleteField(entry.key)}
                         />
                       ))}
-                    </div>
+                    </ul>
                   </SortableContext>
 
                   {section.fields.length === 0 && (
@@ -422,17 +437,37 @@ export function SchemaEditor({
                   )}
 
                   {field && (
-                    <FieldEditor
-                      key={field.key}
-                      field={field}
-                      earlierFields={earlierFields(schema, field.key)}
-                      keyLocked={!unlockedKeys.has(field.key)}
-                      serverError={fieldErrors[field.key] ?? null}
-                      catalog={subroleCatalog}
-                      catalogLoading={catalogLoading}
-                      onChange={(next) => commit(replaceField(schema, field.key, next))}
-                      onCommitKey={commitKey}
-                    />
+                    /* The settings of one question, named: the pane holds a
+                       growing list above it, and a panel that says nothing
+                       about what it edits makes a row click look like a no-op. */
+                    <section
+                      aria-labelledby={`${panelIds}-field`}
+                      className="grid gap-3 rounded-lg border bg-muted/20 p-3"
+                    >
+                      <div className="flex flex-wrap items-baseline gap-x-2">
+                        <h3 id={`${panelIds}-field`} className="text-sm font-medium">
+                          {fieldDisplayLabel(field, tBuiltins)}
+                        </h3>
+                        {/* An unnamed custom question already shows its key as
+                            the heading; twice is noise. */}
+                        {fieldDisplayLabel(field, tBuiltins) === field.key ? null : (
+                          <span className="font-mono text-xs text-muted-foreground">
+                            {field.key}
+                          </span>
+                        )}
+                      </div>
+                      <FieldEditor
+                        key={field.key}
+                        field={field}
+                        earlierFields={earlierFields(schema, field.key)}
+                        keyLocked={!unlockedKeys.has(field.key)}
+                        serverError={fieldErrors[field.key] ?? null}
+                        catalog={subroleCatalog}
+                        catalogLoading={catalogLoading}
+                        onChange={(next) => commit(replaceField(schema, field.key, next))}
+                        onCommitKey={commitKey}
+                      />
+                    </section>
                   )}
                 </div>
               ) : null}
@@ -465,13 +500,13 @@ export function SchemaEditor({
                 >
                   {t("previewBack")}
                 </Button>
-                <Button
-                  size="sm"
-                  disabled={isLast}
-                  onClick={() => setPreviewStep((current) => current + 1)}
-                >
-                  {isLast ? t("previewDone") : t("previewNext")}
-                </Button>
+                {isLast ? (
+                  <p className="text-xs text-muted-foreground">{t("previewEnd")}</p>
+                ) : (
+                  <Button size="sm" onClick={() => setPreviewStep((current) => current + 1)}>
+                    {t("previewNext")}
+                  </Button>
+                )}
               </div>
             )}
           />
@@ -603,31 +638,34 @@ export default function RegistrationFormBuilder({
 
   if (!tournamentId) {
     return (
-      <Alert>
-        <AlertTitle>{t("noTournament.title")}</AlertTitle>
-        <AlertDescription>{t("noTournament.description")}</AlertDescription>
-      </Alert>
+      <PageStateCard
+        state="empty"
+        title={t("noTournament.title")}
+        description={t("noTournament.description")}
+      />
     );
   }
 
   if (formQuery.isError) {
     return (
-      <Alert variant="destructive">
-        <AlertTitle>{t("loadError.title")}</AlertTitle>
-        <AlertDescription>
-          {(formQuery.error as Error)?.message ?? t("loadError.fallback")}
-        </AlertDescription>
-      </Alert>
+      <PageStateCard
+        state="error"
+        title={t("loadError.title")}
+        description={(formQuery.error as Error)?.message ?? t("loadError.fallback")}
+        onAction={() => void formQuery.refetch()}
+      />
     );
   }
 
-  // Avoid flashing the default questionnaire while the saved one is loading.
+  // Avoid flashing the default questionnaire while the saved one is loading —
+  // skeletons in the editor's own shape, so nothing jumps when it arrives.
   if (formQuery.isLoading) {
     return (
-      <output className="flex flex-1 items-center justify-center py-16 text-sm text-muted-foreground">
-        <LoaderCircle className="mr-2 size-4 animate-spin motion-reduce:animate-none" aria-hidden />
-        {t("loading")}
-      </output>
+      <div role="status" className="flex flex-col gap-4 md:flex-row md:items-start">
+        <span className="sr-only">{t("loading")}</span>
+        <Skeleton aria-hidden className="h-64 w-full shrink-0 rounded-xl md:w-64" />
+        <Skeleton aria-hidden className="h-64 min-w-0 flex-1 rounded-xl" />
+      </div>
     );
   }
 
@@ -648,6 +686,9 @@ export default function RegistrationFormBuilder({
             {stale > 0 && (
               <Badge tone="warning" title={tBuilder("staleHint")}>
                 {tBuilder("stale", { count: stale })}
+                {/* The `title` is pointer-only; the reason has to reach a
+                    screen reader too. */}
+                <span className="sr-only"> {tBuilder("staleHint")}</span>
               </Badge>
             )}
             <TemplateMenu

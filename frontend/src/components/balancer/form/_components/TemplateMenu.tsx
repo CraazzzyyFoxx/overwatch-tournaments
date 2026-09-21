@@ -139,7 +139,7 @@ export function TemplateMenu({
                   className={cn(
                     "rounded-lg border px-3 py-2 text-left text-sm",
                     template.id === selectedId
-                      ? "border-primary/40 bg-primary/5"
+                      ? "border-primary/40 bg-primary/10"
                       : "border-border/60 hover:border-border"
                   )}
                 >

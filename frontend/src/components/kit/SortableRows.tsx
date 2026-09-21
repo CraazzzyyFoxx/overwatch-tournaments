@@ -1,6 +1,6 @@
 "use client";
 
-import type { CSSProperties, ReactNode } from "react";
+import { useId, type CSSProperties, type ReactNode } from "react";
 import {
   DndContext,
   KeyboardSensor,
@@ -59,6 +59,10 @@ export function SortableRows<T>({
   className,
   children,
 }: Readonly<SortableRowsProps<T>>) {
+  // An explicit `id`: without one dnd-kit numbers its keyboard instructions
+  // from a module counter that server and client disagree on, so every grip's
+  // `aria-describedby` hydrates into a dangling reference.
+  const dndId = useId();
   const sensors = useSensors(
     // 5px before a drag starts, so a click on a control inside a row is still a
     // click and not a one-pixel drag.
@@ -80,7 +84,12 @@ export function SortableRows<T>({
   };
 
   return (
-    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+    <DndContext
+      id={dndId}
+      sensors={sensors}
+      collisionDetection={closestCenter}
+      onDragEnd={handleDragEnd}
+    >
       <SortableContext items={ids} strategy={verticalListSortingStrategy}>
         <div className={className}>{items.map((item, index) => children(item, index))}</div>
       </SortableContext>

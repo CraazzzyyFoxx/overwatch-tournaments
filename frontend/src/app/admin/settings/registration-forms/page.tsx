@@ -174,7 +174,7 @@ export default function WorkspaceRegistrationFormsSettingsPage() {
                   className={cn(
                     "flex items-center gap-2 rounded-lg border px-2.5 py-1.5",
                     template.id === selectedId
-                      ? "border-primary/40 bg-primary/5"
+                      ? "border-primary/40 bg-primary/10"
                       : "border-border/60"
                   )}
                 >

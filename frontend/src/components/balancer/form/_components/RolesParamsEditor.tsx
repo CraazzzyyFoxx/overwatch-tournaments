@@ -54,7 +54,14 @@ export function rolesParamsOf(params: Record<string, unknown>): RolesParams {
   };
 }
 
-function ParamSwitch({
+/**
+ * One switch setting: what it is and why on the left, the control on the right.
+ *
+ * Shared with `FieldEditor` — the question panel and this params editor are one
+ * surface to the organizer, and two copies of the row is how their label sizes
+ * and hint spacing start to drift.
+ */
+export function SwitchRow({
   id,
   label,
   hint,
@@ -112,19 +119,19 @@ export function RolesParamsEditor({
   return (
     <div className="grid gap-4">
       <div className="grid gap-3">
-        <ParamSwitch
+        <SwitchRow
           id={`${ids}-primary`}
           label={t("primaryRequired")}
           checked={params.primary_required}
           onCheckedChange={(primary_required) => onChange({ ...params, primary_required })}
         />
-        <ParamSwitch
+        <SwitchRow
           id={`${ids}-additional`}
           label={t("additionalRequired")}
           checked={params.additional_required}
           onCheckedChange={(additional_required) => onChange({ ...params, additional_required })}
         />
-        <ParamSwitch
+        <SwitchRow
           id={`${ids}-flex`}
           label={t("flexAllowed")}
           hint={t("flexAllowedHint")}
@@ -159,7 +166,7 @@ export function RolesParamsEditor({
       <div className="grid gap-3 border-t pt-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-sm font-medium">{tSub("title")}</p>
+            <h5 className="text-sm font-medium">{tSub("title")}</h5>
             <p className="text-xs text-muted-foreground">{tSub("description")}</p>
           </div>
           <Button variant="outline" size="sm" asChild className="shrink-0">
@@ -232,7 +239,7 @@ export function RolesParamsEditor({
       </div>
 
       <div className="grid gap-3 border-t pt-4">
-        <ParamSwitch
+        <SwitchRow
           id={`${ids}-heroes`}
           label={t("topHeroesEnabled")}
           hint={t("topHeroesHint")}
@@ -241,7 +248,7 @@ export function RolesParamsEditor({
             onChange({ ...params, top_heroes: { ...params.top_heroes, enabled } })
           }
         />
-        <ParamSwitch
+        <SwitchRow
           id={`${ids}-heroes-required`}
           label={t("topHeroesRequired")}
           checked={params.top_heroes.required}

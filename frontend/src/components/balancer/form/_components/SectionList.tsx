@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 
 import { SortableGrip, useSortableRow } from "@/components/kit/SortableRows";
+import { EYEBROW_CLASS } from "@/components/kit/tone";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { FormSection } from "@/types/forms.types";
@@ -35,12 +36,12 @@ function SectionRow({
   const title = section.title?.trim() || t("sectionFallback", { index: index + 1 });
 
   return (
-    <div
+    <li
       ref={ref}
       style={style}
       className={cn(
         "flex items-center gap-2 rounded-lg border px-2 py-1.5",
-        selected ? "border-primary/40 bg-primary/5" : "border-border/60",
+        selected ? "border-primary/40 bg-primary/10" : "border-border/60",
         isDragging && "opacity-90"
       )}
     >
@@ -62,12 +63,16 @@ function SectionRow({
         className="size-7 shrink-0"
         disabled={!deletable}
         title={deletable ? t("deleteSection") : t("deleteSectionBlocked")}
-        aria-label={t("deleteSectionAria", { section: title })}
+        aria-label={
+          deletable
+            ? t("deleteSectionAria", { section: title })
+            : t("deleteSectionBlockedAria", { section: title })
+        }
         onClick={onDelete}
       >
         <Trash2 className="size-3.5" aria-hidden />
       </Button>
-    </div>
+    </li>
   );
 }
 
@@ -98,14 +103,12 @@ export function SectionList({
 
   return (
     <div className="flex w-full shrink-0 flex-col gap-2 md:w-64">
-      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-        {t("sections")}
-      </p>
+      <h3 className={EYEBROW_CLASS}>{t("sections")}</h3>
       <SortableContext
         items={sections.map((section) => `${SECTION_DRAG_PREFIX}${section.key}`)}
         strategy={verticalListSortingStrategy}
       >
-        <div className="flex flex-col gap-1.5">
+        <ul role="list" className="flex flex-col gap-1.5">
           {sections.map((section, index) => (
             <SectionRow
               key={section.key}
@@ -118,7 +121,7 @@ export function SectionList({
               onDelete={() => onDelete(section.key)}
             />
           ))}
-        </div>
+        </ul>
       </SortableContext>
       <Button variant="outline" size="sm" className="justify-start" onClick={onAdd}>
         <Plus className="mr-1.5 size-3.5" aria-hidden />

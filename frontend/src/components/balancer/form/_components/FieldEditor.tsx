@@ -1,8 +1,10 @@
 "use client";
 
-import { useId } from "react";
+import { useId, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 
+import { EYEBROW_CLASS } from "@/components/kit/tone";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -12,12 +14,17 @@ import {
   SelectTrigger,
   SelectValue
 } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { builtinFixedVisibility, builtinParamsKind } from "@/lib/forms/builtin-keys";
+import { cn } from "@/lib/utils";
 import type { Condition, FormField, Visibility } from "@/types/forms.types";
 
-import { RolesParamsEditor, rolesParamsOf, type SubroleCatalogByRole } from "./RolesParamsEditor";
+import {
+  RolesParamsEditor,
+  SwitchRow,
+  rolesParamsOf,
+  type SubroleCatalogByRole
+} from "./RolesParamsEditor";
 import {
   MAX_REGEX_LENGTH,
   fieldDisplayLabel,
@@ -28,6 +35,17 @@ import {
 const OPTION_KINDS: Record<string, true> = { select: true, multi_select: true };
 
 const CONDITION_OPS = ["truthy", "eq", "neq", "in"] as const;
+
+/** One labelled block of the panel. Space and an eyebrow, no extra boxes: the
+ *  panel already sits on its own surface inside the question list. */
+function Group({ title, children }: Readonly<{ title: string; children: ReactNode }>) {
+  return (
+    <section className="grid gap-3">
+      <h4 className={EYEBROW_CLASS}>{title}</h4>
+      {children}
+    </section>
+  );
+}
 
 /** The control a `visible_when` value needs, derived from the field it targets. */
 function conditionValueKind(target: FormField | undefined): "boolean" | "number" | "options" | "text" {
@@ -213,78 +231,175 @@ export function FieldEditor({
   const setCondition = (next: Condition | null) => onChange({ ...field, visible_when: next });
 
   return (
-    <div className="grid gap-4 border-t pt-4">
+    <div className="grid gap-5 border-t pt-4">
       {serverError ? (
-        <p className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+        <p
+          role="alert"
+          className="rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive"
+        >
           {serverError}
         </p>
       ) : null}
 
-      {isBuiltin ? (
-        <p className="text-xs text-muted-foreground">{t("builtinCopyHint")}</p>
-      ) : (
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div className="grid gap-1.5">
-            <Label htmlFor={`${ids}-label`} className="text-xs">
-              {t("label")}
-            </Label>
-            <Input
-              id={`${ids}-label`}
-              value={field.label ?? ""}
-              placeholder={t("labelPlaceholder")}
-              aria-invalid={issues.label !== null}
-              onChange={(event) => onChange({ ...field, label: event.target.value })}
-              onBlur={onCommitKey}
-            />
-            {issues.label ? (
-              <p className="text-xs text-destructive">{t(`issues.${issues.label}`)}</p>
-            ) : issues.key ? (
-              <p className="text-xs text-destructive">
-                {t(`issues.${issues.key}`, { key: field.key })}
+      <Group title={t("groupQuestion")}>
+        {isBuiltin ? (
+          <p className="text-xs text-muted-foreground">{t("builtinCopyHint")}</p>
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-1.5">
+              <Label htmlFor={`${ids}-label`} className="text-xs">
+                {t("label")}
+              </Label>
+              <Input
+                id={`${ids}-label`}
+                value={field.label ?? ""}
+                placeholder={t("labelPlaceholder")}
+                aria-invalid={issues.label !== null}
+                aria-describedby={`${ids}-label-note`}
+                onChange={(event) => onChange({ ...field, label: event.target.value })}
+                onBlur={onCommitKey}
+              />
+              {/* One note slot: the objection if there is one, otherwise what
+                  the answer key is — the thing every stored answer is filed
+                  under, so it is never silently off screen. */}
+              <p
+                id={`${ids}-label-note`}
+                className={cn(
+                  "text-xs",
+                  issues.label || issues.key ? "text-destructive" : "text-muted-foreground"
+                )}
+              >
+                {issues.label
+                  ? t(`issues.${issues.label}`)
+                  : issues.key
+                    ? t(`issues.${issues.key}`, { key: field.key })
+                    : keyLocked
+                      ? t("keyLocked", { key: field.key })
+                      : t("keyPending", { key: field.key })}
               </p>
-            ) : (
-              <p className="text-xs text-muted-foreground">
-                {keyLocked ? t("keyLocked", { key: field.key }) : t("keyPending", { key: field.key })}
-              </p>
-            )}
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor={`${ids}-placeholder`} className="text-xs">
+                {t("placeholder")}
+              </Label>
+              <Input
+                id={`${ids}-placeholder`}
+                value={field.placeholder ?? ""}
+                onChange={(event) =>
+                  onChange({ ...field, placeholder: event.target.value || null })
+                }
+              />
+            </div>
+            <div className="grid gap-1.5 sm:col-span-2">
+              <Label htmlFor={`${ids}-help`} className="text-xs">
+                {t("help")}
+              </Label>
+              <Input
+                id={`${ids}-help`}
+                value={field.help ?? ""}
+                onChange={(event) => onChange({ ...field, help: event.target.value || null })}
+              />
+            </div>
           </div>
-          <div className="grid gap-1.5">
-            <Label htmlFor={`${ids}-placeholder`} className="text-xs">
-              {t("placeholder")}
-            </Label>
-            <Input
-              id={`${ids}-placeholder`}
-              value={field.placeholder ?? ""}
-              onChange={(event) =>
-                onChange({ ...field, placeholder: event.target.value || null })
-              }
-            />
-          </div>
-          <div className="grid gap-1.5 sm:col-span-2">
-            <Label htmlFor={`${ids}-help`} className="text-xs">
-              {t("help")}
-            </Label>
-            <Input
-              id={`${ids}-help`}
-              value={field.help ?? ""}
-              onChange={(event) => onChange({ ...field, help: event.target.value || null })}
-            />
-          </div>
-        </div>
-      )}
+        )}
 
-      <div className="grid gap-3 sm:grid-cols-2">
-        <div className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2">
-          <Label htmlFor={`${ids}-required`} className="text-xs">
-            {t("required")}
-          </Label>
-          <Switch
-            id={`${ids}-required`}
-            checked={field.required}
-            onCheckedChange={(required) => onChange({ ...field, required })}
+        {OPTION_KINDS[field.kind] ? (
+          <div className="grid gap-1.5">
+            <Label htmlFor={`${ids}-options`} className="text-xs">
+              {t("options")}
+            </Label>
+            <Textarea
+              id={`${ids}-options`}
+              rows={4}
+              value={(field.options ?? []).join("\n")}
+              placeholder={t("optionsPlaceholder")}
+              aria-invalid={issues.options !== null}
+              aria-describedby={issues.options ? `${ids}-options-error` : undefined}
+              onChange={(event) => onChange({ ...field, options: event.target.value.split("\n") })}
+            />
+            {issues.options ? (
+              <p id={`${ids}-options-error`} className="text-xs text-destructive">
+                {t(`issues.${issues.options}`)}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+      </Group>
+
+      <Group title={t("groupAnswer")}>
+        <SwitchRow
+          id={`${ids}-required`}
+          label={t("required")}
+          checked={field.required}
+          onCheckedChange={(required) => onChange({ ...field, required })}
+        />
+
+        {paramsKind === "battle_tag" || paramsKind === "identity" ? (
+          <SwitchRow
+            id={`${ids}-verified`}
+            label={t("requireVerified")}
+            hint={t("requireVerifiedHint")}
+            checked={field.params.require_verified === true}
+            onCheckedChange={(require_verified) =>
+              onChange({ ...field, params: { ...field.params, require_verified } })
+            }
           />
-        </div>
+        ) : null}
 
+        {supportsValidation(field) ? (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-1.5">
+              <Label htmlFor={`${ids}-regex`} className="text-xs">
+                {t("regex")}
+              </Label>
+              <Input
+                id={`${ids}-regex`}
+                className="font-mono"
+                value={field.validation?.regex ?? ""}
+                aria-invalid={issues.regex !== null}
+                aria-describedby={`${ids}-regex-note`}
+                onChange={(event) =>
+                  onChange({
+                    ...field,
+                    validation: {
+                      ...(field.validation ?? {}),
+                      regex: event.target.value || null
+                    }
+                  })
+                }
+              />
+              <p
+                id={`${ids}-regex-note`}
+                className={cn("text-xs", issues.regex ? "text-destructive" : "text-muted-foreground")}
+              >
+                {issues.regex
+                  ? t(`issues.${issues.regex}`, { max: MAX_REGEX_LENGTH })
+                  : t("regexHint")}
+              </p>
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor={`${ids}-regex-message`} className="text-xs">
+                {t("errorMessage")}
+              </Label>
+              <Input
+                id={`${ids}-regex-message`}
+                value={field.validation?.error_message ?? ""}
+                onChange={(event) =>
+                  onChange({
+                    ...field,
+                    validation: {
+                      ...(field.validation ?? {}),
+                      error_message: event.target.value || null
+                    }
+                  })
+                }
+              />
+            </div>
+          </div>
+        ) : null}
+      </Group>
+
+      <Group title={t("groupVisibility")}>
         <div className="grid gap-1.5">
           <Label htmlFor={`${ids}-visibility`} className="text-xs">
             {t("visibility")}
@@ -294,7 +409,7 @@ export function FieldEditor({
             disabled={fixedVisibility !== null}
             onValueChange={(value) => setVisibility(value as Visibility)}
           >
-            <SelectTrigger id={`${ids}-visibility`}>
+            <SelectTrigger id={`${ids}-visibility`} aria-describedby={`${ids}-visibility-note`}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -302,96 +417,43 @@ export function FieldEditor({
               <SelectItem value="organizers">{t("visibilityOrganizers")}</SelectItem>
             </SelectContent>
           </Select>
-          <p className="text-xs text-muted-foreground">
+          <p id={`${ids}-visibility-note`} className="text-xs text-muted-foreground">
             {fixedVisibility
               ? t("visibilityFixed", { field: fieldDisplayLabel(field, tBuiltins) })
               : t("visibilityHint")}
           </p>
         </div>
-      </div>
 
-      {OPTION_KINDS[field.kind] ? (
-        <div className="grid gap-1.5">
-          <Label htmlFor={`${ids}-options`} className="text-xs">
-            {t("options")}
-          </Label>
-          <Textarea
-            id={`${ids}-options`}
-            rows={4}
-            value={(field.options ?? []).join("\n")}
-            placeholder={t("optionsPlaceholder")}
-            aria-invalid={issues.options !== null}
-            onChange={(event) => onChange({ ...field, options: event.target.value.split("\n") })}
+        {isBuiltin ? null : (
+          <SwitchRow
+            id={`${ids}-draft`}
+            label={t("showInDraft")}
+            hint={
+              field.visibility === "organizers" ? t("showInDraftBlocked") : t("showInDraftHint")
+            }
+            checked={field.show_in_draft}
+            disabled={field.visibility === "organizers"}
+            onCheckedChange={(show_in_draft) => onChange({ ...field, show_in_draft })}
           />
-          {issues.options ? (
-            <p className="text-xs text-destructive">{t(`issues.${issues.options}`)}</p>
-          ) : null}
-        </div>
-      ) : null}
+        )}
+      </Group>
 
-      {supportsValidation(field) ? (
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div className="grid gap-1.5">
-            <Label htmlFor={`${ids}-regex`} className="text-xs">
-              {t("regex")}
-            </Label>
-            <Input
-              id={`${ids}-regex`}
-              value={field.validation?.regex ?? ""}
-              aria-invalid={issues.regex !== null}
-              onChange={(event) =>
-                onChange({
-                  ...field,
-                  validation: {
-                    ...(field.validation ?? {}),
-                    regex: event.target.value || null
-                  }
-                })
-              }
-            />
-            {issues.regex ? (
-              <p className="text-xs text-destructive">
-                {t(`issues.${issues.regex}`, { max: MAX_REGEX_LENGTH })}
-              </p>
-            ) : (
-              <p className="text-xs text-muted-foreground">{t("regexHint")}</p>
-            )}
-          </div>
-          <div className="grid gap-1.5">
-            <Label htmlFor={`${ids}-regex-message`} className="text-xs">
-              {t("errorMessage")}
-            </Label>
-            <Input
-              id={`${ids}-regex-message`}
-              value={field.validation?.error_message ?? ""}
-              onChange={(event) =>
-                onChange({
-                  ...field,
-                  validation: {
-                    ...(field.validation ?? {}),
-                    error_message: event.target.value || null
-                  }
-                })
-              }
-            />
-          </div>
-        </div>
-      ) : null}
-
-      <div className="grid gap-3 rounded-lg border p-3">
+      <Group title={t("groupCondition")}>
         <div className="grid gap-1.5">
           <Label htmlFor={`${ids}-when`} className="text-xs">
             {t("visibleWhen")}
           </Label>
           <Select
             value={condition?.field ?? ""}
+            // Nothing earlier to point at is a dead dropdown, not a choice.
+            disabled={earlierFields.length === 0}
             onValueChange={(value) =>
               // `truthy` is the default because it is the only operator that
               // reads correctly against every kind, and it needs no value.
               setCondition(value === "" ? null : { field: value, op: "truthy" })
             }
           >
-            <SelectTrigger id={`${ids}-when`}>
+            <SelectTrigger id={`${ids}-when`} aria-describedby={`${ids}-when-note`}>
               <SelectValue placeholder={t("visibleWhenAlways")} />
             </SelectTrigger>
             <SelectContent>
@@ -402,7 +464,7 @@ export function FieldEditor({
               ))}
             </SelectContent>
           </Select>
-          <p className="text-xs text-muted-foreground">
+          <p id={`${ids}-when-note`} className="text-xs text-muted-foreground">
             {earlierFields.length === 0 ? t("visibleWhenNoEarlier") : t("visibleWhenHint")}
           </p>
         </div>
@@ -448,61 +510,27 @@ export function FieldEditor({
                 />
               </div>
             )}
-            <button
-              type="button"
-              className="justify-self-start text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground"
+            <Button
+              variant="link"
+              size="sm"
+              className="h-auto justify-self-start p-0"
               onClick={() => setCondition(null)}
             >
               {t("visibleWhenClear")}
-            </button>
+            </Button>
           </div>
         ) : null}
-      </div>
-
-      {isBuiltin ? null : (
-        <div className="flex items-start justify-between gap-3 rounded-lg border px-3 py-2">
-          <div className="min-w-0">
-            <Label htmlFor={`${ids}-draft`} className="text-xs">
-              {t("showInDraft")}
-            </Label>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              {field.visibility === "organizers" ? t("showInDraftBlocked") : t("showInDraftHint")}
-            </p>
-          </div>
-          <Switch
-            id={`${ids}-draft`}
-            checked={field.show_in_draft}
-            disabled={field.visibility === "organizers"}
-            onCheckedChange={(show_in_draft) => onChange({ ...field, show_in_draft })}
-          />
-        </div>
-      )}
-
-      {paramsKind === "battle_tag" || paramsKind === "identity" ? (
-        <div className="flex items-start justify-between gap-3 rounded-lg border px-3 py-2">
-          <div className="min-w-0">
-            <Label htmlFor={`${ids}-verified`} className="text-xs">
-              {t("requireVerified")}
-            </Label>
-            <p className="mt-0.5 text-xs text-muted-foreground">{t("requireVerifiedHint")}</p>
-          </div>
-          <Switch
-            id={`${ids}-verified`}
-            checked={field.params.require_verified === true}
-            onCheckedChange={(require_verified) =>
-              onChange({ ...field, params: { ...field.params, require_verified } })
-            }
-          />
-        </div>
-      ) : null}
+      </Group>
 
       {paramsKind === "roles" ? (
-        <RolesParamsEditor
-          params={rolesParamsOf(field.params)}
-          onChange={(params) => onChange({ ...field, params: { ...params } })}
-          catalog={catalog}
-          catalogLoading={catalogLoading}
-        />
+        <Group title={t("groupParams")}>
+          <RolesParamsEditor
+            params={rolesParamsOf(field.params)}
+            onChange={(params) => onChange({ ...field, params: { ...params } })}
+            catalog={catalog}
+            catalogLoading={catalogLoading}
+          />
+        </Group>
       ) : null}
     </div>
   );
