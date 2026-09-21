@@ -25,9 +25,9 @@ import { tournamentQueryKeys } from "@/lib/tournament-query-keys";
 import meService from "@/services/me.service";
 import registrationService from "@/services/registration.service";
 import registrationTeamService from "@/services/registration-team.service";
-import type { RegistrationCreateInput, RegistrationForm } from "@/types/registration.types";
+import type { RegistrationForm, RegistrationSubmitInput } from "@/types/registration.types";
 
-import UnifiedRegistrationForm from "./UnifiedRegistrationForm";
+import RegistrationSchemaForm from "./RegistrationSchemaForm";
 
 interface InviteAcceptWizardProps {
   workspaceId: number;
@@ -98,7 +98,7 @@ export default function InviteAcceptWizard({
   const acceptMutation = useMutation({
     // `undefined` is the honest value on the attach path, not an empty object cast
     // to a form payload: the server has nothing to read there.
-    mutationFn: (registration?: RegistrationCreateInput) =>
+    mutationFn: (registration?: RegistrationSubmitInput) =>
       registrationTeamService.accept({ ...reference, registration }),
     onSuccess: async () => {
       notify.success(t("accept.success", { team: teamName }));
@@ -180,17 +180,16 @@ export default function InviteAcceptWizard({
           {t("accept.submit")}
         </Button>
       ) : (
-        <UnifiedRegistrationForm
+        <RegistrationSchemaForm
           mode="public"
           tournamentId={tournamentId}
-          workspaceId={workspaceId}
-          formConfig={form}
+          form={form}
           tournamentName={tournamentName}
           userProfile={userQuery.data}
           lockedRole={lockedRole}
-          onSubmit={async (payload) => {
+          onSubmit={async ({ form_version_id, answers }) => {
             setError(null);
-            await acceptMutation.mutateAsync(payload);
+            await acceptMutation.mutateAsync({ form_version_id, answers });
           }}
           onCancel={onClose}
           submitPending={acceptMutation.isPending}

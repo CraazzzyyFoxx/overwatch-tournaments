@@ -34,7 +34,8 @@ import {
   RegistrationStatusBadge,
 } from "@/components/status/RegistrationBadges";
 import TournamentHistoryCell from "./TournamentHistoryCell";
-import { renderCustomFieldValue } from "@/components/registration/customFieldValue";
+import { AnswerValue } from "@/components/forms/AnswerValue";
+import type { FieldKind } from "@/types/forms.types";
 import { useTranslations } from "next-intl";
 import { formatSubroleSlug } from "@/lib/roles";
 import { resolveDivisionFromRank, DEFAULT_DIVISION_GRID } from "@/lib/division-grid";
@@ -711,11 +712,13 @@ export function buildParticipantColumns(
         category: "custom",
         defaultVisible: false,
         responsive: "md",
-        render: (reg) =>
-          renderCustomFieldValue(field, reg.custom_fields_json?.[field.key] ?? null, {
-            yes: t("common.yes"),
-            no: t("common.no"),
-          }),
+        render: (reg) => (
+          <AnswerValue
+            value={reg.custom_fields_json?.[field.key] ?? null}
+            kind={field.type as FieldKind}
+            labels={{ yes: t("common.yes"), no: t("common.no") }}
+          />
+        ),
         searchValue:
           field.type === "text" || field.type === "select"
             ? (reg) => {

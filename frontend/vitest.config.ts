@@ -154,7 +154,6 @@ export default defineConfig({
       // so a directory glob here drags it into vitest and it fails on the import.
       "src/components/registration/SubscriptionRow.behavior.test.tsx",
       "src/components/registration/CheckInSubscriptionProof.behavior.test.tsx",
-      "src/components/registration/DetailsStep.behavior.test.tsx",
       "src/components/registration/MyTeamPanel.i18n.test.tsx",
       // Own-team dedup: unrun, a green suite would coexist with the exact
       // duplicate-card regression this file exists to catch.

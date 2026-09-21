@@ -15,10 +15,10 @@ import type { RoleCode } from "@/lib/roles";
 import { tournamentQueryKeys } from "@/lib/tournament-query-keys";
 import meService from "@/services/me.service";
 import registrationTeamService from "@/services/registration-team.service";
-import type { RegistrationCreateInput, RegistrationForm } from "@/types/registration.types";
+import type { RegistrationForm, RegistrationSubmitInput } from "@/types/registration.types";
 
 import RosterSlotPicker, { type RosterSlotOption } from "./RosterSlotPicker";
-import UnifiedRegistrationForm from "./UnifiedRegistrationForm";
+import RegistrationSchemaForm from "./RegistrationSchemaForm";
 
 interface TeamRegistrationWizardProps {
   workspaceId: number;
@@ -105,7 +105,7 @@ export default function TeamRegistrationWizard({
   const showNameError = nameTouched && nameError !== null;
 
   const mutation = useMutation({
-    mutationFn: async (registration: RegistrationCreateInput) => {
+    mutationFn: async (registration: RegistrationSubmitInput) => {
       if (!slot) throw new Error("no slot");
       const team = await registrationTeamService.create(tournamentId, {
         name: name.trim(),
@@ -259,11 +259,10 @@ export default function TeamRegistrationWizard({
         </fieldset>
       </section>
 
-      <UnifiedRegistrationForm
+      <RegistrationSchemaForm
         mode="public"
         tournamentId={tournamentId}
-        workspaceId={workspaceId}
-        formConfig={form}
+        form={form}
         tournamentName={tournamentName}
         // The dialog title already names the task and the tournament; a second
         // visible heading here would also put an `<h3>` above an `<h2>`.
@@ -272,7 +271,7 @@ export default function TeamRegistrationWizard({
         // The captain's chosen slot drives the role step, so the matrix shows the
         // one row they will actually play instead of asking the question twice.
         lockedRole={slot}
-        onSubmit={async (payload) => {
+        onSubmit={async ({ form_version_id, answers }) => {
           setError(null);
           if (nameError) {
             // Surface it where it belongs and move focus there, rather than
@@ -281,7 +280,7 @@ export default function TeamRegistrationWizard({
             nameRef.current?.focus();
             return;
           }
-          await mutation.mutateAsync(payload);
+          await mutation.mutateAsync({ form_version_id, answers });
         }}
         onCancel={onClose}
         submitPending={mutation.isPending}

@@ -1,9 +1,5 @@
 import type { RosterRoleSlotCode } from "@/lib/roster-shape";
-import type {
-  RegistrationForm,
-  SubroleCatalog,
-  SubroleOption,
-} from "@/types/registration.types";
+import type { SubroleCatalog, SubroleOption } from "@/types/registration.types";
 
 /**
  * Single source of truth for registration role codes, display labels, accent
@@ -120,36 +116,28 @@ export function formatSubroleSlug(slug: string): string {
 }
 
 /**
- * Resolve the sub-role options to offer for a role.
+ * The sub-role options a role offers, from the workspace catalog narrowed by
+ * the `roles` builtin's `subroles` allowlist.
  *
- * - selection `undefined` (field not configured) → offer all catalog options.
- * - selection `[]` (explicit opt-out) → offer none.
- * - selection non-empty → offer the catalog options whose slug was selected.
+ * - role absent from `subroles` → offer all catalog options for it.
+ * - role present with `[]` → explicit opt-out, offer none.
+ * - role present and non-empty → offer the catalog options it names.
+ *
+ * The allowlist no longer splits primary from additional: one map per role,
+ * whatever slot the role is taken in.
  */
-function resolveSubroleOptions(
+export function getSubroleOptions(
   catalog: SubroleCatalog | undefined,
-  selection: string[] | undefined,
+  subroles: Record<string, string[]>,
   role: string,
 ): SubroleOption[] {
   const all = catalog?.[role] ?? [];
+  const selection = subroles[role];
   if (selection === undefined) {
     return all;
   }
   const enabled = new Set(selection);
   return all.filter((option) => enabled.has(option.slug));
-}
-
-/** Convenience resolver bound to a public registration form payload. */
-export function getSubroleOptions(
-  form: Pick<RegistrationForm, "subrole_catalog" | "built_in_fields">,
-  role: string,
-  fieldKey: "primary_role" | "additional_roles" = "primary_role",
-): SubroleOption[] {
-  return resolveSubroleOptions(
-    form.subrole_catalog,
-    form.built_in_fields?.[fieldKey]?.subroles?.[role],
-    role,
-  );
 }
 
 /** Look up a sub-role's display label from the catalog, with a humanized fallback. */

@@ -1,0 +1,56 @@
+/**
+ * The renderer contract `SchemaForm` drives.
+ *
+ * A schema field is rendered by whichever component the registry names for its
+ * KEY (a builtin: `battle_tag`, `roles`, `identity_discord`, …) or, failing
+ * that, for its KIND (`text`, `select`, …). Every renderer takes the same four
+ * props plus a shared context, so the form never has to know which of the two
+ * it dispatched on — that is the whole point of one field model for builtins
+ * and custom questions alike.
+ */
+
+import type { ComponentType } from "react";
+
+import type { Translate } from "@/lib/forms/form-errors";
+import type { RoleCode } from "@/lib/roles";
+import type { FormField } from "@/types/forms.types";
+import type { Hero } from "@/types/hero.types";
+import type { SubroleCatalog, SubscriptionStatus } from "@/types/registration.types";
+import type { SocialAccount } from "@/types/user.types";
+
+/** Everything a builtin renderer needs that is not the field itself. */
+export interface FieldRendererContext {
+  mode: "public" | "admin";
+  /**
+   * The registrant's own social accounts, or `[]` while an organizer edits
+   * somebody else's row. Feeds the handle suggestions AND the verified-account
+   * picker, which filters to `is_verified` itself — `require_verified` is a
+   * server rule now, so nothing here re-derives it.
+   */
+  accounts: SocialAccount[];
+  subroleCatalog: SubroleCatalog;
+  /** Roster for the top-heroes pickers; empty until the query resolves. */
+  heroes: Hero[];
+  lockedRole: RoleCode | null;
+  /** Server-resolved subscription standing, or `null` when it does not apply.
+   *  Read-only: proving a subscription is a check-in step, not a signup step. */
+  subscription: SubscriptionStatus | null;
+  /** Opens profile settings so the registrant can link an account. Absent in
+   *  admin mode, where the accounts are somebody else's. */
+  onLinkAccounts?: () => void;
+  /** Translator scoped to `forms.errors`. */
+  t: Translate;
+}
+
+export interface FieldRendererProps {
+  field: FormField;
+  value: unknown;
+  onChange: (value: unknown) => void;
+  error: string | null;
+  context: FieldRendererContext;
+}
+
+export type FieldRenderer = ComponentType<FieldRendererProps>;
+
+/** Keyed by builtin field key first, then by {@link FormField.kind}. */
+export type RendererRegistry = Partial<Record<string, FieldRenderer>>;

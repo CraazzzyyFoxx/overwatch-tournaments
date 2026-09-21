@@ -1,4 +1,5 @@
-import type { RoleCode } from "@/lib/roles";
+import { ROLES, type RoleCode } from "@/lib/roles";
+import type { RoleInput } from "@/types/registration.types";
 
 /**
  * How willing the registrant is to play a role.
@@ -75,4 +76,57 @@ export function priorityChoice(selections: RoleSelections): RoleCode | "flex" | 
 export function isFlexSelection(selections: RoleSelections): boolean {
   const active = Object.values(selections).filter((entry) => entry.priority !== "off");
   return active.length > 1 && active.every((entry) => entry.priority === "main");
+}
+
+/**
+ * The stored `roles` answer → the matrix's per-role map.
+ *
+ * A role the answer does not name is one the registrant did not take, which is
+ * `off`. The two representations are otherwise the same information: presence
+ * plus `is_primary` is priority, and order is only a tiebreak the server
+ * rebuilds from `is_primary`.
+ */
+export function toRoleSelections(value: readonly RoleInput[]): RoleSelections {
+  const selections = createRoleSelections();
+  for (const entry of value) {
+    if (!(entry.role in selections)) continue;
+    selections[entry.role as RoleCode] = {
+      priority: entry.is_primary ? "main" : "fallback",
+      subrole: entry.subrole ?? "",
+      topHeroes: entry.top_heroes ?? [],
+    };
+  }
+  return selections;
+}
+
+/**
+ * The matrix's map → the stored `roles` answer, main role first.
+ *
+ * A locked slot submits exactly that role, always primary: it is the one role
+ * the invite bought, and the matrix hides the control that could say otherwise.
+ * Without the filter the two hidden rows would ride along whenever the form's
+ * flex mode seeded them non-`off`, registering the invitee for roles the team
+ * never offered.
+ */
+export function fromRoleSelections(
+  selections: RoleSelections,
+  lockedRole: RoleCode | null = null,
+): RoleInput[] {
+  const rows = lockedRole
+    ? ROLES.filter((role) => role.code === lockedRole)
+    : ROLES.filter((role) => selections[role.code].priority !== "off");
+  return rows
+    .sort((a, b) => {
+      const rank = (code: RoleCode) => (selections[code].priority === "main" ? 0 : 1);
+      return rank(a.code) - rank(b.code);
+    })
+    .map((role) => {
+      const selection = selections[role.code];
+      return {
+        role: role.code,
+        ...(selection.subrole ? { subrole: selection.subrole } : {}),
+        is_primary: lockedRole != null || selection.priority === "main",
+        ...(selection.topHeroes.length > 0 ? { top_heroes: selection.topHeroes } : {}),
+      };
+    });
 }

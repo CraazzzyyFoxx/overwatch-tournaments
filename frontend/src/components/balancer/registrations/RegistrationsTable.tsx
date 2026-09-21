@@ -19,8 +19,9 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 
-import UnifiedRegistrationForm from "@/components/registration/UnifiedRegistrationForm";
-import { renderCustomFieldValue } from "@/components/registration/customFieldValue";
+import RegistrationSchemaForm from "@/components/registration/RegistrationSchemaForm";
+import { AnswerValue } from "@/components/forms/AnswerValue";
+import type { FieldKind } from "@/types/forms.types";
 import { buildBalancerRegistrationColumns } from "@/components/balancer/registrations/_components/balancerRegistrationColumns";
 import {
   type RegistrationGroupingMode,
@@ -910,13 +911,12 @@ export default function RegistrationsTable({
             </DialogDescription>
           </DialogHeader>
           <div className="max-h-[calc(100vh-12rem)] overflow-y-auto px-4 py-3.5 sm:px-5">
-            <UnifiedRegistrationForm
+            <RegistrationSchemaForm
               mode="admin"
-              tournamentId={tournamentId}
-              workspaceId={workspaceId as number}
-              formConfig={roleForm}
-              onSubmit={async (payload) => {
-                await createMutation.mutateAsync(payload);
+              tournamentId={tournamentId as number}
+              form={roleForm}
+              onSubmit={async ({ answers, admin }) => {
+                await createMutation.mutateAsync({ ...admin, answers });
               }}
               onCancel={() => setCreateOpen(false)}
               submitPending={createMutation.isPending}
@@ -949,14 +949,13 @@ export default function RegistrationsTable({
               // dialog. It now lives in the row's "Change history" action, which
               // opens the shared drawer: a Radix sheet inside a Radix dialog
               // stacks two focus traps and two scroll locks on one screen.
-              <UnifiedRegistrationForm
+              <RegistrationSchemaForm
                 mode="admin"
-                tournamentId={tournamentId}
-                workspaceId={workspaceId as number}
-                formConfig={roleForm}
-                initialData={editingRegistration}
-                onSubmit={async (payload) => {
-                  await updateMutation.mutateAsync(payload);
+                tournamentId={tournamentId as number}
+                form={roleForm}
+                initial={editingRegistration}
+                onSubmit={async ({ answers, admin }) => {
+                  await updateMutation.mutateAsync({ ...admin, answers });
                 }}
                 onCancel={() => setEditingRegistration(null)}
                 submitPending={updateMutation.isPending}
@@ -1035,7 +1034,10 @@ function RegistrationInspectorBody({
               <div key={field.key}>
                 <dt className="text-muted-foreground">{field.label}</dt>
                 <dd className="mt-0.5 text-foreground">
-                  {renderCustomFieldValue(field, registration.custom_fields_json?.[field.key])}
+                  <AnswerValue
+                    value={registration.custom_fields_json?.[field.key]}
+                    kind={field.type as FieldKind}
+                  />
                 </dd>
               </div>
             ))}

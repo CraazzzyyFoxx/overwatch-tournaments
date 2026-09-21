@@ -7,9 +7,9 @@ import { useAuthProfile } from "@/hooks/useAuthProfile";
 import { getApiErrorMessage } from "@/lib/api-error";
 import registrationService from "@/services/registration.service";
 import meService from "@/services/me.service";
-import type { RegistrationForm } from "@/types/registration.types";
+import type { RegistrationForm, RegistrationSubmitInput } from "@/types/registration.types";
 
-import UnifiedRegistrationForm from "./UnifiedRegistrationForm";
+import RegistrationSchemaForm from "./RegistrationSchemaForm";
 
 interface RegistrationWizardProps {
   workspaceId: number;
@@ -43,9 +43,8 @@ export default function RegistrationWizard({
   });
 
   const mutation = useMutation({
-    mutationFn: (payload: any) => {
-      return registrationService.register(tournamentId, payload);
-    },
+    mutationFn: (payload: RegistrationSubmitInput) =>
+      registrationService.register(tournamentId, payload),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["registration", workspaceId, tournamentId] });
       await queryClient.invalidateQueries({
@@ -66,16 +65,15 @@ export default function RegistrationWizard({
           {error}
         </div>
       )}
-      <UnifiedRegistrationForm
+      <RegistrationSchemaForm
         mode="public"
         tournamentId={tournamentId}
-        workspaceId={workspaceId}
-        formConfig={form}
+        form={form}
         tournamentName={tournamentName}
         userProfile={userQuery.data}
-        onSubmit={async (payload) => {
+        onSubmit={async ({ form_version_id, answers }) => {
           setError(null);
-          await mutation.mutateAsync(payload);
+          await mutation.mutateAsync({ form_version_id, answers });
         }}
         onCancel={onClose}
         submitPending={mutation.isPending}

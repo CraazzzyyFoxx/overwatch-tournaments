@@ -11,12 +11,15 @@ import {
 } from "react";
 
 import type { Hero } from "@/types/hero.types";
-import type { RegistrationForm } from "@/types/registration.types";
+import type { RolesParams } from "@/types/forms.types";
+import type { SubroleCatalog } from "@/types/registration.types";
 
 import {
   createRoleSelections,
+  fromRoleSelections,
   isFlexSelection,
   priorityChoice,
+  toRoleSelections,
   type FlexMode,
   type RoleSelections,
 } from "./types";
@@ -110,15 +113,23 @@ const HEROES: Hero[] = [
   image_path: `/heroes/${slug}.png`,
 }) as unknown as Hero);
 
-const FORM = {
-  built_in_fields: {},
-  custom_fields: [],
-  subrole_catalog: {
-    tank: [{ slug: "main-tank", label: "Main tank" }],
-    damage: [{ slug: "hitscan", label: "Hitscan" }],
-    support: [{ slug: "main-heal", label: "Main heal" }],
-  },
-} as unknown as RegistrationForm;
+const CATALOG: SubroleCatalog = {
+  tank: [{ slug: "main-tank", label: "Main tank" }],
+  damage: [{ slug: "hitscan", label: "Hitscan" }],
+  support: [{ slug: "main-heal", label: "Main heal" }],
+};
+
+/** `subroles: {}` offers the whole catalog, which is what these cases assume. */
+function paramsFor(flexMode: FlexMode): RolesParams {
+  return {
+    primary_required: true,
+    additional_required: false,
+    flex_allowed: flexMode !== "off",
+    flex_mode: flexMode === "off" ? "optional" : flexMode,
+    subroles: {},
+    top_heroes: { enabled: true, required: false, max: 5 },
+  };
+}
 
 let container = testWindow.document.createElement("div");
 let root = createRoot(container as unknown as Element);
@@ -134,18 +145,20 @@ function Harness({
   const [selections, setSelections] = useState<RoleSelections>(
     initial ?? createRoleSelections(flexMode),
   );
+  // The matrix speaks `RoleSelections`; the stored answer is `RoleInput[]`.
+  // Converting at the boundary keeps these cases written in the vocabulary
+  // they assert in, and exercises the round trip on every interaction.
   return (
     <RoleStep
-      selections={selections}
+      params={paramsFor(flexMode)}
+      subroleCatalog={CATALOG}
+      value={fromRoleSelections(selections)}
       onChange={(next) => {
-        latest = next;
-        setSelections(next);
+        const restored = toRoleSelections(next);
+        latest = restored;
+        setSelections(restored);
       }}
-      form={FORM}
       allHeroes={HEROES}
-      topHeroesEnabled
-      maxHeroes={5}
-      flexMode={flexMode}
     />
   );
 }

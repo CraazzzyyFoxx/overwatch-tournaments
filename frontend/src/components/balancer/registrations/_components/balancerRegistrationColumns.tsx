@@ -30,7 +30,8 @@ import type {
   AdminRegistrationRole,
 } from "@/types/balancer-admin.types";
 import type { CustomFieldDefinition, SubroleCatalog } from "@/types/registration.types";
-import { renderCustomFieldValue } from "@/components/registration/customFieldValue";
+import { AnswerValue } from "@/components/forms/AnswerValue";
+import type { FieldKind } from "@/types/forms.types";
 
 /**
  * The slice of next-intl's formatter the timestamp cells need. These helpers are
@@ -352,7 +353,12 @@ export function buildBalancerRegistrationColumns(
     // Free-form answers: the old client-side sort had no case for them either.
     enableSorting: false,
     cell: ({ row }) =>
-      renderCustomFieldValue(field, row.original.custom_fields_json?.[field.key] ?? null),
+      (
+        <AnswerValue
+          value={row.original.custom_fields_json?.[field.key] ?? null}
+          kind={field.type as FieldKind}
+        />
+      ),
     meta: adminColumnMeta<AdminRegistration>({
       category: "admin",
       defaultHidden: true,

@@ -6,7 +6,7 @@ import Link from "next/link";
 
 import DivisionIcon from "@/components/DivisionIcon";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
-import { renderCustomFieldValue } from "@/components/registration/customFieldValue";
+import { AnswerValue } from "@/components/forms/AnswerValue";
 import { HeroCoord } from "@/components/site/PageHero";
 import { Avatar, AvatarImage, AvatarStack } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { getDivisionLabel, resolveDivisionFromRank } from "@/lib/division-grid";
 import { getRoleIconName, ROLE_ACCENT } from "@/lib/roles";
 import { cn } from "@/lib/utils";
+import type { FieldKind } from "@/types/forms.types";
 import type {
   DraftPickOption,
   DraftPickOptionsResponse,
@@ -225,10 +226,11 @@ export function PlayerInspector({
                 <div key={entry.key} className="min-w-0">
                   <dt className="text-xs text-[color:var(--aqt-fg-muted)]">{entry.label}</dt>
                   <dd className="mt-0.5 break-words text-[color:var(--aqt-fg)]">
-                    {renderCustomFieldValue(entry, entry.value, {
-                      yes: t("customFieldYes"),
-                      no: t("customFieldNo")
-                    })}
+                    <AnswerValue
+                      value={entry.value}
+                      kind={entry.type as FieldKind}
+                      labels={{ yes: t("customFieldYes"), no: t("customFieldNo") }}
+                    />
                   </dd>
                 </div>
               ))}
