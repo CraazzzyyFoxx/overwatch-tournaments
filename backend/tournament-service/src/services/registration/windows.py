@@ -99,9 +99,7 @@ class RegistrationWindowService:
             await session.scalar(sa.select(registration_open_clause()).where(models.Tournament.id == tournament_id))
         )
 
-    async def load_registration_state(
-        self, session: AsyncSession, tournament_id: int
-    ) -> tuple[bool, bool]:
+    async def load_registration_state(self, session: AsyncSession, tournament_id: int) -> tuple[bool, bool]:
         """``(is_open, is_late)`` in ONE round trip.
 
         The public form read needs both — openness to show the form at all, and
