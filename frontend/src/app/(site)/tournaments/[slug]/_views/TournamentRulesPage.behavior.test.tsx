@@ -131,4 +131,20 @@ describe("Tournament Rules section", () => {
     expect(html.querySelector("nav")).toBeNull();
     expect(html.querySelector("h3")?.textContent).toBe("Format");
   });
+
+  it("puts the section in the URL and the keyboard on the heading", async () => {
+    getPublicOverview.mockResolvedValue(tournament("## Формат\n\nProse.\n\n## Замены\n\nProse."));
+
+    const html = await mount();
+    const link = html.querySelector<HTMLAnchorElement>('nav a[href="#замены"]');
+
+    await act(async () => {
+      link?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    });
+
+    // The handler takes the click over to animate the scroll, so it owes the
+    // address bar and the keyboard what a plain anchor would have given them.
+    expect(decodeURIComponent(window.location.hash)).toBe("#замены");
+    expect(document.activeElement?.textContent).toBe("Замены");
+  });
 });

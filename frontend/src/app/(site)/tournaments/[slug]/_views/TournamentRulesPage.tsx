@@ -1,12 +1,13 @@
 "use client";
 
 import { useTranslations } from "next-intl";
+import { useMemo } from "react";
 
 import { Markdown } from "@/components/Markdown";
 import { extractToc } from "@/lib/markdown-toc";
 import { cn } from "@/lib/utils";
 
-import { RulesToc } from "../_components/RulesToc";
+import { RulesToc, useActiveSection } from "../_components/RulesToc";
 import { TournamentPageState } from "../_components/TournamentPageState";
 import { useTournamentQuery } from "@/hooks/useTournamentClientData";
 import styles from "../TournamentDetail.module.css";
@@ -26,16 +27,21 @@ import styles from "../TournamentDetail.module.css";
 export default function TournamentRulesPage({ slug }: Readonly<{ slug: string }>) {
   const t = useTranslations();
   const tournament = useTournamentQuery(slug).data;
-  // The shell owns pending and error for this exact payload and renders its
-  // children only once it resolved, so there is no third state to show here.
-  if (!tournament) return null;
-
-  const rules = tournament.rules?.trim();
+  const rules = tournament?.rules?.trim();
   // One entry is not a table of contents, it is a duplicate of the heading the
   // reader can already see — and a document written with bold lead-ins instead
   // of `##` produces none at all. Both fall back to the plain single column.
-  const toc = rules ? extractToc(rules) : [];
+  //
+  // Above the early return, with the observer, because hooks cannot run
+  // conditionally — and memoised so the parse does not re-run (and the
+  // observer does not tear down) on every unrelated render.
+  const toc = useMemo(() => (rules ? extractToc(rules) : []), [rules]);
+  const [activeId, markSection] = useActiveSection(toc);
   const hasToc = toc.length > 1;
+
+  // The shell owns pending and error for this exact payload and renders its
+  // children only once it resolved, so there is no third state to show here.
+  if (!tournament) return null;
 
   return (
     <section className={styles.publicDataPage} aria-label={t("common.rules")}>
@@ -67,13 +73,21 @@ export default function TournamentRulesPage({ slug }: Readonly<{ slug: string }>
                 <summary className="cursor-pointer text-body font-semibold text-foreground">
                   {t("tournamentDetail.rules.toc")}
                 </summary>
-                <RulesToc entries={toc} className="pt-2" />
+                <RulesToc entries={toc} activeId={activeId} onJump={markSection} className="pt-2" />
               </details>
               <aside className="hidden xl:block">
                 {/* `top-28` is the same offset the tournament pages' anchors
                     already use (`scroll-mt-28`), so the rail clears the sticky
                     tab bar by exactly as much as a jumped-to heading does. */}
-                <RulesToc entries={toc} className="sticky top-28" />
+                <RulesToc
+                  entries={toc}
+                  activeId={activeId}
+                  onJump={markSection}
+                  // A regulation with twenty sections must not push its own
+                  // rail off the screen: the rail scrolls inside the viewport
+                  // it is pinned to.
+                  className="sticky top-28 max-h-[calc(100dvh-9rem)] overflow-y-auto"
+                />
               </aside>
             </>
           ) : null}
