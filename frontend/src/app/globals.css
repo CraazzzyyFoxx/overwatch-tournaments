@@ -14,6 +14,11 @@
   --text-body--line-height: 1.5;
   --text-ui: 15px;
   --text-ui--line-height: 1.5;
+  /* The one reading size: long-form prose (a tournament's regulations), not UI
+     chrome. Every rung below it is a density rung — 14px is what a table row
+     and a form label want, and a document read in paragraphs wants more. */
+  --text-reading: 16px;
+  --text-reading--line-height: 1.6;
   --text-heading: 18px;
   --text-heading--line-height: 1.3;
   --text-title: 22px;

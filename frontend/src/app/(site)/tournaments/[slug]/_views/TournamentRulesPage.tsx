@@ -37,7 +37,12 @@ export default function TournamentRulesPage({ slug }: Readonly<{ slug: string }>
         // measure cap is the only layout it needs — prose run to the full width
         // of a desktop viewport passes the ~75-character line every readability
         // guide draws the limit at. Tables inside still scroll on their own.
-        <Markdown source={rules} className="max-w-[72ch] py-2" />
+        //
+        // 64ch, not 72: `ch` is the width of Inter's `0`, which is wider than
+        // the average letter, so a `ch` cap always renders MORE characters than
+        // it names — 72ch measured ~83 characters, and Cyrillic runs wider
+        // still.
+        <Markdown source={rules} className="max-w-[64ch] py-2" />
       ) : (
         // Reachable by a direct link after an organizer clears the document:
         // the tab is gone from the rail, the URL still resolves.
