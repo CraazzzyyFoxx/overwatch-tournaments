@@ -70,9 +70,7 @@ class SqlEntitlementStore:
         self._entitlements = SubscriptionEntitlementRepository()
 
     async def load_configs(self, workspace_id: int, providers: Sequence[str]) -> dict[str, ProviderConfigRow]:
-        rows = await self._configs.list_with_guild(
-            self._session, workspace_id=workspace_id, providers=providers
-        )
+        rows = await self._configs.list_with_guild(self._session, workspace_id=workspace_id, providers=providers)
         return {
             provider: ProviderConfigRow(
                 provider=provider,

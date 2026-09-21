@@ -5,12 +5,12 @@ from __future__ import annotations
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.core import enums
+from shared.domain.encounter_naming import build_encounter_name_from_ids
 from shared.models.tournament.encounter import Encounter
 from shared.models.tournament.stage import Stage
 from shared.repository import EncounterRepository
 from shared.services.bracket.advancement import persist_advancement_edges
 from shared.services.bracket.types import BracketSkeleton
-from shared.domain.encounter_naming import build_encounter_name_from_ids
 
 __all__ = ("persist_skeleton",)
 

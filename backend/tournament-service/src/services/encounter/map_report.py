@@ -28,6 +28,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from shared.core import http_status as status
 from shared.core.enums import MapPoolEntryStatus, MatchSource, PickBanKind
 from shared.core.errors import BaseAPIException as HTTPException
+from shared.domain import pick_ban_engine as engine
 from shared.models.identity.user import User
 from shared.models.matches.match import Match
 from shared.models.tournament.encounter import Encounter
@@ -36,7 +37,6 @@ from shared.models.tournament.pick_ban import PickBanEntry, PickBanSession
 from shared.models.tournament.team import Team
 from shared.models.tournament.tournament import Tournament
 from shared.repository import EncounterMapReportRepository, PickBanEntryRepository
-from shared.domain import pick_ban_engine as engine
 from shared.services.bracket.usability import is_encounter_live
 from shared.services.notifications import notify
 from shared.services.realtime import Resource, Scope, emit

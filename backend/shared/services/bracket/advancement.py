@@ -21,6 +21,7 @@ from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.core import enums
+from shared.domain.encounter_naming import build_encounter_name_from_ids
 from shared.models.tournament.encounter import Encounter
 from shared.models.tournament.encounter_link import EncounterLink
 from shared.models.tournament.encounter_report import EncounterCaptainReport
@@ -28,7 +29,6 @@ from shared.models.tournament.stage import Stage
 from shared.models.tournament.team import Team
 from shared.services.bracket.types import AdvancementEdge
 from shared.services.encounter.result_audit import record_result_transition
-from shared.domain.encounter_naming import build_encounter_name_from_ids
 
 __all__ = (
     "persist_advancement_edges",

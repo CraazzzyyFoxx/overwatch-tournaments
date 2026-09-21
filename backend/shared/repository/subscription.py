@@ -199,7 +199,6 @@ class SubscriptionCheckLogRepository(BaseRepository[models.SubscriptionCheckLog]
         return row
 
 
-
 __all__ = (
     "ENTITLEMENT_CONSTRAINT",
     "PROVIDER_CONFIG_CONSTRAINT",

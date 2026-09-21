@@ -22,13 +22,13 @@ from loguru import logger
 from shared import models
 from shared.core.enums import SubscriptionCollectionSource
 from shared.observability import observe_scheduled_job
-from shared.services.settings_provider import settings_provider
 from shared.services.distributed_lock import (
     DistributedLockUnavailable,
     acquire_distributed_lock,
     release_distributed_lock,
 )
 from shared.services.scheduler import IntervalScheduler
+from shared.services.settings_provider import settings_provider
 from src.core import db
 from src.core.broker import optional_broker
 from src.core.clients import realtime_redis

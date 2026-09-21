@@ -12,6 +12,7 @@ from shared.core import tournament_state
 from shared.core.enums import StageType, TournamentStatus
 from shared.core.errors import ApiExc, ApiHTTPException
 from shared.core.errors import BaseAPIException as HTTPException
+from shared.domain.tournament_slug import slugify
 from shared.repository import (
     ChallongeSourceRepository,
     RegistrationFormRepository,
@@ -24,7 +25,6 @@ from shared.services.draft_guards import assert_no_active_draft_session
 from shared.services.realtime import Resource, Scope, emit
 from shared.services.registration_team_guards import assert_no_registered_teams
 from shared.services.roster_shape_access import invalidate_roster_shape_cache
-from shared.domain.tournament_slug import slugify
 from shared.services.tournament.computation import request_bracket_job
 from shared.services.tournament.slug import generate_unique_tournament_slug
 from src import models, schemas

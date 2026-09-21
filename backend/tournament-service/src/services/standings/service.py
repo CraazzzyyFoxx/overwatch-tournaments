@@ -11,8 +11,6 @@ from sqlalchemy.orm.strategy_options import _AbstractLoad
 
 from shared.core import enums
 from shared.core.enums import StageType
-from shared.repository import EncounterRepository, StandingRepository, TeamRepository, TournamentRepository
-from shared.services.bracket.swiss_settings import swiss_bye_counts, swiss_scope_stopped
 from shared.domain.tournament_utils import (
     completed_encounters as _shared_completed_encounters,
 )
@@ -20,6 +18,8 @@ from shared.domain.tournament_utils import (
     completed_encounters_in_finished_rounds as _shared_completed_encounters_in_finished_rounds,
 )
 from shared.domain.tournament_utils import is_completed_encounter, sort_bracket_matches
+from shared.repository import EncounterRepository, StandingRepository, TeamRepository, TournamentRepository
+from shared.services.bracket.swiss_settings import swiss_bye_counts, swiss_scope_stopped
 from src import models, schemas
 from src.core import utils
 from src.services.encounter.service import encounter_service

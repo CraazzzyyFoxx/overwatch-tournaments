@@ -8,6 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.core.errors import BaseAPIException as HTTPException
+from shared.domain.workspace_tier import is_verified_or_trusted
 from shared.messaging.rpc import request_rpc
 from shared.models.identity.auth_user import AuthUser
 from shared.rbac import (
@@ -30,7 +31,6 @@ from shared.repository import (
 from shared.services.audit import record_audit
 from shared.services.division_grid.access import get_default_division_grid_version_id
 from shared.services.settings_provider import settings_provider
-from shared.domain.workspace_tier import is_verified_or_trusted
 from shared.tenancy.hostnames import RESERVED_SUBDOMAINS, normalize_custom_domain
 from src import models
 

@@ -195,7 +195,9 @@ class TeamEligibilityService:
             return []
 
         issues: list[EligibilityIssue] = []
-        ranked = form.team_rank_min is not None or form.team_rank_max is not None or form.team_max_rank_spread is not None
+        ranked = (
+            form.team_rank_min is not None or form.team_rank_max is not None or form.team_max_rank_spread is not None
+        )
         if ranked and members:
             loaded = list(
                 await session.scalars(

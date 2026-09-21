@@ -35,6 +35,7 @@ from shared.core.enums import (
     PickBanNoRepeatScope,
 )
 from shared.core.errors import BaseAPIException as HTTPException
+from shared.domain import pick_ban_engine as engine
 from shared.models.matches.match import Match
 from shared.models.tournament.encounter import Encounter
 from shared.models.tournament.encounter_report import EncounterMapReport
@@ -53,7 +54,6 @@ from shared.repository import (
     PickBanEntryRepository,
     PickBanSessionRepository,
 )
-from shared.domain import pick_ban_engine as engine
 from shared.services.bracket.usability import is_encounter_live
 from src.services.encounter.realtime_commit import emit_pick_ban_update
 from src.services.encounter.veto_session import (

@@ -71,7 +71,9 @@ class Scope:
     @property
     def invalidation_topic(self) -> str:
         if self.kind in (ScopeKind.ENCOUNTER, ScopeKind.DRAFT):
-            raise ValueError(f"{self.kind} scope has no invalidation topic — name the tournament-scoped resource instead")
+            raise ValueError(
+                f"{self.kind} scope has no invalidation topic — name the tournament-scoped resource instead"
+            )
         return f"{self.kind}:{self.id}:invalidation"
 
     def domain_topic(self, domain: str) -> str:

@@ -18,11 +18,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from shared.core import enums
-from shared.repository import EncounterRepository, StageRepository
 from shared.domain.tournament_utils import (
     completed_encounters_in_finished_rounds,
     has_incomplete_playable_rounds,
 )
+from shared.repository import EncounterRepository, StageRepository
 from src import models
 from src.services.admin.stage import _collect_item_team_ids, stage_service
 

@@ -33,6 +33,7 @@ from sqlalchemy.orm import selectinload
 
 from shared.core import enums
 from shared.core.errors import BaseAPIException as HTTPException
+from shared.domain.encounter_naming import build_encounter_name
 from shared.repository import (
     ChallongeMatchMappingRepository,
     ChallongeParticipantMappingRepository,
@@ -49,7 +50,6 @@ from shared.repository import (
 from shared.services.challonge_refs import resolve_encounter_challonge
 from shared.services.distributed_lock import distributed_lock
 from shared.services.encounter.result_audit import record_result_transition
-from shared.domain.encounter_naming import build_encounter_name
 from shared.services.realtime import Resource
 from shared.services.stage_refs import StageRefs, resolve_stage_refs_from_group
 from src import models, schemas
