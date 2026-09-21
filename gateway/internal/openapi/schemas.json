@@ -37410,6 +37410,11 @@
     },
     "tournament.FormField": {
       "properties": {
+        "editable": {
+          "default": false,
+          "title": "Editable",
+          "type": "boolean"
+        },
         "help": {
           "anyOf": [
             {
@@ -40142,6 +40147,11 @@
           "title": "Open Profile Scope",
           "type": "string"
         },
+        "registration_late": {
+          "default": false,
+          "title": "Registration Late",
+          "type": "boolean"
+        },
         "require_open_profile": {
           "default": false,
           "title": "Require Open Profile",
@@ -40564,10 +40574,34 @@
           "default": null,
           "title": "Battle Tag"
         },
+        "can_edit": {
+          "default": false,
+          "title": "Can Edit",
+          "type": "boolean"
+        },
         "checked_in": {
           "default": false,
           "title": "Checked In",
           "type": "boolean"
+        },
+        "edit_locked_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Edit Locked Reason"
+        },
+        "edit_writable_keys": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Edit Writable Keys",
+          "type": "array"
         },
         "form_version_id": {
           "anyOf": [
