@@ -275,8 +275,15 @@ class _FormStub:
         self.current_version = SimpleNamespace(id=12, schema_json=SCHEMA.model_dump(mode="json"))
 
 
+#: ``form=None`` has to mean "this tournament has NO registration form", so the
+#: harness needs a separate "caller said nothing" marker.
+_DEFAULT_FORM = object()
+
+
 class TestManualCreateHonorsTheEditor(IsolatedAsyncioTestCase):
-    async def _create(self, **overrides: Any) -> tuple[models.BalancerRegistration, list[str]]:
+    async def _create(
+        self, *, form: Any = _DEFAULT_FORM, **overrides: Any
+    ) -> tuple[models.BalancerRegistration, list[str]]:
         session = _RecordingSession()
         events: list[str] = []
 
@@ -297,7 +304,7 @@ class TestManualCreateHonorsTheEditor(IsolatedAsyncioTestCase):
             mock.patch.object(
                 reg_lifecycle.lifecycle_service.common,
                 "get_registration_form",
-                mock.AsyncMock(return_value=_FormStub()),
+                mock.AsyncMock(return_value=_FormStub() if form is _DEFAULT_FORM else form),
             ),
             mock.patch.object(reg_lifecycle, "_resolve_top_heroes_config", mock.AsyncMock(return_value=(None, None))),
             mock.patch.object(reg_lifecycle.lifecycle_service, "validate_registration_status_value", _noop),
@@ -358,6 +365,19 @@ class TestManualCreateHonorsTheEditor(IsolatedAsyncioTestCase):
         registration, _ = await self._create(answers={})
 
         assert registration.battle_tag is None
+
+    async def test_a_tournament_with_no_form_still_accepts_what_the_organizer_typed(self) -> None:
+        """Before the form schema existed these were unconditional keyword
+        arguments, so a form-less tournament still took an organizer's input.
+        Validating against nothing would silently drop all of it; the fallback is
+        ``default_schema()``, the same one the sheet-sync feed uses."""
+        registration, _ = await self._create(
+            form=None, answers={"battle_tag": "Walkin#4242", "public_notes": "signed up at the venue"}
+        )
+
+        assert registration.battle_tag == "Walkin#4242"
+        assert registration.battle_tag_normalized == "walkin#4242"
+        assert registration.public_notes == "signed up at the venue"
 
 
 class TestAdminProfileUpdateAnswers(IsolatedAsyncioTestCase):

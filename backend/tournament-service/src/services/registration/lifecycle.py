@@ -25,7 +25,7 @@ from sqlalchemy.orm import selectinload
 from shared.balancer_registration_statuses import balancer_pool_excluded_clause, balancer_pool_included_clause
 from shared.core import http_status as status
 from shared.core.errors import BaseAPIException as HTTPException
-from shared.domain.forms import FormSchema, schema_from_form
+from shared.domain.forms import FormSchema, default_schema, schema_from_form
 from shared.domain.roster import flex_role_mode
 from shared.hero_catalog import HeroCatalog
 from shared.repository import (
@@ -226,10 +226,9 @@ class RegistrationLifecycleService:
         session: AsyncSession,
         *,
         form: models.BalancerRegistrationForm | None,
-        schema: FormSchema | None,
         answers: Mapping[str, Any],
         workspace_id: int,
-    ) -> tuple[dict[str, Any], HeroCatalog | None, int | None]:
+    ) -> tuple[FormSchema, dict[str, Any], HeroCatalog | None, int | None]:
         """Validate an ORGANIZER's answers: partial, and requirements off.
 
         An organizer enters what they know about a player, so a blank required
@@ -238,12 +237,17 @@ class RegistrationLifecycleService:
         organizer's typing, which is why ``enforce_required=False`` also switches
         the ``require_verified`` gate off.
 
-        A tournament whose form has no schema yet accepts no answers at all;
-        ``{}`` back keeps every admin edit that touches only admin state working.
+        A tournament with no form (or no version yet) is validated against
+        ``default_schema()``, the same fallback the sheet-sync feed uses: before
+        the form schema existed an organizer's input was written unconditionally,
+        and refusing it here would silently drop every battle tag, handle and note
+        they type on such a tournament. THE resolver for both callers, so the
+        fallback cannot apply to one and not the other.
         """
-        if schema is None or form is None:
-            return {}, None, None
-        hero_catalog, max_heroes = await _resolve_top_heroes_config(session, form)
+        schema = schema_from_form(form) or default_schema()
+        # ``_resolve_top_heroes_config`` reads a real form; no form means no
+        # top-heroes ask to resolve, which is also what the default schema says.
+        hero_catalog, max_heroes = await _resolve_top_heroes_config(session, form) if form is not None else (None, None)
         values = await answer_service.validate(
             session,
             schema=schema,
@@ -254,7 +258,7 @@ class RegistrationLifecycleService:
             workspace_id=workspace_id,
             hero_catalog=hero_catalog,
         )
-        return values, hero_catalog, max_heroes
+        return schema, values, hero_catalog, max_heroes
 
     async def create_manual_registration(
         self,
@@ -289,9 +293,8 @@ class RegistrationLifecycleService:
             )
 
         form = await self.common.get_registration_form(session, tournament_id)
-        schema = schema_from_form(form)
-        values, hero_catalog, max_heroes = await self._validated_answers(
-            session, form=form, schema=schema, answers=answers, workspace_id=workspace_id
+        schema, values, hero_catalog, max_heroes = await self._validated_answers(
+            session, form=form, answers=answers, workspace_id=workspace_id
         )
         if roles:
             # The admin rows carry ranks an answer document cannot express, so
@@ -309,8 +312,7 @@ class RegistrationLifecycleService:
             status=resolved_status,
             balancer_status=NOT_ADDED_BALANCER_STATUS,
         )
-        if schema is not None:
-            answer_service.apply(registration, values, schema=schema, hero_catalog=hero_catalog)
+        answer_service.apply(registration, values, schema=schema, hero_catalog=hero_catalog)
         registration.display_name = display_name or registration.battle_tag
         if roles:
             replace_registration_roles(
@@ -375,11 +377,9 @@ class RegistrationLifecycleService:
         previous_status = registration.status
 
         form = await self.common.get_registration_form(session, registration.tournament_id)
-        schema = schema_from_form(form)
-        values, hero_catalog, max_heroes = await self._validated_answers(
+        schema, values, hero_catalog, max_heroes = await self._validated_answers(
             session,
             form=form,
-            schema=schema,
             answers=answers,
             workspace_id=registration.tournament.workspace_id,
         )
@@ -392,10 +392,9 @@ class RegistrationLifecycleService:
                 battle_tag=normalize_battle_tag(values["battle_tag"]),
                 exclude_registration_id=registration.id,
             )
-        if schema is not None:
-            answer_service.apply(registration, values, schema=schema, hero_catalog=hero_catalog)
-            if form is not None:
-                registration.form_version_id = form.current_version_id
+        answer_service.apply(registration, values, schema=schema, hero_catalog=hero_catalog)
+        if form is not None:
+            registration.form_version_id = form.current_version_id
         if display_name is not None:
             registration.display_name = display_name or registration.battle_tag
         if admin_notes is not None:
