@@ -18,6 +18,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import en from "@/i18n/messages/en.json";
 import type { RosterShape } from "@/lib/roster-shape";
+import type { FormField } from "@/types/forms.types";
 import type { Registration, RegistrationForm, RegistrationRole } from "@/types/registration.types";
 import type { Tournament, TournamentStatus } from "@/types/tournament.types";
 
@@ -29,6 +30,18 @@ declare global {
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 const TOURNAMENT_ID = 91;
+
+function builtin(key: string, overrides: Partial<FormField> = {}): FormField {
+  return {
+    key,
+    kind: "builtin",
+    required: false,
+    visibility: "public",
+    params: {},
+    show_in_draft: false,
+    ...overrides
+  };
+}
 
 const listRegistrations = vi.fn();
 const getForm = vi.fn();
@@ -196,13 +209,10 @@ function makeRegistration(
     workspace_id: 3,
     user_id: null,
     battle_tag: battleTag,
-    smurf_tags_json: null,
-    discord_nick: null,
-    twitch_nick: null,
-    stream_pov: false,
     roles,
-    notes: null,
-    custom_fields_json: null,
+    answers: { stream_pov: false },
+    form_version_id: 7,
+    form_version_stale: false,
     status,
     checked_in: false,
     profiles_open: null,
@@ -239,16 +249,28 @@ function makeForm(overrides: Partial<RegistrationForm> = {}): RegistrationForm {
     is_open: false,
     require_open_profile: false,
     require_subscription: false,
-    // Explicit: `{}` means "the organizer disabled every built-in", which would
-    // leave the gated `notes`/`smurf_tags` columns out for an unrelated reason.
-    built_in_fields: {
-      battle_tag: { enabled: true, required: true },
-      primary_role: { enabled: true, required: true },
-      top_heroes: { enabled: true, required: false },
-      smurf_tags: { enabled: true, required: false },
-      notes: { enabled: true, required: false }
+    // Explicit: an empty schema means "this form asks nothing", which would
+    // leave the gated `public_notes`/`smurf_tags` columns out for an unrelated
+    // reason.
+    form_schema: {
+      schema_version: 1,
+      sections: [
+        {
+          key: "main",
+          fields: [
+            builtin("battle_tag", { required: true }),
+            builtin("roles", {
+              required: true,
+              params: { top_heroes: { enabled: true, required: false, max: 5 } }
+            }),
+            builtin("smurf_tags"),
+            builtin("public_notes")
+          ]
+        }
+      ]
     },
-    custom_fields: [],
+    version_id: 7,
+    version_number: 1,
     ...overrides
   };
 }
@@ -447,7 +469,7 @@ describe("participants pool", () => {
     const columns = (
       container.querySelector('[data-testid="roster"]')?.getAttribute("data-columns") ?? ""
     ).split(",");
-    for (const id of ["notes", "smurf_tags"]) {
+    for (const id of ["public_notes", "smurf_tags"]) {
       expect(columns).not.toContain(id);
     }
     // The registration's own state is public: check-in, the subscription
@@ -467,7 +489,7 @@ describe("participants pool", () => {
     const columns = (
       container.querySelector('[data-testid="roster"]')?.getAttribute("data-columns") ?? ""
     ).split(",");
-    for (const id of ["notes", "smurf_tags"]) {
+    for (const id of ["public_notes", "smurf_tags"]) {
       expect(columns).toContain(id);
     }
   });

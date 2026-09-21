@@ -124,8 +124,9 @@ beforeEach(() => {
     hide_registrations: true,
     max_participants: 60,
     max_substitutes: 2,
-    built_in_fields: {},
-    custom_fields: []
+    form_schema: { schema_version: 1, sections: [] },
+    version_id: 1,
+    version_number: 1
   });
 });
 

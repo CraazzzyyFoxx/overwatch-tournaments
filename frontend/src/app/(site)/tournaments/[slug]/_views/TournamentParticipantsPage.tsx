@@ -56,6 +56,8 @@ import { getRegistrationTeamStatus } from "@/lib/registration-team-tone";
 import { normalizePlayerRole, playerRoleSlotCode } from "@/lib/player-role";
 import { reachedAtLeast } from "@/lib/tournament-lifecycle";
 import { isPhaseWindowActive } from "@/lib/tournament-status";
+import { answerFlag, answerText } from "@/lib/forms/answers";
+import { IDENTITY_PROVIDERS, identityKey } from "@/lib/forms/builtin-keys";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
 import { tournamentQueryKeys } from "@/lib/tournament-query-keys";
 import { getApiErrorMessage } from "@/lib/api-error";
@@ -190,6 +192,19 @@ const TwitchIcon = (props: React.SVGProps<SVGSVGElement>) => (
   </svg>
 );
 
+/**
+ * Brand icons for the identity chips on the registrant's own card. A provider
+ * with no icon here is labelled instead — a bare handle beside four other
+ * handles says nothing about where it lives.
+ */
+const IDENTITY_ICONS: Record<
+  string,
+  { Icon: (props: React.SVGProps<SVGSVGElement>) => React.ReactElement; className: string }
+> = {
+  discord: { Icon: DiscordIcon, className: "text-[color:var(--aqt-brand-discord)]" },
+  twitch: { Icon: TwitchIcon, className: "text-[color:var(--aqt-brand-twitch)]" }
+};
+
 const STATUS_FILTER_META: Record<RegistrationStatus, { dot: string }> = {
   approved: { dot: "var(--aqt-emerald)" },
   pending: { dot: "var(--aqt-amber)" },
@@ -230,10 +245,14 @@ const TERMINAL_REGISTRATION_STATUSES = new Set<string>(["rejected", "banned", "w
 /** Team formations whose roster is a player pool rather than a list of teams. */
 const POOL_TEAM_FORMATIONS: Record<string, true> = { balancer: true, draft: true };
 
-/** Organizer-only columns: private notes and smurf tags — the two fields the
- *  organizer writes about a player rather than reads off them. Filtered out of
- *  the column CONFIG rather than blanked per cell, so they leave the table, the
- *  search and the column picker together.
+/** Organizer-only columns: the player's notes and smurf tags — what the roster
+ *  shows ABOUT a player rather than the state of their own entry. Filtered out
+ *  of the column CONFIG rather than blanked per cell, so they leave the table,
+ *  the search and the column picker together.
+ *
+ *  This is a roster-surface decision on top of the schema's `visibility`, which
+ *  the server already enforces: an organizers-only answer never reaches a
+ *  public read at all, and its column is skipped for want of a value.
  *
  *  Check-in, the subscription verdict and the balancer status are deliberately
  *  NOT here: all three are the registration's own public state — "am I in, and
@@ -241,7 +260,7 @@ const POOL_TEAM_FORMATIONS: Record<string, true> = { balancer: true, draft: true
  *  public read already ships `checked_in`, `subscription_outcome`, `admission`
  *  and `balancer_status` on every row. */
 const ADMIN_ONLY_COLUMN_IDS: Record<string, true> = {
-  notes: true,
+  public_notes: true,
   smurf_tags: true
 };
 
@@ -578,6 +597,12 @@ function MyRegistrationCard({
     hintText = statusMeta?.description || t("registration.myCard.pendingReviewDesc");
   }
 
+  // Public answers only: this read is stripped against the registration's own
+  // form version, so an organizers-only answer is not merely empty here, it is
+  // absent — and nothing below may render a placeholder for one.
+  const streamPov = answerFlag(registration.answers, "stream_pov");
+  const publicNotes = answerText(registration.answers, "public_notes");
+
   return (
     <div className="relative overflow-hidden rounded-xl border border-[color:var(--aqt-border)] bg-[color:var(--aqt-overlay-1)] shadow-md backdrop-blur-md">
       {/* Decorative gradient blurs */}
@@ -823,58 +848,62 @@ function MyRegistrationCard({
                     </span>
                   </div>
                 )}
-                {registration.discord_nick && (
-                  <div className="flex items-center gap-1.5 rounded-md border border-[color:var(--aqt-border)] bg-[color:var(--aqt-overlay-1)] px-2 py-1">
-                    <DiscordIcon
-                      aria-hidden
-                      className="size-3.5 text-[color:var(--aqt-brand-discord)]"
-                    />
-                    <span className="text-[color:var(--aqt-fg-muted)]">
-                      {registration.discord_nick}
-                    </span>
-                  </div>
-                )}
-                {registration.twitch_nick && (
-                  <div className="flex items-center gap-1.5 rounded-md border border-[color:var(--aqt-border)] bg-[color:var(--aqt-overlay-1)] px-2 py-1">
-                    <TwitchIcon
-                      aria-hidden
-                      className="size-3.5 text-[color:var(--aqt-brand-twitch)]"
-                    />
-                    <span className="text-[color:var(--aqt-fg-muted)]">
-                      {registration.twitch_nick}
-                    </span>
-                  </div>
-                )}
+                {IDENTITY_PROVIDERS.map((provider) => {
+                  const handle = answerText(registration.answers, identityKey(provider));
+                  if (!handle) return null;
+                  const brand = IDENTITY_ICONS[provider];
+                  return (
+                    <div
+                      key={provider}
+                      className="flex items-center gap-1.5 rounded-md border border-[color:var(--aqt-border)] bg-[color:var(--aqt-overlay-1)] px-2 py-1"
+                    >
+                      {brand ? (
+                        <brand.Icon aria-hidden className={cn("size-3.5", brand.className)} />
+                      ) : (
+                        <span className="text-label font-semibold uppercase tracking-label text-[color:var(--aqt-fg-dim)]">
+                          {t(`registration.accounts.${provider}`)}
+                        </span>
+                      )}
+                      <span className="text-[color:var(--aqt-fg-muted)]">{handle}</span>
+                    </div>
+                  );
+                })}
               </div>
             </div>
 
-            <div className="space-y-2">
-              <h4 className="text-label font-semibold uppercase tracking-label text-[color:var(--aqt-fg-dim)]">
-                {t("registration.details.streamPov")}
-              </h4>
-              <span
-                className={cn(
-                  "inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium",
-                  registration.stream_pov
-                    ? "border-[color:color-mix(in_srgb,var(--aqt-emerald)_20%,transparent)] bg-[color:color-mix(in_srgb,var(--aqt-emerald)_10%,transparent)] text-[color:var(--aqt-emerald)]"
-                    : "border-[color:var(--aqt-border)] bg-[color:var(--aqt-overlay-1)] text-[color:var(--aqt-fg-dim)]"
-                )}
-              >
-                <Tv className="size-3.5" aria-hidden />
-                {registration.stream_pov
-                  ? t("registration.myCard.streamPovActive")
-                  : t("registration.myCard.streamPovInactive")}
-              </span>
-            </div>
+            {/* Only when the form asks it: `stream_pov` is public, so the key is
+                present on every read of a registration that was asked — and
+                absent on one that was not, where "will not stream" would be an
+                answer nobody gave. */}
+            {"stream_pov" in (registration.answers ?? {}) && (
+              <div className="space-y-2">
+                <h4 className="text-label font-semibold uppercase tracking-label text-[color:var(--aqt-fg-dim)]">
+                  {t("registration.details.streamPov")}
+                </h4>
+                <span
+                  className={cn(
+                    "inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium",
+                    streamPov
+                      ? "border-[color:color-mix(in_srgb,var(--aqt-emerald)_20%,transparent)] bg-[color:color-mix(in_srgb,var(--aqt-emerald)_10%,transparent)] text-[color:var(--aqt-emerald)]"
+                      : "border-[color:var(--aqt-border)] bg-[color:var(--aqt-overlay-1)] text-[color:var(--aqt-fg-dim)]"
+                  )}
+                >
+                  <Tv className="size-3.5" aria-hidden />
+                  {streamPov
+                    ? t("registration.myCard.streamPovActive")
+                    : t("registration.myCard.streamPovInactive")}
+                </span>
+              </div>
+            )}
           </div>
 
-          {registration.notes ? (
+          {publicNotes ? (
             <div className="mt-4 space-y-1.5">
               <h4 className="text-label font-semibold uppercase tracking-label text-[color:var(--aqt-fg-dim)]">
                 {t("registration.details.notes")}
               </h4>
               <p className="border-l-2 border-[color:var(--aqt-border-2)] pl-3 text-xs italic leading-relaxed text-[color:var(--aqt-fg-muted)]">
-                &ldquo;{registration.notes}&rdquo;
+                &ldquo;{publicNotes}&rdquo;
               </p>
             </div>
           ) : null}

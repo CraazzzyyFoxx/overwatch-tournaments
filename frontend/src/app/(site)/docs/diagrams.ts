@@ -892,9 +892,9 @@ export const domains: DiagramDomain[] = [
     title: "Балансировка и регистрация",
     schemaLabel: "balancer",
     schemas: ["balancer"],
-    tableCount: 13,
+    tableCount: 16,
     description:
-      "Форма регистрации, заявки игроков (роли + топ-герои + статусы), опциональный импорт из Google Sheets. Результат баланса → варианты → команды → слоты.",
+      "Форма регистрации со схемой вопросов (версии-снапшоты + шаблоны воркспейса), заявки игроков (ответы, роли + топ-герои + статусы, соцсети), опциональный импорт из Google Sheets. Результат баланса → варианты → команды → слоты.",
     mermaid: `erDiagram
     BAL_REGISTRATION_FORM {
         int id PK
@@ -902,8 +902,28 @@ export const domains: DiagramDomain[] = [
         int workspace_id FK
         bool is_open
         bool auto_approve
-        json built_in_fields_json
-        json custom_fields_json
+        int current_version_id FK "nullable → registration_form_version; NULL = форма не настроена"
+    }
+    BAL_REGISTRATION_FORM_VERSION {
+        int id PK
+        int form_id FK "UK(form, number)"
+        int number
+        json schema_json "снапшот FormSchema; append-only"
+        int created_by FK "nullable → auth.user"
+    }
+    BAL_REGISTRATION_FORM_TEMPLATE {
+        int id PK
+        int workspace_id FK "UK(workspace, lower(name))"
+        string name
+        json schema_json "копируется в форму при применении; связи после этого нет"
+        int created_by FK "nullable → auth.user"
+    }
+    BAL_REGISTRATION_IDENTITY {
+        int id PK
+        int registration_id FK "UK(registration, provider)"
+        string provider "discord/twitch/boosty/vk/youtube"
+        string handle
+        string handle_normalized "INDEX(provider, handle_normalized)"
     }
     BAL_REGISTRATION {
         int id PK
@@ -916,6 +936,12 @@ export const domains: DiagramDomain[] = [
         string exclude_reason "nullable; заполняется когда balancer_status = excluded"
         bool checked_in
         timestamp submitted_at
+        int form_version_id FK "nullable → registration_form_version; версия, против которой заполнена заявка"
+        json smurf_tags_json
+        bool stream_pov
+        text public_notes "nullable; видно всем"
+        text organizer_notes "nullable; видно только организаторам"
+        json custom_fields_json "ответы на собственные вопросы организатора"
         timestamp deleted_at "soft-delete"
     }
     BAL_REGISTRATION_ROLE {
@@ -1020,6 +1046,11 @@ export const domains: DiagramDomain[] = [
     }
 
     TOURNAMENT |o--o| BAL_REGISTRATION_FORM : "форма (1:0..1)"
+    BAL_REGISTRATION_FORM ||--o{ BAL_REGISTRATION_FORM_VERSION : "версии схемы (append-only)"
+    BAL_REGISTRATION_FORM_VERSION |o--o| BAL_REGISTRATION_FORM : "current_version_id"
+    WORKSPACE ||--o{ BAL_REGISTRATION_FORM_TEMPLATE : "шаблоны форм"
+    BAL_REGISTRATION_FORM_VERSION |o--o{ BAL_REGISTRATION : "версия заявки"
+    BAL_REGISTRATION ||--o{ BAL_REGISTRATION_IDENTITY : "соцсети"
     TOURNAMENT ||--o{ BAL_REGISTRATION : "заявки"
     WORKSPACE_MEMBER |o--o{ BAL_REGISTRATION : "член (nullable — единственный якорь)"
     BAL_REGISTRATION ||--o{ BAL_REGISTRATION_ROLE : "роли"

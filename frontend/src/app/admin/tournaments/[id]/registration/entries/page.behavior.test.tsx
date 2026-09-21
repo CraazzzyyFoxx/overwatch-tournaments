@@ -71,6 +71,7 @@ vi.mock("@/hooks/usePermissions", () => ({
 }));
 
 const listRegistrations = vi.fn();
+const getPublicForm = vi.fn();
 
 vi.mock("@/services/admin.service", () => ({
   default: {
@@ -103,7 +104,7 @@ vi.mock("@/services/balancer-admin.service", () => ({
   }
 }));
 vi.mock("@/services/registration.service", () => ({
-  default: { getForm: vi.fn().mockResolvedValue(null) }
+  default: { getForm: (...args: unknown[]) => getPublicForm(...args) }
 }));
 // The inspector's rank chart fetches on mount; this suite is about the screen,
 // not the chart, and a live fetch outlives the test's window teardown.
@@ -148,14 +149,11 @@ function registration(
     user_id: id,
     display_name: `Player ${id}`,
     battle_tag: `Player${id}#1234`,
-    smurf_tags_json: [],
-    discord_nick: null,
-    twitch_nick: null,
-    stream_pov: false,
     roles: [],
-    notes: null,
+    answers: { smurf_tags: [], stream_pov: false },
+    form_version_id: 2,
+    form_version_stale: false,
     admin_notes: null,
-    custom_fields_json: null,
     status: "approved",
     status_meta: statusMeta("approved", "registration"),
     balancer_status: "ready",
@@ -257,6 +255,7 @@ beforeEach(() => {
   rerender = null;
   replace.mockClear();
   listRegistrations.mockReset().mockResolvedValue(POOL);
+  getPublicForm.mockReset().mockResolvedValue(null);
   // The inspector is a side panel above `lg` and a sheet below it.
   window.matchMedia = ((query: string) => ({
     matches: true,
@@ -373,5 +372,57 @@ describe("Registration entries", () => {
     const inspector = withInspector.querySelector("aside[aria-label='Row inspector']");
     expect(inspector?.textContent).toContain("Player1#1234");
     expect(inspector?.textContent).toContain("Admission");
+  });
+
+  it("still reads an answer the form no longer asks, and says it is from an older version", async () => {
+    // The whole point of versioned schemas: a registration filed against an
+    // older version keeps answers this form has since dropped. The table has no
+    // column for them — only the current schema builds columns — so the
+    // inspector is where they have to remain readable.
+    getPublicForm.mockResolvedValue({
+      id: 9,
+      tournament_id: 80,
+      workspace_id: 1,
+      is_open: true,
+      form_schema: {
+        schema_version: 1,
+        sections: [
+          {
+            key: "details",
+            fields: [
+              {
+                key: "vk",
+                kind: "text",
+                label: "VK profile",
+                required: false,
+                visibility: "public",
+                params: {},
+                show_in_draft: false
+              }
+            ]
+          }
+        ]
+      },
+      version_id: 4,
+      version_number: 2
+    });
+    listRegistrations.mockResolvedValue([
+      {
+        ...registration(1, "admitted"),
+        answers: { vk: "vk.com/player", why_this_tournament: "a question we dropped" },
+        form_version_id: 3,
+        form_version_stale: true
+      }
+    ]);
+
+    const withInspector = await mount("?id=1");
+    const inspector = withInspector.querySelector("aside[aria-label='Row inspector']");
+
+    expect(inspector?.textContent).toContain("VK profile");
+    expect(inspector?.textContent).toContain("vk.com/player");
+    expect(inspector?.textContent).toContain("why_this_tournament");
+    expect(inspector?.textContent).toContain("a question we dropped");
+    expect(inspector?.textContent).toContain("no longer asked");
+    expect(inspector?.textContent).toContain("older version of this form");
   });
 });

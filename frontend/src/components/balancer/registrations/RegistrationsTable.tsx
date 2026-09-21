@@ -21,8 +21,11 @@ import Link from "next/link";
 
 import RegistrationSchemaForm from "@/components/registration/RegistrationSchemaForm";
 import { AnswerValue } from "@/components/forms/AnswerValue";
-import type { FieldKind } from "@/types/forms.types";
-import { buildBalancerRegistrationColumns } from "@/components/balancer/registrations/_components/balancerRegistrationColumns";
+import type { FormField } from "@/types/forms.types";
+import {
+  BUILTIN_ANSWER_LABELS,
+  buildBalancerRegistrationColumns
+} from "@/components/balancer/registrations/_components/balancerRegistrationColumns";
 import {
   type RegistrationGroupingMode,
   groupRegistrations,
@@ -74,18 +77,18 @@ import type { RegistrationForm, SubroleCatalog } from "@/types/registration.type
 import { cn } from "@/lib/utils";
 import { useWorkspaceStore } from "@/stores/workspace.store";
 
-// Minimal fallback used only until the real registration form (with its
-// workspace sub-role catalog) loads. Sub-role options are then data-driven.
+// Minimal fallback used only until the real registration form loads. Its schema
+// is EMPTY on purpose: the questions this tournament asks are the ones the
+// server sends, and inventing a plausible set here would render a form nobody
+// configured. The sub-role catalog rides along on the same query.
 const ADMIN_ROLE_FORM: RegistrationForm = {
   id: 0,
   tournament_id: 0,
   workspace_id: 0,
   is_open: true,
-  built_in_fields: {
-    primary_role: { enabled: true, required: true },
-    additional_roles: { enabled: true, required: false }
-  },
-  custom_fields: []
+  form_schema: { schema_version: 1, sections: [] },
+  version_id: 0,
+  version_number: 0
 };
 
 const ADMISSION_LABELS: Record<AdmissionDecision, string> = {
@@ -220,7 +223,14 @@ export default function RegistrationsTable({
   // resolved server-side and travels on each row. This flag survives only
   // because the Subscription chip column exists or does not exist per tournament.
   const requireSubscription = formQuery.data?.require_subscription ?? false;
-  const customFields = roleForm.custom_fields;
+  // The questions the CURRENT schema asks, flattened in render order. A row
+  // filed against an older version is still read through these: answers are
+  // keyed, not positional. What the current schema no longer asks has no column
+  // — the inspector shows those beside the row's stale-version notice.
+  const schemaFields = useMemo(
+    () => roleForm.form_schema.sections.flatMap((section) => section.fields),
+    [roleForm]
+  );
 
   const customStatusesQuery = useQuery({
     queryKey: ["balancer-admin", "status-catalog", workspaceId],
@@ -693,7 +703,7 @@ export default function RegistrationsTable({
       ...buildBalancerRegistrationColumns(
         subroleCatalog,
         requireSubscription,
-        customFields,
+        schemaFields,
         statusFilterOptions,
         adminNotesEdit
       ),
@@ -705,7 +715,7 @@ export default function RegistrationsTable({
   }, [
     subroleCatalog,
     requireSubscription,
-    customFields,
+    schemaFields,
     statusFilterOptions,
     adminNotesEdit,
     approve,
@@ -892,7 +902,7 @@ export default function RegistrationsTable({
           <RegistrationInspectorBody
             registration={inspected}
             catalog={subroleCatalog}
-            customFields={customFields}
+            schemaFields={schemaFields}
             t={t}
           />
         ) : null}
@@ -987,16 +997,37 @@ export default function RegistrationsTable({
 function RegistrationInspectorBody({
   registration,
   catalog,
-  customFields,
+  schemaFields,
   t
 }: Readonly<{
   registration: AdminRegistration;
   catalog?: SubroleCatalog;
-  customFields: RegistrationForm["custom_fields"];
+  schemaFields: FormField[];
   t: AdmissionTranslator;
 }>) {
-  const answers = customFields.filter(
-    (field) => (registration.custom_fields_json?.[field.key] ?? null) !== null
+  // Answered questions of the CURRENT schema, then whatever the row still
+  // carries that the current schema no longer asks. The second list is the
+  // whole reason a stale registration is readable at all: its answers were
+  // filed against an older version, and the table has no column for a question
+  // that version asked and this one does not. Until the form query resolves
+  // there is no schema to compare against, so every answer lands in the second
+  // list and none of them is labelled as dropped.
+  const schemaKnown = schemaFields.length > 0;
+  const asked = schemaFields.filter(
+    (field) =>
+      field.key !== "battle_tag" &&
+      field.key !== "roles" &&
+      (registration.answers?.[field.key] ?? null) !== null
+  );
+  const askedKeys: Record<string, true> = Object.fromEntries(
+    schemaFields.map((field) => [field.key, true] as const)
+  );
+  const orphaned = Object.entries(registration.answers ?? {}).filter(
+    ([key, value]) =>
+      askedKeys[key] !== true &&
+      key !== "battle_tag" &&
+      key !== "roles" &&
+      (value ?? null) !== null
   );
   const blockers = registration.admission.blockers.flatMap(
     (requirement) => requirement.reasons
@@ -1026,44 +1057,46 @@ function RegistrationInspectorBody({
         <RolesCell roles={registration.roles} catalog={catalog} />
       </section>
 
-      {answers.length > 0 ? (
+      {asked.length > 0 || orphaned.length > 0 ? (
         <section className="space-y-1.5">
           <h3 className={EYEBROW_CLASS}>Questionnaire</h3>
           <dl className="space-y-2 text-xs">
-            {answers.map((field) => (
+            {asked.map((field) => (
               <div key={field.key}>
-                <dt className="text-muted-foreground">{field.label}</dt>
+                <dt className="text-muted-foreground">
+                  {field.label || BUILTIN_ANSWER_LABELS[field.key] || field.key}
+                </dt>
                 <dd className="mt-0.5 text-foreground">
-                  <AnswerValue
-                    value={registration.custom_fields_json?.[field.key]}
-                    kind={field.type as FieldKind}
-                  />
+                  <AnswerValue value={registration.answers?.[field.key]} kind={field.kind} />
+                </dd>
+              </div>
+            ))}
+            {orphaned.map(([key, value]) => (
+              <div key={key}>
+                <dt className="text-muted-foreground">
+                  {BUILTIN_ANSWER_LABELS[key] || key}
+                  {schemaKnown ? (
+                    <span className="ml-1 text-[color:var(--aqt-fg-dim)]">· no longer asked</span>
+                  ) : null}
+                </dt>
+                <dd className="mt-0.5 text-foreground">
+                  <AnswerValue value={value} />
                 </dd>
               </div>
             ))}
           </dl>
+          {registration.form_version_stale ? (
+            <p className="text-xs text-muted-foreground">
+              Answered on an older version of this form. Editing the registration re-files it
+              against the current one.
+            </p>
+          ) : null}
         </section>
       ) : null}
 
       <section className="space-y-1.5">
         <h3 className={EYEBROW_CLASS}>Details</h3>
         <dl className="space-y-2 text-xs text-muted-foreground">
-          {(registration.smurf_tags_json?.length ?? 0) > 0 ? (
-            <div className="flex justify-between gap-3">
-              <dt>Smurfs</dt>
-              <dd className="text-right">{registration.smurf_tags_json?.join(", ")}</dd>
-            </div>
-          ) : null}
-          {registration.discord_nick || registration.twitch_nick || registration.boosty_nick ? (
-            <div className="flex justify-between gap-3">
-              <dt>Contact</dt>
-              <dd className="text-right">
-                {[registration.discord_nick, registration.twitch_nick, registration.boosty_nick]
-                  .filter(Boolean)
-                  .join(" · ")}
-              </dd>
-            </div>
-          ) : null}
           <div className="flex justify-between gap-3">
             <dt>Source</dt>
             <dd className="text-right">{registration.source}</dd>
@@ -1079,12 +1112,6 @@ function RegistrationInspectorBody({
                 {formatSubmittedAt(registration.reviewed_at)}
                 {registration.reviewed_by_username ? ` · ${registration.reviewed_by_username}` : ""}
               </dd>
-            </div>
-          ) : null}
-          {registration.notes ? (
-            <div>
-              <dt>Notes</dt>
-              <dd className="mt-0.5">{registration.notes}</dd>
             </div>
           ) : null}
           {registration.admin_notes ? (

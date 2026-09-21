@@ -3,20 +3,29 @@ import { describe, expect, it } from "vitest";
 
 import { readAdminColumnMeta, readAdminColumnFilter } from "@/components/data-table";
 import type { AdminRegistration } from "@/types/balancer-admin.types";
-import type { CustomFieldDefinition, StatusMeta } from "@/types/registration.types";
+import type { StatusMeta } from "@/types/registration.types";
+import type { FormField } from "@/types/forms.types";
 
 import { buildBalancerRegistrationColumns } from "./balancerRegistrationColumns";
 
-const CUSTOM_FIELDS: CustomFieldDefinition[] = [
-  { key: "vk", label: "VK profile", type: "text", required: false, placeholder: null, options: null },
-  {
-    key: "rules",
-    label: "Read the rules",
-    type: "checkbox",
-    required: true,
-    placeholder: null,
-    options: null,
-  },
+function field(key: string, overrides: Partial<FormField> = {}): FormField {
+  return {
+    key,
+    kind: "builtin",
+    required: false,
+    visibility: "public",
+    params: {},
+    show_in_draft: false,
+    ...overrides,
+  };
+}
+
+const SCHEMA_FIELDS: FormField[] = [
+  field("identity_discord"),
+  field("identity_twitch"),
+  field("identity_boosty"),
+  field("vk", { kind: "text", label: "VK profile" }),
+  field("rules", { kind: "checkbox", label: "Read the rules", required: true }),
 ];
 
 function registration(overrides: Partial<AdminRegistration> = {}): AdminRegistration {
@@ -24,11 +33,11 @@ function registration(overrides: Partial<AdminRegistration> = {}): AdminRegistra
     id: 1,
     battle_tag: "Player#1234",
     display_name: "Player",
-    discord_nick: "player",
-    twitch_nick: "player_tv",
-    boosty_nick: "player_boosty",
-    smurf_tags_json: [],
-    custom_fields_json: null,
+    answers: {
+      identity_discord: "player",
+      identity_twitch: "player_tv",
+      identity_boosty: "player_boosty",
+    },
     source: "manual",
     source_record_key: null,
     ...overrides,
@@ -45,33 +54,49 @@ function column(id: string, ...args: Parameters<typeof buildBalancerRegistration
 }
 
 describe("balancer registration column model", () => {
-  it("builds one column per custom-field definition", () => {
+  it("builds one column per question the schema asks", () => {
     // The admin table rendered no custom fields at all: an organizer could read
-    // an answer nowhere and fix it nowhere.
-    const ids = buildBalancerRegistrationColumns(undefined, false, CUSTOM_FIELDS).map(
+    // an answer nowhere and fix it nowhere. Builtins are questions too — the
+    // schema knows no difference — so they get their column the same way.
+    const ids = buildBalancerRegistrationColumns(undefined, false, SCHEMA_FIELDS).map(
       (candidate) => candidate.id,
     );
 
-    expect(ids).toContain("custom_vk");
-    expect(ids).toContain("custom_rules");
+    expect(ids).toContain("answer_vk");
+    expect(ids).toContain("answer_rules");
+    expect(ids).toContain("answer_identity_boosty");
   });
 
-  it("reads the stored answer for its own definition", () => {
-    const vk = column("custom_vk", undefined, false, CUSTOM_FIELDS);
+  it("keeps the dedicated BattleTag and roles columns out of the answer set", () => {
+    const ids = buildBalancerRegistrationColumns(undefined, false, [
+      field("battle_tag"),
+      field("roles"),
+      field("smurf_tags"),
+    ]).map((candidate) => candidate.id);
+
+    expect(ids).not.toContain("answer_battle_tag");
+    expect(ids).not.toContain("answer_roles");
+    expect(ids).toContain("answer_smurf_tags");
+  });
+
+  it("reads the stored answer for its own question", () => {
+    const vk = column("answer_vk", undefined, false, SCHEMA_FIELDS);
     const meta = readAdminColumnMeta<AdminRegistration>(vk.meta);
 
-    const value = meta.searchValue?.(registration({ custom_fields_json: { vk: "vk.com/player" } }));
+    const value = meta.searchValue?.(registration({ answers: { vk: "vk.com/player" } }));
     expect(value).toBe("vk.com/player");
   });
 
-  it("adds no custom columns when the form defines none", () => {
+  it("adds no answer columns when the form asks nothing", () => {
     const ids = buildBalancerRegistrationColumns().map((candidate) => candidate.id);
 
-    expect(ids.some((id) => id?.startsWith("custom_"))).toBe(false);
+    expect(ids.some((id) => id?.startsWith("answer_"))).toBe(false);
   });
 
-  it("searches the participant by every handle, boosty included", () => {
-    const meta = readAdminColumnMeta<AdminRegistration>(column("participant").meta);
+  it("searches the participant by every handle the form collects, boosty included", () => {
+    const meta = readAdminColumnMeta<AdminRegistration>(
+      column("participant", undefined, false, SCHEMA_FIELDS).meta,
+    );
 
     expect(meta.searchValue?.(registration())).toContain("player_boosty");
   });

@@ -19,6 +19,7 @@ import { DEFAULT_DIVISION_GRID, getDivisionLabel, resolveDivisionFromRank } from
 import userService from "@/services/user.service";
 import balancerAdminService from "@/services/balancer-admin.service";
 import { DivisionGridNormalizer } from "@/lib/division-grid-normalizer";
+import { answerFlag, answerList, answerText } from "@/lib/forms/answers";
 
 const ROLE_ORDER: BalancerRoleCode[] = ["tank", "damage", "support"];
 const API_ROLE_KEYS: Record<BalancerRoleCode, "Tank" | "Damage" | "Support"> = {
@@ -523,14 +524,14 @@ export function createSyntheticApplicationFromRegistration(
     tournament_sheet_id: 0,
     battle_tag: battleTag,
     battle_tag_normalized: registration.battle_tag_normalized ?? battleTag.toLowerCase(),
-    smurf_tags_json: registration.smurf_tags_json ?? [],
-    twitch_nick: registration.twitch_nick,
-    discord_nick: registration.discord_nick,
-    stream_pov: registration.stream_pov,
+    smurf_tags_json: answerList(registration.answers, "smurf_tags"),
+    twitch_nick: answerText(registration.answers, "identity_twitch"),
+    discord_nick: answerText(registration.answers, "identity_discord"),
+    stream_pov: answerFlag(registration.answers, "stream_pov"),
     last_tournament_text: null,
     primary_role: primaryRole,
     additional_roles_json: additionalRoles,
-    notes: registration.notes,
+    notes: answerText(registration.answers, "public_notes"),
     submitted_at: registration.submitted_at,
     synced_at: registration.submitted_at ?? registration.reviewed_at ?? new Date(0).toISOString(),
     is_active: isRegistrationAvailableForBalancer(registration),

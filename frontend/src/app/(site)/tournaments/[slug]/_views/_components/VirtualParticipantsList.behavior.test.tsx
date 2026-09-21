@@ -184,13 +184,10 @@ function registration(id: number): Registration {
     workspace_id: 1,
     user_id: id,
     battle_tag: `Player${id}#1234`,
-    smurf_tags_json: null,
-    discord_nick: null,
-    twitch_nick: null,
-    stream_pov: false,
     roles: [],
-    notes: null,
-    custom_fields_json: null,
+    answers: { stream_pov: false },
+    form_version_id: 1,
+    form_version_stale: false,
     status: "approved",
     // Sent by the server for every row; the admission column reads it directly.
     admission: {

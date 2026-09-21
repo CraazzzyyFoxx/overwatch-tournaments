@@ -14,7 +14,6 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { getDivisionLabel, resolveDivisionFromRank } from "@/lib/division-grid";
 import { getRoleIconName, ROLE_ACCENT } from "@/lib/roles";
 import { cn } from "@/lib/utils";
-import type { FieldKind } from "@/types/forms.types";
 import type {
   DraftPickOption,
   DraftPickOptionsResponse,
@@ -228,7 +227,7 @@ export function PlayerInspector({
                   <dd className="mt-0.5 break-words text-[color:var(--aqt-fg)]">
                     <AnswerValue
                       value={entry.value}
-                      kind={entry.type as FieldKind}
+                      kind={entry.type}
                       labels={{ yes: t("customFieldYes"), no: t("customFieldNo") }}
                     />
                   </dd>
