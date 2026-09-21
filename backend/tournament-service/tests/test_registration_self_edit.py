@@ -148,16 +148,15 @@ class PolicyTests(TestCase):
         opened = _schema(editable_keys=frozenset({"battle_tag", "public_notes"}))
 
         assert "battle_tag" in self_edit_policy(_registration(), _tournament(), opened).writable_keys
-        assert (
-            "battle_tag"
-            not in self_edit_policy(_registration(reviewed_at=NOW), _tournament(), opened).writable_keys
-        )
+        assert "battle_tag" not in self_edit_policy(_registration(reviewed_at=NOW), _tournament(), opened).writable_keys
 
     def test_roles_re_lock_once_the_balancer_has_them(self) -> None:
         opened = _schema(editable_keys=frozenset({"roles"}))
 
         assert "roles" in self_edit_policy(_registration(), _tournament(), opened).writable_keys
-        assert "roles" not in self_edit_policy(_registration(balancer_status="ready"), _tournament(), opened).writable_keys
+        assert (
+            "roles" not in self_edit_policy(_registration(balancer_status="ready"), _tournament(), opened).writable_keys
+        )
         assert (
             "roles" not in self_edit_policy(_registration(registration_team_id=3), _tournament(), opened).writable_keys
         )
