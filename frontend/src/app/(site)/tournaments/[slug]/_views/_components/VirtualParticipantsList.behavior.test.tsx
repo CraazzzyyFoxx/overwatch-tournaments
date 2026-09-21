@@ -199,7 +199,12 @@ function registration(id: number): Registration {
       ready: true
     },
     submitted_at: null,
-    reviewed_at: null
+    reviewed_at: null,
+    // Server-resolved self-edit policy. Never true on a LIST row: only the
+    // caller's own `/registration/me` read carries an editable verdict.
+    can_edit: false,
+    edit_locked_reason: null,
+    edit_writable_keys: []
   };
 }
 

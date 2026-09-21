@@ -273,6 +273,7 @@ export default function RegistrationsTable({
     const subscription = new Map<string, number>();
     const source = new Map<string, number>();
     let included = 0;
+    let reserve = 0;
     for (const registration of registrations) {
       // Per registration, not per role entry: the Role chip asks whether a row
       // has that role, so a row must count once for it.
@@ -288,6 +289,9 @@ export default function RegistrationsTable({
       // Mirrors the inclusion column's own filter, which reads the meta flag
       // rather than comparing the status slug.
       if (!registration.balancer_status_meta.excludes_from_balancer) included += 1;
+      // Consent, not pool membership: a reserve is counted on its own axis so the
+      // chip can answer "who agreed to sub in" without the pool verdict blurring it.
+      if (registration.answers?.reserve === true) reserve += 1;
     }
     return {
       role,
@@ -295,7 +299,9 @@ export default function RegistrationsTable({
       subscription,
       source,
       included,
-      excluded: registrations.length - included
+      excluded: registrations.length - included,
+      reserve,
+      notReserve: registrations.length - reserve
     };
   }, [registrations]);
 
@@ -355,7 +361,12 @@ export default function RegistrationsTable({
         kind: "single",
         options: [
           { value: "included", label: "Included", count: facets.included },
-          { value: "excluded", label: "Excluded", count: facets.excluded }
+          { value: "excluded", label: "Excluded", count: facets.excluded },
+          // A second axis on the same chip: a reserve is always outside the pool,
+          // so "excluded" cannot single them out. These two go through the message
+          // catalogue because "резерв" is the word organizers actually use.
+          { value: "reserve", label: t("common.reserve"), count: facets.reserve },
+          { value: "not_reserve", label: t("common.notReserve"), count: facets.notReserve }
         ]
       },
       {
@@ -372,7 +383,7 @@ export default function RegistrationsTable({
         ]
       }
     ],
-    [admissionOptions, roleOptions, requireSubscription, statusFilterOptions, facets]
+    [admissionOptions, roleOptions, requireSubscription, statusFilterOptions, facets, t]
   );
 
   const filters = useAdminFilters(filterDefs);
@@ -837,6 +848,11 @@ export default function RegistrationsTable({
                   );
                 }}
                 disabled={bulkAddToBalancerMutation.isPending}
+                // The server skips reserves in a bulk sweep on purpose — the whole
+                // point of the flag is that they stay out until somebody needs a
+                // substitute — and a silent "N skipped" in the toast does not say
+                // why. A single-row add still promotes one.
+                title={t("common.bulkAddSkipsReserves")}
               >
                 {bulkAddToBalancerMutation.isPending ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />

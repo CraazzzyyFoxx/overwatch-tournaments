@@ -179,6 +179,18 @@ describe("admin registration form i18n", () => {
 
       const { container, root } = await renderPage(locale);
 
+      // A question with no system floor first: its settings panel carries the
+      // plain self-edit hint, which the `roles` panel below replaces with the
+      // floor wording and would otherwise hide from this walk.
+      const discordRow = [...container.querySelectorAll("button")].find((node) =>
+        (node.textContent ?? "").includes(
+          MESSAGES[locale].registrationFormAdmin.builtins.identity_discord
+        )
+      );
+      if (!discordRow) throw new Error("the Discord question is not listed");
+      await click(discordRow);
+      expect(container.textContent ?? "").not.toMatch(/registrationFormAdmin\./);
+
       // The roles section, then its one question: that is where the params
       // editor with the sub-role catalog lives.
       const rail = [...container.querySelectorAll("button")].filter((node) =>

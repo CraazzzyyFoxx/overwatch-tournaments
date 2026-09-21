@@ -65,12 +65,17 @@ export function toRoleSlotCounts(
 export function RegistrationSummary({
   total,
   roleCounts,
-  maxParticipants
+  maxParticipants,
+  reserveCount = 0
 }: Readonly<{
   total: number;
   roleCounts: Readonly<Record<string, number>>;
   /** Advisory capacity. Rendered as a `/ N` suffix; never compared against `total`. */
   maxParticipants?: number | null;
+  /** How many of `total` are reserves. `total` stays the server's number — it is
+   *  the queue denominator — so this is stated beside it, and only the CAPACITY
+   *  line nets it out: a reserve does not occupy a starting slot. */
+  reserveCount?: number;
 }>) {
   const t = useTranslations();
   const counts = toRoleSlotCounts(roleCounts);
@@ -78,6 +83,7 @@ export function RegistrationSummary({
   // describe the component, not the field.
   const shares = ROSTER_SLOT_CODES.filter((code) => counts[code] > 0);
   const shareTotal = shares.reduce((sum, code) => sum + counts[code], 0);
+  const hasCapacity = maxParticipants != null && maxParticipants > 0;
 
   return (
     <>
@@ -86,7 +92,11 @@ export function RegistrationSummary({
           label={t("tournamentDetail.overview.registration.total")}
           value={String(total)}
           hint={
-            maxParticipants != null && maxParticipants > 0 ? `/ ${maxParticipants}` : undefined
+            hasCapacity
+              ? reserveCount > 0
+                ? `${total - reserveCount} / ${maxParticipants}`
+                : `/ ${maxParticipants}`
+              : undefined
           }
         />
         {shares.map((code) => (
@@ -98,6 +108,11 @@ export function RegistrationSummary({
           />
         ))}
       </div>
+      {reserveCount > 0 ? (
+        <p className="mt-2 text-xs text-[color:var(--aqt-fg-muted)]">
+          {t("tournamentDetail.overview.registration.reserveNote", { count: reserveCount })}
+        </p>
+      ) : null}
       {shares.length > 1 && shareTotal > 0 ? (
         <div aria-hidden className="mt-3 flex h-1.5 gap-px overflow-hidden rounded-sm">
           {shares.map((code) => (

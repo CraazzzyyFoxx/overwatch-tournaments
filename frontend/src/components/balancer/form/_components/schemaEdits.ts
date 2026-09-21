@@ -241,7 +241,11 @@ export function sanitizeSchema(schema: FormSchema): FormSchema {
             : null,
           validation: regex || message ? { regex, error_message: message } : null,
           params: isBuiltin ? field.params : {},
-          show_in_draft: !isBuiltin && field.visibility === "public" && field.show_in_draft
+          show_in_draft: !isBuiltin && field.visibility === "public" && field.show_in_draft,
+          // Optional on the wire and closed by default, so an imported or
+          // hand-edited schema cannot reach the save as `undefined` and leave
+          // the server's default deciding what the organizer meant.
+          editable: field.editable === true
         };
       })
     }))

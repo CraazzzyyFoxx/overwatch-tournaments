@@ -161,6 +161,11 @@ class RegistrationLifecycleService:
             query = query.where(models.BalancerRegistration.deleted_at.is_(None))
         if status_filter and status_filter != "all":
             query = query.where(models.BalancerRegistration.status == status_filter)
+        if inclusion_filter in ("reserve", "not_reserve"):
+            # Separate axis from the pool clauses below: a reserve is a player's
+            # declaration, not a balancer status, and "who agreed to sub in" is
+            # unanswerable by eye at a few hundred rows.
+            query = query.where(models.BalancerRegistration.is_reserve.is_(inclusion_filter == "reserve"))
         if inclusion_filter in ("included", "excluded"):
             workspace_id_expr = (
                 sa.select(models.Tournament.workspace_id).where(models.Tournament.id == tournament_id).scalar_subquery()
@@ -673,6 +678,10 @@ class RegistrationLifecycleService:
     ) -> tuple[int, int]:
         """Bulk version of `add_to_balancer` -- only approved registrations
         qualify; every other id is silently skipped (counted, not errored).
+
+        Reserves are skipped too: they asked to be cover, and a "select all ->
+        add to pool" sweep must not quietly enrol them as starters. Adding ONE
+        reserve by hand still works and is exactly the "we need a sub" action.
         """
         result = await session.execute(
             self.registration_repo.select()
@@ -681,6 +690,7 @@ class RegistrationLifecycleService:
                 models.BalancerRegistration.deleted_at.is_(None),
                 models.BalancerRegistration.id.in_(registration_ids),
                 models.BalancerRegistration.status == "approved",
+                models.BalancerRegistration.is_reserve.is_(False),
             )
             # The engine reads roles, their heroes and the member anchor; none of
             # them may lazy-load on an async session.

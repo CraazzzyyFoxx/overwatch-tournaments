@@ -57,7 +57,10 @@ export function newBuiltinField(key: string): FormField {
     // reading the registrant already expects from the rest of the form.
     visibility: builtinFixedVisibility(key) ?? "public",
     params: {},
-    show_in_draft: false
+    show_in_draft: false,
+    // Matches the server default: a freshly added question is frozen at submit
+    // until the organizer deliberately opens it.
+    editable: false
   };
 }
 
@@ -80,7 +83,8 @@ export function newCustomField(kind: FieldKind, existingKeys: Iterable<string>):
     // already looking.
     options: OPTION_KINDS[kind] ? [] : null,
     params: {},
-    show_in_draft: false
+    show_in_draft: false,
+    editable: false
   };
 }
 

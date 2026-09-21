@@ -26,6 +26,11 @@ class RegistrationFormRead(BaseModel):
     # tournament's REGISTRATION phase-schedule window. No longer a column on the
     # form -- see shared.services.registration_window.
     is_open: bool
+    # DERIVED, read-only: ``is_open`` is true only because
+    # ``allow_late_registration`` lifted the window's ``ends_at``. The wizard
+    # renders the reserve switch forced ON when this is set, because that is what
+    # the server will write -- a registrant must learn it BEFORE submitting.
+    registration_late: bool = False
     auto_approve: bool = False
     require_open_profile: bool = False
     open_profile_scope: str = "main"

@@ -71,6 +71,18 @@ vi.mock("@/lib/notify", () => ({
   notify: { success: vi.fn(), error: vi.fn(), apiError: vi.fn() }
 }));
 
+// Only the keys this suite asserts on. Everything else on this screen is an
+// English literal by design, so an empty catalogue was enough until the reserve
+// chip — which the organizer reads as a word, not as a key path.
+const MESSAGES = {
+  common: {
+    reserve: "Reserve",
+    notReserve: "Not reserve",
+    reserveHint: "Agreed to stand in if a replacement is needed",
+    bulkAddSkipsReserves: "Reserves are skipped; add them one at a time"
+  }
+};
+
 function statusMeta(
   value: string,
   scope: "registration" | "balancer",
@@ -172,7 +184,7 @@ async function mount(search = "") {
   mounted.push(root);
   await act(async () => {
     root.render(
-      <NextIntlClientProvider locale="en" messages={{}}>
+      <NextIntlClientProvider locale="en" messages={MESSAGES}>
         <QueryClientProvider client={client}>
           {/* Each row's "Change history" action opens the shared audit drawer,
               which the admin layout mounts in the real app. */}
@@ -315,6 +327,41 @@ describe("RegistrationsTable toolbar", () => {
 
     // Both buckets: the pool has no checked-in rows, so one section holds all 25.
     expect(scope.textContent).toContain("25 registrations");
+  });
+});
+
+describe("RegistrationsTable reserves", () => {
+  const RESERVE_POOL = [
+    registration(1, { answers: { reserve: true } }),
+    registration(2, { answers: { reserve: false } })
+  ];
+
+  it("marks the players who agreed to cover, and only them", async () => {
+    listRegistrations.mockResolvedValue(RESERVE_POOL);
+    const scope = await mount();
+
+    expect(scope.querySelector("tbody tr[data-row-id='1']")?.textContent).toContain("Reserve");
+    expect(scope.querySelector("tbody tr[data-row-id='2']")?.textContent).not.toContain("Reserve");
+  });
+
+  it("narrows the table to the reserves through the inclusion param", async () => {
+    listRegistrations.mockResolvedValue(RESERVE_POOL);
+    const scope = await mount();
+
+    await click(scope.querySelector("[aria-label='Add filter']"));
+    const participation = [...document.querySelectorAll("[cmdk-item]")].find((node) =>
+      node.textContent?.includes("Participation")
+    );
+    await click(participation);
+    // "Not reserve" is the other option and does not match this capitalisation.
+    const reserveOption = [...document.querySelectorAll("[cmdk-item]")].find((node) =>
+      node.textContent?.includes("Reserve")
+    );
+    await click(reserveOption);
+
+    // Same param the pool split rides, a different axis on it.
+    expect(new URLSearchParams(window.location.search).get("inclusion")).toBe("reserve");
+    expect(scope.querySelectorAll("tbody tr[data-row-id]").length).toBe(1);
   });
 });
 

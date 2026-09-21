@@ -311,3 +311,37 @@ def test_evaluate_condition_ops():
     assert evaluate_condition(Condition(field="a", op="truthy"), {"a": "true"})
     assert not evaluate_condition(Condition(field="a", op="truthy"), {"a": "false"})
     assert not evaluate_condition(Condition(field="a", op="truthy"), {})
+
+
+def test_editable_is_closed_by_default_and_reports_an_allowlist():
+    """The deploy must not widen what a registrant may rewrite: a schema nobody
+    re-opened in the builder keeps every question frozen."""
+    schema = _schema(
+        FormField(key="battle_tag", kind="builtin"),
+        FormField(key="public_notes", kind="builtin", editable=True),
+    )
+    assert schema.field("battle_tag").editable is False
+    assert schema.editable_keys() == frozenset({"public_notes"})
+
+
+def test_a_stored_document_without_the_flag_canonicalizes_to_the_default():
+    """``apply_schema`` dedupes versions on ``canonical_json`` after re-validating
+    the STORED side, so shipping the flag must not append a cosmetic version to
+    every existing form."""
+    stored = _schema(FormField(key="battle_tag", kind="builtin")).model_dump(mode="json")
+    for section in stored["sections"]:
+        for field in section["fields"]:
+            del field["editable"]
+
+    assert FormSchema.model_validate(stored).canonical_json() == (
+        _schema(FormField(key="battle_tag", kind="builtin")).canonical_json()
+    )
+
+
+def test_the_reserve_builtin_is_a_public_switch():
+    schema = _schema(FormField(key="reserve", kind="builtin"))
+
+    assert builtin_spec("reserve").fixed_visibility == "public"
+    assert schema.public_keys() == frozenset({"reserve"})
+    # Coerced like a checkbox, not stored as the string a form encoding sends.
+    assert normalize_answers(schema, {"reserve": "true"}).values == {"reserve": True}

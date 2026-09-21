@@ -36,6 +36,22 @@ const OPTION_KINDS: Record<string, true> = { select: true, multi_select: true };
 
 const CONDITION_OPS = ["truthy", "eq", "neq", "in"] as const;
 
+/**
+ * Builtins the SERVER re-locks on its own, whatever this switch says, and the
+ * hint that has to name that floor.
+ *
+ * The control stays enabled for them: the floor is a lower bound, so an
+ * organizer may legitimately freeze `battle_tag` or `roles` EARLIER than the
+ * server would. Stating the floor beats silently overriding the switch.
+ *
+ * Valued with message-key LITERALS, not `string`: the translator is typed
+ * against the message tree, so a widened key would not resolve.
+ */
+const EDITABLE_HINT_KEY: Record<string, "editableHintBattleTag" | "editableHintRoles"> = {
+  battle_tag: "editableHintBattleTag",
+  roles: "editableHintRoles"
+};
+
 /** One labelled block of the panel. Space and an eyebrow, no extra boxes: the
  *  panel already sits on its own surface inside the question list. */
 function Group({ title, children }: Readonly<{ title: string; children: ReactNode }>) {
@@ -436,6 +452,14 @@ export function FieldEditor({
             onCheckedChange={(show_in_draft) => onChange({ ...field, show_in_draft })}
           />
         )}
+
+        <SwitchRow
+          id={`${ids}-editable`}
+          label={t("editable")}
+          hint={t(EDITABLE_HINT_KEY[field.key] ?? "editableHint")}
+          checked={field.editable === true}
+          onCheckedChange={(editable) => onChange({ ...field, editable })}
+        />
       </Group>
 
       <Group title={t("groupCondition")}>

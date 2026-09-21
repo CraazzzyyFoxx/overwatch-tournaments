@@ -244,6 +244,16 @@ export interface RegistrationForm {
   /** Registrations still filed against an older version. Organizer reads only —
    *  a public read sends `null`. */
   stale_registrations?: number | null;
+  /**
+   * The registration window's `ends_at` has passed and only
+   * `allow_late_registration` keeps this form open. Everyone who signs up from
+   * now on is written as a RESERVE by the server, whatever they tick — so the
+   * wizard has to say so before the submit, not after it.
+   *
+   * Optional for the same fail-safe reason `FormField.editable` is: a payload
+   * or fixture that omits it must read as "not late", never as "closed".
+   */
+  registration_late?: boolean;
   subrole_catalog?: SubroleCatalog;
 }
 
@@ -272,6 +282,18 @@ export interface RegistrationTeamBrief {
   is_substitute: boolean;
   is_captain: boolean;
 }
+
+/**
+ * Why the server refused a self-edit. Mirrors
+ * `services.registration.self_edit.SelfEditPolicy.reason`, and doubles as the
+ * `detail` of the 409 the write path raises — one vocabulary, translated once
+ * under `registration.edit.reason.*`.
+ */
+export type EditLockedReason =
+  | "status_locked"
+  | "checked_in"
+  | "window_closed"
+  | "nothing_editable";
 
 export interface Registration {
   id: number;
@@ -328,6 +350,26 @@ export interface Registration {
   /** Capped to the most recent few entries; see `tournament_history_count` for the true total. */
   tournament_history?: TournamentHistoryEntry[];
   tournament_history_count?: number;
+  /**
+   * May the CURRENT caller edit this row? SERVER-RESOLVED, and only ever true
+   * on the caller's own `/registration/me` reads.
+   *
+   * Never re-derive this (or `edit_writable_keys`) from `FormField.editable`:
+   * the server's answer already folds in the schema flag, the system floors
+   * (`battle_tag` after review, `roles` once pooled, `reserve` on a late
+   * sign-up) and the "a key this row has never answered is writable anyway"
+   * exception. Three consumers re-deriving it would grow three different
+   * answers to "may I edit".
+   */
+  can_edit: boolean;
+  /** Why `can_edit` is false. A CLOSED server enum — unlike `status`, which is
+   *  workspace-extensible — so it is typed as one: every consumer translates it
+   *  through `registration.edit.reason.*`, and a wide `string` would make that
+   *  key unconstructible. */
+  edit_locked_reason: EditLockedReason | null;
+  /** The answer keys the registrant may send. An ALLOWLIST: everything else
+   *  renders read-only, and sending one back is refused with `code: "locked"`. */
+  edit_writable_keys: string[];
 }
 
 /** Envelope returned by `GET /tournaments/{id}/registration/list`. Division grid
@@ -345,6 +387,11 @@ export interface RegistrationListResponse {
   /** Primary role code -> count. Server-computed on both paths. */
   role_counts: Record<string, number>;
   max_participants: number | null;
+  /** How many of `total` declared themselves (or were placed into) the reserve.
+   *  `total` and `role_counts` still count them — `total` is the queue
+   *  denominator — so the capacity line subtracts this client-side rather than
+   *  two server numbers disagreeing. */
+  reserve_count: number;
 }
 
 export interface RegistrationRole {

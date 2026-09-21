@@ -39,6 +39,7 @@ ANSWER_TARGET_KEYS: tuple[str, ...] = (
     "smurf_tags",
     *(identity_key(provider) for provider in IDENTITY_PROVIDERS),
     "stream_pov",
+    "reserve",
     "public_notes",
     "organizer_notes",
 )
@@ -196,6 +197,14 @@ def _build_builtin_specs() -> tuple[MappingTargetSpec, ...]:
             accepted_parsers=(PARSER_BOOLEAN,),
             default_parser=PARSER_BOOLEAN,
             aliases=("stream", "pov", "стрим"),
+        ),
+        MappingTargetSpec(
+            key="reserve",
+            label="Reserve",
+            group="profile",
+            accepted_parsers=(PARSER_BOOLEAN,),
+            default_parser=PARSER_BOOLEAN,
+            aliases=("reserve", "substitute", "резерв", "замена"),
         ),
         MappingTargetSpec(
             key="public_notes",

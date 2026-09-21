@@ -330,6 +330,7 @@ function regList(
     total: registrations.length,
     role_counts,
     max_participants: null,
+    reserve_count: 0,
     ...overrides
   };
 }

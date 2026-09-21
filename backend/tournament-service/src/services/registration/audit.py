@@ -26,7 +26,7 @@ from typing import Any
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.domain.forms import IDENTITY_PROVIDERS, identity_key
-from shared.services.audit import record_audit
+from shared.services.audit import AuditSource, record_audit
 from src import models
 from src.domain.registration.utils import normalize_battle_tag
 from src.services.registration.answers import custom_answers, merge_custom_answers
@@ -53,6 +53,7 @@ _ANSWER_FIELDS: dict[str, str] = {
     "battle_tag": "battle_tag",
     "smurf_tags": "smurf_tags_json",
     "stream_pov": "stream_pov",
+    "reserve": "is_reserve",
     "public_notes": "public_notes",
     "organizer_notes": "organizer_notes",
 }
@@ -84,6 +85,26 @@ def role_snapshot(registration: models.BalancerRegistration) -> list[dict[str, A
                 "is_active": role.is_active,
             }
             for role in registration.roles
+        ),
+        key=lambda entry: entry["role"],
+    )
+
+
+def _answer_roles(roles: list[Any]) -> list[dict[str, Any]]:
+    """The role fields a PLAYER's answer can express, from either side.
+
+    Ranks and ``is_active`` are organizer state that no answer carries, so they
+    are left out of BOTH images -- otherwise every self-edit of a role would read
+    as if the player had also wiped their ranks.
+    """
+    return sorted(
+        (
+            {
+                "role": _role_key(role.get("role") if isinstance(role, dict) else role.role),
+                "subrole": (role.get("subrole") if isinstance(role, dict) else role.subrole),
+                "is_primary": bool(role.get("is_primary", False) if isinstance(role, dict) else role.is_primary),
+            }
+            for role in roles
         ),
         key=lambda entry: entry["role"],
     )
@@ -158,6 +179,12 @@ def profile_changes(
         stored_custom = registration.custom_fields_json or None
         record("custom_fields_json", stored_custom, merge_custom_answers(stored_custom, custom) or None)
 
+    # The player's own path: roles arrive INSIDE ``answers``. Projected on both
+    # sides so the two images are comparable; the organizer's top-level ``roles``
+    # below carries ranks and wins when both are present.
+    if "roles" in answers:
+        record("roles", _answer_roles(registration.roles), _answer_roles(answers["roles"] or []))
+
     roles = requested.get("roles")
     if roles is not None:
         old_roles = role_snapshot(registration)
@@ -183,6 +210,9 @@ class RegistrationAuditService:
         entity_id: int | None,
         entity_type: str = ENTITY,
         entity_label: str | None = None,
+        #: ``player`` for a registrant editing their own row through the public
+        #: PATCH; operator writes keep the default.
+        source: AuditSource = "admin",
         before: dict[str, Any] | None = None,
         after: dict[str, Any] | None = None,
     ) -> None:
@@ -199,7 +229,7 @@ class RegistrationAuditService:
         await record_audit(
             session,
             action=action,
-            source="admin",
+            source=source,
             actor=actor,
             # Snapshotted for the same reason as in the CRUD engine: nothing points
             # at auth.user, so a reader's join resolves nothing once it is deleted.

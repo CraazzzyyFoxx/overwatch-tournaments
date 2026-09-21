@@ -38,7 +38,10 @@ if str(BACKEND_ROOT) not in sys.path:
 
 from shared.core.enums import TournamentStatus  # noqa: E402
 from shared.core.tournament_state import is_within_phase_window  # noqa: E402
-from shared.services.registration_window import is_registration_window_open  # noqa: E402
+from shared.services.registration_window import (  # noqa: E402
+    is_registration_late,
+    is_registration_window_open,
+)
 
 NOW = datetime(2026, 8, 20, 12, 0, tzinfo=UTC)
 CREATED = NOW - timedelta(days=30)
@@ -289,3 +292,44 @@ class LateRegistrationOverrideTests(TestCase):
         for schedule in ([_reg_row(CREATED)], [_reg_row(CREATED, NOW + timedelta(days=1))]):
             self.assertTrue(_open(TournamentStatus.LIVE, schedule, NOW))
             self.assertTrue(_open(TournamentStatus.LIVE, schedule, NOW, allow_late=True))
+
+
+# --------------------------------------------------------------------------- #
+# "Late" — the flag that sends a sign-up into the reserve
+# --------------------------------------------------------------------------- #
+
+
+class LatenessTests(TestCase):
+    """``is_registration_late`` decides whether a sign-up is written as a RESERVE.
+
+    Deliberately not the negation of openness: closed is closed, late is
+    open-by-override. Getting this wrong either tells an on-time registrant they
+    are cover, or lets a latecomer in as a starter.
+    """
+
+    def test_past_the_end_is_late_and_still_open_under_the_override(self) -> None:
+        ended = [_reg_row(CREATED, NOW - timedelta(days=1))]
+        self.assertTrue(is_registration_late(TournamentStatus.REGISTRATION, ended, NOW))
+        self.assertTrue(_open(TournamentStatus.REGISTRATION, ended, NOW, allow_late=True))
+
+    def test_lateness_does_not_depend_on_the_override(self) -> None:
+        """The flag decides whether the sign-up HAPPENS, not whether it is late —
+        which is why the predicate does not take it."""
+        ended = [_reg_row(CREATED, NOW - timedelta(days=1))]
+        self.assertFalse(_open(TournamentStatus.REGISTRATION, ended, NOW))
+        self.assertTrue(is_registration_late(TournamentStatus.REGISTRATION, ended, NOW))
+
+    def test_an_open_window_is_never_late(self) -> None:
+        for schedule in ([_reg_row(CREATED)], [_reg_row(CREATED, NOW + timedelta(days=1))]):
+            self.assertFalse(is_registration_late(TournamentStatus.REGISTRATION, schedule, NOW))
+
+    def test_no_closing_time_means_nothing_to_be_past(self) -> None:
+        self.assertFalse(is_registration_late(TournamentStatus.REGISTRATION, [_reg_row(CREATED)], NOW))
+
+    def test_a_window_that_has_not_started_is_not_late(self) -> None:
+        future = [_reg_row(NOW + timedelta(days=1), NOW + timedelta(days=2))]
+        self.assertFalse(is_registration_late(TournamentStatus.REGISTRATION, future, NOW))
+
+    def test_no_registration_row_is_not_late(self) -> None:
+        for status in _NON_TERMINAL:
+            self.assertFalse(is_registration_late(status, [], NOW), status)

@@ -33,6 +33,7 @@ export default function GenericField({
   value,
   onChange,
   error,
+  disabled = false,
 }: Readonly<FieldRendererProps>) {
   const t = useTranslations();
   const id = useId();
@@ -61,6 +62,7 @@ export default function GenericField({
               id={id}
               checked={value === true || value === "true"}
               onCheckedChange={onChange}
+              disabled={disabled}
               aria-invalid={Boolean(error)}
               aria-describedby={error ? errorId : undefined}
             />
@@ -80,6 +82,7 @@ export default function GenericField({
           <Select
             value={typeof value === "string" && value ? value : undefined}
             onValueChange={onChange}
+            disabled={disabled}
           >
             <SelectTrigger
               id={id}
@@ -122,6 +125,7 @@ export default function GenericField({
                 <input
                   type="checkbox"
                   checked={selected.includes(option)}
+                  disabled={disabled}
                   onChange={(event) =>
                     onChange(
                       event.target.checked
@@ -152,6 +156,7 @@ export default function GenericField({
             type="date"
             value={typeof value === "string" ? value : ""}
             onChange={(event) => onChange(event.target.value)}
+            disabled={disabled}
             aria-invalid={Boolean(error)}
             aria-describedby={error ? errorId : undefined}
             className={cn(fieldControlClass, "h-9", error && fieldInvalidClass)}
@@ -175,6 +180,7 @@ export default function GenericField({
             placeholder={field.placeholder ?? ""}
             value={typeof value === "string" || typeof value === "number" ? String(value) : ""}
             onChange={onChange}
+            disabled={disabled}
             error={error}
           />
           {helpNode}

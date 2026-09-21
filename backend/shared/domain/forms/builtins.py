@@ -88,6 +88,9 @@ _STATIC: dict[str, BuiltinSpec] = {
     "smurf_tags": BuiltinSpec("smurf_tags", None, None),
     "roles": BuiltinSpec("roles", "public", RolesParams),
     "stream_pov": BuiltinSpec("stream_pov", "public", None),
+    #: "Call me in if a replacement is needed." Public on purpose: a reserve
+    #: nobody can see on the roster cannot be called.
+    "reserve": BuiltinSpec("reserve", "public", None),
     "public_notes": BuiltinSpec("public_notes", "public", None),
     "organizer_notes": BuiltinSpec("organizer_notes", "organizers", None),
 }

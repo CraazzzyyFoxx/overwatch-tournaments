@@ -59,7 +59,12 @@ from shared.core.enums import TournamentStatus
 from shared.core.tournament_state import PhaseScheduleEntry, is_finished_for_status
 from shared.models.tournament.tournament import Tournament, TournamentPhaseSchedule
 
-__all__ = ("is_registration_window_open", "registration_open_clause")
+__all__ = (
+    "is_registration_late",
+    "is_registration_window_open",
+    "registration_late_clause",
+    "registration_open_clause",
+)
 
 
 def is_registration_window_open(
@@ -90,6 +95,35 @@ def is_registration_window_open(
     if entry.ends_at is None or allow_late:
         return True
     return moment <= _as_utc(entry.ends_at)
+
+
+def is_registration_late(
+    status: TournamentStatus,
+    schedule: Iterable[PhaseScheduleEntry],
+    now: datetime | None = None,
+) -> bool:
+    """``True`` when a sign-up right now is only possible past the closing time.
+
+    Deliberately NOT ``not is_registration_window_open(...)``: closed is closed,
+    late is open-BY-OVERRIDE. A window with no ``ends_at`` is therefore never
+    late (nothing was announced to be past), one that has not started yet is
+    never late (*late* means after the end), and neither is a tournament with no
+    REGISTRATION row at all.
+
+    ``allow_late`` is not a parameter: whether the override is armed decides
+    whether the sign-up happens, not whether it is late. Callers that only admit
+    open tournaments have already consulted
+    :func:`is_registration_window_open`.
+    """
+    if is_finished_for_status(status):
+        return False
+
+    entry = next((e for e in schedule if e.status == TournamentStatus.REGISTRATION), None)
+    if entry is None or entry.ends_at is None:
+        return False
+
+    moment = now or datetime.now(UTC)
+    return _as_utc(entry.starts_at) <= moment and moment > _as_utc(entry.ends_at)
 
 
 def registration_open_clause(now: datetime | None = None) -> sa.ColumnElement[bool]:
@@ -125,6 +159,32 @@ def registration_open_clause(now: datetime | None = None) -> sa.ColumnElement[bo
     return sa.and_(
         Tournament.status.notin_([TournamentStatus.COMPLETED, TournamentStatus.ARCHIVED]),
         window,
+    )
+
+
+def registration_late_clause(now: datetime | None = None) -> sa.ColumnElement[bool]:
+    """SQL form of :func:`is_registration_late`, correlated on ``Tournament``.
+
+    Exists for the same reason ``registration_open_clause`` does: the answer is
+    read both per-tournament and inside a query, and one of the two drifting
+    would mean a registrant told they are on time landing in the reserve.
+    """
+    moment = now or datetime.now(UTC)
+    past_end = (
+        sa.select(sa.literal(1))
+        .select_from(TournamentPhaseSchedule)
+        .where(
+            TournamentPhaseSchedule.tournament_id == Tournament.id,
+            TournamentPhaseSchedule.status == TournamentStatus.REGISTRATION,
+            TournamentPhaseSchedule.starts_at <= moment,
+            TournamentPhaseSchedule.ends_at.is_not(None),
+            TournamentPhaseSchedule.ends_at < moment,
+        )
+        .exists()
+    )
+    return sa.and_(
+        Tournament.status.notin_([TournamentStatus.COMPLETED, TournamentStatus.ARCHIVED]),
+        past_end,
     )
 
 

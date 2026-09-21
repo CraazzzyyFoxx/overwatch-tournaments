@@ -130,4 +130,36 @@ describe("balancer registration column model", () => {
     expect(filterFn(excludedRow, "balancer", ["excluded"], () => {})).toBe(true);
     expect(filterFn(excludedRow, "balancer", ["included"], () => {})).toBe(false);
   });
+
+  it("answers 'who agreed to cover' on its own axis, not through the pool", () => {
+    const filterFn = column("balancer").filterFn as FilterFn<AdminRegistration>;
+    const outOfPool = { excludes_from_balancer: true } as StatusMeta;
+    const reserveRow = {
+      original: registration({ answers: { reserve: true }, balancer_status_meta: outOfPool }),
+    } as Row<AdminRegistration>;
+    const plainRow = {
+      original: registration({ answers: {}, balancer_status_meta: outOfPool }),
+    } as Row<AdminRegistration>;
+
+    expect(filterFn(reserveRow, "balancer", ["reserve"], () => {})).toBe(true);
+    expect(filterFn(plainRow, "balancer", ["reserve"], () => {})).toBe(false);
+    expect(filterFn(reserveRow, "balancer", ["not_reserve"], () => {})).toBe(false);
+    expect(filterFn(plainRow, "balancer", ["not_reserve"], () => {})).toBe(true);
+    // Both sit outside the pool, so the pool clause cannot tell a volunteer from
+    // a row nobody has processed yet — which is why reserve is a second axis.
+    expect(filterFn(reserveRow, "balancer", ["excluded"], () => {})).toBe(true);
+    expect(filterFn(plainRow, "balancer", ["excluded"], () => {})).toBe(true);
+  });
+
+  it("offers the reserve axis on the same param as the pool split", () => {
+    const filter = readAdminColumnFilter(column("balancer").meta);
+
+    expect(filter?.param).toBe("inclusion");
+    expect(filter?.options?.map((option) => option.value)).toEqual([
+      "included",
+      "excluded",
+      "reserve",
+      "not_reserve",
+    ]);
+  });
 });

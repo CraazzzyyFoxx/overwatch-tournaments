@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, type ReactNode } from "react";
-import { EyeOff } from "lucide-react";
+import { EyeOff, Lock } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import StepIndicator from "@/components/registration/StepIndicator";
@@ -18,6 +18,10 @@ function isVisible(field: FormField, answers: Answers): boolean {
   return !field.visible_when || evaluateCondition(field.visible_when, answers);
 }
 
+/** The hint to render under a field the viewer may not change, keyed by answer
+ *  key. A key's presence IS the lock; the value says why. */
+export type LockedFields = Readonly<Record<string, string>>;
+
 /**
  * The sections that are actually a step: those with at least one VISIBLE field.
  *
@@ -26,10 +30,21 @@ function isVisible(field: FormField, answers: Answers): boolean {
  * "Details" step whose entire content was "No additional fields required". The
  * fallback to the first section keeps a schema whose every field is currently
  * hidden from rendering as a form with no steps at all.
+ *
+ * `isActionable` is the edit case: a step whose every visible field is
+ * read-only has nothing on it to do, so it is dropped rather than shown as a
+ * page of greyed-out controls to click Next through. Absent = every visible
+ * field counts, which is every other caller.
  */
-export function schemaSteps(schema: FormSchema, answers: Answers): FormSection[] {
+export function schemaSteps(
+  schema: FormSchema,
+  answers: Answers,
+  isActionable?: (field: FormField) => boolean,
+): FormSection[] {
   const withContent = schema.sections.filter((section) =>
-    section.fields.some((field) => isVisible(field, answers)),
+    section.fields.some(
+      (field) => isVisible(field, answers) && (!isActionable || isActionable(field)),
+    ),
   );
   return withContent.length > 0 ? withContent : schema.sections.slice(0, 1);
 }
@@ -54,6 +69,18 @@ export interface SchemaFormProps {
   /** Reveal client-side objections. Off until the registrant tries to advance. */
   showErrors: boolean;
   readOnly?: boolean;
+  /**
+   * Fields this viewer may read but not write, each mapped to the hint that
+   * says why. Rendered disabled AND wrapped in a disabled `<fieldset>`, so the
+   * lock holds whether or not the field's renderer honours `disabled`.
+   */
+  lockedFields?: LockedFields;
+  /**
+   * Drop a step whose every visible field is locked. On by the edit path only:
+   * a first submission locks single answers (a forced `reserve`) on steps that
+   * still have work on them.
+   */
+  skipLockedSteps?: boolean;
   footer: (state: SchemaFormFooterState) => ReactNode;
 }
 
@@ -79,10 +106,16 @@ export default function SchemaForm({
   onStepChange,
   showErrors,
   readOnly = false,
+  lockedFields,
+  skipLockedSteps = false,
   footer,
 }: Readonly<SchemaFormProps>) {
   const t = useTranslations("forms");
-  const steps = schemaSteps(schema, answers);
+  const steps = schemaSteps(
+    schema,
+    answers,
+    skipLockedSteps ? (field) => lockedFields?.[field.key] === undefined : undefined,
+  );
   const index = Math.min(Math.max(step, 0), Math.max(steps.length - 1, 0));
   const section = steps[index] as FormSection | undefined;
   const fields = section?.fields.filter((field) => isVisible(field, answers)) ?? [];
@@ -112,6 +145,10 @@ export default function SchemaForm({
 
   let stepError: string | null = null;
   for (const field of fields) {
+    // A locked field's objection is not this viewer's to clear, so it must not
+    // hold the step: an edit that may only touch `public_notes` would be stuck
+    // behind a required question it is forbidden to answer.
+    if (lockedFields?.[field.key] !== undefined) continue;
     const objection = objectionTo(field);
     if (objection) {
       stepError = objection;
@@ -147,13 +184,21 @@ export default function SchemaForm({
 
         {fields.map((field) => {
           const Renderer = renderers[field.key] ?? renderers[field.kind] ?? GenericField;
-          const error = serverErrors[field.key] ?? (showErrors ? objectionTo(field) : null);
+          const lockHint = lockedFields?.[field.key];
+          // A server rejection still shows on a locked field — it names THIS
+          // write ("locked") — but a client-side objection does not: telling
+          // somebody an answer is required under a control they cannot reach is
+          // advice with no action.
+          const error =
+            serverErrors[field.key] ??
+            (showErrors && lockHint === undefined ? objectionTo(field) : null);
           const control = (
             <Renderer
               field={field}
               value={answers[field.key]}
               onChange={(value) => onChange(field.key, value)}
               error={error}
+              disabled={lockHint !== undefined}
               context={fieldContext}
             />
           );
@@ -161,16 +206,35 @@ export default function SchemaForm({
           // `visibility` is about who READS the answer. Saying so is the whole
           // difference they can perceive, so it is said once, here, rather than
           // in each of the eight renderers.
-          if (field.visibility !== "organizers" || context.mode === "admin") {
+          const organizersOnly =
+            field.visibility === "organizers" && context.mode !== "admin";
+          if (lockHint === undefined && !organizersOnly) {
             return <div key={field.key}>{control}</div>;
           }
           return (
             <div key={field.key} className="grid gap-1.5">
-              {control}
-              <p className="inline-flex items-center gap-1.5 text-label text-[color:var(--aqt-fg-dim)]">
-                <EyeOff className="size-3 shrink-0" aria-hidden />
-                {t("organizersOnly")}
-              </p>
+              {/* The lock ENFORCED, not merely styled: a disabled fieldset
+                  disables every control inside it, so a renderer that ignores
+                  `disabled` is still read-only. */}
+              {lockHint === undefined ? (
+                control
+              ) : (
+                <fieldset disabled className="m-0 min-w-0 border-0 p-0 opacity-60">
+                  {control}
+                </fieldset>
+              )}
+              {lockHint === undefined ? null : (
+                <p className="inline-flex items-center gap-1.5 text-label text-[color:var(--aqt-fg-dim)]">
+                  <Lock className="size-3 shrink-0" aria-hidden />
+                  {lockHint}
+                </p>
+              )}
+              {organizersOnly ? (
+                <p className="inline-flex items-center gap-1.5 text-label text-[color:var(--aqt-fg-dim)]">
+                  <EyeOff className="size-3 shrink-0" aria-hidden />
+                  {t("organizersOnly")}
+                </p>
+              ) : null}
             </div>
           );
         })}

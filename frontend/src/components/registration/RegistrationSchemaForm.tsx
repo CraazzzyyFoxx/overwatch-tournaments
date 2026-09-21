@@ -85,6 +85,16 @@ interface RegistrationSchemaFormProps {
    * near-duplicate heading below the host's own `<h2>`.
    */
   hideTitle?: boolean;
+  /**
+   * The answer keys this viewer may write — the server's `edit_writable_keys`,
+   * and ONLY that. Present = edit mode: every other field renders read-only,
+   * a step with nothing writable on it is dropped, and the submit sends these
+   * keys alone (the server refuses the rest with `code: "locked"`).
+   *
+   * Never built from `field.editable`: the server's answer already folds in the
+   * schema flag, the system floors and the never-answered exception.
+   */
+  writableKeys?: readonly string[];
 }
 
 /** A role row as either read model serves it. */
@@ -111,6 +121,10 @@ const BALANCER_STATUS_OPTIONS = [
   { value: "incomplete", name: "Incomplete" },
   { value: "ready", name: "Ready" },
 ];
+
+/** The builtin whose answer the REGISTRATION SCHEDULE can overrule: a sign-up
+ *  that lands after the window's `ends_at` is a reserve whatever it ticked. */
+const RESERVE_KEY = "reserve";
 
 /**
  * NOTE ON `visibility`: it decides who may READ an answer, never who is ASKED
@@ -199,10 +213,16 @@ function initialRanks(roles: readonly StoredRole[] | undefined): Record<string, 
  * reason the stale-version recovery in `submit` refetches instead of resetting.
  *
  * Admin mode has no draft — it would belong to whichever registration row the
- * organizer happened to have open, and reinstate it over the next one.
+ * organizer happened to have open, and reinstate it over the next one. Neither
+ * has an EDIT: it opens on the STORED answers, and a leftover sign-up draft
+ * reinstating itself over them would silently rewrite the saved registration.
  */
-function draftKeyFor(mode: "public" | "admin", tournamentId: number): string | null {
-  return mode === "public" ? `aqt:registration-draft:${tournamentId}` : null;
+function draftKeyFor(
+  mode: "public" | "admin",
+  tournamentId: number,
+  isEditing: boolean,
+): string | null {
+  return mode === "public" && !isEditing ? `aqt:registration-draft:${tournamentId}` : null;
 }
 
 function readDraft(key: string, lockedRole: RoleCode | null): Answers | null {
@@ -251,6 +271,7 @@ export default function RegistrationSchemaForm({
   onCancel,
   submitPending = false,
   hideTitle = false,
+  writableKeys,
 }: Readonly<RegistrationSchemaFormProps>) {
   const t = useTranslations();
   const tErrors = useTranslations("forms.errors");
@@ -261,13 +282,43 @@ export default function RegistrationSchemaForm({
   const schema = form.form_schema;
   const adminInitial = initial && "admin_notes" in initial ? initial : null;
 
-  const draftKey = draftKeyFor(mode, tournamentId);
+  /** Edit mode. The allowlist may legitimately be EMPTY (nothing opened), so
+   *  its PRESENCE and not its length is the signal. */
+  const isEditing = writableKeys !== undefined;
+  /**
+   * The registration window's `ends_at` is behind us and `allow_late_registration`
+   * is the only reason this form is still open, so the server writes this entry
+   * as a reserve whatever the switch says. Said here, before the submit — a
+   * player who discovers it afterwards reads it as a bug.
+   */
+  const lateReserve = !isAdmin && form.registration_late === true;
+
+  /**
+   * Every field this viewer may look at but not change, mapped to the sentence
+   * that says why. Two sources, deliberately worded apart: the allowlist
+   * ("frozen at submit") and the schedule ("you are in the reserve"), because
+   * "cannot be changed" would leave a forced-ON switch unexplained.
+   */
+  const lockedFields: Record<string, string> = {};
+  if (writableKeys) {
+    for (const field of allFields(schema)) {
+      if (!writableKeys.includes(field.key)) {
+        lockedFields[field.key] = t("registration.edit.fieldLocked");
+      }
+    }
+  }
+  if (lateReserve) lockedFields[RESERVE_KEY] = t("registration.reserve.lateLocked");
+
+  const draftKey = draftKeyFor(mode, tournamentId, isEditing);
   // The draft is read at INIT, not in an effect: every host mounts this form
   // client-side only (the invite page waits for the URL fragment, the two
   // dialogs for a click), so there is no server render to diverge from.
   const [answers, setAnswers] = useState<Answers>(() => ({
     ...initialAnswers(schema, mode, initial, userProfile, lockedRole),
     ...(draftKey ? readDraft(draftKey, lockedRole) : null),
+    // Last, so a draft saved while the window was still open cannot un-tick a
+    // flag the schedule has since imposed.
+    ...(lateReserve ? { [RESERVE_KEY]: true } : null),
   }));
   const [step, setStep] = useState(0);
   // Objections stay hidden until the registrant tries to advance: the form used
@@ -381,8 +432,14 @@ export default function RegistrationSchemaForm({
     // Only what was asked: a hidden field's answer is not an answer, and the
     // server refuses a key its current schema does not render visible. Blank
     // answers travel too — that is how an organizer CLEARS a question.
+    //
+    // In edit mode the allowlist narrows it further: re-sending an unchanged
+    // answer for a key the form froze is still a write of that key, and the
+    // server rejects it with `code: "locked"` — so the whole save would fail on
+    // fields nobody touched.
     const sent: Answers = {};
     for (const field of visibleFields(schema, answers)) {
+      if (writableKeys && !writableKeys.includes(field.key)) continue;
       sent[field.key] = answers[field.key] ?? null;
     }
 
@@ -443,9 +500,13 @@ export default function RegistrationSchemaForm({
       // Land on the step the rejection belongs to; otherwise the message
       // renders on a step nobody is looking at.
       const rejected = Object.keys(mapped.fields);
-      const target = schemaSteps(schema, answers).findIndex((section) =>
-        section.fields.some((field) => rejected.includes(field.key)),
-      );
+      // The SAME step list `SchemaForm` renders, or the index would point into
+      // a section the edit dialog dropped for having nothing writable on it.
+      const target = schemaSteps(
+        schema,
+        answers,
+        isEditing ? (field) => lockedFields[field.key] === undefined : undefined,
+      ).findIndex((section) => section.fields.some((field) => rejected.includes(field.key)));
       if (target >= 0) setStep(target);
       // A field-less rejection stays with the host: all three wizards already
       // render one banner, and the admin table has none — so it gets a toast.
@@ -634,6 +695,18 @@ export default function RegistrationSchemaForm({
       {!isAdmin && (
         <>
           <SubscriptionRuleNotice subscription={subscriptionQuery.data} />
+          {/* Before the submit, on every step. The switch below (when the form
+              asks it) is forced on and disabled; when it does not ask at all
+              this paragraph is the whole of the warning, because the server
+              writes the flag either way. */}
+          {lateReserve && (
+            <p
+              role="status"
+              className="rounded-lg border border-[color:color-mix(in_srgb,var(--aqt-amber)_30%,transparent)] bg-[color:color-mix(in_srgb,var(--aqt-amber)_12%,transparent)] p-2.5 text-xs leading-5 text-[color:var(--aqt-fg)]"
+            >
+              {t("registration.reserve.lateNotice")}
+            </p>
+          )}
           {accounts.length === 0 && onLinkAccounts && (
             <button
               type="button"
@@ -667,6 +740,8 @@ export default function RegistrationSchemaForm({
         step={step}
         onStepChange={setStep}
         showErrors={showErrors}
+        lockedFields={lockedFields}
+        skipLockedSteps={isEditing}
         footer={footer}
       />
     </div>

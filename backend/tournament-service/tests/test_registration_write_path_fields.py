@@ -23,6 +23,7 @@ Runs under stdlib unittest -- no pytest-asyncio in this repo.
 from __future__ import annotations
 
 import sys
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 from unittest import IsolatedAsyncioTestCase, mock
@@ -30,7 +31,7 @@ from unittest import IsolatedAsyncioTestCase, mock
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from shared.core.enums import HeroClass  # noqa: E402
+from shared.core.enums import HeroClass, TournamentStatus  # noqa: E402
 from shared.core.errors import BaseAPIException as HTTPException  # noqa: E402
 from shared.domain.forms import FormField, FormSchema, FormSection  # noqa: E402
 from shared.domain.roster import PlayerRoster, RosterRole  # noqa: E402
@@ -42,20 +43,25 @@ from src.services.registration import service as reg_service  # noqa: E402
 
 def _schema() -> FormSchema:
     """A form asking a BattleTag, one identity, roles, both notes and one custom
-    question -- enough for every branch the writers have."""
+    question -- enough for every branch the writers have.
+
+    Every question is ``editable``: this suite is about what a write path
+    PERSISTS, and the self-PATCH refuses a question the organizer never opened
+    (see ``test_registration_self_edit.py`` for that rule).
+    """
     return FormSchema(
         sections=[
             FormSection(
                 key="all",
                 fields=[
-                    FormField(key="battle_tag", kind="builtin"),
-                    FormField(key="identity_discord", kind="builtin"),
-                    FormField(key="smurf_tags", kind="builtin"),
-                    FormField(key="roles", kind="builtin"),
-                    FormField(key="public_notes", kind="builtin"),
-                    FormField(key="organizer_notes", kind="builtin", visibility="organizers"),
-                    FormField(key="vk", kind="text", label="VK"),
-                    FormField(key="tg", kind="text", label="Telegram"),
+                    FormField(key="battle_tag", kind="builtin", editable=True),
+                    FormField(key="identity_discord", kind="builtin", editable=True),
+                    FormField(key="smurf_tags", kind="builtin", editable=True),
+                    FormField(key="roles", kind="builtin", editable=True),
+                    FormField(key="public_notes", kind="builtin", editable=True),
+                    FormField(key="organizer_notes", kind="builtin", visibility="organizers", editable=True),
+                    FormField(key="vk", kind="text", label="VK", editable=True),
+                    FormField(key="tg", kind="text", label="Telegram", editable=True),
                 ],
             )
         ]
@@ -63,6 +69,21 @@ def _schema() -> FormSchema:
 
 
 SCHEMA = _schema()
+
+
+def _open_tournament() -> models.Tournament:
+    """A tournament whose REGISTRATION window is open right now."""
+    now = datetime.now(UTC)
+    tournament = models.Tournament(id=7, status=TournamentStatus.REGISTRATION)
+    tournament.phase_schedule = [
+        models.TournamentPhaseSchedule(
+            tournament_id=7,
+            status=TournamentStatus.REGISTRATION,
+            starts_at=now - timedelta(days=1),
+            ends_at=now + timedelta(days=1),
+        )
+    ]
+    return tournament
 
 
 class _RecordingSession:
@@ -209,7 +230,12 @@ class TestSelfUpdateAppliesAnswers(IsolatedAsyncioTestCase):
 
     async def _update(self, registration: models.BalancerRegistration, values: dict[str, Any]) -> None:
         await reg_service.registration_service.update_registration(
-            _RecordingSession(), registration, values=values, schema=SCHEMA, form_version_id=5
+            _RecordingSession(),
+            registration,
+            tournament=_open_tournament(),
+            values=values,
+            schema=SCHEMA,
+            form_version_id=5,
         )
 
     async def test_custom_answers_merge_with_the_stored_ones(self) -> None:
@@ -252,12 +278,13 @@ class TestSelfUpdateAppliesAnswers(IsolatedAsyncioTestCase):
         assert registration.form_version_id == 5
 
     async def test_a_settled_registration_cannot_be_edited(self) -> None:
-        registration = models.BalancerRegistration(id=1, tournament_id=7, status="approved")
+        """``approved`` is editable now; ``withdrawn`` is over."""
+        registration = models.BalancerRegistration(id=1, tournament_id=7, status="withdrawn")
 
         with self.assertRaises(HTTPException) as caught:
             await self._update(registration, {"battle_tag": "Player#1234"})
 
-        assert caught.exception.status_code == 400
+        assert caught.exception.status_code == 409
 
 
 class _FormStub:

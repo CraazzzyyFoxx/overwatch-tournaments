@@ -5,7 +5,7 @@ import { act, type ReactNode } from "react";
 import type { FormField, FormSchema } from "@/types/forms.types";
 import en from "@/i18n/messages/en.json";
 import { IDENTITY_PROVIDERS, identityKey } from "@/lib/forms/builtin-keys";
-import type { RegistrationForm } from "@/types/registration.types";
+import type { Registration, RegistrationForm } from "@/types/registration.types";
 
 const testWindow = new Window({ url: "http://localhost:3000/", width: 900, height: 900 });
 const previousGlobals = new Map<PropertyKey, PropertyDescriptor | undefined>();
@@ -254,6 +254,183 @@ describe("RegistrationSchemaForm", () => {
     act(() => root.unmount());
     mount();
     expect(container.querySelectorAll("textarea")[0].value).toBe("");
+  });
+});
+
+/** A stored registration, only as much of one as the form reads. */
+const STORED = {
+  id: 55,
+  battle_tag: "Anak#2100",
+  roles: [],
+  answers: { public_notes: "mine", organizer_notes: "theirs" },
+  can_edit: true,
+  edit_locked_reason: null,
+  edit_writable_keys: ["public_notes"],
+} as unknown as Registration;
+
+function mountForm(props: Record<string, unknown>) {
+  container = testWindow.document.createElement("div");
+  testWindow.document.body.appendChild(container);
+  root = createRoot(container as unknown as Element);
+  act(() => {
+    root.render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <RegistrationSchemaForm
+          mode="public"
+          form={FORM}
+          tournamentId={7}
+          onSubmit={async () => {}}
+          onCancel={() => {}}
+          {...props}
+        />
+      </QueryClientProvider>,
+    );
+  });
+}
+
+describe("RegistrationSchemaForm editing an existing registration", () => {
+  it("renders every key outside the server's allowlist read-only", async () => {
+    // The allowlist is the SERVER's answer — schema flag plus the system floors
+    // plus the never-answered exception — so the form forwards it rather than
+    // re-deriving anything from `field.editable`.
+    testWindow.localStorage.clear();
+    mountForm({ initial: STORED, writableKeys: ["public_notes"] });
+
+    const boxes = container.querySelectorAll("textarea");
+    expect(boxes.length).toBe(2);
+    // The lock is ENFORCED by a disabled fieldset around the control, not by a
+    // prop each of the eight builtin renderers has to remember to honour.
+    expect(boxes[0].closest("fieldset")?.disabled).toBe(false);
+    expect(boxes[1].closest("fieldset")?.disabled).toBe(true);
+    // …and says why, rather than leaving a dead control unexplained.
+    expect(container.textContent).toContain("registration.edit.fieldLocked");
+  });
+
+  it("sends only the allowlisted answers, not the ones it merely displayed", async () => {
+    // Re-sending an unchanged answer for a frozen key is still a write of that
+    // key, and the server refuses the whole request with `code: "locked"`.
+    testWindow.localStorage.clear();
+    let submitted: { answers: Record<string, unknown> } | null = null;
+    container = testWindow.document.createElement("div");
+    testWindow.document.body.appendChild(container);
+    root = createRoot(container as unknown as Element);
+    act(() => {
+      root.render(
+        <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+          <RegistrationSchemaForm
+            mode="public"
+            form={FORM}
+            tournamentId={7}
+            initial={STORED}
+            writableKeys={["public_notes"]}
+            onSubmit={async (input) => {
+              submitted = input;
+            }}
+            onCancel={() => {}}
+          />
+        </QueryClientProvider>,
+      );
+    });
+
+    const buttons = container.querySelectorAll("button");
+    await act(async () => {
+      buttons[buttons.length - 1].dispatchEvent(
+        new testWindow.MouseEvent("click", { bubbles: true }) as unknown as Event,
+      );
+    });
+
+    expect(submitted).not.toBeNull();
+    expect(Object.keys(submitted?.answers ?? {})).toEqual(["public_notes"]);
+  });
+
+  it("drops a step with nothing writable on it", async () => {
+    // A page of greyed-out controls to click Next through is not a step.
+    testWindow.localStorage.clear();
+    mountForm({
+      form: {
+        ...FORM,
+        form_schema: {
+          schema_version: 1,
+          sections: [
+            { key: "details", title: "Details", fields: [field({ key: "public_notes", kind: "builtin" })] },
+            { key: "extra", title: "Extra", fields: [field({ key: "note2", kind: "textarea" })] },
+          ],
+        },
+      } as unknown as RegistrationForm,
+      initial: STORED,
+      writableKeys: ["public_notes"],
+    });
+
+    // One step, so no indicator and no sign of the second section at all.
+    expect(container.querySelectorAll("textarea").length).toBe(1);
+    expect(container.textContent).not.toContain("Extra");
+  });
+});
+
+describe("RegistrationSchemaForm on a late sign-up", () => {
+  /** The window's `ends_at` is behind us; `allow_late_registration` is the only
+   *  reason this form is open, so the server files the entry as cover. */
+  const LATE_FORM = {
+    ...FORM,
+    registration_late: true,
+    form_schema: {
+      schema_version: 1,
+      sections: [
+        {
+          key: "details",
+          title: "Details",
+          fields: [
+            field({ key: "public_notes", kind: "builtin" }),
+            field({ key: "reserve", kind: "builtin" }),
+          ],
+        },
+      ],
+    },
+  } as unknown as RegistrationForm;
+
+  it("warns before the submit and sends the reserve flag nobody ticked", async () => {
+    // A player who learns this only after submitting reads it as a bug.
+    testWindow.localStorage.clear();
+    let submitted: { answers: Record<string, unknown> } | null = null;
+    container = testWindow.document.createElement("div");
+    testWindow.document.body.appendChild(container);
+    root = createRoot(container as unknown as Element);
+    act(() => {
+      root.render(
+        <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+          <RegistrationSchemaForm
+            mode="public"
+            form={LATE_FORM}
+            tournamentId={7}
+            onSubmit={async (input) => {
+              submitted = input;
+            }}
+            onCancel={() => {}}
+          />
+        </QueryClientProvider>,
+      );
+    });
+
+    expect(container.textContent).toContain("registration.reserve.lateNotice");
+    // The switch is forced ON and read-only: the schedule overrules the answer,
+    // so letting it be un-ticked would promise a main-field slot.
+    expect(container.textContent).toContain("registration.reserve.lateLocked");
+
+    const buttons = container.querySelectorAll("button");
+    await act(async () => {
+      buttons[buttons.length - 1].dispatchEvent(
+        new testWindow.MouseEvent("click", { bubbles: true }) as unknown as Event,
+      );
+    });
+    expect(submitted?.answers.reserve).toBe(true);
+  });
+
+  it("says nothing about a reserve while the window is still open", async () => {
+    testWindow.localStorage.clear();
+    mountForm({ form: { ...LATE_FORM, registration_late: false } as unknown as RegistrationForm });
+
+    expect(container.textContent).not.toContain("registration.reserve.lateNotice");
+    expect(container.textContent).not.toContain("registration.reserve.lateLocked");
   });
 });
 

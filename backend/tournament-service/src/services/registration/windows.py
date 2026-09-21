@@ -18,7 +18,12 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.core import enums, tournament_state
-from shared.services.registration_window import is_registration_window_open, registration_open_clause
+from shared.services.registration_window import (
+    is_registration_late,
+    is_registration_window_open,
+    registration_late_clause,
+    registration_open_clause,
+)
 from src import models
 
 
@@ -63,8 +68,25 @@ def is_registration_open(
     )
 
 
+def is_late_registration(
+    tournament: models.Tournament,
+    *,
+    now: datetime | None = None,
+) -> bool:
+    """Whether a sign-up right now is only possible past the announced closing time.
+
+    Deliberately not ``not is_registration_open(...)``: closed is closed, late is
+    open-BY-OVERRIDE (``allow_late_registration``). A window with no ``ends_at``
+    is never late, and neither is one that has not started.
+
+    A late sign-up is written as a RESERVE -- see
+    ``service.submit_public_registration``.
+    """
+    return is_registration_late(tournament.status, tournament.phase_schedule, now)
+
+
 class RegistrationWindowService:
-    """The one session-taking window read; the two predicates above stay pure."""
+    """The one session-taking window read; the three predicates above stay pure."""
 
     async def load_registration_open(self, session: AsyncSession, tournament_id: int) -> bool:
         """Openness for a tournament we hold only the id of.
@@ -76,6 +98,25 @@ class RegistrationWindowService:
         return bool(
             await session.scalar(sa.select(registration_open_clause()).where(models.Tournament.id == tournament_id))
         )
+
+    async def load_registration_state(
+        self, session: AsyncSession, tournament_id: int
+    ) -> tuple[bool, bool]:
+        """``(is_open, is_late)`` in ONE round trip.
+
+        The public form read needs both — openness to show the form at all, and
+        lateness to tell the registrant *before* they submit that they are signing
+        up into the reserve. Two scalars off one row rather than two calls, and
+        both off the same clauses the write path evaluates in Python.
+        """
+        row = (
+            await session.execute(
+                sa.select(registration_open_clause(), registration_late_clause()).where(
+                    models.Tournament.id == tournament_id
+                )
+            )
+        ).first()
+        return (bool(row[0]), bool(row[1])) if row is not None else (False, False)
 
 
 windows_service = RegistrationWindowService()

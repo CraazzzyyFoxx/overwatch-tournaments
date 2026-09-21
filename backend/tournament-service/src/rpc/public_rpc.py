@@ -42,6 +42,7 @@ from shared.balancer_registration_statuses import get_status_metas_map
 from shared.balancer_subrole_catalog import resolve_subrole_catalog
 from shared.core.enums import PickBanKind, SubscriptionCollectionSource
 from shared.core.errors import BaseAPIException as HTTPException
+from shared.domain.forms import schema_from_form
 from shared.rpc.identity import rehydrate_user
 from shared.services.admission import AdmissionStage
 from shared.services.chat import (
@@ -114,11 +115,13 @@ from src.services.encounter.pick_ban_session import pick_ban_session_service
 from src.services.encounter.pick_ban_undo import pick_ban_undo_service
 from src.services.encounter.report_form import report_form_service
 from src.services.registration import _common as reg_common
+from src.services.registration import audit as reg_audit
 from src.services.registration import service as reg_service
 from src.services.registration import subscription_config
 from src.services.registration import teams as team_service
 from src.services.registration.admission import assert_admitted_at
 from src.services.registration.answers import answer_service
+from src.services.registration.self_edit import SelfEditPolicy, self_edit_policy
 from src.services.registration.serializers import serialize_registration_form
 from src.services.registration.subscription_codes import redeem_challenge_code
 from src.services.registration.subscription_status import (
@@ -126,6 +129,31 @@ from src.services.registration.subscription_status import (
     subscription_status_for_user,
 )
 from src.services.registration.windows import windows_service
+
+
+async def _require_tournament(session: Any, tournament_id: int) -> models.Tournament:
+    """The tournament row (schedule eager-loaded by the mapper), or 404."""
+    tournament = await reg_service.registration_service.tournament_repo.get(session, tournament_id)
+    if tournament is None:
+        raise HTTPException(status_code=404, detail="Tournament not found")
+    return tournament
+
+
+async def _self_edit_policy(
+    session: Any,
+    registration: models.BalancerRegistration,
+    tournament_id: int,
+    form: models.BalancerRegistrationForm | None,
+) -> SelfEditPolicy | None:
+    """The caller's own edit rights, for their own registration read.
+
+    ``None`` when there is no form or no schema to consult: the read then reports
+    ``can_edit=False``, which is the truth -- there are no questions to rewrite.
+    """
+    schema = schema_from_form(form)
+    if schema is None:
+        return None
+    return self_edit_policy(registration, await _require_tournament(session, tournament_id), schema)
 
 
 def _subscription_resolver(session: Any) -> Any:
@@ -483,11 +511,12 @@ def register(broker: Any, logger: Any) -> None:
             requirement = await subscription_config.subscription_config_service.load_workspace_requirement_blob(
                 session, form.workspace_id
             )
-            is_open = await windows_service.load_registration_open(session, tournament_id)
+            is_open, registration_late = await windows_service.load_registration_state(session, tournament_id)
             return _dump(
                 serialize_registration_form(
                     form,
                     is_open=is_open,
+                    registration_late=registration_late,
                     subrole_catalog=subrole_catalog,
                     subscription_requirement=requirement,
                     stale_registrations=None,
@@ -571,6 +600,7 @@ def register(broker: Any, logger: Any) -> None:
                     # The registrant's OWN card: no public-key filter (they wrote
                     # every answer), but it must say when the questions moved on.
                     current_version_id=form.current_version_id if form is not None else None,
+                    self_edit=await _self_edit_policy(session, reg, tournament_id, form),
                 )
             )
 
@@ -607,10 +637,28 @@ def register(broker: Any, logger: Any) -> None:
                 hero_catalog=hero_catalog,
             )
 
-            # update_registration commits internally.
+            # update_registration commits internally, so the audit row is staged
+            # BEFORE it and rides the same transaction -- a refused edit leaves no
+            # trail of having happened. Same ordering rule the admin RPC follows.
+            before, after = reg_audit.profile_changes(reg, {"answers": values})
+            if before or after:
+                await reg_audit.audit_service.stage(
+                    session,
+                    action="registration.self_update",
+                    actor=user,
+                    workspace_id=form.workspace_id,
+                    data=data,
+                    entity_id=reg.id,
+                    entity_label=reg_audit.label(reg),
+                    source="player",
+                    before=before,
+                    after=after,
+                )
+
             updated = await reg_service.registration_service.update_registration(
                 session,
                 reg,
+                tournament=await _require_tournament(session, tournament_id),
                 values=values,
                 schema=schema,
                 hero_catalog=hero_catalog,
@@ -626,6 +674,7 @@ def register(broker: Any, logger: Any) -> None:
                     roster=(await _public_rosters(session, [updated])).get(updated.id),
                     queue=await reg_service.registration_service.queue_position(session, updated),
                     current_version_id=form.current_version_id,
+                    self_edit=await _self_edit_policy(session, updated, tournament_id, form),
                 )
             )
 
@@ -700,6 +749,9 @@ def register(broker: Any, logger: Any) -> None:
                     roster=(await _public_rosters(session, [checked_in])).get(checked_in.id),
                     queue=await reg_service.registration_service.queue_position(session, checked_in),
                     current_version_id=form.current_version_id if form is not None else None,
+                    # Now ``checked_in``, so the card's Edit affordance turns off with
+                    # a reason instead of silently vanishing on the next refetch.
+                    self_edit=await _self_edit_policy(session, checked_in, tournament_id, form),
                 )
             )
 
