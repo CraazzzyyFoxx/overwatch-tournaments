@@ -28,13 +28,13 @@ const MARKDOWN_COMPONENTS: Components = {
   // keeps the heading outline of the page legal for a screen reader no matter
   // which level the author started at.
   h1: ({ node: _node, ...props }) => (
-    <h2 {...props} className="text-balance font-display text-title font-semibold text-foreground" />
+    <h2
+      {...props}
+      className="text-balance font-display text-headline font-semibold text-foreground"
+    />
   ),
   h2: ({ node: _node, ...props }) => (
-    <h3
-      {...props}
-      className="text-balance font-display text-heading font-semibold text-foreground"
-    />
+    <h3 {...props} className="text-balance font-display text-title font-semibold text-foreground" />
   ),
   // The bottom of the heading ladder sits AT the body size, never under it: a
   // heading smaller than the text it introduces reads as a caption. h3..h6
@@ -89,22 +89,22 @@ const MARKDOWN_COMPONENTS: Components = {
       className={cn(
         className,
         className?.includes("language-")
-          ? "font-mono text-body"
-          : "rounded bg-muted px-1 py-0.5 font-mono text-body text-foreground"
+          ? "font-mono text-ui"
+          : "rounded bg-muted px-1 py-0.5 font-mono text-ui text-foreground"
       )}
     />
   ),
   pre: ({ node: _node, ...props }) => (
     <pre
       {...props}
-      className="overflow-x-auto rounded-lg border border-border bg-muted/40 p-3 text-body"
+      className="overflow-x-auto rounded-lg border border-border bg-muted/40 p-3 text-ui"
     />
   ),
   // Tables get the scroll region the design system requires of every table, so
   // a wide tiebreaker grid scrolls instead of stretching the page on a phone.
   table: ({ node: _node, ...props }) => (
     <div className="overflow-x-auto rounded-lg border border-border">
-      <table {...props} className="w-full border-collapse text-body" />
+      <table {...props} className="w-full border-collapse text-ui" />
     </div>
   ),
   th: ({ node: _node, ...props }) => (

@@ -16,8 +16,14 @@
   --text-ui--line-height: 1.5;
   /* The one reading size: long-form prose (a tournament's regulations), not UI
      chrome. Every rung below it is a density rung — 14px is what a table row
-     and a form label want, and a document read in paragraphs wants more. */
-  --text-reading: 16px;
+     and a form label want, and a document read in paragraphs wants more.
+
+     18px, the same number as --text-heading and deliberately so: the rules
+     column runs at 48rem, and the bigger the glyph the fewer characters fit
+     that fixed width (768px is ~89 characters at 16px, ~79 at 18px). The
+     document's own heading levels move UP a rung in Markdown.tsx to stay above
+     it. */
+  --text-reading: 18px;
   --text-reading--line-height: 1.6;
   --text-heading: 18px;
   --text-heading--line-height: 1.3;
