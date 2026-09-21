@@ -14,106 +14,20 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  builtinFixedVisibility,
-  builtinParamsKind,
-  isBuiltinKey,
-  type BuiltinFieldKey
-} from "@/lib/forms/builtin-keys";
+import { builtinFixedVisibility, builtinParamsKind } from "@/lib/forms/builtin-keys";
 import type { Condition, FormField, Visibility } from "@/types/forms.types";
 
 import { RolesParamsEditor, rolesParamsOf, type SubroleCatalogByRole } from "./RolesParamsEditor";
-
-/** The server compiles a pattern at save time and caps it; see `shared.core.social`. */
-const MAX_REGEX_LENGTH = 256;
-
-/** Kinds and builtin keys whose answer is a string a pattern can run on. */
-const VALIDATABLE_KINDS: Record<string, true> = {
-  text: true,
-  textarea: true,
-  url: true,
-  number: true
-};
-const VALIDATABLE_KEYS: Record<string, true> = { battle_tag: true, smurf_tags: true };
+import {
+  MAX_REGEX_LENGTH,
+  fieldDisplayLabel,
+  fieldIssues,
+  supportsValidation
+} from "./schemaEdits";
 
 const OPTION_KINDS: Record<string, true> = { select: true, multi_select: true };
 
 const CONDITION_OPS = ["truthy", "eq", "neq", "in"] as const;
-
-export function supportsValidation(field: FormField): boolean {
-  if (field.kind === "builtin") {
-    return VALIDATABLE_KEYS[field.key] === true || builtinParamsKind(field.key) === "identity";
-  }
-  return VALIDATABLE_KINDS[field.kind] === true;
-}
-
-export type FieldIssueCode =
-  | "labelRequired"
-  | "optionsRequired"
-  | "optionsDuplicate"
-  | "regexInvalid"
-  | "regexTooLong";
-
-export interface FieldIssues {
-  label: FieldIssueCode | null;
-  options: FieldIssueCode | null;
-  regex: FieldIssueCode | null;
-}
-
-/**
- * The server invariants this field currently violates.
- *
- * Reported as codes rather than copy so the SAVE path and the editor can share
- * one implementation: the builder blocks the mutation on any issue, the editor
- * translates the same codes under the control that caused them. A rule that
- * only the button knew about would be a disabled button with no explanation.
- */
-export function fieldIssues(field: FormField): FieldIssues {
-  const issues: FieldIssues = { label: null, options: null, regex: null };
-
-  if (field.kind !== "builtin" && !(field.label ?? "").trim()) {
-    issues.label = "labelRequired";
-  }
-
-  if (OPTION_KINDS[field.kind]) {
-    const options = (field.options ?? []).map((option) => option.trim()).filter(Boolean);
-    if (options.length === 0) issues.options = "optionsRequired";
-    else if (new Set(options).size !== options.length) issues.options = "optionsDuplicate";
-  }
-
-  const regex = field.validation?.regex?.trim();
-  if (regex) {
-    if (regex.length > MAX_REGEX_LENGTH) {
-      issues.regex = "regexTooLong";
-    } else {
-      try {
-        // Compiled here for the same reason the server compiles it on save: a
-        // pattern that cannot run must never reach a submission.
-        new RegExp(regex);
-      } catch {
-        issues.regex = "regexInvalid";
-      }
-    }
-  }
-
-  return issues;
-}
-
-/**
- * What a field is called in the rail, the row and the `visible_when` picker.
- *
- * `builtinLabel` is `useTranslations("registrationFormAdmin.builtins")`. Its key
- * type is the literal union of that dictionary's keys, so the parameter takes
- * the same union rather than `string`: a wide-key parameter would refuse the
- * translator, and a cast at every call site would hide a key that has no copy.
- */
-export function fieldDisplayLabel(
-  field: FormField,
-  builtinLabel: (key: BuiltinFieldKey) => string
-): string {
-  if (field.kind === "builtin" && isBuiltinKey(field.key)) return builtinLabel(field.key);
-  return (field.label ?? "").trim() || field.key;
-}
 
 /** The control a `visible_when` value needs, derived from the field it targets. */
 function conditionValueKind(target: FormField | undefined): "boolean" | "number" | "options" | "text" {
@@ -324,6 +238,10 @@ export function FieldEditor({
             />
             {issues.label ? (
               <p className="text-xs text-destructive">{t(`issues.${issues.label}`)}</p>
+            ) : issues.key ? (
+              <p className="text-xs text-destructive">
+                {t(`issues.${issues.key}`, { key: field.key })}
+              </p>
             ) : (
               <p className="text-xs text-muted-foreground">
                 {keyLocked ? t("keyLocked", { key: field.key }) : t("keyPending", { key: field.key })}

@@ -58,6 +58,21 @@ export function isBuiltinKey(key: string): key is BuiltinFieldKey {
 }
 
 /**
+ * Keys a CUSTOM field may never take, mirroring the schema's rule
+ * (`is_builtin_key(key) or key.startswith(IDENTITY_KEY_PREFIX)`).
+ *
+ * Wider than {@link isBuiltinKey} on purpose: the whole `identity_` prefix is
+ * reserved, not just the five providers this build knows, so a question
+ * labelled "Identity card" cannot occupy a namespace a later server release
+ * means to own. And it does not depend on what the form currently asks —
+ * removing the `battle_tag` builtin must not free its key for a custom field
+ * the server would then refuse.
+ */
+export function isReservedFieldKey(key: string): boolean {
+  return KNOWN[key] === true || key.startsWith(IDENTITY_KEY_PREFIX);
+}
+
+/**
  * The visibility the catalog FIXES for a builtin, mirroring
  * `BuiltinSpec.fixed_visibility`. `null` where the organizer may choose
  * (`smurf_tags` and the identities).

@@ -319,6 +319,8 @@
       "discordPlaceholder": "username",
       "twitchPlaceholder": "channel_name",
       "boosty": "Boosty",
+      "vk": "VK",
+      "youtube": "YouTube",
       "boostyPlaceholder": "nickname",
       "verified": "Verified",
       "noAccountsHint": "You don't have any linked accounts yet.",
@@ -5050,6 +5052,7 @@
       "keyPending": "Answer key: {key} — set from the label when you leave the box, then locked.",
       "issues": {
         "labelRequired": "A question of your own needs a label.",
+        "keyReserved": "“{key}” is reserved for a built-in question — rename this one so its answer key changes.",
         "optionsRequired": "List at least one option.",
         "optionsDuplicate": "Two options are identical.",
         "regexInvalid": "This pattern does not compile.",

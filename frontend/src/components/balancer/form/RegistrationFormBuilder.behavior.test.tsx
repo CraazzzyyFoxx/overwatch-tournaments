@@ -10,6 +10,10 @@
 // 2. Loading a template replaces the draft only after the confirmation. The
 //    dialog's list is a browser; picking a row must not overwrite the questions
 //    behind it, because there is no undo for "I clicked the wrong template".
+// 3. A `schema_invalid` rejection lands on the question it names. The server
+//    reports a schema PATH; a toast saying "sections[0].fields[1].visible_when"
+//    is not something an organizer can act on, so it is resolved to the field
+//    and shown under its settings instead.
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { NextIntlClientProvider } from "next-intl";
 import { act } from "react";
@@ -17,6 +21,8 @@ import { createRoot, type Root } from "react-dom/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import en from "@/i18n/messages/en.json";
+import { ApiError } from "@/lib/api-error";
+import { notify } from "@/lib/notify";
 import type { FormSchema } from "@/types/forms.types";
 
 import RegistrationFormBuilder from "./RegistrationFormBuilder";
@@ -345,5 +351,31 @@ describe("registration form builder", () => {
     await settle();
 
     expect(railText()).toContain("Who are you");
+  });
+
+  it("files a schema_invalid rejection on the question its path names", async () => {
+    upsertRegistrationForm.mockRejectedValueOnce(
+      new ApiError(422, [
+        {
+          msg: "sections[0].fields[1].visible_when: must reference an earlier field",
+          code: "schema_invalid",
+          field: "sections[0].fields[1].visible_when"
+        }
+      ])
+    );
+    await mount();
+
+    // `stream_pov` is the field that path names; open it and dirty the form so
+    // the save bar is reachable.
+    await click(button("Stream POVstream_pov"));
+    await click(labelled("Required"));
+    await click(button("Save changes"));
+    await settle();
+
+    const panel = container.textContent ?? "";
+    expect(panel).toContain("sections[0].fields[1].visible_when");
+    expect(panel).toContain(en.forms.errors.schema_invalid);
+    // Not a toast: a rejection that names a field belongs under that field.
+    expect(notify.error).not.toHaveBeenCalled();
   });
 });

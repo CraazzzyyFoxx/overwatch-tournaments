@@ -38,4 +38,30 @@ describe("makeUniqueFieldKey", () => {
       expect(makeUniqueFieldKey(label, [])).toMatch(KEY_PATTERN);
     }
   });
+
+  it("never lands in the namespace the schema reserves for builtins", () => {
+    // The reserved set does not depend on what the form currently asks: drop
+    // the `battle_tag` builtin and a question labelled "Battle Tag" still may
+    // not take its key, because `_invariants` refuses any non-builtin field
+    // whose key is a builtin one or starts with `identity_`.
+    expect(makeUniqueFieldKey("Battle Tag", [])).not.toBe("battle_tag");
+    expect(makeUniqueFieldKey("Stream POV", [])).not.toBe("stream_pov");
+    // A label that merely resembles one is left alone.
+    expect(makeUniqueFieldKey("Notes", ["public_notes"])).toBe("notes");
+
+    // Suffixing cannot escape a PREFIX — `identity_card_2` is still reserved —
+    // so the escape has to happen at the front.
+    for (const label of ["Identity card", "identity_discord", "Identity"]) {
+      const key = makeUniqueFieldKey(label, []);
+      expect(key.startsWith("identity_")).toBe(false);
+      expect(key).toMatch(KEY_PATTERN);
+    }
+  });
+
+  it("still disambiguates once a key has been escaped", () => {
+    const first = makeUniqueFieldKey("Battle Tag", []);
+    const second = makeUniqueFieldKey("Battle Tag", [first]);
+    expect(second).not.toBe(first);
+    expect(second).toMatch(KEY_PATTERN);
+  });
 });

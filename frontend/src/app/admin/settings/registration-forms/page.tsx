@@ -7,11 +7,14 @@ import { useTranslations } from "next-intl";
 
 import {
   SchemaEditor,
-  blockedFieldKeys,
-  sanitizeSchema,
   useSubroleCatalog
 } from "@/components/balancer/form/RegistrationFormBuilder";
+import {
+  blockedFieldKeys,
+  sanitizeSchema
+} from "@/components/balancer/form/_components/schemaEdits";
 import { registrationFormTemplatesKey } from "@/components/balancer/form/_components/TemplateMenu";
+import { ConfirmDialog, type ConfirmIntent } from "@/components/kit/ConfirmDialog";
 import { InlineEditText } from "@/components/kit/InlineEditText";
 import { SaveBar } from "@/components/kit/SaveBar";
 import { Button } from "@/components/ui/button";
@@ -48,6 +51,15 @@ export default function WorkspaceRegistrationFormsSettingsPage() {
   /** `null` = the selected template's saved schema, untouched. */
   const [draft, setDraft] = useState<FormSchema | null>(null);
   const [newName, setNewName] = useState("");
+  /**
+   * The destructive action waiting on a confirmation: deleting a shared
+   * template, or walking away from unsaved questions. Both are one dialog with
+   * a swapped intent, the pattern every other section of this hub follows —
+   * and neither is recoverable from the UI once done.
+   */
+  const [pending, setPending] = useState<
+    { kind: "delete"; id: number; name: string } | { kind: "switch"; id: number } | null
+  >(null);
 
   const canEdit = canAccessPermission("registration_form.update", workspaceId);
   const { catalog, loading: catalogLoading } = useSubroleCatalog(workspaceId);
@@ -74,9 +86,15 @@ export default function WorkspaceRegistrationFormsSettingsPage() {
       registrationFormTemplatesService.create(workspaceId as number, name, defaultFormSchema()),
     onSuccess: async (created) => {
       setNewName("");
-      setSelectedId(created.id);
-      setDraft(null);
       await invalidate();
+      // Opening the new template would discard whatever is unsaved in the pane
+      // — the same loss the switch confirmation exists to prevent, so the
+      // selection simply stays put and the row is waiting in the list.
+      if (draft !== null) {
+        notify.success(`Template “${created.name}” created — open it once you have saved this one`);
+        return;
+      }
+      setSelectedId(created.id);
       notify.success("Template created");
     },
     onError: (error) => notify.error(fieldErrorsFrom(error, tErrors).form ?? "Could not create the template")
@@ -105,6 +123,32 @@ export default function WorkspaceRegistrationFormsSettingsPage() {
     },
     onError: (error) => notify.apiError(error, { title: "Could not delete the template" })
   });
+
+  /** Select a template, asking first when the one on screen has unsaved edits. */
+  const openTemplate = (id: number) => {
+    if (id === selectedId) return;
+    if (draft !== null) {
+      setPending({ kind: "switch", id });
+      return;
+    }
+    setSelectedId(id);
+  };
+
+  const confirmIntent: ConfirmIntent =
+    pending?.kind === "delete"
+      ? {
+          title: "Delete this template?",
+          description: `“${pending.name}” is shared by every tournament in this workspace. Forms already built from it keep their questions; the template itself cannot be restored.`,
+          confirmLabel: "Delete template",
+          tone: "danger"
+        }
+      : {
+          title: "Discard unsaved questions?",
+          description:
+            "The questions you edited here have not been saved. Opening another template drops them.",
+          confirmLabel: "Discard and switch",
+          tone: "warning"
+        };
 
   if (workspaceId === null) {
     return (
@@ -152,10 +196,7 @@ export default function WorkspaceRegistrationFormsSettingsPage() {
                     <button
                       type="button"
                       className="text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground"
-                      onClick={() => {
-                        setSelectedId(template.id);
-                        setDraft(null);
-                      }}
+                      onClick={() => openTemplate(template.id)}
                     >
                       {template.id === selectedId ? "Editing" : "Edit questions"}
                     </button>
@@ -166,7 +207,9 @@ export default function WorkspaceRegistrationFormsSettingsPage() {
                     className="size-7 shrink-0"
                     disabled={!canEdit || deleteMutation.isPending}
                     aria-label={`Delete ${template.name}`}
-                    onClick={() => deleteMutation.mutate(template.id)}
+                    onClick={() =>
+                      setPending({ kind: "delete", id: template.id, name: template.name })
+                    }
                   >
                     <Trash2 className="size-3.5" aria-hidden />
                   </Button>
@@ -252,6 +295,25 @@ export default function WorkspaceRegistrationFormsSettingsPage() {
           }}
         />
       )}
+
+      <ConfirmDialog
+        open={pending !== null}
+        onOpenChange={(open) => {
+          if (!open) setPending(null);
+        }}
+        intent={confirmIntent}
+        pending={deleteMutation.isPending}
+        onConfirm={async () => {
+          if (pending === null) return;
+          if (pending.kind === "delete") {
+            await deleteMutation.mutateAsync(pending.id);
+          } else {
+            setDraft(null);
+            setSelectedId(pending.id);
+          }
+          setPending(null);
+        }}
+      />
     </div>
   );
 }

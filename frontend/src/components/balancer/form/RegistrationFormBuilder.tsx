@@ -46,205 +46,25 @@ import type { AdminRegistrationForm } from "@/types/balancer-admin.types";
 import type { FieldKind, FormField, FormSchema } from "@/types/forms.types";
 
 import { AddFieldMenu, newBuiltinField, newCustomField } from "./_components/AddFieldMenu";
-import { FieldEditor, fieldDisplayLabel, fieldIssues } from "./_components/FieldEditor";
+import { FieldEditor } from "./_components/FieldEditor";
 import type { CatalogEntry, SubroleCatalogByRole } from "./_components/RolesParamsEditor";
 import { FIELD_DRAG_PREFIX, SECTION_DRAG_PREFIX, SectionList } from "./_components/SectionList";
 import { TemplateMenu } from "./_components/TemplateMenu";
-
-const OPTION_KINDS: Record<string, true> = { select: true, multi_select: true };
-
-// ---------------------------------------------------------------------------
-// Pure schema edits. The editor never mutates: every change produces a new
-// `FormSchema`, which is what makes "draft ?? server's" a one-line decision.
-// ---------------------------------------------------------------------------
-
-/** Every field in the order the wizard asks them — the order the server's
- *  `visible_when` invariant is stated in. */
-function flatFields(schema: FormSchema): FormField[] {
-  return schema.sections.flatMap((section) => section.fields);
-}
-
-function locate(schema: FormSchema, key: string): { si: number; fi: number } | null {
-  for (let si = 0; si < schema.sections.length; si += 1) {
-    const fi = schema.sections[si].fields.findIndex((field) => field.key === key);
-    if (fi !== -1) return { si, fi };
-  }
-  return null;
-}
-
-/** The fields asked BEFORE `key` — the only legal `visible_when` targets. */
-function earlierFields(schema: FormSchema, key: string): FormField[] {
-  const flat = flatFields(schema);
-  const index = flat.findIndex((field) => field.key === key);
-  return index <= 0 ? [] : flat.slice(0, index);
-}
-
-function withSections(
-  schema: FormSchema,
-  map: (fields: FormField[], index: number) => FormField[]
-): FormSchema {
-  return {
-    ...schema,
-    sections: schema.sections.map((section, index) => ({ ...section, fields: map(section.fields, index) }))
-  };
-}
-
-function replaceField(schema: FormSchema, key: string, next: FormField): FormSchema {
-  return withSections(schema, (fields) =>
-    fields.some((field) => field.key === key)
-      ? fields.map((field) => (field.key === key ? next : field))
-      : fields
-  );
-}
-
-function appendField(schema: FormSchema, sectionKey: string, field: FormField): FormSchema {
-  return {
-    ...schema,
-    sections: schema.sections.map((section) =>
-      section.key === sectionKey ? { ...section, fields: [...section.fields, field] } : section
-    )
-  };
-}
-
-function removeField(schema: FormSchema, key: string): FormSchema {
-  return withSections(schema, (fields) => fields.filter((field) => field.key !== key));
-}
-
-/**
- * Rename a field and follow its references.
- *
- * Only ever called for a field whose key is still provisional (a custom one the
- * organizer has not named yet), but a later field may already point at it, and
- * a dangling `visible_when` is a 422 rather than a warning.
- */
-function renameField(schema: FormSchema, from: string, to: string): FormSchema {
-  return withSections(schema, (fields) =>
-    fields.map((field) => {
-      const renamed = field.key === from ? { ...field, key: to } : field;
-      return renamed.visible_when?.field === from
-        ? { ...renamed, visible_when: { ...renamed.visible_when, field: to } }
-        : renamed;
-    })
-  );
-}
-
-/** Move `key` onto `overKey`'s slot, across sections when they differ. */
-function moveFieldOnto(schema: FormSchema, key: string, overKey: string): FormSchema {
-  const from = locate(schema, key);
-  const to = locate(schema, overKey);
-  if (!from || !to) return schema;
-  if (from.si === to.si) {
-    return withSections(schema, (fields, index) =>
-      index === from.si ? arrayMove(fields, from.fi, to.fi) : fields
-    );
-  }
-  const field = schema.sections[from.si].fields[from.fi];
-  return withSections(schema, (fields, index) => {
-    if (index === from.si) return fields.filter((candidate) => candidate.key !== key);
-    if (index !== to.si) return fields;
-    const next = [...fields];
-    next.splice(to.fi, 0, field);
-    return next;
-  });
-}
-
-/** Move `key` to the end of `sectionKey` — the rail rows are drop targets so a
- *  field can reach a section that is not on screen. */
-function moveFieldToSection(schema: FormSchema, key: string, sectionKey: string): FormSchema {
-  const from = locate(schema, key);
-  if (!from || schema.sections[from.si].key === sectionKey) return schema;
-  const field = schema.sections[from.si].fields[from.fi];
-  return {
-    ...schema,
-    sections: schema.sections.map((section, index) => {
-      if (index === from.si) {
-        return { ...section, fields: section.fields.filter((candidate) => candidate.key !== key) };
-      }
-      return section.key === sectionKey ? { ...section, fields: [...section.fields, field] } : section;
-    })
-  };
-}
-
-/**
- * Drop every `visible_when` that no longer points at an EARLIER field.
- *
- * A reorder, a cross-section move or a deletion can strand a condition, and the
- * server rejects the whole schema when one is. Refusing the drop would make
- * dragging feel broken for a rule the organizer cannot see; keeping the stale
- * condition would fail the save with a path nobody can read. So the condition
- * is CLEARED and the caller says which questions lost one — the edit lands, and
- * nothing changes silently.
- */
-function pruneStrandedConditions(schema: FormSchema): { schema: FormSchema; cleared: string[] } {
-  const seen = new Set<string>();
-  const cleared: string[] = [];
-  const next = withSections(schema, (fields) =>
-    fields.map((field) => {
-      const target = field.visible_when?.field;
-      const stranded = target !== undefined && (target === field.key || !seen.has(target));
-      seen.add(field.key);
-      if (!stranded) return field;
-      cleared.push(field.key);
-      return { ...field, visible_when: null };
-    })
-  );
-  return cleared.length === 0 ? { schema, cleared } : { schema: next, cleared };
-}
-
-/**
- * The schema as it goes on the wire: trimmed copy, empty parts dropped.
- *
- * The editor keeps what the organizer typed — a trailing blank line in the
- * options box is a line they are about to fill — and this is where that becomes
- * a document the server's invariants accept.
- */
-export function sanitizeSchema(schema: FormSchema): FormSchema {
-  return {
-    ...schema,
-    sections: schema.sections.map((section) => ({
-      ...section,
-      title: section.title?.trim() || null,
-      description: section.description?.trim() || null,
-      fields: section.fields.map((field) => {
-        const isBuiltin = field.kind === "builtin";
-        const regex = field.validation?.regex?.trim() || null;
-        const message = field.validation?.error_message?.trim() || null;
-        return {
-          ...field,
-          label: isBuiltin ? (field.label ?? null) : (field.label ?? "").trim(),
-          help: field.help?.trim() || null,
-          placeholder: field.placeholder?.trim() || null,
-          options: OPTION_KINDS[field.kind]
-            ? [...new Set((field.options ?? []).map((option) => option.trim()).filter(Boolean))]
-            : null,
-          validation: regex || message ? { regex, error_message: message } : null,
-          params: isBuiltin ? field.params : {},
-          show_in_draft: !isBuiltin && field.visibility === "public" && field.show_in_draft
-        };
-      })
-    }))
-  };
-}
-
-/** Fields the editor itself refuses to send. The save button reports the count;
- *  each row and the field editor show the reason under the control. */
-export function blockedFieldKeys(schema: FormSchema): Set<string> {
-  const blocked = new Set<string>();
-  for (const field of flatFields(schema)) {
-    const issues = fieldIssues(field);
-    if (issues.label || issues.options || issues.regex) blocked.add(field.key);
-  }
-  return blocked;
-}
-
-/** `sections[1].fields[3].visible_when` → the key of the field it names.
- *  `schema_invalid` reports a PATH, and a path is not something to show an
- *  organizer; the field it points at is. */
-function fieldKeyAtSchemaPath(schema: FormSchema, path: string): string | null {
-  const match = /^sections\[(\d+)]\.fields\[(\d+)]/.exec(path);
-  if (!match) return null;
-  return schema.sections[Number(match[1])]?.fields[Number(match[2])]?.key ?? null;
-}
+import {
+  appendField,
+  blockedFieldKeys,
+  earlierFields,
+  fieldDisplayLabel,
+  fieldKeyAtSchemaPath,
+  flatFields,
+  moveFieldOnto,
+  moveFieldToSection,
+  pruneStrandedConditions,
+  removeField,
+  renameField,
+  replaceField,
+  sanitizeSchema
+} from "./_components/schemaEdits";
 
 // ---------------------------------------------------------------------------
 // The editor
@@ -419,6 +239,9 @@ export function SchemaEditor({
   };
 
   const addSection = () => {
+    // Section keys answer to the same `KEY_PATTERN` and are never typed by
+    // hand, so the field-key factory generates them too. Its reserved-namespace
+    // guard is a harmless superset here — "section" is not a builtin key.
     const key = makeUniqueFieldKey(
       "section",
       schema.sections.map((entry) => entry.key)
