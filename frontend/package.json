@@ -48,6 +48,7 @@
     "@tanstack/react-virtual": "^3.14.9",
     "@uiw/react-md-editor": "^4",
     "@xyflow/react": "^12.11.2",
+    "ai": "^7.0.107",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
@@ -68,6 +69,7 @@
     "tailwind-merge": "^3.6.0",
     "tailwindcss-animate": "^1.0.7",
     "use-debounce": "^10.1.1",
+    "use-stick-to-bottom": "^1.1.6",
     "zustand": "^5.0.14"
   },
   "devDependencies": {

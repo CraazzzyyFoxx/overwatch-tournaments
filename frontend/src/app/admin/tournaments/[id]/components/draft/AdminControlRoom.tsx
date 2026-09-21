@@ -6,6 +6,7 @@ import { AlertTriangle, ArrowUpRight, Radio, ShieldAlert, UserRound, Users } fro
 import { useTranslations } from "next-intl";
 
 import { DraftClock } from "@/components/draft/DraftClock";
+import { RoomChat } from "@/components/chat/RoomChat";
 import {
   useDraftFeasibilityQuery,
   useDraftPickOptionsQuery,
@@ -19,6 +20,7 @@ import {
 } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
 import { HeroCoord, HeroFrame, HeroStamp } from "@/components/site/PageHero";
+import { draftChatRoom } from "@/lib/chat-rooms";
 import type { DraftBoard } from "@/types/draft.types";
 
 import { captainPresenceRows } from "./admin-control-model";
@@ -204,6 +206,11 @@ export function AdminControlRoom({ tournamentId, board }: Readonly<AdminControlR
             />
             <AdminMetric icon={Radio} label={t("viewers")} value={presence.anonymous_viewer_count} />
           </section>
+
+          {/* The organizer's side of the room, where they are already running
+              the draft — same room and same session id the public board
+              mounts, so a message sent here lands in the captains' panel. */}
+          <RoomChat room={draftChatRoom(session.id)} />
 
           <Accordion type="single" collapsible className="lg:hidden">
             <AccordionItem value="watch" className="border-t border-[color:var(--aqt-border)]">

@@ -44,6 +44,13 @@ from shared.core.enums import PickBanKind, SubscriptionCollectionSource
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.rpc.identity import rehydrate_user
 from shared.services.admission import AdmissionStage
+from shared.services.chat import (
+    HISTORY_DEFAULT,
+    ChatMuteInput,
+    ChatPostInput,
+    ChatRoom,
+    ChatSettingsInput,
+)
 from shared.services.subscriptions.realtime import emit_subscriptions_updated
 from shared.services.subscriptions.wiring import build_resolver, build_store
 from shared.services.tournament.visibility import assert_tournament_viewable
@@ -56,6 +63,7 @@ from src.rpc._helpers import (
     _identity,
     _path_int,
     _payload,
+    _q1,
     _require_id,
     _require_q1,
     _run,
@@ -100,6 +108,7 @@ from src.services import visibility_resolvers
 from src.services.encounter import flows as encounter_flows
 from src.services.encounter import pick_ban_action as pick_ban_action
 from src.services.encounter.captain import captain_service
+from src.services.encounter.chat_access import encounter_chat_service
 from src.services.encounter.map_report import map_report_service
 from src.services.encounter.pick_ban_session import pick_ban_session_service
 from src.services.encounter.pick_ban_undo import pick_ban_undo_service
@@ -371,6 +380,89 @@ def register(broker: Any, logger: Any) -> None:
             # mark_ready commits internally.
             readiness = await pick_ban_session_service.mark_ready(session, encounter, captain_side, captain_user_id)
             return {"readiness": readiness}
+
+        return await _run(logger, op)
+
+    # ── pre-game room chat (shared room-chat service, chat_* tables) ──────
+
+    @broker.subscriber("rpc.tournament.encounter_chat_history")
+    async def _encounter_chat_history(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            # AuthOptional: spectators read this room when an organizer has
+            # opened it, so an absent identity is a caller, not an error.
+            user = _optional_identity(data)
+            room = ChatRoom.encounter(_require_id(data))
+            envelope = await encounter_chat_service.envelope(
+                session,
+                user,
+                room,
+                after_id=_q1(data, "after_id", int),
+                limit=_q1(data, "limit", int, HISTORY_DEFAULT),
+            )
+            return envelope.model_dump(mode="json")
+
+        return await _run(logger, op)
+
+    @broker.subscriber("rpc.tournament.encounter_chat_post")
+    async def _encounter_chat_post(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            user = _identity(data)
+            room = ChatRoom.encounter(_require_id(data))
+            body = ChatPostInput.model_validate(_payload(data))
+            # ChatService commits internally, here and in every write below.
+            message = await encounter_chat_service.post(session, user, room, body.body)
+            return message.model_dump(mode="json")
+
+        return await _run(logger, op)
+
+    @broker.subscriber("rpc.tournament.encounter_chat_delete")
+    async def _encounter_chat_delete(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            user = _identity(data)
+            room = ChatRoom.encounter(_require_id(data))
+            await encounter_chat_service.delete(session, user, room, _path_int(data, "message_id"))
+            return {"deleted": True}
+
+        return await _run(logger, op)
+
+    @broker.subscriber("rpc.tournament.encounter_chat_settings")
+    async def _encounter_chat_settings(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            user = _identity(data)
+            room = ChatRoom.encounter(_require_id(data))
+            body = ChatSettingsInput.model_validate(_payload(data))
+            settings_read = await encounter_chat_service.set_settings(
+                session, user, room, spectators_can_read=body.spectators_can_read
+            )
+            return settings_read.model_dump(mode="json")
+
+        return await _run(logger, op)
+
+    @broker.subscriber("rpc.tournament.encounter_chat_mute_set")
+    async def _encounter_chat_mute_set(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            user = _identity(data)
+            room = ChatRoom.encounter(_require_id(data))
+            body = ChatMuteInput.model_validate(_payload(data))
+            mute = await encounter_chat_service.set_mute(
+                session,
+                user,
+                room,
+                _path_int(data, "target_user_id"),
+                minutes=body.minutes,
+                reason=body.reason,
+            )
+            return mute.model_dump(mode="json")
+
+        return await _run(logger, op)
+
+    @broker.subscriber("rpc.tournament.encounter_chat_mute_clear")
+    async def _encounter_chat_mute_clear(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            user = _identity(data)
+            room = ChatRoom.encounter(_require_id(data))
+            await encounter_chat_service.clear_mute(session, user, room, _path_int(data, "target_user_id"))
+            return {"deleted": True}
 
         return await _run(logger, op)
 

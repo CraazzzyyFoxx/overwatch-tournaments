@@ -23,6 +23,8 @@ import pickBanService, { type PickBanActionInput } from "@/services/pickBan.serv
 import type { Encounter } from "@/types/encounter.types";
 import type { PickBanAction, PickBanKind, PickBanState } from "@/types/tournament.types";
 
+import { RoomChat } from "@/components/chat/RoomChat";
+import { encounterChatRoom } from "@/lib/chat-rooms";
 import {
   PICK_BAN_UNAVAILABLE_COPY,
   agreedMapScore,
@@ -74,6 +76,29 @@ const UNAVAILABLE_ICON: Record<PickBanUnavailableIcon, React.ReactNode> = {
 };
 
 /**
+ * The room plus its private back channel. The chat sits BESIDE the phase the
+ * room happens to be on rather than inside one of them: every branch below
+ * returns a different screen (readiness, a pick-ban board, a map report, the
+ * closing report), and the captains need to talk across all of them —
+ * "ready?" is asked precisely when the readiness gate is up. `RoomChat`
+ * renders nothing for a non-participant, and a flex row (not a grid track)
+ * means a spectator's layout is exactly what it was before it existed.
+ */
+export function PregameRoom(props: Readonly<PregameRoomProps>) {
+  return (
+    <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
+      <div className="min-w-0 flex-1">
+        <PregameRoomBody {...props} />
+      </div>
+      <RoomChat
+        room={encounterChatRoom(props.encounterId)}
+        className="lg:w-[22rem] lg:shrink-0"
+      />
+    </div>
+  );
+}
+
+/**
  * Unified pre-game room: one screen for the whole pre-game loop, which runs
  * once per map of the series —
  *
@@ -91,7 +116,7 @@ const UNAVAILABLE_ICON: Record<PickBanUnavailableIcon, React.ReactNode> = {
  * `pick_ban_session.ensure_pick_ban_session`) until both captains confirm
  * readiness, shown here as a waiting screen with an "I'm ready" button.
  */
-export function PregameRoom({ encounterId, seriesReport = true }: Readonly<PregameRoomProps>) {
+function PregameRoomBody({ encounterId, seriesReport = true }: Readonly<PregameRoomProps>) {
   const t = useTranslations("pickBan.room");
   const queryClient = useQueryClient();
   const { isSuperuser, isWorkspaceAdmin, hasWorkspacePermission } = usePermissions();

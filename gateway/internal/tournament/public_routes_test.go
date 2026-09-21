@@ -38,7 +38,13 @@ func TestVisibilityGatedPublicReadsForwardIdentity(t *testing.T) {
 // `reads.py`, whose whole-module contract is `data["id"]`.
 func TestRequireIDWorkersUseIDParam(t *testing.T) {
 	requireID := map[string]bool{
-		"rpc.tournament.get_pick_ban_configs": true,
+		"rpc.tournament.get_pick_ban_configs":   true,
+		"rpc.tournament.encounter_chat_history": true,
+		"rpc.tournament.encounter_chat_post":    true,
+		// The delete/mute routes carry a second path param (message_id /
+		// target_user_id) alongside IDParam, so they are deliberately not listed:
+		// the assertion below forbids that pairing, and for them it is correct.
+		"rpc.tournament.encounter_chat_settings": true,
 	}
 	seen := map[string]bool{}
 	for _, r := range PublicWriteRoutes {

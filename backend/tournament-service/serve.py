@@ -1,3 +1,5 @@
+from datetime import UTC, datetime, timedelta
+
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from faststream import FastStream
 from faststream.rabbit import Channel
@@ -30,6 +32,7 @@ from shared.observability import (
 )
 from shared.quota import close as close_quota
 from shared.quota import configure as configure_quota
+from shared.repository import ChatMessageRepository, ChatMuteRepository
 from shared.schemas.events import TournamentComputationJobEvent
 from shared.services.realtime import configure_realtime
 from shared.services.realtime.consumer import register_invalidation_consumer
@@ -169,19 +172,21 @@ async def auto_transition_tournaments() -> None:
 async def purge_stale_realtime_events(
     session_factory: async_sessionmaker[AsyncSession] = db.async_session_maker,
 ) -> None:
-    """Drop realtime rows nobody can still replay: brackets and invalidations.
+    """Drop realtime rows nobody can still replay: brackets, invalidations, chat.
 
-    Two statements, one per topic family, each a single unbatched DELETE (design
+    Three statements, one per topic family, each a single unbatched DELETE (design
     decision D2 of docs/plans/2026-08-24-realtime-shared-library.md). Bracket and
     invalidation only, never pregame/draft: those sessions have no upper bound on
-    duration, so a 7-day floor would cut a live one.
+    duration, so a 7-day floor would cut a live one. ``%:chat`` joins them because
+    chat history moved to ``chat_message`` (the chat01 migration copied these rows
+    across); what is left here is a duplicate nothing reads any more.
 
     The patterns are BOUND, not inlined: a literal `:` inside ``text()`` is
     parsed as a bind-parameter marker (here `:bracket`), not a plain character,
     and raises ``InvalidRequestError`` at execute time with no value supplied.
     """
     async with observe_scheduled_job("realtime_workspace_event_purge"), session_factory() as session:
-        for pattern in ("tournament:%:bracket", "%:invalidation"):
+        for pattern in ("tournament:%:bracket", "%:invalidation", "%:chat"):
             await session.execute(
                 text(
                     "DELETE FROM realtime.workspace_event "
@@ -189,6 +194,23 @@ async def purge_stale_realtime_events(
                 ),
                 {"topic_pattern": pattern},
             )
+        await session.commit()
+
+
+async def purge_chat(
+    session_factory: async_sessionmaker[AsyncSession] = db.async_session_maker,
+) -> None:
+    """Retention for the room chat: 90 days of messages, then gone.
+
+    Room chatter has a short useful life; what was *decided* lives in
+    ``encounter_result_audit`` / ``draft_audit_event``, not here. Expired mutes
+    age out on the same clock -- an expired row is already inert, this just
+    stops it accumulating. ``chat_room`` rows are tiny and left alone.
+    """
+    cutoff = datetime.now(UTC) - timedelta(days=90)
+    async with observe_scheduled_job("chat_purge"), session_factory() as session:
+        await ChatMessageRepository().purge_older_than(session, cutoff)
+        await ChatMuteRepository().purge_expired_before(session, cutoff)
         await session.commit()
 
 
@@ -254,6 +276,12 @@ async def start_worker() -> None:
         "interval",
         days=1,
         id="realtime_workspace_event_purge",
+    )
+    scheduler.add_job(
+        purge_chat,
+        "interval",
+        days=1,
+        id="chat_purge",
     )
     scheduler.start()
     logger.info("Tournament worker scheduler started")

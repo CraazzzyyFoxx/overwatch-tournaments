@@ -3211,20 +3211,6 @@
         "won": "{team} won the series {home}:{away}",
         "drawn": "The series ended {home}:{away}"
       },
-      "chat": {
-        "title": "Room chat",
-        "listLabel": "Room chat messages",
-        "empty": "No messages yet",
-        "emptyHint": "Only the two captains and the organizers can read this.",
-        "inputLabel": "Message to the room",
-        "placeholder": "Write to the room",
-        "inputHint": "Enter sends, Shift+Enter is a new line",
-        "send": "Send message",
-        "staff": "staff",
-        "remaining": "{count} characters left",
-        "throttled": "Too many messages — wait a moment",
-        "sendFailed": "Message not sent"
-      },
       "finalReport": {
         "title": "Report the match",
         "hint": "Pick and ban are done. This is the tournament's match report: confirm the series score, add the match codes and anything else the organizers asked for. Filing it takes you back where you came from."
@@ -3435,6 +3421,40 @@
       "pickScopeTitle": "Pick a scope",
       "pickScopeHint": "Choose the tournament, a stage or a round on the left to see and edit the rules its matches play by.",
       "orderSlotsMode": "One group per match resolves its own order, so there is no series-wide list of steps to author."
+    }
+  },
+  "chat": {
+    "title": "Room chat",
+    "listLabel": "Room chat messages",
+    "empty": "No messages yet",
+    "emptyHint": "Everyone who can read this room sees what you write here.",
+    "inputLabel": "Message to the room",
+    "placeholder": "Write to the room",
+    "inputHint": "Enter sends, Shift+Enter is a new line",
+    "send": "Send message",
+    "remaining": "{count} characters left",
+    "throttled": "Too many messages — wait a moment",
+    "sendMuted": "You are muted in this room",
+    "sendFailed": "Message not sent",
+    "readOnly": "Read-only — only captains and organizers write here.",
+    "muted": "You are muted until {until}",
+    "mutedIndefinite": "You are muted until an organizer lifts it",
+    "deleteLabel": "Delete the message from {name}",
+    "deleteFailed": "Message not deleted",
+    "muteLabel": "Mute {name}",
+    "mute5m": "Mute for 5 minutes",
+    "mute1h": "Mute for an hour",
+    "muteForever": "Mute until lifted",
+    "unmute": "Unmute",
+    "muteFailed": "Mute not changed",
+    "spectatorRead": "Spectators can read",
+    "visibilityFailed": "Visibility not changed",
+    "role": {
+      "home": "home",
+      "away": "away",
+      "captain": "captain",
+      "staff": "staff",
+      "spectator": "spectator"
     }
   },
   "users": {

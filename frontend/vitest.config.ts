@@ -149,6 +149,9 @@ export default defineConfig({
       // `src/components/realtime` is vitest-only, so a directory glob is safe
       // here and covers the next test added without another edit to this list.
       "src/components/realtime/**/*.test.tsx",
+      // `src/components/chat` is vitest-only (it renders DOM), so a directory
+      // glob is safe and covers the next test added without another edit here.
+      "src/components/chat/**/*.test.tsx",
       // File-level, not a directory glob: this folder holds BOTH runners'
       // tests. `RoleStep.behavior.test.tsx` is `.tsx` yet imports `bun:test`,
       // so a directory glob here drags it into vitest and it fails on the import.

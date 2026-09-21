@@ -33,6 +33,14 @@ from shared.repository.draft import (
     DraftSessionRepository,
 )
 from shared.repository.identity import UserRepository
+from shared.rpc.common import optional_actor
+from shared.services.chat import (
+    HISTORY_DEFAULT,
+    ChatMuteInput,
+    ChatPostInput,
+    ChatRoom,
+    ChatSettingsInput,
+)
 from shared.services.realtime import Scope, emit, enqueue_invalidation_outbox
 from shared.services.roster_shape_access import get_effective_roster_shape
 from src import schemas
@@ -50,6 +58,7 @@ from src.services.balancer.realtime import EXPORT_RESOURCES
 from src.services.draft import clock as clock_svc
 from src.services.draft import realtime as draft_rt
 from src.services.draft.board import board_service
+from src.services.draft.chat_access import draft_chat_service
 from src.services.draft.export import export_service
 from src.services.draft.feasibility import feasibility_service
 from src.services.draft.lifecycle import lifecycle_service
@@ -773,3 +782,76 @@ def register(broker: Any, logger: Any) -> None:
             return await board_service.session_read(session, draft)
 
         return await c.envelope(logger, "draft.pick_override", op, session_factory=_SF)
+
+    # --- room chat (keyed by session_id; the room IS the draft session) -----
+    @broker.subscriber("rpc.balancer.draft.chat_history")
+    async def _chat_history(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            return await draft_chat_service.envelope(
+                session,
+                optional_actor(data),
+                ChatRoom.draft(c.require_id(data)),
+                after_id=c.q1(data, "after_id", int),
+                limit=c.q1(data, "limit", int, HISTORY_DEFAULT),
+            )
+
+        return await c.envelope(logger, "draft.chat_history", op, session_factory=_SF)
+
+    @broker.subscriber("rpc.balancer.draft.chat_post")
+    async def _chat_post(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            user = c.active_actor(data)
+            room = ChatRoom.draft(c.require_id(data))
+            payload = ChatPostInput.model_validate(c.payload(data))
+            return await draft_chat_service.post(session, user, room, payload.body)
+
+        return await c.envelope(logger, "draft.chat_post", op, session_factory=_SF)
+
+    @broker.subscriber("rpc.balancer.draft.chat_delete")
+    async def _chat_delete(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            user = c.active_actor(data)
+            room = ChatRoom.draft(c.require_id(data))
+            await draft_chat_service.delete(session, user, room, c.path_int(data, "message_id"))
+            return {"deleted": True}
+
+        return await c.envelope(logger, "draft.chat_delete", op, session_factory=_SF)
+
+    @broker.subscriber("rpc.balancer.draft.chat_settings")
+    async def _chat_settings(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            user = c.active_actor(data)
+            room = ChatRoom.draft(c.require_id(data))
+            payload = ChatSettingsInput.model_validate(c.payload(data))
+            return await draft_chat_service.set_settings(
+                session, user, room, spectators_can_read=payload.spectators_can_read
+            )
+
+        return await c.envelope(logger, "draft.chat_settings", op, session_factory=_SF)
+
+    @broker.subscriber("rpc.balancer.draft.chat_mute_set")
+    async def _chat_mute_set(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            user = c.active_actor(data)
+            room = ChatRoom.draft(c.require_id(data))
+            payload = ChatMuteInput.model_validate(c.payload(data))
+            return await draft_chat_service.set_mute(
+                session,
+                user,
+                room,
+                c.path_int(data, "target_user_id"),
+                minutes=payload.minutes,
+                reason=payload.reason,
+            )
+
+        return await c.envelope(logger, "draft.chat_mute_set", op, session_factory=_SF)
+
+    @broker.subscriber("rpc.balancer.draft.chat_mute_clear")
+    async def _chat_mute_clear(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            user = c.active_actor(data)
+            room = ChatRoom.draft(c.require_id(data))
+            await draft_chat_service.clear_mute(session, user, room, c.path_int(data, "target_user_id"))
+            return {"deleted": True}
+
+        return await c.envelope(logger, "draft.chat_mute_clear", op, session_factory=_SF)

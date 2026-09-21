@@ -101,6 +101,20 @@ async def _seed(session_maker, *, tournament_id: int, encounter_id: int) -> dict
             payload={"encounter_id": encounter_id},
             occurred_at=old,
         ),
+        "old_chat": WorkspaceEvent(
+            topic=f"encounter:{encounter_id}:chat",
+            event_type="chat.message",
+            schema_version=1,
+            payload={"text": "gl hf"},
+            occurred_at=old,
+        ),
+        "recent_chat": WorkspaceEvent(
+            topic=f"encounter:{encounter_id}:chat",
+            event_type="chat.message",
+            schema_version=1,
+            payload={"text": "gl hf"},
+            occurred_at=recent,
+        ),
     }
 
     async with session_maker() as session:
@@ -145,3 +159,7 @@ def test_purge_deletes_only_stale_bracket_and_invalidation_rows() -> None:
     assert ids["recent_invalidation"] in surviving
     assert ids["old_draft"] in surviving
     assert ids["old_map_veto"] in surviving
+    # The chat01 migration copied these into ``chat_message``; the originals
+    # are duplicates and now age out on the same 7-day floor.
+    assert ids["old_chat"] not in surviving
+    assert ids["recent_chat"] in surviving

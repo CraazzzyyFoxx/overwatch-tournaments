@@ -165,4 +165,16 @@ var DraftRoutes = []edge.RouteSpec{
 	{Method: "POST", Pattern: "/api/v1/balancer/draft/picks/{pick_id}/select", Queue: "rpc.balancer.draft.pick_select", IDParam: "pick_id", Body: true, Auth: edge.AuthRequired},
 	{Method: "POST", Pattern: "/api/v1/balancer/draft/picks/{pick_id}/autopick", Queue: "rpc.balancer.draft.pick_autopick", IDParam: "pick_id", Body: true, Auth: edge.AuthRequired},
 	{Method: "POST", Pattern: "/api/v1/balancer/draft/picks/{pick_id}/override", Queue: "rpc.balancer.draft.pick_override", IDParam: "pick_id", Body: true, Auth: edge.AuthRequired},
+	// draft room chat, on the shared chat tables
+	// (docs/plans/2026-09-21-shared-room-chat.md). Same six-endpoint shape as
+	// the pre-game room, keyed by the SESSION: a re-seed is a different draft
+	// and a different conversation. The history read is AuthOptional rather
+	// than AuthRequired — a draft is a show and spectators read it by default,
+	// anonymous ones included — while every write stays AuthRequired.
+	{Method: "GET", Pattern: "/api/v1/balancer/draft/sessions/{session_id}/chat", Queue: "rpc.balancer.draft.chat_history", IDParam: "session_id", AllQuery: true, Auth: edge.AuthOptional},
+	{Method: "POST", Pattern: "/api/v1/balancer/draft/sessions/{session_id}/chat", Queue: "rpc.balancer.draft.chat_post", IDParam: "session_id", Body: true, Auth: edge.AuthRequired},
+	{Method: "DELETE", Pattern: "/api/v1/balancer/draft/sessions/{session_id}/chat/{message_id}", Queue: "rpc.balancer.draft.chat_delete", IDParam: "session_id", Path: []string{"message_id"}, Auth: edge.AuthRequired},
+	{Method: "PATCH", Pattern: "/api/v1/balancer/draft/sessions/{session_id}/chat/settings", Queue: "rpc.balancer.draft.chat_settings", IDParam: "session_id", Body: true, Auth: edge.AuthRequired},
+	{Method: "PUT", Pattern: "/api/v1/balancer/draft/sessions/{session_id}/chat/mutes/{target_user_id}", Queue: "rpc.balancer.draft.chat_mute_set", IDParam: "session_id", Path: []string{"target_user_id"}, Body: true, Auth: edge.AuthRequired},
+	{Method: "DELETE", Pattern: "/api/v1/balancer/draft/sessions/{session_id}/chat/mutes/{target_user_id}", Queue: "rpc.balancer.draft.chat_mute_clear", IDParam: "session_id", Path: []string{"target_user_id"}, Auth: edge.AuthRequired},
 }

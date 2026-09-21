@@ -19,9 +19,11 @@ func (f fakeResolver) TournamentWorkspaceID(context.Context, int64) (int64, bool
 }
 
 type fakeMembers struct {
-	member bool
-	err    error
-	calls  []memberCall
+	member       bool
+	captain      bool
+	draftCaptain bool
+	err          error
+	calls        []memberCall
 }
 
 type memberCall struct{ user, ws int64 }
@@ -31,15 +33,26 @@ func (f *fakeMembers) IsWorkspaceMember(_ context.Context, userID, workspaceID i
 	return f.member, f.err
 }
 
+func (f *fakeMembers) IsEncounterCaptain(context.Context, int64, int64) (bool, error) {
+	return f.captain, f.err
+}
+
+func (f *fakeMembers) IsDraftSessionCaptain(context.Context, int64, int64) (bool, error) {
+	return f.draftCaptain, f.err
+}
+
 // fakeVis defaults to a visible (found, not hidden) tournament so spectating
 // topics stay public unless a test opts into hidden.
 type fakeVis struct {
-	hidden      bool
-	hiddenFound bool
-	preview     bool
-	encTID      int64
-	encFound    bool
-	err         error
+	hidden        bool
+	hiddenFound   bool
+	preview       bool
+	encTID        int64
+	encFound      bool
+	draftTID      int64
+	draftFound    bool
+	spectatorRead bool
+	err           error
 }
 
 func (f fakeVis) TournamentIsHidden(context.Context, int64) (bool, bool, error) {
@@ -52,6 +65,14 @@ func (f fakeVis) IsPreviewAllowed(context.Context, int64, int64) (bool, error) {
 
 func (f fakeVis) EncounterTournamentID(context.Context, int64) (int64, bool, error) {
 	return f.encTID, f.encFound, f.err
+}
+
+func (f fakeVis) DraftSessionTournamentID(context.Context, int64) (int64, bool, error) {
+	return f.draftTID, f.draftFound, f.err
+}
+
+func (f fakeVis) RoomSpectatorRead(context.Context, string, int64) (bool, error) {
+	return f.spectatorRead, f.err
 }
 
 // visibleVis: a real, non-hidden tournament (public spectating stays open).
@@ -156,6 +177,89 @@ func TestAllow_SpectateHiddenEncounterPickBanHero(t *testing.T) {
 	su := &auth.User{ID: 9, IsSuperuser: true}
 	if ok, err := r.Allow(ctx, su, "encounter:5:pick-ban:hero"); err != nil || !ok {
 		t.Fatalf("superuser should be allowed hidden hero pick-ban topic: ok=%v err=%v", ok, err)
+	}
+}
+
+// Both chat rooms behave the same way: participants (captain / workspace
+// member / superuser) always get in, and everyone else — anonymous included —
+// only while the organizer leaves spectator read ON. The toggle widens the
+// audience of a room the caller could already see; it never unhides a hidden
+// tournament.
+func TestAllow_RoomChat(t *testing.T) {
+	ctx := context.Background()
+	user := &auth.User{ID: 7}
+	su := &auth.User{ID: 9, IsSuperuser: true}
+
+	rooms := []struct {
+		name    string
+		topic   string
+		captain func() *fakeMembers
+	}{
+		{"encounter", "encounter:1:chat", func() *fakeMembers { return &fakeMembers{captain: true} }},
+		{"draft", "draft:1:chat", func() *fakeMembers { return &fakeMembers{draftCaptain: true} }},
+	}
+
+	for _, room := range rooms {
+		t.Run(room.name, func(t *testing.T) {
+			cases := []struct {
+				name    string
+				user    *auth.User
+				members *fakeMembers
+				open    bool
+				hidden  bool
+				want    bool
+			}{
+				{"anonymous denied when closed", nil, &fakeMembers{}, false, false, false},
+				{"anonymous allowed when open", nil, &fakeMembers{}, true, false, true},
+				{"non-participant denied when closed", user, &fakeMembers{}, false, false, false},
+				{"non-participant allowed when open", user, &fakeMembers{}, true, false, true},
+				{"captain allowed when closed", user, room.captain(), false, false, true},
+				{"captain allowed when open", user, room.captain(), true, false, true},
+				{"workspace member allowed when closed", user, &fakeMembers{member: true}, false, false, true},
+				{"workspace member allowed when open", user, &fakeMembers{member: true}, true, false, true},
+				{"superuser allowed when closed", su, &fakeMembers{}, false, false, true},
+				{"hidden tournament outsider denied when open", user, &fakeMembers{}, true, true, false},
+				{"hidden tournament anonymous denied when open", nil, &fakeMembers{}, true, true, false},
+			}
+			for _, tc := range cases {
+				t.Run(tc.name, func(t *testing.T) {
+					r := New(
+						fakeResolver{workspaceID: 3, found: true},
+						tc.members,
+						fakeVis{
+							hiddenFound:   true,
+							hidden:        tc.hidden,
+							encTID:        42,
+							encFound:      true,
+							draftTID:      42,
+							draftFound:    true,
+							spectatorRead: tc.open,
+						},
+					)
+					ok, err := r.Allow(ctx, tc.user, room.topic)
+					if err != nil {
+						t.Fatalf("unexpected error: %v", err)
+					}
+					if ok != tc.want {
+						t.Fatalf("Allow(%s) = %v, want %v", room.topic, ok, tc.want)
+					}
+				})
+			}
+		})
+	}
+}
+
+// A room whose referent does not exist is denied even wide open — there is no
+// tournament to apply the visibility gate to, and answering "allowed" would
+// disclose which encounter/session ids exist.
+func TestAllow_RoomChatUnknownReferentDenied(t *testing.T) {
+	ctx := context.Background()
+	vis := fakeVis{hiddenFound: true, spectatorRead: true, encFound: false, draftFound: false}
+	r := New(fakeResolver{workspaceID: 3, found: true}, &fakeMembers{}, vis)
+	for _, topic := range []string{"encounter:1:chat", "draft:1:chat"} {
+		if ok, err := r.Allow(ctx, &auth.User{ID: 7}, topic); err != nil || ok {
+			t.Fatalf("Allow(%s) = %v (err=%v), want denied", topic, ok, err)
+		}
 	}
 }
 

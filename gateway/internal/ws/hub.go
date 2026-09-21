@@ -171,6 +171,22 @@ func (h *Hub) CloseAll() {
 	}
 }
 
+// SubscribersOf returns a snapshot of the connections currently subscribed to
+// topic. The snapshot is taken under the same lock Route uses and is stale the
+// moment it is returned — callers (TopicRevoker) must tolerate a connection
+// that unsubscribed or closed in between, which unsubscribe/send already do.
+func (h *Hub) SubscribersOf(topic string) []*Conn {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	subs := make([]*Conn, 0, len(h.conns))
+	for c := range h.conns {
+		if c.hasTopic(topic) {
+			subs = append(subs, c)
+		}
+	}
+	return subs
+}
+
 // Route delivers a pre-serialized frame to every connection subscribed to
 // topic, except exclude. Failed sends drop the offending connection. Sends run
 // concurrently so one slow client cannot stall fan-out to the others.

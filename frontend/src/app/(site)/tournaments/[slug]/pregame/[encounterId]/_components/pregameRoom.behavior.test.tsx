@@ -67,6 +67,12 @@ vi.mock("@/services/map.service", () => ({
 vi.mock("@/services/hero.service", () => ({
   default: { getAll: (...args: unknown[]) => getAllHeroes(...args) }
 }));
+// The room now mounts `RoomChat` beside every phase. These cases are about the
+// phases, so the viewer is a spectator here (403 -> `null`) and the panel keeps
+// to itself; without the mock every case would also fire a real chat request.
+vi.mock("@/services/roomChat.service", () => ({
+  default: { getEnvelope: vi.fn().mockResolvedValue(null), postMessage: vi.fn() }
+}));
 /** Topic -> the room's handler, so a test can fire what the hub would push. */
 const realtimeHandlers = new Map<string, () => void>();
 vi.mock("@/hooks/useRealtimeTopic", () => ({
