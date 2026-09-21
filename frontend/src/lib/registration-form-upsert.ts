@@ -1,3 +1,4 @@
+import { defaultFormSchema } from "@/lib/forms/default-schema";
 import type {
   AdminRegistrationForm,
   AdminRegistrationFormUpsert
@@ -14,10 +15,11 @@ import type {
  * untouched. This is that baseline: load the form, spread the section's own
  * edits over it, send the result.
  *
- * Values are echoed verbatim rather than re-normalized. `built_in_fields` and
- * `custom_fields` only pass through `getBuiltInConfig`/`hydrateCustomField` on
- * the screen that EDITS them; running those over a payload nobody touched would
- * let a policy save rewrite field definitions it never displayed.
+ * Values are echoed verbatim rather than re-normalized. `form_schema` in
+ * particular travels back exactly as it was read: a policy save must never
+ * rewrite questions the screen it came from never displayed. A tournament with
+ * no form yet has no schema to echo, so it gets the same default the server
+ * would have built.
  *
  * `is_open` and `subscription_requirement_json` are absent on purpose: both are
  * server-derived read-only projections, and the schema drops them on the way in.
@@ -43,7 +45,6 @@ export function toRegistrationFormUpsert(
     // The looser stage for a form saved before the field existed, so loading an
     // old form never silently arms a sign-up wall.
     subscription_stage: form?.subscription_stage === "registration" ? "registration" : "check_in",
-    built_in_fields: form?.built_in_fields ?? {},
-    custom_fields: form?.custom_fields ?? []
+    form_schema: form?.form_schema ?? defaultFormSchema()
   };
 }

@@ -3207,6 +3207,20 @@
         "won": "{team} won the series {home}:{away}",
         "drawn": "The series ended {home}:{away}"
       },
+      "chat": {
+        "title": "Room chat",
+        "listLabel": "Room chat messages",
+        "empty": "No messages yet",
+        "emptyHint": "Only the two captains and the organizers can read this.",
+        "inputLabel": "Message to the room",
+        "placeholder": "Write to the room",
+        "inputHint": "Enter sends, Shift+Enter is a new line",
+        "send": "Send message",
+        "staff": "staff",
+        "remaining": "{count} characters left",
+        "throttled": "Too many messages — wait a moment",
+        "sendFailed": "Message not sent"
+      },
       "finalReport": {
         "title": "Report the match",
         "hint": "Pick and ban are done. This is the tournament's match report: confirm the series score, add the match codes and anything else the organizers asked for. Filing it takes you back where you came from."
@@ -4937,99 +4951,127 @@
     }
   },
   "registrationFormAdmin": {
-    "builtInFields": {
-      "title": "Built-in Fields",
-      "description": "Toggle which standard fields appear on the registration form. Sub-roles for the role fields are configured in the Subroles tab.",
-      "verifiedBadge": "Verified",
-      "required": "Required",
-      "mode": "Mode",
-      "modeOptional": "Player chooses",
-      "modeAllRoles": "All roles, one priority",
-      "modeForced": "Everyone is flex",
-      "settingsAria": "{field} settings",
-      "verifiedAccount": "Verified account",
-      "verifiedAccountHelp": "Require an OAuth-verified account; the registrant picks from their verified accounts.",
-      "regexPattern": "Regex pattern",
-      "errorMessage": "Error message",
-      "errorMessagePlaceholder": "Shown when {field} is invalid",
-      "maxHeroes": "Max heroes per role",
-      "defs": {
-        "battle_tag": {
-          "label": "BattleTag",
-          "description": "Battle.net tag (e.g. Player#1234)"
-        },
-        "smurf_tags": {
-          "label": "Smurf Accounts",
-          "description": "Additional BattleTag accounts (smurfs)"
-        },
-        "discord_nick": {
-          "label": "Discord",
-          "description": "Discord username"
-        },
-        "twitch_nick": {
-          "label": "Twitch",
-          "description": "Twitch channel name"
-        },
-        "primary_role": {
-          "label": "Primary Role",
-          "description": "Main role (tank/damage/support) with subrole selection"
-        },
-        "additional_roles": {
-          "label": "Additional Roles",
-          "description": "Secondary roles the player can fill"
-        },
-        "flex_role": {
-          "label": "Flex Role",
-          "description": "\"Player chooses\" offers a Flex preset. \"All roles, one priority\" makes every role mandatory and asks the player for a single priority role, or Flex — their other roles stay playable but less comfortable, which keeps the balancer's comfort trade-off alive. \"Everyone is flex\" removes the choice entirely. Both of the latter rate a player by their highest rank across all roles, and in both the Additional Roles sub-role list stops applying because every role counts as main."
-        },
-        "boosty_nick": {
-          "label": "Boosty",
-          "description": "Boosty nickname (self-declared — Boosty has no OAuth)"
-        },
-        "top_heroes": {
-          "label": "Top Heroes",
-          "description": "Let players pick their best heroes per role"
-        },
-        "stream_pov": {
-          "label": "Stream POV",
-          "description": "Player will stream their POV"
-        },
-        "notes": {
-          "label": "Notes",
-          "description": "Free-text notes from the player"
-        }
-      }
+    "builder": {
+      "editTab": "Build",
+      "previewTab": "Preview",
+      "sections": "Sections",
+      "addSection": "Add section",
+      "sectionFallback": "Section {index}",
+      "reorderSection": "Reorder {section}",
+      "reorderField": "Reorder {field}",
+      "fieldCount": "{count, plural, =0 {No questions} one {# question} other {# questions}}",
+      "deleteSection": "Delete this section",
+      "deleteSectionBlocked": "Move its questions out before deleting this section",
+      "deleteSectionAria": "Delete {section}",
+      "sectionTitle": "Step title",
+      "sectionTitlePlaceholder": "Named by its key when left empty",
+      "sectionDescription": "Description",
+      "sectionDescriptionPlaceholder": "One line under the step title",
+      "addField": "Add question",
+      "builtinGroup": "Built-in questions",
+      "identityGroup": "Social accounts",
+      "customGroup": "Your own question",
+      "emptySection": "This step asks nothing yet",
+      "emptySectionHint": "Add a built-in question or one of your own. A step with no questions is skipped in the wizard.",
+      "deleteField": "Delete {field}",
+      "organizersBadge": "Organizers only",
+      "requiredBadge": "Required",
+      "conditionalBadge": "Conditional",
+      "strandedCleared": "“Show only when” was cleared on {fields}: the question it depended on is no longer asked earlier.",
+      "blocked": "Fix the highlighted questions before saving.",
+      "previewBack": "Back",
+      "previewNext": "Next",
+      "previewDone": "Submit",
+      "previewNote": "Read-only preview of every question, organizers-only ones included.",
+      "version": "Version {number}",
+      "stale": "{count, plural, =0 {Up to date} one {# registration on an older version} other {# registrations on an older version}}",
+      "staleHint": "Those answers were filed against an earlier version of this form. Editing them re-files them against the current one."
     },
-    "customFields": {
-      "title": "Custom Fields",
-      "description": "Add extra fields like Boosty nick, VK link, YouTube, etc.",
-      "addField": "Add field",
-      "emptyTitle": "No custom fields yet",
-      "emptyHint": "Custom fields collect extra details from players, such as a Boosty nickname or a VK link.",
+    "builtins": {
+      "battle_tag": "BattleTag",
+      "smurf_tags": "Smurf accounts",
+      "roles": "Roles",
+      "stream_pov": "Stream POV",
+      "public_notes": "Notes",
+      "organizer_notes": "Notes for organizers",
+      "identity_discord": "Discord",
+      "identity_twitch": "Twitch",
+      "identity_boosty": "Boosty",
+      "identity_vk": "VK",
+      "identity_youtube": "YouTube"
+    },
+    "kinds": {
+      "text": "Text",
+      "textarea": "Long text",
+      "number": "Number",
+      "select": "Select one",
+      "multi_select": "Select several",
+      "checkbox": "Checkbox",
+      "url": "Link",
+      "date": "Date"
+    },
+    "field": {
+      "builtinCopyHint": "This question is built in: its wording, its input and its validation are the same everywhere, so only the settings below are yours.",
       "label": "Label",
-      "labelPlaceholder": "e.g. Boosty nick",
-      "type": "Type",
-      "types": {
-        "text": "Text",
-        "number": "Number",
-        "url": "URL",
-        "select": "Select",
-        "checkbox": "Checkbox"
-      },
+      "labelPlaceholder": "e.g. Boosty nickname",
       "placeholder": "Placeholder",
-      "placeholderHint": "Hint text...",
+      "help": "Help text",
       "required": "Required",
-      "showInDraft": "Show in draft",
-      "showInDraftHint": "Show this answer in the live draft player card. The draft board is public — anyone watching can read it.",
-      "fieldFallback": "field",
-      "settingsAria": "{field} settings",
-      "removeAria": "Remove {field}",
+      "visibility": "Who reads the answer",
+      "visibilityPublic": "Everyone",
+      "visibilityOrganizers": "Organizers only",
+      "visibilityHint": "Either way the registrant is asked. This decides who may read the answer afterwards.",
+      "visibilityFixed": "{field} always has the same readership — it cannot be changed per form.",
       "options": "Options (one per line)",
       "optionsPlaceholder": "Option A\nOption B\nOption C",
       "regex": "Regex pattern",
+      "regexHint": "Leave empty to use the server's default for this question.",
       "errorMessage": "Error message",
-      "errorMessagePlaceholder": "Shown when {field} is invalid",
-      "keyLabel": "key: {key}"
+      "visibleWhen": "Show only when",
+      "visibleWhenAlways": "Always shown",
+      "visibleWhenHint": "Only questions asked EARLIER than this one can drive it.",
+      "visibleWhenNoEarlier": "Nothing is asked before this question yet.",
+      "visibleWhenOp": "Condition",
+      "visibleWhenValue": "Value",
+      "visibleWhenClear": "Always show this question",
+      "visibleWhenListPlaceholder": "Comma-separated values",
+      "valueTrue": "Answered yes",
+      "valueFalse": "Answered no",
+      "op_truthy": "is answered",
+      "op_eq": "equals",
+      "op_neq": "does not equal",
+      "op_in": "is one of",
+      "showInDraft": "Show in the draft",
+      "showInDraftHint": "Show this answer on the live draft player card. The draft board is public — anyone watching can read it.",
+      "showInDraftBlocked": "Unavailable: the draft board is public and this answer is organizers-only.",
+      "requireVerified": "Require a verified account",
+      "requireVerifiedHint": "The registrant must pick one of their OAuth-verified accounts instead of typing a handle.",
+      "keyLocked": "Answer key: {key}",
+      "keyPending": "Answer key: {key} — set from the label when you leave the box, then locked.",
+      "issues": {
+        "labelRequired": "A question of your own needs a label.",
+        "optionsRequired": "List at least one option.",
+        "optionsDuplicate": "Two options are identical.",
+        "regexInvalid": "This pattern does not compile.",
+        "regexTooLong": "A pattern may be at most {max} characters."
+      }
+    },
+    "roles": {
+      "primaryRequired": "Primary role is required",
+      "additionalRequired": "Additional roles are required",
+      "flexAllowed": "Allow a full-flex answer",
+      "flexAllowedHint": "Off refuses a submission that marks every role as primary.",
+      "flexMode": "Mode",
+      "mode_optional": "Player chooses",
+      "mode_all_roles": "All roles, one priority",
+      "mode_forced": "Everyone is flex",
+      "modeHint_optional": "The registrant picks their roles and may take the Flex preset.",
+      "modeHint_all_roles": "Every role is mandatory and the registrant names one priority role, or Flex. Rating uses their highest rank across all roles, and the sub-role list stops applying because every role counts as main.",
+      "modeHint_forced": "The choice is removed: everyone is rated as flex across all roles.",
+      "topHeroesEnabled": "Ask for top heroes",
+      "topHeroesHint": "Per role, the heroes the registrant plays best.",
+      "topHeroesRequired": "Top heroes are required",
+      "topHeroesMax": "Max heroes per role"
     },
     "subroles": {
       "title": "Subroles",
@@ -5040,6 +5082,27 @@
       "chipHidden": "Hidden — click to offer",
       "loading": "Loading…",
       "emptyRole": "No {role} sub-roles in this workspace yet — add them in the catalog."
+    },
+    "templates": {
+      "menu": "Templates",
+      "load": "Load a template…",
+      "saveAs": "Save as template…",
+      "loadTitle": "Load a template",
+      "loadDescription": "Replaces the questions on screen. Nothing is written until you save the form.",
+      "loading": "Loading templates…",
+      "emptyTitle": "No templates yet",
+      "emptyHint": "Save a form as a template and every tournament in this workspace can start from it.",
+      "sectionCount": "{count, plural, =0 {No steps} one {# step} other {# steps}}",
+      "cancel": "Cancel",
+      "loadConfirm": "Replace the questions",
+      "loadedToast": "Loaded “{name}” — save the form to keep it.",
+      "saveAsTitle": "Save as template",
+      "saveAsDescription": "Snapshots the SAVED questions of this tournament. Save your edits first if you want them in the template.",
+      "nameLabel": "Template name",
+      "namePlaceholder": "e.g. Open cup, no streams",
+      "saveConfirm": "Save template",
+      "savedToast": "Template saved",
+      "saveFailed": "Could not save the template"
     },
     "page": {
       "admission": {

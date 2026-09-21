@@ -1,114 +1,678 @@
 "use client";
 
-import { startTransition, useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { LoaderCircle } from "lucide-react";
+import {
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  arrayMove,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy
+} from "@dnd-kit/sortable";
+import { LoaderCircle, Trash2 } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import SchemaForm from "@/components/forms/SchemaForm";
+import type { FieldRendererContext } from "@/components/forms/types";
 import { SaveBar } from "@/components/kit/SaveBar";
-import { notify } from "@/lib/notify";
+import { EmptyNote } from "@/components/kit/EmptyNote";
+import { SortableGrip, useSortableRow } from "@/components/kit/SortableRows";
+import { registrationRenderers } from "@/components/registration/registrationRenderers";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { defaultFormSchema } from "@/lib/forms/default-schema";
+import { fieldErrorsFrom } from "@/lib/forms/form-errors";
 import { makeUniqueFieldKey } from "@/lib/forms/keys";
+import { notify } from "@/lib/notify";
 import { toRegistrationFormUpsert } from "@/lib/registration-form-upsert";
 import { ROLES, canonicalToRegistrationRole } from "@/lib/roles";
+import { cn } from "@/lib/utils";
 import adminService from "@/services/admin.service";
 import balancerAdminService from "@/services/balancer-admin.service";
 import { useWorkspaceStore } from "@/stores/workspace.store";
-import type {
-  AdminCustomFieldDef,
-  AdminRegistrationForm,
-  AdminRegistrationFormUpsert,
-  BuiltInFieldConfig
-} from "@/types/balancer-admin.types";
+import type { AdminRegistrationForm } from "@/types/balancer-admin.types";
+import type { FieldKind, FormField, FormSchema } from "@/types/forms.types";
 
-import { BuiltInFieldsCard } from "./_components/BuiltInFieldsCard";
-import { CustomFieldsCard } from "./_components/CustomFieldsCard";
-import { type CatalogEntry, SubrolesTab } from "./_components/SubrolesTab";
-import {
-  ROLE_FIELD_KEYS,
-  getBuiltInConfig,
-  getCustomFieldDefaultValidation,
-  hydrateCustomField,
-  normalizeValidation,
-  supportsCustomFieldValidation
-} from "./_components/formConfig";
+import { AddFieldMenu, newBuiltinField, newCustomField } from "./_components/AddFieldMenu";
+import { FieldEditor, fieldDisplayLabel, fieldIssues } from "./_components/FieldEditor";
+import type { CatalogEntry, SubroleCatalogByRole } from "./_components/RolesParamsEditor";
+import { FIELD_DRAG_PREFIX, SECTION_DRAG_PREFIX, SectionList } from "./_components/SectionList";
+import { TemplateMenu } from "./_components/TemplateMenu";
+
+const OPTION_KINDS: Record<string, true> = { select: true, multi_select: true };
+
+// ---------------------------------------------------------------------------
+// Pure schema edits. The editor never mutates: every change produces a new
+// `FormSchema`, which is what makes "draft ?? server's" a one-line decision.
+// ---------------------------------------------------------------------------
+
+/** Every field in the order the wizard asks them — the order the server's
+ *  `visible_when` invariant is stated in. */
+function flatFields(schema: FormSchema): FormField[] {
+  return schema.sections.flatMap((section) => section.fields);
+}
+
+function locate(schema: FormSchema, key: string): { si: number; fi: number } | null {
+  for (let si = 0; si < schema.sections.length; si += 1) {
+    const fi = schema.sections[si].fields.findIndex((field) => field.key === key);
+    if (fi !== -1) return { si, fi };
+  }
+  return null;
+}
+
+/** The fields asked BEFORE `key` — the only legal `visible_when` targets. */
+function earlierFields(schema: FormSchema, key: string): FormField[] {
+  const flat = flatFields(schema);
+  const index = flat.findIndex((field) => field.key === key);
+  return index <= 0 ? [] : flat.slice(0, index);
+}
+
+function withSections(
+  schema: FormSchema,
+  map: (fields: FormField[], index: number) => FormField[]
+): FormSchema {
+  return {
+    ...schema,
+    sections: schema.sections.map((section, index) => ({ ...section, fields: map(section.fields, index) }))
+  };
+}
+
+function replaceField(schema: FormSchema, key: string, next: FormField): FormSchema {
+  return withSections(schema, (fields) =>
+    fields.some((field) => field.key === key)
+      ? fields.map((field) => (field.key === key ? next : field))
+      : fields
+  );
+}
+
+function appendField(schema: FormSchema, sectionKey: string, field: FormField): FormSchema {
+  return {
+    ...schema,
+    sections: schema.sections.map((section) =>
+      section.key === sectionKey ? { ...section, fields: [...section.fields, field] } : section
+    )
+  };
+}
+
+function removeField(schema: FormSchema, key: string): FormSchema {
+  return withSections(schema, (fields) => fields.filter((field) => field.key !== key));
+}
 
 /**
- * The questionnaire: what a registrant is asked, and what they may answer.
+ * Rename a field and follow its references.
  *
- * Nothing that decides who gets in lives here any more. Admission rules, the
- * public-page display and the bench size moved to the Settings rail
- * (`settings/admission`, `settings/registration`, `settings/roster`) — they are
- * tournament policy, and holding them inside a field builder is what made this
- * one screen answer four unrelated questions under headings joined by "and".
- *
- * The save still sends the WHOLE form: the upsert is a full replace, so the
- * policy fields are echoed back from `toRegistrationFormUpsert`.
+ * Only ever called for a field whose key is still provisional (a custom one the
+ * organizer has not named yet), but a later field may already point at it, and
+ * a dangling `visible_when` is a 422 rather than a warning.
  */
-export default function RegistrationFormBuilder({
-  tournamentId
-}: Readonly<{
-  tournamentId: number | null;
-}>) {
-  const t = useTranslations("registrationFormAdmin.page");
-
-  const queryClient = useQueryClient();
-  const currentWorkspaceId = useWorkspaceStore((state) => state.currentWorkspaceId);
-
-  const [builtInFields, setBuiltInFields] = useState<Record<string, BuiltInFieldConfig>>(() =>
-    getBuiltInConfig({})
+function renameField(schema: FormSchema, from: string, to: string): FormSchema {
+  return withSections(schema, (fields) =>
+    fields.map((field) => {
+      const renamed = field.key === from ? { ...field, key: to } : field;
+      return renamed.visible_when?.field === from
+        ? { ...renamed, visible_when: { ...renamed.visible_when, field: to } }
+        : renamed;
+    })
   );
-  const [customFields, setCustomFields] = useState<AdminCustomFieldDef[]>([]);
-  const [hasChanges, setHasChanges] = useState(false);
+}
 
-  const formQuery = useQuery({
-    queryKey: ["balancer-admin", "registration-form", tournamentId],
-    queryFn: () => balancerAdminService.getRegistrationForm(tournamentId as number),
-    enabled: tournamentId !== null,
-    // This page is a long-lived editor; a background refetch must not clobber
-    // the admin's unsaved edits.
-    refetchOnWindowFocus: false
+/** Move `key` onto `overKey`'s slot, across sections when they differ. */
+function moveFieldOnto(schema: FormSchema, key: string, overKey: string): FormSchema {
+  const from = locate(schema, key);
+  const to = locate(schema, overKey);
+  if (!from || !to) return schema;
+  if (from.si === to.si) {
+    return withSections(schema, (fields, index) =>
+      index === from.si ? arrayMove(fields, from.fi, to.fi) : fields
+    );
+  }
+  const field = schema.sections[from.si].fields[from.fi];
+  return withSections(schema, (fields, index) => {
+    if (index === from.si) return fields.filter((candidate) => candidate.key !== key);
+    if (index !== to.si) return fields;
+    const next = [...fields];
+    next.splice(to.fi, 0, field);
+    return next;
   });
+}
 
-  const loadedFormKeyRef = useRef<string | null>(null);
+/** Move `key` to the end of `sectionKey` — the rail rows are drop targets so a
+ *  field can reach a section that is not on screen. */
+function moveFieldToSection(schema: FormSchema, key: string, sectionKey: string): FormSchema {
+  const from = locate(schema, key);
+  if (!from || schema.sections[from.si].key === sectionKey) return schema;
+  const field = schema.sections[from.si].fields[from.fi];
+  return {
+    ...schema,
+    sections: schema.sections.map((section, index) => {
+      if (index === from.si) {
+        return { ...section, fields: section.fields.filter((candidate) => candidate.key !== key) };
+      }
+      return section.key === sectionKey ? { ...section, fields: [...section.fields, field] } : section;
+    })
+  };
+}
 
-  /** Local state ← a saved form (or the defaults, for a tournament with none). */
-  const applyForm = (data: AdminRegistrationForm | null) => {
-    startTransition(() => {
-      setBuiltInFields(getBuiltInConfig(data?.built_in_fields ?? {}));
-      setCustomFields((data?.custom_fields ?? []).map(hydrateCustomField));
-      setHasChanges(false);
+/**
+ * Drop every `visible_when` that no longer points at an EARLIER field.
+ *
+ * A reorder, a cross-section move or a deletion can strand a condition, and the
+ * server rejects the whole schema when one is. Refusing the drop would make
+ * dragging feel broken for a rule the organizer cannot see; keeping the stale
+ * condition would fail the save with a path nobody can read. So the condition
+ * is CLEARED and the caller says which questions lost one — the edit lands, and
+ * nothing changes silently.
+ */
+function pruneStrandedConditions(schema: FormSchema): { schema: FormSchema; cleared: string[] } {
+  const seen = new Set<string>();
+  const cleared: string[] = [];
+  const next = withSections(schema, (fields) =>
+    fields.map((field) => {
+      const target = field.visible_when?.field;
+      const stranded = target !== undefined && (target === field.key || !seen.has(target));
+      seen.add(field.key);
+      if (!stranded) return field;
+      cleared.push(field.key);
+      return { ...field, visible_when: null };
+    })
+  );
+  return cleared.length === 0 ? { schema, cleared } : { schema: next, cleared };
+}
+
+/**
+ * The schema as it goes on the wire: trimmed copy, empty parts dropped.
+ *
+ * The editor keeps what the organizer typed — a trailing blank line in the
+ * options box is a line they are about to fill — and this is where that becomes
+ * a document the server's invariants accept.
+ */
+export function sanitizeSchema(schema: FormSchema): FormSchema {
+  return {
+    ...schema,
+    sections: schema.sections.map((section) => ({
+      ...section,
+      title: section.title?.trim() || null,
+      description: section.description?.trim() || null,
+      fields: section.fields.map((field) => {
+        const isBuiltin = field.kind === "builtin";
+        const regex = field.validation?.regex?.trim() || null;
+        const message = field.validation?.error_message?.trim() || null;
+        return {
+          ...field,
+          label: isBuiltin ? (field.label ?? null) : (field.label ?? "").trim(),
+          help: field.help?.trim() || null,
+          placeholder: field.placeholder?.trim() || null,
+          options: OPTION_KINDS[field.kind]
+            ? [...new Set((field.options ?? []).map((option) => option.trim()).filter(Boolean))]
+            : null,
+          validation: regex || message ? { regex, error_message: message } : null,
+          params: isBuiltin ? field.params : {},
+          show_in_draft: !isBuiltin && field.visibility === "public" && field.show_in_draft
+        };
+      })
+    }))
+  };
+}
+
+/** Fields the editor itself refuses to send. The save button reports the count;
+ *  each row and the field editor show the reason under the control. */
+export function blockedFieldKeys(schema: FormSchema): Set<string> {
+  const blocked = new Set<string>();
+  for (const field of flatFields(schema)) {
+    const issues = fieldIssues(field);
+    if (issues.label || issues.options || issues.regex) blocked.add(field.key);
+  }
+  return blocked;
+}
+
+/** `sections[1].fields[3].visible_when` → the key of the field it names.
+ *  `schema_invalid` reports a PATH, and a path is not something to show an
+ *  organizer; the field it points at is. */
+function fieldKeyAtSchemaPath(schema: FormSchema, path: string): string | null {
+  const match = /^sections\[(\d+)]\.fields\[(\d+)]/.exec(path);
+  if (!match) return null;
+  return schema.sections[Number(match[1])]?.fields[Number(match[2])]?.key ?? null;
+}
+
+// ---------------------------------------------------------------------------
+// The editor
+// ---------------------------------------------------------------------------
+
+function FieldRow({
+  field,
+  label,
+  selected,
+  invalid,
+  onSelect,
+  onDelete
+}: Readonly<{
+  field: FormField;
+  label: string;
+  selected: boolean;
+  invalid: boolean;
+  onSelect: () => void;
+  onDelete: () => void;
+}>) {
+  const t = useTranslations("registrationFormAdmin.builder");
+  const tKinds = useTranslations("registrationFormAdmin.kinds");
+  const { ref, style, handleProps, isDragging } = useSortableRow(`${FIELD_DRAG_PREFIX}${field.key}`);
+
+  return (
+    <div
+      ref={ref}
+      style={style}
+      className={cn(
+        "flex items-center gap-2 rounded-lg border px-2 py-1.5",
+        selected ? "border-primary/40 bg-primary/5" : "border-border/60",
+        invalid && "border-destructive/50",
+        isDragging && "opacity-90"
+      )}
+    >
+      <SortableGrip handleProps={handleProps} label={t("reorderField", { field: label })} />
+      <button type="button" onClick={onSelect} className="min-w-0 flex-1 text-left">
+        <span className="block truncate text-sm font-medium">{label}</span>
+        <span className="flex flex-wrap items-center gap-1.5 pt-0.5">
+          <span className="font-mono text-xs text-muted-foreground">{field.key}</span>
+          {field.kind === "builtin" ? null : (
+            <Badge variant="outline" className="text-[10px]">
+              {tKinds(field.kind)}
+            </Badge>
+          )}
+          {field.required && (
+            <Badge variant="outline" className="text-[10px]">
+              {t("requiredBadge")}
+            </Badge>
+          )}
+          {field.visibility === "organizers" && (
+            <Badge variant="outline" className="text-[10px]">
+              {t("organizersBadge")}
+            </Badge>
+          )}
+          {field.visible_when && (
+            <Badge variant="outline" className="text-[10px]">
+              {t("conditionalBadge")}
+            </Badge>
+          )}
+        </span>
+      </button>
+      <Button
+        variant="ghost"
+        size="icon"
+        className="size-7 shrink-0"
+        aria-label={t("deleteField", { field: label })}
+        onClick={onDelete}
+      >
+        <Trash2 className="size-3.5" aria-hidden />
+      </Button>
+    </div>
+  );
+}
+
+export interface SchemaEditorProps {
+  schema: FormSchema;
+  onChange: (next: FormSchema) => void;
+  /** Workspace `PlayerSubRole` rows, grouped by role — the `roles` params
+   *  editor keys its chips by row id, the preview only needs slug/label. */
+  subroleCatalog: SubroleCatalogByRole;
+  catalogLoading?: boolean;
+  /** `schema_invalid` rejections, already resolved from path to field key. */
+  fieldErrors: Record<string, string>;
+  /** Template menu, save-as, anything the owning screen puts above the tabs. */
+  toolbar?: ReactNode;
+}
+
+/**
+ * The questionnaire itself: sections on the rail, that section's questions in
+ * the pane, one question's settings under them, and a read-only preview.
+ *
+ * Owns no persistence — a tournament's form and a workspace template are the
+ * same document written to different endpoints, and the difference is the save
+ * button, not the editor.
+ *
+ * The server's schema invariants are made UNREACHABLE here rather than reported
+ * after the fact: a builtin whose visibility the catalog fixes gets a disabled
+ * selector, a `visible_when` only ever lists earlier fields, a reorder that
+ * would strand a condition clears it and says so, and a custom key is derived
+ * from the label once and then locked.
+ */
+export function SchemaEditor({
+  schema,
+  onChange,
+  subroleCatalog,
+  catalogLoading = false,
+  fieldErrors,
+  toolbar
+}: Readonly<SchemaEditorProps>) {
+  const t = useTranslations("registrationFormAdmin.builder");
+  const tBuiltins = useTranslations("registrationFormAdmin.builtins");
+  const tFormErrors = useTranslations("forms.errors");
+
+  const [sectionKey, setSectionKey] = useState<string | null>(null);
+  const [fieldKey, setFieldKey] = useState<string | null>(null);
+  /** Custom fields whose key is still derived from the label. Emptied one field
+   *  at a time, the first time the label leaves the box with text in it. */
+  const [unlockedKeys, setUnlockedKeys] = useState<ReadonlySet<string>>(() => new Set());
+  const [previewStep, setPreviewStep] = useState(0);
+
+  const sensors = useSensors(
+    // 5px before a drag starts, so a click on a row's button stays a click.
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
+  const section = schema.sections.find((entry) => entry.key === sectionKey) ?? schema.sections[0];
+  const field = section?.fields.find((entry) => entry.key === fieldKey) ?? null;
+  const usedKeys = useMemo(() => new Set(flatFields(schema).map((entry) => entry.key)), [schema]);
+  const invalidKeys = useMemo(() => blockedFieldKeys(schema), [schema]);
+
+
+  /** Apply an edit; `prune` for the structural ones, which can strand a condition. */
+  const commit = (next: FormSchema, prune = false) => {
+    if (!prune) {
+      onChange(next);
+      return;
+    }
+    const { schema: pruned, cleared } = pruneStrandedConditions(next);
+    if (cleared.length > 0) {
+      const names = cleared
+        .map((key) => flatFields(pruned).find((entry) => entry.key === key))
+        .filter((entry): entry is FormField => entry !== undefined)
+        .map((entry) => `\u201c${fieldDisplayLabel(entry, tBuiltins)}\u201d`);
+      notify.warning(t("strandedCleared", { fields: names.join(", ") }));
+    }
+    onChange(pruned);
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const activeId = String(event.active.id);
+    const overId = event.over ? String(event.over.id) : null;
+    if (!overId || activeId === overId) return;
+
+    if (activeId.startsWith(SECTION_DRAG_PREFIX)) {
+      if (!overId.startsWith(SECTION_DRAG_PREFIX)) return;
+      const keys = schema.sections.map((entry) => entry.key);
+      const from = keys.indexOf(activeId.slice(SECTION_DRAG_PREFIX.length));
+      const to = keys.indexOf(overId.slice(SECTION_DRAG_PREFIX.length));
+      if (from === -1 || to === -1) return;
+      commit({ ...schema, sections: arrayMove(schema.sections, from, to) }, true);
+      return;
+    }
+
+    const moved = activeId.slice(FIELD_DRAG_PREFIX.length);
+    if (overId.startsWith(SECTION_DRAG_PREFIX)) {
+      commit(moveFieldToSection(schema, moved, overId.slice(SECTION_DRAG_PREFIX.length)), true);
+      return;
+    }
+    commit(moveFieldOnto(schema, moved, overId.slice(FIELD_DRAG_PREFIX.length)), true);
+  };
+
+  const addSection = () => {
+    const key = makeUniqueFieldKey(
+      "section",
+      schema.sections.map((entry) => entry.key)
+    );
+    commit({
+      ...schema,
+      sections: [...schema.sections, { key, title: null, description: null, fields: [] }]
+    });
+    setSectionKey(key);
+    setFieldKey(null);
+  };
+
+  const deleteSection = (key: string) => {
+    commit({ ...schema, sections: schema.sections.filter((entry) => entry.key !== key) }, true);
+    if (sectionKey === key) setSectionKey(null);
+  };
+
+  const patchSection = (key: string, updates: { title?: string | null; description?: string | null }) =>
+    commit({
+      ...schema,
+      sections: schema.sections.map((entry) => (entry.key === key ? { ...entry, ...updates } : entry))
+    });
+
+  const addBuiltin = (key: string) => {
+    if (!section) return;
+    commit(appendField(schema, section.key, newBuiltinField(key)));
+    setFieldKey(key);
+  };
+
+  const addCustom = (kind: FieldKind) => {
+    if (!section) return;
+    const created = newCustomField(kind, usedKeys);
+    commit(appendField(schema, section.key, created));
+    setFieldKey(created.key);
+    setUnlockedKeys((previous) => new Set(previous).add(created.key));
+  };
+
+  const deleteField = (key: string) => {
+    commit(removeField(schema, key), true);
+    if (fieldKey === key) setFieldKey(null);
+    setUnlockedKeys((previous) => {
+      if (!previous.has(key)) return previous;
+      const next = new Set(previous);
+      next.delete(key);
+      return next;
     });
   };
 
-  useEffect(() => {
-    const data = formQuery.data;
-    if (!data) {
-      return;
-    }
-    const formKey = String(data.id);
-    // Always hydrate on initial load / when switching to a different form.
-    // For background refetches of the same form, never clobber unsaved edits.
-    if (loadedFormKeyRef.current === formKey && hasChanges) {
-      return;
-    }
-    loadedFormKeyRef.current = formKey;
-    applyForm(data);
-  }, [formQuery.data, hasChanges]);
+  /**
+   * Derive the answer key from the label, once.
+   *
+   * Runs when the label box is left. A still-empty label leaves the key
+   * provisional rather than freezing the placeholder one: the organizer has not
+   * named the question yet, and the key is what every stored answer is filed
+   * under.
+   */
+  const commitKey = () => {
+    if (!field || !unlockedKeys.has(field.key)) return;
+    const label = (field.label ?? "").trim();
+    if (!label) return;
+    setUnlockedKeys((previous) => {
+      const next = new Set(previous);
+      next.delete(field.key);
+      return next;
+    });
+    const derived = makeUniqueFieldKey(
+      label,
+      flatFields(schema)
+        .filter((entry) => entry.key !== field.key)
+        .map((entry) => entry.key)
+    );
+    if (derived === field.key) return;
+    commit(renameField(schema, field.key, derived));
+    setFieldKey(derived);
+  };
 
-  // The workspace `PlayerSubRole` catalog is fetched with row ids so the tab can
-  // key its chips; managing it lives on `/admin/sub-roles`. The form's embedded
-  // `subrole_catalog` only carries {slug,label} for the public wizard.
-  const workspaceId = formQuery.data?.workspace_id ?? currentWorkspaceId ?? null;
+  const previewContext = useMemo<FieldRendererContext>(
+    () => ({
+      mode: "public",
+      accounts: [],
+      subroleCatalog,
+      heroes: [],
+      lockedRole: null,
+      subscription: null,
+      t: tFormErrors
+    }),
+    [subroleCatalog, tFormErrors]
+  );
 
+  return (
+    <Tabs defaultValue="edit" className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <TabsList>
+          <TabsTrigger value="edit">{t("editTab")}</TabsTrigger>
+          <TabsTrigger value="preview">{t("previewTab")}</TabsTrigger>
+        </TabsList>
+        {toolbar}
+      </div>
+
+      <TabsContent value="edit" className="m-0">
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <div className="flex flex-col gap-4 md:flex-row md:items-start">
+            <SectionList
+              sections={schema.sections}
+              selectedKey={section?.key ?? ""}
+              onSelect={(key) => {
+                setSectionKey(key);
+                setFieldKey(null);
+              }}
+              onAdd={addSection}
+              onDelete={deleteSection}
+            />
+
+            <div className="min-w-0 flex-1 rounded-xl border p-4">
+              {section ? (
+                <div className="grid gap-4">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="grid gap-1.5">
+                      <Label htmlFor="registration-section-title" className="text-xs">
+                        {t("sectionTitle")}
+                      </Label>
+                      <Input
+                        id="registration-section-title"
+                        value={section.title ?? ""}
+                        placeholder={t("sectionTitlePlaceholder")}
+                        onChange={(event) =>
+                          patchSection(section.key, { title: event.target.value || null })
+                        }
+                      />
+                    </div>
+                    <div className="grid gap-1.5">
+                      <Label htmlFor="registration-section-description" className="text-xs">
+                        {t("sectionDescription")}
+                      </Label>
+                      <Input
+                        id="registration-section-description"
+                        value={section.description ?? ""}
+                        placeholder={t("sectionDescriptionPlaceholder")}
+                        onChange={(event) =>
+                          patchSection(section.key, { description: event.target.value || null })
+                        }
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      {t("fieldCount", { count: section.fields.length })}
+                    </p>
+                    <AddFieldMenu
+                      usedKeys={usedKeys}
+                      onAddBuiltin={addBuiltin}
+                      onAddCustom={addCustom}
+                    />
+                  </div>
+
+                  <SortableContext
+                    items={section.fields.map((entry) => `${FIELD_DRAG_PREFIX}${entry.key}`)}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    <div className="flex flex-col gap-1.5">
+                      {section.fields.map((entry) => (
+                        <FieldRow
+                          key={entry.key}
+                          field={entry}
+                          label={fieldDisplayLabel(entry, tBuiltins)}
+                          selected={entry.key === field?.key}
+                          invalid={invalidKeys.has(entry.key) || fieldErrors[entry.key] !== undefined}
+                          onSelect={() => setFieldKey(entry.key)}
+                          onDelete={() => deleteField(entry.key)}
+                        />
+                      ))}
+                    </div>
+                  </SortableContext>
+
+                  {section.fields.length === 0 && (
+                    <EmptyNote title={t("emptySection")}>{t("emptySectionHint")}</EmptyNote>
+                  )}
+
+                  {field && (
+                    <FieldEditor
+                      key={field.key}
+                      field={field}
+                      earlierFields={earlierFields(schema, field.key)}
+                      keyLocked={!unlockedKeys.has(field.key)}
+                      serverError={fieldErrors[field.key] ?? null}
+                      catalog={subroleCatalog}
+                      catalogLoading={catalogLoading}
+                      onChange={(next) => commit(replaceField(schema, field.key, next))}
+                      onCommitKey={commitKey}
+                    />
+                  )}
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </DndContext>
+      </TabsContent>
+
+      <TabsContent value="preview" className="m-0">
+        <div className="grid gap-3 rounded-xl border p-4">
+          <p className="text-xs text-muted-foreground">{t("previewNote")}</p>
+          <SchemaForm
+            readOnly
+            schema={schema}
+            answers={{}}
+            onChange={() => undefined}
+            renderers={registrationRenderers}
+            context={previewContext}
+            serverErrors={{}}
+            step={previewStep}
+            onStepChange={setPreviewStep}
+            showErrors={false}
+            footer={({ canGoBack, isLast }) => (
+              <div className="flex items-center justify-between gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={!canGoBack}
+                  onClick={() => setPreviewStep((current) => Math.max(0, current - 1))}
+                >
+                  {t("previewBack")}
+                </Button>
+                <Button
+                  size="sm"
+                  disabled={isLast}
+                  onClick={() => setPreviewStep((current) => current + 1)}
+                >
+                  {isLast ? t("previewDone") : t("previewNext")}
+                </Button>
+              </div>
+            )}
+          />
+        </div>
+      </TabsContent>
+    </Tabs>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// The tournament's own questionnaire
+// ---------------------------------------------------------------------------
+
+/** The workspace sub-role catalog, grouped the way both the params editor and
+ *  the preview renderers want it. */
+export function useSubroleCatalog(workspaceId: number | null) {
   const catalogQuery = useQuery({
     queryKey: ["admin", "player-sub-roles", workspaceId],
     queryFn: () => adminService.getPlayerSubRoles({ workspace_id: workspaceId as number }),
     enabled: workspaceId !== null
   });
 
-  const subroleCatalog = useMemo<Record<string, CatalogEntry[]>>(() => {
-    const grouped: Record<string, CatalogEntry[]> = Object.fromEntries(
+  const catalog = useMemo<SubroleCatalogByRole>(() => {
+    const grouped: SubroleCatalogByRole = Object.fromEntries(
       ROLES.map((role) => [role.code, [] as CatalogEntry[]])
     );
     for (const row of catalogQuery.data ?? []) {
@@ -120,119 +684,99 @@ export default function RegistrationFormBuilder({
     return grouped;
   }, [catalogQuery.data]);
 
+  return { catalog, loading: catalogQuery.isLoading };
+}
+
+/**
+ * The questionnaire: what a registrant is asked, and what they may answer.
+ *
+ * Nothing that decides who gets in lives here. Admission rules, the public-page
+ * display and the bench size are the Settings rail's (`settings/admission`,
+ * `settings/registration`, `settings/roster`) — they are tournament policy, and
+ * holding them inside a field builder is what made this one screen answer four
+ * unrelated questions under headings joined by "and".
+ *
+ * The save still sends the WHOLE form: the upsert is a full replace, so the
+ * policy fields are echoed back from `toRegistrationFormUpsert`.
+ */
+export default function RegistrationFormBuilder({
+  tournamentId
+}: Readonly<{
+  tournamentId: number | null;
+}>) {
+  const t = useTranslations("registrationFormAdmin.page");
+  const tBuilder = useTranslations("registrationFormAdmin.builder");
+  const tErrors = useTranslations("forms.errors");
+
+  const queryClient = useQueryClient();
+  const currentWorkspaceId = useWorkspaceStore((state) => state.currentWorkspaceId);
+
+  /** `null` means untouched: the editor renders the server's schema until the
+   *  organizer changes something, so a background refetch cannot clobber edits
+   *  and no effect copies query data into state. */
+  const [draft, setDraft] = useState<FormSchema | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  const formQuery = useQuery({
+    queryKey: ["balancer-admin", "registration-form", tournamentId],
+    queryFn: () => balancerAdminService.getRegistrationForm(tournamentId as number),
+    enabled: tournamentId !== null,
+    // This page is a long-lived editor; a background refetch must not clobber
+    // the admin's unsaved edits.
+    refetchOnWindowFocus: false
+  });
+
+  // The form's own workspace wins: a superuser may be looking at a tournament
+  // that is not in the workspace their sidebar has selected.
+  const workspaceId = formQuery.data?.workspace_id ?? currentWorkspaceId ?? null;
+  const { catalog, loading: catalogLoading } = useSubroleCatalog(workspaceId);
+
+  // A tournament with no form row yet has no schema to render, and the upsert
+  // that creates it needs one; the server would have built exactly this.
+  const serverSchema = useMemo<FormSchema>(
+    () => formQuery.data?.form_schema ?? defaultFormSchema(),
+    [formQuery.data]
+  );
+  const schema = draft ?? serverSchema;
+  const blocked = useMemo(() => blockedFieldKeys(schema), [schema]);
+
   const saveMutation = useMutation({
-    mutationFn: () => {
+    mutationFn: (payload: FormSchema) => {
       if (!tournamentId) throw new Error(t("noTournamentError"));
-      const payload: AdminRegistrationFormUpsert = {
+      return balancerAdminService.upsertRegistrationForm(tournamentId, {
         // The upsert is a full replace, so the policy fields this page no
         // longer shows travel back untouched from the saved form. Editing a
-        // custom field must not reset the admission rules.
+        // question must not reset the admission rules.
         ...toRegistrationFormUpsert(formQuery.data),
-        built_in_fields: Object.fromEntries(
-          Object.entries(builtInFields).map(([key, value]) => [
-            key,
-            { ...value, validation: normalizeValidation(value.validation) }
-          ])
-        ),
-        custom_fields: customFields.map((field) => ({
-          ...field,
-          validation: normalizeValidation(field.validation)
-        }))
-      };
-      return balancerAdminService.upsertRegistrationForm(tournamentId, payload);
+        form_schema: payload
+      });
     },
-    onSuccess: async () => {
+    onSuccess: async (updated: AdminRegistrationForm) => {
+      queryClient.setQueryData(["balancer-admin", "registration-form", tournamentId], updated);
       await queryClient.invalidateQueries({
         queryKey: ["balancer-admin", "registration-form", tournamentId]
       });
-      setHasChanges(false);
+      setDraft(null);
+      setFieldErrors({});
       notify.success(t("savedToast"));
+    },
+    onError: (error, payload) => {
+      const { fields, form } = fieldErrorsFrom(error, tErrors);
+      const byKey: Record<string, string> = {};
+      let unplaced: string | null = null;
+      for (const [path, message] of Object.entries(fields)) {
+        // `schema_invalid` files its rejection under a schema PATH. Resolved to
+        // the field it names, it lands under the control that caused it; the
+        // path travels with it because it is the server's own vocabulary.
+        const key = fieldKeyAtSchemaPath(payload, path);
+        if (key) byKey[key] = `${message} (${path})`;
+        else unplaced ??= message;
+      }
+      setFieldErrors(byKey);
+      const toast = unplaced ?? form;
+      if (toast && Object.keys(byKey).length === 0) notify.error(toast);
     }
   });
-
-  const updateBuiltIn = (key: string, updates: Partial<BuiltInFieldConfig>) => {
-    setBuiltInFields((prev) => ({
-      ...prev,
-      [key]: {
-        ...prev[key],
-        ...updates,
-        ...(Object.prototype.hasOwnProperty.call(updates, "validation")
-          ? { validation: normalizeValidation(updates.validation) }
-          : {})
-      }
-    }));
-    setHasChanges(true);
-  };
-
-  // A single sub-role selection drives both the primary and additional role pickers.
-  const subroleSelection =
-    builtInFields.primary_role?.subroles ?? builtInFields.additional_roles?.subroles ?? {};
-
-  const handleToggleSubrole = (role: string, _slug: string, nextSlugs: string[]) => {
-    setBuiltInFields((prev) => {
-      const next = { ...prev };
-      for (const fieldKey of ROLE_FIELD_KEYS) {
-        const cfg = prev[fieldKey] ?? { enabled: true, required: false };
-        next[fieldKey] = {
-          ...cfg,
-          subroles: { ...(cfg.subroles ?? {}), [role]: nextSlugs }
-        };
-      }
-      return next;
-    });
-    setHasChanges(true);
-  };
-
-  const addCustomField = () => {
-    setCustomFields((prev) => [
-      ...prev,
-      {
-        key: "",
-        label: "",
-        type: "text",
-        required: false,
-        placeholder: null,
-        options: null,
-        validation: getCustomFieldDefaultValidation("text")
-      }
-    ]);
-    setHasChanges(true);
-  };
-
-  const updateCustomField = (index: number, updates: Partial<AdminCustomFieldDef>) => {
-    setCustomFields((prev) =>
-      prev.map((field, i) => {
-        if (i !== index) return field;
-        const updated: AdminCustomFieldDef = { ...field, ...updates };
-
-        if ("type" in updates && updates.type && !supportsCustomFieldValidation(updates.type)) {
-          updated.validation = null;
-        } else if ("type" in updates && updates.type) {
-          updated.validation =
-            normalizeValidation(updated.validation) ??
-            getCustomFieldDefaultValidation(updates.type);
-        }
-
-        // Assign a stable, unique key once when the field is first named; never
-        // regenerate it from the label afterwards (keeps custom_fields_json safe).
-        if ("label" in updates && updates.label !== undefined && !field.key) {
-          const otherKeys = prev.filter((_, j) => j !== index).map((other) => other.key);
-          updated.key = makeUniqueFieldKey(updates.label, otherKeys);
-        }
-
-        if ("validation" in updates) {
-          updated.validation = normalizeValidation(updates.validation);
-        }
-        return updated;
-      })
-    );
-    setHasChanges(true);
-  };
-
-  const removeCustomField = (index: number) => {
-    setCustomFields((prev) => prev.filter((_, i) => i !== index));
-    setHasChanges(true);
-  };
 
   if (!tournamentId) {
     return (
@@ -254,7 +798,7 @@ export default function RegistrationFormBuilder({
     );
   }
 
-  // Avoid flashing default toggles while the saved form is still loading.
+  // Avoid flashing the default questionnaire while the saved one is loading.
   if (formQuery.isLoading) {
     return (
       <output className="flex flex-1 items-center justify-center py-16 text-sm text-muted-foreground">
@@ -264,29 +808,33 @@ export default function RegistrationFormBuilder({
     );
   }
 
-  const formExists = formQuery.data != null;
+  const saved = formQuery.data ?? null;
+  const stale = saved?.stale_registrations ?? 0;
+
   return (
     <div className="flex flex-col gap-4">
-      {/* The policy that used to sit above these cards — who is admitted, what
-          the public sees, how deep the bench goes — moved to the Settings rail
-          (`settings/registration`, `settings/admission`, `settings/roster`).
-          This page is the questionnaire and nothing else: what a registrant is
-          asked, and what they may answer. */}
-
-      <BuiltInFieldsCard builtInFields={builtInFields} onUpdate={updateBuiltIn} />
-
-      <SubrolesTab
-        catalog={subroleCatalog}
-        selection={subroleSelection}
-        onToggleOffered={handleToggleSubrole}
-        isLoading={catalogQuery.isLoading}
-      />
-
-      <CustomFieldsCard
-        customFields={customFields}
-        onAdd={addCustomField}
-        onUpdate={updateCustomField}
-        onRemove={removeCustomField}
+      <SchemaEditor
+        schema={schema}
+        onChange={setDraft}
+        subroleCatalog={catalog}
+        catalogLoading={catalogLoading}
+        fieldErrors={fieldErrors}
+        toolbar={
+          <div className="flex flex-wrap items-center gap-2">
+            {saved && <Badge variant="outline">{tBuilder("version", { number: saved.version_number })}</Badge>}
+            {stale > 0 && (
+              <Badge tone="warning" title={tBuilder("staleHint")}>
+                {tBuilder("stale", { count: stale })}
+              </Badge>
+            )}
+            <TemplateMenu
+              workspaceId={workspaceId}
+              tournamentId={tournamentId}
+              dirty={draft !== null}
+              onLoad={setDraft}
+            />
+          </div>
+        }
       />
 
       {/* The shared bar. Shown while dirty like every settings section — and
@@ -294,13 +842,24 @@ export default function RegistrationFormBuilder({
           reachable before any edit; the navigation guard stays off in that
           untouched state so the page does not prompt on every tab switch. */}
       <SaveBar
-        dirty={hasChanges || !formExists}
-        guardNavigation={hasChanges}
-        summary={hasChanges ? t("unsavedChanges") : ""}
+        dirty={draft !== null || saved === null}
+        guardNavigation={draft !== null}
+        summary={
+          blocked.size > 0 ? tBuilder("blocked") : draft !== null ? t("unsavedChanges") : ""
+        }
         saving={saveMutation.isPending}
-        primaryLabel={formExists ? t("saveChanges") : t("createForm")}
-        onDiscard={() => applyForm(formQuery.data ?? null)}
-        onSave={() => saveMutation.mutate()}
+        primaryLabel={saved ? t("saveChanges") : t("createForm")}
+        onDiscard={() => {
+          setDraft(null);
+          setFieldErrors({});
+        }}
+        onSave={() => {
+          if (blocked.size > 0) {
+            notify.error(tBuilder("blocked"));
+            return;
+          }
+          saveMutation.mutate(sanitizeSchema(schema));
+        }}
       />
     </div>
   );
