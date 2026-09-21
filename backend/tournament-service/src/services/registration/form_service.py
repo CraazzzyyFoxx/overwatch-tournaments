@@ -14,6 +14,9 @@ in ONE flush, then the pointer is UPDATEd in.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+from typing import Any
+
 import sqlalchemy as sa
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -28,28 +31,43 @@ from src.schemas.registration_form import RegistrationFormUpsert
 __all__ = ("RegistrationFormService", "form_service", "parse_form_schema")
 
 
+#: What pydantic prepends to a ``ValueError`` raised inside a validator.
+_VALUE_ERROR_PREFIX = "Value error, "
+
+
+def _schema_field_error(error: Mapping[str, Any]) -> FieldError:
+    """One pydantic error, keyed by the schema path it is about.
+
+    A per-field error (a bad ``kind``, a bad ``max``) carries its path in ``loc``.
+    A CROSS-field invariant does not: ``FormSchema``'s ``model_validator`` raises a
+    plain ``ValueError``, which pydantic reports at the model root with an empty
+    ``loc`` and the path folded into the message as ``"<path>: <detail>"``. Those
+    are precisely the rules the builder most needs to point at -- duplicate keys,
+    ``visible_when`` ordering, builtin params and fixed visibility -- so the path is
+    lifted back out here rather than left for the client to parse out of English.
+    """
+    loc = error["loc"]
+    msg = str(error["msg"])
+    if loc:
+        return FieldError(field=".".join(str(part) for part in loc), code="schema_invalid", msg=msg)
+    detail = msg.removeprefix(_VALUE_ERROR_PREFIX)
+    path, separator, remainder = detail.partition(": ")
+    # No separator means an invariant that does not name a path; keep the whole
+    # message rather than inventing one out of its first clause.
+    return FieldError(field=path if separator else "", code="schema_invalid", msg=remainder if separator else detail)
+
+
 def parse_form_schema(raw: object) -> FormSchema:
     """Validate a schema document, turning pydantic's errors into field errors.
 
-    One ``FieldError`` per pydantic error, keyed by the offending schema path
-    (``sections.1.fields.3.visible_when``), so the builder can highlight what is
-    wrong instead of showing one English sentence. An invariant violation is
-    raised by ``FormSchema``'s model validator and therefore carries no ``loc``:
-    its path travels inside ``msg``, which is where the model puts it.
+    One ``schema_invalid`` ``FieldError`` per pydantic error, keyed by the offending
+    schema path, so the builder can highlight what is wrong instead of showing one
+    English sentence.
     """
     try:
         return FormSchema.model_validate(raw)
     except ValidationError as exc:
-        raise_field_errors(
-            [
-                FieldError(
-                    field=".".join(str(part) for part in error["loc"]),
-                    code="schema_invalid",
-                    msg=error["msg"],
-                )
-                for error in exc.errors()
-            ]
-        )
+        raise_field_errors([_schema_field_error(error) for error in exc.errors()])
 
 
 class RegistrationFormService:

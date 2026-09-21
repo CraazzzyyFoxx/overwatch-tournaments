@@ -26,13 +26,26 @@ from sqlalchemy.dialects import postgresql
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
+import pytest  # noqa: E402
+
 from shared.core import enums  # noqa: E402
-from shared.domain.forms import FormField, FormSchema, default_schema  # noqa: E402
+from shared.core.errors import ApiHTTPException  # noqa: E402
+from shared.domain.forms import (  # noqa: E402
+    Condition,
+    FormField,
+    FormSchema,
+    FormSection,
+    default_schema,
+)
 from shared.models.registration.registration import BalancerRegistration  # noqa: E402
 from shared.models.tenancy.workspace import Workspace  # noqa: E402
 from shared.models.tournament import Tournament  # noqa: E402
 from src.schemas.registration_form import RegistrationFormUpsert  # noqa: E402
-from src.services.registration.form_service import form_service  # noqa: E402
+from src.services.registration.form_service import (  # noqa: E402
+    _schema_field_error,
+    form_service,
+    parse_form_schema,
+)
 
 
 def _schema_with_vk() -> FormSchema:
@@ -40,6 +53,62 @@ def _schema_with_vk() -> FormSchema:
     changed = default_schema()
     changed.sections[2].fields.append(FormField(key="vk", kind="url", label="VK"))
     return changed
+
+
+# ── the schema an organizer POSTs: refusals name the offending path ──────────
+
+
+def _errors_of(raw: object) -> list[dict[str, Any]]:
+    """``ApiHTTPException`` serializes its ``ApiExc`` list on construction, so the
+    wire shape is what a caller actually sees."""
+    with pytest.raises(ApiHTTPException) as caught:
+        parse_form_schema(raw)
+    return list(caught.value.detail)
+
+
+def test_a_cross_field_invariant_names_the_field_it_is_about() -> None:
+    """``visible_when`` pointing forward is raised by ``FormSchema``'s model
+    validator, so pydantic reports it at the model ROOT with an empty ``loc`` and
+    the path folded into the message. The builder highlights a field from
+    ``ApiExc.field``, so the path has to be lifted back out -- otherwise every
+    multi-field rule (duplicate keys, builtin params, fixed visibility) answers
+    with a blank field and an English sentence."""
+    forward = FormSchema.model_construct(
+        schema_version=1,
+        sections=[
+            FormSection(
+                key="details",
+                fields=[
+                    FormField(key="why", kind="text", label="Why", visible_when=Condition(field="later", op="truthy")),
+                    FormField(key="later", kind="checkbox", label="Later"),
+                ],
+            )
+        ],
+    ).model_dump(mode="json")
+
+    errors = _errors_of(forward)
+
+    assert len(errors) == 1
+    assert errors[0]["code"] == "schema_invalid"
+    assert errors[0]["field"] == "sections[0].fields[0].visible_when"
+    assert errors[0]["msg"] == "must reference an earlier field"
+
+
+def test_a_per_field_type_error_keeps_its_own_location() -> None:
+    """The ``loc`` path is authoritative when pydantic supplies one."""
+    errors = _errors_of({"sections": [{"key": "details", "fields": [{"key": "why", "kind": "telepathy"}]}]})
+
+    assert [e["field"] for e in errors] == ["sections.0.fields.0.kind"]
+    assert errors[0]["code"] == "schema_invalid"
+
+
+def test_an_invariant_without_a_path_keeps_its_whole_message() -> None:
+    """Guard for a future invariant that names no path: the message must survive
+    whole rather than lose its first clause to a field it never identified."""
+    error = _schema_field_error({"loc": (), "msg": "Value error, the form is haunted"})
+
+    assert error.field == ""
+    assert error.msg == "the form is haunted"
 
 
 # ── pure: dedupe and the stale predicate ────────────────────────────────────
