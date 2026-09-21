@@ -25,7 +25,6 @@ from shared.core import http_status as status
 from shared.core.errors import ApiExc, ApiHTTPException
 from shared.domain.forms import FormSchema
 from shared.repository import RegistrationFormTemplateRepository
-from shared.services.realtime import Resource, Scope, emit
 from src import models
 from src.schemas.registration_form import (
     RegistrationFormTemplateUpsert,
@@ -166,22 +165,8 @@ class RegistrationFormTemplateService:
                 actor_user_id=actor_user_id,
             )
 
-        await form_service.apply_schema(session, form, schema, actor_user_id=actor_user_id)
-        # Same signal a hand edit stages, for the same reason: open organizer tabs
-        # are rendering the question set that just moved.
-        await emit(
-            session,
-            scope=Scope.tournament(tournament_id),
-            invalidates=[Resource.TOURNAMENT_REGISTRATION_FORM],
-        )
-        await session.commit()
-        # Re-read, never ``refresh``: the commit expires the instance and a refresh
-        # brings back the columns only, leaving ``current_version`` to lazy-load --
-        # a ``MissingGreenlet`` for the caller that serializes the schema next.
-        reloaded = await form_service.get_form(session, tournament_id)
-        if reloaded is None:  # pragma: no cover -- committed one statement ago
-            raise RuntimeError(f"registration form for tournament {tournament_id} vanished after commit")
-        return reloaded
+        # The shared schema-save tail: version, invalidate, commit, reload.
+        return await form_service.save_schema(session, form, schema, actor_user_id=actor_user_id)
 
     async def save_from_form(
         self,

@@ -141,6 +141,43 @@ class RegistrationFormService:
         await session.flush()
         return version
 
+    async def save_schema(
+        self,
+        session: AsyncSession,
+        form: models.BalancerRegistrationForm,
+        schema: FormSchema,
+        *,
+        actor_user_id: int | None,
+    ) -> models.BalancerRegistrationForm:
+        """Persist ``schema`` on ``form`` and hand back the reloaded row. Commits.
+
+        The whole tail of a schema save, shared by the form upsert and by
+        applying a template: version the schema, tell open tabs, commit, re-read.
+        Two call sites, one place to change the invalidation resource or the
+        reload reasoning.
+        """
+        await self.apply_schema(session, form, schema, actor_user_id=actor_user_id)
+        # Staged before the commit that owns the write: the rail persists the
+        # row in this transaction and publishes it from after_commit. Until this
+        # existed a form edit emitted nothing at all, so open tabs only learned
+        # about it by accident, riding along with the next unrelated
+        # registration event.
+        await emit(
+            session,
+            scope=Scope.tournament(form.tournament_id),
+            invalidates=[Resource.TOURNAMENT_REGISTRATION_FORM],
+        )
+        tournament_id = form.tournament_id
+        await session.commit()
+        # Re-read rather than ``refresh``: the commit expires the instance, and a
+        # refresh brings back the COLUMNS only -- leaving ``current_version`` to
+        # lazy-load on the caller's first read, which in async code is a
+        # ``MissingGreenlet``. Every caller serializes the schema straight after.
+        reloaded = await self.get_form(session, tournament_id)
+        if reloaded is None:  # pragma: no cover -- committed one statement ago
+            raise RuntimeError(f"registration form for tournament {tournament_id} vanished after commit")
+        return reloaded
+
     async def upsert(
         self,
         session: AsyncSession,
@@ -199,27 +236,7 @@ class RegistrationFormService:
             form.team_require_discord_guild = body.team_require_discord_guild
             form.max_substitutes = body.max_substitutes
 
-        await self.apply_schema(session, form, body.form_schema, actor_user_id=actor_user_id)
-
-        # Staged before the commit that owns the write: the rail persists the
-        # row in this transaction and publishes it from after_commit. Until this
-        # existed a form edit emitted nothing at all, so open tabs only learned
-        # about it by accident, riding along with the next unrelated
-        # registration event.
-        await emit(
-            session,
-            scope=Scope.tournament(tournament_id),
-            invalidates=[Resource.TOURNAMENT_REGISTRATION_FORM],
-        )
-        await session.commit()
-        # Re-read rather than ``refresh``: the commit expires the instance, and a
-        # refresh brings back the COLUMNS only -- leaving ``current_version`` to
-        # lazy-load on the caller's first read, which in async code is a
-        # ``MissingGreenlet``. Every caller serializes the schema straight after.
-        reloaded = await self.get_form(session, tournament_id)
-        if reloaded is None:  # pragma: no cover -- committed one statement ago
-            raise RuntimeError(f"registration form for tournament {tournament_id} vanished after commit")
-        return reloaded
+        return await self.save_schema(session, form, body.form_schema, actor_user_id=actor_user_id)
 
     async def stale_count(
         self,

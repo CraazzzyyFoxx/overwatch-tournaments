@@ -42,6 +42,7 @@ from shared.core import enums  # noqa: E402
 from shared.core.errors import ApiHTTPException  # noqa: E402
 from shared.domain.forms import FormField, FormSchema, default_schema  # noqa: E402
 from shared.models.registration.registration import (  # noqa: E402
+    BalancerRegistrationForm,
     BalancerRegistrationFormTemplate,
 )
 from shared.models.tenancy.workspace import Workspace  # noqa: E402
@@ -65,6 +66,22 @@ def _schema_with(key: str) -> FormSchema:
 
 def _keys(schema_json: Any) -> set[str]:
     return {field["key"] for section in schema_json["sections"] for field in section["fields"]}
+
+
+#: Identity/bookkeeping columns, excluded when two forms are compared for "same
+#: settings". Everything else on the mapper is a toggle and is compared, so a
+#: newly added setting is covered without editing this test.
+_FORM_IDENTITY_COLUMNS = frozenset(
+    {"id", "tournament_id", "workspace_id", "current_version_id", "created_at", "updated_at"}
+)
+
+
+def _toggles(form: Any) -> dict[str, Any]:
+    return {
+        attr.key: getattr(form, attr.key)
+        for attr in sa.inspect(BalancerRegistrationForm).mapper.column_attrs
+        if attr.key not in _FORM_IDENTITY_COLUMNS
+    }
 
 
 async def _seed(session: Any) -> tuple[int, int]:
@@ -294,6 +311,157 @@ def test_save_from_form_snapshots_the_current_schema(db_session) -> None:
     assert after_edit_keys == snapshot_keys
     assert "telegram" not in after_edit_keys
     assert form_version == 2
+
+
+def test_apply_to_a_tournament_with_no_form_creates_one(db_session) -> None:
+    """Form rows are created lazily on the first save, so applying a template to
+    a tournament nobody has configured yet IS that first save -- not a 404. The
+    toggles must come out exactly as a plain first upsert leaves them, which is
+    asserted against a real one rather than against copied literals."""
+
+    async def _run() -> tuple[set[str], int, dict[str, Any], dict[str, Any]]:
+        workspace_id, tournament_id = await _seed(db_session)
+        try:
+            template = await template_service.create(
+                db_session,
+                workspace_id=workspace_id,
+                body=RegistrationFormTemplateUpsert(name="Fresh", form_schema=_schema_with("vk")),
+                actor_user_id=None,
+            )
+            created = await template_service.apply(
+                db_session,
+                workspace_id=workspace_id,
+                tournament_id=tournament_id,
+                template_id=template.id,
+                actor_user_id=None,
+            )
+
+            # The yardstick: a second tournament in the same workspace, given a
+            # form the ordinary way. Whatever defaults that produces is what the
+            # lazily created one must carry.
+            baseline_tournament = Tournament(
+                workspace_id=workspace_id,
+                name=f"Baseline {uuid.uuid4().hex[:8]}",
+                slug=f"baseline-{uuid.uuid4().hex[:8]}",
+                status=enums.TournamentStatus.REGISTRATION,
+            )
+            db_session.add(baseline_tournament)
+            await db_session.flush()
+            baseline = await form_service.upsert(
+                db_session,
+                baseline_tournament.id,
+                RegistrationFormUpsert(form_schema=default_schema()),
+                workspace_id=workspace_id,
+                actor_user_id=None,
+            )
+            return (
+                _keys(created.current_version.schema_json),
+                created.current_version.number,
+                _toggles(created),
+                _toggles(baseline),
+            )
+        finally:
+            await _drop(db_session, workspace_id)
+
+    keys, number, created_toggles, baseline_toggles = asyncio.run(_run())
+
+    assert "vk" in keys
+    assert number == 1
+    assert created_toggles == baseline_toggles
+
+
+def test_save_from_form_without_a_form_is_a_structured_404(db_session) -> None:
+    """There is nothing to snapshot, and the refusal must carry a code the
+    frontend can branch on rather than a bare sentence."""
+
+    async def _run() -> tuple[int, list[dict[str, Any]]]:
+        workspace_id, tournament_id = await _seed(db_session)
+        try:
+            with pytest.raises(ApiHTTPException) as caught:
+                await template_service.save_from_form(
+                    db_session,
+                    workspace_id=workspace_id,
+                    tournament_id=tournament_id,
+                    name="Nothing to save",
+                    actor_user_id=None,
+                )
+            return caught.value.status_code, list(caught.value.detail)
+        finally:
+            await _drop(db_session, workspace_id)
+
+    status_code, detail = asyncio.run(_run())
+
+    assert status_code == 404
+    assert detail[0]["code"] == "form_not_configured"
+
+
+def test_another_workspaces_template_is_invisible(db_session) -> None:
+    """The tenancy boundary. Every lookup is scoped by the workspace the caller
+    was authorized against, so a template id from a neighbouring workspace must
+    read as "not found" -- never as a row to rename, delete or apply. The
+    neighbour's row is re-read afterwards to prove nothing leaked through."""
+
+    async def _run() -> tuple[list[tuple[int, str]], str, set[str], dict[str, Any] | None]:
+        owner_ws, _ = await _seed(db_session)
+        other_ws, other_tournament = await _seed(db_session)
+        try:
+            template = await template_service.create(
+                db_session,
+                workspace_id=owner_ws,
+                body=RegistrationFormTemplateUpsert(name="Owned", form_schema=_schema_with("vk")),
+                actor_user_id=None,
+            )
+            refusals: list[tuple[int, str]] = []
+
+            async def _refused(coro) -> None:
+                with pytest.raises(ApiHTTPException) as caught:
+                    await coro
+                refusals.append((caught.value.status_code, caught.value.detail[0]["code"]))
+
+            await _refused(
+                template_service.update(
+                    db_session,
+                    workspace_id=other_ws,
+                    template_id=template.id,
+                    body=RegistrationFormTemplateUpsert(name="Stolen", form_schema=default_schema()),
+                    actor_user_id=None,
+                )
+            )
+            await _refused(template_service.delete(db_session, workspace_id=other_ws, template_id=template.id))
+            await _refused(
+                template_service.apply(
+                    db_session,
+                    workspace_id=other_ws,
+                    tournament_id=other_tournament,
+                    template_id=template.id,
+                    actor_user_id=None,
+                )
+            )
+
+            # The neighbour is also not listed for the wrong workspace.
+            assert [row.id for row in await template_service.list(db_session, workspace_id=other_ws)] == []
+
+            survivor = await db_session.execute(
+                sa.select(BalancerRegistrationFormTemplate.name, BalancerRegistrationFormTemplate.schema_json).where(
+                    BalancerRegistrationFormTemplate.id == template.id
+                )
+            )
+            name, schema_json = survivor.one()
+            # The refused apply must also have left the other workspace's
+            # tournament without a form: a 404 that still wrote is not a 404.
+            leaked = await form_service.get_form(db_session, other_tournament)
+            return refusals, name, _keys(schema_json), None if leaked is None else {"id": leaked.id}
+        finally:
+            await _drop(db_session, owner_ws)
+            await _drop(db_session, other_ws)
+
+    refusals, name, keys, leaked = asyncio.run(_run())
+
+    assert refusals == [(404, "template_not_found")] * 3
+    # The owner's row survived all three refusals untouched, name and questions.
+    assert name == "Owned"
+    assert "vk" in keys
+    assert leaked is None
 
 
 # ── RPC wiring: the path params and body keys the handlers read ─────────────
