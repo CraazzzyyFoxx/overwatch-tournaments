@@ -32,6 +32,7 @@ from shared.core.social import (
 )
 from shared.domain.forms.builtins import default_pattern, identity_provider
 from shared.domain.forms.schema import Condition, FormField, FormSchema
+from shared.domain.player_sub_roles import REGISTRATION_ROLE_CODES
 
 __all__ = (
     "ErrorCode",
@@ -207,6 +208,36 @@ def _coerce_multi_select(field: FormField, raw: Any) -> tuple[Any, FieldError | 
     return [option for option in options if option in chosen], None
 
 
+def _coerce_role_ranks(key: str, raw: Any) -> tuple[Any, FieldError | None]:
+    """``{role_code: int}`` over the three registration roles, blanks dropped.
+
+    Not tied to the ``roles`` answer on purpose: this is extra information the
+    organizer asks for (current rank, peak rank per role, …), so every role is
+    offered regardless of which ones the registrant signed up to play, and an
+    all-blank block is no answer at all rather than a dict of nulls.
+    """
+    if raw is None or raw == "":
+        return None, None
+    if not isinstance(raw, dict):
+        return None, _err(key, ErrorCode.INVALID_TYPE, "Expected one rank per role.")
+    unknown = sorted(str(role) for role in raw if role not in REGISTRATION_ROLE_CODES)
+    if unknown:
+        return None, _err(key, ErrorCode.INVALID_OPTION, "Not a known role.", values=tuple(unknown))
+    ranks: dict[str, int] = {}
+    for role in REGISTRATION_ROLE_CODES:
+        value, error = _coerce_number(key, raw.get(role))
+        if error is not None:
+            return None, error
+        if value is None or value == "":
+            continue
+        # A rank is a whole number on the division grid; ``_coerce_number`` hands
+        # back a float only when the text really was fractional.
+        if not isinstance(value, int):
+            return None, _err(key, ErrorCode.INVALID_TYPE, "Expected a whole rank.")
+        ranks[role] = value
+    return (ranks or None), None
+
+
 def _coerce_tags(key: str, raw: Any) -> tuple[Any, FieldError | None]:
     if raw is None:
         return None, None
@@ -267,6 +298,8 @@ def _coerce(field: FormField, raw: Any) -> tuple[Any, FieldError | None]:
         return _coerce_select(field, raw)
     if kind == "multi_select":
         return _coerce_multi_select(field, raw)
+    if kind == "role_ranks":
+        return _coerce_role_ranks(key, raw)
     if key == "smurf_tags":
         return _coerce_tags(key, raw)
     if key == "roles":

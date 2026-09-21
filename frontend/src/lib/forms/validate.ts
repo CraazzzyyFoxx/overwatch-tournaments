@@ -13,6 +13,7 @@
 
 import { identityProvider } from "@/lib/forms/builtin-keys";
 import type { Translate } from "@/lib/forms/form-errors";
+import { REGISTRATION_TO_CANONICAL } from "@/lib/roles";
 import type { FormField } from "@/types/forms.types";
 
 /**
@@ -31,7 +32,13 @@ const DEFAULT_PATTERNS: Record<string, string> = {
 
 /** A number as typed by a human: `1,5` is the Russian decimal separator. */
 const NUMBER = /^-?\d+(?:[.,]\d+)?$/;
+/** A rank is a whole number on the division grid — `_coerce_role_ranks` agrees. */
+const INTEGER = /^-?\d+$/;
 const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
 
 /** `\s*#\s*` around a BattleTag's separator, as `shared.core.social` spells it. */
 const BATTLE_TAG_HASH = /\s*#\s*/g;
@@ -132,7 +139,9 @@ export function validateAnswer(field: FormField, value: unknown, t: Translate): 
     value === null ||
     value === undefined ||
     value === "" ||
-    (Array.isArray(value) && value.length === 0);
+    (Array.isArray(value) && value.length === 0) ||
+    // A `role_ranks` block with every rank left blank stores `{}` — no answer.
+    (isPlainObject(value) && Object.keys(value).length === 0);
 
   // An unchecked required checkbox is a missing answer, not a wrong type.
   if (empty || value === false) {
@@ -152,6 +161,20 @@ export function validateAnswer(field: FormField, value: unknown, t: Translate): 
     case "checkbox":
       if (typeof value !== "boolean") return t("invalid_type");
       break;
+    case "role_ranks": {
+      if (!isPlainObject(value)) return t("invalid_type");
+      const entries = Object.entries(value);
+      if (entries.some(([role]) => !Object.hasOwn(REGISTRATION_TO_CANONICAL, role))) {
+        return t("invalid_option");
+      }
+      const bad = entries.some(([, rank]) =>
+        typeof rank === "number"
+          ? !Number.isInteger(rank)
+          : !(typeof rank === "string" && INTEGER.test(rank.trim())),
+      );
+      if (bad) return t("invalid_type");
+      break;
+    }
     case "select":
       if (typeof value !== "string") return t("invalid_type");
       if (!options.includes(value.trim())) return t("invalid_option");

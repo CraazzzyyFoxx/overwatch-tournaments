@@ -192,6 +192,27 @@ def test_an_unanswered_optional_number_or_date_is_not_a_type_error():
     assert result.errors == [] and result.values == {}
 
 
+def test_role_ranks_are_coerced_per_role_and_never_tied_to_the_roles_answer():
+    schema = _s(
+        FormField(key="current_rank", kind="role_ranks", label="Current", required=True),
+        FormField(key="peak_rank", kind="role_ranks", label="Peak"),
+    )
+
+    # Only the roles the registrant filled in are stored, whatever `roles` says,
+    # and a block left entirely blank is no answer rather than a dict of nulls.
+    ok = normalize_answers(schema, {"current_rank": {"tank": "3200", "damage": 2915, "support": ""}, "peak_rank": {}})
+    assert ok.errors == []
+    assert ok.values == {"current_rank": {"tank": 3200, "damage": 2915}}
+
+    # A required block with nothing in it is missing, not malformed.
+    assert _codes(normalize_answers(schema, {"current_rank": {}})) == {("current_rank", "required")}
+    assert _codes(normalize_answers(schema, {"current_rank": "3200"})) == {("current_rank", "invalid_type")}
+    assert _codes(normalize_answers(schema, {"current_rank": {"tank": "3200.5"}})) == {("current_rank", "invalid_type")}
+    assert _codes(normalize_answers(schema, {"current_rank": {"healer": "3200"}})) == {
+        ("current_rank", "invalid_option")
+    }
+
+
 def test_a_battle_tag_is_matched_in_its_canonical_form():
     """The grammar has no room for the spacing humans type around the ``#``, so
     the pattern runs on the provider's canonical form -- the same one the column

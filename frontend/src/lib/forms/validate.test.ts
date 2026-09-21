@@ -151,6 +151,17 @@ describe("validateAnswer — kinds", () => {
     expect(validateAnswer(rules, "https://twitch.tv/x", t)).toBeNull();
     expect(validateAnswer(rules, "twitch.tv/x", t)).toBe("invalid_format");
   });
+
+  it("reads an all-blank role_ranks block as no answer, and checks role and rank", () => {
+    const rules = field({ key: "peak_rank", kind: "role_ranks", required: true });
+    expect(validateAnswer(rules, { tank: "3200", support: 2915 }, t)).toBeNull();
+    // The renderer deletes a blank rank, so an untouched block arrives as `{}`.
+    expect(validateAnswer(rules, {}, t)).toBe("required");
+    expect(validateAnswer(field({ key: "peak_rank", kind: "role_ranks" }), {}, t)).toBeNull();
+    expect(validateAnswer(rules, { healer: "3200" }, t)).toBe("invalid_option");
+    expect(validateAnswer(rules, { tank: "3200.5" }, t)).toBe("invalid_type");
+    expect(validateAnswer(rules, "3200", t)).toBe("invalid_type");
+  });
 });
 
 describe("normalizeAnswerText", () => {

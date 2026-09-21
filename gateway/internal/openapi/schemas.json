@@ -36816,7 +36816,8 @@
             "multi_select",
             "checkbox",
             "url",
-            "date"
+            "date",
+            "role_ranks"
           ],
           "title": "Kind",
           "type": "string"

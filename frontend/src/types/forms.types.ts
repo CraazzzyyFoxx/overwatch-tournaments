@@ -17,7 +17,10 @@ export type FieldKind =
   | "multi_select"
   | "checkbox"
   | "url"
-  | "date";
+  | "date"
+  /** Per-role rank info (current rank, peak rank, …): `{ [roleCode]: number }`,
+   *  independent of the `roles` builtin's answer. */
+  | "role_ranks";
 
 /** `organizers` fields are stripped from every public read and never drafted. */
 export type Visibility = "public" | "organizers";

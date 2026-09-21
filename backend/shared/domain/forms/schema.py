@@ -32,7 +32,12 @@ __all__ = (
     "schema_from_form",
 )
 
-FieldKind = Literal["builtin", "text", "textarea", "number", "select", "multi_select", "checkbox", "url", "date"]
+#: ``role_ranks`` is per-role rank INFORMATION (current rank, peak rank, …): one
+#: number per registration role, independent of the ``roles`` builtin's answer —
+#: a schema may carry several, and none of them decides which roles are played.
+FieldKind = Literal[
+    "builtin", "text", "textarea", "number", "select", "multi_select", "checkbox", "url", "date", "role_ranks"
+]
 Visibility = Literal["public", "organizers"]
 ConditionOp = Literal["eq", "neq", "in", "truthy"]
 KEY_PATTERN = re.compile(r"^[a-z][a-z0-9_]{0,31}$")

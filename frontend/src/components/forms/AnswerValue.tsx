@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Check, ExternalLink, Minus } from "lucide-react";
 
+import { ROLE_LABELS, ROLES } from "@/lib/roles";
 import type { FieldKind } from "@/types/forms.types";
 
 /**
@@ -33,6 +34,12 @@ const CHIP =
   "inline-flex items-center rounded-md border border-[color:var(--aqt-border-2)] " +
   "bg-[color:var(--aqt-overlay-3)] px-1.5 py-0.5 text-xs font-medium text-[color:var(--aqt-fg-muted)]";
 
+/** Sort key for a `role_ranks` entry: known roles first, in `ROLES` order. */
+function roleRank(code: string): number {
+  const index = ROLES.findIndex((role) => role.code === code);
+  return index < 0 ? ROLES.length : index;
+}
+
 export function AnswerValue({
   value,
   kind,
@@ -47,6 +54,27 @@ export function AnswerValue({
         {value.map((item) => (
           <span key={String(item)} className={CHIP}>
             {String(item)}
+          </span>
+        ))}
+      </span>
+    );
+  }
+
+  // `role_ranks` is the one answer that is an OBJECT, so it is read before the
+  // generic `String(value)` tail turns it into "[object Object]". Keyed on the
+  // VALUE, not on `kind`: an answer whose question was since deleted arrives
+  // here with no kind at all, and it is still ranks. Roles sort in `ROLES`
+  // order so one table column does not reorder itself row by row.
+  if (typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>)
+      .filter(([, rank]) => rank !== null && rank !== undefined && rank !== "")
+      .sort(([a], [b]) => roleRank(a) - roleRank(b));
+    if (entries.length === 0) return EMPTY;
+    return (
+      <span className="flex flex-wrap gap-1">
+        {entries.map(([role, rank]) => (
+          <span key={role} className={CHIP}>
+            {ROLE_LABELS[role] ?? role} {String(rank)}
           </span>
         ))}
       </span>

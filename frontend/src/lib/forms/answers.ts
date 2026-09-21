@@ -60,5 +60,14 @@ export function answerFlag(answers: AnswerDocument, key: string): boolean {
 export function answerSearchText(value: unknown): string | null {
   if (value === null || value === undefined || value === "" || value === false) return null;
   if (Array.isArray(value)) return value.join(" ") || null;
+  // `role_ranks`: "tank 3200 support 2900" — `String({})` matches nothing a
+  // human types, and every row with the question would match "[object".
+  if (typeof value === "object") {
+    return (
+      Object.entries(value as Record<string, unknown>)
+        .map(([role, rank]) => `${role} ${rank}`)
+        .join(" ") || null
+    );
+  }
   return String(value);
 }

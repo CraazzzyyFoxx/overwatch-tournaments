@@ -326,9 +326,16 @@ def custom_field_target_key(field_key: str) -> str:
 def custom_field_target_specs(
     custom_fields: list[FormField] | None,
 ) -> tuple[MappingTargetSpec, ...]:
-    """Build a mapping target spec for each dynamic custom field on the form."""
+    """Build a mapping target spec for each dynamic custom field on the form.
+
+    ``role_ranks`` is skipped: its answer is one number per role, and a sheet
+    column is one cell -- there is no shape to map onto it, so offering the
+    target would only let an organizer store a string where a dict belongs.
+    """
     specs: list[MappingTargetSpec] = []
     for definition in custom_fields or []:
+        if definition.kind == "role_ranks":
+            continue
         parser = _CUSTOM_FIELD_PARSER_BY_TYPE.get(definition.kind, PARSER_STRING)
         specs.append(
             MappingTargetSpec(

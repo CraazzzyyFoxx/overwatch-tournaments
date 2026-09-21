@@ -4,6 +4,7 @@ import { IDENTITY_PROVIDERS, identityKey } from "@/lib/forms/builtin-keys";
 import BattleTagField from "./fields/BattleTagField";
 import IdentityField from "./fields/IdentityField";
 import NotesField from "./fields/NotesField";
+import RoleRanksField from "./fields/RoleRanksField";
 import RolesField from "./fields/RolesField";
 import SmurfTagsField from "./fields/SmurfTagsField";
 import StreamPovField from "./fields/StreamPovField";
@@ -24,6 +25,9 @@ export const registrationRenderers: RendererRegistry = {
   stream_pov: StreamPovField,
   public_notes: NotesField,
   organizer_notes: NotesField,
+  // Keyed by KIND, not by a builtin key: `role_ranks` is a custom question an
+  // organizer adds — any number of times — and only its rendering is fixed.
+  role_ranks: RoleRanksField,
   ...Object.fromEntries(
     IDENTITY_PROVIDERS.map((provider) => [identityKey(provider), IdentityField] as const),
   ),

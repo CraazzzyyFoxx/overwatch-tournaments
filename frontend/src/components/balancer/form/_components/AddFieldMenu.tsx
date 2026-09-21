@@ -39,7 +39,8 @@ export const CUSTOM_FIELD_KINDS = [
   "multi_select",
   "checkbox",
   "url",
-  "date"
+  "date",
+  "role_ranks"
 ] as const satisfies readonly FieldKind[];
 
 /** Builtins that are not an identity, in the order the catalog declares them. */
