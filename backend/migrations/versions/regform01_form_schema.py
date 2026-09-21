@@ -60,15 +60,21 @@ depends_on: str | Sequence[str] | None = None
 # ---------------------------------------------------------------------------
 
 #: Whether a legacy builtin counted as present when its key was absent from
-#: ``built_in_fields_json``. Matches the shipped form's effective behaviour, which
-#: is what the backfill has to reproduce; the builder's ``defaultEnabled``
-#: (frontend formConfig.ts) differs for ``smurf_tags``/``additional_roles``.
+#: ``built_in_fields_json``. Source of truth is the SHIPPED WIZARD, not the
+#: builder: ``UnifiedRegistrationForm.tsx:202`` (``?.enabled !== false`` --
+#: absent means enabled), ``AccountStep.tsx:63-67`` (same reading for all five
+#: account fields, ``showBoosty`` included) and ``DetailsStep.tsx:61``
+#: (``notes``). Only ``top_heroes`` (``UnifiedRegistrationForm.tsx:211-212``)
+#: and ``stream_pov`` (``DetailsStep.tsx:62``) are read as ``=== true``, i.e.
+#: absent means disabled. Do NOT "fix" this table against
+#: ``formConfig.ts::defaultEnabled``: that only seeds the builder UI and
+#: disagrees on ``smurf_tags``/``additional_roles``.
 LEGACY_DEFAULT_ENABLED: dict[str, bool] = {
     "battle_tag": True,
     "smurf_tags": True,
     "discord_nick": True,
     "twitch_nick": True,
-    "boosty_nick": False,
+    "boosty_nick": True,
     "primary_role": True,
     "additional_roles": True,
     "flex_role": True,

@@ -112,11 +112,15 @@ def test_default_form_converts_to_three_sections_in_todays_order():
 
 
 def test_disabled_builtins_and_absent_keys_are_omitted_and_empty_config_yields_the_default():
+    # An absent ``boosty_nick`` is ENABLED: the shipped wizard reads every account
+    # field as ``?.enabled !== false`` (AccountStep.tsx:63-67), so a form saved
+    # with an empty config still shows the Boosty input today.
     assert [f["key"] for f in mod.legacy_to_schema({}, [])["sections"][0]["fields"]] == [
         "battle_tag",
         "smurf_tags",
         "identity_discord",
         "identity_twitch",
+        "identity_boosty",
     ]
     only_tag = mod.legacy_to_schema(
         {k: {"enabled": False} for k in LEGACY_DEFAULT_BUILTINS if k != "battle_tag"}
