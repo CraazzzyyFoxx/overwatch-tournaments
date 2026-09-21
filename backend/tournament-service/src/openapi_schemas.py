@@ -13,6 +13,17 @@ from __future__ import annotations
 
 from shared.core.pagination import Paginated
 from shared.rpc.openapi import Op, QueryParam
+from shared.services.chat import (
+    HISTORY_DEFAULT,
+    HISTORY_MAX,
+    ChatEnvelope,
+    ChatMessageRead,
+    ChatMuteInput,
+    ChatMuteRead,
+    ChatPostInput,
+    ChatSettings,
+    ChatSettingsInput,
+)
 from src import schemas
 from src.schemas import captain as captain_schemas
 from src.schemas import encounter_report_form as report_form_schemas
@@ -428,6 +439,21 @@ OPERATIONS: dict[str, Op] = {
     "rpc.tournament.captain_pick_ban_elect_opener": Op(request=captain_schemas.ElectOpenerInput),
     "rpc.tournament.captain_pick_ban_undo": Op(request=captain_schemas.PickBanUndoInput),
     "rpc.tournament.captain_report_map": Op(request=captain_schemas.MapReportInput),
+    # ── pre-game room chat (shared chat service; same shapes in balancer) ──
+    # chat_delete / chat_mute_clear answer a bare {"deleted": true}, so they are
+    # documented in DOCS only — this module maps whole models.
+    "rpc.tournament.encounter_chat_history": Op(
+        response=ChatEnvelope,
+        query_params=(
+            QueryParam("after_id", "integer", description="Only messages newer than this id (live tail)."),
+            QueryParam(
+                "limit", "integer", description=f"Page size, clamped to 1..{HISTORY_MAX}, default {HISTORY_DEFAULT}."
+            ),
+        ),
+    ),
+    "rpc.tournament.encounter_chat_post": Op(request=ChatPostInput, response=ChatMessageRead),
+    "rpc.tournament.encounter_chat_settings": Op(request=ChatSettingsInput, response=ChatSettings),
+    "rpc.tournament.encounter_chat_mute_set": Op(request=ChatMuteInput, response=ChatMuteRead),
     # ── captain reports admin list (cross-tournament, workspace-scoped) ────
     "rpc.tournament.admin_encounter_reports_list": Op(
         response=Paginated[schemas.EncounterReportsRow],

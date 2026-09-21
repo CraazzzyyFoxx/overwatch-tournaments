@@ -3962,6 +3962,76 @@
       },
       "summary": "Cancel draft session"
     },
+    "rpc.balancer.draft.chat_delete": {
+      "description": "Permission: the message's author, or a moderator of the room (workspace staff). Soft-deletes one message and publishes the removal to the room's subscribers. 404 when the id is not a message of this room. Answers `{deleted: true}`.",
+      "summary": "Delete a draft chat message"
+    },
+    "rpc.balancer.draft.chat_history": {
+      "description": "Permission: optional authentication. Captains of the session's teams and the workspace's staff always read; anybody else reads while the room's `spectators_can_read` is on, which a draft room has ON by default (a draft is a show). A hidden tournament is visible only to its workspace's admins and its preview allowlist. The room is the SESSION, so a re-seed starts a new conversation. Returns the messages plus the room settings, the caller's own viewer rights and \u2014 for moderators only \u2014 the active mutes. `after_id` tails the room; `limit` pages it.",
+      "query_params": [
+        {
+          "name": "after_id",
+          "required": false,
+          "schema": {
+            "description": "Only messages newer than this id (live tail).",
+            "type": "integer"
+          }
+        },
+        {
+          "name": "limit",
+          "required": false,
+          "schema": {
+            "description": "Page size, clamped to 1..200, default 50.",
+            "type": "integer"
+          }
+        }
+      ],
+      "response": {
+        "array": false,
+        "ref": "balancer.ChatEnvelope"
+      },
+      "summary": "Read the draft room chat"
+    },
+    "rpc.balancer.draft.chat_mute_clear": {
+      "description": "Permission: moderator of the room (workspace staff). Lifts one account's mute in this room, idempotent. Answers `{deleted: true}`.",
+      "summary": "Unmute an account in the draft chat"
+    },
+    "rpc.balancer.draft.chat_mute_set": {
+      "description": "Permission: moderator of the room (workspace staff). Mutes one account in this room for `minutes` (1..10080), or until lifted when `minutes` is null, with an optional reason. 422 on muting yourself. Returns the mute.",
+      "request": {
+        "array": false,
+        "ref": "balancer.ChatMuteInput"
+      },
+      "response": {
+        "array": false,
+        "ref": "balancer.ChatMuteRead"
+      },
+      "summary": "Mute an account in the draft chat"
+    },
+    "rpc.balancer.draft.chat_post": {
+      "description": "Permission: authenticated captain of one of the session's teams, or workspace staff; spectators never write, at any setting. The body is sanitized and capped at 500 characters. 403 with code `chat_muted` while the account is muted in this room, 429 past 10 messages per 10 seconds. Returns the stored message, which is also fanned out to the room's realtime topic.",
+      "request": {
+        "array": false,
+        "ref": "balancer.ChatPostInput"
+      },
+      "response": {
+        "array": false,
+        "ref": "balancer.ChatMessageRead"
+      },
+      "summary": "Post to the draft room chat"
+    },
+    "rpc.balancer.draft.chat_settings": {
+      "description": "Permission: moderator of the room (workspace staff). Opens or closes the room to spectators and returns the stored setting. Closing it also revokes the spectators already subscribed to the room's realtime topic; a no-op toggle emits nothing.",
+      "request": {
+        "array": false,
+        "ref": "balancer.ChatSettingsInput"
+      },
+      "response": {
+        "array": false,
+        "ref": "balancer.ChatSettings"
+      },
+      "summary": "Set draft chat visibility"
+    },
     "rpc.balancer.draft.export": {
       "description": "Permission: workspace `team.create`. Finalizes the drafted rosters into tournament teams and publishes a draft-completed realtime event.",
       "response": {
@@ -7168,6 +7238,76 @@
         "ref": "tournament.ChallongeTeamSyncPreview"
       },
       "summary": "Preview Challonge team sync"
+    },
+    "rpc.tournament.encounter_chat_delete": {
+      "description": "Permission: the message's author, or a moderator of the room (workspace staff). Soft-deletes one message and publishes the removal to the room's subscribers. 404 when the id is not a message of this room. Answers `{deleted: true}`.",
+      "summary": "Delete a pre-game chat message"
+    },
+    "rpc.tournament.encounter_chat_history": {
+      "description": "Permission: optional authentication. Captains of either team and the workspace's staff always read; anybody else reads only while the room's `spectators_can_read` is on, which a pre-game room has OFF by default (captains trade custom-lobby codes there). A hidden tournament is visible only to its workspace's admins and its preview allowlist. Returns the messages plus the room settings, the caller's own viewer rights and \u2014 for moderators only \u2014 the active mutes. `after_id` tails the room; `limit` pages it.",
+      "query_params": [
+        {
+          "name": "after_id",
+          "required": false,
+          "schema": {
+            "description": "Only messages newer than this id (live tail).",
+            "type": "integer"
+          }
+        },
+        {
+          "name": "limit",
+          "required": false,
+          "schema": {
+            "description": "Page size, clamped to 1..200, default 50.",
+            "type": "integer"
+          }
+        }
+      ],
+      "response": {
+        "array": false,
+        "ref": "tournament.ChatEnvelope"
+      },
+      "summary": "Read the pre-game room chat"
+    },
+    "rpc.tournament.encounter_chat_mute_clear": {
+      "description": "Permission: moderator of the room (workspace staff). Lifts one account's mute in this room, idempotent. Answers `{deleted: true}`.",
+      "summary": "Unmute an account in the pre-game chat"
+    },
+    "rpc.tournament.encounter_chat_mute_set": {
+      "description": "Permission: moderator of the room (workspace staff). Mutes one account in this room for `minutes` (1..10080), or until lifted when `minutes` is null, with an optional reason. 422 on muting yourself. Returns the mute.",
+      "request": {
+        "array": false,
+        "ref": "tournament.ChatMuteInput"
+      },
+      "response": {
+        "array": false,
+        "ref": "tournament.ChatMuteRead"
+      },
+      "summary": "Mute an account in the pre-game chat"
+    },
+    "rpc.tournament.encounter_chat_post": {
+      "description": "Permission: authenticated captain of either team, or workspace staff; spectators never write, at any setting. The body is sanitized and capped at 500 characters. 403 with code `chat_muted` while the account is muted in this room, 429 past 10 messages per 10 seconds. Returns the stored message, which is also fanned out to the room's realtime topic.",
+      "request": {
+        "array": false,
+        "ref": "tournament.ChatPostInput"
+      },
+      "response": {
+        "array": false,
+        "ref": "tournament.ChatMessageRead"
+      },
+      "summary": "Post to the pre-game room chat"
+    },
+    "rpc.tournament.encounter_chat_settings": {
+      "description": "Permission: moderator of the room (workspace staff). Opens or closes the room to spectators and returns the stored setting. Closing it also revokes the spectators already subscribed to the room's realtime topic; a no-op toggle emits nothing.",
+      "request": {
+        "array": false,
+        "ref": "tournament.ChatSettingsInput"
+      },
+      "response": {
+        "array": false,
+        "ref": "tournament.ChatSettings"
+      },
+      "summary": "Set pre-game chat visibility"
     },
     "rpc.tournament.encounter_reopen_result": {
       "description": "Permission: workspace `match.update` on the encounter's workspace. Un-confirms an encounter so it can be replayed or re-reported, clearing its score, closeness and confirmation, and cascading through anything the old result advanced. Captain reports are kept. 409 when there is no recorded result.",
@@ -20568,6 +20708,246 @@
       "title": "BalancerTournamentConfigUpsert",
       "type": "object"
     },
+    "balancer.ChatEnvelope": {
+      "properties": {
+        "messages": {
+          "items": {
+            "$ref": "#/components/schemas/balancer.ChatMessageRead"
+          },
+          "title": "Messages",
+          "type": "array"
+        },
+        "mutes": {
+          "items": {
+            "$ref": "#/components/schemas/balancer.ChatMuteRead"
+          },
+          "title": "Mutes",
+          "type": "array"
+        },
+        "settings": {
+          "$ref": "#/components/schemas/balancer.ChatSettings"
+        },
+        "viewer": {
+          "$ref": "#/components/schemas/balancer.ChatViewer"
+        }
+      },
+      "required": [
+        "messages",
+        "settings",
+        "viewer"
+      ],
+      "title": "ChatEnvelope",
+      "type": "object"
+    },
+    "balancer.ChatMessageRead": {
+      "properties": {
+        "auth_user_id": {
+          "title": "Auth User Id",
+          "type": "integer"
+        },
+        "author_avatar_url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Author Avatar Url"
+        },
+        "author_name": {
+          "title": "Author Name",
+          "type": "string"
+        },
+        "author_role": {
+          "title": "Author Role",
+          "type": "string"
+        },
+        "body": {
+          "title": "Body",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "created_at",
+        "auth_user_id",
+        "author_name",
+        "author_role",
+        "body"
+      ],
+      "title": "ChatMessageRead",
+      "type": "object"
+    },
+    "balancer.ChatMuteInput": {
+      "properties": {
+        "minutes": {
+          "anyOf": [
+            {
+              "maximum": 10080,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Minutes"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason"
+        }
+      },
+      "title": "ChatMuteInput",
+      "type": "object"
+    },
+    "balancer.ChatMuteRead": {
+      "properties": {
+        "auth_user_id": {
+          "title": "Auth User Id",
+          "type": "integer"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "created_by_auth_user_id": {
+          "title": "Created By Auth User Id",
+          "type": "integer"
+        },
+        "muted_until": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Muted Until"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Reason"
+        }
+      },
+      "required": [
+        "auth_user_id",
+        "muted_until",
+        "reason",
+        "created_by_auth_user_id",
+        "created_at"
+      ],
+      "title": "ChatMuteRead",
+      "type": "object"
+    },
+    "balancer.ChatPostInput": {
+      "properties": {
+        "body": {
+          "title": "Body",
+          "type": "string"
+        }
+      },
+      "required": [
+        "body"
+      ],
+      "title": "ChatPostInput",
+      "type": "object"
+    },
+    "balancer.ChatSettings": {
+      "properties": {
+        "spectators_can_read": {
+          "title": "Spectators Can Read",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "spectators_can_read"
+      ],
+      "title": "ChatSettings",
+      "type": "object"
+    },
+    "balancer.ChatSettingsInput": {
+      "properties": {
+        "spectators_can_read": {
+          "title": "Spectators Can Read",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "spectators_can_read"
+      ],
+      "title": "ChatSettingsInput",
+      "type": "object"
+    },
+    "balancer.ChatViewer": {
+      "description": "Everything the panel needs to decide what to render, in the same reply.\n\nWithout it the client would have to infer \"may I type here\" from the\nabsence of an error on a write it has not made yet.",
+      "properties": {
+        "can_moderate": {
+          "title": "Can Moderate",
+          "type": "boolean"
+        },
+        "can_write": {
+          "title": "Can Write",
+          "type": "boolean"
+        },
+        "muted_until": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Muted Until"
+        },
+        "role": {
+          "title": "Role",
+          "type": "string"
+        }
+      },
+      "required": [
+        "role",
+        "can_write",
+        "can_moderate"
+      ],
+      "title": "ChatViewer",
+      "type": "object"
+    },
     "balancer.ConfigOverrides": {
       "additionalProperties": false,
       "description": "Optional public configuration overrides for the balancing algorithm.",
@@ -33251,6 +33631,246 @@
         "group_stages_were_started"
       ],
       "title": "ChallongeTournament",
+      "type": "object"
+    },
+    "tournament.ChatEnvelope": {
+      "properties": {
+        "messages": {
+          "items": {
+            "$ref": "#/components/schemas/tournament.ChatMessageRead"
+          },
+          "title": "Messages",
+          "type": "array"
+        },
+        "mutes": {
+          "items": {
+            "$ref": "#/components/schemas/tournament.ChatMuteRead"
+          },
+          "title": "Mutes",
+          "type": "array"
+        },
+        "settings": {
+          "$ref": "#/components/schemas/tournament.ChatSettings"
+        },
+        "viewer": {
+          "$ref": "#/components/schemas/tournament.ChatViewer"
+        }
+      },
+      "required": [
+        "messages",
+        "settings",
+        "viewer"
+      ],
+      "title": "ChatEnvelope",
+      "type": "object"
+    },
+    "tournament.ChatMessageRead": {
+      "properties": {
+        "auth_user_id": {
+          "title": "Auth User Id",
+          "type": "integer"
+        },
+        "author_avatar_url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Author Avatar Url"
+        },
+        "author_name": {
+          "title": "Author Name",
+          "type": "string"
+        },
+        "author_role": {
+          "title": "Author Role",
+          "type": "string"
+        },
+        "body": {
+          "title": "Body",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "created_at",
+        "auth_user_id",
+        "author_name",
+        "author_role",
+        "body"
+      ],
+      "title": "ChatMessageRead",
+      "type": "object"
+    },
+    "tournament.ChatMuteInput": {
+      "properties": {
+        "minutes": {
+          "anyOf": [
+            {
+              "maximum": 10080,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Minutes"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason"
+        }
+      },
+      "title": "ChatMuteInput",
+      "type": "object"
+    },
+    "tournament.ChatMuteRead": {
+      "properties": {
+        "auth_user_id": {
+          "title": "Auth User Id",
+          "type": "integer"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "created_by_auth_user_id": {
+          "title": "Created By Auth User Id",
+          "type": "integer"
+        },
+        "muted_until": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Muted Until"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Reason"
+        }
+      },
+      "required": [
+        "auth_user_id",
+        "muted_until",
+        "reason",
+        "created_by_auth_user_id",
+        "created_at"
+      ],
+      "title": "ChatMuteRead",
+      "type": "object"
+    },
+    "tournament.ChatPostInput": {
+      "properties": {
+        "body": {
+          "title": "Body",
+          "type": "string"
+        }
+      },
+      "required": [
+        "body"
+      ],
+      "title": "ChatPostInput",
+      "type": "object"
+    },
+    "tournament.ChatSettings": {
+      "properties": {
+        "spectators_can_read": {
+          "title": "Spectators Can Read",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "spectators_can_read"
+      ],
+      "title": "ChatSettings",
+      "type": "object"
+    },
+    "tournament.ChatSettingsInput": {
+      "properties": {
+        "spectators_can_read": {
+          "title": "Spectators Can Read",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "spectators_can_read"
+      ],
+      "title": "ChatSettingsInput",
+      "type": "object"
+    },
+    "tournament.ChatViewer": {
+      "description": "Everything the panel needs to decide what to render, in the same reply.\n\nWithout it the client would have to infer \"may I type here\" from the\nabsence of an error on a write it has not made yet.",
+      "properties": {
+        "can_moderate": {
+          "title": "Can Moderate",
+          "type": "boolean"
+        },
+        "can_write": {
+          "title": "Can Write",
+          "type": "boolean"
+        },
+        "muted_until": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Muted Until"
+        },
+        "role": {
+          "title": "Role",
+          "type": "string"
+        }
+      },
+      "required": [
+        "role",
+        "can_write",
+        "can_moderate"
+      ],
+      "title": "ChatViewer",
       "type": "object"
     },
     "tournament.CheckInRequest": {

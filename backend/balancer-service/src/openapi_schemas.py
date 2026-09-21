@@ -9,6 +9,17 @@ balance_get) and bare-dict / 204 handlers are omitted.
 from __future__ import annotations
 
 from shared.rpc.openapi import Op, QueryParam
+from shared.services.chat import (
+    HISTORY_DEFAULT,
+    HISTORY_MAX,
+    ChatEnvelope,
+    ChatMessageRead,
+    ChatMuteInput,
+    ChatMuteRead,
+    ChatPostInput,
+    ChatSettings,
+    ChatSettingsInput,
+)
 from src import schemas
 from src.schemas import custom_game
 
@@ -49,6 +60,21 @@ OPERATIONS: dict[str, Op] = {
         request=schemas.DraftRoleEditRequest,
         response=schemas.DraftRoleEditResponse,
     ),
+    # ── draft: room chat (shared chat service; same shapes in tournament) ──
+    # chat_delete / chat_mute_clear answer a bare {"deleted": true}, so they are
+    # documented in DOCS only — this module maps whole models.
+    "rpc.balancer.draft.chat_history": Op(
+        response=ChatEnvelope,
+        query_params=(
+            QueryParam("after_id", "integer", description="Only messages newer than this id (live tail)."),
+            QueryParam(
+                "limit", "integer", description=f"Page size, clamped to 1..{HISTORY_MAX}, default {HISTORY_DEFAULT}."
+            ),
+        ),
+    ),
+    "rpc.balancer.draft.chat_post": Op(request=ChatPostInput, response=ChatMessageRead),
+    "rpc.balancer.draft.chat_settings": Op(request=ChatSettingsInput, response=ChatSettings),
+    "rpc.balancer.draft.chat_mute_set": Op(request=ChatMuteInput, response=ChatMuteRead),
     # ── draft: admin lifecycle (all -> DraftSessionRead) ───────────────────
     "rpc.balancer.draft.session_list": Op(response=schemas.DraftSessionRead, response_array=True),
     "rpc.balancer.draft.session_create": Op(
