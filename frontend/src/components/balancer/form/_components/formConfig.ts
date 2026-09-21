@@ -231,30 +231,3 @@ export function getBuiltInConfig(
   return result;
 }
 
-// ---------------------------------------------------------------------------
-// Custom field keys (stable, unique, decoupled from the label)
-// ---------------------------------------------------------------------------
-
-function slugifyKey(value: string): string {
-  return value
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_|_$/g, "");
-}
-
-/** Generate a stable unique key for a new custom field, never derived again. */
-export function makeUniqueCustomFieldKey(
-  label: string,
-  existingKeys: Iterable<string>,
-): string {
-  const taken = new Set(existingKeys);
-  const base = slugifyKey(label) || "field";
-  if (!taken.has(base)) {
-    return base;
-  }
-  let index = 2;
-  while (taken.has(`${base}_${index}`)) {
-    index += 1;
-  }
-  return `${base}_${index}`;
-}

@@ -5840,5 +5840,32 @@
     "workspace": {
       "description": "The tenant pool every key and member of this workspace draws from, as it stands right now."
     }
+  },
+  "forms": {
+    "errors": {
+      "required": "This field is required.",
+      "invalid_format": "This value does not match the required format.",
+      "invalid_type": "This value is not in the expected format.",
+      "invalid_option": "This is not one of the available options.",
+      "too_many": "Too many values selected.",
+      "not_verified": "This must match an account verified on your profile.",
+      "unknown_field": "This question is no longer part of the form.",
+      "form_version_stale": "The form has changed. Reload the page and check your answers.",
+      "schema_invalid": "This form is configured incorrectly. Contact the organizer.",
+      "template_name_taken": "A template with this name already exists.",
+      "template_not_found": "Template not found.",
+      "form_not_configured": "This tournament has no registration form yet.",
+      "request_failed": "Unable to complete the action. Try again.",
+      "roles": {
+        "primary_required": "Choose a primary role.",
+        "additional_required": "Choose at least one additional role.",
+        "flex_unavailable": "Flex registration is not available for this tournament.",
+        "one_priority_or_flex": "Choose one priority role, or Flex.",
+        "unknown_role": "This role does not exist.",
+        "subrole_not_allowed": "This sub-role is not available for the chosen role.",
+        "too_many_heroes": "Too many heroes selected for one role.",
+        "hero_wrong_class": "This hero does not belong to the chosen role."
+      }
+    }
   }
 }

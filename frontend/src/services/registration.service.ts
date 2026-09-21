@@ -2,10 +2,9 @@ import { apiFetch } from "@/lib/api-fetch";
 import { rehydrateRegistrationList } from "@/services/registration.helpers";
 import type {
   Registration,
-  RegistrationCreateInput,
   RegistrationForm,
   RegistrationListResponse,
-  RegistrationUpdateInput,
+  RegistrationSubmitInput,
   SubscriptionStatus,
 } from "@/types/registration.types";
 
@@ -16,10 +15,9 @@ const registrationService = {
     return response.json();
   },
 
-  async register(
-    tournamentId: number,
-    input: RegistrationCreateInput,
-  ): Promise<Registration> {
+  /** The whole answer document, against the version it was written for. A
+   *  schema change since then comes back as a 409 `form_version_stale`. */
+  async register(tournamentId: number, input: RegistrationSubmitInput): Promise<Registration> {
     const response = await apiFetch(`/api/v1/tournaments/${tournamentId}/registration`,
       { method: "POST", body: input },
     );
@@ -34,7 +32,7 @@ const registrationService = {
 
   async updateMyRegistration(
     tournamentId: number,
-    input: RegistrationUpdateInput,
+    input: RegistrationSubmitInput,
   ): Promise<Registration> {
     const response = await apiFetch(`/api/v1/tournaments/${tournamentId}/registration/me`,
       { method: "PATCH", body: input },

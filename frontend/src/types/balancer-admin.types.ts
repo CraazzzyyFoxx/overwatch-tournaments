@@ -1,10 +1,8 @@
 import type { PlayerRoleOption, PlayerRoleSlotCode } from "@/lib/player-role";
 import type { Statistics as BalancerStatistics } from "@/types/balancer.types";
+import type { Answers, FormField, FormSchema } from "@/types/forms.types";
 import type {
   Admission,
-  BuiltInFieldConfig,
-  CustomFieldDefinition,
-  FieldValidationConfig,
   StatusKind,
   StatusMeta,
   StatusScope,
@@ -12,15 +10,6 @@ import type {
   SubscriptionOutcome,
   SubscriptionRequirement,
 } from "@/types/registration.types";
-
-// Re-exported for callers that historically imported these registration
-// field-config types from the admin module rather than registration.types
-// directly (e.g. balancer/form/_components/formConfig.ts). The shapes are
-// identical on both sides of the registration/admin boundary -- one
-// registration form definition, read by both the public sign-up flow and
-// this admin editor -- so registration.types.ts is the single source of
-// truth and this file only re-exports.
-export type { BuiltInFieldConfig, FieldValidationConfig };
 
 /** Registration/draft wire code — the non-flex slice of `PlayerRoleSlotCode`. */
 export type BalancerRoleCode = Exclude<PlayerRoleSlotCode, "flex">;
@@ -329,11 +318,6 @@ export interface BalanceSaveInput {
 // Registration (admin)
 // ---------------------------------------------------------------------------
 
-// Identical shape to CustomFieldDefinition (registration.types.ts) -- one
-// registration form definition, read by both the public sign-up flow and
-// this admin editor.
-export type AdminCustomFieldDef = CustomFieldDefinition;
-
 export interface AdminRegistrationForm {
   id: number;
   tournament_id: number;
@@ -365,8 +349,13 @@ export interface AdminRegistrationForm {
    *  lives on the workspace, so the upsert below deliberately has no counterpart.
    *  Still returned because the check-in dialog renders the composed rule. */
   subscription_requirement_json?: SubscriptionRequirement;
-  built_in_fields: Record<string, BuiltInFieldConfig>;
-  custom_fields: AdminCustomFieldDef[];
+  form_schema: FormSchema;
+  /** The version `form_schema` was read from; echoed back by every write. */
+  version_id: number;
+  version_number: number;
+  /** How many registrations are still filed against an older version. Null on
+   *  a public read; the admin form page renders it as a badge. */
+  stale_registrations?: number | null;
   subrole_catalog?: SubroleCatalog;
 }
 
@@ -390,8 +379,7 @@ export interface AdminRegistrationFormUpsert {
   team_require_discord_guild?: boolean;
   require_subscription?: boolean;
   subscription_stage?: "registration" | "check_in";
-  built_in_fields: Record<string, BuiltInFieldConfig>;
-  custom_fields: AdminCustomFieldDef[];
+  form_schema: FormSchema;
 }
 
 export interface AdminRegistrationRole {
@@ -483,11 +471,17 @@ export interface AdminRegistration {
   battle_tag_normalized: string | null;
   source: "manual" | "google_sheets";
   source_record_key: string | null;
-  smurf_tags_json: string[];
-  discord_nick: string | null;
-  twitch_nick: string | null;
-  boosty_nick?: string | null;
-  stream_pov: boolean;
+  /**
+   * Every answer this registration carries, flat and UNFILTERED: the admin
+   * table IS the organizer context, so `organizer_notes` and organizers-only
+   * questions are part of it. `battle_tag` and `roles` stay beside it because
+   * they are columns and rows, not JSON.
+   */
+  answers: Answers;
+  /** The schema version the answers were written against, and whether the form
+   *  has moved on since (the stale badge in the admin table). */
+  form_version_id: number | null;
+  form_version_stale: boolean;
   /**
    * The roster engine's max rank across this registration's PLAYABLE roles,
    * `null` when none is playable. Read this instead of maxing `roles` client-
@@ -496,9 +490,7 @@ export interface AdminRegistration {
    */
   best_rank: number | null;
   roles: AdminRegistrationRole[];
-  notes: string | null;
   admin_notes: string | null;
-  custom_fields_json: Record<string, unknown> | null;
   is_flex: boolean;
   status: string;
   status_meta: StatusMeta;
@@ -529,19 +521,15 @@ export interface AdminRegistration {
 
 export interface AdminRegistrationCreateInput {
   display_name?: string | null;
-  battle_tag?: string | null;
-  smurf_tags_json?: string[] | null;
-  discord_nick?: string | null;
-  twitch_nick?: string | null;
-  boosty_nick?: string | null;
-  stream_pov?: boolean;
-  notes?: string | null;
   admin_notes?: string | null;
-  /** Answers to the tournament's custom field definitions, keyed by field key. */
-  custom_fields_json?: Record<string, string> | null;
+  /** The same flat document the public form submits, validated against the
+   *  form's current schema with requirements OFF: an organizer enters what they
+   *  know. `battle_tag` and the identities are answers like any other. */
+  answers?: Answers;
   status?: string | null;
   balancer_status?: string | null;
-  is_flex?: boolean;
+  /** Admin role rows carry ranks and activity, which `answers.roles` cannot —
+   *  so when both are sent, THIS wins. */
   roles?: AdminRegistrationRoleInput[];
   /** Site account to anchor this registration on (its player). */
   auth_user_id?: number | null;
@@ -549,21 +537,15 @@ export interface AdminRegistrationCreateInput {
 
 export interface AdminRegistrationUpdateInput {
   display_name?: string | null;
-  battle_tag?: string | null;
-  smurf_tags_json?: string[] | null;
-  discord_nick?: string | null;
-  twitch_nick?: string | null;
-  boosty_nick?: string | null;
-  notes?: string | null;
   admin_notes?: string | null;
-  stream_pov?: boolean | null;
-  /** Replaced wholesale when present; omit to leave the stored answers alone. */
-  custom_fields_json?: Record<string, string> | null;
-  is_flex?: boolean | null;
+  /** Partial: only the keys present are validated and written. A key present
+   *  and BLANK clears its answer, which is how the editor empties a question. */
+  answers?: Answers;
   status?: string | null;
   /** `ready`/`incomplete` are rejected server-side (computed from role ranks
    *  only); use `not_in_balancer`, `excluded`, or a custom slug. */
   balancer_status?: string | null;
+  /** Wins over `answers.roles` when both are sent. */
   roles?: AdminRegistrationRoleInput[] | null;
   /** When set, (re)anchor the registration on this site account's player. */
   auth_user_id?: number | null;
@@ -692,7 +674,9 @@ export interface MappingCatalog {
   targets: MappingTargetDef[];
   parsers: MappingParserDef[];
   value_categories: MappingValueCategory[];
-  custom_fields: AdminCustomFieldDef[];
+  /** The schema's non-builtin questions; each is a bindable mapping target.
+   *  Serialized straight from `FormField`, so `kind` — never a legacy `type`. */
+  custom_fields: FormField[];
   header_keys: string[];
   subrole_catalog?: SubroleCatalog;
 }

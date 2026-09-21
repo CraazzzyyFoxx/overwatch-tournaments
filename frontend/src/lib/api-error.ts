@@ -1,6 +1,10 @@
 export interface ApiErrorDetail {
   msg: string;
   code: string;
+  /** The answer/request key the rejection belongs to, when the server named one
+   *  (`shared.domain.forms.validate.FieldError.field`). Absent on the many
+   *  errors that belong to the whole request. */
+  field?: string | null;
 }
 
 export class ApiError extends Error {
@@ -70,11 +74,11 @@ function formatPydanticLoc(loc: unknown): string {
 }
 
 /**
- * Normalize a single `detail` entry into one or more {msg, code}.
+ * Normalize a single `detail` entry into one or more {msg, code, field}.
  *
  * Handles the backend shapes:
  *   - string                                   (wrapped HTTPException)
- *   - { msg: string, code }                    (business error)
+ *   - { msg: string, code, field? }            (business error)
  *   - { msg: [pydantic errors], code }         (422 validation – msg is an array)
  */
 function normalizeDetailItem(item: unknown): ApiErrorDetail[] {
@@ -83,8 +87,9 @@ function normalizeDetailItem(item: unknown): ApiErrorDetail[] {
   }
 
   if (item && typeof item === "object") {
-    const obj = item as { msg?: unknown; message?: unknown; code?: string };
+    const obj = item as { msg?: unknown; message?: unknown; code?: string; field?: unknown };
     const code = obj.code ?? "unknown";
+    const field = typeof obj.field === "string" ? obj.field : null;
     const rawMsg = obj.msg ?? obj.message;
 
     // 422: msg is the raw pydantic error array → expand into readable lines.
@@ -93,16 +98,16 @@ function normalizeDetailItem(item: unknown): ApiErrorDetail[] {
         const pe = (entry ?? {}) as { loc?: unknown; msg?: unknown };
         const loc = formatPydanticLoc(pe.loc);
         const peMsg = typeof pe.msg === "string" ? pe.msg : "Invalid value";
-        return { msg: loc ? `${loc}: ${peMsg}` : peMsg, code };
+        return { msg: loc ? `${loc}: ${peMsg}` : peMsg, code, field: loc || field };
       });
-      return lines.length > 0 ? lines : [{ msg: "Invalid input", code }];
+      return lines.length > 0 ? lines : [{ msg: "Invalid input", code, field }];
     }
 
     if (typeof rawMsg === "string") {
-      return [{ msg: rawMsg, code }];
+      return [{ msg: rawMsg, code, field }];
     }
 
-    return [{ msg: "Unknown error", code }];
+    return [{ msg: "Unknown error", code, field }];
   }
 
   return [{ msg: "Unknown error", code: "unknown" }];

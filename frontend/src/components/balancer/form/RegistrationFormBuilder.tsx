@@ -8,6 +8,7 @@ import { useTranslations } from "next-intl";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { SaveBar } from "@/components/kit/SaveBar";
 import { notify } from "@/lib/notify";
+import { makeUniqueFieldKey } from "@/lib/forms/keys";
 import { toRegistrationFormUpsert } from "@/lib/registration-form-upsert";
 import { ROLES, canonicalToRegistrationRole } from "@/lib/roles";
 import adminService from "@/services/admin.service";
@@ -28,7 +29,6 @@ import {
   getBuiltInConfig,
   getCustomFieldDefaultValidation,
   hydrateCustomField,
-  makeUniqueCustomFieldKey,
   normalizeValidation,
   supportsCustomFieldValidation
 } from "./_components/formConfig";
@@ -217,7 +217,7 @@ export default function RegistrationFormBuilder({
         // regenerate it from the label afterwards (keeps custom_fields_json safe).
         if ("label" in updates && updates.label !== undefined && !field.key) {
           const otherKeys = prev.filter((_, j) => j !== index).map((other) => other.key);
-          updated.key = makeUniqueCustomFieldKey(updates.label, otherKeys);
+          updated.key = makeUniqueFieldKey(updates.label, otherKeys);
         }
 
         if ("validation" in updates) {
