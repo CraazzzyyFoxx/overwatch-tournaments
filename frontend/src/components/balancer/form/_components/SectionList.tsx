@@ -102,7 +102,7 @@ export function SectionList({
   const t = useTranslations("registrationFormAdmin.builder");
 
   return (
-    <div className="flex w-full shrink-0 flex-col gap-2 md:w-64">
+    <div className="flex w-full shrink-0 flex-col gap-2 rounded-xl border border-border bg-card p-3 md:w-64">
       <h3 className={EYEBROW_CLASS}>{t("sections")}</h3>
       <SortableContext
         items={sections.map((section) => `${SECTION_DRAG_PREFIX}${section.key}`)}

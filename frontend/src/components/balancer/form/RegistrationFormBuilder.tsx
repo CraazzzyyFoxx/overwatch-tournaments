@@ -34,6 +34,7 @@ import { Label } from "@/components/ui/label";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { segmentedFrame, toggleVariants } from "@/components/ui/toggle";
 import { defaultFormSchema } from "@/lib/forms/default-schema";
 import { fieldErrorsFrom } from "@/lib/forms/form-errors";
 import { makeUniqueFieldKey } from "@/lib/forms/keys";
@@ -338,9 +339,16 @@ export function SchemaEditor({
   return (
     <Tabs defaultValue="edit" className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <TabsList>
-          <TabsTrigger value="edit">{t("editTab")}</TabsTrigger>
-          <TabsTrigger value="preview">{t("previewTab")}</TabsTrigger>
+        {/* The house segmented control, not the shadcn grey box: same drawing
+            as every other view switch (`ToggleGroup variant="pill"`, the
+            bracket's stage tabs), borrowed rather than restated. */}
+        <TabsList className={cn(segmentedFrame, "h-8")}>
+          <TabsTrigger value="edit" className={toggleVariants({ variant: "pill", size: "sm" })}>
+            {t("editTab")}
+          </TabsTrigger>
+          <TabsTrigger value="preview" className={toggleVariants({ variant: "pill", size: "sm" })}>
+            {t("previewTab")}
+          </TabsTrigger>
         </TabsList>
         {toolbar}
       </div>
@@ -367,7 +375,7 @@ export function SchemaEditor({
               onDelete={deleteSection}
             />
 
-            <div className="min-w-0 flex-1 rounded-xl border p-4">
+            <div className="min-w-0 flex-1 rounded-xl border border-border bg-card p-4">
               {section ? (
                 <div className="grid gap-4">
                   <div className="grid gap-3 sm:grid-cols-2">
@@ -477,7 +485,7 @@ export function SchemaEditor({
       </TabsContent>
 
       <TabsContent value="preview" className="m-0">
-        <div className="grid gap-3 rounded-xl border p-4">
+        <div className="grid gap-3 rounded-xl border border-border bg-card p-4">
           <p className="text-xs text-muted-foreground">{t("previewNote")}</p>
           <SchemaForm
             readOnly
