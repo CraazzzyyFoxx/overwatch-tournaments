@@ -70,7 +70,7 @@ export default function VerifiedAccountSelect({
     const next = typeof window !== "undefined" ? window.location.pathname + window.location.search : "/";
     const connectHref = `/auth/${provider}/login?action=link&next=${encodeURIComponent(next)}`;
     return (
-      <div className="space-y-1.5">
+      <div className="space-y-2">
         <FieldLabel label={label} required={required} icon={iconEl} />
         <div className="rounded-lg border border-warning/30 bg-warning/5 p-3">
           <p className="text-xs text-warning">
@@ -93,7 +93,7 @@ export default function VerifiedAccountSelect({
   }
 
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-2">
       <FieldLabel label={label} htmlFor={controlId} required={required} icon={iconEl} />
       <Select value={value} onValueChange={onChange}>
         <SelectTrigger

@@ -116,7 +116,7 @@ export default function AccountCombobox({
   ) : null;
 
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-2">
       <FieldLabel label={label} htmlFor={controlId} required={required} icon={iconEl} />
       {hasSuggestions ? (
         <Popover open={open} onOpenChange={setOpen}>

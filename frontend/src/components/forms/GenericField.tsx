@@ -73,7 +73,7 @@ export default function GenericField({
 
     case "select":
       return (
-        <div className="space-y-1.5">
+        <div className="space-y-2">
           <FieldLabel label={label} htmlFor={id} required={field.required} />
           {/* Radix Select rejects an empty item value, so the empty state is the
               trigger placeholder rather than a blank option. */}
@@ -106,7 +106,7 @@ export default function GenericField({
       const selected = Array.isArray(value) ? (value as unknown[]).map(String) : [];
       return (
         <fieldset
-          className="m-0 min-w-0 space-y-1.5 border-0 p-0"
+          className="m-0 min-w-0 space-y-2 border-0 p-0"
           aria-invalid={Boolean(error)}
           aria-describedby={error ? errorId : undefined}
         >
@@ -143,7 +143,7 @@ export default function GenericField({
 
     case "date":
       return (
-        <div className="space-y-1.5">
+        <div className="space-y-2">
           <FieldLabel label={label} htmlFor={id} required={field.required} />
           {/* The platform's own picker: a date library here would ship a
               calendar widget to replace a control every browser already has. */}
