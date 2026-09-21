@@ -3,7 +3,10 @@
 import { useTranslations } from "next-intl";
 
 import { Markdown } from "@/components/Markdown";
+import { extractToc } from "@/lib/markdown-toc";
+import { cn } from "@/lib/utils";
 
+import { RulesToc } from "../_components/RulesToc";
 import { TournamentPageState } from "../_components/TournamentPageState";
 import { useTournamentQuery } from "@/hooks/useTournamentClientData";
 import styles from "../TournamentDetail.module.css";
@@ -28,27 +31,54 @@ export default function TournamentRulesPage({ slug }: Readonly<{ slug: string }>
   if (!tournament) return null;
 
   const rules = tournament.rules?.trim();
+  // One entry is not a table of contents, it is a duplicate of the heading the
+  // reader can already see — and a document written with bold lead-ins instead
+  // of `##` produces none at all. Both fall back to the plain single column.
+  const toc = rules ? extractToc(rules) : [];
+  const hasToc = toc.length > 1;
 
   return (
     <section className={styles.publicDataPage} aria-label={t("common.rules")}>
       {rules ? (
         // No card: a regulation is a page of prose, and boxing it adds a border
-        // around text that nothing else on the page is competing with. The
-        // measure cap is the only layout it needs. Tables inside still scroll
-        // on their own.
+        // around text that nothing else on the page is competing with. Tables
+        // inside still scroll on their own.
         //
         // 48rem — one step WIDER than the 42rem `/docs` and `/terms` read at,
         // chosen deliberately so the document fills more of a desktop tab.
-        // Measured in Inter at 16px: 768px ≈ 89 Cyrillic characters per line,
+        // Measured in Inter at 18px: 768px ≈ 80 Cyrillic characters per line,
         // above the 75 every readability guide draws the limit at. The price is
         // paid in line tracking on the widest viewports; `leading-relaxed`
         // (1.625) on every paragraph is what keeps that survivable, so do not
         // tighten it here.
-        //
-        // Centred, because the cap cannot be spent instead: on a wide desktop
-        // the column still leaves the tab's sides empty, and empty space on ONE
-        // side reads as a layout that broke rather than a document that ends.
-        <Markdown source={rules} className="mx-auto max-w-3xl py-2" />
+        <div
+          className={cn(
+            "grid justify-center gap-8",
+            // The rail takes the empty left gutter a centred column leaves
+            // behind; the PAIR is centred, so the document does not drift right
+            // as the viewport grows. Below `xl` there is no gutter to take, so
+            // the rail becomes a collapsed summary above the text instead.
+            hasToc && "xl:grid-cols-[16rem_minmax(0,48rem)]"
+          )}
+        >
+          {hasToc ? (
+            <>
+              <details className="w-full max-w-3xl rounded-lg border border-border px-4 py-3 xl:hidden">
+                <summary className="cursor-pointer text-body font-semibold text-foreground">
+                  {t("tournamentDetail.rules.toc")}
+                </summary>
+                <RulesToc entries={toc} className="pt-2" />
+              </details>
+              <aside className="hidden xl:block">
+                {/* `top-28` is the same offset the tournament pages' anchors
+                    already use (`scroll-mt-28`), so the rail clears the sticky
+                    tab bar by exactly as much as a jumped-to heading does. */}
+                <RulesToc entries={toc} className="sticky top-28" />
+              </aside>
+            </>
+          ) : null}
+          <Markdown source={rules} className="w-full max-w-3xl py-2" />
+        </div>
       ) : (
         // Reachable by a direct link after an organizer clears the document:
         // the tab is gone from the rail, the URL still resolves.

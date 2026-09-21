@@ -56,7 +56,9 @@ function RulesForm({
         <CardContent className="flex flex-col gap-3 pt-6">
           <p className="text-caption text-muted-foreground">
             Markdown, shown to everyone on the tournament&apos;s Rules tab. The tab appears only
-            once this is not empty — clearing it unpublishes the document.
+            once this is not empty — clearing it unpublishes the document. Write sections as{" "}
+            <code>##</code> headings (<code>###</code> for subsections): two or more of them give
+            the public page a table of contents. Bold text on its own line does not.
           </p>
           <MarkdownEditor
             label="Tournament rules, Markdown"

@@ -1,6 +1,7 @@
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 
+import { headingText, slugifyHeading } from "@/lib/markdown-toc";
 import { cn } from "@/lib/utils";
 
 /**
@@ -33,14 +34,31 @@ const MARKDOWN_COMPONENTS: Components = {
       className="text-balance font-display text-headline font-semibold text-foreground"
     />
   ),
-  h2: ({ node: _node, ...props }) => (
-    <h3 {...props} className="text-balance font-display text-title font-semibold text-foreground" />
+  // `##` and `###` carry the anchors the table of contents links to, and the
+  // id comes from the same slug function the rail's parser uses — one source,
+  // or the links point at ids that do not exist. `scroll-mt-28` is the offset
+  // the rest of the tournament pages already anchor with, so a jumped-to
+  // section does not land under the sticky rail.
+  h2: ({ node: _node, children, ...props }) => (
+    <h3
+      {...props}
+      id={slugifyHeading(headingText(children))}
+      className="scroll-mt-28 text-balance font-display text-title font-semibold text-foreground"
+    >
+      {children}
+    </h3>
   ),
   // The bottom of the heading ladder sits AT the body size, never under it: a
   // heading smaller than the text it introduces reads as a caption. h3..h6
   // separate themselves by weight and foreground colour instead.
-  h3: ({ node: _node, ...props }) => (
-    <h4 {...props} className="text-reading font-semibold text-foreground" />
+  h3: ({ node: _node, children, ...props }) => (
+    <h4
+      {...props}
+      id={slugifyHeading(headingText(children))}
+      className="scroll-mt-28 text-reading font-semibold text-foreground"
+    >
+      {children}
+    </h4>
   ),
   h4: ({ node: _node, ...props }) => (
     <h5 {...props} className="text-reading font-semibold text-foreground" />

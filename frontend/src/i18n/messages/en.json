@@ -2215,7 +2215,8 @@
     },
     "rules": {
       "emptyTitle": "No rules published",
-      "emptyDescription": "The organizer has not published a rules document for this tournament yet."
+      "emptyDescription": "The organizer has not published a rules document for this tournament yet.",
+      "toc": "Contents"
     },
     "stats": {
       "title": "Statistics",

@@ -9,7 +9,7 @@
 //     empty card, because the URL stays reachable after the rail drops the tab.
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { NextIntlClientProvider } from "next-intl";
-import { act, type ReactNode } from "react";
+import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -100,5 +100,35 @@ describe("Tournament Rules section", () => {
 
     expect(html.textContent).toContain(en.tournamentDetail.rules.emptyTitle);
     expect(html.querySelector("h2")).toBeNull();
+  });
+
+  it("links every table-of-contents entry to a heading that exists", async () => {
+    getPublicOverview.mockResolvedValue(
+      tournament(
+        "# Regulations\n\n## Формат **турнира**\n\nProse.\n\n### Чек-ин\n\nProse.\n\n```\n## not a section\n```\n\n## Замены\n\nProse."
+      )
+    );
+
+    const html = await mount();
+
+    // Two rails are mounted (the collapsed one for small viewports and the
+    // sticky one); CSS decides which is visible, so read the first.
+    const nav = html.querySelector("nav");
+    const targets = [...(nav?.querySelectorAll("a") ?? [])].map((a) => a.getAttribute("href"));
+    // `#` is the document title, the fenced line is code, and emphasis inside a
+    // heading is not part of its text.
+    expect(targets).toEqual(["#формат-турнира", "#чек-ин", "#замены"]);
+    for (const target of targets) {
+      expect(html.querySelector(`[id="${target?.slice(1)}"]`)).not.toBeNull();
+    }
+  });
+
+  it("drops the rail when the document has a single section", async () => {
+    getPublicOverview.mockResolvedValue(tournament("## Format\n\nOne section only."));
+
+    const html = await mount();
+
+    expect(html.querySelector("nav")).toBeNull();
+    expect(html.querySelector("h3")?.textContent).toBe("Format");
   });
 });
