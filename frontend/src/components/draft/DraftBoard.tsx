@@ -133,40 +133,31 @@ export function DraftBoard({ tournament }: Readonly<DraftBoardProps>) {
         connectionState={connectionState}
         currentUserId={user?.id ?? null}
       />
-      {/* The board and its chat, as a flex ROW rather than a grid track: the
-          panel renders nothing for a viewer the room will not let read, and a
-          row with one child is exactly the layout the board had before the
-          chat existed. Keyed by the SESSION — a re-seed is a different draft
-          and deserves its own conversation. */}
-      <div className="flex flex-col gap-5 lg:flex-row lg:items-start">
-        <div className="min-w-0 flex-1">
-          {gating.isCaptain ? (
-            <CaptainDraftWorkspace
-              board={board}
-              gating={gating}
-              options={optionsQuery.data ?? null}
-              optionsLoading={optionsQuery.isFetching}
-              onRetryOptions={() => void optionsQuery.refetch()}
-              connectionState={connectionState}
-              viewParams={viewParams}
-              onViewParamsChange={updateViewParams}
-              mutations={mutations}
-              divisionGrid={divisionGrid}
-              onlineCaptainIds={onlineCaptainIds}
-            />
-          ) : (
-            <SpectatorDraftWorkspace
-              board={board}
-              divisionGrid={divisionGrid}
-              onlineCaptainIds={onlineCaptainIds}
-            />
-          )}
-        </div>
-        <RoomChat
-          room={draftChatRoom(board.session.id)}
-          className="lg:w-[22rem] lg:shrink-0"
+      {gating.isCaptain ? (
+        <CaptainDraftWorkspace
+          board={board}
+          gating={gating}
+          options={optionsQuery.data ?? null}
+          optionsLoading={optionsQuery.isFetching}
+          onRetryOptions={() => void optionsQuery.refetch()}
+          connectionState={connectionState}
+          viewParams={viewParams}
+          onViewParamsChange={updateViewParams}
+          mutations={mutations}
+          divisionGrid={divisionGrid}
+          onlineCaptainIds={onlineCaptainIds}
         />
-      </div>
+      ) : (
+        <SpectatorDraftWorkspace
+          board={board}
+          divisionGrid={divisionGrid}
+          onlineCaptainIds={onlineCaptainIds}
+        />
+      )}
+      {/* Docked over the page, not a column of the board: the board wants
+          every pixel of width it can get. Keyed by the SESSION — a re-seed is
+          a different draft and deserves its own conversation. */}
+      <RoomChat room={draftChatRoom(board.session.id)} />
     </div>
   );
 }

@@ -79,13 +79,13 @@ function render(streams: TournamentStreams) {
 function playingChannel(streams: TournamentStreams): string | null {
   render(streams);
   reveal();
-  const src = container.querySelector("iframe")?.getAttribute("src");
+  const src = document.body.querySelector("iframe")?.getAttribute("src");
   return src ? new URL(src).searchParams.get("channel") : null;
 }
 
 function control(label: string): HTMLButtonElement | null {
   return (
-    [...container.querySelectorAll("button")].find(
+    [...document.body.querySelectorAll("button")].find(
       (button) =>
         button.getAttribute("aria-label") === label || button.textContent?.includes(label)
     ) ?? null
@@ -143,8 +143,8 @@ describe("TournamentBroadcastDock featured pick", () => {
     });
     reveal();
 
-    expect(container.querySelector("iframe")).toBeNull();
-    expect(container.textContent).toContain(
+    expect(document.body.querySelector("iframe")).toBeNull();
+    expect(document.body.textContent).toContain(
       en.stream.broadcast.watchOn.replace("{platform}", "YouTube")
     );
   });
@@ -172,7 +172,7 @@ describe("TournamentBroadcastDock naming", () => {
   it("is the official broadcast even when the cast is off air", () => {
     render(streams);
     reveal();
-    const text = container.textContent ?? "";
+    const text = document.body.textContent ?? "";
 
     expect(text).toContain(en.stream.broadcast.heading);
     // Not a word about the participant who is live right now.
@@ -186,7 +186,7 @@ describe("TournamentBroadcastDock naming", () => {
     render(streams);
     reveal();
 
-    expect(container.querySelector('a[href="https://twitch.tv/owtcast"]')).not.toBeNull();
+    expect(document.body.querySelector('a[href="https://twitch.tv/owtcast"]')).not.toBeNull();
   });
 });
 
@@ -209,7 +209,7 @@ describe("TournamentBroadcastDock panel body", () => {
     });
     reveal();
 
-    expect(container.textContent).not.toContain("[DROPS] day two, watch the finals");
+    expect(document.body.textContent).not.toContain("[DROPS] day two, watch the finals");
   });
 
   it("ends at the frame when there is nothing else to say", () => {
@@ -222,7 +222,7 @@ describe("TournamentBroadcastDock panel body", () => {
     reveal();
 
     // Header, then the frame's ratio box — and nothing after it.
-    expect(container.querySelector("aside")?.children).toHaveLength(2);
+    expect(document.body.querySelector("aside")?.children).toHaveLength(2);
   });
 
   // The footer is not dead code: it still carries what the frame cannot say.
@@ -236,7 +236,7 @@ describe("TournamentBroadcastDock panel body", () => {
     });
     reveal();
 
-    expect(container.querySelector('a[href="https://twitch.tv/owtcast2"]')).not.toBeNull();
+    expect(document.body.querySelector('a[href="https://twitch.tv/owtcast2"]')).not.toBeNull();
   });
 });
 
@@ -255,7 +255,7 @@ describe("TournamentBroadcastDock hide and restore", () => {
   it("starts collapsed, with the restore control and no frame", () => {
     render(streams);
 
-    expect(container.querySelector("iframe")).toBeNull();
+    expect(document.body.querySelector("iframe")).toBeNull();
     expect(control(en.stream.broadcast.show)).not.toBeNull();
   });
 
@@ -273,7 +273,7 @@ describe("TournamentBroadcastDock hide and restore", () => {
 
     act(() => control(en.stream.broadcast.hide)?.click());
 
-    expect(container.querySelector("iframe")).toBeNull();
+    expect(document.body.querySelector("iframe")).toBeNull();
   });
 
   it("keeps the broadcast one click away after hiding", () => {
@@ -283,7 +283,7 @@ describe("TournamentBroadcastDock hide and restore", () => {
     expect(restore).not.toBeNull();
 
     act(() => restore?.click());
-    expect(container.querySelector("iframe")?.getAttribute("src")).toContain("channel=owtcast");
+    expect(document.body.querySelector("iframe")?.getAttribute("src")).toContain("channel=owtcast");
   });
 
   it("moves focus to the restore control when the panel goes away", () => {
@@ -312,18 +312,18 @@ describe("TournamentBroadcastDock hide and restore", () => {
     reveal();
 
     act(() => {
-      container
+      document.body
         .querySelector("aside")
         ?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     });
 
-    expect(container.querySelector("iframe")).toBeNull();
+    expect(document.body.querySelector("iframe")).toBeNull();
   });
 
   it("announces itself as a landmark rather than a modal dialog", () => {
     render(streams);
     reveal();
-    const panel = container.querySelector("aside");
+    const panel = document.body.querySelector("aside");
 
     expect(panel?.getAttribute("aria-label")).toBe(en.stream.broadcast.heading);
     expect(panel?.getAttribute("aria-modal")).toBeNull();

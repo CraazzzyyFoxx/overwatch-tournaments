@@ -76,25 +76,20 @@ const UNAVAILABLE_ICON: Record<PickBanUnavailableIcon, React.ReactNode> = {
 };
 
 /**
- * The room plus its private back channel. The chat sits BESIDE the phase the
- * room happens to be on rather than inside one of them: every branch below
- * returns a different screen (readiness, a pick-ban board, a map report, the
- * closing report), and the captains need to talk across all of them —
- * "ready?" is asked precisely when the readiness gate is up. `RoomChat`
- * renders nothing for a non-participant, and a flex row (not a grid track)
- * means a spectator's layout is exactly what it was before it existed.
+ * The room plus its private back channel. The chat is a `Dock` over the page
+ * rather than a panel inside one of the phases: every branch below returns a
+ * different screen (readiness, a pick-ban board, a map report, the closing
+ * report), and the captains need to talk across all of them — "ready?" is
+ * asked precisely when the readiness gate is up. Docked, it also costs the
+ * room no width, and `RoomChat` renders nothing at all for a viewer the room
+ * will not let read.
  */
 export function PregameRoom(props: Readonly<PregameRoomProps>) {
   return (
-    <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
-      <div className="min-w-0 flex-1">
-        <PregameRoomBody {...props} />
-      </div>
-      <RoomChat
-        room={encounterChatRoom(props.encounterId)}
-        className="lg:w-[22rem] lg:shrink-0"
-      />
-    </div>
+    <>
+      <PregameRoomBody {...props} />
+      <RoomChat room={encounterChatRoom(props.encounterId)} />
+    </>
   );
 }
 

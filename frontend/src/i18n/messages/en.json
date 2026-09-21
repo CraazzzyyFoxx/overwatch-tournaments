@@ -3419,6 +3419,7 @@
   },
   "chat": {
     "title": "Room chat",
+    "hide": "Hide the chat",
     "listLabel": "Room chat messages",
     "empty": "No messages yet",
     "emptyHint": "Everyone who can read this room sees what you write here.",

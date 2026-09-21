@@ -207,11 +207,6 @@ export function AdminControlRoom({ tournamentId, board }: Readonly<AdminControlR
             <AdminMetric icon={Radio} label={t("viewers")} value={presence.anonymous_viewer_count} />
           </section>
 
-          {/* The organizer's side of the room, where they are already running
-              the draft — same room and same session id the public board
-              mounts, so a message sent here lands in the captains' panel. */}
-          <RoomChat room={draftChatRoom(session.id)} />
-
           <Accordion type="single" collapsible className="lg:hidden">
             <AccordionItem value="watch" className="border-t border-[color:var(--aqt-border)]">
               <AccordionTrigger>{t("watchPanel")}</AccordionTrigger>
@@ -223,6 +218,12 @@ export function AdminControlRoom({ tournamentId, board }: Readonly<AdminControlR
           {watch}
         </aside>
       </div>
+
+      {/* The organizer's side of the room, docked over the control page where
+          they are already running the draft — same room and same session id
+          the public board mounts, so a message sent here lands in the
+          captains' panel. */}
+      <RoomChat room={draftChatRoom(session.id)} />
 
       <ResolveRoleConflictDialog
         open={roleDialogOpen}

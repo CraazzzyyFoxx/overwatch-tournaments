@@ -136,13 +136,13 @@ describe("room chat", () => {
     getEnvelope.mockResolvedValue(envelope());
     await render();
 
-    expect(container.textContent).toContain("ready?");
-    expect(container.textContent).not.toContain("go");
+    expect(document.body.textContent).toContain("ready?");
+    expect(document.body.textContent).not.toContain("go");
 
     await push({});
 
-    expect(container.textContent).toContain("go");
-    expect(container.textContent).toContain("Rabbit");
+    expect(document.body.textContent).toContain("go");
+    expect(document.body.textContent).toContain("Rabbit");
   });
 
   it("does not duplicate a message already known by id", async () => {
@@ -155,25 +155,25 @@ describe("room chat", () => {
     // read that overlapped what is already on screen.
     await push({ data: message({ id: 9, body: "already here" }) });
 
-    expect(container.textContent?.match(/already here/g)).toHaveLength(1);
+    expect(document.body.textContent?.match(/already here/g)).toHaveLength(1);
   });
 
   it("removes a row on chat.message_deleted", async () => {
     getEnvelope.mockResolvedValue(envelope());
     await render();
-    expect(container.textContent).toContain("ready?");
+    expect(document.body.textContent).toContain("ready?");
 
     await push({ event_type: "chat.message_deleted", data: { id: 1 } });
 
-    expect(container.textContent).not.toContain("ready?");
+    expect(document.body.textContent).not.toContain("ready?");
   });
 
   it("renders nothing when the room refuses the viewer", async () => {
     getEnvelope.mockResolvedValue(null);
     await render();
 
-    expect(container.textContent).toBe("");
-    expect(container.querySelector("textarea")).toBeNull();
+    expect(document.body.textContent).toBe("");
+    expect(document.body.querySelector("textarea")).toBeNull();
     expect(document.body.textContent).not.toContain(CHAT.title);
   });
 
@@ -185,9 +185,9 @@ describe("room chat", () => {
     );
     await render();
 
-    expect(container.textContent).toContain("ready?");
-    expect(container.querySelector("textarea")).toBeNull();
-    expect(container.textContent).toContain(CHAT.readOnly);
+    expect(document.body.textContent).toContain("ready?");
+    expect(document.body.querySelector("textarea")).toBeNull();
+    expect(document.body.textContent).toContain(CHAT.readOnly);
   });
 
   it("tells a muted viewer when the mute lifts instead of showing a composer", async () => {
@@ -203,8 +203,8 @@ describe("room chat", () => {
     );
     await render();
 
-    expect(container.querySelector("textarea")).toBeNull();
-    expect(container.textContent).toContain(CHAT.muted.split("{until}")[0].trim());
+    expect(document.body.querySelector("textarea")).toBeNull();
+    expect(document.body.textContent).toContain(CHAT.muted.split("{until}")[0].trim());
   });
 
   it("deletes a message through the service when a moderator asks", async () => {
@@ -218,7 +218,7 @@ describe("room chat", () => {
 
     // Moderation lives behind the message's context menu, so the bubble is the
     // trigger — no per-message buttons to find.
-    const bubble = container.querySelector<HTMLElement>('[data-slot="bubble"]');
+    const bubble = document.body.querySelector<HTMLElement>('[data-slot="bubble"]');
     expect(bubble?.textContent).toContain("ready?");
 
     await act(async () => {
@@ -240,6 +240,6 @@ describe("room chat", () => {
     await settle();
 
     expect(deleteMessage).toHaveBeenCalledWith(ROOM, 1);
-    expect(container.textContent).not.toContain("ready?");
+    expect(document.body.textContent).not.toContain("ready?");
   });
 });
