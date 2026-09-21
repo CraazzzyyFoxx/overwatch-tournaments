@@ -5,17 +5,18 @@ import { useTranslations } from "next-intl";
 import { HeroCoord } from "@/components/site/PageHero";
 import type { DraftBoard } from "@/types/draft.types";
 
-import { picksUntilTeamTurn } from "@/lib/draft-workspace-model";
 import { accentToken, resolveDraftAccent } from "@/lib/draft-visual";
 import { DraftClockRing } from "./DraftClockRing";
 
 interface CurrentPickProps {
   board: DraftBoard;
-  isMyPick?: boolean;
-  myTeamId?: number | null;
 }
 
-export function CurrentPick({ board, isMyPick = false, myTeamId = null }: Readonly<CurrentPickProps>) {
+/**
+ * Spectator-only. A captain reads the same state off `PickCommandBar`, which
+ * is why nothing here is written in the second person.
+ */
+export function CurrentPick({ board }: Readonly<CurrentPickProps>) {
   const t = useTranslations("draftRedesign");
   const current = board.current_pick;
   const team = current
@@ -26,11 +27,6 @@ export function CurrentPick({ board, isMyPick = false, myTeamId = null }: Readon
   const blocked = accent === "blocked";
   const paused = board.session.status === "paused";
 
-  const picksUntilMyTurn =
-    !isMyPick && board.session.status === "live" && myTeamId != null
-      ? picksUntilTeamTurn(board.picks, myTeamId)
-      : null;
-
   return (
     <section
       className="rounded-2xl border bg-[color:var(--aqt-card)] p-5 shadow-lg"
@@ -40,7 +36,7 @@ export function CurrentPick({ board, isMyPick = false, myTeamId = null }: Readon
       <span aria-hidden className="mb-4 block h-0.5 w-12 rounded" style={{ background: accentColor }} />
       <div className="flex flex-wrap items-start justify-between gap-5">
         <div>
-          <HeroCoord>{isMyPick ? t("yourTurn") : t("currentPick")}</HeroCoord>
+          <HeroCoord>{t("currentPick")}</HeroCoord>
           <h2 id="current-pick-heading" className="mt-2 font-onest text-2xl font-semibold sm:text-3xl">
             {team?.name ?? t("noActivePick")}
           </h2>
@@ -49,16 +45,6 @@ export function CurrentPick({ board, isMyPick = false, myTeamId = null }: Readon
               ? t("pickMeta", { pick: current.overall_no, total: board.picks.length })
               : t("pickIdle")}
           </p>
-          {isMyPick && !blocked && (
-            <p className="mt-3 font-onest text-base font-semibold" style={{ color: accentColor }}>
-              {t("focalPickPrompt")}
-            </p>
-          )}
-          {picksUntilMyTurn != null && (
-            <p className="mt-3 text-sm text-[color:var(--aqt-fg-muted)]">
-              {t("yourTurnInPicks", { n: picksUntilMyTurn })}
-            </p>
-          )}
         </div>
         <DraftClockRing
           expiresAt={current?.clock_expires_at ?? null}

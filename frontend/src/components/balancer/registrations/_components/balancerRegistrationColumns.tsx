@@ -44,6 +44,7 @@ import { identityProvider } from "@/lib/forms/builtin-keys";
 export const BUILTIN_ANSWER_LABELS: Record<string, string> = {
   smurf_tags: "Smurfs",
   stream_pov: "Stream POV",
+  reserve: "Reserve",
   public_notes: "Notes",
   organizer_notes: "Organizer Notes",
   identity_discord: "Discord",
@@ -275,6 +276,25 @@ function ReviewedCell({ registration }: Readonly<{ registration: AdminRegistrati
   );
 }
 
+/**
+ * "This player agreed to be a substitute" — CONSENT, not a pool verdict.
+ *
+ * It rides beside the balancer chip rather than replacing it because the two
+ * answer different questions: a reserve is deliberately left out of the pool
+ * until an organizer pulls them in, so the balancer chip says `not_in_balancer`
+ * for a reserve and for a row nobody has got to yet alike. Folding them into one
+ * chip would erase exactly the distinction an organizer looking for a
+ * replacement needs.
+ */
+function ReserveBadge() {
+  const t = useTranslations();
+  return (
+    <StatusPill tone="info" title={t("common.reserveHint")}>
+      {t("common.reserve")}
+    </StatusPill>
+  );
+}
+
 function ExclusionCell({ registration }: Readonly<{ registration: AdminRegistration }>) {
   if (registration.balancer_status !== "excluded") {
     return <span className="text-[color:var(--aqt-fg-dim)]">—</span>;
@@ -463,20 +483,32 @@ export function buildBalancerRegistrationColumns(
       header: "Balancer",
       accessorFn: (registration) => registration.balancer_status || "",
       sortingFn: localeTextSort,
-      // `excluded` keeps what the balancer drops, `included` keeps the pool.
+      // Two axes on ONE chip, deliberately: `included`/`excluded` is the pool
+      // verdict, `reserve`/`not_reserve` is the registrant's consent to be cover.
+      // They are not alternatives — every reserve is also out of the pool — so a
+      // reserve must not be answerable by the pool clause, or "who agreed to sub
+      // in" would return every unprocessed row alongside the volunteers.
       filterFn: (row: Row<AdminRegistration>, _columnId: string, values: string[]) => {
-        if (values.length === 0) {
+        const [value] = values;
+        if (!value) {
           return true;
         }
 
+        if (value === "reserve" || value === "not_reserve") {
+          return (row.original.answers?.reserve === true) === (value === "reserve");
+        }
+
         const isExcluded = row.original.balancer_status_meta?.excludes_from_balancer === true;
-        return values.includes("excluded") ? isExcluded : !isExcluded;
+        return value === "excluded" ? isExcluded : !isExcluded;
       },
       cell: ({ row }) => (
-        <BalancerStatusBadge
-          status={row.original.balancer_status}
-          meta={row.original.balancer_status_meta}
-        />
+        <div className="flex flex-col items-center gap-1">
+          <BalancerStatusBadge
+            status={row.original.balancer_status}
+            meta={row.original.balancer_status_meta}
+          />
+          {row.original.answers?.reserve === true ? <ReserveBadge /> : null}
+        </div>
       ),
       meta: adminColumnMeta<AdminRegistration>({
         category: "core",
@@ -489,9 +521,12 @@ export function buildBalancerRegistrationColumns(
           options: [
             { value: "included", label: "Included" },
             { value: "excluded", label: "Excluded" },
+            { value: "reserve", label: "Reserve" },
+            { value: "not_reserve", label: "Not reserve" },
           ],
         },
-        searchValue: (registration) => registration.balancer_status,
+        searchValue: (registration) =>
+          `${registration.balancer_status}${registration.answers?.reserve === true ? " reserve" : ""}`,
       }),
     },
     {

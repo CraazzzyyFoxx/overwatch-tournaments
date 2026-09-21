@@ -44,6 +44,7 @@ ALL_ANSWER_FIELDS = tuple(
         "identity_vk",
         "identity_youtube",
         "stream_pov",
+        "reserve",
         "public_notes",
         "organizer_notes",
     )
@@ -66,6 +67,7 @@ BUILTIN_TARGETS = {
     "identity_vk",
     "identity_youtube",
     "stream_pov",
+    "reserve",
     "public_notes",
     "organizer_notes",
     "source_roles.primary",

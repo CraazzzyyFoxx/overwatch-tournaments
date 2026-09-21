@@ -136,6 +136,20 @@ class RegistrationRead(BaseModel):
     queue_role: str | None = None
     queue_role_position: int | None = None
     queue_role_total: int | None = None
+    #: Self-service editing, answered by the server (``self_edit_policy``): the
+    #: form schema decides per question, three keys are floored regardless, and
+    #: the reason is a machine code the client translates
+    #: (``status_locked`` / ``checked_in`` / ``window_closed`` /
+    #: ``nothing_editable``). Populated ONLY by the caller's own registration
+    #: reads, like ``queue_*`` above — a reader looking at somebody else's row
+    #: gets ``can_edit=False``, which is the truth for them.
+    #:
+    #: The client MUST NOT re-derive this from ``FormField.editable``: the policy
+    #: also folds in the floors and the "never answered yet" exception, and three
+    #: consumers re-deriving it would grow three different answers.
+    can_edit: bool = False
+    edit_locked_reason: str | None = None
+    edit_writable_keys: list[str] = Field(default_factory=list)
 
 
 class TournamentHistoryEntry(BaseModel):
@@ -407,6 +421,13 @@ class RegistrationListResponse(BaseModel):
     #: Primary role -> count, one bucket per registration. Mirrors what the overview
     #: card used to derive client-side from the rows it can no longer see.
     role_counts: dict[str, int] = Field(default_factory=dict)
+    #: How many of ``total`` declared themselves reserves (or were made one by
+    #: signing up late). Deliberately an EXTRA number rather than a subtraction:
+    #: ``total`` is the queue denominator (``queue_position`` counts the same
+    #: rows) and ``Tournament.registrations_count`` is cached separately, so a
+    #: reserve-adjusted ``total`` would disagree with both. The capacity line
+    #: subtracts this client-side.
+    reserve_count: int = 0
     #: Advisory capacity from the form, echoed here so a consumer that already reads
     #: this envelope needs no second request for it.
     max_participants: int | None = None

@@ -20,6 +20,7 @@ func (f fakeResolver) TournamentWorkspaceID(context.Context, int64) (int64, bool
 
 type fakeMembers struct {
 	member       bool
+	organizer    bool
 	captain      bool
 	draftCaptain bool
 	err          error
@@ -31,6 +32,11 @@ type memberCall struct{ user, ws int64 }
 func (f *fakeMembers) IsWorkspaceMember(_ context.Context, userID, workspaceID int64) (bool, error) {
 	f.calls = append(f.calls, memberCall{userID, workspaceID})
 	return f.member, f.err
+}
+
+func (f *fakeMembers) IsWorkspaceOrganizer(_ context.Context, userID, workspaceID int64) (bool, error) {
+	f.calls = append(f.calls, memberCall{userID, workspaceID})
+	return f.organizer, f.err
 }
 
 func (f *fakeMembers) IsEncounterCaptain(context.Context, int64, int64) (bool, error) {
@@ -181,10 +187,12 @@ func TestAllow_SpectateHiddenEncounterPickBanHero(t *testing.T) {
 }
 
 // Both chat rooms behave the same way: participants (captain / workspace
-// member / superuser) always get in, and everyone else — anonymous included —
-// only while the organizer leaves spectator read ON. The toggle widens the
-// audience of a room the caller could already see; it never unhides a hidden
-// tournament.
+// organizer / superuser) always get in, and everyone else — anonymous
+// included — only while the organizer leaves spectator read ON. The toggle
+// widens the audience of a room the caller could already see; it never unhides
+// a hidden tournament. A plain workspace member is NOT staff: every tournament
+// registrant gets a workspace_member row, so membership is roster, not
+// moderation.
 func TestAllow_RoomChat(t *testing.T) {
 	ctx := context.Background()
 	user := &auth.User{ID: 7}
@@ -215,8 +223,9 @@ func TestAllow_RoomChat(t *testing.T) {
 				{"non-participant allowed when open", user, &fakeMembers{}, true, false, true},
 				{"captain allowed when closed", user, room.captain(), false, false, true},
 				{"captain allowed when open", user, room.captain(), true, false, true},
-				{"workspace member allowed when closed", user, &fakeMembers{member: true}, false, false, true},
-				{"workspace member allowed when open", user, &fakeMembers{member: true}, true, false, true},
+				{"roster-only member denied when closed", user, &fakeMembers{member: true}, false, false, false},
+				{"workspace organizer allowed when closed", user, &fakeMembers{organizer: true}, false, false, true},
+				{"workspace organizer allowed when open", user, &fakeMembers{organizer: true}, true, false, true},
 				{"superuser allowed when closed", su, &fakeMembers{}, false, false, true},
 				{"hidden tournament outsider denied when open", user, &fakeMembers{}, true, true, false},
 				{"hidden tournament anonymous denied when open", nil, &fakeMembers{}, true, true, false},

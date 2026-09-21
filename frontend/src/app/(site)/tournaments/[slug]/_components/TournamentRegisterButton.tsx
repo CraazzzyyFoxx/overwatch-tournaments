@@ -19,6 +19,7 @@ import registrationService from "@/services/registration.service";
 import { tournamentHref } from "@/lib/tournament-url";
 import {
   TOURNAMENT_PRIMARY_ACTION_CLASS,
+  TOURNAMENT_STATUS_BOX_CLASS,
   TOURNAMENT_TEXT_ACTION_CLASS,
 } from "./tournamentActionClass";
 import type { Tournament } from "@/types/tournament.types";
@@ -76,7 +77,7 @@ export default function TournamentRegisterButton({
   // tournament's REGISTRATION schedule window does.
   if (!isRegistrationOpen(tournament)) {
     return (
-      <div className="inline-flex items-center gap-2 rounded-lg border border-[color:var(--aqt-border)] bg-[color:var(--aqt-overlay-1)] px-4 py-2 text-sm text-[color:var(--aqt-fg-dim)]">
+      <div className={TOURNAMENT_STATUS_BOX_CLASS}>
         <Clock className="size-4" aria-hidden />
         {t("registration.button.closed")}
       </div>

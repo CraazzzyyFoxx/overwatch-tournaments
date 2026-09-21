@@ -37,7 +37,7 @@ export function identityProvider(key: string): IdentityProvider | null {
   return IDENTITY_PROVIDERS.includes(provider) ? provider : null;
 }
 
-/** Spread as a typed tuple rest so `BuiltinFieldKey` stays a union of the ELEVEN
+/** Spread as a typed tuple rest so `BuiltinFieldKey` stays a union of the TWELVE
  *  literals. `.map()` alone widens to `string`, and the admin builder localises a
  *  builtin by key against a typed message dictionary, which only accepts the
  *  literals. (Naming that dictionary's namespace here would make the zone
@@ -49,6 +49,7 @@ export const BUILTIN_FIELD_KEYS = [
   "smurf_tags",
   "roles",
   "stream_pov",
+  "reserve",
   "public_notes",
   "organizer_notes",
   ...IDENTITY_FIELD_KEYS,
@@ -92,6 +93,9 @@ const FIXED_VISIBILITY: Record<string, Visibility> = {
   battle_tag: "public",
   roles: "public",
   stream_pov: "public",
+  // A reserve hidden from the roster cannot be found when a replacement is
+  // needed, so the catalog pins this one public too.
+  reserve: "public",
   public_notes: "public",
   organizer_notes: "organizers",
 };

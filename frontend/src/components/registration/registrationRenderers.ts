@@ -7,7 +7,7 @@ import NotesField from "./fields/NotesField";
 import RoleRanksField from "./fields/RoleRanksField";
 import RolesField from "./fields/RolesField";
 import SmurfTagsField from "./fields/SmurfTagsField";
-import StreamPovField from "./fields/StreamPovField";
+import SwitchField from "./fields/SwitchField";
 
 /**
  * Which component answers which builtin key.
@@ -22,7 +22,8 @@ export const registrationRenderers: RendererRegistry = {
   battle_tag: BattleTagField,
   smurf_tags: SmurfTagsField,
   roles: RolesField,
-  stream_pov: StreamPovField,
+  stream_pov: SwitchField,
+  reserve: SwitchField,
   public_notes: NotesField,
   organizer_notes: NotesField,
   // Keyed by KIND, not by a builtin key: `role_ranks` is a custom question an

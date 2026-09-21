@@ -34,7 +34,7 @@ __all__ = ("AuditSource", "json_safe", "record_audit", "record_admin_audit")
 
 # Mirrors ``audit_log.source`` — a plain ``String(16)`` with no DB enum, the same
 # shape ``FinalizeSource`` gives ``encounter_result_audit.source``.
-AuditSource = Literal["admin", "api_key", "challonge", "discord", "scheduler", "system"]
+AuditSource = Literal["admin", "api_key", "challonge", "discord", "player", "scheduler", "system"]
 
 # ``actor_label``, ``entity_label`` and ``user_agent`` are ``String(255)``;
 # ``ip_address`` is ``String(45)``.

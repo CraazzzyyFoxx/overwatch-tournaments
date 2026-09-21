@@ -68,9 +68,14 @@ __all__ = (
 _ANSWER_COLUMNS: dict[str, str] = {
     "smurf_tags": "smurf_tags_json",
     "stream_pov": "stream_pov",
+    "reserve": "is_reserve",
     "public_notes": "public_notes",
     "organizer_notes": "organizer_notes",
 }
+
+#: Of those, the ones whose column is NOT NULL boolean: a blank answer is
+#: ``False``, never ``NULL``.
+_BOOL_COLUMNS = frozenset({"stream_pov", "is_reserve"})
 
 _NOT_VERIFIED_MSG = "This must match an OAuth-verified account linked to your profile."
 
@@ -296,7 +301,7 @@ class RegistrationAnswerService:
             if key not in values:
                 continue
             value = values[key]
-            setattr(registration, column, bool(value) if column == "stream_pov" else (value or None))
+            setattr(registration, column, bool(value) if column in _BOOL_COLUMNS else (value or None))
         self._apply_identities(registration, values, schema=schema)
         if "roles" in values:
             self._apply_roles(registration, values["roles"] or [], schema=schema, hero_catalog=hero_catalog)

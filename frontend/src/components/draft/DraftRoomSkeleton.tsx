@@ -48,31 +48,16 @@ function DraftSkeletonToolbar() {
   );
 }
 
+/** Mirrors the loaded `DraftPageHero`: one compact identification strip. */
 function DraftHeroSkeleton() {
   return (
     <section className={styles.skeletonHero} data-draft-skeleton="standalone-hero">
-      <span className={styles.skeletonHeroAccent} />
-      <div className={styles.skeletonHeroCopy}>
-        <div className={styles.skeletonHeroMeta}>
-          <SkeletonBlock className={styles.skeletonEyebrow} />
-          <SkeletonBlock className={styles.skeletonStatusPill} />
-        </div>
-        <SkeletonBlock className={styles.skeletonHeroTitle} />
-        <SkeletonBlock className={styles.skeletonHeroLede} />
-        <SkeletonBlock className={styles.skeletonHeroLedeShort} />
-        <div className={styles.skeletonHeroStamps}>
-          <SkeletonBlock />
-          <SkeletonBlock />
-          <SkeletonBlock />
-        </div>
-      </div>
+      <SkeletonBlock className={styles.skeletonBackArrow} />
+      <SkeletonBlock className={styles.skeletonHeroTitle} />
+      <SkeletonBlock className={styles.skeletonStatusPill} />
       <div className={styles.skeletonStatusSummary} data-draft-skeleton="status-summary">
-        {Array.from({ length: 3 }, (_, index) => (
-          <div className={styles.skeletonMetric} key={index}>
-            <SkeletonBlock className={styles.skeletonMetricLabel} />
-            <SkeletonBlock className={styles.skeletonMetricValue} />
-          </div>
-        ))}
+        <SkeletonBlock className={styles.skeletonConnectionMeta} />
+        <SkeletonBlock className={styles.skeletonConnectionState} />
       </div>
     </section>
   );
@@ -144,12 +129,6 @@ function DraftWorkspaceSkeleton() {
   return (
     <div className={styles.skeletonWorkspace}>
       <DraftHeroSkeleton />
-
-      <div className={styles.skeletonConnectionRail}>
-        <SkeletonBlock className={styles.skeletonConnectionState} />
-        <SkeletonBlock className={styles.skeletonConnectionMeta} />
-      </div>
-
       <section className={styles.skeletonCurrentPick} data-draft-skeleton="board-controls">
         <div className={styles.skeletonCurrentPickCopy}>
           <SkeletonBlock className={styles.skeletonEyebrow} />

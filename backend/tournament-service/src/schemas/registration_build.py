@@ -167,6 +167,10 @@ async def _resolve_top_heroes_config(
     return await resolve_hero_catalog(session), top_heroes.max
 
 
+#: Answer keys every reader may see regardless of the version a row answered.
+_ALWAYS_PUBLIC = frozenset({"reserve"})
+
+
 def registration_public_keys(
     form: models.BalancerRegistrationForm | None,
 ) -> Callable[[Any], frozenset[str]]:
@@ -181,9 +185,15 @@ def registration_public_keys(
     ``form_version`` to be eager-loaded (``registration_load_options``); a row
     without it falls back to the form's current public keys, which is exactly the
     legacy/manual case where ``form_version_id`` is NULL.
+
+    ``reserve`` is the one key added unconditionally. Its visibility is FIXED
+    public by the builtin catalog, so no version can have collected it in
+    confidence -- and the schedule imposes it on every late sign-up whether or
+    not the form ever asked the question. Leaving it to the schema would hide
+    exactly the rows the reserve group exists to show.
     """
     current = schema_from_form(form)
-    fallback = current.public_keys() if current is not None else frozenset()
+    fallback = (current.public_keys() if current is not None else frozenset()) | _ALWAYS_PUBLIC
     cache: dict[int, frozenset[str]] = {}
     if form is not None and form.current_version_id is not None:
         cache[form.current_version_id] = fallback
@@ -195,7 +205,7 @@ def registration_public_keys(
         cached = cache.get(version.id)
         if cached is None:
             schema = schema_from_version(version)
-            cached = cache[version.id] = schema.public_keys() if schema is not None else frozenset()
+            cached = cache[version.id] = (schema.public_keys() if schema is not None else frozenset()) | _ALWAYS_PUBLIC
         return cached
 
     return keys_for
@@ -244,6 +254,11 @@ def _reg_to_read(
     #: The form's current version, so the read can say whether these answers
     #: were given against it. Unknown (``None``) is never reported as stale.
     current_version_id: int | None = None,
+    #: The registrant's own edit rights, resolved by
+    #: ``services.registration.self_edit.self_edit_policy``. Only the ``*_me``
+    #: reads pay for it; every other surface leaves it ``None`` and the payload
+    #: reports "no editing", which is what a third party may do anyway.
+    self_edit: Any | None = None,
 ) -> RegistrationRead:
     """Serialize a registration for public API responses.
 
@@ -346,6 +361,9 @@ def _reg_to_read(
         queue_role=queue.role if queue is not None else None,
         queue_role_position=queue.role_position if queue is not None else None,
         queue_role_total=queue.role_total if queue is not None else None,
+        can_edit=bool(self_edit is not None and self_edit.can_edit),
+        edit_locked_reason=self_edit.reason if self_edit is not None else None,
+        edit_writable_keys=sorted(self_edit.writable_keys) if self_edit is not None else [],
     )
 
 

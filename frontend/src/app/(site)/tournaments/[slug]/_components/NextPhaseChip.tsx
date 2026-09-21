@@ -76,16 +76,22 @@ export function NextPhaseChip({
     );
   }
 
+  // The pill stands in the collapsed rail, beside the title and the register
+  // button — the widest thing in a row that has none to spare. It keeps the
+  // answer ("in 13 hours") and drops the restatement: the absolute stamp is
+  // already in the hero above and in the phase timeline the chip links to, so
+  // here it rides in `title` rather than 120px of header.
   return (
     <Link
       href={href}
+      title={`${label} · ${stamp}`}
       className={cn(
         "meta-pill transition-colors hover:border-[color:var(--aqt-teal)]",
         className
       )}
     >
       <span className="k">{label}</span>
-      <span className="v aqt-tnum">{when}</span>
+      <span className="v aqt-tnum">{relative}</span>
     </Link>
   );
 }

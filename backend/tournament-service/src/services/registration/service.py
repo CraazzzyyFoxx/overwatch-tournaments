@@ -55,7 +55,12 @@ from src.services.registration._common import (
     _common_service,
 )
 from src.services.registration.answers import answer_service
-from src.services.registration.windows import is_check_in_window_active, is_registration_open
+from src.services.registration.self_edit import self_edit_policy
+from src.services.registration.windows import (
+    is_check_in_window_active,
+    is_late_registration,
+    is_registration_open,
+)
 from src.services.tournament.events import enqueue_registration_approved
 
 __all__ = (
@@ -70,6 +75,8 @@ __all__ = (
 _ANSWERS_REQUIRED = "This tournament's registration form has to be answered."
 
 _FORM_VERSION_STALE = "The registration form changed; reload and try again."
+
+_LOCKED_ANSWER = "This answer cannot be changed after submitting; ask an organizer."
 
 
 def _require_current_schema(
@@ -122,6 +129,16 @@ def _role_counts(registrations: Sequence[models.BalancerRegistration]) -> dict[s
             continue
         counts[roles[0].role] = counts.get(roles[0].role, 0) + 1
     return counts
+
+
+def _reserve_count(registrations: Sequence[models.BalancerRegistration]) -> int:
+    """Rows that declared themselves cover (or signed up past the deadline).
+
+    Counted over the SAME row set as ``total`` and reported beside it, never
+    subtracted from it: ``total`` is the queue denominator and the capacity line
+    does its own arithmetic.
+    """
+    return sum(1 for registration in registrations if registration.is_reserve)
 
 
 def _primary_role_select(tournament_id: int) -> sa.Subquery:
@@ -517,6 +534,7 @@ class RegistrationService:
         form_version_id: int | None = None,
         auto_approve: bool = False,
         auth_user: models.AuthUser | None = None,
+        force_reserve: bool = False,
         commit: bool = True,
     ) -> models.BalancerRegistration:
         """Create a self-service registration and auto-enroll the registrant.
@@ -537,6 +555,11 @@ class RegistrationService:
 
         ``commit=False`` flushes instead, so a caller that must land this row
         together with something else (the team flows) really can.
+
+        ``force_reserve`` writes ``is_reserve`` regardless of what the answer
+        document said: it carries the schedule's verdict (a sign-up past the
+        registration window's ``ends_at`` is cover, not a starter), and the
+        registrant does not get a vote on that.
         """
         if auth_user is not None and not auth_user.can_capability(
             "registration", "self_register", workspace_id=workspace_id
@@ -557,6 +580,10 @@ class RegistrationService:
         # after, and ``ensure_player_identity`` below resolves the domain player
         # from it.
         answer_service.apply(registration, values, schema=schema, hero_catalog=hero_catalog)
+        if force_reserve:
+            # AFTER ``apply``: the schedule overrides the checkbox rather than
+            # racing it, whether or not the form even asks the question.
+            registration.is_reserve = True
         registration.display_name = registration.battle_tag
         registration = await self.registration_repo.create(session, registration)
         # Provision the domain player identity so first-time registrants are picked
@@ -623,6 +650,7 @@ class RegistrationService:
         session: AsyncSession,
         registration: models.BalancerRegistration,
         *,
+        tournament: models.Tournament,
         values: Mapping[str, Any],
         schema: FormSchema,
         hero_catalog: HeroCatalog | None = None,
@@ -630,12 +658,26 @@ class RegistrationService:
     ) -> models.BalancerRegistration:
         """Apply a validated PARTIAL answer document to an existing registration.
 
+        The REGISTRANT's own edit, so it is gated by ``self_edit_policy``: the
+        form schema says which questions may be rewritten (closed by default),
+        and three keys are floored regardless. An organizer's edit goes through
+        ``lifecycle.update_registration_profile`` and is gated by none of it.
+
         Only the questions the document mentions move; the registration's
         ``form_version_id`` advances to the version it was validated against, so
         the stale badge and the read-side public-key set follow the edit.
         """
-        if registration.status != "pending":
-            raise HTTPException(status_code=400, detail="Cannot update a registration that is not pending")
+        policy = self_edit_policy(registration, tournament, schema)
+        if not policy.can_edit:
+            raise HTTPException(status_code=409, detail=policy.reason)
+        # Reported per key, not as one refusal: the message belongs under the
+        # control the registrant just touched.
+        locked = sorted(set(values) - policy.writable_keys)
+        if locked:
+            raise_field_errors(
+                [FieldError(key, ErrorCode.LOCKED.value, _LOCKED_ANSWER) for key in locked],
+                status_code=409,
+            )
         answer_service.apply(registration, values, schema=schema, hero_catalog=hero_catalog)
         if form_version_id is not None:
             registration.form_version_id = form_version_id
@@ -794,6 +836,11 @@ class RegistrationService:
                 form_version_id=form.current_version_id,
                 auto_approve=form.auto_approve,
                 auth_user=auth_user,
+                # A sign-up admitted only by ``allow_late_registration`` is cover
+                # for the field, not part of it. Solo only: on a team the bench is
+                # ``is_substitute`` and the slot is the captain's decision, so a
+                # starter carrying ``is_reserve`` would mean two things at once.
+                force_reserve=team_placement is None and is_late_registration(tournament),
                 # One transaction for the row, its answers and (below) its team
                 # slot: a registration with a team_id but no slot_code would be
                 # counted by the roster reader and placed nowhere.
@@ -830,6 +877,9 @@ class RegistrationService:
             roster=rosters.get(registration.id),
             queue=await self.queue_position(session, registration),
             current_version_id=form.current_version_id,
+            # The row the registrant lands on: the card renders its Edit affordance
+            # straight from this, instead of showing none until the first refetch.
+            self_edit=self_edit_policy(registration, tournament, schema),
         )
 
     async def resolve_admission_list(
@@ -994,6 +1044,7 @@ class RegistrationService:
                 hidden=True,
                 total=len(hidden_rows),
                 role_counts=_role_counts(hidden_rows),
+                reserve_count=_reserve_count(hidden_rows),
                 max_participants=max_participants,
             )
 
@@ -1067,6 +1118,7 @@ class RegistrationService:
             division_grids=division_grids,
             total=len(registrations),
             role_counts=_role_counts(registrations),
+            reserve_count=_reserve_count(registrations),
             max_participants=max_participants,
         )
 

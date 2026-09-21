@@ -31,9 +31,20 @@ SESSION_ID = 42
 OTHER_SESSION_ID = 43
 WORKSPACE_ID = 5
 
-CAPTAIN = SimpleNamespace(id=7, username="cap_account", is_workspace_member=lambda _ws: False)
-STAFF = SimpleNamespace(id=1, username="organizer", is_workspace_member=lambda ws: ws == WORKSPACE_ID)
-VIEWER = SimpleNamespace(id=99, username="viewer", is_workspace_member=lambda _ws: False)
+# ``has_admin_panel_access`` is the staff gate, NOT ``is_workspace_member``: a
+# workspace_member row exists for every tournament registrant, so ROSTER is a
+# player who must stay a spectator here.
+CAPTAIN = SimpleNamespace(id=7, username="cap_account", has_admin_panel_access=lambda _ws: False)
+STAFF = SimpleNamespace(id=1, username="organizer", has_admin_panel_access=lambda ws: ws == WORKSPACE_ID)
+VIEWER = SimpleNamespace(id=99, username="viewer", has_admin_panel_access=lambda _ws: False)
+ROSTER = SimpleNamespace(
+    id=100,
+    username="player",
+    # Read-only workspace ``member``/``player`` role: on the roster, no
+    # non-read grant anywhere.
+    has_admin_panel_access=lambda _ws: False,
+    is_workspace_member=lambda ws: ws == WORKSPACE_ID,
+)
 
 
 class _Sessions:
@@ -97,7 +108,7 @@ class DraftChatAccessTests(IsolatedAsyncioTestCase):
         self.assertEqual(membership.role, SPECTATOR_ROLE)
         self.assertFalse(membership.can_write)
 
-    async def test_workspace_member_moderates(self) -> None:
+    async def test_workspace_organizer_moderates(self) -> None:
         membership = await _access().resolve(object(), STAFF, self.room)
 
         self.assertEqual(membership.role, "staff")
@@ -105,6 +116,15 @@ class DraftChatAccessTests(IsolatedAsyncioTestCase):
         self.assertTrue(membership.can_moderate)
         # Staff need not be a player: the auth account's name is the floor.
         self.assertEqual(membership.display_name, "organizer")
+
+    async def test_plain_workspace_member_is_only_a_spectator(self) -> None:
+        """Registering for a tournament creates a workspace_member row and the
+        baseline ``member`` role, which must not confer moderation."""
+        membership = await _access().resolve(object(), ROSTER, self.room)
+
+        self.assertEqual(membership.role, SPECTATOR_ROLE)
+        self.assertFalse(membership.can_write)
+        self.assertFalse(membership.can_moderate)
 
     async def test_anonymous_visitor_is_a_spectator(self) -> None:
         membership = await _access().resolve(object(), None, self.room)

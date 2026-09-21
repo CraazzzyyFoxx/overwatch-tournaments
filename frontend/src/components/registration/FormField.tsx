@@ -39,6 +39,8 @@ interface FormFieldProps {
   /** Render a `<textarea>` instead of an `<input>`. */
   multiline?: boolean;
   rows?: number;
+  /** Read-only: the answer is shown, not asked for. */
+  disabled?: boolean;
   onKeyDown?: KeyboardEventHandler<HTMLInputElement | HTMLTextAreaElement>;
   /** Content between the label and the control (e.g. a tag list). */
   beforeControl?: ReactNode;
@@ -61,6 +63,7 @@ export default function FormField({
   placeholder,
   type = "text",
   multiline = false,
+  disabled = false,
   rows = 2,
   onKeyDown,
   beforeControl,
@@ -83,6 +86,7 @@ export default function FormField({
       value={value}
       onChange={(event) => onChange(event.target.value)}
       onKeyDown={onKeyDown}
+      disabled={disabled}
       aria-invalid={invalid}
       aria-describedby={invalid ? errorId : undefined}
       className={cn(controlClass, "py-2")}
@@ -95,6 +99,7 @@ export default function FormField({
       value={value}
       onChange={(event) => onChange(event.target.value)}
       onKeyDown={onKeyDown}
+      disabled={disabled}
       aria-invalid={invalid}
       aria-describedby={invalid ? errorId : undefined}
       className={cn(controlClass, "h-9")}

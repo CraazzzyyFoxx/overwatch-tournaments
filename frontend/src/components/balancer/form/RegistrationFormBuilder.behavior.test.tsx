@@ -14,6 +14,8 @@
 //    reports a schema PATH; a toast saying "sections[0].fields[1].visible_when"
 //    is not something an organizer can act on, so it is resolved to the field
 //    and shown under its settings instead.
+// 4. The palette offers the `reserve` builtin, and per-question self-editing
+//    round-trips: the flag the organizer ticks is the flag the upsert carries.
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { NextIntlClientProvider } from "next-intl";
 import { act } from "react";
@@ -23,7 +25,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import en from "@/i18n/messages/en.json";
 import { ApiError } from "@/lib/api-error";
 import { notify } from "@/lib/notify";
-import type { FormSchema } from "@/types/forms.types";
+import type { FormField, FormSchema } from "@/types/forms.types";
 
 import RegistrationFormBuilder from "./RegistrationFormBuilder";
 
@@ -111,7 +113,8 @@ function builtin(key: string, required = false) {
     options: null,
     validation: null,
     params: {},
-    show_in_draft: false
+    show_in_draft: false,
+    editable: false
   };
 }
 
@@ -329,6 +332,7 @@ describe("registration form builder", () => {
               validation: null,
               params: {},
               show_in_draft: false,
+              editable: false,
               visible_when: { field: "stream_pov", op: "truthy" }
             }
           ]
@@ -377,5 +381,25 @@ describe("registration form builder", () => {
     expect(panel).toContain(en.forms.errors.schema_invalid);
     // Not a toast: a rejection that names a field belongs under that field.
     expect(notify.error).not.toHaveBeenCalled();
+  });
+
+  it("offers the reserve builtin and saves the per-question editable flag", async () => {
+    await mount();
+
+    // The palette lists every builtin this form does not already ask for.
+    await menuItem("Add question", "Reserve");
+    // Adding a question selects it, so the panel below belongs to `reserve`.
+    await click(labelled("Allow changes after submitting"));
+
+    await click(button("Save changes"));
+    await settle();
+
+    const [, body] = upsertRegistrationForm.mock.calls[0];
+    const fields: FormField[] = body.form_schema.sections[0].fields;
+    expect(fields.map((one) => one.key)).toEqual(["battle_tag", "stream_pov", "reserve"]);
+    // Closed stays closed on the questions nobody touched; the ticked one opens.
+    expect(fields.map((one) => one.editable)).toEqual([false, false, true]);
+    // The catalog pins the reserve's readership, so the builder cannot send another.
+    expect(fields[2].visibility).toBe("public");
   });
 });

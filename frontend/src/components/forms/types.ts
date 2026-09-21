@@ -53,6 +53,16 @@ export interface FieldRendererProps {
   value: unknown;
   onChange: (value: unknown) => void;
   error: string | null;
+  /**
+   * Render read-only: this viewer may look at the answer but not change it.
+   *
+   * Set by `SchemaForm` from the host's lock map — in practice the server's
+   * `edit_writable_keys` allowlist, or a value the schedule forced (a late
+   * sign-up's `reserve`). The form ALSO wraps a locked field in a disabled
+   * `<fieldset>`, so a renderer that ignores this prop is still read-only;
+   * honouring it is about saying so visibly.
+   */
+  disabled?: boolean;
   context: FieldRendererContext;
 }
 

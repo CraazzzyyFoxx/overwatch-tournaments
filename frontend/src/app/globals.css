@@ -3309,7 +3309,7 @@
   font-weight: 600;
   letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: hsl(0 0% 100% / 0.35);
+  color: var(--aqt-fg-faint);
   text-align: left;
   padding: 8px 12px;
   height: 30px;
@@ -3329,7 +3329,9 @@
 .roster tr:hover td {
   background: var(--aqt-overlay-2);
 }
-.roster .roster-scroll {
+/* `.roster-scroll` WRAPS `.roster` — the old `.roster .roster-scroll` matched
+   nothing, so `.team-card { overflow: hidden }` clipped the table instead. */
+.roster-scroll {
   overflow-x: auto;
 }
 

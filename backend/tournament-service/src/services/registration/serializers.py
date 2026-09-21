@@ -148,6 +148,7 @@ def serialize_registration_form(
     form: models.BalancerRegistrationForm,
     *,
     is_open: bool,
+    registration_late: bool = False,
     subscription_requirement: dict[str, Any] | None = None,
     subrole_catalog: dict[str, list[dict[str, str]]] | None = None,
     stale_registrations: int | None = None,
@@ -162,6 +163,10 @@ def serialize_registration_form(
     tournament's REGISTRATION schedule window rather than read off the form — the
     form no longer has a say in whether registration is open.
 
+    ``registration_late`` says the window's ``ends_at`` has passed and only
+    ``allow_late_registration`` keeps the form open: everyone signing up now is
+    written as a reserve, and the form has to say so before they submit.
+
     ``stale_registrations`` is the organizer-only count of registrations still on
     an older version; the public read leaves it ``None`` rather than paying for it.
     """
@@ -174,6 +179,7 @@ def serialize_registration_form(
         tournament_id=form.tournament_id,
         workspace_id=form.workspace_id,
         is_open=is_open,
+        registration_late=registration_late,
         auto_approve=form.auto_approve,
         require_open_profile=form.require_open_profile,
         open_profile_scope=form.open_profile_scope,

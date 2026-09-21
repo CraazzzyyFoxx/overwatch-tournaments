@@ -197,6 +197,22 @@ describe("sanitizeSchema", () => {
     const drafted = clean.sections[0].fields.map((f) => f.show_in_draft);
     expect(drafted).toEqual([false, false, true]);
   });
+
+  it("saves a missing editable flag as closed", () => {
+    const clean = sanitizeSchema(
+      schemaOf([
+        "one",
+        [
+          // The fixture omits the key entirely — an imported or hand-edited
+          // document does the same, and locked is the only safe reading.
+          field("silent"),
+          field("explicitly_open", { editable: true }),
+          field("explicitly_shut", { editable: false })
+        ]
+      ])
+    );
+    expect(clean.sections[0].fields.map((f) => f.editable)).toEqual([false, true, false]);
+  });
 });
 
 describe("blockedFieldKeys", () => {

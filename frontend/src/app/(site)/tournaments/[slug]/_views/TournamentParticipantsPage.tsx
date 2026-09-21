@@ -28,6 +28,7 @@ import {
   ChevronUp,
   EyeOff,
   LayoutGrid,
+  Pencil,
   Table2
 } from "lucide-react";
 
@@ -64,8 +65,13 @@ import { getApiErrorMessage } from "@/lib/api-error";
 import registrationService from "@/services/registration.service";
 import registrationTeamService from "@/services/registration-team.service";
 import CheckInSubscriptionProof from "@/components/registration/CheckInSubscriptionProof";
+import MyRegistrationEditDialog from "@/components/registration/MyRegistrationEditDialog";
 import type { Tournament } from "@/types/tournament.types";
-import type { Registration, RegistrationStatus } from "@/types/registration.types";
+import type {
+  Registration,
+  RegistrationForm,
+  RegistrationStatus
+} from "@/types/registration.types";
 
 import ColumnPicker from "./_components/ColumnPicker";
 import {
@@ -339,7 +345,8 @@ function MyRegistrationCard({
   onWithdraw,
   isCheckingIn,
   isWithdrawing,
-  tournament
+  tournament,
+  form
 }: Readonly<{
   registration: Registration;
   canCheckIn: boolean;
@@ -348,10 +355,14 @@ function MyRegistrationCard({
   isCheckingIn: boolean;
   isWithdrawing: boolean;
   tournament: Tournament;
+  /** The CURRENT form. Self-edit needs its schema and version id, so the Edit
+   *  action waits for it even when the server already said `can_edit`. */
+  form: RegistrationForm | null;
 }>) {
   const t = useTranslations();
   const tSlot = useTranslations("rosterShape.slotCodes");
   const [isExpanded, setIsExpanded] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
 
   // §12.5 needs two facts the inline brief deliberately omits: the per-slot
   // shortfall ("what is still missing") and whether the team already made it
@@ -426,6 +437,21 @@ function MyRegistrationCard({
   // drafted against a confirmed attendee list (backend returns 409 too).
   const canWithdraw =
     !isCheckedIn && (registration.status === "pending" || registration.status === "approved");
+  // SERVER-resolved, never re-derived: `can_edit` already folds in the schema's
+  // per-question `editable` flags, the system floors and the window. The form
+  // is the only local prerequisite — the dialog renders its schema.
+  const canEdit = registration.can_edit && form !== null;
+  // `nothing_editable` is the closed-by-default state of every tournament whose
+  // organizer never opened a question, so it hides the action instead of
+  // parking a permanently dead button on the card. The other three reasons mean
+  // the entry WAS editable and something closed it — worth saying out loud.
+  const editLockedReason =
+    !canEdit && registration.edit_locked_reason !== "nothing_editable"
+      ? registration.edit_locked_reason
+      : null;
+  // A reserve plays only if somebody drops out, so it is a fact about this
+  // entry, not a status: it rides `answers` like any other public answer.
+  const isReserve = answerFlag(registration.answers, "reserve");
   // D3: `ready` is the server's own "the data is complete" — approved AND holding
   // a rank in the balancer pool. It is deliberately NOT a requirement and is
   // never spent by check-in, which is why it travels beside the decision rather
@@ -676,11 +702,30 @@ function MyRegistrationCard({
                   })}
                 </span>
               ) : null}
+              {isReserve ? (
+                <span
+                  data-registration-reserve="true"
+                  className="rounded-full border border-[color:color-mix(in_srgb,var(--aqt-amber)_35%,transparent)] bg-[color:color-mix(in_srgb,var(--aqt-amber)_12%,transparent)] px-1.5 py-px text-label font-semibold uppercase tracking-label text-[color:var(--aqt-amber)]"
+                >
+                  {t("registration.reserve.badge")}
+                </span>
+              ) : null}
             </div>
             <h3 className="mt-0.5 text-lg font-bold leading-tight text-[color:var(--aqt-fg)]">
               {statusName}
             </h3>
             <p className={cn("mt-0.5 text-xs", hintClass)}>{hintText}</p>
+            {/* Why they are in the reserve, not just that they are. The late
+                variant is the server's own decision stated plainly: past the
+                window's `ends_at` every sign-up is written as cover, and the
+                form read is what reports that the window is behind us. */}
+            {isReserve ? (
+              <p className="mt-0.5 text-xs text-[color:var(--aqt-amber)]">
+                {form?.registration_late === true
+                  ? t("registration.reserve.lateImposed")
+                  : t("registration.reserve.explainer")}
+              </p>
+            ) : null}
           </div>
         </div>
 
@@ -706,6 +751,32 @@ function MyRegistrationCard({
               {isCheckingIn ? t("common.checkingIn") : t("common.checkIn")}
             </button>
           )}
+          {/* Edit sits before Withdraw: "fix my answer" is the cheaper of the
+              two and the one a player reaches for first. Disabled-with-a-reason
+              rather than silently absent, because a registrant who edited
+              yesterday and cannot today is owed the reason. */}
+          {canEdit || editLockedReason ? (
+            <button
+              type="button"
+              data-registration-edit="true"
+              onClick={() => setIsEditOpen(true)}
+              disabled={!canEdit}
+              aria-label={
+                editLockedReason
+                  ? `${t("registration.edit.action")} — ${t(`registration.edit.reason.${editLockedReason}`)}`
+                  : undefined
+              }
+              title={
+                editLockedReason
+                  ? t(`registration.edit.reason.${editLockedReason}`)
+                  : t("registration.edit.action")
+              }
+              className="inline-flex items-center justify-center gap-1 rounded-md border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-overlay-2)] px-2.5 py-1.5 text-label font-semibold text-[color:var(--aqt-fg-muted)] transition-all hover:bg-[color:var(--aqt-overlay-3)] hover:text-[color:var(--aqt-fg)] active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50"
+            >
+              <Pencil className="size-3" aria-hidden />
+              {t("registration.edit.action")}
+            </button>
+          ) : null}
           {canWithdraw && (
             <button
               type="button"
@@ -909,6 +980,19 @@ function MyRegistrationCard({
           ) : null}
         </div>
       )}
+
+      {/* Mounted only once the form has loaded: the dialog renders its schema
+          and echoes its version id back on save. */}
+      {form ? (
+        <MyRegistrationEditDialog
+          open={isEditOpen}
+          onOpenChange={setIsEditOpen}
+          workspaceId={tournament.workspace_id}
+          tournamentId={tournament.id}
+          form={form}
+          registration={registration}
+        />
+      ) : null}
     </div>
   );
 }
@@ -1345,6 +1429,22 @@ function TournamentParticipantsView({ tournament }: Readonly<{ tournament: Tourn
     [divisionGrid, registrations, view]
   );
 
+  // Reserves are their own group, after the main field: they are in the
+  // tournament, but only if somebody drops out, and a name interleaved with the
+  // starters reads as one of them. Each half keeps its own virtual list rather
+  // than a header row inside one — the list is window-virtualized, and two
+  // lists is the whole of "two groups".
+  const reserveRows = useMemo(
+    () => filtered.filter((registration) => answerFlag(registration.answers, "reserve")),
+    [filtered]
+  );
+  const mainRows = useMemo(
+    () => filtered.filter((registration) => !answerFlag(registration.answers, "reserve")),
+    [filtered]
+  );
+  // The server's own count, covering the rows a hidden roster does not send.
+  const reserveCount = registrationList?.reserve_count ?? 0;
+
   if (listQuery.isPending && listQuery.data === undefined) {
     return <TournamentParticipantsSkeleton />;
   }
@@ -1365,6 +1465,7 @@ function TournamentParticipantsView({ tournament }: Readonly<{ tournament: Tourn
           isCheckingIn={checkInMutation.isPending}
           isWithdrawing={withdrawMutation.isPending}
           tournament={tournament}
+          form={form}
         />
       )}
 
@@ -1455,6 +1556,21 @@ function TournamentParticipantsView({ tournament }: Readonly<{ tournament: Tourn
       {!listHidden && view === "table" && (
         <p aria-atomic="true" aria-live="polite" className="sr-only">
           {t("tournamentDetail.participants.resultCount", { count: filtered.length })}
+        </p>
+      )}
+
+      {/* The one place the two numbers appear together. `total` is the server's
+          and counts reserves — it is the queue denominator — so the reserve
+          figure is stated beside it rather than subtracted out of it. */}
+      {!listHidden && reserveCount > 0 && (
+        <p
+          data-reserve-count={reserveCount}
+          className="text-xs text-[color:var(--aqt-fg-muted)]"
+        >
+          {t("tournamentDetail.participants.countWithReserve", {
+            count: registrationList?.total ?? registrations.length,
+            reserve: reserveCount
+          })}
         </p>
       )}
 
@@ -1592,6 +1708,7 @@ function TournamentParticipantsView({ tournament }: Readonly<{ tournament: Tourn
             total={registrationList?.total ?? 0}
             roleCounts={registrationList?.role_counts ?? {}}
             maxParticipants={registrationList?.max_participants}
+            reserveCount={reserveCount}
           />
           <p className="mt-3 text-caption text-[color:var(--aqt-fg-faint)]">
             {t("tournamentDetail.participants.hidden.description")}
@@ -1608,13 +1725,44 @@ function TournamentParticipantsView({ tournament }: Readonly<{ tournament: Tourn
           onResetFilters={() => navigateParticipantUrl({ type: "reset" })}
         />
       ) : filtered.length > 0 ? (
-        <VirtualParticipantsList
-          allColumns={allColumns}
-          expandedIds={expandedIds}
-          onToggleExpanded={toggleExpanded}
-          registrations={filtered}
-          visibleColumns={visibleColumns}
-        />
+        <>
+          {mainRows.length > 0 ? (
+            <VirtualParticipantsList
+              allColumns={allColumns}
+              expandedIds={expandedIds}
+              onToggleExpanded={toggleExpanded}
+              registrations={mainRows}
+              visibleColumns={visibleColumns}
+            />
+          ) : null}
+          {reserveRows.length > 0 ? (
+            <section
+              aria-label={t("tournamentDetail.participants.reserveGroup", {
+                count: reserveRows.length
+              })}
+              className="mt-5 space-y-2"
+              data-reserve-group={reserveRows.length}
+            >
+              <div className="flex items-baseline gap-2">
+                <h3 className="text-label font-semibold uppercase tracking-label text-[color:var(--aqt-amber)]">
+                  {t("tournamentDetail.participants.reserveGroup", {
+                    count: reserveRows.length
+                  })}
+                </h3>
+                <p className="text-xs text-[color:var(--aqt-fg-dim)]">
+                  {t("tournamentDetail.participants.reserveGroupDesc")}
+                </p>
+              </div>
+              <VirtualParticipantsList
+                allColumns={allColumns}
+                expandedIds={expandedIds}
+                onToggleExpanded={toggleExpanded}
+                registrations={reserveRows}
+                visibleColumns={visibleColumns}
+              />
+            </section>
+          ) : null}
+        </>
       ) : filteredEmpty ? (
         <TournamentPageState
           state="filtered-empty"

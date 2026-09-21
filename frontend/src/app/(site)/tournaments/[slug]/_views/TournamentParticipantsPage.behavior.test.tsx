@@ -39,6 +39,7 @@ const listRegistrations = vi.fn();
 const getForm = vi.fn();
 const checkInMyRegistration = vi.fn();
 const withdrawMyRegistration = vi.fn();
+const updateMyRegistration = vi.fn();
 
 vi.mock("@/services/registration.service", () => ({
   default: {
@@ -46,7 +47,9 @@ vi.mock("@/services/registration.service", () => ({
     listRegistrations: (...args: unknown[]) => listRegistrations(...args),
     getForm: (...args: unknown[]) => getForm(...args),
     checkInMyRegistration: (...args: unknown[]) => checkInMyRegistration(...args),
-    withdrawMyRegistration: (...args: unknown[]) => withdrawMyRegistration(...args)
+    withdrawMyRegistration: (...args: unknown[]) => withdrawMyRegistration(...args),
+    updateMyRegistration: (...args: unknown[]) => updateMyRegistration(...args),
+    getMySubscriptionStatus: () => Promise.resolve({ required: false, verdicts: {} })
   }
 }));
 
@@ -54,6 +57,14 @@ vi.mock("@/services/registration.service", () => ({
 // fetched on mount. It backs nothing this test asserts.
 vi.mock("@/services/hero.service", () => ({
   default: { getAll: () => Promise.resolve({ results: [] }) }
+}));
+
+// Pulled in by the self-edit dialog, for the identity questions' suggestions.
+vi.mock("@/services/me.service", () => ({
+  default: { getSocialAccounts: () => Promise.resolve(null) }
+}));
+vi.mock("@/services/rbac.service", () => ({
+  rbacService: { listOAuthConnections: () => Promise.resolve({ results: [] }) }
 }));
 
 // Signed in, because an anonymous visitor has no registration to check in.
@@ -155,6 +166,11 @@ function makeRegistration(overrides: Partial<Registration> = {}): Registration {
     },
     submitted_at: null,
     reviewed_at: null,
+    // The server's self-edit verdict. Closed by default, exactly as a
+    // tournament whose organizer never opened a question reads.
+    can_edit: false,
+    edit_locked_reason: "nothing_editable",
+    edit_writable_keys: [],
     ...overrides
   };
 }
@@ -175,6 +191,7 @@ function regList(
     total: registrations.length,
     role_counts: {},
     max_participants: null,
+    reserve_count: 0,
     ...overrides
   };
 }
@@ -596,5 +613,172 @@ describe("a roster the organizer hid", () => {
       container.querySelector('[aria-label^="Position 4 of"]')
     ).toBeNull();
     expect(container.textContent).toContain("12 / 48");
+  });
+});
+
+/** The card's Edit action, found by the marker rather than by its label: the
+ *  label is localized and this file mounts the real message catalogue. */
+function editButton(): HTMLButtonElement | null {
+  return container.querySelector<HTMLButtonElement>("[data-registration-edit]");
+}
+
+describe("editing your own registration", () => {
+  it("hides the action while the form has nothing open", async () => {
+    // Closed by default: every tournament whose organizer never ticked
+    // `editable` on a question reports `nothing_editable`, and a permanently
+    // dead button on every card is worse than no button.
+    await mount();
+    expect(editButton()).toBeNull();
+  });
+
+  it("offers the action exactly when the server says the row is editable", async () => {
+    getMyRegistration.mockResolvedValue(
+      makeRegistration({
+        can_edit: true,
+        edit_locked_reason: null,
+        edit_writable_keys: ["public_notes"]
+      })
+    );
+    await mount();
+
+    const button = editButton();
+    expect(button).not.toBeNull();
+    expect(button?.disabled).toBe(false);
+  });
+
+  it("keeps the action visible but dead, with the reason, once something closed it", async () => {
+    // A registrant who could edit yesterday and cannot today is owed the
+    // reason. `checked_in` froze the entry the organizer is about to balance.
+    getMyRegistration.mockResolvedValue(
+      makeRegistration({
+        checked_in: true,
+        can_edit: false,
+        edit_locked_reason: "checked_in",
+        edit_writable_keys: []
+      })
+    );
+    await mount();
+
+    const button = editButton();
+    expect(button?.disabled).toBe(true);
+    // The tooltip carries the REASON, not a second copy of the action label.
+    expect(button?.title).not.toBe("");
+    expect(button?.title).not.toBe(button?.textContent?.trim());
+  });
+
+  it("waits for the form before offering an edit of it", async () => {
+    // The dialog renders the form's schema and echoes its version id back, so
+    // `can_edit` alone is not enough to act on.
+    getForm.mockResolvedValue(null);
+    getMyRegistration.mockResolvedValue(
+      makeRegistration({ can_edit: true, edit_locked_reason: null, edit_writable_keys: ["roles"] })
+    );
+    await mount();
+
+    expect(editButton()).toBeNull();
+  });
+
+  it("saves only the allowlisted answers and refreshes the card from the response", async () => {
+    // Re-sending an unchanged answer for a frozen key is still a write of it,
+    // and the server refuses the whole request with `code: "locked"` — so the
+    // dialog must send the allowlist and nothing else.
+    getForm.mockResolvedValue({
+      ...FORM,
+      form_schema: {
+        schema_version: 1,
+        sections: [
+          {
+            key: "details",
+            fields: [
+              {
+                key: "battle_tag",
+                kind: "builtin",
+                required: true,
+                visibility: "public",
+                params: {},
+                show_in_draft: false
+              },
+              {
+                key: "public_notes",
+                kind: "builtin",
+                required: false,
+                visibility: "public",
+                params: {},
+                show_in_draft: false
+              }
+            ]
+          }
+        ]
+      }
+    });
+    const editable = {
+      can_edit: true,
+      edit_locked_reason: null,
+      edit_writable_keys: ["public_notes"]
+    };
+    getMyRegistration.mockResolvedValue(
+      makeRegistration({ ...editable, answers: { public_notes: "before" } })
+    );
+    updateMyRegistration.mockResolvedValue(
+      makeRegistration({ ...editable, answers: { public_notes: "before", reserve: true } })
+    );
+    await mount();
+
+    await act(async () => editButton()?.click());
+    const modal = document.body.querySelector<HTMLElement>('[role="dialog"]');
+    expect(modal).not.toBeNull();
+
+    const submit = Array.from(modal?.querySelectorAll("button") ?? []).find(
+      (button) => button.textContent?.trim() === en.common.submit
+    );
+    await act(async () => submit?.click());
+    await settle();
+
+    expect(updateMyRegistration).toHaveBeenCalledWith(TOURNAMENT_ID, {
+      form_version_id: FORM.version_id,
+      answers: { public_notes: "before" }
+    });
+    // The response IS the updated row, so the card behind the dialog re-reads
+    // it without a second round trip — here, as a reserve.
+    expect(container.querySelector("[data-registration-reserve]")).not.toBeNull();
+  });
+});
+
+describe("reserves", () => {
+  const RESERVE = makeRegistration({
+    id: 402,
+    user_id: 9,
+    battle_tag: "Sub#1000",
+    answers: { reserve: true }
+  });
+
+  it("groups reserves after the main field and reports the server's count", async () => {
+    listRegistrations.mockResolvedValue(
+      regList([makeRegistration(), RESERVE], { total: 2, reserve_count: 1 })
+    );
+    await mount();
+
+    // Its OWN group: a reserve interleaved with the starters reads as one.
+    expect(container.querySelector("[data-reserve-group]")?.getAttribute("data-reserve-group")).toBe(
+      "1"
+    );
+    // Stated beside the total, never subtracted out of it: `total` is the
+    // queue denominator and the server counts reserves in it.
+    expect(container.querySelector("[data-reserve-count]")?.getAttribute("data-reserve-count")).toBe(
+      "1"
+    );
+  });
+
+  it("says nothing about reserves when there are none", async () => {
+    await mount();
+    expect(container.querySelector("[data-reserve-group]")).toBeNull();
+    expect(container.querySelector("[data-reserve-count]")).toBeNull();
+  });
+
+  it("marks the owner's own card as a reserve and explains what that means", async () => {
+    getMyRegistration.mockResolvedValue(makeRegistration({ answers: { reserve: true } }));
+    await mount();
+
+    expect(container.querySelector("[data-registration-reserve]")).not.toBeNull();
   });
 });

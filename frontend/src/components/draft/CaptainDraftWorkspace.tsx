@@ -7,8 +7,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { canConfirmPick } from "@/lib/draft-logic";
 import type { DraftGating } from "@/lib/draft-logic";
 import {
-  filterDraftPlayers,
+  draftPoolView,
   playerRoles,
+  DRAFT_MOBILE_VIEWS,
   type DraftMobileView,
   type DraftViewParams
 } from "@/lib/draft-workspace-model";
@@ -46,8 +47,6 @@ interface CaptainDraftWorkspaceProps {
   onlineCaptainIds?: Set<number>;
 }
 
-const MOBILE_VIEWS = ["pool", "team", "order"] as const;
-
 export function CaptainDraftWorkspace({
   board,
   gating,
@@ -71,28 +70,12 @@ export function CaptainDraftWorkspace({
   );
   const shortlist = useMemo(() => new Set(shortlistIds), [shortlistIds]);
   const [announcement, setAnnouncement] = useState("");
-  const availablePlayers = useMemo(
-    () => board.players.filter((player) => player.status === "available"),
-    [board.players]
-  );
-  const filteredPlayers = useMemo(
-    () => filterDraftPlayers(availablePlayers, viewParams),
-    [availablePlayers, viewParams]
-  );
-  const roleCounts = useMemo<Record<DraftRole, number>>(() => {
-    const counts: Record<DraftRole, number> = { tank: 0, damage: 0, support: 0 };
-    for (const player of availablePlayers) {
-      for (const role of playerRoles(player)) {
-        counts[role] += 1;
-      }
-    }
-    return counts;
-  }, [availablePlayers]);
+  const pool = useMemo(() => draftPoolView(board.players, viewParams), [board.players, viewParams]);
   const selectedPlayer =
     selectedPlayerId == null
       ? null
-      : availablePlayers.find((player) => player.id === selectedPlayerId) ?? null;
-  const shortlistPlayers = availablePlayers.filter((player) => shortlist.has(player.id));
+      : pool.available.find((player) => player.id === selectedPlayerId) ?? null;
+  const shortlistPlayers = pool.available.filter((player) => shortlist.has(player.id));
   const myTeam = board.teams.find((team) => team.id === gating.myTeamId) ?? null;
   const currentPick = board.current_pick;
   // Only claim a player is safe or blocked when the server's option list is
@@ -147,9 +130,9 @@ export function CaptainDraftWorkspace({
 
   const renderPool = (poolHeadingId: string) => (
     <PlayerPool
-      players={filteredPlayers}
-      totalPlayers={availablePlayers.length}
-      roleCounts={roleCounts}
+      players={pool.filtered}
+      totalPlayers={pool.available.length}
+      roleCounts={pool.roleCounts}
       selectedPlayerId={selectedPlayerId}
       shortlist={shortlist}
       role={viewParams.role}
@@ -234,7 +217,7 @@ export function CaptainDraftWorkspace({
           className="flex h-auto w-full gap-1 rounded-xl bg-[color:var(--aqt-card-2)] p-1"
           aria-label={t("mobileViews")}
         >
-          {MOBILE_VIEWS.map((view) => (
+          {DRAFT_MOBILE_VIEWS.map((view) => (
             <TabsTrigger
               key={view}
               value={view}

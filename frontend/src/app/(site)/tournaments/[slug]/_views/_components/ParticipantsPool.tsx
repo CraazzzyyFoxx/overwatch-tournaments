@@ -8,6 +8,7 @@ import { useTranslations } from "next-intl";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import DivisionIcon from "@/components/DivisionIcon";
 import { HeroStrip } from "@/components/hero/HeroImage";
+import { answerFlag } from "@/lib/forms/answers";
 import { resolveDivisionFromRank } from "@/lib/division-grid";
 import { isRoleSlotCode, orderSlotCodes, ROSTER_SLOT_CODES } from "@/lib/roster-shape";
 import type { RosterShape } from "@/lib/roster-shape";
@@ -94,6 +95,13 @@ export interface ParticipantsPoolProps {
 
 function isWithdrawn(registration: Registration): boolean {
   return registration.status === WITHDRAWN_STATUS;
+}
+
+/** A reserve is in the tournament, but only as cover: they are outside the
+ *  balancer pool until an organizer promotes them, so they are outside the role
+ *  columns too. Read off the row's own public answer, exactly like the badge. */
+function isReserve(registration: Registration): boolean {
+  return answerFlag(registration.answers, "reserve");
 }
 
 /**
@@ -345,8 +353,15 @@ export default function ParticipantsPool({
 }: Readonly<ParticipantsPoolProps>) {
   const t = useTranslations();
 
+  // The main field: neither withdrawn nor in the reserve. Reserves get their
+  // own group below rather than a row in every role column — the columns are
+  // read as "how deep is this role", and cover that only plays on a dropout is
+  // not depth.
   const active = useMemo(
-    () => registrations.filter((registration) => !isWithdrawn(registration)),
+    () =>
+      registrations.filter(
+        (registration) => !isWithdrawn(registration) && !isReserve(registration)
+      ),
     [registrations]
   );
 
@@ -425,6 +440,21 @@ export default function ParticipantsPool({
     [normalizedSearch, registrations]
   );
 
+  // Searchable like every other name — a reserve is exactly who an organizer
+  // looks up when a replacement is needed. Not division-filtered: a reserve
+  // usually has no rank yet, so a division filter would empty the group.
+  const reserves = useMemo(
+    () =>
+      registrations.filter(
+        (registration) =>
+          !isWithdrawn(registration) &&
+          isReserve(registration) &&
+          (normalizedSearch.length === 0 ||
+            (registration.battle_tag?.toLowerCase().includes(normalizedSearch) ?? false))
+      ),
+    [normalizedSearch, registrations]
+  );
+
   const shownPlayers = useMemo(() => {
     const ids = new Set<number>();
     for (const bucket of entriesByRole.values()) {
@@ -442,7 +472,7 @@ export default function ParticipantsPool({
     return false;
   }, [entriesByRole]);
 
-  if (shownPlayers === 0 && withdrawn.length === 0) {
+  if (shownPlayers === 0 && reserves.length === 0 && withdrawn.length === 0) {
     const isFiltered = normalizedSearch.length > 0 || division != null;
     return isFiltered ? (
       <TournamentPageState state="filtered-empty" onReset={onResetFilters} />
@@ -474,6 +504,30 @@ export default function ParticipantsPool({
             />
           ))}
         </div>
+      ) : null}
+
+      {reserves.length > 0 ? (
+        <section
+          aria-label={t("tournamentDetail.participantsPool.reserve", {
+            count: reserves.length
+          })}
+          className="rounded-xl border border-[color:color-mix(in_srgb,var(--aqt-amber)_25%,transparent)] bg-[color:var(--aqt-card)] px-3 py-2"
+          data-pool-reserve="true"
+        >
+          <h3 className="text-label font-semibold uppercase tracking-label text-[color:var(--aqt-amber)]">
+            {t("tournamentDetail.participantsPool.reserve", { count: reserves.length })}
+          </h3>
+          <p className="mt-0.5 text-xs text-[color:var(--aqt-fg-dim)]">
+            {t("tournamentDetail.participantsPool.reserveDesc")}
+          </p>
+          <ul className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
+            {reserves.map((registration) => (
+              <li key={registration.id} className="text-xs text-[color:var(--aqt-fg-muted)]">
+                {registration.battle_tag ?? "\u2014"}
+              </li>
+            ))}
+          </ul>
+        </section>
       ) : null}
 
       {withdrawn.length > 0 ? (

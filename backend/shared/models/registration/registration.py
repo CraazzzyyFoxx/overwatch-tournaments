@@ -272,6 +272,13 @@ class BalancerRegistration(db.TimeStampIntegerMixin):
     battle_tag_normalized: Mapped[str | None] = mapped_column(String(255), nullable=True)
     smurf_tags_json: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
     stream_pov: Mapped[bool] = mapped_column(Boolean(), nullable=False, server_default="false", default=False)
+    #: "Call me in if a replacement is needed." The registrant's OWN declaration,
+    #: answered through the ``reserve`` builtin question. It is not a pool state:
+    #: membership stays ``balancer_status``, and an organizer adding a reserve to
+    #: the pool IS the "we need a sub" action. Also imposed by the schedule -- a
+    #: sign-up past the REGISTRATION window's ``ends_at`` is a reserve whatever
+    #: the answer said (see ``services/registration/self_edit.py``).
+    is_reserve: Mapped[bool] = mapped_column(Boolean(), nullable=False, server_default="false", default=False)
     #: The schema version this registration's answers were validated against;
     #: NULL for legacy/manual rows, which fall back to the form's current version.
     form_version_id: Mapped[int | None] = mapped_column(

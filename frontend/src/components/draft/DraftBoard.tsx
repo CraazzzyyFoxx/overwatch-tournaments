@@ -114,7 +114,6 @@ export function DraftBoard({ tournament }: Readonly<DraftBoardProps>) {
     );
   }
 
-  const mode = gating.isCaptain ? "captain" : "spectator";
   const onlineCaptainIds = new Set(
     board.teams
       .filter(
@@ -128,10 +127,8 @@ export function DraftBoard({ tournament }: Readonly<DraftBoardProps>) {
       <DraftPageHero
         tournament={tournament}
         board={board}
-        mode={mode}
         presence={presence}
         connectionState={connectionState}
-        currentUserId={user?.id ?? null}
       />
       {gating.isCaptain ? (
         <CaptainDraftWorkspace
@@ -151,6 +148,8 @@ export function DraftBoard({ tournament }: Readonly<DraftBoardProps>) {
         <SpectatorDraftWorkspace
           board={board}
           divisionGrid={divisionGrid}
+          viewParams={viewParams}
+          onViewParamsChange={updateViewParams}
           onlineCaptainIds={onlineCaptainIds}
         />
       )}

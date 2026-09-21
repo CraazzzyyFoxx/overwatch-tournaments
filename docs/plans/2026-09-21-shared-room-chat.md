@@ -135,8 +135,17 @@ class ChatMembership:
 
 | room | writers | moderators | spectators (read-only) |
 |---|---|---|---|
-| `encounter` | captain of home/away, workspace member, superuser | workspace member, superuser | anyone who may view the encounter, **iff** `spectators_can_read` |
-| `draft` | captain of a `draft_team` of the session, workspace member, superuser | workspace member, superuser | anyone who may view the tournament, **iff** `spectators_can_read` |
+| `encounter` | captain of home/away, workspace staff, superuser | workspace staff, superuser | anyone who may view the encounter, **iff** `spectators_can_read` |
+| `draft` | captain of a `draft_team` of the session, workspace staff, superuser | workspace staff, superuser | anyone who may view the tournament, **iff** `spectators_can_read` |
+
+**"Workspace staff", not "workspace member"** (corrected 2026-09-21, after the first cut shipped membership): a
+`workspace_member` row — and the baseline `member` RBAC role it autofills — is created for *every tournament registrant*
+(`RegistrationService._anchor_registration_member`, draft seeding, team materialization), and the token's `workspaces` claim is
+built from exactly those rows. Reading membership as staff therefore handed moderation, and a pre-game room closed to
+spectators, to every player who ever signed up in that workspace. Staff is `AuthUser.has_admin_panel_access(workspace_id)`:
+superuser, a global admin-panel role, or any non-read grant in THIS workspace — read-only `member`/`player` and the mix `host`
+are excluded. The gateway mirrors it with `Store.IsWorkspaceOrganizer` (same predicate in SQL), so a roster-only account cannot
+subscribe live to a room REST would 403.
 
 "May view" is the existing hidden-tournament rule (`allowSpectate`), so a hidden tournament's chat stays invisible regardless of
 the toggle. Anonymous visitors count as spectators — the draft room already serves them, and presence already counts them

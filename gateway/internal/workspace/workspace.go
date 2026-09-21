@@ -29,6 +29,24 @@ const (
 		JOIN players."user" u ON u.id = wm.player_id
 		WHERE u.auth_user_id = $1 AND wm.workspace_id = $2
 	)`
+	// Organizer staff of a workspace, as opposed to anyone on its roster. Mirror
+	// of AuthUser.has_admin_panel_access(workspace_id) on the REST side: a role
+	// scoped to this workspace (or a global one) carrying at least one non-read
+	// grant. The `custom_game` exclusion mirrors _NON_ADMIN_PANEL_RESOURCES —
+	// hosting a mix is a member-level capability, not organizing. Membership
+	// itself is NOT this: workspace_member rows (and the baseline `member` role
+	// they autofill) are created for every tournament registrant.
+	isOrganizerSQL = `SELECT EXISTS(
+		SELECT 1
+		FROM auth.user_roles ur
+		JOIN auth.roles r ON r.id = ur.role_id
+		JOIN auth.role_permissions rp ON rp.role_id = r.id
+		JOIN auth.permissions p ON p.id = rp.permission_id
+		WHERE ur.user_id = $1
+		  AND (r.workspace_id = $2 OR r.workspace_id IS NULL)
+		  AND p.resource <> 'custom_game'
+		  AND p.action <> 'read'
+	)`
 	// Only a workspace whose custom domain has completed DNS TXT verification
 	// matches; a domain that is merely set (custom_domain_verified_at IS NULL,
 	// still pending/unverified) never does. See
@@ -112,6 +130,7 @@ type Store struct {
 	pool          *pgxpool.Pool
 	tournament    *ttlCache[int64, int64]
 	members       *ttlCache[memberKey, bool]
+	organizers    *ttlCache[memberKey, bool]
 	customDomains *ttlCache[string, bool]
 	hidden        *ttlCache[int64, bool]
 	preview       *ttlCache[previewKey, bool]
@@ -149,6 +168,7 @@ func New(pool *pgxpool.Pool) *Store {
 		pool:          pool,
 		tournament:    newTTLCache[int64, int64](tournamentCacheTTL),
 		members:       newTTLCache[memberKey, bool](membershipCacheTTL),
+		organizers:    newTTLCache[memberKey, bool](membershipCacheTTL),
 		customDomains: newBoundedTTLCache[string, bool](customDomainCacheTTL, customDomainCacheMaxEntries),
 		hidden:        newTTLCache[int64, bool](hiddenCacheTTL),
 		preview:       newTTLCache[previewKey, bool](previewCacheTTL),
@@ -194,6 +214,25 @@ func (s *Store) IsWorkspaceMember(ctx context.Context, userID, workspaceID int64
 
 	s.members.set(key, member)
 	return member, nil
+}
+
+// IsWorkspaceOrganizer reports whether the user is staff of the workspace --
+// the chat-moderation audience -- rather than merely on its roster. Cached and
+// fail-closed exactly like IsWorkspaceMember: a query error is returned, never
+// memoized.
+func (s *Store) IsWorkspaceOrganizer(ctx context.Context, userID, workspaceID int64) (bool, error) {
+	key := memberKey{userID: userID, workspaceID: workspaceID}
+	if v, ok := s.organizers.get(key); ok {
+		return v, nil
+	}
+
+	var organizer bool
+	if err := s.pool.QueryRow(ctx, isOrganizerSQL, userID, workspaceID).Scan(&organizer); err != nil {
+		return false, fmt.Errorf("organizer lookup: %w", err)
+	}
+
+	s.organizers.set(key, organizer)
+	return organizer, nil
 }
 
 // IsEncounterCaptain reports whether the auth user captains either side of the

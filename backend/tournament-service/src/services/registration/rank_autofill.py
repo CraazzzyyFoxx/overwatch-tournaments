@@ -243,6 +243,11 @@ def _rank_autofill_balancer_addition(
 ) -> tuple[bool, str | None]:
     if not add_to_balancer:
         return False, None
+    if getattr(registration, "is_reserve", False):
+        # Same rule as ``bulk_add_to_balancer``: a sweep never promotes somebody
+        # who asked to be cover. The organizer adds one reserve by hand when a
+        # replacement is actually needed.
+        return False, "Registration is a reserve; add it to the pool explicitly."
     if getattr(registration, "status", None) != "approved":
         return False, "Registration must be approved before it can be added to balancer."
     if not is_balancer_status_excluded(getattr(registration, "balancer_status", None)):

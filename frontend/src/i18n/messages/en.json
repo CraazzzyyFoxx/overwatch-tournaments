@@ -130,6 +130,10 @@
     "vs": "vs",
     "switchLanguage": "Switch language",
     "checkedIn": "Checked in",
+    "reserve": "Reserve",
+    "notReserve": "Not reserve",
+    "reserveHint": "Agreed to stand in if a replacement is needed",
+    "bulkAddSkipsReserves": "Reserves are skipped by a bulk add — put them in the pool one at a time, when a replacement is actually needed",
     "notCheckedIn": "Not checked in",
     "profileOpen": "Profile open",
     "profileClosed": "Profile closed",
@@ -275,6 +279,25 @@
     }
   },
   "registration": {
+    "edit": {
+      "action": "Edit",
+      "title": "Edit your registration",
+      "description": "Only the questions the organizer left open can be changed. Everything else is shown exactly as you submitted it.",
+      "fieldLocked": "Frozen after submitting",
+      "reason": {
+        "status_locked": "A registration with this status can no longer be edited.",
+        "checked_in": "You have already checked in — your entry is frozen.",
+        "window_closed": "Registration is closed.",
+        "nothing_editable": "The organizer has not opened any question for editing."
+      }
+    },
+    "reserve": {
+      "badge": "Reserve",
+      "explainer": "You are in the reserve: you play only if a replacement is needed.",
+      "lateImposed": "You signed up after registration closed, so you are in the reserve: you play only if a replacement is needed.",
+      "lateNotice": "Registration is closed — this sign-up goes into the reserve. You will play only if a replacement is needed.",
+      "lateLocked": "Registration is closed, so the reserve cannot be turned off."
+    },
     "wizard": {
       "title": "Register",
       "titleFor": "Register for {name}",
@@ -363,6 +386,8 @@
     "details": {
       "streamPov": "Stream POV",
       "streamPovLabel": "I will stream my POV",
+      "reserve": "Reserve",
+      "reserveLabel": "Call me in if a replacement is needed",
       "notes": "Notes",
       "notesPlaceholder": "Anything you'd like organizers to know"
     },
@@ -2135,7 +2160,8 @@
         "all": "all participants →",
         "total": "Registered",
         "teams": "Teams",
-        "latest": "Latest"
+        "latest": "Latest",
+        "reserveNote": "{count, plural, one {# of them is in the reserve} other {# of them are in the reserve}}"
       },
       "format": {
         "title": "Format",
@@ -2299,6 +2325,9 @@
     },
     "participants": {
       "resultCount": "{count, plural, one {# participant shown} other {# participants shown}}",
+      "countWithReserve": "{count, plural, one {# participant} other {# participants}} (+{reserve} in reserve)",
+      "reserveGroup": "Reserve · {count}",
+      "reserveGroupDesc": "They play only if a replacement is needed.",
       "hidden": {
         "title": "Participants list hidden",
         "description": "The organizer publishes only the size of the field and how it splits by role. Your own registration is still shown above."
@@ -2310,6 +2339,8 @@
     },
     "participantsPool": {
       "viewLabel": "Participant view",
+      "reserve": "Reserve · {count}",
+      "reserveDesc": "Outside the pool: they come in only if a replacement is needed.",
       "view": {
         "pool": "By role",
         "table": "Table"
@@ -4680,15 +4711,8 @@
       "completed": "Completed",
       "cancelled": "Cancelled"
     },
-    "format": "Format",
-    "rosterSize": "Roster",
-    "teams": "Teams",
-    "progress": "Progress",
-    "onClock": "On the clock",
     "onClockLabel": "On the clock",
     "anonymousViewers": "Viewers: {count}",
-    "onlineCount": "{n} of {total} online",
-    "you": "You",
     "captainOnline": "Online",
     "captainOffline": "Offline",
     "yourTurn": "Your turn",
@@ -4699,8 +4723,7 @@
     "pickIdle": "Waiting for the next draft update.",
     "roleShortagePaused": "Draft paused: the remaining role requirements cannot be fulfilled. The organizer must resolve the player roles before play resumes.",
     "orderRecalculatedPaused": "Draft paused: this round's pick order was just recalculated from the live team averages. Check the new order — the organizer resumes the clock.",
-    "organizerPaused": "The organizer paused the draft. Your selection is preserved until current data is available again.",
-    "focalPickPrompt": "Select a player below to pick",
+    "organizerPaused": "The draft is paused. Waiting for the organizer to resume.",
     "yourTurnInPicks": "You pick in {n, plural, one {# pick} other {# picks}}",
     "draftOrder": "Draft order",
     "round": "Round {n}",
@@ -4730,6 +4753,7 @@
     "noFilterResults": "No players match these filters.",
     "noFilterResultsHint": "Clear the search or broaden the selected role.",
     "resetFilters": "Reset filters",
+    "poolExhausted": "Every player has already been drafted.",
     "heroFilter": "Heroes",
     "heroFilterClear": "Clear",
     "heroFilterCount": "{count, plural, one {# hero} other {# heroes}}",
@@ -4789,6 +4813,8 @@
     "mobileViews": "Draft workspace sections",
     "mobileView": {
       "pool": "Pool",
+      "players": "Players",
+      "rosters": "Rosters",
       "team": "My team",
       "order": "Order"
     },
@@ -5014,6 +5040,7 @@
       "smurf_tags": "Smurf accounts",
       "roles": "Roles",
       "stream_pov": "Stream POV",
+      "reserve": "Reserve",
       "public_notes": "Notes",
       "organizer_notes": "Notes for organizers",
       "identity_discord": "Discord",
@@ -5072,6 +5099,10 @@
       "showInDraft": "Show in the draft",
       "showInDraftHint": "Show this answer on the live draft player card. The draft board is public — anyone watching can read it.",
       "showInDraftBlocked": "Unavailable: the draft board is public and this answer is organizers-only.",
+      "editable": "Allow changes after submitting",
+      "editableHint": "The registrant may change this answer in their own application after submitting. Every other question stays frozen.",
+      "editableHintBattleTag": "The registrant may change this until the application is reviewed — after review the BattleTag re-locks anyway, because every rank layer and the profile link hang off it.",
+      "editableHintRoles": "The registrant may change their roles until the application enters the balancer pool or a team roster — after that the roles re-lock anyway.",
       "requireVerified": "Require a verified account",
       "requireVerifiedHint": "The registrant must pick one of their OAuth-verified accounts instead of typing a handle.",
       "keyLocked": "Answer key: {key}",
@@ -5936,6 +5967,7 @@
   "forms": {
     "organizersOnly": "Only the organizers see this answer. It is never shown on the public roster.",
     "errors": {
+      "locked": "This answer can no longer be changed.",
       "required": "This field is required.",
       "invalid_format": "This value does not match the required format.",
       "invalid_type": "This value is not in the expected format.",

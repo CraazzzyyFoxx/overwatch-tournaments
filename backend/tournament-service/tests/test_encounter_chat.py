@@ -37,12 +37,21 @@ class _FakeSession:
     """The resolver never touches the session itself -- every read is patched."""
 
 
-def _auth_user(*, workspaces: tuple[int, ...] = (), superuser: bool = False) -> SimpleNamespace:
+def _auth_user(
+    *,
+    organizer_of: tuple[int, ...] = (),
+    roster_of: tuple[int, ...] = (),
+    superuser: bool = False,
+) -> SimpleNamespace:
+    """``organizer_of`` is staff authority (a non-read grant in that
+    workspace); ``roster_of`` is mere membership, which every tournament
+    registrant has and which must buy nothing here."""
     return SimpleNamespace(
         id=7,
         username="fox",
         is_superuser=superuser,
-        is_workspace_member=lambda ws: superuser or ws in workspaces,
+        has_admin_panel_access=lambda ws: superuser or ws in organizer_of,
+        is_workspace_member=lambda ws: superuser or ws in roster_of or ws in organizer_of,
     )
 
 
@@ -104,12 +113,22 @@ class EncounterChatAccessTest(IsolatedAsyncioTestCase):
         self.assertTrue(membership.can_write)
         self.assertFalse(membership.can_moderate)
 
-    async def test_workspace_member_is_staff_and_moderates(self) -> None:
+    async def test_workspace_organizer_is_staff_and_moderates(self) -> None:
         with _Ctx(captain_side=None):
-            membership = await _resolve(_auth_user(workspaces=(WORKSPACE_ID,)))
+            membership = await _resolve(_auth_user(organizer_of=(WORKSPACE_ID,)))
         self.assertEqual(membership.role, "staff")
         self.assertTrue(membership.can_write)
         self.assertTrue(membership.can_moderate)
+
+    async def test_plain_workspace_member_is_only_a_spectator(self) -> None:
+        # Signing up for a tournament creates the workspace_member row (and the
+        # baseline ``member`` role) this used to read as staff, handing every
+        # registrant the lobby code and the mute button.
+        with _Ctx(captain_side=None):
+            membership = await _resolve(_auth_user(roster_of=(WORKSPACE_ID,)))
+        self.assertEqual(membership.role, SPECTATOR_ROLE)
+        self.assertFalse(membership.can_write)
+        self.assertFalse(membership.can_moderate)
 
     async def test_logged_in_stranger_is_a_read_only_spectator(self) -> None:
         # Not a captain, not in the owning workspace: allowed to SEE the room,

@@ -225,7 +225,12 @@ function makeRegistration(
       ready: true
     },
     submitted_at: null,
-    reviewed_at: null
+    reviewed_at: null,
+    // Never true on a LIST row: an editable verdict is only resolved on the
+    // caller's own `/registration/me` read.
+    can_edit: false,
+    edit_locked_reason: null,
+    edit_writable_keys: []
   };
 }
 
@@ -304,7 +309,8 @@ beforeEach(() => {
     hidden: false,
     total: POOL_ROSTER.length,
     role_counts: {},
-    max_participants: null
+    max_participants: null,
+    reserve_count: 0
   });
   getForm.mockResolvedValue(makeForm());
   container = document.createElement("div");
@@ -423,6 +429,27 @@ describe("participants pool", () => {
     );
     expect(withdrawn).toBeDefined();
     expect(withdrawn?.textContent).toContain("Gone#404");
+  });
+
+  it("keeps reserves out of the role columns and lists them as their own group", async () => {
+    // A column answers "how deep is this role". Cover that only plays if
+    // somebody drops out is not depth — and the reserve still has to be
+    // findable, which is the whole point of agreeing to be one.
+    const reserve = makeRegistration(6, "Sub#1000", [role("damage", 3100)]);
+    listRegistrations.mockResolvedValue({
+      registrations: [...POOL_ROSTER, { ...reserve, answers: { reserve: true } }],
+      division_grids: {},
+      hidden: false,
+      total: POOL_ROSTER.length + 1,
+      role_counts: {},
+      max_participants: null,
+      reserve_count: 1
+    });
+    await mountPool();
+
+    expect(column("damage")?.textContent).not.toContain("Sub#1000");
+    const group = container.querySelector<HTMLElement>("[data-pool-reserve]");
+    expect(group?.textContent).toContain("Sub#1000");
   });
 
   it("gives team registration the table and no view switch", async () => {

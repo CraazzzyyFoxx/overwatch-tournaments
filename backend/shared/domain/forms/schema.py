@@ -67,6 +67,11 @@ class FormField(BaseModel):
     validation: FieldValidation | None = None
     params: dict[str, Any] = Field(default_factory=dict)
     show_in_draft: bool = False
+    #: May the REGISTRANT change this answer after submitting? The organizer's own
+    #: edit is never gated by it. Default FALSE: a question is frozen at submit
+    #: unless the organizer deliberately opens it, so a form nobody re-opened in
+    #: the builder keeps the behaviour that predates self-service editing.
+    editable: bool = False
     visible_when: Condition | None = None
 
     @property
@@ -163,6 +168,15 @@ class FormSchema(BaseModel):
 
     def public_keys(self) -> frozenset[str]:
         return frozenset(f.key for f in self.fields() if f.visibility == "public")
+
+    def editable_keys(self) -> frozenset[str]:
+        """The keys a registrant may rewrite after submitting.
+
+        An ALLOWLIST, which is what the closed default means mechanically: a
+        question this server does not recognise, or a document written before the
+        flag existed, is locked rather than open.
+        """
+        return frozenset(f.key for f in self.fields() if f.editable)
 
     def canonical_json(self) -> str:
         return json.dumps(self.model_dump(mode="json"), sort_keys=True, separators=(",", ":"))

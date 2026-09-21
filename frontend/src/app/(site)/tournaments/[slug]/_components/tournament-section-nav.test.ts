@@ -4,6 +4,7 @@ import type { StageSummary, TournamentStatus } from "@/types/tournament.types";
 
 import {
   buildTournamentSectionNav,
+  collapsedRailTitle,
   getTournamentRailScrollState,
   observeTournamentRail,
   scrollTournamentRail,
@@ -452,5 +453,25 @@ describe("tournament rail overflow behavior", () => {
     scheduler.flush();
     expect(states.at(-1)?.hasOverflow).toBe(false);
     observer.cleanup();
+  });
+});
+
+describe("collapsed rail title", () => {
+  it("drops the subtitle of a long name at the sentence break", () => {
+    expect(collapsedRailTitle("Турнир Тхао #5. Анти-вантрик турнир")).toBe("Турнир Тхао #5");
+  });
+
+  it("keeps a name that already fits, sentence break or not", () => {
+    expect(collapsedRailTitle("Winter Cup. Div 2")).toBe("Winter Cup. Div 2");
+  });
+
+  it("keeps a long name whose head is too short to identify it", () => {
+    const name = "OW2. The extremely long subtitle nobody can read anyway";
+    expect(collapsedRailTitle(name)).toBe(name);
+  });
+
+  it("keeps a long name with no sentence break for the ellipsis to replace", () => {
+    const name = "Anti-vantrick tournament with a very long single-sentence name";
+    expect(collapsedRailTitle(name)).toBe(name);
   });
 });

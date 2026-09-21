@@ -53,6 +53,9 @@ class ErrorCode(StrEnum):
     TOO_MANY = "too_many"
     NOT_VERIFIED = "not_verified"
     UNKNOWN_FIELD = "unknown_field"
+    #: The form does not let the REGISTRANT change this answer after submitting
+    #: (``FormField.editable`` is off, or the key is system-locked).
+    LOCKED = "locked"
     FORM_VERSION_STALE = "form_version_stale"
     SCHEMA_INVALID = "schema_invalid"
 
@@ -77,7 +80,8 @@ _BOOLS = {"true": True, "false": False}
 #: ``truthy`` in ``visible_when``: a checkbox that round-tripped through a form
 #: encoding arrives as the string ``"false"``, which is not a truthy answer.
 _FALSE_STRINGS = frozenset({"", "false", "0"})
-_BOOL_KEYS = frozenset({"stream_pov"})
+#: Builtins whose answer is a switch: coerced like ``kind == "checkbox"``.
+_BOOL_KEYS = frozenset({"stream_pov", "reserve"})
 
 
 def _err(field: str, code: ErrorCode, msg: str, **params: Any) -> FieldError:
