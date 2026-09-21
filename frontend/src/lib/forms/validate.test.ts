@@ -154,12 +154,15 @@ describe("validateAnswer — kinds", () => {
 });
 
 describe("normalizeAnswerText", () => {
-  it("canonicalizes a BattleTag without touching its display casing", () => {
-    // The server stores the BattleTag as typed (trimmed) and casefolds only to
-    // match, so the input must not lowercase what the user sees.
-    const battleTag = field({ key: "battle_tag", kind: "builtin" });
-    expect(normalizeAnswerText(battleTag, "  Player # 1234 ")).toBe("Player#1234");
-    expect(normalizeAnswerText(battleTag, "Player#1234")).toBe("Player#1234");
+  const battleTag = field({ key: "battle_tag", kind: "builtin" });
+
+  it("only trims a BattleTag — the server stores it verbatim", () => {
+    // `_coerce_text`, not `_battle_tag_candidate`: `identity_provider()` returns
+    // None for `battle_tag`, so the server persists the spacing and casing the
+    // user typed. Canonicalizing here would submit a different string than the
+    // one the server would have stored for the same input.
+    expect(normalizeAnswerText(battleTag, "  Player # 1234 ")).toBe("Player # 1234");
+    expect(normalizeAnswerText(battleTag, " Player#1234 ")).toBe("Player#1234");
   });
 
   it("casefolds an identity handle, which is what the server stores", () => {
@@ -170,5 +173,17 @@ describe("normalizeAnswerText", () => {
   it("only trims everything else", () => {
     const custom = field({ key: "invite_code", kind: "text" });
     expect(normalizeAnswerText(custom, "  ABC 123  ")).toBe("ABC 123");
+  });
+
+  it("splits storage from matching: a spaced BattleTag is valid AND stored as typed", () => {
+    // The whole contract in one place. The pattern side normalizes so the answer
+    // is accepted; the storage side does not, so what is submitted is what the
+    // server would have kept for the same raw input.
+    expect(validateAnswer(battleTag, "Player # 1234", t)).toBeNull();
+    expect(normalizeAnswerText(battleTag, "Player # 1234")).toBe("Player # 1234");
+
+    const smurfs = field({ key: "smurf_tags", kind: "builtin" });
+    expect(validateAnswer(smurfs, ["Alt # 1111"], t)).toBeNull();
+    expect(normalizeAnswerText(smurfs, "Alt # 1111")).toBe("Alt # 1111");
   });
 });
