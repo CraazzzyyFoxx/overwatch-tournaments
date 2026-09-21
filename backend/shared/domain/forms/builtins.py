@@ -116,7 +116,10 @@ def builtin_spec(key: str) -> BuiltinSpec | None:
     return BuiltinSpec(key, None, IdentityParams) if identity_provider(key) else None
 
 
-#: Server-side defaults; today these live only in frontend formConfig.ts:30-35.
+#: Server-side defaults, applied when a field carries no explicit
+#: ``validation.regex``. Before the schema these patterns existed only in the
+#: browser, so a non-browser writer (sheet sync, admin API) could store a
+#: malformed handle; the server is now the one place that decides.
 DEFAULT_PATTERNS: dict[str, str] = {
     "battle_tag": r"([^#]{2,12}#[0-9]{4,})",
     "smurf_tags": r"([^#]{2,12}#[0-9]{4,})",

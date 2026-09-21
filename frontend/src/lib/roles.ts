@@ -5,8 +5,8 @@ import type { SubroleCatalog, SubroleOption } from "@/types/registration.types";
  * Single source of truth for registration role codes, display labels, accent
  * colors, and sub-role resolution. Sub-role *options* are data-driven from the
  * workspace `PlayerSubRole` catalog embedded in the form payload
- * (`form.subrole_catalog`); per-tournament `built_in_fields[*].subroles` only
- * selects which catalog slugs are offered.
+ * (`form.subrole_catalog`); the `roles` field's `params.subroles` only selects
+ * which catalog slugs are offered.
  */
 
 export type RoleCode = RosterRoleSlotCode;

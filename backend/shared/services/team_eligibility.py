@@ -53,7 +53,7 @@ def _identity_keys(registration: models.BalancerRegistration, discord_ids: Seque
         "",
     )
     if nick:
-        keys.add(f"discord_nick:{nick}")
+        keys.add(f"discord_handle:{nick}")
     for snowflake in discord_ids:
         if snowflake:
             keys.add(f"discord_id:{snowflake}")

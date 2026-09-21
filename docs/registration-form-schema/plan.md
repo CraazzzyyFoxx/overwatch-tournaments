@@ -1,5 +1,5 @@
 # Registration Form Schema — Implementation Plan
-**Status:** design approved
+**Status:** implemented (2026-09-21)
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -440,7 +440,7 @@ def default_pattern(key: str, kind: str) -> str | None:
 
 ```python
 from shared.domain.forms import FormField, FormSchema, FormSection, evaluate_condition, normalize_answers
-from shared.domain.forms.validate import ErrorCode
+
 
 def _s(*fields): return FormSchema(sections=[FormSection(key="s", fields=list(fields))])
 def _codes(result): return {(e.field, e.code) for e in result.errors}
@@ -523,7 +523,7 @@ Algorithm: `visible = visible_fields(schema, answers)`; `unknown = answers.keys(
 ### Task 4: ORM models and load options
 
 **Files:**
-- Modify: `backend/shared/models/registration/registration.py` (`BalancerRegistrationForm:29-115`, `BalancerRegistration:168-278`, `__all__`), `backend/shared/services/roster.py` (`registration_load_options`, `PlayerRoster:102-243`, `RosterEngine._build:306-390`, `full_export:431-527`), `backend/shared/repository/registration.py`
+- Modify: `backend/shared/models/registration/registration.py` (`BalancerRegistrationForm:29-115`, `BalancerRegistration:168-278`, `__all__`), `backend/shared/domain/roster.py` (`PlayerRoster:102-243`), `backend/shared/services/roster.py` (`registration_load_options`, `RosterEngine._build:306-390`, `full_export:431-527`), `backend/shared/repository/registration.py`
 - Regenerate: `docs/database_erd.md`
 
 **Interfaces:**
@@ -764,7 +764,7 @@ answer_service = RegistrationAnswerService()
 
 **Files:**
 - Create: `tournament-service/src/services/registration/templates.py`
-- Modify: `rpc/registration_admin.py` (six ops), gateway routes for tournament-service admin registration (find the file in `gateway/internal/tournament/` that declares the `registration_form` routes; add `GET/POST /workspaces/{id}/registration-form-templates`, `PUT/DELETE .../{template_id}`, `POST /tournaments/{id}/registration-form/apply-template`, `POST /tournaments/{id}/registration-form/save-template`), RBAC route documentation the repo keeps for every grant (see commit `8e85427c` for the file), `backend/tests/test_rpc_route_parity.py` fixtures if they enumerate ops
+- Modify: `rpc/registration_admin.py` (six ops), gateway routes for tournament-service admin registration (find the file in `gateway/internal/tournament/` that declares the `registration_form` routes; add `GET/POST /api/v1/admin/ws/{workspace_id}/registration-form-templates`, `PUT/DELETE .../{template_id}`, `POST /api/v1/admin/balancer/tournaments/{tournament_id}/registration-form/apply-template`, `POST /api/v1/admin/balancer/tournaments/{tournament_id}/registration-form/save-template` — the house prefixes every neighbouring route in that table uses), RBAC route documentation the repo keeps for every grant (see commit `8e85427c` for the file), `backend/tests/test_rpc_route_parity.py` fixtures if they enumerate ops
 - Test: `tournament-service/tests/test_registration_form_templates.py`
 
 **Interfaces:**

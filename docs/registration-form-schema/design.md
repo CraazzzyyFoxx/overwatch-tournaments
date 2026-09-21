@@ -1,5 +1,5 @@
 # Registration form schema — one field model, versions, templates, identities
-**Status:** design approved
+**Status:** implemented (2026-09-21)
 
 Design produced against the shipped registration pipeline (`balancer.registration*`,
 `tournament-service/src/services/registration/*`, `frontend/src/components/registration/*`).

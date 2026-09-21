@@ -40,10 +40,10 @@ interface TeamRegistrationWizardProps {
  *
  * The team's identity — logo, name, and the captain's own slot — lives ABOVE the
  * ordinary registration wizard rather than inside it: these are team facts, not
- * registration fields, and the wizard's step machinery is driven by
- * `formConfig.built_in_fields`, which knows nothing about teams. Keeping the
- * panel outside the steps also keeps it on screen throughout, so its validation
- * is visible from the first step instead of ambushing the captain at submit.
+ * registration fields, and the wizard's step machinery is driven by the form
+ * schema's sections, which know nothing about teams. Keeping the panel outside
+ * the steps also keeps it on screen throughout, so its validation is visible
+ * from the first step instead of ambushing the captain at submit.
  *
  * The captain is a member like anyone else (decision 5) — they occupy a real slot
  * and their registration goes through exactly the same validation as a solo

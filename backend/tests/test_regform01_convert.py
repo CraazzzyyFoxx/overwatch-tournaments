@@ -112,9 +112,9 @@ def test_default_form_converts_to_three_sections_in_todays_order():
 
 
 def test_disabled_builtins_and_absent_keys_are_omitted_and_empty_config_yields_the_default():
-    # An absent ``boosty_nick`` is ENABLED: the shipped wizard reads every account
-    # field as ``?.enabled !== false`` (AccountStep.tsx:63-67), so a form saved
-    # with an empty config still shows the Boosty input today.
+    # An absent ``boosty_nick`` is ENABLED: the pre-migration wizard read every
+    # account field as ``?.enabled !== false``, so a form saved with an empty
+    # config still showed the Boosty input, and the conversion must keep it.
     assert [f["key"] for f in mod.legacy_to_schema({}, [])["sections"][0]["fields"]] == [
         "battle_tag",
         "smurf_tags",
