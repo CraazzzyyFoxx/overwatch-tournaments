@@ -54,6 +54,26 @@ export function answerFlag(answers: AnswerDocument, key: string): boolean {
   return value === true || value === "true";
 }
 
+/**
+ * The role codes the `roles` answer signs the registrant up for.
+ *
+ * One row per role that is not `off`, so the codes ARE the declaration — a
+ * per-role rule ("a rank is required for every role you play") reads them
+ * rather than the role matrix's own state, which only the role step has.
+ * `[]` when the form asks no role question, or nothing is chosen yet.
+ */
+export function declaredRoles(answers: AnswerDocument): string[] {
+  const value = answers?.roles;
+  if (!Array.isArray(value)) return [];
+  const codes: string[] = [];
+  for (const row of value) {
+    if (row === null || typeof row !== "object" || !("role" in row)) continue;
+    const code = row.role;
+    if (typeof code === "string" && code && !codes.includes(code)) codes.push(code);
+  }
+  return codes;
+}
+
 /** One answer as search text, or `null` when there is nothing to match on.
  *  `false` is not searchable: an unticked checkbox is not something anybody
  *  types into a search box, and every row without the tick would match "false". */

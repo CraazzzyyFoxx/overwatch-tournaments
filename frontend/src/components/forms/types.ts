@@ -32,6 +32,12 @@ export interface FieldRendererContext {
   /** Roster for the top-heroes pickers; empty until the query resolves. */
   heroes: Hero[];
   lockedRole: RoleCode | null;
+  /**
+   * The roles the `roles` answer declares, injected by `SchemaForm`. Optional:
+   * a host builds the rest of this context, and only the per-role rank block
+   * reads it — to mark exactly those roles' ranks required.
+   */
+  declaredRoles?: readonly string[];
   /** Server-resolved subscription standing, or `null` when it does not apply.
    *  Read-only: proving a subscription is a check-in step, not a signup step. */
   subscription: SubscriptionStatus | null;

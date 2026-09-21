@@ -5,6 +5,7 @@ import { EyeOff } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import StepIndicator from "@/components/registration/StepIndicator";
+import { declaredRoles } from "@/lib/forms/answers";
 import { validateAnswer } from "@/lib/forms/validate";
 import { evaluateCondition } from "@/lib/forms/visible-when";
 import type { Answers, FormField, FormSchema, FormSection } from "@/types/forms.types";
@@ -106,7 +107,7 @@ export default function SchemaForm({
    */
   const objectionTo = (field: FormField): string | null => {
     const rule = context.mode === "admin" && field.required ? { ...field, required: false } : field;
-    return validateAnswer(rule, answers[field.key], context.t);
+    return validateAnswer(rule, answers[field.key], context.t, answers);
   };
 
   let stepError: string | null = null;
@@ -117,6 +118,14 @@ export default function SchemaForm({
       break;
     }
   }
+
+  // Derived here rather than by each host: a renderer that needs to know which
+  // roles the registration declares (the per-role rank block marks exactly
+  // those required) reads it off the same document this form already owns.
+  const fieldContext: FieldRendererContext = {
+    ...context,
+    declaredRoles: declaredRoles(answers),
+  };
 
   return (
     <div className="flex flex-col gap-4">
@@ -145,7 +154,7 @@ export default function SchemaForm({
               value={answers[field.key]}
               onChange={(value) => onChange(field.key, value)}
               error={error}
-              context={context}
+              context={fieldContext}
             />
           );
           // The registrant answers organizers-only questions like any other —

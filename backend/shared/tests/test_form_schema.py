@@ -213,6 +213,31 @@ def test_role_ranks_are_coerced_per_role_and_never_tied_to_the_roles_answer():
     }
 
 
+def test_a_required_rank_block_wants_a_rank_on_every_declared_role_and_only_those():
+    schema = _s(
+        FormField(key="roles", kind="builtin"),
+        FormField(key="current_rank", kind="role_ranks", label="Current", required=True),
+    )
+    roles = [{"role": "tank", "is_primary": True}, {"role": "support", "is_primary": False}]
+
+    # Signed up for tank and support, rated only tank: the support rank is missing.
+    partial = normalize_answers(schema, {"roles": roles, "current_rank": {"tank": 3200}})
+    assert _codes(partial) == {("current_rank", "required")}
+    assert partial.errors[0].params["roles"] == ("support",)
+
+    both = normalize_answers(schema, {"roles": roles, "current_rank": {"tank": 3200, "support": 2915}})
+    assert both.errors == []
+
+    # A rank on a role nobody signed up for is extra information, not an error.
+    extra = normalize_answers(schema, {"roles": roles, "current_rank": {"tank": 3200, "support": 2915, "damage": 4100}})
+    assert extra.errors == []
+    assert extra.values["current_rank"] == {"tank": 3200, "damage": 4100, "support": 2915}
+
+    # An organizer writing somebody else's row is not held to the registrant's rule.
+    lenient = normalize_answers(schema, {"roles": roles, "current_rank": {"tank": 3200}}, enforce_required=False)
+    assert lenient.errors == []
+
+
 def test_a_battle_tag_is_matched_in_its_canonical_form():
     """The grammar has no room for the spacing humans type around the ``#``, so
     the pattern runs on the provider's canonical form -- the same one the column

@@ -346,6 +346,24 @@ def _is_empty(value: Any) -> bool:
     return value is None or value == "" or value == []
 
 
+def _declared_roles(answers: Mapping[str, Any]) -> tuple[str, ...]:
+    """The roles the ``roles`` answer signs the registrant up for.
+
+    One row per role that is not off, so the rows ARE the declaration. Read RAW,
+    like ``visible_when``: a per-role rule has to hold whatever the roles answer
+    itself does with its own coercion.
+    """
+    rows = answers.get("roles")
+    if not isinstance(rows, list):
+        return ()
+    codes: list[str] = []
+    for row in rows:
+        code = row.get("role") if isinstance(row, dict) else None
+        if isinstance(code, str) and code in REGISTRATION_ROLE_CODES and code not in codes:
+            codes.append(code)
+    return tuple(codes)
+
+
 def normalize_answers(
     schema: FormSchema,
     answers: Mapping[str, Any],
@@ -360,6 +378,7 @@ def normalize_answers(
     draft path: formats still have to be right, blanks are allowed.
     """
     declared = {f.key for f in schema.fields()}
+    declared_roles = _declared_roles(answers)
     values: dict[str, Any] = {}
     errors = [_err(key, ErrorCode.UNKNOWN_FIELD, f"Unknown field {key!r}.") for key in answers if key not in declared]
     for field in visible_fields(schema, answers):
@@ -377,6 +396,15 @@ def normalize_answers(
                 errors.append(_err(key, ErrorCode.REQUIRED, "This field is required."))
                 continue
             if _is_empty(value):
+                continue
+        # Required per ROLE for a rank block: the registrant must rate the roles
+        # they signed up for, and may still rate the ones they did not — the
+        # block is extra information, not a second role declaration.
+        if field.kind == "role_ranks" and required:
+            missing = tuple(role for role in declared_roles if role not in (value or {}))
+            if missing:
+                msg = "A rank is required for every role you signed up for."
+                errors.append(_err(key, ErrorCode.REQUIRED, msg, roles=missing))
                 continue
         pattern_error = _check_pattern(field, value)
         if pattern_error is not None:

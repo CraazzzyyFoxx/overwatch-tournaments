@@ -162,6 +162,19 @@ describe("validateAnswer — kinds", () => {
     expect(validateAnswer(rules, { tank: "3200.5" }, t)).toBe("invalid_type");
     expect(validateAnswer(rules, "3200", t)).toBe("invalid_type");
   });
+
+  it("wants a rank on every role the registration declares, and only those", () => {
+    const rules = field({ key: "peak_rank", kind: "role_ranks", required: true });
+    const answers = {
+      roles: [{ role: "tank", is_primary: true }, { role: "support", is_primary: false }],
+    };
+    expect(validateAnswer(rules, { tank: 3200 }, t, answers)).toBe("required");
+    expect(validateAnswer(rules, { tank: 3200, support: 2915 }, t, answers)).toBeNull();
+    // A rank on a role nobody signed up for is extra information, not an error.
+    expect(validateAnswer(rules, { tank: 3200, support: 2915, damage: 4100 }, t, answers)).toBeNull();
+    // Not required: the declaration asks for nothing.
+    expect(validateAnswer(field({ key: "peak_rank", kind: "role_ranks" }), { tank: 3200 }, t, answers)).toBeNull();
+  });
 });
 
 describe("normalizeAnswerText", () => {

@@ -55,10 +55,14 @@ export default function RoleRanksField({
   value,
   onChange,
   error,
+  context,
 }: Readonly<FieldRendererProps>) {
   const id = useId();
   const errorId = `${id}-error`;
   const ranks = ranksOf(value);
+  // Required per ROLE, not per block: the registrant must rate the roles they
+  // signed up for, and may still rate the ones they did not.
+  const declared = context.declaredRoles ?? [];
 
   const setRank = (role: string, rank: number | null) => {
     const next = { ...ranks };
@@ -81,9 +85,21 @@ export default function RoleRanksField({
           const controlId = `${id}-${role.code}`;
           const rank = storedRank(ranks[role.code]);
           const division = resolveDivisionFromRank(OW_REFERENCE_GRID, rank);
+          // Only the blank cells the objection is ABOUT go red: a rank that is
+          // filled in is not why the block was refused, and painting all three
+          // made the answered roles look wrong too. With nothing declared the
+          // block just needs a rank, so every blank cell is a candidate.
+          const atFault =
+            error !== null &&
+            rank === null &&
+            (declared.length === 0 || declared.includes(role.code));
           return (
             <div key={role.code} className="space-y-2">
-              <FieldLabel label={role.display} htmlFor={controlId} />
+              <FieldLabel
+                label={role.display}
+                htmlFor={controlId}
+                required={field.required && declared.includes(role.code)}
+              />
               <div className="relative">
                 <NumberInput
                   id={controlId}
@@ -92,12 +108,12 @@ export default function RoleRanksField({
                   placeholder={field.placeholder || "—"}
                   value={rank}
                   onValueChange={(next) => setRank(role.code, next)}
-                  aria-invalid={Boolean(error)}
+                  aria-invalid={atFault}
                   className={cn(
                     fieldControlClass,
                     "h-9",
                     division != null && "pr-11",
-                    error && fieldInvalidClass,
+                    atFault && fieldInvalidClass,
                   )}
                 />
                 {division != null ? (

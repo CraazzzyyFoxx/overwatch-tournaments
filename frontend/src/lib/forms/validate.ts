@@ -11,10 +11,11 @@
  * "the server will accept this".
  */
 
+import { declaredRoles } from "@/lib/forms/answers";
 import { identityProvider } from "@/lib/forms/builtin-keys";
 import type { Translate } from "@/lib/forms/form-errors";
 import { REGISTRATION_TO_CANONICAL } from "@/lib/roles";
-import type { FormField } from "@/types/forms.types";
+import type { Answers, FormField } from "@/types/forms.types";
 
 /**
  * Patterns applied when a field declares no `validation.regex`, mirroring
@@ -133,8 +134,18 @@ function isRealDate(value: string): boolean {
  *
  * Checks run in the server's order — shape, then required, then format — so the
  * two never disagree about WHICH complaint a bad answer earns.
+ *
+ * `answers` is the whole document, needed by the rules that read a SECOND
+ * answer: a required `role_ranks` block wants a rank on every role the `roles`
+ * answer declares. Optional, so a caller validating one value in isolation (a
+ * BattleTag being typed into a combobox) keeps passing three arguments.
  */
-export function validateAnswer(field: FormField, value: unknown, t: Translate): string | null {
+export function validateAnswer(
+  field: FormField,
+  value: unknown,
+  t: Translate,
+  answers?: Answers,
+): string | null {
   const empty =
     value === null ||
     value === undefined ||
@@ -173,6 +184,12 @@ export function validateAnswer(field: FormField, value: unknown, t: Translate): 
           : !(typeof rank === "string" && INTEGER.test(rank.trim())),
       );
       if (bad) return t("invalid_type");
+      // A rank is required for every role the registration declares, and only
+      // those: the registrant may still rate a role they did not sign up for —
+      // this block is extra information, so a blank there is not a refusal.
+      if (field.required && declaredRoles(answers).some((role) => !Object.hasOwn(value, role))) {
+        return t("required");
+      }
       break;
     }
     case "select":
