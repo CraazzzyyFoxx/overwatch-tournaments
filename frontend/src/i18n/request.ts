@@ -3,7 +3,6 @@ import { cookies, headers } from "next/headers";
 import { IntlErrorCode } from "next-intl";
 
 import { resolveLocale } from "./resolve-locale";
-import { pickMessages, ZONES, type Zone } from "./zones";
 
 export default getRequestConfig(async () => {
   const [cookieStore, headerStore] = await Promise.all([cookies(), headers()]);
@@ -11,15 +10,14 @@ export default getRequestConfig(async () => {
     cookieStore.get("NEXT_LOCALE")?.value,
     headerStore.get("accept-language"),
   );
-  // Never trust the header: middleware sets it, the gateway strips any inbound
-  // copy, and an unrecognised value falls back to the widest public bundle
-  // rather than to nothing.
-  const header = headerStore.get("x-owt-zone");
-  const zone: Zone = ZONES.find((candidate) => candidate === header) ?? "web";
   // Runtime-selected specifier: the locale comes from a cookie / Accept-Language,
   // so this cannot be a static import.
-  const all = (await import(`./messages/${locale}.json`)).default;
-  const messages = pickMessages(all, zone);
+  const messages = (await import(`./messages/${locale}.json`)).default;
+  // The WHOLE tree, deliberately. Server rendering costs no payload for a
+  // message it does not render, and `getTranslations` in any zone reads from
+  // here. Narrowing happens where it is actually observable — at each
+  // `NextIntlClientProvider`, which serialises its `messages` into the RSC
+  // payload. See `src/i18n/zones.ts`.
 
   return {
     locale,
@@ -31,11 +29,11 @@ export default getRequestConfig(async () => {
       }
       // A missing message used to be silent ("expected during rollout"). Now it
       // is also the single failure mode of the zone split: a namespace left out
-      // of this request's bundle renders its dotted key to the user. Silent in
+      // of a zone bundle renders its dotted key to the user. Silent in
       // production (a log line per render is not worth it), loud everywhere a
-      // developer or CI would see it, with the zone named so the fix is obvious.
+      // developer or CI would see it.
       if (process.env.NODE_ENV !== "production") {
-        console.warn(`[i18n] missing message in zone "${zone}": ${error.message}`);
+        console.warn(`[i18n] missing message: ${error.message}`);
       }
     },
     getMessageFallback({ namespace, key }) {

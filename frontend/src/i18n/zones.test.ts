@@ -2,40 +2,15 @@ import { describe, expect, it } from "bun:test";
 
 import en from "./messages/en.json";
 import ZONE_NAMESPACES from "./zone-namespaces.json";
-import { pickMessages, ZONES, zoneFromPathname, type Zone } from "./zones";
+import { pickMessages, ZONES } from "./zones";
 
 /**
  * The bundle *contents* are generated and drift-checked by
  * `scripts/check-zone-boundaries.mjs` (rule Z4) — it walks the import graph,
- * which a unit test cannot. What is tested here is the runtime half: the
- * pathname→zone mapping, that the picker actually narrows, and the invariant
- * that makes narrowing safe at all (root chrome present in every bundle).
+ * which a unit test cannot. What is tested here is the runtime half: that the
+ * picker narrows, and the invariant that makes narrowing safe at all (a zone
+ * provider replaces the root one, so every zone must carry the root bundle).
  */
-
-describe("zoneFromPathname", () => {
-  it("maps route prefixes to their zone and defaults the rest to web", () => {
-    const cases: ReadonlyArray<readonly [string, Zone]> = [
-      ["/admin", "admin"],
-      ["/admin/tournaments/12/bracket", "admin"],
-      ["/balancer", "tools"],
-      ["/balancer/mix/4", "tools"],
-      ["/draft/9", "tools"],
-      ["/", "web"],
-      ["/tournaments/owal-2026/bracket", "web"],
-      ["/users/anak", "web"],
-      ["/_not-found", "web"],
-    ];
-    for (const [pathname, zone] of cases) {
-      expect(zoneFromPathname(pathname)).toBe(zone);
-    }
-  });
-
-  it("does not let a prefix match a longer segment", () => {
-    // `/administration` is not the admin zone; a naive startsWith would claim it.
-    expect(zoneFromPathname("/administration")).toBe("web");
-    expect(zoneFromPathname("/drafts")).toBe("web");
-  });
-});
 
 describe("pickMessages", () => {
   it("ships the zone's namespaces and nothing else", () => {
@@ -84,15 +59,15 @@ describe("bundle coverage", () => {
     }
   });
 
-  it("puts the root layout's own chrome in every bundle", () => {
-    // `app/layout.tsx` renders the auth modal, account settings, the cookie
-    // notice and the toaster OUTSIDE `{children}`, so they render under whatever
-    // zone bundle the request selected. A namespace they need that is missing
-    // from one zone shows dotted keys on every page of that zone.
-    for (const namespace of ["common", "accountSettings", "auth", "nav"]) {
-      for (const zone of ZONES) {
-        expect(ZONE_NAMESPACES[zone]).toContain(namespace);
-      }
+  it("makes every zone bundle a superset of the root one", () => {
+    // `app/layout.tsx` mounts `zone="root"` for the chrome it renders outside
+    // `{children}` (auth modal, account settings, cookie notice, toaster), and
+    // each zone layout mounts its own provider INSIDE it. `use-intl`'s
+    // IntlProvider replaces `messages` instead of merging, so a root namespace
+    // missing from a zone shows dotted keys on every page of that zone.
+    for (const zone of ZONES) {
+      const have = new Set(ZONE_NAMESPACES[zone]);
+      expect(ZONE_NAMESPACES.root.filter((namespace) => !have.has(namespace))).toEqual([]);
     }
   });
 });

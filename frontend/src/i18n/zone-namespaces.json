@@ -1,4 +1,27 @@
 {
+  "root": [
+    "accountSettings",
+    "admin",
+    "admission",
+    "analytics",
+    "auth",
+    "bracket",
+    "common",
+    "discord",
+    "draft",
+    "encounters",
+    "errors",
+    "home",
+    "legal",
+    "matches",
+    "notFound",
+    "registration",
+    "rosterShape",
+    "standings",
+    "stream",
+    "users",
+    "workspace"
+  ],
   "web": [
     "accountSettings",
     "achievements",

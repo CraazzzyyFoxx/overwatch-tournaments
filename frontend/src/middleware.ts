@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolveHost } from "@/lib/host";
 import { internalApiOrigin } from "@/lib/api-routes";
-import { zoneFromPathname } from "@/i18n/zones";
 
 // Small bounded TTL cache: the host->workspace map is tiny and rarely changes.
 const CACHE_TTL_MS = 60_000;
@@ -58,10 +57,6 @@ function scopedHeaders(request: NextRequest): Headers {
   const headers = new Headers(request.headers);
   headers.delete("x-owt-workspace-id");
   headers.delete("x-owt-host-mode");
-  headers.delete("x-owt-zone");
-  // The i18n request config has no access to the pathname, and it needs one to
-  // ship a zone's messages instead of all 47 namespaces. See src/i18n/zones.ts.
-  headers.set("x-owt-zone", zoneFromPathname(request.nextUrl.pathname));
   return headers;
 }
 

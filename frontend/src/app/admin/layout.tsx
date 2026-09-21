@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { cookies } from "next/headers";
 
 import { AdminLayoutClient } from "@/app/admin/AdminLayoutClient";
+import ZoneIntlProvider from "@/i18n/ZoneIntlProvider";
 import { SIDEBAR_COOKIE_NAMES, parseSidebarOpenCookie } from "@/lib/sidebar-cookies";
 import notificationService from "@/services/notification.service";
 import type { NotificationItem } from "@/types/notification.types";
@@ -28,8 +29,10 @@ export default async function AdminLayout({ children }: Readonly<AdminLayoutProp
   const announcements = await resolveActiveAnnouncements();
 
   return (
-    <AdminLayoutClient defaultSidebarOpen={defaultSidebarOpen} announcements={announcements}>
-      {children}
-    </AdminLayoutClient>
+    <ZoneIntlProvider zone="admin">
+      <AdminLayoutClient defaultSidebarOpen={defaultSidebarOpen} announcements={announcements}>
+        {children}
+      </AdminLayoutClient>
+    </ZoneIntlProvider>
   );
 }

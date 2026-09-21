@@ -5,33 +5,21 @@ import ZONE_NAMESPACES from "./zone-namespaces.json";
  * is payload: `NextIntlClientProvider` serialises whatever `messages` it is
  * given into the RSC payload, and with no `messages` prop it serialises the
  * *whole* tree (`next-intl/dist/.../NextIntlClientProviderServer.js`:
- * `messages: undefined === v ? await getMessages() : v`). That shipped all 47
+ * `messages: undefined === v ? await getMessages() : v`). That shipped all 49
  * namespaces — the admin draft console, the quota editor, the registration form
  * builder — to every anonymous visitor.
+ *
+ * The bundle is chosen by the LAYOUT that renders it (`ZoneIntlProvider`), not
+ * by the request path: a client-side navigation re-renders only the segments
+ * below the deepest shared layout, so a root-layout provider keeps the bundle
+ * of whatever page was loaded first. Going /tournaments → /draft/x that way
+ * left the draft room reading the web bundle and rendering the draft console's
+ * own keys raw. A zone's layout, by construction, re-renders exactly when
+ * its zone is entered.
  */
 export type Zone = keyof typeof ZONE_NAMESPACES;
 
 export const ZONES = Object.keys(ZONE_NAMESPACES) as readonly Zone[];
-
-/** Prefixes that identify a non-default zone. `(site)` is a route group, so web has none. */
-const ZONE_PREFIXES: ReadonlyArray<readonly [string, Zone]> = [
-  ["/admin", "admin"],
-  ["/balancer", "tools"],
-  ["/draft", "tools"],
-];
-
-/**
- * Zone for a request path. Web is the default because `app/(site)` is a route
- * group and contributes no URL segment — and because a path nothing matches
- * (`/_not-found`, an error boundary) renders root-layout chrome, whose
- * namespaces are in every bundle.
- */
-export function zoneFromPathname(pathname: string): Zone {
-  for (const [prefix, zone] of ZONE_PREFIXES) {
-    if (pathname === prefix || pathname.startsWith(`${prefix}/`)) return zone;
-  }
-  return "web";
-}
 
 /**
  * The zone's slice of the message tree. Sub-trees are aliased, not cloned: the
