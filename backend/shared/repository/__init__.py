@@ -8,6 +8,7 @@ from .balance import (
     WorkspaceBalancerConfigRepository,
 )
 from .base import BaseRepository
+from .audit import AuditLogRepository
 from .baselines import StatBaselineRepository
 from .catalog import CatalogAliasMissRepository, GamemodeRepository, HeroRepository, MapRepository
 from .challonge import (
@@ -17,6 +18,7 @@ from .challonge import (
     ChallongeSourceRepository,
     ChallongeSyncLogRepository,
 )
+from .chat import ChatMessageRepository, ChatMuteRepository, ChatRoomSettingsRepository
 from .division_grid import (
     DivisionGridImportJobRepository,
     DivisionGridMappingRepository,
@@ -95,6 +97,8 @@ from .stream import (
     VerifiedChannelRow,
 )
 from .subscription import (
+    SubscriptionCheckLogRepository,
+    SubscriptionEntitlementRepository,
     SubscriptionProviderConfigRepository,
     WorkspaceSubscriptionRequirementRepository,
 )
@@ -175,6 +179,7 @@ __all__ = (
     "AnalyticsStandingsDistributionRepository",
     "ApiKeyRepository",
     "AuthUserRepository",
+    "AuditLogRepository",
     "BalancerBalanceRepository",
     "BalancerBalanceVariantRepository",
     "BalancerRegistrationRepository",
@@ -192,6 +197,9 @@ __all__ = (
     "ChallongeParticipantMappingRepository",
     "ChallongeSourceRepository",
     "ChallongeSyncLogRepository",
+    "ChatMessageRepository",
+    "ChatMuteRepository",
+    "ChatRoomSettingsRepository",
     "DiscordChannelRepository",
     "DivisionGridImportJobRepository",
     "DivisionGridMappingRepository",
@@ -262,6 +270,8 @@ __all__ = (
     "StatBaselineRepository",
     "StreamRosterRow",
     "StreamTargetRepository",
+    "SubscriptionCheckLogRepository",
+    "SubscriptionEntitlementRepository",
     "SubscriptionProviderConfigRepository",
     "TeamRepository",
     "TournamentComputationJobRepository",

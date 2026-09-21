@@ -1,6 +1,6 @@
 // Anak Tournaments — PostgreSQL schema dumped from SQLAlchemy metadata.
 // Open in VS Code (DBML extension) or paste into https://dbdiagram.io
-// Tables: 131
+// Tables: 137
 
 Project anak_tournaments {
   database_type: "PostgreSQL"
@@ -953,11 +953,10 @@ Table balancer.registration {
   battle_tag VARCHAR(255)
   battle_tag_normalized VARCHAR(255)
   smurf_tags_json json
-  discord_nick VARCHAR(255)
-  twitch_nick VARCHAR(255)
-  boosty_nick VARCHAR(255)
   stream_pov boolean [not null, default: false]
-  notes text
+  form_version_id bigint
+  public_notes text
+  organizer_notes text
   exclude_reason VARCHAR(64)
   admin_notes text
   custom_fields_json json
@@ -977,6 +976,7 @@ Table balancer.registration {
   is_substitute boolean [not null, default: false]
   is_team_manager boolean [not null, default: false]
   indexes {
+    (form_version_id) [name: "ix_balancer_registration_form_version_id"]
     (registration_team_id) [name: "ix_balancer_registration_registration_team_id"]
     (tournament_id, status, balancer_status) [name: "ix_balancer_registration_tournament_balancer_status"]
     (tournament_id) [name: "ix_balancer_registration_tournament_id"]
@@ -994,8 +994,7 @@ Table balancer.registration_form {
   workspace_id bigint [not null]
   is_open boolean [not null, default: false]
   auto_approve boolean [not null, default: false]
-  built_in_fields_json json [not null, default: `{}`]
-  custom_fields_json json [not null, default: `[]`]
+  current_version_id bigint
   require_open_profile boolean [not null, default: false]
   open_profile_scope VARCHAR(8) [not null, default: `main`]
   show_ranks boolean [not null, default: false]
@@ -1016,6 +1015,34 @@ Table balancer.registration_form {
   }
 }
 
+Table balancer.registration_form_template {
+  id bigint [pk, increment]
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz
+  workspace_id bigint [not null]
+  name VARCHAR(64) [not null]
+  schema_json json [not null]
+  created_by bigint
+  indexes {
+    (workspace_id) [name: "ix_balancer_registration_form_template_workspace_id"]
+    (workspace_id) [unique, name: "uq_balancer_registration_form_template_name"]
+  }
+}
+
+Table balancer.registration_form_version {
+  id bigint [pk, increment]
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz
+  form_id bigint [not null]
+  number int [not null]
+  schema_json json [not null]
+  created_by bigint
+  indexes {
+    (form_id, number) [unique, name: "uq_balancer_registration_form_version_number"]
+    (form_id) [name: "ix_balancer_registration_form_version_form_id"]
+  }
+}
+
 Table balancer.registration_google_sheet_binding {
   id bigint [pk, increment]
   created_at timestamptz [not null, default: `now()`]
@@ -1028,8 +1055,8 @@ Table balancer.registration_google_sheet_binding {
   row_hash VARCHAR(128)
   last_seen_at timestamptz
   indexes {
-    (feed_id, source_record_key) [unique, name: "uq_balancer_registration_google_sheet_binding_key"]
     (registration_id) [unique, name: "uq_balancer_registration_google_sheet_binding_registration"]
+    (feed_id, source_record_key) [unique, name: "uq_balancer_registration_google_sheet_binding_key"]
     (feed_id) [name: "ix_balancer_registration_google_sheet_binding_feed_id"]
   }
 }
@@ -1053,6 +1080,21 @@ Table balancer.registration_google_sheet_feed {
   last_error text
   indexes {
     (tournament_id) [unique, name: "uq_balancer_registration_google_sheet_feed_tournament"]
+  }
+}
+
+Table balancer.registration_identity {
+  id bigint [pk, increment]
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz
+  registration_id bigint [not null]
+  provider VARCHAR(32) [not null]
+  handle VARCHAR(255) [not null]
+  handle_normalized VARCHAR(255) [not null]
+  indexes {
+    (registration_id, provider) [unique, name: "uq_balancer_registration_identity_provider"]
+    (provider, handle_normalized) [name: "ix_balancer_registration_identity_handle"]
+    (registration_id) [name: "ix_balancer_registration_identity_registration_id"]
   }
 }
 
@@ -1081,8 +1123,8 @@ Table balancer.registration_role_hero {
   hero_id bigint [not null]
   priority int [not null]
   indexes {
-    (role_id, hero_id) [unique, name: "uq_reg_role_hero_role_hero"]
     (role_id, priority) [unique, name: "uq_reg_role_hero_role_priority"]
+    (role_id, hero_id) [unique, name: "uq_reg_role_hero_role_hero"]
     (role_id) [name: "ix_balancer_registration_role_hero_role_id"]
   }
 }
@@ -1265,8 +1307,11 @@ TableGroup balancer {
   balancer.member_rank
   balancer.registration
   balancer.registration_form
+  balancer.registration_form_template
+  balancer.registration_form_version
   balancer.registration_google_sheet_binding
   balancer.registration_google_sheet_feed
+  balancer.registration_identity
   balancer.registration_role
   balancer.registration_role_hero
   balancer.registration_status
@@ -1743,6 +1788,42 @@ Table audit_log {
   }
 }
 
+Table chat_message {
+  id bigint [pk, increment]
+  room_kind VARCHAR(16) [not null]
+  room_ref_id bigint [not null]
+  auth_user_id bigint [not null]
+  author_name text [not null]
+  author_role VARCHAR(16) [not null]
+  body text [not null]
+  created_at timestamptz [not null, default: `now()`]
+  deleted_at timestamptz
+  deleted_by_auth_user_id bigint
+  indexes {
+    (room_kind, room_ref_id, auth_user_id, id) [name: "ix_chat_message_author"]
+    (room_kind, room_ref_id, id) [name: "ix_chat_message_room"]
+  }
+}
+
+Table chat_mute {
+  room_kind VARCHAR(16) [pk, increment]
+  room_ref_id bigint [pk, increment]
+  auth_user_id bigint [pk, increment]
+  muted_until timestamptz
+  reason text
+  created_by_auth_user_id bigint [not null]
+  created_at timestamptz [not null, default: `now()`]
+}
+
+Table chat_room_settings {
+  room_kind VARCHAR(16) [pk, increment]
+  room_ref_id bigint [pk, increment]
+  spectators_can_read boolean [not null]
+  updated_by_auth_user_id bigint [not null]
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz
+}
+
 Table division_grid {
   id bigint [pk, increment]
   created_at timestamptz [not null, default: `now()`]
@@ -1980,6 +2061,9 @@ Table workspace_member {
 
 TableGroup public {
   audit_log
+  chat_message
+  chat_mute
+  chat_room_settings
   division_grid
   division_grid_import_job
   division_grid_mapping
@@ -2954,15 +3038,22 @@ Ref: balancer.member_rank.workspace_member_id > workspace_member.id [delete: cas
 Ref: balancer.member_rank.author_user_id > auth.user.id [delete: cascade]
 Ref: balancer.registration.tournament_id > tournament.tournament.id [delete: cascade]
 Ref: balancer.registration.workspace_member_id > workspace_member.id [delete: set null]
+Ref: balancer.registration.form_version_id > balancer.registration_form_version.id [delete: set null]
 Ref: balancer.registration.checked_in_by > auth.user.id [delete: set null]
 Ref: balancer.registration.reviewed_by > auth.user.id [delete: set null]
 Ref: balancer.registration.deleted_by > auth.user.id [delete: set null]
 Ref: balancer.registration.registration_team_id > balancer.registration_team.id [delete: set null]
 Ref: balancer.registration_form.tournament_id > tournament.tournament.id [delete: cascade]
 Ref: balancer.registration_form.workspace_id > workspace.id [delete: cascade]
+Ref: balancer.registration_form.current_version_id > balancer.registration_form_version.id [delete: set null]
+Ref: balancer.registration_form_template.workspace_id > workspace.id [delete: cascade]
+Ref: balancer.registration_form_template.created_by > auth.user.id [delete: set null]
+Ref: balancer.registration_form_version.form_id > balancer.registration_form.id [delete: cascade]
+Ref: balancer.registration_form_version.created_by > auth.user.id [delete: set null]
 Ref: balancer.registration_google_sheet_binding.feed_id > balancer.registration_google_sheet_feed.id [delete: cascade]
 Ref: balancer.registration_google_sheet_binding.registration_id > balancer.registration.id [delete: cascade]
 Ref: balancer.registration_google_sheet_feed.tournament_id > tournament.tournament.id [delete: cascade]
+Ref: balancer.registration_identity.registration_id > balancer.registration.id [delete: cascade]
 Ref: balancer.registration_role.registration_id > balancer.registration.id [delete: cascade]
 Ref: balancer.registration_role_hero.role_id > balancer.registration_role.id [delete: cascade]
 Ref: balancer.registration_role_hero.hero_id > overwatch.hero.id [delete: cascade]

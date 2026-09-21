@@ -25,6 +25,7 @@ class ScopeKind(StrEnum):
     WORKSPACE = "workspace"
     USER = "user"
     ENCOUNTER = "encounter"
+    DRAFT = "draft"
 
 
 @dataclass(frozen=True, slots=True)
@@ -55,10 +56,22 @@ class Scope:
         """
         return cls(ScopeKind.ENCOUNTER, int(encounter_id))
 
+    @classmethod
+    def draft(cls, draft_session_id: int) -> Scope:
+        """A live draft SESSION's own topics (currently just its chat).
+
+        Keyed by the session and not by the tournament because a session IS the
+        draft: re-seeding one deletes it and creates another, and the two are
+        different events with different participants. Data only, like
+        ``encounter`` -- a draft write stales ``tournament.*`` resources, which
+        are already published under the tournament scope.
+        """
+        return cls(ScopeKind.DRAFT, int(draft_session_id))
+
     @property
     def invalidation_topic(self) -> str:
-        if self.kind is ScopeKind.ENCOUNTER:
-            raise ValueError("encounter scope has no invalidation topic — name the tournament-scoped resource instead")
+        if self.kind in (ScopeKind.ENCOUNTER, ScopeKind.DRAFT):
+            raise ValueError(f"{self.kind} scope has no invalidation topic — name the tournament-scoped resource instead")
         return f"{self.kind}:{self.id}:invalidation"
 
     def domain_topic(self, domain: str) -> str:
