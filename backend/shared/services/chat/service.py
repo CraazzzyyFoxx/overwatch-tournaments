@@ -24,6 +24,7 @@ from shared.repository.chat import (
     ChatMuteRepository,
     ChatRoomSettingsRepository,
 )
+from shared.repository.identity import AuthUserRepository
 from shared.services.chat.access import ChatAccess, ChatMembership
 from shared.services.chat.room import CHAT_DOMAIN, ChatRoom
 from shared.services.chat.schemas import (
@@ -76,7 +77,7 @@ def _sanitize(body: str) -> str:
     return cleaned
 
 
-def _read(row: ChatMessage) -> ChatMessageRead:
+def _read(row: ChatMessage, avatar_url: str | None = None) -> ChatMessageRead:
     return ChatMessageRead(
         id=row.id,
         created_at=row.created_at,
@@ -84,6 +85,7 @@ def _read(row: ChatMessage) -> ChatMessageRead:
         author_name=row.author_name,
         author_role=row.author_role,
         body=row.body,
+        author_avatar_url=avatar_url,
     )
 
 
@@ -95,11 +97,13 @@ class ChatService:
         messages: ChatMessageRepository | None = None,
         settings: ChatRoomSettingsRepository | None = None,
         mutes: ChatMuteRepository | None = None,
+        auth_users: AuthUserRepository | None = None,
     ) -> None:
         self.access = access
         self.messages = messages or ChatMessageRepository()
         self.settings = settings or ChatRoomSettingsRepository()
         self.mutes = mutes or ChatMuteRepository()
+        self.auth_users = auth_users or AuthUserRepository()
 
     # ── policy ───────────────────────────────────────────────────────────────
 
@@ -185,6 +189,9 @@ class ChatService:
             after_id=after_id,
             limit=max(1, min(int(limit), HISTORY_MAX)),
         )
+        # One extra two-column query for the whole page, not one per row: the
+        # transcript usually repeats a handful of authors.
+        avatars = await self.auth_users.avatar_urls(session, {row.auth_user_id for row in rows})
 
         mute = None
         if auth_user is not None:
@@ -210,7 +217,7 @@ class ChatService:
         )
 
         return ChatEnvelope(
-            messages=[_read(row) for row in rows],
+            messages=[_read(row, avatars.get(row.auth_user_id)) for row in rows],
             settings=ChatSettings(spectators_can_read=visible),
             viewer=ChatViewer(
                 role=membership.role,
@@ -290,7 +297,11 @@ class ChatService:
         # MissingGreenlet rather than filling it in.
         await session.refresh(row, ["created_at"])
 
-        message = _read(row)
+        # Also on the event, not just the reply: every other subscriber renders
+        # this message straight from the payload and would otherwise show a
+        # faceless row until the next full read.
+        avatars = await self.auth_users.avatar_urls(session, (auth_user.id,))
+        message = _read(row, avatars.get(auth_user.id))
         await self._emit(
             session,
             room,

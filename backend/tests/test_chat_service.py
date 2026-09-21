@@ -112,6 +112,19 @@ class _Mutes:
         return True
 
 
+class _AuthUsers:
+    """Avatars live on the account, so the service reads them per page."""
+
+    def __init__(self, avatars: dict[int, str | None] | None = None) -> None:
+        self.avatars = avatars or {}
+        self.asked: list[set[int]] = []
+
+    async def avatar_urls(self, _session: Any, auth_user_ids: Any) -> dict[int, str | None]:
+        ids = set(auth_user_ids)
+        self.asked.append(ids)
+        return {user_id: self.avatars[user_id] for user_id in ids if user_id in self.avatars}
+
+
 class _Access:
     def __init__(self, membership: ChatMembership | None) -> None:
         self.membership = membership
@@ -152,11 +165,18 @@ class ChatServiceTest(IsolatedAsyncioTestCase):
         messages: _Messages | None = None,
         settings: _Settings | None = None,
         mutes: _Mutes | None = None,
+        auth_users: _AuthUsers | None = None,
     ) -> tuple[ChatService, _Messages, _Settings, _Mutes]:
         messages = messages or _Messages()
         settings = settings if settings is not None else _Settings()
         mutes = mutes or _Mutes()
-        service = ChatService(access, messages=messages, settings=settings, mutes=mutes)
+        service = ChatService(
+            access,
+            messages=messages,
+            settings=settings,
+            mutes=mutes,
+            auth_users=auth_users or _AuthUsers(),
+        )
         return service, messages, settings, mutes
 
     # ── spectator visibility ─────────────────────────────────────────────────
@@ -210,6 +230,34 @@ class ChatServiceTest(IsolatedAsyncioTestCase):
         self.assertFalse(kwargs["data"].durable)
         self.assertEqual(kwargs["actor_user_id"], CAPTAIN.id)
         self.assertEqual(messages.rows[-1].body, "ready?")
+
+    async def test_the_author_face_is_the_account_current_one_on_history_and_on_the_event(
+        self,
+    ) -> None:
+        """``author_name`` is the snapshot; the avatar is resolved on read.
+
+        So an account that changes its picture changes it on messages already
+        said, and a live subscriber gets the face in the payload rather than a
+        blank circle until the next full read.
+        """
+        avatars = _AuthUsers({CAPTAIN.id: "https://cdn/avatars/7.png"})
+        rows = [_row(1, auth_user_id=CAPTAIN.id), _row(2, auth_user_id=VIEWER.id)]
+        service, *_ = self._service(_Access(CAPTAIN_MEMBER), messages=_Messages(rows), auth_users=avatars)
+
+        envelope = await service.envelope(_Session(), CAPTAIN, ChatRoom.draft(3))
+        self.assertEqual(envelope.messages[0].author_avatar_url, "https://cdn/avatars/7.png")
+        # No row for this account, and no face invented for it either.
+        self.assertIsNone(envelope.messages[1].author_avatar_url)
+        # One query for the page, asked for both authors at once.
+        self.assertEqual(avatars.asked, [{CAPTAIN.id, VIEWER.id}])
+
+        with patch("shared.services.chat.service.emit") as emit:
+            posted = await service.post(_Session(), CAPTAIN, ChatRoom.draft(3), "ready?")
+        self.assertEqual(posted.author_avatar_url, "https://cdn/avatars/7.png")
+        self.assertEqual(
+            emit.await_args.kwargs["data"].payload["author_avatar_url"],
+            "https://cdn/avatars/7.png",
+        )
 
     async def test_blank_and_oversized_bodies_are_refused_without_writing(self) -> None:
         for body in ("", "   ", "\x00\x07", "x" * 501, "y" * 2001):

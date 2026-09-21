@@ -22,6 +22,12 @@ export interface ChatMessage {
   author_name: string;
   author_role: ChatRole;
   body: string;
+  /**
+   * The author's avatar as it is NOW — resolved per read, unlike
+   * `author_name`, which is the snapshot taken when the message was sent.
+   * `null` for an account that has not set one.
+   */
+  author_avatar_url: string | null;
 }
 
 export interface ChatSettings {
@@ -69,6 +75,7 @@ export interface ChatEventData {
   author_name?: string;
   author_role?: ChatRole;
   body?: string;
+  author_avatar_url?: string | null;
   muted_until?: string | null;
   reason?: string | null;
   created_by_auth_user_id?: number;

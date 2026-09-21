@@ -10,21 +10,22 @@ import {
   ConversationEmptyState,
   ConversationScrollButton
 } from "@/components/ai-elements/conversation";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Bubble, BubbleContent } from "@/components/ui/bubble";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger
-} from "@/components/ui/dropdown-menu";
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuLabel,
+  ContextMenuSeparator,
+  ContextMenuTrigger
+} from "@/components/ui/context-menu";
 import {
   Message,
   MessageAvatar,
   MessageContent,
-  MessageFooter,
   MessageGroup,
   MessageHeader
 } from "@/components/ui/message";
@@ -223,6 +224,11 @@ export function RoomChat({
                           <MessageAvatar>
                             {index === streak.length - 1 ? (
                               <Avatar className="size-8">
+                                {message.author_avatar_url ? (
+                                  // Decorative: the author's name is right
+                                  // above it, so alt text would only repeat.
+                                  <AvatarImage src={message.author_avatar_url} alt="" />
+                                ) : null}
                                 <AvatarFallback className="text-xs font-semibold">
                                   {initial(message.author_name)}
                                 </AvatarFallback>
@@ -241,88 +247,94 @@ export function RoomChat({
                                 </span>
                               </MessageHeader>
                             ) : null}
-                            <Bubble variant={isSelf ? "default" : "muted"}>
-                              {/* Plain text, always: chat bodies are never
-                                  parsed as markup. */}
-                              <BubbleContent className="whitespace-pre-wrap">
-                                {message.body}
-                              </BubbleContent>
-                            </Bubble>
-                            {/* Time and moderation below the bubble, never in
-                                the header row: with two icon buttons up there
-                                the author's name wrapped to a second line and
-                                the controls moved per row. */}
-                            <MessageFooter className="gap-3">
-                              <time
-                                dateTime={message.created_at}
-                                className="shrink-0 font-normal tabular-nums"
-                              >
-                                {format.dateTime(new Date(message.created_at), {
-                                  hour: "2-digit",
-                                  minute: "2-digit"
-                                })}
-                              </time>
-                              {canDelete ? (
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon"
-                                  className="size-7 shrink-0"
-                                  aria-label={t("deleteLabel", { name: message.author_name })}
-                                  disabled={remove.isPending && remove.variables === message.id}
-                                  onClick={() =>
-                                    remove.mutate(message.id, {
-                                      onError: () => notify.error(t("deleteFailed"))
-                                    })
-                                  }
+                            {/* Right-click (long-press on touch, the menu key
+                                on a keyboard) rather than a row of icons under
+                                every message: moderation is rare and the
+                                buttons cost more attention than they earn. The
+                                bubble is focusable only when there is in fact
+                                a menu behind it. */}
+                            <ContextMenu>
+                              <ContextMenuTrigger asChild disabled={!canDelete && !canMute}>
+                                <Bubble
+                                  variant={isSelf ? "default" : "muted"}
+                                  tabIndex={canDelete || canMute ? 0 : undefined}
+                                  aria-haspopup={canDelete || canMute ? "menu" : undefined}
+                                  className="outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card"
                                 >
-                                  <Trash2 className="size-3.5" aria-hidden />
-                                </Button>
-                              ) : null}
-                              {canMute ? (
-                                <DropdownMenu>
-                                  <DropdownMenuTrigger asChild>
-                                    <Button
-                                      type="button"
-                                      variant="ghost"
-                                      size="icon"
-                                      className="size-7 shrink-0"
-                                      aria-label={t("muteLabel", { name: message.author_name })}
+                                  {/* Plain text, always: chat bodies are never
+                                      parsed as markup. The time rides inside
+                                      the bubble, where every other chat puts
+                                      it. */}
+                                  <BubbleContent className="flex flex-col gap-0.5">
+                                    <span className="whitespace-pre-wrap">{message.body}</span>
+                                    <time
+                                      dateTime={message.created_at}
+                                      // 0.85, not 0.7: at 12px the dimmer step
+                                      // measured APCA |Lc| 54 on the sent
+                                      // bubble, under the 60 non-body floor
+                                      // this theme is verified against.
+                                      className="self-end text-label leading-none tabular-nums opacity-85"
                                     >
-                                      <ShieldOff className="size-3.5" aria-hidden />
-                                    </Button>
-                                  </DropdownMenuTrigger>
-                                  <DropdownMenuContent align={isSelf ? "end" : "start"}>
-                                    {isMuted ? (
-                                      <DropdownMenuItem
-                                        onSelect={() =>
-                                          unmute.mutate(message.auth_user_id, {
-                                            onError: () => notify.error(t("muteFailed"))
-                                          })
-                                        }
+                                      {format.dateTime(new Date(message.created_at), {
+                                        hour: "2-digit",
+                                        minute: "2-digit"
+                                      })}
+                                    </time>
+                                  </BubbleContent>
+                                </Bubble>
+                              </ContextMenuTrigger>
+                              {canDelete || canMute ? (
+                                <ContextMenuContent className="w-48">
+                                  <ContextMenuLabel className="truncate">
+                                    {message.author_name}
+                                  </ContextMenuLabel>
+                                  {canDelete ? (
+                                    <ContextMenuItem
+                                      onSelect={() =>
+                                        remove.mutate(message.id, {
+                                          onError: () => notify.error(t("deleteFailed"))
+                                        })
+                                      }
+                                    >
+                                      <Trash2 className="mr-2 size-4" aria-hidden />
+                                      {t("deleteAction")}
+                                    </ContextMenuItem>
+                                  ) : null}
+                                  {canMute ? (
+                                    <>
+                                      <ContextMenuSeparator />
+                                      {isMuted ? (
+                                        <ContextMenuItem
+                                          onSelect={() =>
+                                            unmute.mutate(message.auth_user_id, {
+                                              onError: () => notify.error(t("muteFailed"))
+                                            })
+                                          }
+                                        >
+                                          <ShieldOff className="mr-2 size-4" aria-hidden />
+                                          {t("unmute")}
+                                        </ContextMenuItem>
+                                      ) : null}
+                                      <ContextMenuItem
+                                        onSelect={() => applyMute(message.auth_user_id, 5)}
                                       >
-                                        {t("unmute")}
-                                      </DropdownMenuItem>
-                                    ) : null}
-                                    <DropdownMenuItem
-                                      onSelect={() => applyMute(message.auth_user_id, 5)}
-                                    >
-                                      {t("mute5m")}
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem
-                                      onSelect={() => applyMute(message.auth_user_id, 60)}
-                                    >
-                                      {t("mute1h")}
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem
-                                      onSelect={() => applyMute(message.auth_user_id, null)}
-                                    >
-                                      {t("muteForever")}
-                                    </DropdownMenuItem>
-                                  </DropdownMenuContent>
-                                </DropdownMenu>
+                                        {t("mute5m")}
+                                      </ContextMenuItem>
+                                      <ContextMenuItem
+                                        onSelect={() => applyMute(message.auth_user_id, 60)}
+                                      >
+                                        {t("mute1h")}
+                                      </ContextMenuItem>
+                                      <ContextMenuItem
+                                        onSelect={() => applyMute(message.auth_user_id, null)}
+                                      >
+                                        {t("muteForever")}
+                                      </ContextMenuItem>
+                                    </>
+                                  ) : null}
+                                </ContextMenuContent>
                               ) : null}
-                            </MessageFooter>
+                            </ContextMenu>
                           </MessageContent>
                         </Message>
                       ))}

@@ -3433,9 +3433,8 @@
     "readOnly": "Read-only — only captains and organizers write here.",
     "muted": "You are muted until {until}",
     "mutedIndefinite": "You are muted until an organizer lifts it",
-    "deleteLabel": "Delete the message from {name}",
+    "deleteAction": "Delete message",
     "deleteFailed": "Message not deleted",
-    "muteLabel": "Mute {name}",
     "mute5m": "Mute for 5 minutes",
     "mute1h": "Mute for an hour",
     "muteForever": "Mute until lifted",
@@ -5029,7 +5028,8 @@
       "multi_select": "Select several",
       "checkbox": "Checkbox",
       "url": "Link",
-      "date": "Date"
+      "date": "Date",
+      "role_ranks": "Rank per role"
     },
     "field": {
       "builtinCopyHint": "This question is built in: its wording, its input and its validation are the same everywhere, so only the settings below are yours.",

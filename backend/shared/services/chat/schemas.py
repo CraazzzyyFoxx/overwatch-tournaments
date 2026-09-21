@@ -36,6 +36,11 @@ class ChatMessageRead(BaseModel):
     author_name: str
     author_role: str
     body: str
+    #: The author's avatar AS IT IS NOW, unlike ``author_name``, which is the
+    #: snapshot taken when the message was sent. A name is part of what was
+    #: said and has to stay readable as it was; a face is just the account's
+    #: current one, so it is resolved on read and costs no column.
+    author_avatar_url: str | None = None
 
 
 class ChatSettings(BaseModel):

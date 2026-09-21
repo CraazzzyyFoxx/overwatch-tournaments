@@ -216,12 +216,26 @@ describe("room chat", () => {
     deleteMessage.mockResolvedValue(undefined);
     await render();
 
-    const label = CHAT.deleteLabel.replace("{name}", "Fox");
-    const button = container.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`);
-    expect(button).not.toBeNull();
+    // Moderation lives behind the message's context menu, so the bubble is the
+    // trigger — no per-message buttons to find.
+    const bubble = container.querySelector<HTMLElement>('[data-slot="bubble"]');
+    expect(bubble?.textContent).toContain("ready?");
 
     await act(async () => {
-      button?.click();
+      bubble?.dispatchEvent(
+        new MouseEvent("contextmenu", { bubbles: true, cancelable: true, button: 2 })
+      );
+    });
+    await settle();
+
+    // The menu is portalled, so it is the document that holds it, not the panel.
+    const item = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
+      (node) => node.textContent?.trim() === CHAT.deleteAction
+    );
+    expect(item).toBeDefined();
+
+    await act(async () => {
+      item?.click();
     });
     await settle();
 

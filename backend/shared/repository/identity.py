@@ -7,7 +7,7 @@ never commit, never raise HTTP errors, and never make policy decisions.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from datetime import datetime, timedelta
 from typing import Any, ClassVar
 from uuid import UUID
@@ -427,6 +427,24 @@ class AuthUserRepository(BaseRepository[models.AuthUser]):
 
     async def get_with_roles(self, session: AsyncSession, user_id: int) -> models.AuthUser | None:
         return await self.get(session, user_id, options=[selectinload(models.AuthUser.roles)])
+
+    async def avatar_urls(
+        self,
+        session: AsyncSession,
+        auth_user_ids: Collection[int],
+    ) -> dict[int, str | None]:
+        """Current avatars for a set of accounts — two columns, one round trip.
+
+        For rendering faces beside names that are already in hand (a chat
+        transcript, a presence list), where loading whole ``AuthUser`` rows
+        would pull roles, tokens and e-mail addresses nobody asked for.
+        """
+        if not auth_user_ids:
+            return {}
+        rows = await session.execute(
+            sa.select(models.AuthUser.id, models.AuthUser.avatar_url).where(models.AuthUser.id.in_(set(auth_user_ids)))
+        )
+        return {row.id: row.avatar_url for row in rows}
 
     async def email_or_username_taken(self, session: AsyncSession, *, email: str, username: str) -> bool:
         """One query for both registration collisions.
