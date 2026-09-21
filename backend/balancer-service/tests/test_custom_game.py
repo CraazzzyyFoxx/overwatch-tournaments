@@ -31,7 +31,6 @@ from src.services.custom_game import _MAX_CO_HOSTS, CustomGameService  # noqa: E
 def _session() -> MagicMock:
     session = MagicMock()
     session.flush = AsyncMock()
-    session.delete = AsyncMock()
     return session
 
 
@@ -202,6 +201,10 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
         # shape and records matches without touching any rank.
         self.host_prefs = MagicMock()
         self.host_prefs.get_by_user = AsyncMock(return_value=None)
+        # The map catalogue: every id resolves unless a test says otherwise.
+        self.maps = MagicMock()
+        self.maps.get = AsyncMock(return_value=None)
+        self.casual_matches.delete = AsyncMock()
         self.roster.list_for_game = AsyncMock(return_value=[])
         self.roster.delete_for_game = AsyncMock()
         self.roster.get_by = AsyncMock(return_value=None)
@@ -244,6 +247,7 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
             casual_matches=self.casual_matches,
             casual_teams=self.casual_teams,
             casual_players=self.casual_players,
+            maps=self.maps,
             host_prefs=self.host_prefs,
             ranks=self.ranks,
             load_roster=self.load_roster,
@@ -981,7 +985,7 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
             ]
         }
         self.games.get.return_value = _game(status="balanced", balance_result_json=result)
-        self.session.get = AsyncMock(return_value=_row(id=42, name="King's Row"))
+        self.maps.get = AsyncMock(return_value=_row(id=42, name="King's Row"))
 
         await self.service.record_outcome(
             self.session,
@@ -1037,7 +1041,7 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
         }
         game = _game(status="balanced", balance_result_json=result, next_map_id=42)
         self.games.get.return_value = game
-        self.session.get = AsyncMock(return_value=_row(id=5, name="Busan"))
+        self.maps.get = AsyncMock(return_value=_row(id=5, name="Busan"))
 
         await self.service.record_outcome(
             self.session,
@@ -1063,7 +1067,7 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
             config_json=None,
             balance_result_json={"variants": [{"teams": []}]},
         )
-        self.session.get = AsyncMock(return_value=None)
+        self.maps.get = AsyncMock(return_value=None)
 
         with self.assertRaises(HTTPException) as ctx:
             await self.service.record_outcome(
@@ -1259,7 +1263,7 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
             )
 
         self.assertEqual(ctx.exception.status_code, 404)
-        self.session.delete.assert_not_awaited()
+        self.casual_matches.delete.assert_not_awaited()
 
     async def test_undo_only_applies_to_the_newest_match(self) -> None:
         self.games.get.return_value = _game()
@@ -1273,7 +1277,7 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
 
         self.assertEqual(ctx.exception.status_code, 409)
         self.assertEqual(ctx.exception.detail, "Only the most recent match can be undone")
-        self.session.delete.assert_not_awaited()
+        self.casual_matches.delete.assert_not_awaited()
 
     async def test_undo_reverses_the_points_the_match_stored(self) -> None:
         match = _match(
@@ -1307,7 +1311,7 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
                 (9, 9, (("tank", 2600),)),
             },
         )
-        self.session.delete.assert_awaited_once_with(match)
+        self.casual_matches.delete.assert_awaited_once_with(self.session, match)
 
     async def test_undo_a_draw_deletes_without_touching_ranks(self) -> None:
         match = _match(
@@ -1327,7 +1331,7 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
         )
 
         self.ranks.set_ranks.assert_not_awaited()
-        self.session.delete.assert_awaited_once_with(match)
+        self.casual_matches.delete.assert_awaited_once_with(self.session, match)
 
     async def test_list_matches_returns_the_recorded_history(self) -> None:
         self.games.get.return_value = _game()
@@ -1405,7 +1409,7 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
 
     async def test_set_next_map_stores_a_catalogue_map(self) -> None:
         self.games.get.return_value = _game()
-        self.session.get = AsyncMock(return_value=_row(id=42, name="King's Row"))
+        self.maps.get = AsyncMock(return_value=_row(id=42, name="King's Row"))
 
         game = await self.service.set_next_map(
             self.session, workspace_id=1, custom_game_id=11, map_id=42, actor_user_id=9
@@ -1415,7 +1419,7 @@ class CustomGameServiceTests(IsolatedAsyncioTestCase):
 
     async def test_set_next_map_unknown_map_404(self) -> None:
         self.games.get.return_value = _game()
-        self.session.get = AsyncMock(return_value=None)
+        self.maps.get = AsyncMock(return_value=None)
 
         with self.assertRaises(HTTPException) as ctx:
             await self.service.set_next_map(

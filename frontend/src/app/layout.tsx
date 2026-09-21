@@ -47,7 +47,7 @@ import { resolveTenantWorkspace } from "@/lib/tenant-host";
 import { COOKIE_CONSENT_COOKIE } from "@/lib/cookie-consent";
 import { GA_ID, YM_ID } from "@/config/site";
 import CookieConsent from "@/components/CookieConsent";
-import { NextIntlClientProvider } from "next-intl";
+import ZoneIntlProvider from "@/i18n/ZoneIntlProvider";
 import { getLocale } from "next-intl/server";
 import { cookies } from "next/headers";
 
@@ -99,7 +99,7 @@ export default async function RootLayout({
     // every display surface silently falls back to Inter.
     <html lang={locale} className={cn(inter.variable, onest.variable)}>
       <body className={cn(inter.className, "dark")}>
-        <NextIntlClientProvider>
+        <ZoneIntlProvider zone="root">
           <Providers>
             <Suspense fallback={null}>
               <LoginModalTrigger />
@@ -112,7 +112,7 @@ export default async function RootLayout({
             <Toaster />
             {children}
           </Providers>
-        </NextIntlClientProvider>
+        </ZoneIntlProvider>
       </body>
     </html>
   );

@@ -152,6 +152,10 @@ class MappingPreviewFieldError(BaseModel):
     column: str | None = None
     message: str
     row_index: int | None = None
+    #: Stable ``ErrorCode`` for the answer-validation failures the sync reports
+    #: per row (``invalid_format``, ``invalid_option``, ``unknown_field``, …).
+    #: ``None`` for a parser/coercion error, which has no code to give.
+    code: str | None = None
 
 
 class MappingValidationError(BaseModel):
@@ -426,14 +430,11 @@ class BalancerRegistrationRead(BaseRead):
     battle_tag_normalized: str | None = None
     source: RegistrationSource
     source_record_key: str | None = None
-    smurf_tags_json: list[str] = Field(default_factory=list)
-    discord_nick: str | None = None
-    twitch_nick: str | None = None
-    boosty_nick: str | None = None
-    stream_pov: bool = False
-    notes: str | None = None
+    #: Every answer the registration carries, flat and UNFILTERED -- the admin
+    #: table is the organizer context, so ``organizer_notes`` and
+    #: organizers-only custom questions are part of it.
+    answers: dict[str, Any] = Field(default_factory=dict)
     admin_notes: str | None = None
-    custom_fields_json: dict[str, Any] | None = None
     is_flex: bool = False
     status: RegistrationStatus
     balancer_status: BalancerStatus = "not_in_balancer"
@@ -478,17 +479,14 @@ class BalancerRegistrationRead(BaseRead):
 
 class BalancerRegistrationCreateRequest(BaseModel):
     display_name: str | None = None
-    battle_tag: str | None = None
-    smurf_tags_json: list[str] | None = None
-    discord_nick: str | None = None
-    twitch_nick: str | None = None
-    boosty_nick: str | None = None
-    stream_pov: bool = False
-    notes: str | None = None
     admin_notes: str | None = None
-    # Answers to the tournament's custom field definitions, keyed by definition
-    # key — the same shape the public ``RegistrationCreate.custom_fields`` sends.
-    custom_fields_json: dict[str, Any] | None = None
+    #: Answers to the tournament's questions, keyed by field key -- the same flat
+    #: document the public form submits. Validated against the form's current
+    #: schema with requirements OFF: an organizer enters what they know.
+    #:
+    #: When ``answers["roles"]`` and ``roles`` are both sent, ``roles`` WINS: only
+    #: the admin rows can carry ``rank_value``/``is_active``.
+    answers: dict[str, Any] = Field(default_factory=dict)
     # Review state chosen in the admin editor. ``None`` keeps the historical
     # "manual rows land approved" default.
     status: RegistrationStatus | None = None
@@ -501,15 +499,12 @@ class BalancerRegistrationCreateRequest(BaseModel):
 
 class BalancerRegistrationUpdateRequest(BaseModel):
     display_name: str | None = None
-    battle_tag: str | None = None
-    smurf_tags_json: list[str] | None = None
-    discord_nick: str | None = None
-    twitch_nick: str | None = None
-    boosty_nick: str | None = None
-    stream_pov: bool | None = None
-    notes: str | None = None
     admin_notes: str | None = None
-    custom_fields_json: dict[str, Any] | None = None
+    #: Partial: only the keys present are validated and written. A key present
+    #: and BLANK clears its answer, which is how the editor empties a question.
+    #:
+    #: When ``answers["roles"]`` and ``roles`` are both sent, ``roles`` WINS.
+    answers: dict[str, Any] = Field(default_factory=dict)
     status: RegistrationStatus | None = None
     balancer_status: BalancerStatus | None = None
     roles: list[BalancerRegistrationRoleInput] | None = None

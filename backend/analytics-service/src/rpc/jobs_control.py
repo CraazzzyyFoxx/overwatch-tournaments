@@ -13,7 +13,7 @@ Auth mirrors the routes: create_job / recalculate / points gate per
 superuser); the deprecated train/infer use a global ``analytics.update``.
 On top of the permission gate, every workspace-scoped GPU job (``kind=compute``
 and the deprecated train/infer) also requires the workspace to be verified or
-trusted — see ``shared.services.workspace_tier``: self-service workspaces start
+trusted — see ``shared.domain.workspace_tier``: self-service workspaces start
 ``unverified`` and must not burn GPU time (403 ``workspace_not_verified``).
 """
 
@@ -25,6 +25,7 @@ from faststream.rabbit.annotations import RabbitMessage
 
 from shared import quota
 from shared.core.errors import BaseAPIException as HTTPException
+from shared.domain.workspace_tier import is_verified_or_trusted
 from shared.jobs import JobConflict
 from shared.messaging.config import (
     ANALYTICS_INFER_QUEUE,
@@ -38,7 +39,6 @@ from shared.schemas.events import (
     AnalyticsJobRequested,
     AnalyticsTrainRequest,
 )
-from shared.services.workspace_tier import is_verified_or_trusted
 from src.core import config, db
 from src.core.jobs import JOB_KIND_COMPUTE, JOB_KIND_TRAIN_ML, create_analytics_job, job_runtime
 from src.schemas.ml import (

@@ -49,7 +49,7 @@ from shared.services.notifications import notify
 from shared.services.realtime import Resource, Scope, emit
 from shared.services.roster_shape_access import get_tournament_roster_slots, get_workspace_roster_slots
 from src import models
-from src.schemas.registration import RegistrationCreate, RegistrationRead
+from src.schemas.registration import RegistrationRead, RegistrationSubmit
 from src.schemas.registration_team import (
     RegistrationFreeAgentRead,
     RegistrationTeamInviteHistoryEntry,
@@ -310,11 +310,15 @@ class RegistrationTeamService:
 
     async def _roster_members(self, session: AsyncSession, team_id: int) -> list[models.BalancerRegistration]:
         result = await session.scalars(
-            self.registration_repo.select().where(
+            self.registration_repo.select()
+            .where(
                 models.BalancerRegistration.registration_team_id == team_id,
                 models.BalancerRegistration.deleted_at.is_(None),
                 models.BalancerRegistration.status.notin_(_SLOT_RELEASING_STATUSES),
             )
+            # The team eligibility rules read each member's Discord handle off
+            # the identity rows, never lazy-loadable in async code.
+            .options(selectinload(models.BalancerRegistration.identities))
         )
         return list(result)
 
@@ -366,7 +370,7 @@ class RegistrationTeamService:
         auth_user: models.AuthUser,
         name: str,
         slot_code: str,
-        body: RegistrationCreate,
+        body: RegistrationSubmit,
     ) -> tuple[models.BalancerRegistrationTeam, RegistrationRead]:
         """Register a new team, with the caller as captain occupying one slot.
 
@@ -1003,7 +1007,7 @@ class RegistrationTeamService:
         session: AsyncSession,
         *,
         auth_user: models.AuthUser,
-        body: RegistrationCreate,
+        body: RegistrationSubmit | None,
         token: str | None = None,
         invite_id: int | None = None,
     ) -> tuple[models.BalancerRegistrationTeam, int]:
@@ -1602,9 +1606,9 @@ class RegistrationTeamService:
             from src.core.broker import optional_broker
             from src.core.config import settings
             from src.schemas.registration_team import TeamEligibilityIssueRead
-            from src.services.registration.team_eligibility import evaluate_team_eligibility
+            from src.services.registration.team_eligibility import team_eligibility
 
-            raw_issues = await evaluate_team_eligibility(
+            raw_issues = await team_eligibility.evaluate(
                 session,
                 team,
                 roster,

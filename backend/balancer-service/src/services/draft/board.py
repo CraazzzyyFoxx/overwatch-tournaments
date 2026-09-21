@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.models.balancer.draft import DraftSession
 from shared.models.platform.realtime import WorkspaceEvent
-from shared.models.registration.registration import BalancerRegistrationForm
+from shared.models.registration.registration import BalancerRegistrationForm, BalancerRegistrationFormVersion
 from shared.repository.draft import (
     DraftPickRepository,
     DraftPlayerRepository,
@@ -54,7 +54,8 @@ def player_custom_fields(
 
     ``answers`` is the registration's own ``custom_fields_json``, read live --
     the draft no longer keeps a copy, so which answers a spectator may see is
-    decided by the CURRENT form (``show_in_draft``) against the CURRENT answers.
+    decided by the CURRENT form schema (``show_in_draft``) against the CURRENT
+    answers.
     Unanswered fields are dropped rather than rendered empty: the inspector is a
     pick aid, and a column of dashes is noise there (unlike the admin table).
     """
@@ -93,35 +94,50 @@ class DraftBoardService:
         return await self.sessions_repo.get_latest_for_tournament(session, tournament_id)
 
     async def visible_custom_fields(self, session: AsyncSession, tournament_id: int) -> list[VisibleCustomField]:
-        """The tournament's ``show_in_draft`` custom-field definitions, in form order.
+        """The tournament's ``show_in_draft`` custom questions, in schema order.
 
         Resolved on every board build rather than frozen at seed time, so flipping a
         field's visibility (or renaming its label) shows up in a running draft. The
-        definitions are read as raw JSON — balancer-service owns no copy of
-        tournament-service's ``CustomFieldDefinition`` — so anything malformed is
-        skipped instead of breaking the snapshot.
+        schema is read as raw JSON — balancer-service owns no copy of
+        tournament-service's ``FormSchema`` — so anything malformed is skipped
+        instead of breaking the snapshot.
+
+        ``show_in_draft`` alone is not the gate: the schema forbids it on an
+        organizers-only field, but a form saved before that rule (or by a future
+        writer) must not leak one onto the public board, so visibility is checked
+        here too.
         """
         raw = await session.scalar(
-            sa.select(BalancerRegistrationForm.custom_fields_json).where(
-                BalancerRegistrationForm.tournament_id == tournament_id
+            sa.select(BalancerRegistrationFormVersion.schema_json)
+            .join(
+                BalancerRegistrationForm,
+                BalancerRegistrationForm.current_version_id == BalancerRegistrationFormVersion.id,
             )
+            .where(BalancerRegistrationForm.tournament_id == tournament_id)
         )
         fields: list[VisibleCustomField] = []
-        for definition in raw or []:
-            if not isinstance(definition, dict) or definition.get("show_in_draft") is not True:
+        for section in (raw or {}).get("sections") or []:
+            if not isinstance(section, dict):
                 continue
-            key = definition.get("key")
-            if not isinstance(key, str) or not key:
-                continue
-            label = definition.get("label")
-            field_type = definition.get("type")
-            fields.append(
-                VisibleCustomField(
-                    key=key,
-                    label=label if isinstance(label, str) and label else key,
-                    type=field_type if isinstance(field_type, str) and field_type else "text",
+            for definition in section.get("fields") or []:
+                if not isinstance(definition, dict):
+                    continue
+                kind = definition.get("kind")
+                if kind == "builtin" or definition.get("show_in_draft") is not True:
+                    continue
+                if definition.get("visibility") != "public":
+                    continue
+                key = definition.get("key")
+                if not isinstance(key, str) or not key:
+                    continue
+                label = definition.get("label")
+                fields.append(
+                    VisibleCustomField(
+                        key=key,
+                        label=label if isinstance(label, str) and label else key,
+                        type=kind if isinstance(kind, str) and kind else "text",
+                    )
                 )
-            )
         return fields
 
     async def session_read(self, session: AsyncSession, draft_session: DraftSession) -> schemas.DraftSessionRead:

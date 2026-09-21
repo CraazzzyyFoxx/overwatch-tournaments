@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.repository import SettingsRepository
 from shared.schemas.settings import SETTINGS_SCHEMAS
-from shared.services import settings_provider
+from shared.services.settings_provider import settings_provider
 from src import models
 from src.core import errors
 

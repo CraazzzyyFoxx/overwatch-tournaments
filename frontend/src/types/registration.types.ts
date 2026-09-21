@@ -1,45 +1,5 @@
+import type { Answers, FormSchema } from "@/types/forms.types";
 import type { DivisionGridVersion } from "@/types/workspace.types";
-
-export interface CustomFieldDefinition {
-  key: string;
-  label: string;
-  type: "text" | "number" | "select" | "checkbox" | "url";
-  required: boolean;
-  placeholder: string | null;
-  options: string[] | null;
-  validation?: FieldValidationConfig | null;
-  /**
-   * Surface this answer in the live draft's player inspector. Off by default:
-   * the draft board is public, so exposing an answer is an explicit choice.
-   */
-  show_in_draft?: boolean;
-}
-
-export interface FieldValidationConfig {
-  regex?: string | null;
-  error_message?: string | null;
-}
-
-export interface BuiltInFieldConfig {
-  enabled: boolean;
-  required: boolean;
-  subroles?: Record<string, string[]>;
-  validation?: FieldValidationConfig | null;
-  /** `top_heroes` field only: max heroes selectable per role (default 5). */
-  max_heroes?: number | null;
-  /**
-   * Identity fields (battle_tag/discord_nick/twitch_nick) only: when true the
-   * submitted handle must match one of the registrant's OAuth-verified social
-   * accounts for the field's provider. Implies the field is required.
-   */
-  require_verified?: boolean;
-  /**
-   * `flex_role` field only. "forced" is a tournament where role does not
-   * matter: the role step hides priorities and every role is submitted as
-   * primary. Absent/null == "optional".
-   */
-  mode?: "optional" | "all_roles" | "forced" | null;
-}
 
 export interface SubroleOption {
   slug: string;
@@ -271,8 +231,19 @@ export interface RegistrationForm {
    *  longer lives on the form. The check-in dialog renders it, so it stays on
    *  the read model. */
   subscription_requirement_json?: SubscriptionRequirement;
-  built_in_fields: Record<string, BuiltInFieldConfig>;
-  custom_fields: CustomFieldDefinition[];
+  /** The questions this tournament asks, in render order. The ONE source of
+   *  what a registration holds: builtins and custom questions are fields of the
+   *  same schema, and every answer is filed under a field key. */
+  form_schema: FormSchema;
+  /** The version `form_schema` was read from. Echoed back on submit so the
+   *  server can refuse an answer written against a schema that has since
+   *  changed (`form_version_stale`). */
+  version_id: number;
+  /** Human-facing counter, bumped on every schema change. */
+  version_number: number;
+  /** Registrations still filed against an older version. Organizer reads only —
+   *  a public read sends `null`. */
+  stale_registrations?: number | null;
   subrole_catalog?: SubroleCatalog;
 }
 
@@ -307,15 +278,20 @@ export interface Registration {
   tournament_id: number;
   workspace_id: number;
   user_id: number | null;
+  /** Stays top-level: it is a column, the roster's identity, and the key the
+   *  Google-Sheets feed matches on. */
   battle_tag: string | null;
-  smurf_tags_json: string[] | null;
-  discord_nick: string | null;
-  twitch_nick: string | null;
-  boosty_nick?: string | null;
-  stream_pov: boolean;
+  /** Stays top-level: normalized rows with ranks and heroes, not a JSON answer. */
   roles: RegistrationRole[];
-  notes: string | null;
-  custom_fields_json: Record<string, unknown> | null;
+  /** Every other answer, keyed by field key. `organizers`-only fields are
+   *  stripped from a public read, so a key being absent means "not asked, not
+   *  answered, or not yours to see" — never "empty". */
+  answers: Answers;
+  /** The schema version these answers were written against. */
+  form_version_id: number | null;
+  /** True when the form has moved on since: the organizer sees a badge, the
+   *  player is asked to review their answers. */
+  form_version_stale: boolean;
   status: RegistrationStatus;
   status_meta?: StatusMeta;
   balancer_status?: BalancerStatus;
@@ -389,28 +365,17 @@ export interface RoleInput {
   top_heroes?: string[];
 }
 
-export interface RegistrationCreateInput {
-  battle_tag?: string;
-  smurf_tags?: string[];
-  discord_nick?: string;
-  twitch_nick?: string;
-  boosty_nick?: string;
-  roles?: RoleInput[];
-  stream_pov?: boolean;
-  notes?: string;
-  custom_fields?: Record<string, unknown>;
-}
-
-export interface RegistrationUpdateInput {
-  battle_tag?: string;
-  discord_nick?: string;
-  twitch_nick?: string;
-  boosty_nick?: string;
-  /* No `primary_role`: the column is long gone (roles are normalized rows now)
-     and the server had nowhere to write it. */
-  stream_pov?: boolean;
-  notes?: string;
-  custom_fields?: Record<string, unknown>;
+/**
+ * The whole write payload, for both the first submission and every edit.
+ *
+ * There is nothing else on the wire: the server rejects unknown keys outright,
+ * so a stale client sending `battle_tag` at the top level is refused rather
+ * than silently half-applied. `form_version_id` is the version the answers were
+ * written against; a schema change since then is a 409 `form_version_stale`.
+ */
+export interface RegistrationSubmitInput {
+  form_version_id: number;
+  answers: Answers;
 }
 
 /**

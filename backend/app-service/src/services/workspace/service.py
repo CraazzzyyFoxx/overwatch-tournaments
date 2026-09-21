@@ -8,6 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.core.errors import BaseAPIException as HTTPException
+from shared.domain.workspace_tier import is_verified_or_trusted
 from shared.messaging.rpc import request_rpc
 from shared.models.identity.auth_user import AuthUser
 from shared.rbac import (
@@ -29,8 +30,7 @@ from shared.repository import (
 )
 from shared.services.audit import record_audit
 from shared.services.division_grid.access import get_default_division_grid_version_id
-from shared.services.settings_provider import get_workspace_creation_config
-from shared.services.workspace_tier import is_verified_or_trusted
+from shared.services.settings_provider import settings_provider
 from shared.tenancy.hostnames import RESERVED_SUBDOMAINS, normalize_custom_domain
 from src import models
 
@@ -568,7 +568,7 @@ class WorkspaceService:
         if user.is_superuser:
             return
         await session.scalar(sa.select(AuthUser.id).where(AuthUser.id == user.id).with_for_update())
-        limit = (await get_workspace_creation_config(session)).max_owned_per_user
+        limit = (await settings_provider.get_workspace_creation_config(session)).max_owned_per_user
         if await self.workspace_repo.count_by_owner(session, owner_id=user.id) >= limit:
             raise HTTPException(status_code=403, detail=detail)
 

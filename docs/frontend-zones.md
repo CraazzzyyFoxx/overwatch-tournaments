@@ -107,22 +107,40 @@ things in this codebase are single-instance today and would need an owner first:
 `messages` prop it serialises the **entire** tree. Every anonymous visitor was therefore
 downloading the admin draft console's strings, the quota editor's, and the registration form
 builder's. Two namespaces (`mapVeto`, `mapVetoAdmin`, 9 kB of `ru`) turned out to be read by
-nothing at all and are gone; `src/i18n/request.ts` ships one zone's slice of the rest:
+nothing at all and are gone; each zone ships its own slice of the rest:
 
 | Zone | Namespaces | Compact `en` | Compact `ru` |
 | --- | --- | --- | --- |
-| full tree | 47 | 195 kB | 207 kB |
-| `web` | 38 | 155 kB | 164 kB (−21%) |
-| `admin` | 38 | 171 kB | 181 kB (−12%) |
-| `tools` | 31 | 128 kB | 136 kB (−34%) |
+| full tree | 49 | 201 kB | 213 kB |
+| `root` | 21 | 89 kB | 94 kB (−56%) |
+| `web` | 40 | 158 kB | 167 kB (−22%) |
+| `admin` | 40 | 178 kB | 188 kB (−12%) |
+| `tools` | 32 | 130 kB | 138 kB (−35%) |
 
-The zone arrives as `x-owt-zone`, set by `src/middleware.ts` (the request config cannot see the
-pathname) and stripped at the edge like the rest of the family.
+**The bundle is mounted by the layout that owns the zone**, not chosen from the request path.
+`src/i18n/ZoneIntlProvider.tsx` takes a zone and hands that slice to the client; `app/layout.tsx`
+mounts `root` for the chrome it renders outside `{children}` (auth modal, account settings,
+cookie notice, toaster) and `app/(site)`, `app/admin`, `app/balancer` and `app/draft` each mount
+their own inside it. Rule Z5 of the gate checks that every zone does.
+
+This is not a style preference. A client-side navigation re-renders only the segments below the
+deepest *shared* layout, so the first version — one provider in the root layout, fed by an
+`x-owt-zone` header the middleware set from the pathname — kept whatever bundle the first page
+load picked, for the life of the tab. Clicking through from a tournament page to its draft room
+rendered 20 raw `draftRedesign.*` keys, because the root layout never re-rendered and the tab
+was still holding the `web` bundle. A zone's own layout re-renders exactly when its zone is
+entered, which is exactly when the bundle must change. `src/i18n/request.ts` now returns the
+whole tree: server rendering pays no payload for a message it does not render, and narrowing
+where it is *observable* is what the split needed all along.
+
+Because `use-intl`'s `IntlProvider` replaces `messages` rather than merging with the parent,
+every zone bundle is generated as a superset of `root`.
 
 `src/i18n/zone-namespaces.json` is **generated**: `bun run lint:zones --write-i18n` walks the
 import graph from each zone's route entries and collects every namespace any reachable module
 could address. Rule Z4 of the gate recomputes it and fails on drift, so the map cannot rot as
-code moves.
+code moves. A directory import (`@/components/data-table` → `…/index`) resolves to its index
+file; before it did, the edge dangled and 29 modules behind it were invisible to Z4.
 
 The collection is deliberately over-inclusive. The dominant call-site idiom is a bare
 `useTranslations()` plus absolute dotted keys — `t("users.profile.title")` — and some of those

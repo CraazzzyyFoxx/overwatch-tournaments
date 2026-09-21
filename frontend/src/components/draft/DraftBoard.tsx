@@ -9,6 +9,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { HeroFrame } from "@/components/site/PageHero";
 import { Button } from "@/components/ui/button";
 import { DraftBoardSkeleton } from "@/components/draft/DraftRoomSkeleton";
+import { RoomChat } from "@/components/chat/RoomChat";
 import { shouldShowInitialDraftSkeleton } from "@/components/draft/draft-loading-state";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
 import { useDivisionGrid } from "@/hooks/useCurrentWorkspace";
@@ -22,6 +23,7 @@ import {
   useDraftRealtime
 } from "@/hooks/useDraftData";
 import { computeGating } from "@/lib/draft-logic";
+import { draftChatRoom } from "@/lib/chat-rooms";
 import { parseDraftViewParams, type DraftViewParams } from "@/lib/draft-workspace-model";
 import { CaptainDraftWorkspace } from "./CaptainDraftWorkspace";
 import { DraftPageHero } from "./DraftPageHero";
@@ -152,6 +154,10 @@ export function DraftBoard({ tournament }: Readonly<DraftBoardProps>) {
           onlineCaptainIds={onlineCaptainIds}
         />
       )}
+      {/* Docked over the page, not a column of the board: the board wants
+          every pixel of width it can get. Keyed by the SESSION — a re-seed is
+          a different draft and deserves its own conversation. */}
+      <RoomChat room={draftChatRoom(board.session.id)} />
     </div>
   );
 }

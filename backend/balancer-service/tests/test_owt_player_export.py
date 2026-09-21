@@ -273,10 +273,10 @@ def test_private_answers_are_withheld_unless_asked_for() -> None:
     roster = _roster(
         5,
         (_role(HeroClass.tank, 3100),),
-        notes="prefers off-tank",
+        public_notes="prefers off-tank",
         admin_notes="banned last season",
         custom_fields={"shirt": "L"},
-        discord_nick="player#0001",
+        identities={"discord": "player#0001"},
         smurf_tags=("alt#1111",),
     )
     kwargs = {"shape": parse_roster_slots(ROLE_MASK), "flex_role_mode": "optional"}
@@ -286,7 +286,7 @@ def test_private_answers_are_withheld_unless_asked_for() -> None:
 
     assert "private" not in public
     assert private["private"]["admin_notes"] == "banned last season"
-    assert private["private"]["notes"] == "prefers off-tank"
+    assert private["private"]["public_notes"] == "prefers off-tank"
     assert private["private"]["custom_fields"] == {"shirt": "L"}
-    assert private["private"]["discord_nick"] == "player#0001"
+    assert private["private"]["identities"] == {"discord": "player#0001"}
     assert private["private"]["smurf_tags"] == ["alt#1111"]

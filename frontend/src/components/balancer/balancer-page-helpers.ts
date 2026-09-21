@@ -6,6 +6,7 @@ import type {
 } from "@/types/balancer-admin.types";
 import type { PlayerValidationIssue } from "@/components/balancer/workspace-helpers";
 import { getActiveRoleEntries } from "@/components/balancer/workspace-helpers";
+import { answerList } from "@/lib/forms/answers";
 
 export type { PlayerValidationIssue };
 
@@ -65,13 +66,13 @@ export function getPoolDropPatch(targetLane: PoolLane): PoolDropPatch {
 }
 
 export function getRegistrationBattleTags(
-  registration: Pick<AdminRegistration, "battle_tag" | "smurf_tags_json"> | null | undefined,
+  registration: Pick<AdminRegistration, "battle_tag" | "answers"> | null | undefined,
   fallbackBattleTag: string
 ): string[] {
   const seen = new Set<string>();
   const tags = [
     registration?.battle_tag ?? fallbackBattleTag,
-    ...(registration?.smurf_tags_json ?? [])
+    ...(registration ? answerList(registration.answers, "smurf_tags") : [])
   ]
     .map((tag) => tag?.trim())
     .filter((tag): tag is string => Boolean(tag));

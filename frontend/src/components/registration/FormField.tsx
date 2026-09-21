@@ -102,7 +102,7 @@ export default function FormField({
   );
 
   return (
-    <div className={cn("space-y-1.5", containerClassName)}>
+    <div className={cn("space-y-2", containerClassName)}>
       <FieldLabel label={label} htmlFor={id} required={required} icon={icon} />
       {beforeControl}
       {endAdornment ? (

@@ -1,6 +1,6 @@
 -- Anak Tournaments — PostgreSQL DDL compiled from SQLAlchemy metadata.
 -- Open in any SQL editor (DataGrip, DBeaver, VS Code).
--- Tables: 131
+-- Tables: 137
 -- Source of truth is backend/shared/models. Regenerate: python scripts/export_db_schema.py
 
 CREATE SCHEMA IF NOT EXISTS achievements;
@@ -890,11 +890,10 @@ CREATE TABLE balancer.registration (
 	battle_tag VARCHAR(255), 
 	battle_tag_normalized VARCHAR(255), 
 	smurf_tags_json JSON, 
-	discord_nick VARCHAR(255), 
-	twitch_nick VARCHAR(255), 
-	boosty_nick VARCHAR(255), 
 	stream_pov BOOLEAN DEFAULT 'false' NOT NULL, 
-	notes TEXT, 
+	form_version_id BIGINT, 
+	public_notes TEXT, 
+	organizer_notes TEXT, 
 	exclude_reason VARCHAR(64), 
 	admin_notes TEXT, 
 	custom_fields_json JSON, 
@@ -916,11 +915,14 @@ CREATE TABLE balancer.registration (
 	PRIMARY KEY (id), 
 	FOREIGN KEY(tournament_id) REFERENCES tournament.tournament (id) ON DELETE CASCADE, 
 	FOREIGN KEY(workspace_member_id) REFERENCES workspace_member (id) ON DELETE SET NULL, 
+	FOREIGN KEY(form_version_id) REFERENCES balancer.registration_form_version (id) ON DELETE SET NULL, 
 	FOREIGN KEY(checked_in_by) REFERENCES auth."user" (id) ON DELETE SET NULL, 
 	FOREIGN KEY(reviewed_by) REFERENCES auth."user" (id) ON DELETE SET NULL, 
 	FOREIGN KEY(deleted_by) REFERENCES auth."user" (id) ON DELETE SET NULL, 
 	FOREIGN KEY(registration_team_id) REFERENCES balancer.registration_team (id) ON DELETE SET NULL
 );
+
+CREATE INDEX ix_balancer_registration_form_version_id ON balancer.registration (form_version_id);
 
 CREATE INDEX ix_balancer_registration_registration_team_id ON balancer.registration (registration_team_id);
 
@@ -942,8 +944,7 @@ CREATE TABLE balancer.registration_form (
 	workspace_id BIGINT NOT NULL, 
 	is_open BOOLEAN DEFAULT 'false' NOT NULL, 
 	auto_approve BOOLEAN DEFAULT 'false' NOT NULL, 
-	built_in_fields_json JSON DEFAULT '{}' NOT NULL, 
-	custom_fields_json JSON DEFAULT '[]' NOT NULL, 
+	current_version_id BIGINT, 
 	require_open_profile BOOLEAN DEFAULT 'false' NOT NULL, 
 	open_profile_scope VARCHAR(8) DEFAULT 'main' NOT NULL, 
 	show_ranks BOOLEAN DEFAULT 'false' NOT NULL, 
@@ -961,12 +962,46 @@ CREATE TABLE balancer.registration_form (
 	PRIMARY KEY (id), 
 	CONSTRAINT uq_balancer_registration_form_tournament UNIQUE (tournament_id), 
 	FOREIGN KEY(tournament_id) REFERENCES tournament.tournament (id) ON DELETE CASCADE, 
-	FOREIGN KEY(workspace_id) REFERENCES workspace (id) ON DELETE CASCADE
+	FOREIGN KEY(workspace_id) REFERENCES workspace (id) ON DELETE CASCADE, 
+	FOREIGN KEY(current_version_id) REFERENCES balancer.registration_form_version (id) ON DELETE SET NULL
 );
 
 CREATE INDEX ix_balancer_registration_form_tournament_id ON balancer.registration_form (tournament_id);
 
 CREATE INDEX ix_balancer_registration_form_workspace_id ON balancer.registration_form (workspace_id);
+
+CREATE TABLE balancer.registration_form_template (
+	id BIGSERIAL NOT NULL, 
+	created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
+	updated_at TIMESTAMP WITH TIME ZONE, 
+	workspace_id BIGINT NOT NULL, 
+	name VARCHAR(64) NOT NULL, 
+	schema_json JSON NOT NULL, 
+	created_by BIGINT, 
+	PRIMARY KEY (id), 
+	FOREIGN KEY(workspace_id) REFERENCES workspace (id) ON DELETE CASCADE, 
+	FOREIGN KEY(created_by) REFERENCES auth."user" (id) ON DELETE SET NULL
+);
+
+CREATE INDEX ix_balancer_registration_form_template_workspace_id ON balancer.registration_form_template (workspace_id);
+
+CREATE UNIQUE INDEX uq_balancer_registration_form_template_name ON balancer.registration_form_template (workspace_id, lower(name));
+
+CREATE TABLE balancer.registration_form_version (
+	id BIGSERIAL NOT NULL, 
+	created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
+	updated_at TIMESTAMP WITH TIME ZONE, 
+	form_id BIGINT NOT NULL, 
+	number INTEGER NOT NULL, 
+	schema_json JSON NOT NULL, 
+	created_by BIGINT, 
+	PRIMARY KEY (id), 
+	CONSTRAINT uq_balancer_registration_form_version_number UNIQUE (form_id, number), 
+	FOREIGN KEY(form_id) REFERENCES balancer.registration_form (id) ON DELETE CASCADE, 
+	FOREIGN KEY(created_by) REFERENCES auth."user" (id) ON DELETE SET NULL
+);
+
+CREATE INDEX ix_balancer_registration_form_version_form_id ON balancer.registration_form_version (form_id);
 
 CREATE TABLE balancer.registration_google_sheet_binding (
 	id BIGSERIAL NOT NULL, 
@@ -1013,6 +1048,23 @@ CREATE TABLE balancer.registration_google_sheet_feed (
 );
 
 CREATE INDEX ix_balancer_registration_google_sheet_feed_tournament_id ON balancer.registration_google_sheet_feed (tournament_id);
+
+CREATE TABLE balancer.registration_identity (
+	id BIGSERIAL NOT NULL, 
+	created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
+	updated_at TIMESTAMP WITH TIME ZONE, 
+	registration_id BIGINT NOT NULL, 
+	provider VARCHAR(32) NOT NULL, 
+	handle VARCHAR(255) NOT NULL, 
+	handle_normalized VARCHAR(255) NOT NULL, 
+	PRIMARY KEY (id), 
+	CONSTRAINT uq_balancer_registration_identity_provider UNIQUE (registration_id, provider), 
+	FOREIGN KEY(registration_id) REFERENCES balancer.registration (id) ON DELETE CASCADE
+);
+
+CREATE INDEX ix_balancer_registration_identity_handle ON balancer.registration_identity (provider, handle_normalized);
+
+CREATE INDEX ix_balancer_registration_identity_registration_id ON balancer.registration_identity (registration_id);
 
 CREATE TABLE balancer.registration_role (
 	id BIGSERIAL NOT NULL, 
@@ -1766,6 +1818,45 @@ CREATE INDEX ix_audit_log_actor_created ON audit_log (actor_auth_user_id, create
 CREATE INDEX ix_audit_log_entity_created ON audit_log (entity_type, entity_id, created_at);
 
 CREATE INDEX ix_audit_log_workspace_created ON audit_log (workspace_id, created_at);
+
+CREATE TABLE chat_message (
+	id BIGSERIAL NOT NULL, 
+	room_kind VARCHAR(16) NOT NULL, 
+	room_ref_id BIGINT NOT NULL, 
+	auth_user_id BIGINT NOT NULL, 
+	author_name TEXT NOT NULL, 
+	author_role VARCHAR(16) NOT NULL, 
+	body TEXT NOT NULL, 
+	created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
+	deleted_at TIMESTAMP WITH TIME ZONE, 
+	deleted_by_auth_user_id BIGINT, 
+	PRIMARY KEY (id)
+);
+
+CREATE INDEX ix_chat_message_author ON chat_message (room_kind, room_ref_id, auth_user_id, id);
+
+CREATE INDEX ix_chat_message_room ON chat_message (room_kind, room_ref_id, id);
+
+CREATE TABLE chat_mute (
+	room_kind VARCHAR(16) NOT NULL, 
+	room_ref_id BIGINT NOT NULL, 
+	auth_user_id BIGINT NOT NULL, 
+	muted_until TIMESTAMP WITH TIME ZONE, 
+	reason TEXT, 
+	created_by_auth_user_id BIGINT NOT NULL, 
+	created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
+	PRIMARY KEY (room_kind, room_ref_id, auth_user_id)
+);
+
+CREATE TABLE chat_room_settings (
+	room_kind VARCHAR(16) NOT NULL, 
+	room_ref_id BIGINT NOT NULL, 
+	spectators_can_read BOOLEAN NOT NULL, 
+	updated_by_auth_user_id BIGINT NOT NULL, 
+	created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL, 
+	updated_at TIMESTAMP WITH TIME ZONE, 
+	PRIMARY KEY (room_kind, room_ref_id)
+);
 
 CREATE TABLE division_grid (
 	id BIGSERIAL NOT NULL, 

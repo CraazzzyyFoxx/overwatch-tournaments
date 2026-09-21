@@ -11,6 +11,8 @@ import importlib
 import os
 import sys
 from pathlib import Path
+from types import SimpleNamespace
+from typing import Any
 from unittest import IsolatedAsyncioTestCase
 from unittest.mock import AsyncMock, patch
 
@@ -23,7 +25,9 @@ sys.path.insert(0, str(backend_root / "tournament-service"))
 os.environ["DEBUG"] = "true"
 
 cache_invalidation = importlib.import_module("src.services.tournament.cache_invalidation")
+form_service_module = importlib.import_module("src.services.registration.form_service")
 
+from shared.domain.forms import FormField, default_schema  # noqa: E402
 from shared.services.realtime import Resource, Scope  # noqa: E402
 
 # Mirrors the prefixes registered by ``src.core.caching.configure_cache()`` in
@@ -91,3 +95,56 @@ class InvalidateTournamentResourcesTests(IsolatedAsyncioTestCase):
         # end-to-end one: cashews itself must accept every pattern the whole
         # tournament vocabulary produces, in a single union.
         await cache_invalidation.invalidate_tournament_resources(Scope.tournament(42), _ALL_TOURNAMENT_RESOURCES)
+
+
+class _FakeSession:
+    """Only what ``save_schema`` touches: the version-number read, flush, commit."""
+
+    async def execute(self, _statement: Any) -> Any:
+        return SimpleNamespace(scalar_one_or_none=lambda: 1)
+
+    async def flush(self) -> None:
+        return None
+
+    async def commit(self) -> None:
+        return None
+
+
+class SchemaSaveInvalidationTests(IsolatedAsyncioTestCase):
+    """The join the tests above stop short of: what a schema save actually emits,
+    put through the real invalidator against a real cache entry."""
+
+    async def asyncSetUp(self) -> None:
+        for prefix in _CONFIGURED_PREFIXES:
+            cache.setup("mem://", prefix=prefix)
+
+    async def test_a_schema_save_purges_the_public_registration_list(self) -> None:
+        # Redacting a field to `organizers` must take effect for the rows whose
+        # `form_version_id` is NULL — they are rendered against the CURRENT
+        # schema, so the cached anonymous list is stale the moment it is saved.
+        key = "fastapi:registration_list:42:"
+        await cache.set(key, ["stale payload"])
+        redacted = default_schema()
+        redacted.sections[2].fields.append(FormField(key="vk", kind="url", label="VK", visibility="organizers"))
+        form = SimpleNamespace(
+            id=1,
+            tournament_id=42,
+            current_version=SimpleNamespace(schema_json=default_schema().model_dump(mode="json")),
+            current_version_id=None,
+        )
+        emitted: list[tuple[Scope, frozenset[Resource]]] = []
+
+        async def _emit(_session: Any, *, scope: Scope, invalidates: Any, **_kwargs: Any) -> None:
+            emitted.append((scope, frozenset(invalidates)))
+
+        with (
+            patch.object(form_service_module, "emit", _emit),
+            patch.object(form_service_module.form_service, "get_form", AsyncMock(return_value=form)),
+        ):
+            await form_service_module.form_service.save_schema(_FakeSession(), form, redacted, actor_user_id=None)
+
+        self.assertEqual(len(emitted), 1)
+        scope, resources = emitted[0]
+        await cache_invalidation.invalidate_tournament_resources(scope, resources)
+
+        self.assertIsNone(await cache.get(key))

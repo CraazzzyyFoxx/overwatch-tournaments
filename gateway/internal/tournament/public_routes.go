@@ -36,6 +36,18 @@ var PublicWriteRoutes = []edge.RouteSpec{
 	{Method: "POST", Pattern: "/api/v1/encounters/{encounter_id}/pick-ban/{kind}/elect-opener", Queue: "rpc.tournament.captain_pick_ban_elect_opener", IDParam: "encounter_id", Path: []string{"kind"}, Body: true, Auth: edge.AuthRequired},
 	{Method: "POST", Pattern: "/api/v1/encounters/{encounter_id}/pick-ban/{kind}/undo", Queue: "rpc.tournament.captain_pick_ban_undo", IDParam: "encounter_id", Path: []string{"kind"}, Body: true, Auth: edge.AuthRequired},
 
+	// chat.py — the pregame room's chat, on the shared chat tables
+	// (docs/plans/2026-09-21-shared-room-chat.md). The GET is AuthOptional, not
+	// AuthRequired: an organizer may open the room to spectators, and an
+	// anonymous spectator must still reach the handler for it to decide. Every
+	// write stays AuthRequired — spectators never write, at any setting.
+	{Method: "GET", Pattern: "/api/v1/encounters/{encounter_id}/chat", Queue: "rpc.tournament.encounter_chat_history", IDParam: "encounter_id", AllQuery: true, Auth: edge.AuthOptional},
+	{Method: "POST", Pattern: "/api/v1/encounters/{encounter_id}/chat", Queue: "rpc.tournament.encounter_chat_post", IDParam: "encounter_id", Body: true, Auth: edge.AuthRequired},
+	{Method: "DELETE", Pattern: "/api/v1/encounters/{encounter_id}/chat/{message_id}", Queue: "rpc.tournament.encounter_chat_delete", IDParam: "encounter_id", Path: []string{"message_id"}, Auth: edge.AuthRequired},
+	{Method: "PATCH", Pattern: "/api/v1/encounters/{encounter_id}/chat/settings", Queue: "rpc.tournament.encounter_chat_settings", IDParam: "encounter_id", Body: true, Auth: edge.AuthRequired},
+	{Method: "PUT", Pattern: "/api/v1/encounters/{encounter_id}/chat/mutes/{target_user_id}", Queue: "rpc.tournament.encounter_chat_mute_set", IDParam: "encounter_id", Path: []string{"target_user_id"}, Body: true, Auth: edge.AuthRequired},
+	{Method: "DELETE", Pattern: "/api/v1/encounters/{encounter_id}/chat/mutes/{target_user_id}", Queue: "rpc.tournament.encounter_chat_mute_clear", IDParam: "encounter_id", Path: []string{"target_user_id"}, Auth: edge.AuthRequired},
+
 	// encounter.py — saved-view writes (the GET /views read is already migrated).
 	{Method: "POST", Pattern: "/api/v1/encounters/views", Queue: "rpc.tournament.saved_view_create", Query: []string{"workspace_id"}, Body: true, Auth: edge.AuthRequired, Success: 200},
 	{Method: "DELETE", Pattern: "/api/v1/encounters/views/{saved_view_id}", Queue: "rpc.tournament.saved_view_delete", Path: []string{"saved_view_id"}, Query: []string{"workspace_id"}, Auth: edge.AuthRequired, Success: 204},

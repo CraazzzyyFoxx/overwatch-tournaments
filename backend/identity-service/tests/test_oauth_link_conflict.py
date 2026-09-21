@@ -24,7 +24,7 @@ from shared.core.errors import BaseAPIException as HTTPException
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from shared.services import social_identity  # noqa: E402
+from shared.services.social_identity import social_identity_service  # noqa: E402
 from src import schemas  # noqa: E402
 from src.services.oauth_accounts import OAuthAccountService, oauth_accounts  # noqa: E402
 from tests._fakes import make_oauth_info  # noqa: E402
@@ -130,7 +130,7 @@ def test_explicit_link_releases_a_stale_pin_and_verifies_the_callers_player(
         upserted.update(kwargs)
         return SimpleNamespace(id=555)
 
-    monkeypatch.setattr(social_identity, "upsert_social_account", fake_upsert)
+    monkeypatch.setattr(social_identity_service, "upsert", fake_upsert)
     monkeypatch.setattr(
         OAuthAccountService,
         "_find_player_by_provider_record",
@@ -165,7 +165,7 @@ def test_login_flow_still_targets_the_pinned_player_and_releases_nothing(
         upserted.update(kwargs)
         return SimpleNamespace(id=555)
 
-    monkeypatch.setattr(social_identity, "upsert_social_account", fake_upsert)
+    monkeypatch.setattr(social_identity_service, "upsert", fake_upsert)
     monkeypatch.setattr(
         OAuthAccountService,
         "_find_player_by_provider_record",

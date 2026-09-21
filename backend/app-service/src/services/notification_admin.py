@@ -36,7 +36,12 @@ from shared import models
 from shared.core import http_status as status
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.models.identity.auth_user import AuthUser
-from shared.repository.notification import InvalidCursorError, decode_cursor, encode_cursor
+from shared.repository.notification import (
+    InvalidCursorError,
+    NotificationRepository,
+    decode_cursor,
+    encode_cursor,
+)
 from shared.services.audit import record_admin_audit
 from shared.services.notifications import NOTIFICATION_KINDS
 from src import schemas
@@ -46,6 +51,8 @@ __all__ = ("DEFAULT_LIST_LIMIT", "MAX_LIST_LIMIT", "SYSTEM_KINDS", "list_for_wor
 
 DEFAULT_LIST_LIMIT = 50
 MAX_LIST_LIMIT = 200
+
+_notifications = NotificationRepository()
 
 #: Every kind an operator can see here: the registry minus the announcement,
 #: which owns a different screen. Derived rather than restated, so a sixth kind
@@ -152,10 +159,7 @@ async def retire(
     if ids:
         conditions.append(model.id.in_({int(value) for value in ids}))
 
-    result = await session.execute(
-        sa.update(model).where(*conditions).values(expires_at=sa.func.now()),
-    )
-    retired = max(result.rowcount, 0)
+    retired = await _notifications.retire(session, filters=conditions)
 
     await record_admin_audit(
         session,

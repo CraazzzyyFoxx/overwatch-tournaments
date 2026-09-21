@@ -117,10 +117,9 @@ function createRegistration(overrides: Partial<AdminRegistration> = {}): AdminRe
     battle_tag_normalized: "player#1234",
     source: "manual",
     source_record_key: null,
-    smurf_tags_json: [],
-    discord_nick: null,
-    twitch_nick: null,
-    stream_pov: false,
+    answers: {},
+    form_version_id: 5,
+    form_version_stale: false,
     best_rank: 900,
     roles: [
       {
@@ -142,9 +141,7 @@ function createRegistration(overrides: Partial<AdminRegistration> = {}): AdminRe
         is_declared_active: true,
       },
     ],
-    notes: null,
     admin_notes: null,
-    custom_fields_json: null,
     is_flex: false,
     status: "approved",
     status_meta: createStatusMeta("approved", "registration", "Approved"),
@@ -378,7 +375,7 @@ describe("battle tag clipboard helpers", () => {
   it("returns the primary BattleTag followed by unique non-empty smurf tags", () => {
     const registration = createRegistration({
       battle_tag: "Main#1111",
-      smurf_tags_json: ["Alt#2222", " ", "Main#1111", "alt#2222", "Pocket#3333"],
+      answers: { smurf_tags: ["Alt#2222", " ", "Main#1111", "alt#2222", "Pocket#3333"] },
     });
 
     expect(getRegistrationBattleTags(registration, "Fallback#0000")).toEqual([
@@ -391,7 +388,7 @@ describe("battle tag clipboard helpers", () => {
   it("falls back to the player BattleTag and formats tags for clipboard", () => {
     const registration = createRegistration({
       battle_tag: null,
-      smurf_tags_json: ["Practice#4444"],
+      answers: { smurf_tags: ["Practice#4444"] },
     });
 
     const battleTags = getRegistrationBattleTags(registration, "Player#1234");

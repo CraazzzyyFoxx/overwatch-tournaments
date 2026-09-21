@@ -6,7 +6,6 @@ from shared.core.config import BaseServiceSettings
 class Settings(BaseServiceSettings):
     project_name: str = "OWT API"
     project_url: str
-    battle_tag_regex: str = r"([\w0-9]{2,12}#[0-9]{4,})"
     # Gateway mount prefix for app-service. tournament-service owns the bare
     # /api/v1 namespace, so app-service is carved out under /api/v1/core. Used as
     # FastAPI root_path (the gateway forwards /api/v1/core/* unchanged).

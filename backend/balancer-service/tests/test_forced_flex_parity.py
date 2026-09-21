@@ -48,6 +48,7 @@ os.environ["DEBUG"] = "false"
 
 from shared.core.enums import HERO_TYPE_CLASSES  # noqa: E402
 from shared.division_grid import DEFAULT_GRID  # noqa: E402
+from shared.domain.forms import FormField, FormSchema, FormSection  # noqa: E402
 from shared.domain.roster import PlayerRoster  # noqa: E402
 from shared.models.registration.registration import (  # noqa: E402
     BalancerRegistration,
@@ -63,6 +64,14 @@ ALL_ROLE_VALUES = {role.slot_code for role in HERO_TYPE_CLASSES}
 def mode(request) -> str:
     """Both every-role modes share this rule; only ``forced`` also forces primary."""
     return request.param
+
+
+def _flex_form(mode: str) -> SimpleNamespace:
+    """The one thing the engine reads a registration form for: the flex mode."""
+    schema = FormSchema(
+        sections=[FormSection(key="roles", fields=[FormField(key="roles", kind="builtin", params={"flex_mode": mode})])]
+    )
+    return SimpleNamespace(current_version=SimpleNamespace(schema_json=schema.model_dump(mode="json")))
 
 
 def _resolve(case: dict[str, Any], mode: str) -> PlayerRoster:
@@ -83,7 +92,7 @@ def _resolve(case: dict[str, Any], mode: str) -> PlayerRoster:
             [registration],
             workspace_id=None,
             tournament_id=1,
-            form=SimpleNamespace(built_in_fields_json={"flex_role": {"mode": mode}}),
+            form=_flex_form(mode),
             grid=DEFAULT_GRID,
         )
     )

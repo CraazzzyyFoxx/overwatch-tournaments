@@ -13,10 +13,22 @@ from __future__ import annotations
 
 from shared.core.pagination import Paginated
 from shared.rpc.openapi import Op, QueryParam
+from shared.services.chat import (
+    HISTORY_DEFAULT,
+    HISTORY_MAX,
+    ChatEnvelope,
+    ChatMessageRead,
+    ChatMuteInput,
+    ChatMuteRead,
+    ChatPostInput,
+    ChatSettings,
+    ChatSettingsInput,
+)
 from src import schemas
 from src.schemas import captain as captain_schemas
 from src.schemas import encounter_report_form as report_form_schemas
 from src.schemas import registration as reg_schemas
+from src.schemas import registration_form as reg_form_schemas
 from src.schemas import registration_team as reg_team_schemas
 
 # Reusable ad-hoc query params (handlers read these via _q/_q1, no query model).
@@ -228,9 +240,28 @@ OPERATIONS: dict[str, Op] = {
         ),
     ),
     # ── registration admin ─────────────────────────────────────────────────
-    "rpc.tournament.reg_form_get": Op(response=reg_schemas.RegistrationFormRead),
+    "rpc.tournament.reg_form_get": Op(response=reg_form_schemas.RegistrationFormRead),
     "rpc.tournament.reg_form_upsert": Op(
-        request=reg_schemas.RegistrationFormUpsert, response=reg_schemas.RegistrationFormRead
+        request=reg_form_schemas.RegistrationFormUpsert, response=reg_form_schemas.RegistrationFormRead
+    ),
+    "rpc.tournament.regform_template_list": Op(
+        response=reg_form_schemas.RegistrationFormTemplateRead, response_array=True
+    ),
+    "rpc.tournament.regform_template_create": Op(
+        request=reg_form_schemas.RegistrationFormTemplateUpsert,
+        response=reg_form_schemas.RegistrationFormTemplateRead,
+    ),
+    "rpc.tournament.regform_template_update": Op(
+        request=reg_form_schemas.RegistrationFormTemplateUpsert,
+        response=reg_form_schemas.RegistrationFormTemplateRead,
+    ),
+    "rpc.tournament.regform_template_apply": Op(
+        request=reg_form_schemas.RegistrationFormTemplateApply,
+        response=reg_form_schemas.RegistrationFormRead,
+    ),
+    "rpc.tournament.regform_template_save_from_form": Op(
+        request=reg_form_schemas.RegistrationFormTemplateSave,
+        response=reg_form_schemas.RegistrationFormTemplateRead,
     ),
     "rpc.tournament.reg_list": Op(response=schemas.BalancerRegistrationRead, response_array=True),
     "rpc.tournament.reg_create_manual": Op(
@@ -288,7 +319,7 @@ OPERATIONS: dict[str, Op] = {
         response=reg_schemas.WorkspaceSubscriptionRequirementRead,
     ),
     # ── public registration (captain/self-service) ─────────────────────────
-    "rpc.tournament.reg_pub_create": Op(request=reg_schemas.RegistrationCreate, response=reg_schemas.RegistrationRead),
+    "rpc.tournament.reg_pub_create": Op(request=reg_schemas.RegistrationSubmit, response=reg_schemas.RegistrationRead),
     "rpc.tournament.reg_pub_update_me": Op(
         request=reg_schemas.RegistrationUpdate, response=reg_schemas.RegistrationRead
     ),
@@ -408,6 +439,21 @@ OPERATIONS: dict[str, Op] = {
     "rpc.tournament.captain_pick_ban_elect_opener": Op(request=captain_schemas.ElectOpenerInput),
     "rpc.tournament.captain_pick_ban_undo": Op(request=captain_schemas.PickBanUndoInput),
     "rpc.tournament.captain_report_map": Op(request=captain_schemas.MapReportInput),
+    # ── pre-game room chat (shared chat service; same shapes in balancer) ──
+    # chat_delete / chat_mute_clear answer a bare {"deleted": true}, so they are
+    # documented in DOCS only — this module maps whole models.
+    "rpc.tournament.encounter_chat_history": Op(
+        response=ChatEnvelope,
+        query_params=(
+            QueryParam("after_id", "integer", description="Only messages newer than this id (live tail)."),
+            QueryParam(
+                "limit", "integer", description=f"Page size, clamped to 1..{HISTORY_MAX}, default {HISTORY_DEFAULT}."
+            ),
+        ),
+    ),
+    "rpc.tournament.encounter_chat_post": Op(request=ChatPostInput, response=ChatMessageRead),
+    "rpc.tournament.encounter_chat_settings": Op(request=ChatSettingsInput, response=ChatSettings),
+    "rpc.tournament.encounter_chat_mute_set": Op(request=ChatMuteInput, response=ChatMuteRead),
     # ── captain reports admin list (cross-tournament, workspace-scoped) ────
     "rpc.tournament.admin_encounter_reports_list": Op(
         response=Paginated[schemas.EncounterReportsRow],

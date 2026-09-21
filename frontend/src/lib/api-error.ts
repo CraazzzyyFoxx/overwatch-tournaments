@@ -1,6 +1,10 @@
 export interface ApiErrorDetail {
   msg: string;
   code: string;
+  /** The answer/request key the rejection belongs to, when the server named one
+   *  (`shared.domain.forms.validate.FieldError.field`). Absent on the many
+   *  errors that belong to the whole request. */
+  field?: string | null;
 }
 
 export class ApiError extends Error {
@@ -70,11 +74,11 @@ function formatPydanticLoc(loc: unknown): string {
 }
 
 /**
- * Normalize a single `detail` entry into one or more {msg, code}.
+ * Normalize a single `detail` entry into one or more {msg, code, field}.
  *
  * Handles the backend shapes:
  *   - string                                   (wrapped HTTPException)
- *   - { msg: string, code }                    (business error)
+ *   - { msg: string, code, field? }            (business error)
  *   - { msg: [pydantic errors], code }         (422 validation – msg is an array)
  */
 function normalizeDetailItem(item: unknown): ApiErrorDetail[] {
@@ -83,8 +87,9 @@ function normalizeDetailItem(item: unknown): ApiErrorDetail[] {
   }
 
   if (item && typeof item === "object") {
-    const obj = item as { msg?: unknown; message?: unknown; code?: string };
+    const obj = item as { msg?: unknown; message?: unknown; code?: string; field?: unknown };
     const code = obj.code ?? "unknown";
+    const field = typeof obj.field === "string" ? obj.field : null;
     const rawMsg = obj.msg ?? obj.message;
 
     // 422: msg is the raw pydantic error array → expand into readable lines.
@@ -93,25 +98,60 @@ function normalizeDetailItem(item: unknown): ApiErrorDetail[] {
         const pe = (entry ?? {}) as { loc?: unknown; msg?: unknown };
         const loc = formatPydanticLoc(pe.loc);
         const peMsg = typeof pe.msg === "string" ? pe.msg : "Invalid value";
-        return { msg: loc ? `${loc}: ${peMsg}` : peMsg, code };
+        return { msg: loc ? `${loc}: ${peMsg}` : peMsg, code, field: loc || field };
       });
-      return lines.length > 0 ? lines : [{ msg: "Invalid input", code }];
+      return lines.length > 0 ? lines : [{ msg: "Invalid input", code, field }];
     }
 
     if (typeof rawMsg === "string") {
-      return [{ msg: rawMsg, code }];
+      return [{ msg: rawMsg, code, field }];
     }
 
-    return [{ msg: "Unknown error", code }];
+    return [{ msg: "Unknown error", code, field }];
   }
 
   return [{ msg: "Unknown error", code: "unknown" }];
 }
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+/**
+ * The structured error entries a worker reported, wherever the transport put
+ * them: the v1 gateway body spreads the envelope's `details` next to
+ * `detail`/`code`, v2 nests the whole envelope under `error.details`.
+ *
+ * This is where an `ApiHTTPException([ApiExc(msg, code, field), …])` keeps its
+ * per-item `code`/`field`. `detail` only carries the human texts joined into
+ * one string, which no renderer can attach to an input.
+ */
+export function errorBodyFields(body: unknown): Record<string, unknown>[] {
+  const root = asRecord(body);
+  if (!root) return [];
+  const candidates = [
+    root.fields,
+    asRecord(root.details)?.fields,
+    asRecord(asRecord(root.error)?.details)?.fields,
+    asRecord(root.detail)?.fields,
+  ];
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate)) {
+      return candidate.map(asRecord).filter((entry): entry is Record<string, unknown> => !!entry);
+    }
+  }
+  return [];
+}
+
 /**
  * Parse a non-ok Response into an ApiError.
  *
- * Expected backend shapes (see backend/shared/core/errors.py & middleware.py):
+ * Expected backend shapes (see backend/shared/core/errors.py & middleware.py,
+ * and backend/shared/rpc/common.py::http_error for the RPC path):
+ *   { "detail": "…", "code": "…", "fields": [{ "msg", "code", "field" }] }
+ *                                                          – relayed RPC error
  *   { "detail": [{ "msg": "…", "code": "…" }] }            – business error
  *   { "detail": [{ "msg": [pydantic…], "code": "…" }] }    – 422 validation
  *   { "detail": ["some string"] } / { "detail": "string" } – wrapped HTTPException
@@ -124,7 +164,10 @@ export async function parseApiError(response: Response): Promise<ApiError> {
   try {
     const body = await response.json();
     parsed = body;
-    const raw = body?.detail ?? body?.message;
+    // Only entries that look like an error item: a `fields` key also exists on
+    // unrelated bodies, and one without a `msg` says nothing a user can read.
+    const fields = errorBodyFields(body).filter((entry) => typeof entry.msg === "string");
+    const raw = fields.length > 0 ? fields : (body?.detail ?? body?.message);
 
     if (Array.isArray(raw)) {
       details = raw.flatMap(normalizeDetailItem);

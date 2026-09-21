@@ -4,12 +4,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
 import { useAuthProfile } from "@/hooks/useAuthProfile";
-import { getApiErrorMessage } from "@/lib/api-error";
+import { ApiError, getApiErrorMessage } from "@/lib/api-error";
 import registrationService from "@/services/registration.service";
 import meService from "@/services/me.service";
-import type { RegistrationForm } from "@/types/registration.types";
+import type { RegistrationForm, RegistrationSubmitInput } from "@/types/registration.types";
 
-import UnifiedRegistrationForm from "./UnifiedRegistrationForm";
+import RegistrationSchemaForm from "./RegistrationSchemaForm";
 
 interface RegistrationWizardProps {
   workspaceId: number;
@@ -43,9 +43,8 @@ export default function RegistrationWizard({
   });
 
   const mutation = useMutation({
-    mutationFn: (payload: any) => {
-      return registrationService.register(tournamentId, payload);
-    },
+    mutationFn: (payload: RegistrationSubmitInput) =>
+      registrationService.register(tournamentId, payload),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["registration", workspaceId, tournamentId] });
       await queryClient.invalidateQueries({
@@ -53,7 +52,15 @@ export default function RegistrationWizard({
       });
       onClose();
     },
-    onError: (err: unknown) => setError(getApiErrorMessage(err)),
+    // `RegistrationSchemaForm` renders every field-scoped rejection under the
+    // control it belongs to (and toasts the stale-version one, which names
+    // `form_version_id`), so a banner here would be a second copy of the same
+    // message. The banner is for what the form has no surface for: a failure
+    // that names no field at all.
+    onError: (err: unknown) => {
+      if (err instanceof ApiError && err.details.some((detail) => detail.field)) return;
+      setError(getApiErrorMessage(err));
+    },
   });
 
   return (
@@ -66,16 +73,15 @@ export default function RegistrationWizard({
           {error}
         </div>
       )}
-      <UnifiedRegistrationForm
+      <RegistrationSchemaForm
         mode="public"
         tournamentId={tournamentId}
-        workspaceId={workspaceId}
-        formConfig={form}
+        form={form}
         tournamentName={tournamentName}
         userProfile={userQuery.data}
-        onSubmit={async (payload) => {
+        onSubmit={async ({ form_version_id, answers }) => {
           setError(null);
-          await mutation.mutateAsync(payload);
+          await mutation.mutateAsync({ form_version_id, answers });
         }}
         onCancel={onClose}
         submitPending={mutation.isPending}

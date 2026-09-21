@@ -5,6 +5,6 @@ registered-team export (balancer-service) can reuse the same rules without
 importing tournament-service.
 """
 
-from shared.services.team_eligibility import evaluate_team_eligibility
+from shared.services.team_eligibility import team_eligibility
 
-__all__ = ("evaluate_team_eligibility",)
+__all__ = ("team_eligibility",)

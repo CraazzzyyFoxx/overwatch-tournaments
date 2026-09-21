@@ -27,51 +27,17 @@ sys.path.insert(0, str(backend_root / "tournament-service"))
 
 os.environ["DEBUG"] = "true"
 
-from shared.domain.roster import flex_role_mode  # noqa: E402
 
 _common = importlib.import_module("src.services.registration._common")
-_service = importlib.import_module("src.services.registration.service")
-
-
-def _form(built_in_fields: dict[str, Any] | None) -> Any:
-    class _Form:
-        built_in_fields_json = built_in_fields
-
-    return _Form()
 
 
 def _role(role: str, **kwargs: Any) -> Any:
     return _common.models.BalancerRegistrationRole(role=role, **kwargs)
 
 
-class TestForcedFlexEnabled:
-    def test_absent_key_is_optional(self) -> None:
-        assert flex_role_mode(_form({})) == "optional"
-
-    def test_absent_mode_is_optional(self) -> None:
-        assert flex_role_mode(_form({"flex_role": {"enabled": True}})) == "optional"
-
-    def test_explicit_optional(self) -> None:
-        assert flex_role_mode(_form({"flex_role": {"mode": "optional"}})) == "optional"
-
-    def test_forced(self) -> None:
-        assert flex_role_mode(_form({"flex_role": {"mode": "forced"}})) == "forced"
-
-    def test_forced_ignored_when_the_field_is_disabled(self) -> None:
-        """``enabled: false`` bans flex outright, so it wins over the mode."""
-        form = _form({"flex_role": {"enabled": False, "mode": "forced"}})
-
-        assert flex_role_mode(form) == "optional"
-
-    def test_missing_form_is_optional(self) -> None:
-        """Fail closed: an unreadable form must not silently inflate ranks."""
-        assert flex_role_mode(None) == "optional"
-
-    def test_empty_built_in_fields_json_is_optional(self) -> None:
-        assert flex_role_mode(_form(None)) == "optional"
-
-    def test_non_dict_config_is_optional(self) -> None:
-        assert flex_role_mode(_form({"flex_role": "forced"})) == "optional"
+# ``flex_role_mode`` itself is unit-tested where it lives, in
+# ``shared/tests/test_flex_role_mode.py``. What follows is what the write path
+# does with the answer.
 
 
 class TestApplyAllRolesForced:
@@ -156,7 +122,7 @@ class TestWritePathsHonourForcedFlex:
             self.top_heroes = None
 
     def test_public_path_forced(self) -> None:
-        entries = _service.build_registration_roles(
+        entries = _common.build_registration_roles(
             [self._PublicRole("damage", is_primary=True)],
             mode="forced",
         )
@@ -165,12 +131,12 @@ class TestWritePathsHonourForcedFlex:
         assert all(entry.is_primary for entry in entries)
 
     def test_public_path_optional_is_unchanged(self) -> None:
-        entries = _service.build_registration_roles([self._PublicRole("damage", is_primary=True)])
+        entries = _common.build_registration_roles([self._PublicRole("damage", is_primary=True)])
 
         assert [entry.role for entry in entries] == ["damage"]
 
     def test_public_path_keeps_the_submitted_subrole(self) -> None:
-        entries = _service.build_registration_roles(
+        entries = _common.build_registration_roles(
             [self._PublicRole("damage", is_primary=True, subrole="hitscan")],
             mode="forced",
         )
@@ -236,30 +202,6 @@ class TestWritePathsHonourForcedFlex:
         assert damage.rank_value == 4100
 
 
-class TestFlexRoleModeReader:
-    def test_all_roles(self) -> None:
-        assert flex_role_mode(_form({"flex_role": {"mode": "all_roles"}})) == "all_roles"
-
-    def test_unknown_mode_reads_as_optional(self) -> None:
-        """A value from a newer client must not accidentally enable a policy."""
-        assert flex_role_mode(_form({"flex_role": {"mode": "whatever"}})) == "optional"
-
-    def test_disabled_field_wins_over_all_roles(self) -> None:
-        form = _form({"flex_role": {"enabled": False, "mode": "all_roles"}})
-
-        assert flex_role_mode(form) == "optional"
-
-    def test_all_roles_and_forced_both_require_every_role(self) -> None:
-        """Both non-optional modes read as "not optional" -- the one comparison
-        that replaced the pair of boolean flex predicates."""
-        for mode in ("all_roles", "forced"):
-            assert flex_role_mode(_form({"flex_role": {"mode": mode}})) != "optional"
-
-    def test_only_forced_makes_the_flex_choice_for_the_registrant(self) -> None:
-        assert flex_role_mode(_form({"flex_role": {"mode": "forced"}})) == "forced"
-        assert flex_role_mode(_form({"flex_role": {"mode": "all_roles"}})) != "forced"
-
-
 class TestApplyAllRolesWithoutForcing:
     """``all_roles`` normalizes the role SET but never the registrant's choice."""
 
@@ -315,7 +257,7 @@ class TestApplyAllRolesWithoutForcing:
                 self.subrole = None
                 self.top_heroes = None
 
-        entries = _service.build_registration_roles(
+        entries = _common.build_registration_roles(
             [_PublicRole("support", True)],
             mode="all_roles",
         )

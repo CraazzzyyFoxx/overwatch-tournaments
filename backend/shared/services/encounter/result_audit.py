@@ -17,8 +17,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from shared.core.enums import EncounterResultAuditAction, EncounterResultStatus
 from shared.models.tournament.encounter import Encounter
 from shared.models.tournament.encounter_result_audit import EncounterResultAudit
+from shared.repository import EncounterResultAuditRepository
 
 __all__ = ("record_result_transition",)
+
+_result_audit = EncounterResultAuditRepository()
 
 
 def record_result_transition(
@@ -47,5 +50,4 @@ def record_result_transition(
         adopted_team_id=adopted_team_id,
         source=source,
     )
-    session.add(row)
-    return row
+    return _result_audit.add(session, row)

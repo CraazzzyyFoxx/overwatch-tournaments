@@ -14,6 +14,7 @@ from typing import Any
 
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from shared import models
 from shared.core.social import SocialProvider
@@ -27,10 +28,10 @@ from shared.domain.team_eligibility import (
     evaluate_unique_identity,
 )
 from shared.services.discord_client import DiscordClient
-from shared.services.roster import registration_load_options, roster_engine
+from shared.services.roster import RosterEngine, registration_load_options, roster_engine
 from shared.services.subscriptions.providers.discord_role import DiscordError, MemberNotFound
 
-__all__ = ("evaluate_team_eligibility",)
+__all__ = ("TeamEligibilityService", "team_eligibility")
 
 _SLOT_RELEASING = frozenset({"withdrawn", "rejected"})
 
@@ -43,9 +44,16 @@ def _slot_role(slot_code: str | None, shape: Any) -> str | None:
 
 def _identity_keys(registration: models.BalancerRegistration, discord_ids: Sequence[str]) -> set[str]:
     keys: set[str] = set()
-    nick = (registration.discord_nick or "").strip().casefold()
+    nick = next(
+        (
+            identity.handle_normalized
+            for identity in registration.identities
+            if identity.provider == SocialProvider.DISCORD and identity.handle_normalized
+        ),
+        "",
+    )
     if nick:
-        keys.add(f"discord_nick:{nick}")
+        keys.add(f"discord_handle:{nick}")
     for snowflake in discord_ids:
         if snowflake:
             keys.add(f"discord_id:{snowflake}")
@@ -94,13 +102,17 @@ async def _taken_identity_keys(
 ) -> set[str]:
     others = list(
         await session.scalars(
-            sa.select(models.BalancerRegistration).where(
+            sa.select(models.BalancerRegistration)
+            .where(
                 models.BalancerRegistration.tournament_id == tournament_id,
                 models.BalancerRegistration.registration_team_id.is_not(None),
                 models.BalancerRegistration.registration_team_id != exclude_team_id,
                 models.BalancerRegistration.deleted_at.is_(None),
                 models.BalancerRegistration.status.notin_(_SLOT_RELEASING),
             )
+            # ``_identity_keys`` reads the Discord handle off the identity rows,
+            # which are never lazy-loadable in async code.
+            .options(selectinload(models.BalancerRegistration.identities))
         )
     )
     discord_ids = await _discord_ids_by_registration(session, others)
@@ -163,51 +175,61 @@ async def _discord_signals(
     return signals
 
 
-async def evaluate_team_eligibility(
-    session: AsyncSession,
-    team: models.BalancerRegistrationTeam,
-    members: Sequence[models.BalancerRegistration],
-    *,
-    form: models.BalancerRegistrationForm | None,
-    shape: Any,
-    workspace: models.Workspace | None,
-    discord: DiscordClient,
-) -> list[EligibilityIssue]:
-    """All configured team rules for this roster. Empty when every rule is off."""
-    if form is None:
-        return []
+class TeamEligibilityService:
+    def __init__(self, *, rosters: RosterEngine = roster_engine) -> None:
+        self.rosters = rosters
 
-    issues: list[EligibilityIssue] = []
-    ranked = form.team_rank_min is not None or form.team_rank_max is not None or form.team_max_rank_spread is not None
-    if ranked and members:
-        loaded = list(
-            await session.scalars(
-                sa.select(models.BalancerRegistration)
-                .where(models.BalancerRegistration.id.in_([m.id for m in members]))
-                .options(*registration_load_options())
+    async def evaluate(
+        self,
+        session: AsyncSession,
+        team: models.BalancerRegistrationTeam,
+        members: Sequence[models.BalancerRegistration],
+        *,
+        form: models.BalancerRegistrationForm | None,
+        shape: Any,
+        workspace: models.Workspace | None,
+        discord: DiscordClient,
+    ) -> list[EligibilityIssue]:
+        """All configured team rules for this roster. Empty when every rule is off."""
+        if form is None:
+            return []
+
+        issues: list[EligibilityIssue] = []
+        ranked = (
+            form.team_rank_min is not None or form.team_rank_max is not None or form.team_max_rank_spread is not None
+        )
+        if ranked and members:
+            loaded = list(
+                await session.scalars(
+                    sa.select(models.BalancerRegistration)
+                    .where(models.BalancerRegistration.id.in_([m.id for m in members]))
+                    .options(*registration_load_options())
+                )
             )
-        )
-        rosters = await roster_engine.resolve(
-            session, loaded, workspace_id=team.workspace_id, tournament_id=team.tournament_id
-        )
-        issues.extend(
-            evaluate_rank_rules(
-                _starter_ranks(members, rosters, shape),
-                rank_min=form.team_rank_min,
-                rank_max=form.team_rank_max,
-                max_spread=form.team_max_rank_spread,
+            rosters = await self.rosters.resolve(
+                session, loaded, workspace_id=team.workspace_id, tournament_id=team.tournament_id
             )
-        )
+            issues.extend(
+                evaluate_rank_rules(
+                    _starter_ranks(members, rosters, shape),
+                    rank_min=form.team_rank_min,
+                    rank_max=form.team_rank_max,
+                    max_spread=form.team_max_rank_spread,
+                )
+            )
 
-    discord_ids = await _discord_ids_by_registration(session, list(members))
-    if form.team_unique_identity:
-        this_keys = {m.id: _identity_keys(m, discord_ids.get(m.id, [])) for m in members}
-        taken = await _taken_identity_keys(session, tournament_id=team.tournament_id, exclude_team_id=team.id)
-        issues.extend(evaluate_unique_identity(this_keys=this_keys, taken_keys=taken))
+        discord_ids = await _discord_ids_by_registration(session, list(members))
+        if form.team_unique_identity:
+            this_keys = {m.id: _identity_keys(m, discord_ids.get(m.id, [])) for m in members}
+            taken = await _taken_identity_keys(session, tournament_id=team.tournament_id, exclude_team_id=team.id)
+            issues.extend(evaluate_unique_identity(this_keys=this_keys, taken_keys=taken))
 
-    if form.team_require_discord_guild:
-        guild_id = getattr(workspace, "discord_guild_id", None) if workspace is not None else None
-        signals = await _discord_signals(list(members), discord_ids, guild_id=guild_id, discord=discord)
-        issues.extend(evaluate_discord_guild(signals, guild_id=guild_id, require=True))
+        if form.team_require_discord_guild:
+            guild_id = getattr(workspace, "discord_guild_id", None) if workspace is not None else None
+            signals = await _discord_signals(list(members), discord_ids, guild_id=guild_id, discord=discord)
+            issues.extend(evaluate_discord_guild(signals, guild_id=guild_id, require=True))
 
-    return issues
+        return issues
+
+
+team_eligibility = TeamEligibilityService()

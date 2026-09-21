@@ -3,7 +3,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { Check, ChevronsUpDown } from "lucide-react";
 import { useTranslations } from "next-intl";
-import type { BuiltInFieldConfig } from "@/types/registration.types";
+import type { FormField } from "@/types/forms.types";
 
 import {
   Command,
@@ -15,10 +15,7 @@ import {
 } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
-import {
-  getBuiltInValueValidationError,
-  normalizeBuiltInFieldValue,
-} from "./validation";
+import { normalizeAnswerText, validateAnswer } from "@/lib/forms/validate";
 import { Input } from "@/components/ui/input";
 import FieldLabel from "./FieldLabel";
 import { fieldControlClass, fieldInvalidClass } from "./FormField";
@@ -31,9 +28,11 @@ interface AccountComboboxProps {
   suggestions: string[];
   icon?: string;
   required?: boolean;
-  fieldKey?: string;
-  config?: BuiltInFieldConfig;
-  onValidationChange?: (error: string | null) => void;
+  /** The schema field this control answers. Drives the live format check and
+   *  the canonical form of what is stored. */
+  field?: FormField;
+  /** Error owned by the form: a server rejection, or a revealed step objection. */
+  error?: string | null;
 }
 
 export default function AccountCombobox({
@@ -44,11 +43,11 @@ export default function AccountCombobox({
   suggestions,
   icon,
   required = false,
-  fieldKey,
-  config,
-  onValidationChange,
+  field,
+  error = null,
 }: Readonly<AccountComboboxProps>) {
   const t = useTranslations();
+  const tErrors = useTranslations("forms.errors");
   const [open, setOpen] = useState(false);
   const [inputValue, setInputValue] = useState(value);
   const [contentWidth, setContentWidth] = useState<number>();
@@ -56,20 +55,21 @@ export default function AccountCombobox({
   const listboxId = useId();
   const controlId = useId();
   const errorId = `${controlId}-error`;
-  const validationError = fieldKey
-    ? getBuiltInValueValidationError(fieldKey, inputValue, config)
-    : null;
-  const normalizedInputValue = fieldKey
-    ? normalizeBuiltInFieldValue(fieldKey, inputValue)
-    : inputValue;
+
+  /** Format only: an empty box is the step's business, not this control's. */
+  const formatError = (candidate: string): string | null =>
+    field && candidate.trim() ? validateAnswer(field, candidate, tErrors) : null;
+
+  const normalize = (candidate: string): string =>
+    field ? normalizeAnswerText(field, candidate) : candidate.trim();
+
+  const liveError = formatError(inputValue);
+  const shownError = error ?? liveError;
+  const normalizedInputValue = normalize(inputValue);
 
   useEffect(() => {
     setInputValue(value);
   }, [value]);
-
-  useEffect(() => {
-    onValidationChange?.(validationError);
-  }, [onValidationChange, validationError]);
 
   useEffect(() => {
     if (!open) {
@@ -82,13 +82,11 @@ export default function AccountCombobox({
   }, [open]);
 
   const handleSelect = (selected: string) => {
-    const nextValue = fieldKey ? normalizeBuiltInFieldValue(fieldKey, selected) : selected;
-    const nextError = fieldKey ? getBuiltInValueValidationError(fieldKey, selected, config) : null;
-    if (nextError) {
+    if (formatError(selected)) {
       setInputValue(selected);
       return;
     }
-
+    const nextValue = normalize(selected);
     onChange(nextValue);
     setInputValue(nextValue);
     setOpen(false);
@@ -96,19 +94,14 @@ export default function AccountCombobox({
 
   const handleInputChange = (v: string) => {
     setInputValue(v);
-
-    if (!fieldKey) {
-      onChange(v);
-      return;
-    }
-
-    const nextError = getBuiltInValueValidationError(fieldKey, v, config);
     if (!v.trim()) {
       onChange("");
       return;
     }
-    if (!nextError) {
-      onChange(normalizeBuiltInFieldValue(fieldKey, v));
+    // A half-typed BattleTag must not be pushed up as the answer; the box keeps
+    // it locally until it is a shape the field accepts.
+    if (!formatError(v)) {
+      onChange(normalize(v));
     }
   };
 
@@ -123,7 +116,7 @@ export default function AccountCombobox({
   ) : null;
 
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-2">
       <FieldLabel label={label} htmlFor={controlId} required={required} icon={iconEl} />
       {hasSuggestions ? (
         <Popover open={open} onOpenChange={setOpen}>
@@ -135,13 +128,13 @@ export default function AccountCombobox({
               role="combobox"
               aria-controls={listboxId}
               aria-expanded={open}
-              aria-invalid={Boolean(validationError)}
-              aria-describedby={validationError ? errorId : undefined}
+              aria-invalid={Boolean(shownError)}
+              aria-describedby={shownError ? errorId : undefined}
               className={cn(
                 fieldControlClass,
                 "flex h-9 items-center justify-between",
                 value ? "text-[color:var(--aqt-fg)]" : "text-[color:var(--aqt-fg-dim)]",
-                validationError && fieldInvalidClass,
+                shownError && fieldInvalidClass,
               )}
             >
               <span className="truncate">{value || placeholder}</span>
@@ -174,7 +167,7 @@ export default function AccountCombobox({
                     </CommandItem>
                   ))}
                 </CommandGroup>
-                {inputValue && !suggestions.includes(inputValue) && !validationError && (
+                {inputValue && !suggestions.includes(inputValue) && !liveError && (
                   <CommandGroup heading={t("registration.accounts.custom")}>
                     <CommandItem value={normalizedInputValue} onSelect={() => handleSelect(inputValue)}>
                       {t("registration.accounts.useValue", { value: normalizedInputValue })}
@@ -192,13 +185,13 @@ export default function AccountCombobox({
           placeholder={placeholder}
           value={inputValue}
           onChange={(e) => handleInputChange(e.target.value)}
-          aria-invalid={Boolean(validationError)}
-          aria-describedby={validationError ? errorId : undefined}
-          className={cn(fieldControlClass, "h-9", validationError && fieldInvalidClass)}
+          aria-invalid={Boolean(shownError)}
+          aria-describedby={shownError ? errorId : undefined}
+          className={cn(fieldControlClass, "h-9", shownError && fieldInvalidClass)}
         />
       )}
-      {validationError && (
-        <p id={errorId} className="text-xs text-destructive">{validationError}</p>
+      {shownError && (
+        <p id={errorId} className="text-xs text-destructive">{shownError}</p>
       )}
     </div>
   );

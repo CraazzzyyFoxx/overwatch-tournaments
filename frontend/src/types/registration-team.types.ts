@@ -9,7 +9,7 @@
  */
 
 import type { RosterSlotCode } from "@/lib/roster-shape";
-import type { RegistrationCreateInput } from "@/types/registration.types";
+import type { RegistrationSubmitInput } from "@/types/registration.types";
 
 /** A registered team's lifecycle. `complete` is NOT terminal — a captain may
  *  still swap a player before the organizer exports. */
@@ -110,7 +110,7 @@ export interface RegistrationTeamCreateInput {
   /** The slot the captain personally occupies — they are a member like any other. */
   slot_code: RosterSlotCode;
   /** Identical shape to a solo registration; the backend runs the same validation. */
-  registration: RegistrationCreateInput;
+  registration: RegistrationSubmitInput;
 }
 
 export interface RegistrationTeamInviteInput {
@@ -138,7 +138,7 @@ export interface RegistrationTeamAcceptInput {
    * It used to be required-but-ignored, which forced callers to cast an empty
    * object — a lie the type system could not catch.
    */
-  registration?: RegistrationCreateInput;
+  registration?: RegistrationSubmitInput;
 }
 
 /**

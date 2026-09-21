@@ -11,12 +11,15 @@ import {
   getSubroleOptions,
   type RoleCode,
 } from "@/lib/roles";
+import type { RolesParams } from "@/types/forms.types";
 import type { Hero } from "@/types/hero.types";
-import type { RegistrationForm } from "@/types/registration.types";
+import type { RoleInput, SubroleCatalog } from "@/types/registration.types";
 
 import {
+  fromRoleSelections,
   isFlexSelection,
   priorityChoice,
+  toRoleSelections,
   type FlexMode,
   type RolePriority,
   type RoleSelections,
@@ -25,23 +28,17 @@ import { RoleMatrixRow } from "./role-step/RoleMatrixRow";
 import { SegmentedRadio, type SegmentedOption } from "./role-step/SegmentedRadio";
 
 interface RoleStepProps {
-  selections: RoleSelections;
-  onChange: (next: RoleSelections) => void;
-  /** Step-level role error, shown once above the matrix. */
+  /** The `roles` builtin's params, defaults already filled in. */
+  params: RolesParams;
+  /** The workspace sub-role catalog the params select from. */
+  subroleCatalog: SubroleCatalog;
+  /** The stored `roles` answer. */
+  value: readonly RoleInput[];
+  onChange: (next: RoleInput[]) => void;
+  /** Field-level role error, shown once above the matrix. */
   error?: string | null;
-  form: RegistrationForm;
   hideHelperText?: boolean;
   allHeroes: Hero[];
-  topHeroesEnabled: boolean;
-  maxHeroes: number;
-  /**
-   * `off` — flex banned by the form. `optional` — the preset is offered.
-   * `all_roles` — every role mandatory; one radiogroup asks for a single
-   * priority role or flex, and the per-row priority disappears.
-   * `forced` — role does not matter at all: no choice, every role permanently
-   * main.
-   */
-  flexMode: FlexMode;
   /**
    * Restrict the matrix to ONE role, permanently `main`.
    *
@@ -67,19 +64,30 @@ interface RoleStepProps {
  * changes control *state*, never the set of rendered controls.
  */
 export default function RoleStep({
-  selections,
-  onChange,
+  params,
+  subroleCatalog,
+  value,
+  onChange: onValueChange,
   error = null,
-  form,
   hideHelperText = false,
   allHeroes,
-  topHeroesEnabled,
-  maxHeroes,
-  flexMode,
   lockedRole = null,
 }: Readonly<RoleStepProps>) {
   const t = useTranslations();
+  // The same translated slot vocabulary the roster shortfall, the invite chips
+  // and the slot picker speak, so the matrix never labels `damage` "DPS" beside
+  // a chip that reads "Дамаг".
+  const tSlots = useTranslations("rosterShape.slotCodes");
   const isLocked = lockedRole != null;
+  // `flex_allowed: false` is the old `flex_role.enabled: false` — no flex at all.
+  const flexMode: FlexMode = params.flex_allowed ? params.flex_mode : "off";
+  const topHeroesEnabled = params.top_heroes.enabled;
+  const maxHeroes = params.top_heroes.max;
+  // The matrix thinks in one entry per role; the answer stores only the roles
+  // taken. Converting at this boundary keeps both honest — the wire shape has
+  // no way to say "off", and the matrix has no way to say "absent".
+  const selections = toRoleSelections(value);
+  const onChange = (next: RoleSelections) => onValueChange(fromRoleSelections(next, lockedRole));
   const isForced = flexMode === "forced";
   const isAllRoles = !isLocked && flexMode === "all_roles";
   // A single row has nothing to prioritise against, so the control would only
@@ -87,9 +95,7 @@ export default function RoleStep({
   const showPriority = !isLocked && !isForced && !isAllRoles;
   const isFlex = !isLocked && (isForced || isFlexSelection(selections));
   const visibleRoles = isLocked ? ROLES.filter((role) => role.code === lockedRole) : ROLES;
-  const isAdditionalRolesRequired =
-    form.built_in_fields?.additional_roles?.enabled !== false &&
-    form.built_in_fields?.additional_roles?.required === true;
+  const isAdditionalRolesRequired = params.additional_required;
 
   /**
    * The roster offered for one row, always filtered to that row's role.
@@ -118,8 +124,10 @@ export default function RoleStep({
     );
   };
 
-  const subroleOptionsFor = (roleCode: string, priority: RolePriority) =>
-    getSubroleOptions(form, roleCode, priority === "main" ? "primary_role" : "additional_roles");
+  // The allowlist no longer splits by priority: one `subroles` map per role,
+  // whatever slot it is taken in.
+  const subroleOptionsFor = (roleCode: string) =>
+    getSubroleOptions(subroleCatalog, params.subroles, roleCode);
 
   /**
    * Exactly one role may be `main`, unless every role is (which is how the
@@ -158,20 +166,17 @@ export default function RoleStep({
   };
 
   const setPriority = (roleCode: RoleCode, priority: RolePriority) => {
-    const next: RoleSelections = { ...selections, [roleCode]: { ...selections[roleCode], priority } };
-    // The allowed specializations differ between a main and a fallback role
-    // (the backend keys the allowlist on `is_primary`), so drop a value the new
-    // priority no longer offers instead of submitting something invalid.
-    const allowed = subroleOptionsFor(roleCode, priority).map((option) => option.slug);
-    if (next[roleCode].subrole && !allowed.includes(next[roleCode].subrole)) {
-      next[roleCode] = { ...next[roleCode], subrole: "" };
-    }
-    onChange(normalize(next, roleCode));
+    // No subrole reset here any more: the allowlist is one map per role, so a
+    // specialization stays valid whichever slot the role is taken in.
+    onChange(
+      normalize({ ...selections, [roleCode]: { ...selections[roleCode], priority } }, roleCode),
+    );
   };
 
   const setSubrole = (roleCode: RoleCode, subrole: string) => {
-    // Choosing a specialization for a role marked "off" is a clear intent to
-    // play it; promote instead of dropping the input on the floor.
+    // Only reachable in the priority-less modes (forced/all_roles/locked): where
+    // the priority control is shown, an "off" row's cells are disabled. There a
+    // specialization on an "off" role is a clear intent to play it, so promote.
     const priority = selections[roleCode].priority === "off" ? "fallback" : selections[roleCode].priority;
     onChange(
       normalize({ ...selections, [roleCode]: { ...selections[roleCode], subrole, priority } }, roleCode),
@@ -227,7 +232,7 @@ export default function RoleStep({
   const priorityOptions: readonly SegmentedOption<RoleCode | "flex">[] = [
     ...ROLES.map((role) => ({
       value: role.code as RoleCode | "flex",
-      label: role.display,
+      label: tSlots(role.code),
       selectedClassName: (ROLE_ACCENTS[role.code] ?? ROLE_ACCENTS.flex).tile,
     })),
     {
@@ -311,9 +316,9 @@ export default function RoleStep({
           <RoleMatrixRow
             key={role.code}
             roleCode={role.code}
-            roleLabel={role.display}
+            roleLabel={tSlots(role.code)}
             selection={selections[role.code]}
-            subroleOptions={subroleOptionsFor(role.code, selections[role.code].priority)}
+            subroleOptions={subroleOptionsFor(role.code)}
             heroes={heroesForRole(role.code)}
             topHeroesEnabled={topHeroesEnabled}
             maxHeroes={maxHeroes}

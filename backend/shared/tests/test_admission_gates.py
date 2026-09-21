@@ -252,16 +252,16 @@ class TestDescribeRequirement(TestCase):
         assert "1" not in text
         assert text == "Boosty"
 
-    def test_unknown_provider_falls_back_to_its_key(self):
-        """A provider added to the catalog before it gets a display label must
-        still be NAMED. The alternative -- an empty segment -- would refuse a
-        patron over a rule the message does not state."""
-        text = describe_requirement(parse_requirement({"requirements": [{"provider": "youtube"}]}))
-        assert text == "youtube"
+    def test_provider_outside_the_catalog_falls_back_to_its_key(self):
+        """A rule naming a provider the catalog does not carry must still NAME
+        it. The alternative -- an empty segment -- would refuse a patron over a
+        rule the message does not state."""
+        text = describe_requirement(parse_requirement({"requirements": [{"provider": "patreon"}]}))
+        assert text == "patreon"
 
-    def test_unknown_provider_keeps_its_threshold(self):
-        text = describe_requirement(parse_requirement({"requirements": [{"provider": "youtube", "min_tier_rank": 3}]}))
-        assert text == "youtube уровень 3"
+    def test_provider_outside_the_catalog_keeps_its_threshold(self):
+        text = describe_requirement(parse_requirement({"requirements": [{"provider": "patreon", "min_tier_rank": 3}]}))
+        assert text == "patreon уровень 3"
 
 
 class TestReasonActorsSurviveTheProjection(TestCase):

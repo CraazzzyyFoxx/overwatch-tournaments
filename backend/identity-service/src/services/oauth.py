@@ -48,7 +48,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.core import http_status as status
 from shared.core.errors import BaseAPIException as HTTPException
-from shared.core.social import OAUTH_TO_SOCIAL
+from shared.core.social import social_provider_for_oauth
 from shared.repository import OAuthConnectionRepository, SocialAccountRepository, UserRepository
 from shared.tenancy.hostnames import is_platform_host, normalize_custom_domain
 from src import models, schemas
@@ -416,7 +416,7 @@ class OAuthFlowService:
             )
 
         unverified = 0
-        provider_social = OAUTH_TO_SOCIAL.get(provider)
+        provider_social = social_provider_for_oauth(provider)
         if provider_social is not None:
             player = await self.players.get_by_auth_user_id(session, user.id)
             if player is not None:

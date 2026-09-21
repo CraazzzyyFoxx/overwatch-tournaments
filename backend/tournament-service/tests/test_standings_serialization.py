@@ -259,7 +259,7 @@ class StandingLoadOptionTests(TestCase):
 
 class MatchHistorySortingTests(TestCase):
     def test_sorts_swiss_matches_naturally(self) -> None:
-        from shared.services.tournament.utils import sort_bracket_matches
+        from shared.domain.tournament_utils import sort_bracket_matches
 
         matches = [
             _encounter(id=1, home_team_id=1, away_team_id=2, stage_id=1, stage_item_id=1, round=3),
@@ -270,7 +270,7 @@ class MatchHistorySortingTests(TestCase):
         self.assertEqual([2, 3, 1], [m.id for m in sorted_matches])
 
     def test_sorts_double_elimination_chronologically(self) -> None:
-        from shared.services.tournament.utils import sort_bracket_matches
+        from shared.domain.tournament_utils import sort_bracket_matches
 
         # UB R1 (1), LB R1 (-1), UB R2 (2), LB R2 (-2), UB Final (3), LB Final (-4), Grand Final (4), GF Reset (5)
         matches = [

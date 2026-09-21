@@ -75,6 +75,7 @@ stop being maintained once the work ships.
 
 - [`tournament-redesign/`](./tournament-redesign/) — public tournament page redesign
 - [`plans/2026-09-13-decouple-stats-from-tournament.md`](./plans/2026-09-13-decouple-stats-from-tournament.md) — write-authority seam between series results and match logs
+- [`plans/2026-09-20-multi-discipline-stats-engine.md`](./plans/2026-09-20-multi-discipline-stats-engine.md) — disciplines (games), per-discipline roles, and the `rpc.stats.*` engine seam
 
 ## Archive
 

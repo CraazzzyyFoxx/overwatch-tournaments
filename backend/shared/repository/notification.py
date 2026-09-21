@@ -326,6 +326,22 @@ class NotificationRepository(BaseRepository[models.Notification]):
         result = await session.execute(statement)
         return max(result.rowcount, 0)
 
+    async def retire(
+        self,
+        session: AsyncSession,
+        *,
+        filters: Sequence[sa.ColumnElement[bool]],
+    ) -> int:
+        """Stamp ``expires_at = now()`` on every row the filters select.
+
+        Retirement is how a notification is "deleted": the row and its read
+        marks survive (``notification_read`` points at the id with no foreign
+        key), while every read already filters on the same time window. The
+        caller composes the scope, because who may retire what is policy.
+        """
+        result = await session.execute(sa.update(self.model).where(*filters).values(expires_at=sa.func.now()))
+        return max(result.rowcount, 0)
+
     async def active_global(
         self,
         session: AsyncSession,

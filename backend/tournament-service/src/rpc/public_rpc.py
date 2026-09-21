@@ -44,6 +44,13 @@ from shared.core.enums import PickBanKind, SubscriptionCollectionSource
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.rpc.identity import rehydrate_user
 from shared.services.admission import AdmissionStage
+from shared.services.chat import (
+    HISTORY_DEFAULT,
+    ChatMuteInput,
+    ChatPostInput,
+    ChatRoom,
+    ChatSettingsInput,
+)
 from shared.services.subscriptions.realtime import emit_subscriptions_updated
 from shared.services.subscriptions.wiring import build_resolver, build_store
 from shared.services.tournament.visibility import assert_tournament_viewable
@@ -56,6 +63,7 @@ from src.rpc._helpers import (
     _identity,
     _path_int,
     _payload,
+    _q1,
     _require_id,
     _require_q1,
     _run,
@@ -69,16 +77,16 @@ from src.schemas.captain import (
     resolve_optional_viewer_side,
 )
 from src.schemas.registration import (
-    RegistrationCreate,
     RegistrationStatusResponse,
+    RegistrationSubmit,
     RegistrationUpdate,
     SubscriptionRedeemRequest,
 )
 from src.schemas.registration_build import (
     AdmissionChips,
-    _form_to_read,
     _public_rosters,
     _reg_to_read,
+    _resolve_top_heroes_config,
     _resolve_tournament_workspace,
 )
 from src.schemas.registration_team import (
@@ -100,6 +108,7 @@ from src.services import visibility_resolvers
 from src.services.encounter import flows as encounter_flows
 from src.services.encounter import pick_ban_action as pick_ban_action
 from src.services.encounter.captain import captain_service
+from src.services.encounter.chat_access import encounter_chat_service
 from src.services.encounter.map_report import map_report_service
 from src.services.encounter.pick_ban_session import pick_ban_session_service
 from src.services.encounter.pick_ban_undo import pick_ban_undo_service
@@ -109,14 +118,12 @@ from src.services.registration import service as reg_service
 from src.services.registration import subscription_config
 from src.services.registration import teams as team_service
 from src.services.registration.admission import assert_admitted_at
+from src.services.registration.answers import answer_service
+from src.services.registration.serializers import serialize_registration_form
 from src.services.registration.subscription_codes import redeem_challenge_code
 from src.services.registration.subscription_status import (
     assert_redeem_attempt_allowed,
     subscription_status_for_user,
-)
-from src.services.registration.validation import (
-    validate_registration_input,
-    validation_service,
 )
 from src.services.registration.windows import windows_service
 
@@ -376,6 +383,89 @@ def register(broker: Any, logger: Any) -> None:
 
         return await _run(logger, op)
 
+    # ── pre-game room chat (shared room-chat service, chat_* tables) ──────
+
+    @broker.subscriber("rpc.tournament.encounter_chat_history")
+    async def _encounter_chat_history(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            # AuthOptional: spectators read this room when an organizer has
+            # opened it, so an absent identity is a caller, not an error.
+            user = _optional_identity(data)
+            room = ChatRoom.encounter(_require_id(data))
+            envelope = await encounter_chat_service.envelope(
+                session,
+                user,
+                room,
+                after_id=_q1(data, "after_id", int),
+                limit=_q1(data, "limit", int, HISTORY_DEFAULT),
+            )
+            return envelope.model_dump(mode="json")
+
+        return await _run(logger, op)
+
+    @broker.subscriber("rpc.tournament.encounter_chat_post")
+    async def _encounter_chat_post(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            user = _identity(data)
+            room = ChatRoom.encounter(_require_id(data))
+            body = ChatPostInput.model_validate(_payload(data))
+            # ChatService commits internally, here and in every write below.
+            message = await encounter_chat_service.post(session, user, room, body.body)
+            return message.model_dump(mode="json")
+
+        return await _run(logger, op)
+
+    @broker.subscriber("rpc.tournament.encounter_chat_delete")
+    async def _encounter_chat_delete(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            user = _identity(data)
+            room = ChatRoom.encounter(_require_id(data))
+            await encounter_chat_service.delete(session, user, room, _path_int(data, "message_id"))
+            return {"deleted": True}
+
+        return await _run(logger, op)
+
+    @broker.subscriber("rpc.tournament.encounter_chat_settings")
+    async def _encounter_chat_settings(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            user = _identity(data)
+            room = ChatRoom.encounter(_require_id(data))
+            body = ChatSettingsInput.model_validate(_payload(data))
+            settings_read = await encounter_chat_service.set_settings(
+                session, user, room, spectators_can_read=body.spectators_can_read
+            )
+            return settings_read.model_dump(mode="json")
+
+        return await _run(logger, op)
+
+    @broker.subscriber("rpc.tournament.encounter_chat_mute_set")
+    async def _encounter_chat_mute_set(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            user = _identity(data)
+            room = ChatRoom.encounter(_require_id(data))
+            body = ChatMuteInput.model_validate(_payload(data))
+            mute = await encounter_chat_service.set_mute(
+                session,
+                user,
+                room,
+                _path_int(data, "target_user_id"),
+                minutes=body.minutes,
+                reason=body.reason,
+            )
+            return mute.model_dump(mode="json")
+
+        return await _run(logger, op)
+
+    @broker.subscriber("rpc.tournament.encounter_chat_mute_clear")
+    async def _encounter_chat_mute_clear(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            user = _identity(data)
+            room = ChatRoom.encounter(_require_id(data))
+            await encounter_chat_service.clear_mute(session, user, room, _path_int(data, "target_user_id"))
+            return {"deleted": True}
+
+        return await _run(logger, op)
+
     # ── public registration (user sign-up) ────────────────────────────────
 
     @broker.subscriber("rpc.tournament.reg_pub_form")
@@ -395,11 +485,12 @@ def register(broker: Any, logger: Any) -> None:
             )
             is_open = await windows_service.load_registration_open(session, tournament_id)
             return _dump(
-                _form_to_read(
+                serialize_registration_form(
                     form,
                     is_open=is_open,
                     subrole_catalog=subrole_catalog,
                     subscription_requirement=requirement,
+                    stale_registrations=None,
                 )
             )
 
@@ -411,7 +502,7 @@ def register(broker: Any, logger: Any) -> None:
             user = _identity(data)
             tournament_id = _path_int(data, "tournament_id")
             await assert_tournament_viewable(session, user, tournament_id)
-            body = RegistrationCreate.model_validate(_payload(data))
+            body = RegistrationSubmit.model_validate(_payload(data))
 
             # Admission gate, sign-up stage. Every requirement the tournament armed
             # at `registration` is asked here, in one call; a requirement staged at
@@ -477,6 +568,9 @@ def register(broker: Any, logger: Any) -> None:
                     subscription_verdicts=chips.subscription_verdicts,
                     roster=(await _public_rosters(session, [reg])).get(reg.id),
                     queue=await reg_service.registration_service.queue_position(session, reg),
+                    # The registrant's OWN card: no public-key filter (they wrote
+                    # every answer), but it must say when the questions moved on.
+                    current_version_id=form.current_version_id if form is not None else None,
                 )
             )
 
@@ -498,22 +592,29 @@ def register(broker: Any, logger: Any) -> None:
             if reg is None:
                 raise HTTPException(status_code=404, detail="No registration found")
 
-            validate_registration_input(form, body, partial=True)
-            await validation_service.validate_verified_identity(
+            schema = reg_service._require_current_schema(form, body.form_version_id)
+            hero_catalog, _ = await _resolve_top_heroes_config(session, form)
+            values = await answer_service.validate(
                 session,
-                form=form,
-                payload=body,
+                schema=schema,
+                answers=body.answers,
+                partial=True,
+                enforce_required=True,
                 # get_registration eager-loads workspace_member (the
                 # registration's only identity anchor since dbarch02).
                 player_id=reg.workspace_member.player_id if reg.workspace_member is not None else None,
-                partial=True,
+                workspace_id=form.workspace_id,
+                hero_catalog=hero_catalog,
             )
 
             # update_registration commits internally.
             updated = await reg_service.registration_service.update_registration(
                 session,
                 reg,
-                **body.model_dump(exclude_unset=True),
+                values=values,
+                schema=schema,
+                hero_catalog=hero_catalog,
+                form_version_id=form.current_version_id,
             )
             status_meta_map = await get_status_metas_map(session, workspace_id=form.workspace_id)
             return _dump(
@@ -524,6 +625,7 @@ def register(broker: Any, logger: Any) -> None:
                     show_ranks=form.show_ranks,
                     roster=(await _public_rosters(session, [updated])).get(updated.id),
                     queue=await reg_service.registration_service.queue_position(session, updated),
+                    current_version_id=form.current_version_id,
                 )
             )
 
@@ -597,6 +699,7 @@ def register(broker: Any, logger: Any) -> None:
                     show_ranks=form.show_ranks if form else False,
                     roster=(await _public_rosters(session, [checked_in])).get(checked_in.id),
                     queue=await reg_service.registration_service.queue_position(session, checked_in),
+                    current_version_id=form.current_version_id if form is not None else None,
                 )
             )
 

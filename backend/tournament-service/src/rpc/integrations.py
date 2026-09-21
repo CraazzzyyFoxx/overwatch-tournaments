@@ -38,11 +38,12 @@ from typing import Any
 
 import sqlalchemy as sa
 from faststream.rabbit.annotations import RabbitMessage
+from sqlalchemy.orm import selectinload
 
 from shared import quota
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.domain.roster import flex_role_mode
-from shared.repository import WorkspaceRepository
+from shared.repository import TournamentRepository, WorkspaceRepository
 from shared.rpc.identity import ensure_workspace_permission
 from shared.services.audit import record_admin_audit
 from shared.services.division_grid.access import (
@@ -136,13 +137,17 @@ async def _owt_player_export(
     solver reads the flex slot count from the tournament, never from the file,
     so a payload without it cannot be re-run anywhere else.
     """
-    tournament = await session.get(models.Tournament, tournament_id)
+    tournament = await TournamentRepository().get(session, tournament_id)
     if tournament is None:
         raise HTTPException(status_code=404, detail="Tournament not found")
     workspace_id = tournament.workspace_id
     shape = await get_effective_roster_shape(session, tournament_id=tournament_id, workspace_id=workspace_id)
     form = await session.scalar(
-        sa.select(models.BalancerRegistrationForm).where(models.BalancerRegistrationForm.tournament_id == tournament_id)
+        sa.select(models.BalancerRegistrationForm)
+        # ``flex_role_mode`` reads the schema off the current version, which is
+        # never lazy-loadable in async code.
+        .options(selectinload(models.BalancerRegistrationForm.current_version))
+        .where(models.BalancerRegistrationForm.tournament_id == tournament_id)
     )
     grid = await get_effective_division_grid(session, workspace_id, tournament_id)
     return roster_engine.full_export(

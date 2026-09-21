@@ -57,7 +57,7 @@ from shared.repository import (
     TournamentRepository,
     UserRepository,
 )
-from shared.services.settings_provider import get_scrim_config
+from shared.services.settings_provider import settings_provider
 from shared.services.tournament.visibility import assert_tournament_viewable
 from src import models
 from src.services.encounter.pick_ban_session import (
@@ -599,7 +599,7 @@ class ScrimService:
         beyond the URL.
         """
         require_workspace_member(user, workspace_id)
-        config = await get_scrim_config(session)
+        config = await settings_provider.get_scrim_config(session)
         await self._assert_under_cap(session, user, config.max_open_rooms_per_user)
         if best_of < 1 or best_of > config.max_best_of:
             raise HTTPException(status_code=422, detail=f"best_of must be between 1 and {config.max_best_of}")

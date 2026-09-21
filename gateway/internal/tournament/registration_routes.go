@@ -32,6 +32,12 @@ var RegistrationAdminRoutes = []edge.RouteSpec{
 	// registration-form get/upsert (keyed by tournament_id).
 	{Method: "GET", Pattern: "/api/v1/admin/balancer/tournaments/{tournament_id}/registration-form", Queue: "rpc.tournament.reg_form_get", IDParam: "tournament_id", Auth: edge.AuthRequired, Timeout: regReadTimeout},
 	{Method: "PUT", Pattern: "/api/v1/admin/balancer/tournaments/{tournament_id}/registration-form", Queue: "rpc.tournament.reg_form_upsert", IDParam: "tournament_id", Body: true, Auth: edge.AuthRequired},
+	// Workspace form templates — named question sets, copied onto a tournament's
+	// form on apply. The two tournament-scoped routes key on the TOURNAMENT
+	// (IDParam) because that is what the worker authorizes against; the template
+	// id rides in the body, scoped to the workspace that resolved to.
+	{Method: "POST", Pattern: "/api/v1/admin/balancer/tournaments/{tournament_id}/registration-form/apply-template", Queue: "rpc.tournament.regform_template_apply", IDParam: "tournament_id", Body: true, Auth: edge.AuthRequired},
+	{Method: "POST", Pattern: "/api/v1/admin/balancer/tournaments/{tournament_id}/registration-form/save-template", Queue: "rpc.tournament.regform_template_save_from_form", IDParam: "tournament_id", Body: true, Auth: edge.AuthRequired, Success: 201},
 	// list registrations (status/inclusion/source filters + include_deleted) -> AllQuery.
 	{Method: "GET", Pattern: "/api/v1/admin/balancer/tournaments/{tournament_id}/registrations", Queue: "rpc.tournament.reg_list", IDParam: "tournament_id", AllQuery: true, Auth: edge.AuthRequired, Timeout: regReadTimeout},
 	// create manual registration (201).
@@ -99,4 +105,12 @@ var RegistrationAdminRoutes = []edge.RouteSpec{
 	// an admission rule would be a silent policy change.
 	{Method: "GET", Pattern: "/api/v1/admin/ws/{workspace_id}/subscription-requirement", Queue: "rpc.tournament.sub_requirement_get", Path: []string{"workspace_id"}, Auth: edge.AuthRequired, Timeout: regReadTimeout},
 	{Method: "PUT", Pattern: "/api/v1/admin/ws/{workspace_id}/subscription-requirement", Queue: "rpc.tournament.sub_requirement_upsert", Path: []string{"workspace_id"}, Body: true, Auth: edge.AuthRequired},
+
+	// Workspace registration-form templates — the library side of the two
+	// tournament routes above. PUT, not PATCH: a template IS its name plus its
+	// question set, and a partial merge of a question set is not a thing.
+	{Method: "GET", Pattern: "/api/v1/admin/ws/{workspace_id}/registration-form-templates", Queue: "rpc.tournament.regform_template_list", Path: []string{"workspace_id"}, Auth: edge.AuthRequired, Timeout: regReadTimeout},
+	{Method: "POST", Pattern: "/api/v1/admin/ws/{workspace_id}/registration-form-templates", Queue: "rpc.tournament.regform_template_create", Path: []string{"workspace_id"}, Body: true, Auth: edge.AuthRequired, Success: 201},
+	{Method: "PUT", Pattern: "/api/v1/admin/ws/{workspace_id}/registration-form-templates/{template_id}", Queue: "rpc.tournament.regform_template_update", Path: []string{"workspace_id", "template_id"}, Body: true, Auth: edge.AuthRequired},
+	{Method: "DELETE", Pattern: "/api/v1/admin/ws/{workspace_id}/registration-form-templates/{template_id}", Queue: "rpc.tournament.regform_template_delete", Path: []string{"workspace_id", "template_id"}, Auth: edge.AuthRequired, Success: 204},
 }

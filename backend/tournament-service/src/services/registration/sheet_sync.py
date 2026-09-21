@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -28,9 +29,11 @@ from sqlalchemy.orm import selectinload
 
 from shared.balancer_subrole_catalog import resolve_subrole_catalog
 from shared.core import http_status as status
+from shared.core.errors import ApiHTTPException
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.core.social import SocialProvider
-from shared.domain.roster import FlexRoleMode, flex_role_mode
+from shared.domain.forms import FormSchema, default_schema, schema_from_form
+from shared.domain.roster import FlexRoleMode, flex_role_mode_from_schema
 from shared.repository import (
     BalancerRegistrationRepository,
     GoogleSheetBindingRepository,
@@ -43,6 +46,7 @@ from src.domain.registration.mapping_catalog import (
     PARSER_CATALOG,
     build_target_specs,
     classify_row_disposition,
+    schema_custom_fields,
     target_spec_map,
     validate_mapping_config,
     validate_value_mapping_subroles,
@@ -65,13 +69,13 @@ from src.domain.registration.utils import (
     normalize_battle_tag_key,
     row_to_json,
 )
-from src.schemas.registration import CustomFieldDefinition
 from src.services.registration._common import (
     RegistrationCommonService,
     _common_service,
     replace_registration_roles,
     sync_included_balancer_status,
 )
+from src.services.registration.answers import answer_service
 from src.services.registration.service import registration_service
 
 logger = logging.getLogger(__name__)
@@ -112,14 +116,14 @@ async def _resolve_header_keys(
 
 
 def build_mapping_catalog(
-    custom_fields: list[CustomFieldDefinition],
+    schema: FormSchema | None,
     *,
     value_mapping: dict[str, Any] | None = None,
     header_keys: list[str] | None = None,
     subrole_catalog: dict[str, list[dict[str, str]]] | None = None,
 ) -> dict[str, Any]:
     """Assemble the frontend mapping catalog (targets, parsers, value maps)."""
-    specs = build_target_specs(custom_fields)
+    specs = build_target_specs(schema)
     default_value_mapping = build_default_value_mapping()
     saved_value_mapping = value_mapping or {}
     effective_value_mapping = {
@@ -157,7 +161,7 @@ def build_mapping_catalog(
             {"category": category, "entries": effective_value_mapping.get(category) or {}}
             for category in ("booleans", "roles", "subroles", "role_subroles", "divisions")
         ],
-        "custom_fields": [field_def.model_dump() for field_def in custom_fields],
+        "custom_fields": [field_def.model_dump() for field_def in schema_custom_fields(schema)],
         "header_keys": header_keys or [],
         "subrole_catalog": subrole_catalog or {code: [] for code in ("tank", "damage", "support")},
     }
@@ -166,11 +170,17 @@ def build_mapping_catalog(
 def apply_sheet_fields_to_registration(
     registration: models.BalancerRegistration,
     parsed_fields: dict[str, Any],
+    values: Mapping[str, Any],
     *,
+    schema: FormSchema,
     allow_balancer_overwrite: bool,
     mode: FlexRoleMode = "optional",
 ) -> bool:
     """Write one parsed sheet row onto a registration.
+
+    ``values`` is the row's answers already validated against ``schema``; the
+    answer service owns the columns, the identity rows and the custom answers,
+    so everything left here is organizer state the form never asks about.
 
     Returns whether the row's roles were rewritten, i.e. whether its
     ``ready``/``incomplete`` verdict needs recomputing. The recompute itself is
@@ -178,24 +188,8 @@ def apply_sheet_fields_to_registration(
     roster engine, which needs a session, and asking it per row would put a
     resolve inside a loop that runs every five minutes per tournament.
     """
-    registration.display_name = (
-        parsed_fields.get("display_name") or parsed_fields.get("battle_tag") or registration.display_name
-    )
-    if parsed_fields.get("battle_tag") is not None:
-        registration.battle_tag = parsed_fields["battle_tag"]
-        registration.battle_tag_normalized = normalize_battle_tag_key(parsed_fields["battle_tag"])
-    registration.smurf_tags_json = parsed_fields.get("smurf_tags") or None
-    registration.discord_nick = parsed_fields.get("discord_nick")
-    registration.twitch_nick = parsed_fields.get("twitch_nick")
-    registration.boosty_nick = parsed_fields.get("boosty_nick")
-    registration.stream_pov = bool(parsed_fields.get("stream_pov", False))
-    registration.notes = parsed_fields.get("notes")
-
-    parsed_custom = parsed_fields.get("custom_fields")
-    if parsed_custom:
-        merged = dict(registration.custom_fields_json or {})
-        merged.update(parsed_custom)
-        registration.custom_fields_json = merged or None
+    registration.display_name = parsed_fields.get("display_name") or registration.display_name
+    answer_service.apply(registration, values, schema=schema, hero_catalog=None)
 
     if not allow_balancer_overwrite:
         return False
@@ -233,6 +227,21 @@ class SheetSyncService:
         self.registration_repo = registration_repo
         self.common = common
 
+    async def _registration_schema(self, session: AsyncSession, tournament_id: int) -> FormSchema:
+        """THE schema every sheet operation is written against.
+
+        One resolver, because the mapping catalog, the config validation, the
+        suggester, the preview and the sync must agree on which targets exist:
+        a catalog that offers a target the validator rejects, or a validator
+        that accepts one the sync ignores, is worse than either rule alone.
+
+        A tournament with no form (or no version yet) falls back to
+        ``default_schema()``, matching ``lifecycle._validated_answers`` — before
+        the schema existed the sheet wrote its columns unconditionally, and
+        dropping every battle tag on such a tournament is not a fix.
+        """
+        return schema_from_form(await self.common.get_registration_form(session, tournament_id)) or default_schema()
+
     async def get_google_sheet_feed(
         self,
         session: AsyncSession,
@@ -262,8 +271,8 @@ class SheetSyncService:
     ) -> None:
         tournament = await self.common.ensure_tournament_exists(session, tournament_id)
         catalog = await resolve_subrole_catalog(session, tournament.workspace_id)
-        custom_fields = await self.common.get_form_custom_field_defs(session, tournament_id)
-        target_specs = target_spec_map(custom_fields)
+        schema = await self._registration_schema(session, tournament_id)
+        target_specs = target_spec_map(schema)
         header_keys = await _resolve_header_keys(source_url, existing_feed)
         issues = []
         if mapping_config_json is not None:
@@ -356,8 +365,8 @@ class SheetSyncService:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Google Sheets URL is required")
         rows = await fetch_google_sheet_rows(url)
         headers = rows[0]
-        custom_fields = await self.common.get_form_custom_field_defs(session, tournament_id)
-        return feed, headers, suggest_mapping_from_headers(headers, custom_fields=custom_fields)
+        schema = await self._registration_schema(session, tournament_id)
+        return feed, headers, suggest_mapping_from_headers(headers, schema=schema)
 
     async def get_mapping_catalog(
         self,
@@ -368,7 +377,7 @@ class SheetSyncService:
     ) -> dict[str, Any]:
         tournament = await self.common.ensure_tournament_exists(session, tournament_id)
         feed = await self.get_google_sheet_feed(session, tournament_id)
-        custom_fields = await self.common.get_form_custom_field_defs(session, tournament_id)
+        schema = await self._registration_schema(session, tournament_id)
         header_keys: list[str] | None = None
         if include_headers and feed is not None:
             if feed.header_row_json:
@@ -376,7 +385,7 @@ class SheetSyncService:
             elif feed.source_url:
                 header_keys = await _resolve_header_keys(feed.source_url, feed)
         return build_mapping_catalog(
-            custom_fields,
+            schema,
             value_mapping=feed.value_mapping_json if feed else None,
             header_keys=header_keys,
             subrole_catalog=await resolve_subrole_catalog(session, tournament.workspace_id),
@@ -403,7 +412,7 @@ class SheetSyncService:
         header_keys = build_header_keys(headers)
         data_rows = rows[1 : 1 + limit]
         grid = await self.common.get_tournament_grid(session, tournament_id)
-        custom_fields = await self.common.get_form_custom_field_defs(session, tournament_id)
+        schema = await self._registration_schema(session, tournament_id)
         effective_mapping = mapping_config_json or (feed.mapping_config_json if feed else None)
         effective_value_mapping = value_mapping_json or (feed.value_mapping_json if feed else None)
         tournament = await self.common.ensure_tournament_exists(session, tournament_id)
@@ -422,12 +431,12 @@ class SheetSyncService:
                 mapping_config=effective_mapping,
                 value_mapping=effective_value_mapping,
                 grid=grid,
-                custom_fields=custom_fields,
+                schema=schema,
                 subrole_catalog=subrole_catalog,
             )
             fields = result.fields
             source_record_key = fields.get("source_record_key") if fields else None
-            battle_tag_key = normalize_battle_tag_key(fields.get("battle_tag")) if fields else None
+            battle_tag_key = normalize_battle_tag_key(((fields or {}).get("answers") or {}).get("battle_tag"))
             disposition = classify_row_disposition(
                 source_record_key,
                 battle_tag_key,
@@ -496,6 +505,54 @@ class SheetSyncService:
         )
         return list(result.scalars().all())
 
+    async def _validated_row_answers(
+        self,
+        session: AsyncSession,
+        parsed_fields: dict[str, Any],
+        *,
+        schema: FormSchema,
+        workspace_id: int,
+    ) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
+        """One row's answers validated against the form, or ``None`` + its errors.
+
+        The organizer profile: partial (an unmapped question is untouched, a
+        mapped-and-empty cell clears), requirements off, and no OAuth gate --
+        nobody's proof backs what a spreadsheet says.
+
+        The answers arrive already restricted to questions the schema declares,
+        because the target set the parser works from IS derived from that schema
+        (``mapping_catalog.build_target_specs``). Nothing is filtered here: a key
+        this rejects as unknown would be a genuine disagreement between the two,
+        and the row error it raises is the right way to hear about it.
+
+        A row whose answers do not normalise comes back as ``None`` plus its
+        field errors, and the caller leaves it unwritten rather than
+        half-written.
+        """
+        answers = parsed_fields.get("answers") or {}
+        try:
+            values = await answer_service.validate(
+                session,
+                schema=schema,
+                answers=answers,
+                partial=True,
+                enforce_required=False,
+                player_id=None,
+                workspace_id=workspace_id,
+                hero_catalog=None,
+            )
+        except ApiHTTPException as exc:
+            return None, [
+                {
+                    "target": detail.get("field"),
+                    "column": None,
+                    "message": detail.get("msg") or "",
+                    "code": detail.get("code"),
+                }
+                for detail in exc.detail
+            ]
+        return values, []
+
     async def sync_google_sheet_feed(
         self,
         session: AsyncSession,
@@ -504,23 +561,28 @@ class SheetSyncService:
         feed = await self.require_google_sheet_feed(session, tournament_id)
         grid = await self.common.get_tournament_grid(session, tournament_id)
         tournament = await self.common.ensure_tournament_exists(session, tournament_id)
-        custom_fields = await self.common.get_form_custom_field_defs(session, tournament_id)
+        form = await self.common.get_registration_form(session, tournament_id)
+        # A feed can be configured before anyone opens the form builder. The
+        # shipped default question set then stands in as the sheet's answer
+        # vocabulary, so an import still lands the battle tag -- the row's own
+        # identity -- instead of writing nothing at all. Same fallback as
+        # ``_registration_schema``, spelled out because the sync needs the form
+        # row itself for ``current_version_id``.
+        schema = schema_from_form(form) or default_schema()
         # The sheet sync is the one role-write path that never read the form. In a
         # non-optional flex mode a sheet row must land with the same role set as any
         # other, so the mode is resolved once per sync rather than per row.
-        mode = flex_role_mode(await self.common.get_registration_form(session, tournament_id))
+        mode = flex_role_mode_from_schema(schema)
         now = datetime.now(UTC)
 
         try:
             rows = await fetch_google_sheet_rows(feed.source_url, sheet_id=feed.sheet_id, gid=feed.gid)
             headers = rows[0]
-            mapping_config = feed.mapping_config_json or suggest_mapping_from_headers(
-                headers, custom_fields=custom_fields
-            )
+            mapping_config = feed.mapping_config_json or suggest_mapping_from_headers(headers, schema=schema)
             value_mapping = feed.value_mapping_json or build_default_value_mapping()
             subrole_catalog = await resolve_subrole_catalog(session, tournament.workspace_id)
 
-            parsed_rows: dict[str, tuple[dict[str, str], dict[str, Any]]] = {}
+            parsed_rows: dict[str, tuple[int, dict[str, str], dict[str, Any]]] = {}
             skipped = 0
             row_errors: list[dict[str, Any]] = []
             for row_index, row in enumerate(rows[1:]):
@@ -530,7 +592,7 @@ class SheetSyncService:
                     mapping_config=mapping_config,
                     value_mapping=value_mapping,
                     grid=grid,
-                    custom_fields=custom_fields,
+                    schema=schema,
                     subrole_catalog=subrole_catalog,
                 )
                 for entry in result.errors:
@@ -539,7 +601,7 @@ class SheetSyncService:
                 if not result.fields:
                     skipped += 1
                     continue
-                parsed_rows[result.fields["source_record_key"]] = (row_to_json(headers, row), result.fields)
+                parsed_rows[result.fields["source_record_key"]] = (row_index, row_to_json(headers, row), result.fields)
 
             existing_bindings = list(
                 await self.binding_repo.list_by_feed(
@@ -553,6 +615,11 @@ class SheetSyncService:
                         # lookup below is query-free for already-anchored rows.
                         selectinload(models.BalancerRegistrationGoogleSheetBinding.registration).selectinload(
                             models.BalancerRegistration.workspace_member
+                        ),
+                        # ``answer_service.apply`` upserts identity rows in place;
+                        # the relationship is never lazy-loadable in async code.
+                        selectinload(models.BalancerRegistrationGoogleSheetBinding.registration).selectinload(
+                            models.BalancerRegistration.identities
                         ),
                     ],
                 )
@@ -576,6 +643,7 @@ class SheetSyncService:
                     # The member is the registration's identity anchor; loading it
                     # here keeps ensure_player_identity's lookup query-free.
                     selectinload(models.BalancerRegistration.workspace_member),
+                    selectinload(models.BalancerRegistration.identities),
                 )
                 .order_by(models.BalancerRegistration.id.asc())
             )
@@ -609,13 +677,28 @@ class SheetSyncService:
             # recomputed once, below, from the engine's rosters.
             resync_status_by_id: dict[int, models.BalancerRegistration] = {}
 
-            for source_record_key, (raw_row_json, parsed_fields) in parsed_rows.items():
+            for source_record_key, (row_index, raw_row_json, parsed_fields) in parsed_rows.items():
+                # Seen BEFORE validation: a row the sheet still carries must not
+                # be withdrawn just because one of its cells no longer parses.
                 seen_keys.add(source_record_key)
+                values, answer_errors = await self._validated_row_answers(
+                    session,
+                    parsed_fields,
+                    schema=schema,
+                    workspace_id=tournament.workspace_id,
+                )
+                if values is None:
+                    for entry in answer_errors:
+                        if len(row_errors) < SYNC_ERROR_SAMPLE_LIMIT:
+                            row_errors.append({**entry, "row_index": row_index})
+                    skipped += 1
+                    continue
+
                 binding = bindings_by_key.get(source_record_key)
                 registration = binding.registration if binding else None
 
                 if registration is None:
-                    battle_tag_key = normalize_battle_tag_key(parsed_fields.get("battle_tag"))
+                    battle_tag_key = normalize_battle_tag_key(values.get("battle_tag"))
                     if battle_tag_key:
                         registration = registrations_by_tag.get(battle_tag_key)
 
@@ -625,20 +708,13 @@ class SheetSyncService:
                     # ensure_player_identity below.
                     registration = models.BalancerRegistration(
                         tournament_id=tournament_id,
-                        display_name=parsed_fields.get("display_name") or parsed_fields.get("battle_tag"),
-                        battle_tag=parsed_fields.get("battle_tag"),
-                        battle_tag_normalized=normalize_battle_tag_key(parsed_fields.get("battle_tag")),
-                        smurf_tags_json=parsed_fields.get("smurf_tags") or None,
-                        discord_nick=parsed_fields.get("discord_nick"),
-                        twitch_nick=parsed_fields.get("twitch_nick"),
-                        boosty_nick=parsed_fields.get("boosty_nick"),
-                        stream_pov=bool(parsed_fields.get("stream_pov", False)),
-                        notes=parsed_fields.get("notes"),
+                        form_version_id=form.current_version_id if form is not None else None,
+                        display_name=parsed_fields.get("display_name"),
                         admin_notes=parsed_fields.get("admin_notes"),
-                        custom_fields_json=parsed_fields.get("custom_fields") or None,
                         status="approved",
                         submitted_at=parsed_fields.get("submitted_at") or now,
                     )
+                    answer_service.apply(registration, values, schema=schema, hero_catalog=None)
                     replace_registration_roles(
                         registration,
                         build_registration_role_payloads(parsed_fields),
@@ -653,6 +729,8 @@ class SheetSyncService:
                     if apply_sheet_fields_to_registration(
                         registration,
                         parsed_fields,
+                        values,
+                        schema=schema,
                         allow_balancer_overwrite=allow_balancer_overwrite,
                         mode=mode,
                     ):

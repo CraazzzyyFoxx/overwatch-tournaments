@@ -50,7 +50,9 @@ class EnsureCreateLimitTests(IsolatedAsyncioTestCase):
         config = WorkspaceCreationConfig() if limit is None else WorkspaceCreationConfig(max_owned_per_user=limit)
         count = AsyncMock(return_value=owned)
         with (
-            patch.object(workspace_service, "get_workspace_creation_config", AsyncMock(return_value=config)),
+            patch.object(
+                workspace_service.settings_provider, "get_workspace_creation_config", AsyncMock(return_value=config)
+            ),
             patch.object(workspaces.workspace_repo, "count_by_owner", count),
         ):
             await workspaces.ensure_create_limit(session, user or _actor())
@@ -92,7 +94,7 @@ class EnsureCreateLimitTests(IsolatedAsyncioTestCase):
         session = _Session()
         count = AsyncMock()
         with (
-            patch.object(workspace_service, "get_workspace_creation_config", AsyncMock()) as config,
+            patch.object(workspace_service.settings_provider, "get_workspace_creation_config", AsyncMock()) as config,
             patch.object(workspaces.workspace_repo, "count_by_owner", count),
         ):
             await workspaces.ensure_create_limit(session, _actor(is_superuser=True))

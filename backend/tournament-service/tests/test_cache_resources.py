@@ -58,11 +58,15 @@ class CacheResourceParityTests(TestCase):
             for pattern in build(7):
                 self.assertNotIn("7*", pattern, msg=f"pattern {pattern!r} ({resource}) matches longer ids")
 
-    def test_registration_form_is_deliberately_uncached(self) -> None:
-        # One reader, and a stale form is either a false refusal or a false
-        # admission (services/registration/admission.py). An empty tuple is the
-        # assertion that this stays uncached, not an oversight.
-        self.assertEqual(tuple(cache_resources.patterns_for(Resource.TOURNAMENT_REGISTRATION_FORM, 42)), ())
+    def test_registration_form_drops_the_public_list_only(self) -> None:
+        # The form read itself stays uncached (one reader, and a stale form is a
+        # false refusal or a false admission). The public registration list is
+        # another matter: a row with a NULL `form_version_id` is rendered
+        # against the CURRENT schema's public keys, so a visibility edit changes
+        # that cached payload.
+        patterns = tuple(cache_resources.patterns_for(Resource.TOURNAMENT_REGISTRATION_FORM, 42))
+
+        self.assertEqual(patterns, tuple(f"{prefix}*registration_list:42:*" for prefix in _CONFIGURED_PREFIXES))
 
     def test_unknown_resource_maps_to_nothing(self) -> None:
         # A workspace-scoped resource reaches this service's invalidator (the

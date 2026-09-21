@@ -3,68 +3,21 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Literal
+from typing import Any
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from shared.core.enums import SubscriptionEnforcementStage
 from shared.services.subscriptions import VERIFICATION_METHODS, VerificationMethod, parse_requirement
 from src.schemas.admission import AdmissionRead
 from src.schemas.division_grid import DivisionGridVersionRead
 
 # ---------------------------------------------------------------------------
 # Registration form (config)
+#
+# What a tournament ASKS now lives in ``schemas/registration_form.py`` as one
+# versioned ``FormSchema``; only the sub-role catalog entry both sides render
+# stayed behind.
 # ---------------------------------------------------------------------------
-
-
-class FieldValidationConfig(BaseModel):
-    regex: str | None = None
-    error_message: str | None = None
-
-
-class CustomFieldDefinition(BaseModel):
-    key: str
-    label: str
-    type: Literal["text", "number", "select", "checkbox", "url"] = "text"
-    required: bool = False
-    placeholder: str | None = None
-    options: list[str] | None = None
-    validation: FieldValidationConfig | None = None
-    # Whether this answer is surfaced in the live draft's player inspector.
-    # Off by default and per-field on purpose: the draft board is PUBLIC, so
-    # showing an answer there is an explicit organizer decision, not a
-    # consequence of asking the question. Read by balancer-service
-    # (services/draft/board.py) straight off ``custom_fields_json``.
-    show_in_draft: bool = False
-
-
-class BuiltInFieldConfig(BaseModel):
-    enabled: bool = True
-    required: bool = False
-    subroles: dict[str, list[str]] | None = None
-    validation: FieldValidationConfig | None = None
-    # ``top_heroes`` field only: max heroes a player may select per role (default 5).
-    max_heroes: int | None = None
-    # Identity fields (battle_tag/discord_nick/twitch_nick) only: when true the
-    # submitted handle must match one of the registrant's OAuth-verified social
-    # accounts for the field's provider. Implies the field is effectively required.
-    require_verified: bool = False
-    # ``flex_role`` field only. None/absent == "optional", so every existing form
-    # keeps its current behaviour.
-    #
-    # - "optional"  — the registrant picks which roles they play at all; flex is
-    #   an opt-in preset.
-    # - "all_roles" — every role is mandatory; the registrant names exactly one
-    #   priority role, or declares flex. Their non-priority roles keep carrying
-    #   discomfort, so the solver keeps a real balance-versus-comfort trade-off.
-    # - "forced"    — every role is mandatory AND every role primary. There is no
-    #   choice, and discomfort is nil everywhere, which collapses that trade-off
-    #   to sub-role collisions alone.
-    #
-    # Both non-optional modes rate a player by their highest rank across all
-    # roles: balancer eligibility is the presence of a rating for a role, so
-    # requiring readiness to play anything requires a rating for everything.
-    mode: Literal["optional", "all_roles", "forced"] | None = None
 
 
 class SubroleOption(BaseModel):
@@ -72,122 +25,29 @@ class SubroleOption(BaseModel):
     label: str
 
 
-class RegistrationFormRead(BaseModel):
-    id: int
-    tournament_id: int
-    workspace_id: int
-    # DERIVED, read-only: "is registration open right now", computed from the
-    # tournament's REGISTRATION phase-schedule window. No longer a column on the
-    # form — see shared.services.registration_window.
-    is_open: bool
-    auto_approve: bool = False
-    require_open_profile: bool = False
-    open_profile_scope: str = "main"
-    show_ranks: bool = False
-    #: Collapses the public participants list to an aggregate. See
-    #: ``BalancerRegistrationForm.hide_registrations`` — enforced in the read model.
-    hide_registrations: bool = False
-    #: Advisory capacity, never enforced. ``None`` means "not announced".
-    max_participants: int | None = Field(default=None, ge=0)
-    require_subscription: bool = False
-    # WHEN the requirement bites, once the toggle above is on. See
-    # ``enums.SubscriptionEnforcementStage``: ``registration`` implies check-in too.
-    subscription_stage: SubscriptionEnforcementStage = SubscriptionEnforcementStage.check_in
-    # Server-resolved from the workspace's requirement and READ-ONLY: the rule is no
-    # longer a property of the form (see WorkspaceSubscriptionRequirementUpsert). It
-    # stays on the read model because the public check-in dialog and the wizard's
-    # review step render it, and there is no value in teaching every public consumer
-    # about a new table.
-    subscription_requirement_json: dict[str, Any] = Field(default_factory=dict)
-    built_in_fields: dict[str, BuiltInFieldConfig] = Field(default_factory=dict)
-    custom_fields: list[CustomFieldDefinition] = Field(default_factory=list)
-    #: Bench size for team registration. Zero disables substitutes. Not a starter
-    #: slot — see ``BalancerRegistrationForm.max_substitutes``.
-    max_substitutes: int = Field(default=0, ge=0)
-    #: ``player`` (default) keeps the per-entrant subscription gate. ``team`` is
-    #: "the captain pays": a stamp on the registered team covers the roster.
-    subscription_scope: Literal["player", "team"] = "player"
-    team_rank_min: int | None = Field(default=None, ge=0)
-    team_rank_max: int | None = Field(default=None, ge=0)
-    team_max_rank_spread: int | None = Field(default=None, ge=0)
-    team_unique_identity: bool = False
-    team_require_discord_guild: bool = False
-    # Workspace sub-role catalog keyed by registration role code (tank/damage/support).
-    # The single source of truth for available sub-roles; per-tournament
-    # built_in_fields[*].subroles selects which of these are offered.
-    subrole_catalog: dict[str, list[SubroleOption]] = Field(default_factory=dict)
-
-
-class RegistrationFormUpsert(BaseModel):
-    # No `subscription_requirement_json`: the rule is workspace-scoped now. No
-    # `is_open` either: registration openness is the tournament's REGISTRATION
-    # schedule window, so the form has no say. A stale client that still sends
-    # either one is TOLERATED, not rejected -- Pydantic's default `extra="ignore"`
-    # drops the key and the rest of the save succeeds. Deliberate: no schema in
-    # this module sets `extra`, and turning every unknown field into a 422 is a
-    # separate decision with a much wider blast radius than these moves.
-    auto_approve: bool = False
-    require_open_profile: bool = False
-    open_profile_scope: str = "main"
-    show_ranks: bool = False
-    hide_registrations: bool = False
-    #: Informational only — deliberately no cross-check against the live count.
-    max_participants: int | None = Field(default=None, ge=0)
-    require_subscription: bool = False
-    # Defaults to the looser stage, so a client that does not know the field yet
-    # cannot silently turn a check-in requirement into a sign-up wall.
-    subscription_stage: SubscriptionEnforcementStage = SubscriptionEnforcementStage.check_in
-    built_in_fields: dict[str, BuiltInFieldConfig] = Field(default_factory=dict)
-    #: Omitted by an older client becomes 0, same as every other field on this
-    #: full-replace upsert. The builder always sends it.
-    max_substitutes: int = Field(default=0, ge=0)
-    #: Omitted by an older client becomes ``player``, same full-replace trap as
-    #: ``max_substitutes``. The builder always sends it.
-    subscription_scope: Literal["player", "team"] = "player"
-    team_rank_min: int | None = Field(default=None, ge=0)
-    team_rank_max: int | None = Field(default=None, ge=0)
-    team_max_rank_spread: int | None = Field(default=None, ge=0)
-    team_unique_identity: bool = False
-    team_require_discord_guild: bool = False
-    custom_fields: list[CustomFieldDefinition] = Field(default_factory=list)
-
-
 # ---------------------------------------------------------------------------
 # Registration (public user-facing)
 # ---------------------------------------------------------------------------
 
 
-class RoleWithSubrole(BaseModel):
-    role: str
-    subrole: str | None = None
-    is_primary: bool = False
-    # Ordered hero slugs (top picks). Length capped by built_in_fields.top_heroes.max_heroes.
-    top_heroes: list[str] | None = None
+class RegistrationSubmit(BaseModel):
+    """A sign-up: the version the registrant answered, and the answers.
 
+    Flat ``{field key -> value}`` rather than a column per built-in, so adding a
+    question costs an organizer a schema edit and nothing else. The server always
+    validates against the form's CURRENT version and refuses a stale
+    ``form_version_id`` with ``form_version_stale`` (409).
+    """
 
-class RegistrationCreate(BaseModel):
-    battle_tag: str | None = None
-    smurf_tags: list[str] | None = None
-    discord_nick: str | None = None
-    twitch_nick: str | None = None
-    boosty_nick: str | None = None
-    roles: list[RoleWithSubrole] | None = None
-    stream_pov: bool = False
-    notes: str | None = None
-    custom_fields: dict[str, Any] | None = None
+    form_version_id: int
+    answers: dict[str, Any] = Field(default_factory=dict)
 
 
 class RegistrationUpdate(BaseModel):
-    battle_tag: str | None = None
-    discord_nick: str | None = None
-    twitch_nick: str | None = None
-    boosty_nick: str | None = None
-    # No ``primary_role``: the column was normalized away into
-    # ``balancer.registration_role`` (migration q7l9m1n5o6p7). It stayed on this
-    # schema long after that, so the write path had nowhere to put it.
-    stream_pov: bool | None = None
-    notes: str | None = None
-    custom_fields: dict[str, Any] | None = None
+    """A partial edit: only the keys present in ``answers`` are validated and written."""
+
+    form_version_id: int
+    answers: dict[str, Any] = Field(default_factory=dict)
 
 
 class RegistrationRoleRead(BaseModel):
@@ -222,14 +82,17 @@ class RegistrationRead(BaseModel):
     workspace_id: int
     user_id: int | None = None
     battle_tag: str | None = None
-    smurf_tags_json: list[str] | None = None
-    discord_nick: str | None = None
-    twitch_nick: str | None = None
-    boosty_nick: str | None = None
-    stream_pov: bool = False
+    #: Every answer this registration carries that the READER may see: the
+    #: public participants list passes the form version's ``public_keys()``, an
+    #: organizer context passes nothing and gets everything. ``battle_tag`` and
+    #: ``roles`` stay top-level because every surface renders them.
+    answers: dict[str, Any] = Field(default_factory=dict)
     roles: list[RegistrationRoleRead] = Field(default_factory=list)
-    notes: str | None = None
-    custom_fields_json: dict[str, Any] | None = None
+    #: The schema version these answers were validated against, and whether the
+    #: form has moved on since. ``form_version_stale`` is what tells the
+    #: registrant's own card to ask them to answer the new questions.
+    form_version_id: int | None = None
+    form_version_stale: bool = False
     status: str = "pending"
     status_meta: dict[str, Any] | None = None
     balancer_status: str = "not_in_balancer"

@@ -19,7 +19,13 @@ from shared.core import http_status as status
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.core.pagination import paginated_dict
 from shared.repository import AuthUserRepository, UserRepository
-from shared.services import social_identity as social_svc
+from shared.services.social_identity import (
+    SocialAccountNotOAuthLinked,
+    SocialHandleConflict,
+)
+from shared.services.social_identity import (
+    social_identity_service as socials,
+)
 from src import models, schemas
 
 __all__ = ("UserAdminService", "users")
@@ -183,8 +189,8 @@ class UserAdminService:
         await session.commit()
 
     # ─── Social identities ───────────────────────────────────────────────────
-    # The row-level writes belong to ``shared.services.social_identity`` (the
-    # unified ``social_account`` writer); these methods add the admin surface's
+    # The row-level writes belong to ``SocialIdentityService`` (the unified
+    # ``social_account`` writer); these methods add the admin surface's
     # 404/409 policy and — the point of them living here — the transaction, so
     # the RPC layer commits nothing.
 
@@ -198,7 +204,7 @@ class UserAdminService:
         url: str | None = None,
     ) -> None:
         await self.get_user_or_404(session, user_id)
-        await social_svc.upsert_social_account(session, user_id=user_id, provider=provider, username=username, url=url)
+        await socials.upsert(session, user_id=user_id, provider=provider, username=username, url=url)
         await session.commit()
 
     async def update_social_account(
@@ -211,10 +217,8 @@ class UserAdminService:
         url: str | None,
     ) -> None:
         try:
-            account = await social_svc.update_social_account(
-                session, account_id=account_id, user_id=user_id, username=username, url=url
-            )
-        except social_svc.SocialHandleConflict as exc:
+            account = await socials.update(session, account_id=account_id, user_id=user_id, username=username, url=url)
+        except SocialHandleConflict as exc:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
         self._require_account(account)
         await session.commit()
@@ -224,19 +228,19 @@ class UserAdminService:
         real OAuth connection that proves it. Never fabricates verification — the
         shared writer refuses an account with no OAuth link."""
         try:
-            account = await social_svc.verify_social_account(session, account_id=account_id, user_id=user_id)
-        except social_svc.SocialAccountNotOAuthLinked as exc:
+            account = await socials.verify(session, account_id=account_id, user_id=user_id)
+        except SocialAccountNotOAuthLinked as exc:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
         self._require_account(account)
         await session.commit()
 
     async def delete_social_account(self, session: AsyncSession, *, user_id: int, account_id: int) -> None:
-        account = await social_svc.delete_social_account(session, account_id=account_id, user_id=user_id)
+        account = await socials.delete(session, account_id=account_id, user_id=user_id)
         self._require_account(account)
         await session.commit()
 
     async def set_social_primary(self, session: AsyncSession, *, user_id: int, account_id: int) -> None:
-        account = await social_svc.set_primary(session, account_id=account_id, user_id=user_id)
+        account = await socials.set_primary(session, account_id=account_id, user_id=user_id)
         self._require_account(account)
         await session.commit()
 
@@ -250,7 +254,7 @@ class UserAdminService:
         visible: bool,
     ) -> None:
         await self._owned_account_or_404(session, user_id=user_id, account_id=account_id)
-        await social_svc.set_visibility(session, account_id=account_id, workspace_id=workspace_id, visible=visible)
+        await socials.set_visibility(session, account_id=account_id, workspace_id=workspace_id, visible=visible)
         await session.commit()
 
     async def set_own_social_primary(self, session: AsyncSession, *, player_id: int, account_id: int) -> None:
@@ -262,7 +266,7 @@ class UserAdminService:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Only OAuth-verified accounts can be primary",
             )
-        await social_svc.set_primary(session, account_id=account.id, user_id=player_id)
+        await socials.set_primary(session, account_id=account.id, user_id=player_id)
         await session.commit()
 
     async def set_own_social_visibility(
@@ -272,7 +276,7 @@ class UserAdminService:
         the account shows on their public profile; hard delete stays superuser-only so
         the verified identity (and its OAuth link) is never destroyed here."""
         account = await self._owned_account_or_404(session, user_id=player_id, account_id=account_id)
-        await social_svc.set_visibility(session, account_id=account.id, workspace_id=None, visible=visible)
+        await socials.set_visibility(session, account_id=account.id, workspace_id=None, visible=visible)
         await session.commit()
 
     async def _owned_account_or_404(
@@ -284,8 +288,8 @@ class UserAdminService:
         "wrong owner" differently from "no such account" would enumerate other
         players' account ids.
         """
-        account = await social_svc.get_social_account(session, account_id)
-        if account is None or account.user_id != user_id:
+        account = await socials.accounts.get_owned(session, account_id=account_id, user_id=user_id)
+        if account is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Social account not found")
         return account
 

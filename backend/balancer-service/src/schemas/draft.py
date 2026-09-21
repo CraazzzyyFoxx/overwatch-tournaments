@@ -268,8 +268,10 @@ class DraftPlayerRead(BaseRead):
     #: from, so an organizer can see why a number is what it is.
     role_sources: dict[str, str] = Field(default_factory=dict)
     role_top_heroes: dict[str, list[dict[str, Any]]] = Field(default_factory=dict)
-    #: Registration ``notes``: captains read them in the Player Inspector.
-    #: Organizer-only ``admin_notes`` are deliberately NOT projected here.
+    #: The registration's ``public_notes``: captains read them in the Player
+    #: Inspector. The wire name stays ``notes`` -- clients depend on it, and the
+    #: organizers-only ``organizer_notes``/``admin_notes`` are deliberately NOT
+    #: projected here.
     notes: str | None = None
     #: The one rank that represents this player in THIS draft: their own role's
     #: rank under a shape with role slots, their best playable rank under a
@@ -309,7 +311,7 @@ class DraftPlayerRead(BaseRead):
             role_ranks=roster.role_ranks if roster is not None else {},
             role_sources=roster.role_sources if roster is not None else {},
             role_top_heroes=roster.role_top_heroes if roster is not None else {},
-            notes=roster.notes if roster is not None else None,
+            notes=roster.public_notes if roster is not None else None,
             # The player's OWN role under role slots -- a support main is not
             # worth their damage rank on the pool card. ``slot_rank`` drops the role
             # itself under a role-less shape, where the maximum is the answer.

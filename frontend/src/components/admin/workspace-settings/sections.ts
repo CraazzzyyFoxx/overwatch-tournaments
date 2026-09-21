@@ -4,7 +4,7 @@ import type { AdminSectionNavGroup } from "@/components/kit/AdminSectionNav";
  * Every section of the workspace settings hub (T5), in rail order.
  *
  * One list, so the rail, the mobile `Select` and each section's own heading
- * cannot drift apart: before the redesign these nine concerns lived in five
+ * cannot drift apart: before the redesign most of these concerns lived in five
  * unrelated routes (`/admin/workspaces/[id]`, `/admin/divisions`,
  * `/admin/balancer`, `/admin/sub-roles`, `/admin/subscriptions`) and nothing
  * told the reader they were the same settings surface.
@@ -18,6 +18,7 @@ export const WORKSPACE_SETTINGS_SECTIONS = [
   "divisions",
   "statuses",
   "sub-roles",
+  "registration-forms",
   "subscriptions",
   "quota"
 ] as const;
@@ -33,6 +34,7 @@ export const WORKSPACE_SETTINGS_SECTION_LABELS: Record<WorkspaceSettingsSectionK
   divisions: "Divisions",
   statuses: "Player statuses",
   "sub-roles": "Sub-roles",
+  "registration-forms": "Registration forms",
   subscriptions: "Subscriptions",
   quota: "Rate limits"
 };
@@ -51,6 +53,7 @@ export const WORKSPACE_SETTINGS_SECTION_DESCRIPTIONS: Record<
   divisions: "Rank bands players are sorted into, and the version tournaments read.",
   statuses: "Player statuses the balancer takes into account.",
   "sub-roles": "Hero sub-roles used by rosters and reports.",
+  "registration-forms": "Saved questionnaires any tournament here can start from.",
   subscriptions: "Subscription providers that grant entitlements here.",
   quota: "How much this workspace, one key and one session may spend."
 };
@@ -59,8 +62,8 @@ export const WORKSPACE_SETTINGS_SECTION_DESCRIPTIONS: Record<
  * The five sections that are a form over the workspace record itself, and so
  * exist under both shells: `/admin/settings/*` for the workspace an admin is
  * currently in, and `/admin/workspaces/[id]/*` for a superuser looking at
- * someone else's. The remaining five are workspace-scoped screens of their
- * own and only ever mount under `/admin/settings`.
+ * someone else's. The rest are workspace-scoped screens of their own and only
+ * ever mount under `/admin/settings`.
  */
 export const WORKSPACE_RECORD_SECTIONS = [
   "general",
@@ -74,7 +77,7 @@ export type WorkspaceRecordSectionKey = (typeof WORKSPACE_RECORD_SECTIONS)[numbe
 
 const GROUPS: ReadonlyArray<{ label: string; sections: readonly WorkspaceSettingsSectionKey[] }> = [
   { label: "Workspace", sections: ["general", "branding", "visibility", "domain", "discord"] },
-  { label: "Competitive", sections: ["divisions", "statuses", "sub-roles"] },
+  { label: "Competitive", sections: ["divisions", "statuses", "sub-roles", "registration-forms"] },
   { label: "Entitlements", sections: ["subscriptions", "quota"] }
 ];
 

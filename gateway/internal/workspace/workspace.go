@@ -48,6 +48,32 @@ const (
 	tournamentHiddenSQL    = `SELECT t.is_hidden OR w.is_hidden FROM tournament.tournament t JOIN workspace w ON w.id = t.workspace_id WHERE t.id = $1`
 	previewAllowedSQL      = `SELECT EXISTS(SELECT 1 FROM tournament.tournament_preview_access WHERE tournament_id = $1 AND auth_user_id = $2)`
 	encounterTournamentSQL = `SELECT tournament_id FROM tournament.encounter WHERE id = $1`
+	// Same players."user" bridge as isMemberSQL above, for the other direction:
+	// tournament.team.captain_id references players."user".id, while the gateway
+	// only ever holds an auth user id (from the JWT). An encounter has at most
+	// two teams, so the IN over (home_team_id, away_team_id) covers both sides
+	// in one indexed pass (ix_tournament_team_captain_id).
+	isEncounterCaptainSQL = `SELECT EXISTS(
+		SELECT 1
+		FROM tournament.encounter e
+		JOIN tournament.team t ON t.id IN (e.home_team_id, e.away_team_id)
+		JOIN players."user" u ON u.id = t.captain_id
+		WHERE e.id = $1 AND u.auth_user_id = $2
+	)`
+	// The draft room's participants. balancer.draft_team carries the captain's
+	// AUTH id directly (captain_auth_user_id), so this needs no players."user"
+	// bridge, unlike isEncounterCaptainSQL above; a session has one row per team
+	// and ix_balancer_draft_team_captain_auth_user_id covers the predicate.
+	isDraftSessionCaptainSQL = `SELECT EXISTS(
+		SELECT 1
+		FROM balancer.draft_team
+		WHERE session_id = $1 AND captain_auth_user_id = $2
+	)`
+	draftSessionTournamentSQL = `SELECT tournament_id FROM balancer.draft_session WHERE id = $1`
+	// Per-room chat settings (default schema, table chat_room_settings). The row
+	// is lazily materialized, so "no row" is not "no such room": it means the
+	// room still runs on its kind's default — see roomSpectatorReadDefault.
+	roomSpectatorReadSQL = `SELECT spectators_can_read FROM chat_room_settings WHERE room_kind = $1 AND room_ref_id = $2`
 
 	tournamentCacheTTL = 5 * time.Minute
 	// Matches the auth-service RBAC cache TTL, so membership changes propagate
@@ -70,6 +96,15 @@ const (
 	// plus headroom, while still capping worst-case memory from a
 	// distinct-host flood; see ttlCache's FIFO eviction.
 	customDomainCacheMaxEntries = 4096
+	// The shortest TTL here, deliberately: spectators_can_read gates a single
+	// observable organizer action ("hide the chat"), and ws.TopicRevoker re-runs
+	// the topic ACL for every live subscriber the moment that toggle is
+	// published — a re-check answered from a stale entry would leave the
+	// spectator it is meant to evict subscribed. The revoker invalidates this
+	// gateway's entry first (InvalidateRoomSpectatorRead); 15s only bounds how
+	// long ANOTHER gateway process can keep admitting new subscribes on the old
+	// answer.
+	roomSettingsCacheTTL = 15 * time.Second
 )
 
 // Store answers ACL lookups against the database, with small TTL caches.
@@ -81,6 +116,10 @@ type Store struct {
 	hidden        *ttlCache[int64, bool]
 	preview       *ttlCache[previewKey, bool]
 	encTournament *ttlCache[int64, int64]
+	captains      *ttlCache[captainKey, bool]
+	draftCaptains *ttlCache[draftCaptainKey, bool]
+	draftTourn    *ttlCache[int64, int64]
+	roomSettings  *ttlCache[roomKey, bool]
 }
 
 type memberKey struct {
@@ -89,6 +128,19 @@ type memberKey struct {
 
 type previewKey struct {
 	userID, tournamentID int64
+}
+
+type captainKey struct {
+	userID, encounterID int64
+}
+
+type draftCaptainKey struct {
+	userID, sessionID int64
+}
+
+type roomKey struct {
+	kind  string
+	refID int64
 }
 
 // New returns a workspace Store backed by the given pool.
@@ -101,6 +153,10 @@ func New(pool *pgxpool.Pool) *Store {
 		hidden:        newTTLCache[int64, bool](hiddenCacheTTL),
 		preview:       newTTLCache[previewKey, bool](previewCacheTTL),
 		encTournament: newTTLCache[int64, int64](tournamentCacheTTL),
+		captains:      newTTLCache[captainKey, bool](membershipCacheTTL),
+		draftCaptains: newTTLCache[draftCaptainKey, bool](membershipCacheTTL),
+		draftTourn:    newTTLCache[int64, int64](tournamentCacheTTL),
+		roomSettings:  newTTLCache[roomKey, bool](roomSettingsCacheTTL),
 	}
 }
 
@@ -138,6 +194,25 @@ func (s *Store) IsWorkspaceMember(ctx context.Context, userID, workspaceID int64
 
 	s.members.set(key, member)
 	return member, nil
+}
+
+// IsEncounterCaptain reports whether the auth user captains either side of the
+// encounter. Both outcomes are cached like IsWorkspaceMember; on a query error
+// nothing is cached and the error is returned, so a transient DB failure is
+// never memoized as "allowed" (callers must treat an error as denied).
+func (s *Store) IsEncounterCaptain(ctx context.Context, authUserID, encounterID int64) (bool, error) {
+	key := captainKey{userID: authUserID, encounterID: encounterID}
+	if v, ok := s.captains.get(key); ok {
+		return v, nil
+	}
+
+	var captain bool
+	if err := s.pool.QueryRow(ctx, isEncounterCaptainSQL, encounterID, authUserID).Scan(&captain); err != nil {
+		return false, fmt.Errorf("encounter captain lookup: %w", err)
+	}
+
+	s.captains.set(key, captain)
+	return captain, nil
 }
 
 // IsVerifiedCustomDomain reports whether host is a workspace's verified
@@ -232,4 +307,81 @@ func (s *Store) EncounterTournamentID(ctx context.Context, encounterID int64) (i
 
 	s.encTournament.set(encounterID, tournamentID)
 	return tournamentID, true, nil
+}
+
+// IsDraftSessionCaptain reports whether the auth user captains one of the
+// session's draft teams. Cached exactly like IsEncounterCaptain: both outcomes
+// cached, nothing cached on a query error.
+func (s *Store) IsDraftSessionCaptain(ctx context.Context, authUserID, sessionID int64) (bool, error) {
+	key := draftCaptainKey{userID: authUserID, sessionID: sessionID}
+	if v, ok := s.draftCaptains.get(key); ok {
+		return v, nil
+	}
+
+	var captain bool
+	if err := s.pool.QueryRow(ctx, isDraftSessionCaptainSQL, sessionID, authUserID).Scan(&captain); err != nil {
+		return false, fmt.Errorf("draft session captain lookup: %w", err)
+	}
+
+	s.draftCaptains.set(key, captain)
+	return captain, nil
+}
+
+// DraftSessionTournamentID returns the tournament a draft session belongs to.
+// found is false when the session does not exist (callers must deny).
+func (s *Store) DraftSessionTournamentID(ctx context.Context, sessionID int64) (int64, bool, error) {
+	if v, ok := s.draftTourn.get(sessionID); ok {
+		return v, true, nil
+	}
+
+	var tournamentID int64
+	err := s.pool.QueryRow(ctx, draftSessionTournamentSQL, sessionID).Scan(&tournamentID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return 0, false, nil
+	}
+	if err != nil {
+		return 0, false, fmt.Errorf("draft session tournament lookup: %w", err)
+	}
+
+	s.draftTourn.set(sessionID, tournamentID)
+	return tournamentID, true, nil
+}
+
+// RoomSpectatorRead reports whether spectators may read a chat room. A missing
+// chat_room_settings row is not an error: the row is lazily materialized, so
+// its absence means the room still runs on its kind's default.
+func (s *Store) RoomSpectatorRead(ctx context.Context, roomKind string, refID int64) (bool, error) {
+	key := roomKey{kind: roomKind, refID: refID}
+	if v, ok := s.roomSettings.get(key); ok {
+		return v, nil
+	}
+
+	var canRead bool
+	err := s.pool.QueryRow(ctx, roomSpectatorReadSQL, roomKind, refID).Scan(&canRead)
+	if errors.Is(err, pgx.ErrNoRows) {
+		canRead = roomSpectatorReadDefault(roomKind)
+	} else if err != nil {
+		return false, fmt.Errorf("room spectator read lookup: %w", err)
+	}
+
+	s.roomSettings.set(key, canRead)
+	return canRead, nil
+}
+
+// InvalidateRoomSpectatorRead drops the cached setting for one room, so the
+// next RoomSpectatorRead re-reads it. ws.TopicRevoker calls this before
+// re-authorizing a room's live subscribers: the whole point of that pass is to
+// act on the value the organizer just wrote.
+func (s *Store) InvalidateRoomSpectatorRead(roomKind string, refID int64) {
+	s.roomSettings.del(roomKey{kind: roomKind, refID: refID})
+}
+
+// roomSpectatorReadDefault mirrors _SPECTATORS_CAN_READ_DEFAULT in
+// backend/shared/services/chat/room.py — a draft is a show and viewers follow
+// it; a pre-game room is where captains trade custom-lobby codes and they do
+// not. The two MUST NOT drift: the gateway gates the live topic, Python gates
+// the REST history, and a disagreement means one of them lies. An unknown kind
+// reads closed, so a typo fails shut.
+func roomSpectatorReadDefault(roomKind string) bool {
+	return roomKind == "draft"
 }

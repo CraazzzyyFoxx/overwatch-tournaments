@@ -25,7 +25,7 @@ from shared.core import http_status as status
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.core.social import SocialProvider, normalize_social_handle
 from shared.repository import UserRepository, get_or_create_workspace_member
-from shared.services import social_identity
+from shared.services.social_identity import social_identity_service
 from shared.services.team_export.identity import find_users_by_battle_tags
 
 __all__ = (
@@ -336,9 +336,7 @@ async def ensure_member_for_battle_tag(
     user = found.get(tag)
     if user is None:
         user = await UserRepository().create(session, models.User(name=tag))
-    await social_identity.upsert_social_account(
-        session, user_id=user.id, provider=SocialProvider.BATTLENET, username=tag
-    )
+    await social_identity_service.upsert(session, user_id=user.id, provider=SocialProvider.BATTLENET, username=tag)
     member = await get_or_create_workspace_member(session, workspace_id=workspace_id, player_id=user.id)
     if display_name is not None:
         member.display_name = display_name or None

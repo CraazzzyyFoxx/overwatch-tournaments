@@ -700,6 +700,30 @@ DOCS: dict[str, dict] = {
         "summary": "Upsert registration form",
         "description": "Permission: workspace `registration_form.update` on the tournament's workspace. Creates or replaces a tournament's registration form config (built-in and custom fields).",
     },
+    "rpc.tournament.regform_template_list": {
+        "summary": "List registration form templates",
+        "description": "Permission: workspace `registration_form.read` on the workspace in the path. Lists that workspace's named registration-form question sets, ordered by name.",
+    },
+    "rpc.tournament.regform_template_create": {
+        "summary": "Create registration form template",
+        "description": "Permission: workspace `registration_form.update` on the workspace in the path. Stores a named question set for the workspace (201 Created). Names are unique per workspace, case-insensitively: a collision is 409 `template_name_taken` on field `name`.",
+    },
+    "rpc.tournament.regform_template_update": {
+        "summary": "Update registration form template",
+        "description": "Permission: workspace `registration_form.update` on the workspace in the path. Replaces a template's name and question set wholesale. 404 `template_not_found` when the id belongs to another workspace; 409 `template_name_taken` on a case-insensitive name collision.",
+    },
+    "rpc.tournament.regform_template_delete": {
+        "summary": "Delete registration form template",
+        "description": "Permission: workspace `registration_form.update` on the workspace in the path. Deletes a template by id (204 no body). Nothing references a template -- applying one copies it -- so no tournament form changes.",
+    },
+    "rpc.tournament.regform_template_apply": {
+        "summary": "Apply template to registration form",
+        "description": "Permission: workspace `registration_form.update` on the tournament's workspace. Copies the template's question set onto the tournament's registration form and returns the form. An ordinary schema save: a changed question set appends a new version, an identical one appends nothing. The form is NOT linked to the template afterwards, so editing the template later never rewrites a live form. The template must belong to the tournament's workspace (else 404 `template_not_found`).",
+    },
+    "rpc.tournament.regform_template_save_from_form": {
+        "summary": "Save registration form as template",
+        "description": "Permission: workspace `registration_form.update` on the tournament's workspace. Snapshots the tournament form's CURRENT question set into a new workspace template under the given name (201 Created). A snapshot, not a link: later edits to either side are invisible to the other. 404 `form_not_configured` when the tournament has no form yet; 409 `template_name_taken` on a case-insensitive name collision.",
+    },
     "rpc.tournament.reg_list": {
         "summary": "List registrations (admin)",
         "description": "Permission: workspace `registration.read` on the tournament's workspace. Lists a tournament's registrations with status metadata and per-registration OW-rank snapshots, filtered by status/inclusion/source and optionally including deleted.",
@@ -1021,6 +1045,57 @@ DOCS: dict[str, dict] = {
             "Marks the calling captain's side ready to begin the encounter's pre-game phase and returns the "
             "resulting `{home, away}` readiness map; idempotent. The pick/ban session only opens once both "
             "sides are ready, and any change of team assignment clears both."
+        ),
+    },
+    "rpc.tournament.encounter_chat_history": {
+        "summary": "Read the pre-game room chat",
+        "description": (
+            "Permission: optional authentication. Captains of either team and the workspace's staff "
+            "always read; anybody else reads only while the room's `spectators_can_read` is on, which "
+            "a pre-game room has OFF by default (captains trade custom-lobby codes there). A hidden "
+            "tournament is visible only to its workspace's admins and its preview allowlist. "
+            "Returns the messages plus the room settings, the caller's own viewer rights and — for "
+            "moderators only — the active mutes. `after_id` tails the room; `limit` pages it."
+        ),
+    },
+    "rpc.tournament.encounter_chat_post": {
+        "summary": "Post to the pre-game room chat",
+        "description": (
+            "Permission: authenticated captain of either team, or workspace staff; spectators never "
+            "write, at any setting. The body is sanitized and capped at 500 characters. 403 with code "
+            "`chat_muted` while the account is muted in this room, 429 past 10 messages per 10 seconds. "
+            "Returns the stored message, which is also fanned out to the room's realtime topic."
+        ),
+    },
+    "rpc.tournament.encounter_chat_delete": {
+        "summary": "Delete a pre-game chat message",
+        "description": (
+            "Permission: the message's author, or a moderator of the room (workspace staff). "
+            "Soft-deletes one message and publishes the removal to the room's subscribers. "
+            "404 when the id is not a message of this room. Answers `{deleted: true}`."
+        ),
+    },
+    "rpc.tournament.encounter_chat_settings": {
+        "summary": "Set pre-game chat visibility",
+        "description": (
+            "Permission: moderator of the room (workspace staff). Opens or closes the room to "
+            "spectators and returns the stored setting. Closing it also revokes the spectators already "
+            "subscribed to the room's realtime topic; a no-op toggle emits nothing."
+        ),
+    },
+    "rpc.tournament.encounter_chat_mute_set": {
+        "summary": "Mute an account in the pre-game chat",
+        "description": (
+            "Permission: moderator of the room (workspace staff). Mutes one account in this room for "
+            "`minutes` (1..10080), or until lifted when `minutes` is null, with an optional reason. "
+            "422 on muting yourself. Returns the mute."
+        ),
+    },
+    "rpc.tournament.encounter_chat_mute_clear": {
+        "summary": "Unmute an account in the pre-game chat",
+        "description": (
+            "Permission: moderator of the room (workspace staff). Lifts one account's mute in this "
+            "room, idempotent. Answers `{deleted: true}`."
         ),
     },
     "rpc.tournament.get_pick_ban_configs": {

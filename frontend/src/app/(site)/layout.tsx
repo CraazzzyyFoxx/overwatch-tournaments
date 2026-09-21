@@ -9,6 +9,7 @@ import workspaceService from "@/services/workspace.service";
 import { deriveWorkspacePalette } from "@/lib/workspace-theme";
 import { WorkspaceThemeSync } from "@/components/WorkspaceThemeSync";
 import { WorkspaceHostLock } from "@/components/WorkspaceHostLock";
+import ZoneIntlProvider from "@/i18n/ZoneIntlProvider";
 import type { NotificationItem } from "@/types/notification.types";
 import type { Workspace } from "@/types/workspace.types";
 
@@ -77,20 +78,22 @@ export default async function SiteLayout({
       : undefined;
 
   return (
-    <div className="site-theme min-h-screen w-full" style={style}>
-      <WorkspaceHostLock workspaceId={tenantMode && workspace ? workspace.id : null} />
-      <WorkspaceThemeSync />
-      <div className="w-full max-w-screen-3xl pt-6 mx-auto px-4 md:px-6 xl:px-10 h-full">
-        <Header tenantMode={tenantMode} tenantWorkspace={tenantWorkspace} />
-        <AnnouncementBanner initial={announcements} />
-        <div className="flex w-full flex-col min-h-[95%]">
-          <main id="main-content" tabIndex={-1} className="flex flex-1 flex-col gap-4 pt-4 md:gap-8 md:pt-8">
-            {children}
-          </main>
+    <ZoneIntlProvider zone="web">
+      <div className="site-theme min-h-screen w-full" style={style}>
+        <WorkspaceHostLock workspaceId={tenantMode && workspace ? workspace.id : null} />
+        <WorkspaceThemeSync />
+        <div className="w-full max-w-screen-3xl pt-6 mx-auto px-4 md:px-6 xl:px-10 h-full">
+          <Header tenantMode={tenantMode} tenantWorkspace={tenantWorkspace} />
+          <AnnouncementBanner initial={announcements} />
+          <div className="flex w-full flex-col min-h-[95%]">
+            <main id="main-content" tabIndex={-1} className="flex flex-1 flex-col gap-4 pt-4 md:gap-8 md:pt-8">
+              {children}
+            </main>
+          </div>
+          <Separator className="mt-8" />
+          <Footer />
         </div>
-        <Separator className="mt-8" />
-        <Footer />
       </div>
-    </div>
+    </ZoneIntlProvider>
   );
 }

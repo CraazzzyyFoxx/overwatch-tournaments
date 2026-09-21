@@ -24,13 +24,14 @@ from shared.core.errors import BaseAPIException as HTTPException
 from shared.division_grid import DivisionGrid, load_runtime_grid
 from shared.domain.player_sub_roles import REGISTRATION_ROLE_CODES, normalize_sub_role
 from shared.domain.roster import FlexRoleMode, PlayerRoster
-from shared.hero_catalog import HeroCatalog
+from shared.hero_catalog import DEFAULT_MAX_TOP_HEROES, HeroCatalog, build_hero_entries
 from shared.repository import RegistrationFormRepository, TournamentRepository
 from shared.services.realtime import Resource, Scope, emit
 from shared.services.roster import roster_engine
 from src import models
 from src.domain.registration.utils import DEFAULT_SORT_PRIORITY_SENTINEL
-from src.schemas.registration import CustomFieldDefinition
+from src.services.registration.form_service import form_service
+from src.services.registration.roles_rules import role_value
 
 VALID_REGISTRATION_STATUSES = get_builtin_status_values("registration")
 VALID_BALANCER_STATUSES = get_builtin_status_values("balancer")
@@ -56,20 +57,6 @@ def get_tournament_grid_from_rows(
     return load_runtime_grid(fallback_version)
 
 
-def form_custom_field_defs(
-    form: models.BalancerRegistrationForm | None,
-) -> list[CustomFieldDefinition]:
-    """Coerce a form's stored custom-field JSON into typed definitions."""
-    raw = getattr(form, "custom_fields_json", None) or []
-    defs: list[CustomFieldDefinition] = []
-    for value in raw:
-        if isinstance(value, CustomFieldDefinition):
-            defs.append(value)
-        else:
-            defs.append(CustomFieldDefinition.model_validate(value or {}))
-    return defs
-
-
 def apply_all_roles(
     entries: list[models.BalancerRegistrationRole],
     *,
@@ -87,7 +74,7 @@ def apply_all_roles(
     primary (yielding ``PlayerRoster.is_full_flex``), ``all_roles`` leaves the registrant's
     own choice alone and backfills the missing roles as non-primary. It cannot
     invent that choice, so a payload naming no priority stays invalid — see
-    ``validation.py``.
+    ``roles_rules.validate_roles``.
 
     Only the role SET and (under ``force_primary``) ``is_primary`` are touched.
     ``is_active`` and ``rank_value`` stay exactly as the calling path set them:
@@ -107,6 +94,50 @@ def apply_all_roles(
             entry.is_primary = True
         entry.priority = priority
     return result
+
+
+def build_registration_roles(
+    roles: list[Any] | None,
+    *,
+    hero_catalog: HeroCatalog | None = None,
+    max_heroes: int | None = None,
+    mode: FlexRoleMode = "optional",
+) -> list[models.BalancerRegistrationRole]:
+    """Build normalized role entries from a submitted ``roles`` answer.
+
+    Filters to valid registration role codes (tank/damage/support), de-duplicates,
+    normalizes the sub-role slug, and assigns sequential priority. Detached rows:
+    the caller decides whether they are new or merged over existing ones
+    (:meth:`RegistrationAnswerService.apply` does the latter, so an organizer's
+    ``rank_value`` survives a player editing their roles).
+
+    When ``hero_catalog`` is provided (the top-heroes ask is enabled), the ordered
+    ``top_heroes`` slugs on each role are attached as ``registration_role_hero`` rows.
+    """
+    resolved_max = max_heroes if max_heroes and max_heroes > 0 else DEFAULT_MAX_TOP_HEROES
+    entries: list[models.BalancerRegistrationRole] = []
+    seen: set[str] = set()
+    for role in roles or []:
+        role_code = role_value(role, "role")
+        if role_code not in REGISTRATION_ROLE_CODES or role_code in seen:
+            continue
+        seen.add(role_code)
+        entry = models.BalancerRegistrationRole(
+            role=role_code,
+            subrole=normalize_sub_role(role_value(role, "subrole")),
+            is_primary=bool(role_value(role, "is_primary", False)),
+            priority=len(entries),
+        )
+        if hero_catalog is not None:
+            entry.hero_entries = build_hero_entries(
+                role_value(role, "top_heroes"),
+                hero_catalog=hero_catalog,
+                max_heroes=resolved_max,
+            )
+        entries.append(entry)
+    if mode in ("all_roles", "forced"):
+        entries = apply_all_roles(entries, force_primary=mode == "forced")
+    return entries
 
 
 def replace_registration_roles(
@@ -294,15 +325,13 @@ class RegistrationCommonService:
         session: AsyncSession,
         tournament_id: int,
     ) -> models.BalancerRegistrationForm | None:
-        return await self.form_repo.get_by_tournament(session, tournament_id)
+        """The form WITH its current schema version eager-loaded.
 
-    async def get_form_custom_field_defs(
-        self,
-        session: AsyncSession,
-        tournament_id: int,
-    ) -> list[CustomFieldDefinition]:
-        form = await self.get_registration_form(session, tournament_id)
-        return form_custom_field_defs(form)
+        Delegated so there is one definition of "a usable form": every reader
+        here goes on to ask the schema something, and ``current_version`` is
+        never lazy-loadable in async code.
+        """
+        return await form_service.get_form(session, tournament_id)
 
 
 _common_service = RegistrationCommonService()

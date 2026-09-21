@@ -12,12 +12,11 @@ from __future__ import annotations
 
 import logging
 
-import sqlalchemy as sa
 from cashews import cache
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from shared import models
+from shared.repository import SettingsRepository
 from shared.schemas.settings import (
     SETTINGS_KEY_RANK_COLLECTION,
     SETTINGS_KEY_RANK_MAPPING,
@@ -38,92 +37,77 @@ logger = logging.getLogger(__name__)
 CACHE_KEY_PREFIX = "backend:"
 SETTINGS_CACHE_TTL_SECONDS = 30
 
+__all__ = (
+    "CACHE_KEY_PREFIX",
+    "SETTINGS_CACHE_TTL_SECONDS",
+    "SettingsProvider",
+    "settings_provider",
+)
+
 
 def _cache_key(key: str) -> str:
     return f"{CACHE_KEY_PREFIX}settings:{key}"
 
 
-async def get_setting_value(session: AsyncSession, key: str) -> dict:
-    """Return the raw JSON value for ``key`` (``{}`` if absent), short-cached."""
-    cache_key = _cache_key(key)
-    if cache.is_setup():
+class SettingsProvider:
+    def __init__(self, *, repo: SettingsRepository = SettingsRepository()) -> None:
+        self._repo = repo
+
+    async def get_setting_value(self, session: AsyncSession, key: str) -> dict:
+        """Return the raw JSON value for ``key`` (``{}`` if absent), short-cached."""
+        cache_key = _cache_key(key)
+        if cache.is_setup():
+            try:
+                cached = await cache.get(cache_key)
+                if cached is not None:
+                    return cached
+            except Exception as exc:  # pragma: no cover - cache is best-effort
+                logger.debug("settings cache get failed for %s: %s", key, exc)
+
+        row = await self._repo.get_by_key(session, key)
+        value = (row.value if row is not None else None) or {}
+
+        if cache.is_setup():
+            try:
+                await cache.set(cache_key, value, expire=SETTINGS_CACHE_TTL_SECONDS)
+            except Exception as exc:  # pragma: no cover - cache is best-effort
+                logger.debug("settings cache set failed for %s: %s", key, exc)
+        return value
+
+    async def invalidate_setting(self, key: str) -> None:
+        """Drop the cached value for ``key`` (call after a write)."""
+        if not cache.is_setup():
+            return
         try:
-            cached = await cache.get(cache_key)
-            if cached is not None:
-                return cached
+            await cache.delete(_cache_key(key))
         except Exception as exc:  # pragma: no cover - cache is best-effort
-            logger.debug("settings cache get failed for %s: %s", key, exc)
+            logger.debug("settings cache invalidate failed for %s: %s", key, exc)
 
-    result = await session.execute(sa.select(models.Settings.value).where(models.Settings.key == key))
-    value = result.scalar_one_or_none() or {}
+    async def get_rank_collection_config(self, session: AsyncSession) -> RankCollectionConfig:
+        return await self._typed(session, SETTINGS_KEY_RANK_COLLECTION, RankCollectionConfig)
 
-    if cache.is_setup():
+    async def get_rank_mapping_config(self, session: AsyncSession) -> RankMappingConfig:
+        return await self._typed(session, SETTINGS_KEY_RANK_MAPPING, RankMappingConfig)
+
+    async def get_subscription_collection_config(self, session: AsyncSession) -> SubscriptionCollectionConfig:
+        return await self._typed(session, SETTINGS_KEY_SUBSCRIPTION_COLLECTION, SubscriptionCollectionConfig)
+
+    async def get_stream_collection_config(self, session: AsyncSession) -> StreamCollectionConfig:
+        return await self._typed(session, SETTINGS_KEY_STREAM_COLLECTION, StreamCollectionConfig)
+
+    async def get_scrim_config(self, session: AsyncSession) -> ScrimConfig:
+        return await self._typed(session, SETTINGS_KEY_SCRIM, ScrimConfig)
+
+    async def get_workspace_creation_config(self, session: AsyncSession) -> WorkspaceCreationConfig:
+        return await self._typed(session, SETTINGS_KEY_WORKSPACE_CREATION, WorkspaceCreationConfig)
+
+    async def _typed(self, session: AsyncSession, key: str, model: type):
+        raw = await self.get_setting_value(session, key)
         try:
-            await cache.set(cache_key, value, expire=SETTINGS_CACHE_TTL_SECONDS)
-        except Exception as exc:  # pragma: no cover - cache is best-effort
-            logger.debug("settings cache set failed for %s: %s", key, exc)
-    return value
+            return model.model_validate(raw)
+        except ValidationError as exc:
+            logger.warning("invalid %s settings, using defaults: %s", key, exc)
+            return model()
 
 
-async def invalidate_setting(key: str) -> None:
-    """Drop the cached value for ``key`` (call after a write)."""
-    if not cache.is_setup():
-        return
-    try:
-        await cache.delete(_cache_key(key))
-    except Exception as exc:  # pragma: no cover - cache is best-effort
-        logger.debug("settings cache invalidate failed for %s: %s", key, exc)
-
-
-async def get_rank_collection_config(session: AsyncSession) -> RankCollectionConfig:
-    raw = await get_setting_value(session, SETTINGS_KEY_RANK_COLLECTION)
-    try:
-        return RankCollectionConfig.model_validate(raw)
-    except ValidationError as exc:
-        logger.warning("invalid %s settings, using defaults: %s", SETTINGS_KEY_RANK_COLLECTION, exc)
-        return RankCollectionConfig()
-
-
-async def get_rank_mapping_config(session: AsyncSession) -> RankMappingConfig:
-    raw = await get_setting_value(session, SETTINGS_KEY_RANK_MAPPING)
-    try:
-        return RankMappingConfig.model_validate(raw)
-    except ValidationError as exc:
-        logger.warning("invalid %s settings, using defaults: %s", SETTINGS_KEY_RANK_MAPPING, exc)
-        return RankMappingConfig()
-
-
-async def get_subscription_collection_config(session: AsyncSession) -> SubscriptionCollectionConfig:
-    raw = await get_setting_value(session, SETTINGS_KEY_SUBSCRIPTION_COLLECTION)
-    try:
-        return SubscriptionCollectionConfig.model_validate(raw)
-    except ValidationError as exc:
-        logger.warning("invalid %s settings, using defaults: %s", SETTINGS_KEY_SUBSCRIPTION_COLLECTION, exc)
-        return SubscriptionCollectionConfig()
-
-
-async def get_stream_collection_config(session: AsyncSession) -> StreamCollectionConfig:
-    raw = await get_setting_value(session, SETTINGS_KEY_STREAM_COLLECTION)
-    try:
-        return StreamCollectionConfig.model_validate(raw)
-    except ValidationError as exc:
-        logger.warning("invalid %s settings, using defaults: %s", SETTINGS_KEY_STREAM_COLLECTION, exc)
-        return StreamCollectionConfig()
-
-
-async def get_scrim_config(session: AsyncSession) -> ScrimConfig:
-    raw = await get_setting_value(session, SETTINGS_KEY_SCRIM)
-    try:
-        return ScrimConfig.model_validate(raw)
-    except ValidationError as exc:
-        logger.warning("invalid %s settings, using defaults: %s", SETTINGS_KEY_SCRIM, exc)
-        return ScrimConfig()
-
-
-async def get_workspace_creation_config(session: AsyncSession) -> WorkspaceCreationConfig:
-    raw = await get_setting_value(session, SETTINGS_KEY_WORKSPACE_CREATION)
-    try:
-        return WorkspaceCreationConfig.model_validate(raw)
-    except ValidationError as exc:
-        logger.warning("invalid %s settings, using defaults: %s", SETTINGS_KEY_WORKSPACE_CREATION, exc)
-        return WorkspaceCreationConfig()
+settings_provider = SettingsProvider()

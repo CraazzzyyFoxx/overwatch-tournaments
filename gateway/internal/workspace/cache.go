@@ -96,6 +96,16 @@ func (c *ttlCache[K, V]) set(k K, v V) {
 	c.m[k] = el
 }
 
+// del drops k, if present, ahead of its expiry. Used when a cached answer is
+// known to have been contradicted (see Store.InvalidateRoomSpectatorRead).
+func (c *ttlCache[K, V]) del(k K) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if el, ok := c.m[k]; ok {
+		c.removeLocked(el)
+	}
+}
+
 // evictOldestLocked drops the least-recently-set entry. Caller holds c.mu.
 func (c *ttlCache[K, V]) evictOldestLocked() {
 	if front := c.ll.Front(); front != nil {

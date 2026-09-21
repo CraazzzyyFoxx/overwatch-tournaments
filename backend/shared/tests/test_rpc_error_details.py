@@ -118,6 +118,9 @@ class HttpErrorTests(IsolatedAsyncioTestCase):
             ],
         )
 
+    def test_api_exc_carries_the_field_an_error_is_about(self) -> None:
+        assert ApiExc(msg="m", code="c", field="f").model_dump(mode="json") == {"msg": "m", "code": "c", "field": "f"}
+
     def test_string_detail_has_no_details(self) -> None:
         self.assertEqual(http_error(HTTPException(status_code=404, detail="Team not found")), ("Team not found", {}))
 

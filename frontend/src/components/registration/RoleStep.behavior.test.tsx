@@ -11,12 +11,15 @@ import {
 } from "react";
 
 import type { Hero } from "@/types/hero.types";
-import type { RegistrationForm } from "@/types/registration.types";
+import type { RolesParams } from "@/types/forms.types";
+import type { SubroleCatalog } from "@/types/registration.types";
 
 import {
   createRoleSelections,
+  fromRoleSelections,
   isFlexSelection,
   priorityChoice,
+  toRoleSelections,
   type FlexMode,
   type RoleSelections,
 } from "./types";
@@ -61,10 +64,17 @@ mock.module("@/components/ui/popover", () => ({
   PopoverContent: ({ children }: { children: ReactNode }) =>
     useContext(PopoverCtx).open ? <div>{children}</div> : null,
 }));
+// Radix passes the root's `disabled` down to the trigger through context; the
+// stand-in has to do the same or a disabled specialization cell looks enabled.
+const SelectCtx = createContext<boolean>(false);
 mock.module("@/components/ui/select", () => ({
-  Select: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  Select: ({ children, disabled = false }: { children: ReactNode; disabled?: boolean }) => (
+    <SelectCtx.Provider value={disabled}>
+      <div>{children}</div>
+    </SelectCtx.Provider>
+  ),
   SelectTrigger: ({ children, ...rest }: { children: ReactNode }) => (
-    <button type="button" {...rest}>
+    <button type="button" disabled={useContext(SelectCtx)} {...rest}>
       {children}
     </button>
   ),
@@ -110,15 +120,23 @@ const HEROES: Hero[] = [
   image_path: `/heroes/${slug}.png`,
 }) as unknown as Hero);
 
-const FORM = {
-  built_in_fields: {},
-  custom_fields: [],
-  subrole_catalog: {
-    tank: [{ slug: "main-tank", label: "Main tank" }],
-    damage: [{ slug: "hitscan", label: "Hitscan" }],
-    support: [{ slug: "main-heal", label: "Main heal" }],
-  },
-} as unknown as RegistrationForm;
+const CATALOG: SubroleCatalog = {
+  tank: [{ slug: "main-tank", label: "Main tank" }],
+  damage: [{ slug: "hitscan", label: "Hitscan" }],
+  support: [{ slug: "main-heal", label: "Main heal" }],
+};
+
+/** `subroles: {}` offers the whole catalog, which is what these cases assume. */
+function paramsFor(flexMode: FlexMode): RolesParams {
+  return {
+    primary_required: true,
+    additional_required: false,
+    flex_allowed: flexMode !== "off",
+    flex_mode: flexMode === "off" ? "optional" : flexMode,
+    subroles: {},
+    top_heroes: { enabled: true, required: false, max: 5 },
+  };
+}
 
 let container = testWindow.document.createElement("div");
 let root = createRoot(container as unknown as Element);
@@ -134,18 +152,20 @@ function Harness({
   const [selections, setSelections] = useState<RoleSelections>(
     initial ?? createRoleSelections(flexMode),
   );
+  // The matrix speaks `RoleSelections`; the stored answer is `RoleInput[]`.
+  // Converting at the boundary keeps these cases written in the vocabulary
+  // they assert in, and exercises the round trip on every interaction.
   return (
     <RoleStep
-      selections={selections}
+      params={paramsFor(flexMode)}
+      subroleCatalog={CATALOG}
+      value={fromRoleSelections(selections)}
       onChange={(next) => {
-        latest = next;
-        setSelections(next);
+        const restored = toRoleSelections(next);
+        latest = restored;
+        setSelections(restored);
       }}
-      form={FORM}
       allHeroes={HEROES}
-      topHeroesEnabled
-      maxHeroes={5}
-      flexMode={flexMode}
     />
   );
 }
@@ -246,6 +266,7 @@ describe("RoleStep flex hero roster", () => {
     // submitted under the row's role, so Ana as a tank pick is a 422 the moment
     // the submission stops being flex.
     mount();
+    click('[role="radio"]', MAIN.tank - 1); // tank → fallback; a skipped row is locked
     expect(roster(0)).toEqual(["reinhardt", "dva"]);
 
     click("[aria-pressed]", 0); // flex preset — every role main
@@ -254,6 +275,21 @@ describe("RoleStep flex hero roster", () => {
     expect(roster(0)).toEqual(["reinhardt", "dva"]);
     expect(roster(1)).toEqual(["genji", "ashe"]);
     expect(roster(2)).toEqual(["ana", "kiriko"]);
+  });
+
+  it("locks the specialization and hero cells of a skipped role", () => {
+    // "Skip" means the role is not part of the submission, so a specialization
+    // or a hero pick on it is an answer to a question that was not asked.
+    mount(); // optional mode starts every role skipped
+    // 3 specialization triggers + 3 hero pickers, all locked while every role
+    // is skipped.
+    expect(container.querySelectorAll("button[disabled]").length).toBe(6);
+
+    click('[role="radio"]', MAIN.damage);
+    expect(container.querySelectorAll("button[disabled]").length).toBe(4);
+
+    click('[role="radio"]', MAIN.damage - 2); // damage → off again
+    expect(container.querySelectorAll("button[disabled]").length).toBe(6);
   });
 
   it("keeps the all-roles flex choice when a top hero is picked", () => {

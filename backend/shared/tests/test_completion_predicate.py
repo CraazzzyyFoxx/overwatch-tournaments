@@ -15,7 +15,7 @@ from types import SimpleNamespace
 import pytest
 
 from shared.core import enums
-from shared.services.tournament.utils import completed_encounters, is_completed_encounter
+from shared.domain.tournament_utils import completed_encounters, is_completed_encounter
 
 
 def _encounter(*, status, result_status, home_team_id=1, away_team_id=2) -> SimpleNamespace:

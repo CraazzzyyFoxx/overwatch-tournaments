@@ -19,15 +19,40 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
+from shared.core.social import SocialProvider
+from shared.domain.forms import IDENTITY_PROVIDERS, FormField, FormSchema, identity_key
 from shared.domain.player_sub_roles import catalog_slugs, normalize_sub_role
 from src.domain.registration.utils import (
     normalize_header,
     parse_boolean_value,
     parse_integer,
 )
-from src.schemas.registration import CustomFieldDefinition
 
 ROLE_CODES = ("tank", "damage", "support")
+
+#: Targets that are FORM ANSWERS: they reach the registration through the
+#: answer pipeline instead of straight onto a column. Everything else a sheet
+#: can map -- ``display_name``, ``admin_notes``, ``submitted_at`` and the
+#: role/rank targets -- is organizer state the form never asks a player about.
+ANSWER_TARGET_KEYS: tuple[str, ...] = (
+    "battle_tag",
+    "smurf_tags",
+    *(identity_key(provider) for provider in IDENTITY_PROVIDERS),
+    "stream_pov",
+    "public_notes",
+    "organizer_notes",
+)
+
+#: Label and header aliases for each identity provider the form can ask about.
+#: Data, not branches: a new provider in ``IDENTITY_PROVIDERS`` only needs a row
+#: here to become mappable (and is mappable without one, minus the suggester).
+_IDENTITY_HEADERS: dict[str, tuple[str, tuple[str, ...]]] = {
+    SocialProvider.DISCORD: ("Discord", ("discord", "дискорд", "дискор")),
+    SocialProvider.TWITCH: ("Twitch", ("twitch", "твич")),
+    SocialProvider.BOOSTY: ("Boosty", ("boosty", "бусти")),
+    SocialProvider.VK: ("VK", ("vk", "вконтакте")),
+    SocialProvider.YOUTUBE: ("YouTube", ("youtube", "ютуб")),
+}
 
 # Parser identifiers understood by ``parse_target_value`` in admin.py.
 PARSER_STRING = "string"
@@ -101,6 +126,24 @@ def _role_label(role_code: str) -> str:
     return {"tank": "Tank", "damage": "Damage", "support": "Support"}[role_code]
 
 
+def _identity_specs() -> list[MappingTargetSpec]:
+    """One mappable target per identity provider the form can ask about."""
+    specs: list[MappingTargetSpec] = []
+    for provider in IDENTITY_PROVIDERS:
+        label, aliases = _IDENTITY_HEADERS.get(provider, (provider.title(), ()))
+        specs.append(
+            MappingTargetSpec(
+                key=identity_key(provider),
+                label=label,
+                group="profile",
+                accepted_parsers=(PARSER_STRING,),
+                default_parser=PARSER_STRING,
+                aliases=aliases,
+            )
+        )
+    return specs
+
+
 def _build_builtin_specs() -> tuple[MappingTargetSpec, ...]:
     specs: list[MappingTargetSpec] = [
         MappingTargetSpec(
@@ -145,30 +188,7 @@ def _build_builtin_specs() -> tuple[MappingTargetSpec, ...]:
             multi_column=True,
             aliases=("smurf", "alt", "смурф"),
         ),
-        MappingTargetSpec(
-            key="discord_nick",
-            label="Discord",
-            group="profile",
-            accepted_parsers=(PARSER_STRING,),
-            default_parser=PARSER_STRING,
-            aliases=("discord", "дискорд", "дискор"),
-        ),
-        MappingTargetSpec(
-            key="twitch_nick",
-            label="Twitch",
-            group="profile",
-            accepted_parsers=(PARSER_STRING,),
-            default_parser=PARSER_STRING,
-            aliases=("twitch", "твич"),
-        ),
-        MappingTargetSpec(
-            key="boosty_nick",
-            label="Boosty",
-            group="profile",
-            accepted_parsers=(PARSER_STRING,),
-            default_parser=PARSER_STRING,
-            aliases=("boosty", "бусти"),
-        ),
+        *_identity_specs(),
         MappingTargetSpec(
             key="stream_pov",
             label="Stream POV",
@@ -178,13 +198,23 @@ def _build_builtin_specs() -> tuple[MappingTargetSpec, ...]:
             aliases=("stream", "pov", "стрим"),
         ),
         MappingTargetSpec(
-            key="notes",
+            key="public_notes",
             label="Notes",
             group="profile",
             accepted_parsers=(PARSER_JOIN_LINES, PARSER_STRING),
             default_parser=PARSER_JOIN_LINES,
             multi_column=True,
             aliases=("note", "comment", "примеч", "любая доп."),
+        ),
+        MappingTargetSpec(
+            # Deliberately alias-free: an organizers-only answer must be mapped
+            # on purpose, never guessed off a header a player filled in.
+            key="organizer_notes",
+            label="Organizer notes",
+            group="profile",
+            accepted_parsers=(PARSER_JOIN_LINES, PARSER_STRING),
+            default_parser=PARSER_JOIN_LINES,
+            multi_column=True,
         ),
         MappingTargetSpec(
             key="is_flex",
@@ -276,10 +306,9 @@ def _build_builtin_specs() -> tuple[MappingTargetSpec, ...]:
     return tuple(specs)
 
 
-BUILTIN_TARGET_SPECS: tuple[MappingTargetSpec, ...] = _build_builtin_specs()
-
-# Derived alias preserved for backward compatibility with any external reference.
-DEFAULT_MAPPING_TARGETS: tuple[str, ...] = tuple(spec.key for spec in BUILTIN_TARGET_SPECS)
+#: Every builtin target the engine knows HOW to parse. Not what a given
+#: tournament may bind: see :func:`builtin_target_specs`.
+_ALL_BUILTIN_SPECS: tuple[MappingTargetSpec, ...] = _build_builtin_specs()
 
 _CUSTOM_FIELD_PARSER_BY_TYPE: dict[str, str] = {
     "text": PARSER_STRING,
@@ -295,12 +324,19 @@ def custom_field_target_key(field_key: str) -> str:
 
 
 def custom_field_target_specs(
-    custom_fields: list[CustomFieldDefinition] | None,
+    custom_fields: list[FormField] | None,
 ) -> tuple[MappingTargetSpec, ...]:
-    """Build a mapping target spec for each dynamic custom field on the form."""
+    """Build a mapping target spec for each dynamic custom field on the form.
+
+    ``role_ranks`` is skipped: its answer is one number per role, and a sheet
+    column is one cell -- there is no shape to map onto it, so offering the
+    target would only let an organizer store a string where a dict belongs.
+    """
     specs: list[MappingTargetSpec] = []
     for definition in custom_fields or []:
-        parser = _CUSTOM_FIELD_PARSER_BY_TYPE.get(definition.type, PARSER_STRING)
+        if definition.kind == "role_ranks":
+            continue
+        parser = _CUSTOM_FIELD_PARSER_BY_TYPE.get(definition.kind, PARSER_STRING)
         specs.append(
             MappingTargetSpec(
                 key=custom_field_target_key(definition.key),
@@ -315,17 +351,37 @@ def custom_field_target_specs(
     return tuple(specs)
 
 
-def build_target_specs(
-    custom_fields: list[CustomFieldDefinition] | None = None,
-) -> tuple[MappingTargetSpec, ...]:
-    """Built-in targets plus the form's dynamic custom-field targets."""
-    return BUILTIN_TARGET_SPECS + custom_field_target_specs(custom_fields)
+def schema_custom_fields(schema: FormSchema | None) -> list[FormField]:
+    """The organizer-defined (non-builtin) questions of a schema."""
+    return [field_def for field_def in schema.fields() if not field_def.is_builtin] if schema is not None else []
 
 
-def target_spec_map(
-    custom_fields: list[CustomFieldDefinition] | None = None,
-) -> dict[str, MappingTargetSpec]:
-    return {spec.key: spec for spec in build_target_specs(custom_fields)}
+def builtin_target_specs(schema: FormSchema | None) -> tuple[MappingTargetSpec, ...]:
+    """The builtin targets THIS form can receive, in catalog order.
+
+    An answer target (:data:`ANSWER_TARGET_KEYS`) is offered only when the
+    schema declares that question, exactly as a custom-field target exists only
+    while its question does. Otherwise binding a column to, say,
+    ``identity_boosty`` on a form that never asks for Boosty would pass
+    :func:`validate_mapping_config` -- the key is a permanent member of the
+    catalog -- and then be dropped by every sync with nothing said anywhere.
+
+    Everything else stays unconditional: ``source_record_key``,
+    ``display_name``, ``submitted_at``, ``admin_notes`` and the role/rank
+    targets are organizer state, which no form asks about and the answer
+    pipeline never touches.
+    """
+    declared = {field_def.key for field_def in schema.fields()} if schema is not None else set()
+    return tuple(spec for spec in _ALL_BUILTIN_SPECS if spec.key not in ANSWER_TARGET_KEYS or spec.key in declared)
+
+
+def build_target_specs(schema: FormSchema | None = None) -> tuple[MappingTargetSpec, ...]:
+    """Every target this form can bind: its builtins plus its custom questions."""
+    return builtin_target_specs(schema) + custom_field_target_specs(schema_custom_fields(schema))
+
+
+def target_spec_map(schema: FormSchema | None = None) -> dict[str, MappingTargetSpec]:
+    return {spec.key: spec for spec in build_target_specs(schema)}
 
 
 # ---------------------------------------------------------------------------
@@ -360,7 +416,7 @@ def _compile_regex(pattern: str | None) -> re.Pattern[str] | None:
 
 
 def coerce_custom_field_value(
-    field_def: CustomFieldDefinition,
+    field_def: FormField,
     raw: str | None,
     *,
     value_mapping: dict[str, Any] | None = None,
@@ -370,13 +426,13 @@ def coerce_custom_field_value(
     if not text:
         return CoercionResult(value=None)
 
-    if field_def.type == "number":
+    if field_def.kind == "number":
         parsed = parse_integer(text)
         if parsed is None:
             return CoercionResult(value=None, error=f"'{text}' is not a valid number")
         return CoercionResult(value=parsed)
 
-    if field_def.type == "checkbox":
+    if field_def.kind == "checkbox":
         custom_booleans = {
             normalize_header(key): bool(mapped) for key, mapped in ((value_mapping or {}).get("booleans") or {}).items()
         }
@@ -384,7 +440,7 @@ def coerce_custom_field_value(
         value = custom_booleans.get(normalized, parse_boolean_value(text))
         return CoercionResult(value=value)
 
-    if field_def.type == "select":
+    if field_def.kind == "select":
         if field_def.options and text not in field_def.options:
             return CoercionResult(value=text, warning=f"'{text}' is not one of the configured options")
         return CoercionResult(value=text)

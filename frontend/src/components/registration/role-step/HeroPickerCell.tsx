@@ -22,6 +22,8 @@ interface HeroPickerCellProps {
   selected: string[];
   max: number;
   onChange: (slugs: string[]) => void;
+  /** Skipped roles keep the cell in place, unusable — the matrix never reflows. */
+  disabled?: boolean;
 }
 
 /**
@@ -39,6 +41,7 @@ export function HeroPickerCell({
   selected,
   max,
   onChange,
+  disabled = false,
 }: Readonly<HeroPickerCellProps>) {
   const t = useTranslations();
   const [open, setOpen] = useState(false);
@@ -54,6 +57,7 @@ export function HeroPickerCell({
       <PopoverTrigger asChild>
         <button
           type="button"
+          disabled={disabled}
           aria-label={t("registration.roles.matrix.heroesLabel", {
             role: roleLabel,
             count: selected.length,
@@ -62,7 +66,7 @@ export function HeroPickerCell({
           className={cn(
             "flex h-9 w-full items-center gap-2 rounded-lg border border-[color:var(--aqt-border-2)]",
             "bg-[color:var(--aqt-overlay-2)] px-2 text-label font-medium transition-colors",
-            "hover:bg-[color:var(--aqt-overlay-3)]",
+            "hover:bg-[color:var(--aqt-overlay-3)] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-[color:var(--aqt-overlay-2)]",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
             selected.length > 0
               ? "text-[color:var(--aqt-fg)]"

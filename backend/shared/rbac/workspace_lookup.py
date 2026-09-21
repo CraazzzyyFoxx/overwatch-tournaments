@@ -30,6 +30,7 @@ from shared import models
 from shared.core import http_status as status
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.models.identity.auth_user import AuthUser
+from shared.repository import TournamentRepository
 
 __all__ = (
     "resolve_user_from_db",
@@ -50,6 +51,8 @@ __all__ = (
     "require_tournament_id_permission",
     "require_encounter_ids_permission",
 )
+
+_tournaments = TournamentRepository()
 
 
 async def resolve_user_from_db(user_id: int, payload: dict[str, Any], *, session: AsyncSession) -> AuthUser | None:
@@ -90,9 +93,7 @@ async def require_workspace_permission(
 
 
 async def get_tournament_workspace_id(session: AsyncSession, tournament_id: int) -> int:
-    workspace_id = await session.scalar(
-        sa.select(models.Tournament.workspace_id).where(models.Tournament.id == tournament_id)
-    )
+    workspace_id = await _tournaments.get_workspace_id(session, tournament_id)
     if workspace_id is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

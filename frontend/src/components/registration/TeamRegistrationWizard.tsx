@@ -8,6 +8,7 @@ import { EditableAvatar } from "@/components/ui/editable-avatar";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
+import { ApiError } from "@/lib/api-error";
 import { MAX_AVATAR_BYTES } from "@/lib/avatar";
 import { notify } from "@/lib/notify";
 import { translateRegistrationTeamError } from "@/lib/registration-team-errors";
@@ -15,10 +16,10 @@ import type { RoleCode } from "@/lib/roles";
 import { tournamentQueryKeys } from "@/lib/tournament-query-keys";
 import meService from "@/services/me.service";
 import registrationTeamService from "@/services/registration-team.service";
-import type { RegistrationCreateInput, RegistrationForm } from "@/types/registration.types";
+import type { RegistrationForm, RegistrationSubmitInput } from "@/types/registration.types";
 
 import RosterSlotPicker, { type RosterSlotOption } from "./RosterSlotPicker";
-import UnifiedRegistrationForm from "./UnifiedRegistrationForm";
+import RegistrationSchemaForm from "./RegistrationSchemaForm";
 
 interface TeamRegistrationWizardProps {
   workspaceId: number;
@@ -39,10 +40,10 @@ interface TeamRegistrationWizardProps {
  *
  * The team's identity — logo, name, and the captain's own slot — lives ABOVE the
  * ordinary registration wizard rather than inside it: these are team facts, not
- * registration fields, and the wizard's step machinery is driven by
- * `formConfig.built_in_fields`, which knows nothing about teams. Keeping the
- * panel outside the steps also keeps it on screen throughout, so its validation
- * is visible from the first step instead of ambushing the captain at submit.
+ * registration fields, and the wizard's step machinery is driven by the form
+ * schema's sections, which know nothing about teams. Keeping the panel outside
+ * the steps also keeps it on screen throughout, so its validation is visible
+ * from the first step instead of ambushing the captain at submit.
  *
  * The captain is a member like anyone else (decision 5) — they occupy a real slot
  * and their registration goes through exactly the same validation as a solo
@@ -105,7 +106,7 @@ export default function TeamRegistrationWizard({
   const showNameError = nameTouched && nameError !== null;
 
   const mutation = useMutation({
-    mutationFn: async (registration: RegistrationCreateInput) => {
+    mutationFn: async (registration: RegistrationSubmitInput) => {
       if (!slot) throw new Error("no slot");
       const team = await registrationTeamService.create(tournamentId, {
         name: name.trim(),
@@ -140,7 +141,13 @@ export default function TeamRegistrationWizard({
       ]);
       onClose();
     },
-    onError: (err: unknown) => setError(translateRegistrationTeamError(tErrors, err)),
+    // A field-scoped rejection is already rendered under its own control by
+    // `RegistrationSchemaForm`; the banner is for team-level failures
+    // (`slot_taken`, `team_name_taken`, …), which name no field.
+    onError: (err: unknown) => {
+      if (err instanceof ApiError && err.details.some((detail) => detail.field)) return;
+      setError(translateRegistrationTeamError(tErrors, err));
+    },
   });
 
   const avatarLabels = {
@@ -259,11 +266,10 @@ export default function TeamRegistrationWizard({
         </fieldset>
       </section>
 
-      <UnifiedRegistrationForm
+      <RegistrationSchemaForm
         mode="public"
         tournamentId={tournamentId}
-        workspaceId={workspaceId}
-        formConfig={form}
+        form={form}
         tournamentName={tournamentName}
         // The dialog title already names the task and the tournament; a second
         // visible heading here would also put an `<h3>` above an `<h2>`.
@@ -272,7 +278,7 @@ export default function TeamRegistrationWizard({
         // The captain's chosen slot drives the role step, so the matrix shows the
         // one row they will actually play instead of asking the question twice.
         lockedRole={slot}
-        onSubmit={async (payload) => {
+        onSubmit={async ({ form_version_id, answers }) => {
           setError(null);
           if (nameError) {
             // Surface it where it belongs and move focus there, rather than
@@ -281,7 +287,7 @@ export default function TeamRegistrationWizard({
             nameRef.current?.focus();
             return;
           }
-          await mutation.mutateAsync(payload);
+          await mutation.mutateAsync({ form_version_id, answers });
         }}
         onCancel={onClose}
         submitPending={mutation.isPending}

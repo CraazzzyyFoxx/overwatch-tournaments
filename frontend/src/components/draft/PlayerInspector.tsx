@@ -6,7 +6,7 @@ import Link from "next/link";
 
 import DivisionIcon from "@/components/DivisionIcon";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
-import { renderCustomFieldValue } from "@/components/registration/customFieldValue";
+import { AnswerValue } from "@/components/forms/AnswerValue";
 import { HeroCoord } from "@/components/site/PageHero";
 import { Avatar, AvatarImage, AvatarStack } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -225,10 +225,11 @@ export function PlayerInspector({
                 <div key={entry.key} className="min-w-0">
                   <dt className="text-xs text-[color:var(--aqt-fg-muted)]">{entry.label}</dt>
                   <dd className="mt-0.5 break-words text-[color:var(--aqt-fg)]">
-                    {renderCustomFieldValue(entry, entry.value, {
-                      yes: t("customFieldYes"),
-                      no: t("customFieldNo")
-                    })}
+                    <AnswerValue
+                      value={entry.value}
+                      kind={entry.type}
+                      labels={{ yes: t("customFieldYes"), no: t("customFieldNo") }}
+                    />
                   </dd>
                 </div>
               ))}

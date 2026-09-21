@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from shared.domain.roster_shape import ROSTER_SLOT_CODES, RosterSlotCode
 from shared.domain.team_roster import RosterOccupancy
 from src import models
-from src.schemas.registration import RegistrationCreate
+from src.schemas.registration import RegistrationSubmit
 
 __all__ = (
     "RegistrationTeamAcceptRequest",
@@ -45,7 +45,7 @@ class RegistrationTeamCreateRequest(BaseModel):
 
     name: str = Field(min_length=1, max_length=255)
     slot_code: RosterSlotCode
-    registration: RegistrationCreate
+    registration: RegistrationSubmit
 
     @field_validator("name")
     @classmethod
@@ -94,12 +94,14 @@ class RegistrationTeamAcceptRequest(BaseModel):
     way to catch.
 
     A genuinely new invitee who sends nothing is still rejected, by the registration
-    form's own validation downstream. This default cannot create a blank row.
+    form's own validation downstream. ``None`` rather than an empty default: a
+    submission carries the ``form_version_id`` it answered, and there is no honest
+    value to invent for someone who answered nothing.
     """
 
     token: str | None = None
     invite_id: int | None = None
-    registration: RegistrationCreate = Field(default_factory=RegistrationCreate)
+    registration: RegistrationSubmit | None = None
 
     @model_validator(mode="after")
     def _exactly_one_reference(self) -> RegistrationTeamAcceptRequest:

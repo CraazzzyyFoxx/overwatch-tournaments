@@ -333,6 +333,21 @@ class _UpsertCase(IsolatedAsyncioTestCase):
             self.assertIn(fragment, message)
         return message
 
+    def assert_field_error(self, envelope: dict, field: str, code: str) -> None:
+        """A pydantic rejection, asserted where the client reads it.
+
+        ``_run`` maps a ``ValidationError`` through
+        ``shared.rpc.common.validation_error``: the message is a one-line human
+        summary and pydantic's own error type rides ``details["fields"]``. That
+        is the only place a machine code survives, so a guard that has to
+        distinguish "``mode`` is missing" from a *different* 422 whose prose
+        merely contains "mode" pins it here rather than in the message.
+        """
+        self.assertFalse(envelope["ok"], envelope)
+        self.assertEqual("unprocessable", envelope["error"]["code"], envelope)
+        entries = envelope["error"]["details"]["fields"]
+        self.assertIn({"field": field, "code": code}, [{"field": e["field"], "code": e["code"]} for e in entries])
+
     def written_config(self, envelope: dict, session: _FakeSession):
         """The config the handler wrote, with the response asserted successful."""
         self.assertTrue(envelope["ok"], envelope)
@@ -351,7 +366,7 @@ class ModeIsRequired(_UpsertCase):
         # so a default would let a stale admin tab convert a slot config to
         # flat in silence. Applies identically here.
         #
-        # ``type=missing`` rather than a bare "mode" match: a defaulted ``mode``
+        # The error CODE rather than a bare "mode" match: a defaulted ``mode``
         # would send this same body down the pool branch, where the message
         # "sequence must be empty in pool mode" contains "mode" too and would
         # let the mutant pass. Pydantic's own error type is what separates them.
@@ -360,16 +375,16 @@ class ModeIsRequired(_UpsertCase):
 
         envelope, session = await self.invoke(body)
 
-        self.assert_unprocessable(envelope, "mode", "type=missing")
+        self.assert_field_error(envelope, "mode", "missing")
         self.assertEqual(0, session.commits)
 
     async def test_an_unknown_mode_is_rejected_rather_than_read_as_flat(self) -> None:
         # ``mode`` is an enum precisely so a typo cannot fall silently into
         # flat mode. Same substring hazard as above, so this pins the enum
-        # error rather than the word.
+        # code rather than the word.
         envelope, session = await self.invoke(slot_body(mode="slot"))
 
-        self.assert_unprocessable(envelope, "mode", "type=enum")
+        self.assert_field_error(envelope, "mode", "enum")
         self.assertEqual(0, session.commits)
 
     async def test_first_ban_rotation_defaults_to_fixed_when_omitted(self) -> None:

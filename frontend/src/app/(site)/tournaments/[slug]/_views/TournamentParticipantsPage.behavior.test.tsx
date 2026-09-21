@@ -133,13 +133,10 @@ function makeRegistration(overrides: Partial<Registration> = {}): Registration {
     workspace_id: 3,
     user_id: 5,
     battle_tag: "Anak#2100",
-    smurf_tags_json: null,
-    discord_nick: null,
-    twitch_nick: null,
-    stream_pov: false,
     roles: [{ role: "damage", subrole: null, is_primary: true, priority: 0, top_heroes: [] }],
-    notes: null,
-    custom_fields_json: null,
+    answers: { stream_pov: false },
+    form_version_id: 4,
+    form_version_stale: false,
     status: "approved",
     checked_in: false,
     profiles_open: null,
@@ -189,8 +186,26 @@ const FORM: RegistrationForm = {
   is_open: false,
   require_open_profile: false,
   require_subscription: false,
-  built_in_fields: {},
-  custom_fields: []
+  form_schema: {
+    schema_version: 1,
+    sections: [
+      {
+        key: "accounts",
+        fields: [
+          {
+            key: "battle_tag",
+            kind: "builtin",
+            required: true,
+            visibility: "public",
+            params: {},
+            show_in_draft: false
+          }
+        ]
+      }
+    ]
+  },
+  version_id: 4,
+  version_number: 1
 };
 
 /** An hour either side of now, i.e. the window is open. */
@@ -532,6 +547,40 @@ describe("a roster the organizer hid", () => {
         .replace("{role}", en.common.roles.damage)
     );
     expect(onRole?.textContent).toBe(`${en.common.roles.damage} 4 / 24`);
+  });
+
+  it("shows the identity handles and notes the registrant answered, and nothing they did not", async () => {
+    // The card reads the flat `answers` document. A public read is stripped
+    // against the registration's own form version, so an answer that is absent
+    // was either never asked or is not this reader's to see — either way the
+    // card must show no row for it rather than an empty one.
+    getMyRegistration.mockResolvedValue(
+      makeRegistration({
+        answers: {
+          identity_discord: "anak",
+          identity_youtube: "@anak",
+          public_notes: "I can play late",
+          stream_pov: true
+        }
+      })
+    );
+    await mount();
+
+    const expand = container.querySelector<HTMLButtonElement>(
+      `[aria-label="${en.registration.myCard.showDetails}"]`
+    );
+    await act(async () => expand?.click());
+    const card = container.textContent ?? "";
+
+    expect(card).toContain("anak");
+    expect(card).toContain("@anak");
+    // No brand icon for YouTube, so the chip is labelled with the provider.
+    expect(card).toContain(en.registration.accounts.youtube);
+    expect(card).toContain("I can play late");
+    expect(card).toContain(en.registration.myCard.streamPovActive);
+    // Twitch was not answered and Boosty was not asked: neither gets a chip.
+    expect(card).not.toContain(en.registration.accounts.twitch);
+    expect(card).not.toContain(en.registration.accounts.boosty);
   });
 
   it("says nothing about a role queue for a registration that declared no role", async () => {

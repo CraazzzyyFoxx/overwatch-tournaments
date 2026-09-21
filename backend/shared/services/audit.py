@@ -27,6 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from shared.models.identity.auth_user import AuthUser
 from shared.models.platform.audit import AuditLog
 from shared.observability.correlation import get_correlation_id
+from shared.repository import AuditLogRepository
 from shared.rpc.identity import api_key_label, credential_type
 
 __all__ = ("AuditSource", "json_safe", "record_audit", "record_admin_audit")
@@ -39,6 +40,8 @@ AuditSource = Literal["admin", "api_key", "challonge", "discord", "scheduler", "
 # ``ip_address`` is ``String(45)``.
 _LABEL_LIMIT = 255
 _IP_LIMIT = 45
+
+_logs = AuditLogRepository()
 
 
 def _clip(value: str | None, limit: int) -> str | None:
@@ -164,8 +167,7 @@ async def record_audit(
         # set; ``None`` outside a traced flow is fine and stays NULL.
         correlation_id=get_correlation_id(),
     )
-    session.add(row)
-    return row
+    return _logs.add(session, row)
 
 
 async def record_admin_audit(

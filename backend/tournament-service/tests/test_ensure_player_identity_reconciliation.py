@@ -66,9 +66,9 @@ async def _make_player(session, suffix: str, *, auth_user_id: int | None = None)
 
 
 async def _battle_tag_account(session, *, user_id: int, battle_tag: str):
-    from shared.services import social_identity
+    from shared.services.social_identity import social_identity_service
 
-    return await social_identity.upsert_social_account(
+    return await social_identity_service.upsert(
         session, user_id=user_id, provider=SocialProvider.BATTLENET, username=battle_tag
     )
 
@@ -113,9 +113,9 @@ def test_reuses_account_owned_player_and_attaches_new_battle_tag() -> None:
                 await session.commit()
 
             async with session_maker() as session:
-                from shared.services import social_identity
+                from shared.services.social_identity import social_identity_service
 
-                account = await social_identity.find_by_handle(
+                account = await social_identity_service.find_by_handle(
                     session, provider=SocialProvider.BATTLENET, username=battle_tag
                 )
                 account_user_id = None if account is None else account.user_id
@@ -155,12 +155,12 @@ def test_colliding_shadow_battle_tag_collapses_onto_account_owned_player() -> No
                 await session.commit()
 
             async with session_maker() as session:
-                from shared.services import social_identity
+                from shared.services.social_identity import social_identity_service
 
-                account = await social_identity.find_by_handle(
+                account = await social_identity_service.find_by_handle(
                     session, provider=SocialProvider.BATTLENET, username=battle_tag
                 )
-                remaining_on_shadow = await social_identity.list_social_accounts(session, shadow_id)
+                remaining_on_shadow = await social_identity_service.list_for_player(session, shadow_id)
                 account_user_id = None if account is None else account.user_id
                 remaining_providers = [a.provider for a in remaining_on_shadow]
 

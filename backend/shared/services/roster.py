@@ -46,6 +46,7 @@ from shared.models.registration.registration import (
 )
 from shared.models.tenancy.workspace import WorkspaceMember
 from shared.models.tournament import Tournament
+from shared.repository import TournamentRepository
 from shared.services.division_grid.access import get_effective_division_grid
 from shared.services.member_rank import TOURNAMENT_ORDER, MemberRankService, member_rank_service
 
@@ -64,6 +65,8 @@ def registration_load_options() -> list[Any]:
         .selectinload(BalancerRegistrationRole.hero_entries)
         .selectinload(BalancerRegistrationRoleHero.hero),
         selectinload(BalancerRegistration.workspace_member).selectinload(WorkspaceMember.player),
+        selectinload(BalancerRegistration.identities),
+        selectinload(BalancerRegistration.form_version),
     ]
 
 
@@ -82,8 +85,14 @@ def _parse_role(code: str | None) -> HeroClass | None:
 
 
 class RosterEngine:
-    def __init__(self, *, ranks: MemberRankService = member_rank_service) -> None:
+    def __init__(
+        self,
+        *,
+        ranks: MemberRankService = member_rank_service,
+        tournaments: TournamentRepository = TournamentRepository(),
+    ) -> None:
         self.ranks = ranks
+        self.tournaments = tournaments
 
     # -- entry points --------------------------------------------------------
 
@@ -102,7 +111,7 @@ class RosterEngine:
         (approved, not deleted, and a ``balancer_status`` that does not exclude) --
         this is what the draft seeds from and what the balance job balances.
         """
-        workspace_id = await session.scalar(sa.select(Tournament.workspace_id).where(Tournament.id == tournament_id))
+        workspace_id = await self.tournaments.get_workspace_id(session, tournament_id)
         query = (
             sa.select(BalancerRegistration)
             .where(BalancerRegistration.tournament_id == tournament_id)
@@ -157,7 +166,11 @@ class RosterEngine:
             tournament_id = next((reg.tournament_id for reg in registrations), None)
         if form is None and tournament_id is not None:
             form = await session.scalar(
-                sa.select(BalancerRegistrationForm).where(BalancerRegistrationForm.tournament_id == tournament_id)
+                sa.select(BalancerRegistrationForm)
+                # ``flex_role_mode`` reads the schema off the current version,
+                # which is never lazy-loadable in async code.
+                .options(selectinload(BalancerRegistrationForm.current_version))
+                .where(BalancerRegistrationForm.tournament_id == tournament_id)
             )
         mode = flex_role_mode(form)
         if grid is None:
@@ -372,7 +385,7 @@ class RosterEngine:
             workspace_member_id=reg.workspace_member_id,
             roles=tuple(entries),
             is_full_flex=is_full_flex,
-            notes=reg.notes,
+            public_notes=reg.public_notes,
             admin_notes=reg.admin_notes,
             custom_fields=dict(reg.custom_fields_json or {}),
             status=reg.status,
@@ -382,9 +395,7 @@ class RosterEngine:
             registration_team_id=reg.registration_team_id,
             team_slot_code=reg.team_slot_code,
             is_substitute=bool(reg.is_substitute),
-            discord_nick=reg.discord_nick,
-            twitch_nick=reg.twitch_nick,
-            boosty_nick=reg.boosty_nick,
+            identities={identity.provider: identity.handle for identity in reg.identities},
             stream_pov=bool(reg.stream_pov),
             smurf_tags=tuple(reg.smurf_tags_json or ()),
         )
@@ -485,13 +496,11 @@ class RosterEngine:
             }
             if include_private:
                 owt["private"] = {
-                    "notes": roster.notes,
+                    "public_notes": roster.public_notes,
                     "admin_notes": roster.admin_notes,
                     "exclude_reason": roster.exclude_reason,
                     "custom_fields": dict(roster.custom_fields),
-                    "discord_nick": roster.discord_nick,
-                    "twitch_nick": roster.twitch_nick,
-                    "boosty_nick": roster.boosty_nick,
+                    "identities": dict(roster.identities),
                     "stream_pov": roster.stream_pov,
                     "smurf_tags": list(roster.smurf_tags),
                 }

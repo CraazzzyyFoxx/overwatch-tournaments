@@ -174,6 +174,17 @@ All services share **one PostgreSQL database** with **one SQLAlchemy metadata** 
 - **Dual identity.** `auth.user` (login account, owned by identity-svc) is distinct from
   `players.user` (domain player, owned by app-svc), linked 1:0..1 via `auth_user_id`. A
   player can exist without a login ("shadow player"). Full reference: [`docs/users-identity.md`](./users-identity.md).
+- **Registration form schema.** What a tournament asks its registrants is one document:
+  a versioned `FormSchema` of ordered sections of typed fields, modelled in
+  `backend/shared/domain/forms/`. `balancer.registration_form_version` keeps append-only
+  snapshots, so a form edited after registrations exist does not orphan the answers
+  already given — each registration records the version it answered. A schema is reusable
+  across a workspace's tournaments through `balancer.registration_form_template`. Answers
+  are validated server-side in one place and stored typed: built-in fields in their own
+  registration columns and `balancer.registration_identity` rows, organizer-defined fields
+  in `registration.custom_fields_json`. Every field declares its visibility, which is what
+  keeps organizer-only answers off the public roster. Design record:
+  [`docs/registration-form-schema/design.md`](./registration-form-schema/design.md).
 - **RBAC.** Grant-only permission catalog + workspace system roles, with a
   `user_permission_deny` overlay. Bootstrapped from `backend/shared/rbac/`.
 - **Migrations.** A single Alembic project under `backend/migrations/`. `make migrate` runs

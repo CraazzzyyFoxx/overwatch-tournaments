@@ -118,6 +118,11 @@ class EncounterResultAuditRepository(BaseRepository[models.EncounterResultAudit]
     def __init__(self) -> None:
         super().__init__(models.EncounterResultAudit)
 
+    def add(self, session: AsyncSession, row: models.EncounterResultAudit) -> models.EncounterResultAudit:
+        """Stage one journal row. No flush — rides the caller's transaction."""
+        session.add(row)
+        return row
+
     async def list_for_encounter(
         self,
         session: AsyncSession,

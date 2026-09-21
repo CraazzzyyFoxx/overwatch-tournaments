@@ -23,6 +23,8 @@ import pickBanService, { type PickBanActionInput } from "@/services/pickBan.serv
 import type { Encounter } from "@/types/encounter.types";
 import type { PickBanAction, PickBanKind, PickBanState } from "@/types/tournament.types";
 
+import { RoomChat } from "@/components/chat/RoomChat";
+import { encounterChatRoom } from "@/lib/chat-rooms";
 import {
   PICK_BAN_UNAVAILABLE_COPY,
   agreedMapScore,
@@ -74,6 +76,24 @@ const UNAVAILABLE_ICON: Record<PickBanUnavailableIcon, React.ReactNode> = {
 };
 
 /**
+ * The room plus its private back channel. The chat is a `Dock` over the page
+ * rather than a panel inside one of the phases: every branch below returns a
+ * different screen (readiness, a pick-ban board, a map report, the closing
+ * report), and the captains need to talk across all of them — "ready?" is
+ * asked precisely when the readiness gate is up. Docked, it also costs the
+ * room no width, and `RoomChat` renders nothing at all for a viewer the room
+ * will not let read.
+ */
+export function PregameRoom(props: Readonly<PregameRoomProps>) {
+  return (
+    <>
+      <PregameRoomBody {...props} />
+      <RoomChat room={encounterChatRoom(props.encounterId)} />
+    </>
+  );
+}
+
+/**
  * Unified pre-game room: one screen for the whole pre-game loop, which runs
  * once per map of the series —
  *
@@ -91,7 +111,7 @@ const UNAVAILABLE_ICON: Record<PickBanUnavailableIcon, React.ReactNode> = {
  * `pick_ban_session.ensure_pick_ban_session`) until both captains confirm
  * readiness, shown here as a waiting screen with an "I'm ready" button.
  */
-export function PregameRoom({ encounterId, seriesReport = true }: Readonly<PregameRoomProps>) {
+function PregameRoomBody({ encounterId, seriesReport = true }: Readonly<PregameRoomProps>) {
   const t = useTranslations("pickBan.room");
   const queryClient = useQueryClient();
   const { isSuperuser, isWorkspaceAdmin, hasWorkspacePermission } = usePermissions();
@@ -497,27 +517,12 @@ export function PregameRoom({ encounterId, seriesReport = true }: Readonly<Prega
   }
 
   if (phase === "done") {
-    // Without a report to file, the closing screen still owes the captains the
-    // one thing they came for: who won. Read off the encounter's own series
-    // score, which `submit_map_report` advances map by map — no extra request,
-    // and it is the same number the header's filmstrip adds up.
-    const home = encounter.score?.home ?? 0;
-    const away = encounter.score?.away ?? 0;
-    const outcome =
-      home === away
-        ? t("seriesDone.drawn", { home, away })
-        : t("seriesDone.won", {
-            team: sideNameOf(home > away ? "home" : "away"),
-            home,
-            away
-          });
     return (
       <div className="flex flex-col gap-4">
         <PregameFinalReport
           encounter={encounter}
           viewerSide={mapState.viewer_side ?? viewerSide}
           reportable={seriesReport}
-          outcome={outcome}
           heroRounds={heroRounds}
           homeName={sideNameOf("home")}
           awayName={sideNameOf("away")}

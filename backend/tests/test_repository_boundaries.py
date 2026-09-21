@@ -44,6 +44,12 @@ APPROVED_DIRECT_WRITE_FILES = {
     "analytics-service/src/services/ml/inference/player_anomaly_runner.py",
     "analytics-service/src/services/ml/inference/runner.py",
     "parser-service/src/services/achievement/engine/runner.py",
+    # Bulk executemany ingest, not CRUD: one parsed match log yields thousands
+    # of kill-feed/event rows, and a per-row repository create would turn a
+    # single INSERT..VALUES into a round trip each. Generic over the model on
+    # purpose -- the caller passes whichever log table the parsed frame belongs
+    # to.
+    "parser-service/src/services/match_logs/flows.py",
     "shared/messaging/outbox.py",
     "shared/rbac/bootstrap.py",
     "shared/services/bracket/advancement.py",
@@ -54,7 +60,21 @@ APPROVED_DIRECT_WRITE_FILES = {
     # hook, which is where the row has to be created for it to ride the
     # caller's transaction.
     "shared/services/realtime/emit.py",
+    # Append-only notification journal, same category as the realtime rail
+    # above: ``notify`` stages one row per domain event so it rides the
+    # caller's transaction, and a repository ``create`` would flush per
+    # recipient -- a fan-out to a six-player roster is one INSERT batch today
+    # and would become six round trips. Nothing ever updates or deletes the
+    # row either; "delete" is an ``expires_at`` stamp, which DOES go through
+    # ``NotificationRepository.retire``.
+    "shared/services/notifications.py",
     "shared/services/stage_refs.py",
+    # Replacing a delete-orphan collection, not CRUD: ``_apply_seeding`` is a
+    # deliberately SYNCHRONOUS helper whose delete half is a collection
+    # ``remove``; the insert half is the matching ``session.add``. An async
+    # repository create would make the whole seeding path async to move one
+    # line.
+    "tournament-service/src/services/admin/stage_common.py",
     "shared/services/team_export/materialization.py",
     "shared/services/team_export/service.py",
     "tournament-service/src/services/admin/encounter.py",
@@ -73,11 +93,6 @@ PENDING_REPOSITORY_MIGRATION = {
     "identity-service/src/services/oauth_accounts.py",
     "identity-service/src/services/rbac_admin.py",
     "identity-service/src/services/sessions.py",
-    "shared/services/audit.py",
-    "shared/services/encounter/result_audit.py",
-    "shared/services/social_identity.py",
-    "shared/services/subscriptions/store.py",
-    "shared/services/tournament/computation.py",
     "tournament-service/src/services/encounter/captain.py",
     "tournament-service/src/services/encounter/map_report.py",
     "tournament-service/src/services/encounter/pick_ban_session.py",

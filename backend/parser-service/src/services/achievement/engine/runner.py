@@ -10,6 +10,7 @@ from loguru import logger
 from sqlalchemy import exc as sa_exc
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.domain.workspace_tier import is_verified_or_trusted
 from shared.messaging.config import ACHIEVEMENT_EVALUATE_DEFERRED_QUEUE
 from shared.models.achievements.achievement import (
     AchievementGrain,
@@ -31,7 +32,6 @@ from shared.services.division_grid.normalization import (
     DivisionGridNormalizationError,
     DivisionGridNormalizer,
 )
-from shared.services.workspace_tier import is_verified_or_trusted
 from src import models
 from src.core.broker import require_broker
 from src.domain.achievement_eval_context import EvalContext

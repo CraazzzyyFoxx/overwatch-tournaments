@@ -21,25 +21,53 @@ sys.path.insert(0, str(backend_root / "tournament-service"))
 os.environ["DEBUG"] = "true"
 
 catalog = importlib.import_module("src.domain.registration.mapping_catalog")
-schemas = importlib.import_module("src.schemas.registration")
 sheet_parsing = importlib.import_module("src.domain.registration.sheet_parsing")
 sheet_sync = importlib.import_module("src.services.registration.sheet_sync")
 
-CustomFieldDefinition = schemas.CustomFieldDefinition
-FieldValidationConfig = schemas.FieldValidationConfig
+from shared.domain.forms import FieldValidation, FormField, FormSchema, FormSection  # noqa: E402
 
-# The canonical built-in target set as it existed before the catalog refactor.
-LEGACY_BUILTIN_TARGETS = {
+
+def _schema(*fields: FormField) -> FormSchema:
+    return FormSchema(sections=[FormSection(key="s", fields=list(fields))])
+
+
+#: Every builtin key the shipped form asks about, so the "full" target set below
+#: is what a form declaring all of them offers.
+ALL_ANSWER_FIELDS = tuple(
+    FormField(key=key, kind="builtin", visibility="organizers" if key == "organizer_notes" else "public")
+    for key in (
+        "battle_tag",
+        "smurf_tags",
+        "identity_discord",
+        "identity_twitch",
+        "identity_boosty",
+        "identity_vk",
+        "identity_youtube",
+        "stream_pov",
+        "public_notes",
+        "organizer_notes",
+    )
+)
+
+#: The targets a form declaring every builtin question offers. The three
+#: ``*_nick`` targets became one ``identity_<provider>`` per
+#: ``IDENTITY_PROVIDERS`` and ``notes`` became ``public_notes`` +
+#: ``organizer_notes`` — the same renames migration ``regform01`` applied to
+#: every saved ``mapping_config_json``.
+BUILTIN_TARGETS = {
     "source_record_key",
     "display_name",
     "battle_tag",
     "submitted_at",
     "smurf_tags",
-    "discord_nick",
-    "twitch_nick",
-    "boosty_nick",
+    "identity_discord",
+    "identity_twitch",
+    "identity_boosty",
+    "identity_vk",
+    "identity_youtube",
     "stream_pov",
-    "notes",
+    "public_notes",
+    "organizer_notes",
     "source_roles.primary",
     "source_roles.additional",
     "is_flex",
@@ -60,31 +88,56 @@ LEGACY_BUILTIN_TARGETS = {
     "roles.support.priority",
 }
 
+#: A form that asks every builtin question, so the whole builtin target set is
+#: mappable. Most tests below are about parsers and columns, not about which
+#: questions exist.
+FULL_SCHEMA = _schema(*ALL_ANSWER_FIELDS)
+
 
 # ---------------------------------------------------------------------------
 # Catalog
 # ---------------------------------------------------------------------------
 
 
-def test_builtin_specs_match_legacy_target_set():
-    keys = {spec.key for spec in catalog.build_target_specs([])}
-    assert keys == LEGACY_BUILTIN_TARGETS
+def test_builtin_specs_match_the_target_set():
+    keys = {spec.key for spec in catalog.build_target_specs(FULL_SCHEMA)}
+    assert keys == BUILTIN_TARGETS
 
 
-def test_catalog_default_targets_alias_matches_admin():
-    # The admin module should expose the same target set (post-refactor import).
-    assert set(catalog.DEFAULT_MAPPING_TARGETS) == LEGACY_BUILTIN_TARGETS
-    assert set(catalog.DEFAULT_MAPPING_TARGETS) == LEGACY_BUILTIN_TARGETS
+def test_an_answer_target_is_offered_only_while_its_question_exists():
+    """A builtin target the form does not ask about is not mappable at all.
+
+    Otherwise binding a column to it passes ``validate_mapping_config`` — the
+    key is a permanent member of the catalog — and then every sync discards
+    that column with nothing said anywhere.
+    """
+    schema = _schema(
+        FormField(key="battle_tag", kind="builtin", required=True),
+        FormField(key="identity_discord", kind="builtin"),
+    )
+    keys = {spec.key for spec in catalog.build_target_specs(schema)}
+
+    assert "battle_tag" in keys
+    assert "identity_discord" in keys
+    assert not keys & {"identity_boosty", "identity_vk", "identity_youtube", "stream_pov", "organizer_notes"}
+    # Organizer state is never a question, so it is always offered.
+    assert {"admin_notes", "display_name", "source_record_key", "roles.tank.rank_value"} <= keys
+
+
+def test_every_answer_target_is_a_mappable_builtin():
+    # ``parse_sheet_row_detailed`` routes exactly these into ``answers``; a key
+    # with no spec would silently never be parsed.
+    assert set(catalog.ANSWER_TARGET_KEYS) <= BUILTIN_TARGETS
 
 
 def test_custom_field_specs_added_with_type_parsers():
-    custom = [
-        CustomFieldDefinition(key="age", label="Age", type="number"),
-        CustomFieldDefinition(key="region", label="Region", type="select", options=["EU", "NA"]),
-        CustomFieldDefinition(key="agree", label="Agree", type="checkbox"),
-        CustomFieldDefinition(key="bio", label="Bio", type="text"),
-    ]
-    specs = catalog.target_spec_map(custom)
+    schema = _schema(
+        FormField(key="age", label="Age", kind="number"),
+        FormField(key="region", label="Region", kind="select", options=["EU", "NA"]),
+        FormField(key="agree", label="Agree", kind="checkbox"),
+        FormField(key="bio", label="Bio", kind="text"),
+    )
+    specs = catalog.target_spec_map(schema)
     assert specs["custom_fields.age"].default_parser == catalog.PARSER_INTEGER
     assert specs["custom_fields.region"].default_parser == catalog.PARSER_STRING
     assert specs["custom_fields.agree"].default_parser == catalog.PARSER_BOOLEAN
@@ -93,12 +146,12 @@ def test_custom_field_specs_added_with_type_parsers():
 
 
 def test_parser_catalog_covers_all_accepted_parsers():
-    referenced = {p for spec in catalog.BUILTIN_TARGET_SPECS for p in spec.accepted_parsers}
+    referenced = {p for spec in catalog.build_target_specs(_schema(*ALL_ANSWER_FIELDS)) for p in spec.accepted_parsers}
     assert referenced <= catalog.VALID_PARSERS
 
 
 def test_mapping_catalog_includes_all_value_mapping_categories():
-    built = sheet_sync.build_mapping_catalog([])
+    built = sheet_sync.build_mapping_catalog(None)
     assert {category["category"] for category in built["value_categories"]} == {
         "booleans",
         "roles",
@@ -109,7 +162,7 @@ def test_mapping_catalog_includes_all_value_mapping_categories():
 
 
 def test_mapping_catalog_merges_saved_value_maps():
-    built = sheet_sync.build_mapping_catalog([], value_mapping={"roles": {"healer": "support"}})
+    built = sheet_sync.build_mapping_catalog(None, value_mapping={"roles": {"healer": "support"}})
     categories = {category["category"]: category["entries"] for category in built["value_categories"]}
     assert categories["roles"]["healer"] == "support"
     assert "tank" not in categories["roles"]
@@ -121,7 +174,7 @@ def test_mapping_catalog_merges_saved_value_maps():
 
 
 def test_coerce_number_ok_and_blank_and_bad():
-    field_def = CustomFieldDefinition(key="age", label="Age", type="number")
+    field_def = FormField(key="age", label="Age", kind="number")
     assert catalog.coerce_custom_field_value(field_def, "42").value == 42
     assert catalog.coerce_custom_field_value(field_def, "  ").value is None
     bad = catalog.coerce_custom_field_value(field_def, "abc")
@@ -130,7 +183,7 @@ def test_coerce_number_ok_and_blank_and_bad():
 
 
 def test_coerce_checkbox_uses_boolean_defaults_and_value_map():
-    field_def = CustomFieldDefinition(key="agree", label="Agree", type="checkbox")
+    field_def = FormField(key="agree", label="Agree", kind="checkbox")
     assert catalog.coerce_custom_field_value(field_def, "да").value is True
     assert catalog.coerce_custom_field_value(field_def, "no").value is False
     # Custom boolean mapping wins.
@@ -141,7 +194,7 @@ def test_coerce_checkbox_uses_boolean_defaults_and_value_map():
 
 
 def test_coerce_select_warns_outside_options():
-    field_def = CustomFieldDefinition(key="region", label="Region", type="select", options=["EU", "NA"])
+    field_def = FormField(key="region", label="Region", kind="select", options=["EU", "NA"])
     ok = catalog.coerce_custom_field_value(field_def, "EU")
     assert ok.value == "EU" and ok.warning is None
     outside = catalog.coerce_custom_field_value(field_def, "ASIA")
@@ -149,11 +202,11 @@ def test_coerce_select_warns_outside_options():
 
 
 def test_coerce_text_regex_warning():
-    field_def = CustomFieldDefinition(
+    field_def = FormField(
         key="code",
         label="Code",
-        type="text",
-        validation=FieldValidationConfig(regex=r"\d{3}", error_message="need 3 digits"),
+        kind="text",
+        validation=FieldValidation(regex=r"\d{3}", error_message="need 3 digits"),
     )
     assert catalog.coerce_custom_field_value(field_def, "123").warning is None
     bad = catalog.coerce_custom_field_value(field_def, "ab")
@@ -166,7 +219,7 @@ def test_coerce_text_regex_warning():
 
 
 def _specs():
-    return catalog.target_spec_map([])
+    return catalog.target_spec_map(FULL_SCHEMA)
 
 
 def _codes(issues):
@@ -276,7 +329,7 @@ def test_suggest_mapping_matches_english_and_russian_headers():
     russian = ["Отметка времени", "Ваш Battle Tag", "Укажите вашу роль", "Смурф аккаунты"]
     english = ["Timestamp", "Your Battle Tag", "Your role", "Smurf accounts"]
     for headers in (russian, english):
-        mapping = sheet_parsing.suggest_mapping_from_headers(headers)
+        mapping = sheet_parsing.suggest_mapping_from_headers(headers, schema=FULL_SCHEMA)
         targets = mapping["targets"]
         assert targets["battle_tag"]["mode"] == "columns"
         assert targets["submitted_at"]["mode"] == "columns"
@@ -285,19 +338,19 @@ def test_suggest_mapping_matches_english_and_russian_headers():
 
 
 def test_suggest_disabled_targets_present_as_hints():
-    mapping = sheet_parsing.suggest_mapping_from_headers(["Random column"])
+    mapping = sheet_parsing.suggest_mapping_from_headers(["Random column"], schema=FULL_SCHEMA)
     # Unmatched targets remain present but disabled (hints, not mappings).
     assert mapping["targets"]["battle_tag"]["mode"] == "disabled"
 
 
 def test_suggest_mapping_matches_custom_field_label_case_insensitively():
-    custom = [CustomFieldDefinition(key="favorite_map", label="Favorite Map", type="text")]
-    mapping = sheet_parsing.suggest_mapping_from_headers(["FAVORITE MAP"], custom_fields=custom)
+    schema = _schema(FormField(key="favorite_map", label="Favorite Map", kind="text"))
+    mapping = sheet_parsing.suggest_mapping_from_headers(["FAVORITE MAP"], schema=schema)
     assert mapping["targets"]["custom_fields.favorite_map"]["mode"] == "columns"
 
 
 # ---------------------------------------------------------------------------
-# Engine: parse_sheet_row writes custom fields & collects errors
+# Engine: parse_sheet_row_detailed writes custom answers & collects errors
 # ---------------------------------------------------------------------------
 
 
@@ -327,20 +380,21 @@ def test_parse_sheet_row_writes_custom_fields():
             "custom_fields.region": {"mode": "columns", "columns": ["Region"], "parser": "string"},
         }
     }
-    custom = [
-        CustomFieldDefinition(key="age", label="Age", type="number"),
-        CustomFieldDefinition(key="region", label="Region", type="select", options=["EU", "NA"]),
-    ]
+    schema = _schema(
+        FormField(key="battle_tag", kind="builtin"),
+        FormField(key="age", label="Age", kind="number"),
+        FormField(key="region", label="Region", kind="select", options=["EU", "NA"]),
+    )
     result = sheet_parsing.parse_sheet_row_detailed(
         headers=headers,
         row=row,
         mapping_config=mapping,
         value_mapping=None,
         grid=_grid(),
-        custom_fields=custom,
+        schema=schema,
     )
     assert result.fields is not None
-    assert result.fields["custom_fields"] == {"age": 25, "region": "EU"}
+    assert result.fields["answers"] == {"battle_tag": "Player#1", "age": 25, "region": "EU"}
 
 
 def test_parse_sheet_row_omits_unmapped_custom_fields():
@@ -352,17 +406,17 @@ def test_parse_sheet_row_omits_unmapped_custom_fields():
             "custom_fields.age": {"mode": "disabled", "parser": "integer"},
         }
     }
-    custom = [CustomFieldDefinition(key="age", label="Age", type="number")]
+    schema = _schema(FormField(key="battle_tag", kind="builtin"), FormField(key="age", label="Age", kind="number"))
     result = sheet_parsing.parse_sheet_row_detailed(
         headers=headers,
         row=row,
         mapping_config=mapping,
         value_mapping=None,
         grid=_grid(),
-        custom_fields=custom,
+        schema=schema,
     )
     assert result.fields is not None
-    assert "custom_fields" not in result.fields or result.fields["custom_fields"] == {}
+    assert result.fields["answers"] == {"battle_tag": "Player#1"}
 
 
 def test_parse_sheet_row_collects_custom_field_error():
@@ -374,14 +428,14 @@ def test_parse_sheet_row_collects_custom_field_error():
             "custom_fields.age": {"mode": "columns", "columns": ["Age"], "parser": "integer"},
         }
     }
-    custom = [CustomFieldDefinition(key="age", label="Age", type="number")]
+    schema = _schema(FormField(key="battle_tag", kind="builtin"), FormField(key="age", label="Age", kind="number"))
     result = sheet_parsing.parse_sheet_row_detailed(
         headers=headers,
         row=row,
         mapping_config=mapping,
         value_mapping=None,
         grid=_grid(),
-        custom_fields=custom,
+        schema=schema,
     )
     assert result.fields is not None
     assert any(e["target"] == "custom_fields.age" for e in result.errors)
@@ -397,7 +451,7 @@ def test_parse_sheet_row_skip_without_identity_returns_none_fields():
         mapping_config=mapping,
         value_mapping=None,
         grid=_grid(),
-        custom_fields=[],
+        schema=FULL_SCHEMA,
     )
     assert result.fields is None
 
@@ -515,7 +569,7 @@ def test_validate_value_mapping_unknown_subrole():
 
 
 def test_mapping_catalog_includes_subrole_catalog():
-    built = sheet_sync.build_mapping_catalog([], subrole_catalog=_SUBROLE_CATALOG)
+    built = sheet_sync.build_mapping_catalog(None, subrole_catalog=_SUBROLE_CATALOG)
     assert built["subrole_catalog"] == _SUBROLE_CATALOG
 
 
@@ -634,14 +688,14 @@ def test_subrole_from_additional_token_propagates_to_payload():
 
 
 def test_role_subrole_token_accepted_for_primary_and_additional():
-    primary_spec = catalog.target_spec_map({})["source_roles.primary"]
-    additional_spec = catalog.target_spec_map({})["source_roles.additional"]
+    primary_spec = catalog.target_spec_map(FULL_SCHEMA)["source_roles.primary"]
+    additional_spec = catalog.target_spec_map(FULL_SCHEMA)["source_roles.additional"]
     assert catalog.PARSER_ROLE_SUBROLE_TOKEN in primary_spec.accepted_parsers
     assert catalog.PARSER_ROLE_SUBROLE_TOKEN in additional_spec.accepted_parsers
 
 
 def test_sr_value_accepted_for_all_rank_value_targets():
-    specs = catalog.target_spec_map({})
+    specs = catalog.target_spec_map(FULL_SCHEMA)
     for role_code in ("tank", "damage", "support"):
         spec = specs[f"roles.{role_code}.rank_value"]
         assert catalog.PARSER_SR_VALUE in spec.accepted_parsers
@@ -825,7 +879,7 @@ def test_role_subrole_token_multi_role_deduplicates_across_columns():
 
 
 def test_additional_roles_spec_has_default_is_list():
-    spec = catalog.target_spec_map({})["source_roles.additional"]
+    spec = catalog.target_spec_map(FULL_SCHEMA)["source_roles.additional"]
     assert spec.default_is_list is True
 
 

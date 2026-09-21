@@ -21,6 +21,14 @@ import type {
   RegistrationForm,
   RegistrationRole,
 } from "@/types/registration.types";
+import type { FormField, RolesParams } from "@/types/forms.types";
+import {
+  answerFlag,
+  answerList,
+  answerSearchText,
+  answerText,
+} from "@/lib/forms/answers";
+import { isBuiltinKey } from "@/lib/forms/builtin-keys";
 import type { Hero } from "@/types/hero.types";
 import heroService from "@/services/hero.service";
 import { HeroStrip } from "@/components/hero/HeroImage";
@@ -34,7 +42,7 @@ import {
   RegistrationStatusBadge,
 } from "@/components/status/RegistrationBadges";
 import TournamentHistoryCell from "./TournamentHistoryCell";
-import { renderCustomFieldValue } from "@/components/registration/customFieldValue";
+import { AnswerValue } from "@/components/forms/AnswerValue";
 import { useTranslations } from "next-intl";
 import { formatSubroleSlug } from "@/lib/roles";
 import { resolveDivisionFromRank, DEFAULT_DIVISION_GRID } from "@/lib/division-grid";
@@ -451,40 +459,10 @@ const BUILT_IN_FIELD_DEFS: Record<string, BuiltInFieldDef> = {
     label: "Smurfs",
     defaultVisible: true,
     responsive: "md",
-    render: (reg) => <SmurfTagsCell tags={reg.smurf_tags_json} />,
-    searchValue: (reg) => reg.smurf_tags_json?.join(" ") ?? null,
+    render: (reg) => <SmurfTagsCell tags={answerList(reg.answers, "smurf_tags")} />,
+    searchValue: (reg) => answerSearchText(reg.answers?.smurf_tags),
   },
-  discord_nick: {
-    id: "discord_nick",
-    label: "Discord",
-    defaultVisible: false,
-    responsive: "sm",
-    render: (reg) => (
-      <span className="text-[color:var(--aqt-fg-muted)]">{reg.discord_nick ?? "\u2014"}</span>
-    ),
-    searchValue: (reg) => reg.discord_nick,
-  },
-  twitch_nick: {
-    id: "twitch_nick",
-    label: "Twitch",
-    defaultVisible: false,
-    responsive: "md",
-    render: (reg) => (
-      <span className="text-[color:var(--aqt-fg-muted)]">{reg.twitch_nick ?? "\u2014"}</span>
-    ),
-    searchValue: (reg) => reg.twitch_nick,
-  },
-  boosty_nick: {
-    id: "boosty_nick",
-    label: "Boosty",
-    defaultVisible: false,
-    responsive: "md",
-    render: (reg) => (
-      <span className="text-[color:var(--aqt-fg-muted)]">{reg.boosty_nick ?? "\u2014"}</span>
-    ),
-    searchValue: (reg) => reg.boosty_nick ?? null,
-  },
-  primary_role: {
+  roles: {
     id: "roles",
     label: "Roles",
     defaultVisible: true,
@@ -495,6 +473,8 @@ const BUILT_IN_FIELD_DEFS: Record<string, BuiltInFieldDef> = {
     searchValue: (reg) =>
       reg.roles?.map((r) => r.role).join(" ") ?? null,
   },
+  // Not a field of its own: the `roles` question carries `top_heroes` in its
+  // params, and this column exists when that is switched on.
   top_heroes: {
     id: "top_heroes",
     label: "Top Heroes",
@@ -512,28 +492,46 @@ const BUILT_IN_FIELD_DEFS: Record<string, BuiltInFieldDef> = {
     responsive: "lg",
     align: "center",
     width: "badge",
-    render: (reg) => <StreamPovCell value={reg.stream_pov} />,
+    render: (reg) => <StreamPovCell value={answerFlag(reg.answers, "stream_pov")} />,
   },
-  notes: {
-    id: "notes",
+  public_notes: {
+    id: "public_notes",
     label: "Notes",
     defaultVisible: true,
     responsive: "md",
     widthClass: "max-w-50",
-    render: (reg) =>
-      reg.notes ? (
+    render: (reg) => {
+      const notes = answerText(reg.answers, "public_notes");
+      return notes ? (
         <span
           className="line-clamp-3 max-w-50 wrap-break-word text-xs text-[color:var(--aqt-fg-muted)]"
-          title={reg.notes}
+          title={notes}
         >
-          {reg.notes}
+          {notes}
         </span>
       ) : (
         <span className="text-[color:var(--aqt-fg-dim)]">&mdash;</span>
-      ),
-    searchValue: (reg) => reg.notes,
+      );
+    },
+    searchValue: (reg) => answerText(reg.answers, "public_notes"),
   },
 };
+
+/** What the roster shows when the tournament has no form configured — the
+ *  registrations still exist (a Google-Sheets feed writes them), and these are
+ *  the answers such a row can carry. */
+const FALLBACK_FIELD_KEYS = [
+  "battle_tag",
+  "roles",
+  "top_heroes",
+  "smurf_tags",
+  "public_notes",
+] as const;
+
+/** Whether the `roles` question also asks for top heroes. */
+function asksTopHeroes(field: FormField): boolean {
+  return (field.params as Partial<RolesParams>).top_heroes?.enabled === true;
+}
 
 // ---------------------------------------------------------------------------
 // Main builder
@@ -564,20 +562,23 @@ export function buildParticipantColumns(
         return t("registration.accounts.battleTag");
       case "smurf_tags":
         return t("registration.accounts.smurfs");
-      case "discord_nick":
+      case "identity_discord":
         return t("registration.accounts.discord");
-      case "twitch_nick":
+      case "identity_twitch":
         return t("registration.accounts.twitch");
-      case "boosty_nick":
+      case "identity_boosty":
         return t("registration.accounts.boosty");
-      case "primary_role":
+      case "identity_vk":
+        return t("registration.accounts.vk");
+      case "identity_youtube":
+        return t("registration.accounts.youtube");
       case "roles":
         return t("common.rolesList");
       case "top_heroes":
         return t("tournamentDetail.topHeroes");
       case "stream_pov":
         return t("registration.details.streamPov");
-      case "notes":
+      case "public_notes":
         return t("registration.details.notes");
       default:
         return fallback;
@@ -636,33 +637,14 @@ export function buildParticipantColumns(
     searchValue: (reg) => reg.team?.name ?? null,
   });
 
-  // Built-in fields in a fixed canonical order: identity first, then gameplay
-  // (roles, heroes), then accounts and extras. The form's JSON key order is
-  // organizer input and must never drive the table layout.
-  const BUILT_IN_KEY_ORDER = [
-    "battle_tag",
-    "primary_role",
-    "top_heroes",
-    "smurf_tags",
-    "discord_nick",
-    "twitch_nick",
-    "boosty_nick",
-    "stream_pov",
-    "notes",
-  ] as const;
-  const enabledBuiltInKeys = form?.built_in_fields
-    ? BUILT_IN_KEY_ORDER.filter((key) => form.built_in_fields[key]?.enabled)
-    : // Fallback when no form config
-      (["battle_tag", "primary_role", "top_heroes", "smurf_tags", "notes"] as const);
-
-  for (const key of enabledBuiltInKeys) {
+  const pushBuiltIn = (key: string, label: string, defaultVisible: boolean) => {
     const def = BUILT_IN_FIELD_DEFS[key];
-    if (!def) continue;
+    if (!def) return;
     columns.push({
       id: def.id,
-      label: getLocalizedLabel(key, def.label),
+      label: getLocalizedLabel(key, label),
       category: "built_in",
-      defaultVisible: form?.built_in_fields ? def.defaultVisible : true,
+      defaultVisible,
       responsive: def.responsive ?? "sm",
       widthClass: def.widthClass,
       width: def.width,
@@ -670,6 +652,58 @@ export function buildParticipantColumns(
       render: (reg) => def.render(reg, renderContext),
       searchValue: def.searchValue,
     });
+  };
+
+  // One column per question the form asks, in the order the organizer arranged
+  // them: the schema IS the layout now, not a JSON blob whose key order was an
+  // accident. Questions only organizers may read are skipped — a public read
+  // carries none of their answers, so the column would be permanently empty.
+  //
+  // The fallback below is for "this tournament HAS no form", not for "its form
+  // asks the public nothing". The second is reachable — no invariant makes
+  // `battle_tag` mandatory and every question may be organizers-only — and it
+  // must render an empty roster rather than five columns the organizer never
+  // asked for. Only `battle_tag` and the notes column survive that, and both
+  // for reasons of their own, below.
+  const schema = form?.form_schema ?? null;
+  const publicFields = (schema?.sections ?? [])
+    .flatMap((section) => section.fields)
+    .filter((field) => field.visibility === "public");
+
+  if (schema) {
+    for (const field of publicFields) {
+      if (BUILT_IN_FIELD_DEFS[field.key]) {
+        const def = BUILT_IN_FIELD_DEFS[field.key];
+        pushBuiltIn(field.key, field.label || def.label, def.defaultVisible);
+        if (field.key === "roles" && asksTopHeroes(field)) {
+          pushBuiltIn("top_heroes", BUILT_IN_FIELD_DEFS.top_heroes.label, true);
+        }
+        continue;
+      }
+      // Social handles and the organizer's own questions: one answer, one
+      // column, rendered by the same `AnswerValue` the admin table and the
+      // draft inspector use.
+      columns.push({
+        id: field.key,
+        label: field.label || getLocalizedLabel(field.key, field.key),
+        category: isBuiltinKey(field.key) ? "built_in" : "custom",
+        defaultVisible: false,
+        responsive: "md",
+        render: (reg) => (
+          <AnswerValue
+            value={reg.answers?.[field.key] ?? null}
+            kind={field.kind}
+            labels={{ yes: t("common.yes"), no: t("common.no") }}
+            locale={locale}
+          />
+        ),
+        searchValue: (reg) => answerSearchText(reg.answers?.[field.key]),
+      });
+    }
+  } else {
+    for (const key of FALLBACK_FIELD_KEYS) {
+      pushBuiltIn(key, BUILT_IN_FIELD_DEFS[key].label, true);
+    }
   }
 
   if (!columns.some((column) => column.id === "battle_tag")) {
@@ -685,46 +719,11 @@ export function buildParticipantColumns(
     });
   }
 
-  // Notes may hold data even when the form field is disabled (e.g. a Google
-  // Sheets sync maps a notes column), so the roster always offers it.
-  if (!columns.some((column) => column.id === "notes")) {
-    const notesDef = BUILT_IN_FIELD_DEFS.notes;
-    columns.push({
-      id: notesDef.id,
-      label: getLocalizedLabel("notes", notesDef.label),
-      category: "built_in",
-      defaultVisible: notesDef.defaultVisible,
-      responsive: notesDef.responsive ?? "sm",
-      widthClass: notesDef.widthClass,
-      align: notesDef.align,
-      render: (reg) => notesDef.render(reg, renderContext),
-      searchValue: notesDef.searchValue,
-    });
-  }
-
-  // Custom fields from form config
-  if (form?.custom_fields) {
-    for (const field of form.custom_fields) {
-      columns.push({
-        id: `custom_${field.key}`,
-        label: field.label,
-        category: "custom",
-        defaultVisible: false,
-        responsive: "md",
-        render: (reg) =>
-          renderCustomFieldValue(field, reg.custom_fields_json?.[field.key] ?? null, {
-            yes: t("common.yes"),
-            no: t("common.no"),
-          }),
-        searchValue:
-          field.type === "text" || field.type === "select"
-            ? (reg) => {
-                const v = reg.custom_fields_json?.[field.key];
-                return v != null ? String(v) : null;
-              }
-            : undefined,
-      });
-    }
+  // Notes may hold data even when the form does not ask for them (a Google
+  // Sheets sync maps a notes column), so the roster always offers the column.
+  if (!columns.some((column) => column.id === "public_notes")) {
+    const notesDef = BUILT_IN_FIELD_DEFS.public_notes;
+    pushBuiltIn("public_notes", notesDef.label, notesDef.defaultVisible);
   }
 
   // Meta: tournament history

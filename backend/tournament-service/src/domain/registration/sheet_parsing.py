@@ -14,16 +14,19 @@ from datetime import UTC, datetime
 from typing import Any
 
 from shared.division_grid import DivisionGrid
+from shared.domain.forms import FormSchema
 from shared.domain.player_sub_roles import catalog_slugs, normalize_sub_role
 from src.domain.registration.mapping_catalog import (
+    ANSWER_TARGET_KEYS,
     ParsedRowResult,
     build_target_specs,
     coerce_custom_field_value,
     custom_field_target_key,
+    schema_custom_fields,
     target_spec_map,
 )
 from src.domain.registration.utils import (
-    BATTLE_TAG_RE,
+    BATTLE_TAG_SCAN_RE,
     DEFAULT_BOOLEAN_TRUE_VALUES,
     ROLE_ORDER,
     VALID_ROLES,
@@ -41,7 +44,6 @@ from src.domain.registration.utils import (
 from src.domain.registration.utils import (
     extract_battle_tags as _extract_battle_tags,
 )
-from src.schemas.registration import CustomFieldDefinition
 
 
 def parse_boolean(value: str | None, value_mapping: dict[str, Any]) -> bool:
@@ -57,7 +59,7 @@ def parse_boolean(value: str | None, value_mapping: dict[str, Any]) -> bool:
 
 
 def extract_battle_tags(value: str | None) -> list[str]:
-    return _extract_battle_tags(value, BATTLE_TAG_RE)
+    return _extract_battle_tags(value, BATTLE_TAG_SCAN_RE)
 
 
 def map_role_token(value: str | None, value_mapping: dict[str, Any]) -> str | None:
@@ -229,7 +231,7 @@ def default_mapping_target(parser: str, mode: str = "disabled") -> dict[str, Any
 def suggest_mapping_from_headers(
     headers: list[str],
     *,
-    custom_fields: list[CustomFieldDefinition] | None = None,
+    schema: FormSchema | None = None,
 ) -> dict[str, Any]:
     """Suggest a starting mapping by matching headers against target aliases.
 
@@ -240,7 +242,7 @@ def suggest_mapping_from_headers(
     """
     header_keys = build_header_keys(headers)
     normalized_headers = [normalize_header(header) for header in headers]
-    specs = build_target_specs(custom_fields)
+    specs = build_target_specs(schema)
     targets: dict[str, Any] = {
         spec.key: default_mapping_target(spec.default_parser, spec.default_mode) for spec in specs
     }
@@ -362,16 +364,28 @@ def parse_sheet_row_detailed(
     mapping_config: dict[str, Any] | None,
     value_mapping: dict[str, Any] | None,
     grid: DivisionGrid,
-    custom_fields: list[CustomFieldDefinition] | None = None,
+    schema: FormSchema | None = None,
     subrole_catalog: dict[str, list[dict[str, str]]] | None = None,
 ) -> ParsedRowResult:
     """Parse one sheet row into the structured registration payload.
+
+    The form-question half of the row lands in ``answers`` -- the flat document
+    :class:`RegistrationAnswerService` validates and writes -- and only for
+    targets the mapping actually binds: an unmapped question is ABSENT, so the
+    sync leaves whatever the registration already holds, while a mapped column
+    the row left empty is present-and-blank and therefore clears it.
+    ``display_name``/``admin_notes``/``submitted_at`` and the role targets stay
+    top level: they are organizer state, not questions.
+
+    Every target offered here is one ``schema`` declares (or one of the
+    organizer-state targets no form asks about), so a key that reaches
+    ``answers`` is always a question the form can answer for.
 
     Collects per-target ``errors`` and ``warnings`` (chiefly from custom-field
     coercion) so a single bad cell never aborts the whole row. Returns
     ``fields=None`` when the row produces no identity key (caller skips it).
     """
-    effective_mapping = mapping_config or suggest_mapping_from_headers(headers, custom_fields=custom_fields)
+    effective_mapping = mapping_config or suggest_mapping_from_headers(headers, schema=schema)
     targets = effective_mapping.get("targets") or {}
     row_json = row_to_json(headers, row)
     effective_value_mapping = {**build_default_value_mapping(), **(value_mapping or {})}
@@ -379,7 +393,8 @@ def parse_sheet_row_detailed(
     warnings: list[dict[str, Any]] = []
 
     flat_values: dict[str, Any] = {}
-    for target_key, spec in target_spec_map(custom_fields).items():
+    mapped: set[str] = set()
+    for target_key, spec in target_spec_map(schema).items():
         if spec.group == "custom_fields":
             continue
         target_config = targets.get(target_key)
@@ -387,6 +402,10 @@ def parse_sheet_row_detailed(
         effective_mode = "auto" if raw_mode in ("auto", "disabled") and spec.default_mode == "auto" else raw_mode
         if effective_mode == "auto":
             continue
+        # A suggested mapping carries EVERY target as a disabled hint, so only a
+        # binding mode counts as "the sheet manages this answer".
+        if effective_mode != "disabled":
+            mapped.add(target_key)
         values = get_selector_values(target_config, row_json)
         parser = (target_config or {}).get("parser", spec.default_parser)
         is_list = bool((target_config or {}).get("is_list", spec.default_is_list))
@@ -409,17 +428,20 @@ def parse_sheet_row_detailed(
     if not source_record_key:
         return ParsedRowResult(fields=None, errors=errors, warnings=warnings)
 
+    battle_tag = normalize_battle_tag(flat_values.get("battle_tag"))
+    answers: dict[str, Any] = {key: flat_values.get(key) for key in ANSWER_TARGET_KEYS if key in mapped}
+    if battle_tag is None:
+        # The one answer a sheet may never blank: it is this row's own identity
+        # and the key every re-sync matches on.
+        answers.pop("battle_tag", None)
+    else:
+        answers["battle_tag"] = battle_tag
+
     parsed: dict[str, Any] = {
         "source_record_key": str(source_record_key),
-        "display_name": flat_values.get("display_name") or flat_values.get("battle_tag"),
-        "battle_tag": normalize_battle_tag(flat_values.get("battle_tag")),
+        "display_name": flat_values.get("display_name") or battle_tag,
         "submitted_at": flat_values.get("submitted_at"),
-        "smurf_tags": flat_values.get("smurf_tags") or [],
-        "discord_nick": flat_values.get("discord_nick"),
-        "twitch_nick": flat_values.get("twitch_nick"),
-        "boosty_nick": flat_values.get("boosty_nick"),
-        "stream_pov": bool(flat_values.get("stream_pov", False)),
-        "notes": flat_values.get("notes"),
+        "answers": answers,
         "source_roles": {
             "primary": flat_values.get("source_roles.primary"),
             "additional": flat_values.get("source_roles.additional") or [],
@@ -450,46 +472,21 @@ def parse_sheet_row_detailed(
         },
     }
 
-    custom_values: dict[str, Any] = {}
-    for field_def in custom_fields or []:
-        target_config = targets.get(custom_field_target_key(field_def.key))
-        values = get_selector_values(target_config, row_json)
+    for field_def in schema_custom_fields(schema):
+        target_key = custom_field_target_key(field_def.key)
+        values = get_selector_values(targets.get(target_key), row_json)
         if not values:
             continue
         result = coerce_custom_field_value(field_def, values[0], value_mapping=effective_value_mapping)
-        target_key = custom_field_target_key(field_def.key)
         if result.error:
             errors.append({"target": target_key, "column": None, "message": result.error})
             continue
         if result.warning:
             warnings.append({"target": target_key, "column": None, "message": result.warning})
         if result.value is not None:
-            custom_values[field_def.key] = result.value
-    if custom_values:
-        parsed["custom_fields"] = custom_values
+            answers[field_def.key] = result.value
 
     return ParsedRowResult(fields=parsed, errors=errors, warnings=warnings)
-
-
-def parse_sheet_row(
-    *,
-    headers: list[str],
-    row: list[str],
-    mapping_config: dict[str, Any] | None,
-    value_mapping: dict[str, Any] | None,
-    grid: DivisionGrid,
-    custom_fields: list[CustomFieldDefinition] | None = None,
-    subrole_catalog: dict[str, list[dict[str, str]]] | None = None,
-) -> dict[str, Any] | None:
-    return parse_sheet_row_detailed(
-        headers=headers,
-        row=row,
-        mapping_config=mapping_config,
-        value_mapping=value_mapping,
-        grid=grid,
-        custom_fields=custom_fields,
-        subrole_catalog=subrole_catalog,
-    ).fields
 
 
 def build_registration_role_payloads(parsed_fields: dict[str, Any]) -> list[dict[str, Any]]:

@@ -14,6 +14,7 @@ friends) are still module globals of *this* module and patch as before.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from typing import Any
 
@@ -24,7 +25,9 @@ from sqlalchemy.orm import selectinload
 from shared.balancer_registration_statuses import balancer_pool_excluded_clause, balancer_pool_included_clause
 from shared.core import http_status as status
 from shared.core.errors import BaseAPIException as HTTPException
+from shared.domain.forms import FormSchema, default_schema, schema_from_form
 from shared.domain.roster import flex_role_mode
+from shared.hero_catalog import HeroCatalog
 from shared.repository import (
     BalancerRegistrationRepository,
     RegistrationStatusRepository,
@@ -36,7 +39,7 @@ from src.domain.registration.utils import (
     normalize_battle_tag,
     normalize_battle_tag_key,
 )
-from src.schemas.registration_build import registration_read_loaders
+from src.schemas.registration_build import _resolve_top_heroes_config, registration_read_loaders
 from src.services.registration._common import (
     AUTO_MANAGED_BALANCER_STATUSES,
     EXCLUDED_BALANCER_STATUS,
@@ -50,6 +53,7 @@ from src.services.registration._common import (
     resolve_roster,
     sync_included_balancer_status,
 )
+from src.services.registration.answers import answer_service
 from src.services.registration.service import RegistrationService, registration_service
 from src.services.tournament.events import (
     enqueue_registration_approved,
@@ -217,75 +221,107 @@ class RegistrationLifecycleService:
                 detail=f"Invalid {scope} status: {value}",
             )
 
+    async def _validated_answers(
+        self,
+        session: AsyncSession,
+        *,
+        form: models.BalancerRegistrationForm | None,
+        answers: Mapping[str, Any],
+        workspace_id: int,
+    ) -> tuple[FormSchema, dict[str, Any], HeroCatalog | None, int | None]:
+        """Validate an ORGANIZER's answers: partial, and requirements off.
+
+        An organizer enters what they know about a player, so a blank required
+        question is not an error here — but a malformed handle or an unknown
+        role still is. ``player_id=None`` is deliberate: nobody's OAuth proves an
+        organizer's typing, which is why ``enforce_required=False`` also switches
+        the ``require_verified`` gate off.
+
+        A tournament with no form (or no version yet) is validated against
+        ``default_schema()``, the same fallback the sheet-sync feed uses: before
+        the form schema existed an organizer's input was written unconditionally,
+        and refusing it here would silently drop every battle tag, handle and note
+        they type on such a tournament. THE resolver for both callers, so the
+        fallback cannot apply to one and not the other.
+        """
+        schema = schema_from_form(form) or default_schema()
+        # ``_resolve_top_heroes_config`` reads a real form; no form means no
+        # top-heroes ask to resolve, which is also what the default schema says.
+        hero_catalog, max_heroes = await _resolve_top_heroes_config(session, form) if form is not None else (None, None)
+        values = await answer_service.validate(
+            session,
+            schema=schema,
+            answers=answers,
+            partial=True,
+            enforce_required=False,
+            player_id=None,
+            workspace_id=workspace_id,
+            hero_catalog=hero_catalog,
+        )
+        return schema, values, hero_catalog, max_heroes
+
     async def create_manual_registration(
         self,
         session: AsyncSession,
         *,
         tournament_id: int,
         display_name: str | None,
-        battle_tag: str | None,
-        smurf_tags_json: list[str] | None,
-        discord_nick: str | None,
-        twitch_nick: str | None,
-        boosty_nick: str | None = None,
-        stream_pov: bool = False,
-        notes: str | None,
         admin_notes: str | None,
-        custom_fields_json: dict[str, Any] | None = None,
+        answers: Mapping[str, Any] | None = None,
         status_value: str | None = None,
         balancer_status_value: str | None = None,
         roles: list[dict[str, Any]],
         auth_user_id: int | None = None,
     ) -> models.BalancerRegistration:
-        battle_tag = normalize_battle_tag(battle_tag)
-        await self.ensure_unique_battle_tag(session, tournament_id=tournament_id, battle_tag=battle_tag)
+        """An organizer-authored registration row.
 
-        resolved_status = status_value or "approved"
+        ``answers`` is the same flat document the public form submits; it is
+        validated with ``enforce_required=False`` and ``partial=True`` because an
+        organizer is entering what they know, not filling in a sign-up. ``roles``
+        (admin rows, with ranks) wins over ``answers["roles"]`` when both arrive.
+        """
+        answers = answers or {}
         workspace_id = await self.tournament_repo.get_workspace_id(session, tournament_id)
-        if status_value is not None or balancer_status_value is not None:
-            if status_value is not None:
-                await self.validate_registration_status_value(
-                    session, workspace_id=workspace_id, scope="registration", value=status_value
-                )
-            if balancer_status_value is not None:
-                await self.validate_registration_status_value(
-                    session, workspace_id=workspace_id, scope="balancer", value=balancer_status_value
-                )
+        resolved_status = status_value or "approved"
+        if status_value is not None:
+            await self.validate_registration_status_value(
+                session, workspace_id=workspace_id, scope="registration", value=status_value
+            )
+        if balancer_status_value is not None:
+            await self.validate_registration_status_value(
+                session, workspace_id=workspace_id, scope="balancer", value=balancer_status_value
+            )
 
         form = await self.common.get_registration_form(session, tournament_id)
-        config = (form.built_in_fields_json or {}).get("top_heroes") if form else None
-        hero_catalog = None
-        max_heroes = None
-        if config and config.get("enabled", True) is not False:
-            from shared.hero_catalog import DEFAULT_MAX_TOP_HEROES, resolve_hero_catalog
+        schema, values, hero_catalog, max_heroes = await self._validated_answers(
+            session, form=form, answers=answers, workspace_id=workspace_id
+        )
+        if roles:
+            # The admin rows carry ranks an answer document cannot express, so
+            # they win outright over a ``roles`` answer sent alongside them.
+            values.pop("roles", None)
 
-            hero_catalog = await resolve_hero_catalog(session)
-            raw_max = config.get("max_heroes")
-            max_heroes = raw_max if isinstance(raw_max, int) and raw_max > 0 else DEFAULT_MAX_TOP_HEROES
+        await self.ensure_unique_battle_tag(
+            session, tournament_id=tournament_id, battle_tag=normalize_battle_tag(values.get("battle_tag"))
+        )
 
         registration = models.BalancerRegistration(
             tournament_id=tournament_id,
-            display_name=display_name or battle_tag,
-            battle_tag=battle_tag,
-            battle_tag_normalized=normalize_battle_tag_key(battle_tag),
-            smurf_tags_json=smurf_tags_json or None,
-            discord_nick=discord_nick,
-            twitch_nick=twitch_nick,
-            boosty_nick=boosty_nick,
-            stream_pov=stream_pov,
-            notes=notes,
+            form_version_id=form.current_version_id if form is not None else None,
             admin_notes=admin_notes,
-            custom_fields_json=custom_fields_json or None,
             status=resolved_status,
             balancer_status=NOT_ADDED_BALANCER_STATUS,
         )
-        replace_registration_roles(
-            registration,
-            roles,
-            hero_catalog=hero_catalog,
-            max_heroes=max_heroes,
-            mode=flex_role_mode(form),
-        )
+        answer_service.apply(registration, values, schema=schema, hero_catalog=hero_catalog)
+        registration.display_name = display_name or registration.battle_tag
+        if roles:
+            replace_registration_roles(
+                registration,
+                roles,
+                hero_catalog=hero_catalog,
+                max_heroes=max_heroes,
+                mode=flex_role_mode(form),
+            )
         auto_managed = balancer_status_value is None or balancer_status_value in AUTO_MANAGED_BALANCER_STATUSES
         if not auto_managed:
             registration.balancer_status = balancer_status_value
@@ -319,15 +355,8 @@ class RegistrationLifecycleService:
         registration_id: int,
         *,
         display_name: str | None,
-        battle_tag: str | None,
-        smurf_tags_json: list[str] | None,
-        discord_nick: str | None,
-        twitch_nick: str | None,
-        boosty_nick: str | None = None,
-        stream_pov: bool | None = None,
-        notes: str | None,
         admin_notes: str | None,
-        custom_fields_json: dict[str, Any] | None = None,
+        answers: Mapping[str, Any] | None = None,
         status_value: str | None,
         balancer_status_value: str | None,
         roles: list[dict[str, Any]] | None,
@@ -336,34 +365,38 @@ class RegistrationLifecycleService:
         pin: bool | None = None,
         clear_pin: bool = False,
     ) -> models.BalancerRegistration:
+        """An organizer's edit of one registration.
+
+        The questions travel as ``answers`` and go through the same validate/apply
+        pipeline the player's own PATCH uses (partial, requirements not enforced);
+        everything else here is admin state the form never asks about. ``roles``
+        (admin rows, with ranks) wins over ``answers["roles"]``.
+        """
+        answers = answers or {}
         registration = await self.get_registration_by_id(session, registration_id)
         previous_status = registration.status
-        if battle_tag is not None:
-            normalized_battle_tag = normalize_battle_tag(battle_tag)
+
+        form = await self.common.get_registration_form(session, registration.tournament_id)
+        schema, values, hero_catalog, max_heroes = await self._validated_answers(
+            session,
+            form=form,
+            answers=answers,
+            workspace_id=registration.tournament.workspace_id,
+        )
+        if roles is not None:
+            values.pop("roles", None)
+        if "battle_tag" in values:
             await self.ensure_unique_battle_tag(
                 session,
                 tournament_id=registration.tournament_id,
-                battle_tag=normalized_battle_tag,
+                battle_tag=normalize_battle_tag(values["battle_tag"]),
                 exclude_registration_id=registration.id,
             )
-            registration.battle_tag = normalized_battle_tag
-            registration.battle_tag_normalized = normalize_battle_tag_key(normalized_battle_tag)
+        answer_service.apply(registration, values, schema=schema, hero_catalog=hero_catalog)
+        if form is not None:
+            registration.form_version_id = form.current_version_id
         if display_name is not None:
             registration.display_name = display_name or registration.battle_tag
-        if smurf_tags_json is not None:
-            registration.smurf_tags_json = smurf_tags_json or None
-        if discord_nick is not None:
-            registration.discord_nick = discord_nick
-        if twitch_nick is not None:
-            registration.twitch_nick = twitch_nick
-        if boosty_nick is not None:
-            registration.boosty_nick = boosty_nick
-        if stream_pov is not None:
-            registration.stream_pov = stream_pov
-        if notes is not None:
-            registration.notes = notes
-        if custom_fields_json is not None:
-            registration.custom_fields_json = custom_fields_json or None
         if admin_notes is not None:
             registration.admin_notes = admin_notes
         if status_value is not None:
@@ -399,18 +432,6 @@ class RegistrationLifecycleService:
             for r_obj in registration.roles:
                 r_obj.hero_entries.clear()
             await session.flush()
-
-            form = await self.common.get_registration_form(session, registration.tournament_id)
-            config = (form.built_in_fields_json or {}).get("top_heroes") if form else None
-            hero_catalog = None
-            max_heroes = None
-            if config and config.get("enabled", True) is not False:
-                from shared.hero_catalog import DEFAULT_MAX_TOP_HEROES, resolve_hero_catalog
-
-                hero_catalog = await resolve_hero_catalog(session)
-                raw_max = config.get("max_heroes")
-                max_heroes = raw_max if isinstance(raw_max, int) and raw_max > 0 else DEFAULT_MAX_TOP_HEROES
-
             replace_registration_roles(
                 registration,
                 roles,

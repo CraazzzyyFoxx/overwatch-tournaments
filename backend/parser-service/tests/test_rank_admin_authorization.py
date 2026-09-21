@@ -23,6 +23,7 @@ sys.path.insert(0, str(backend_root / "parser-service"))
 
 from shared.core.errors import BaseAPIException  # noqa: E402
 from shared.rbac.catalog import PERMISSION_CATALOG, permission_names_for_workspace_role  # noqa: E402
+from shared.services.settings_provider import settings_provider  # noqa: E402
 
 WORKSPACE = 7
 OTHER_WORKSPACE = 9
@@ -196,8 +197,9 @@ class ScopingTests(IsolatedAsyncioTestCase):
         from src.services.overwatch_rank import service
 
         session = self._empty_session()
-        with patch(
-            "shared.services.settings_provider.get_rank_collection_config",
+        with patch.object(
+            settings_provider,
+            "get_rank_collection_config",
             AsyncMock(return_value=RankCollectionConfig()),
         ):
             from src.services.overwatch_rank import admin

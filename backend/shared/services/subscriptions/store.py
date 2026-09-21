@@ -26,12 +26,16 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-import sqlalchemy as sa
-from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared import models
 from shared.core.enums import SubscriptionCollectionSource
+from shared.repository import (
+    SubscriptionCheckLogRepository,
+    SubscriptionEntitlementRepository,
+    SubscriptionProviderConfigRepository,
+    WorkspaceSubscriptionRequirementRepository,
+)
 from shared.services.subscriptions import SubscriptionVerdict
 from shared.services.subscriptions.entitlements import ProviderConfigRow, StoredEntitlement
 
@@ -58,54 +62,28 @@ def _entitlement_row(
     }
 
 
-def _entitlement_conflict_update(stmt: Any) -> dict[str, Any]:
-    return {
-        "state": stmt.excluded.state,
-        "tier_rank": stmt.excluded.tier_rank,
-        "tier_label": stmt.excluded.tier_label,
-        "source": stmt.excluded.source,
-        "checked_at": stmt.excluded.checked_at,
-        "expires_at": stmt.excluded.expires_at,
-        "evidence_json": stmt.excluded.evidence_json,
-        "updated_at": sa.func.now(),
-    }
-
-
 class SqlEntitlementStore:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
+        self._configs = SubscriptionProviderConfigRepository()
+        self._requirements = WorkspaceSubscriptionRequirementRepository()
+        self._entitlements = SubscriptionEntitlementRepository()
 
     async def load_configs(self, workspace_id: int, providers: Sequence[str]) -> dict[str, ProviderConfigRow]:
-        if not providers:
-            return {}
-        cfg = models.SubscriptionProviderConfig
-        rows = await self._session.execute(
-            sa.select(cfg.provider, cfg.enabled, cfg.config_json, models.Workspace.discord_guild_id)
-            .join(models.Workspace, models.Workspace.id == cfg.workspace_id)
-            .where(
-                cfg.workspace_id == workspace_id,
-                cfg.provider.in_(list(providers)),
-            )
-        )
+        rows = await self._configs.list_with_guild(self._session, workspace_id=workspace_id, providers=providers)
         return {
             provider: ProviderConfigRow(
                 provider=provider,
                 enabled=bool(enabled),
                 # The guild belongs to the workspace, never to the provider blob.
-                # Injected here -- the single place configs are born -- so the
-                # resolver's `config["guild_id"]` contract, and with it the whole
-                # fail-open decision table, stays untouched.
                 config={**(config or {}), "guild_id": guild_id or ""},
             )
-            for provider, enabled, config, guild_id in rows.all()
+            for provider, enabled, config, guild_id in rows
         }
 
     async def load_requirement(self, workspace_id: int) -> dict[str, Any] | None:
-        req = models.WorkspaceSubscriptionRequirement
-        blob = await self._session.scalar(
-            sa.select(req.requirement_json).where(req.workspace_id == workspace_id, req.is_default.is_(True))
-        )
-        return dict(blob) if blob else None
+        blob = await self._requirements.get_default_blob(self._session, workspace_id)
+        return blob or None
 
     async def load_entitlements(
         self,
@@ -113,47 +91,23 @@ class SqlEntitlementStore:
         auth_user_ids: Sequence[int],
         providers: Sequence[str],
     ) -> dict[tuple[int, str], StoredEntitlement]:
-        if not auth_user_ids or not providers:
-            return {}
-        entitlement = models.SubscriptionEntitlement
-        rows = await self._session.execute(
-            sa.select(
-                entitlement.auth_user_id,
-                entitlement.provider,
-                entitlement.state,
-                entitlement.tier_rank,
-                entitlement.tier_label,
-                entitlement.source,
-                entitlement.checked_at,
-                entitlement.expires_at,
-                entitlement.evidence_json,
-            ).where(
-                entitlement.workspace_id == workspace_id,
-                entitlement.auth_user_id.in_(list(auth_user_ids)),
-                entitlement.provider.in_(list(providers)),
-            )
+        rows = await self._entitlements.list_for_users(
+            self._session,
+            workspace_id=workspace_id,
+            auth_user_ids=auth_user_ids,
+            providers=providers,
         )
         return {
-            (auth_user_id, provider): StoredEntitlement(
-                state=state,
-                tier_rank=tier_rank,
-                tier_label=tier_label,
-                source=source,
-                checked_at=checked_at,
-                expires_at=expires_at,
-                evidence=dict(evidence or {}),
+            (row.auth_user_id, row.provider): StoredEntitlement(
+                state=row.state,
+                tier_rank=row.tier_rank,
+                tier_label=row.tier_label,
+                source=row.source,
+                checked_at=row.checked_at,
+                expires_at=row.expires_at,
+                evidence=dict(row.evidence_json or {}),
             )
-            for (
-                auth_user_id,
-                provider,
-                state,
-                tier_rank,
-                tier_label,
-                source,
-                checked_at,
-                expires_at,
-                evidence,
-            ) in rows.all()
+            for row in rows
         }
 
     async def upsert(
@@ -163,14 +117,8 @@ class SqlEntitlementStore:
         provider: str,
         verdict: SubscriptionVerdict,
     ) -> None:
-        stmt = pg_insert(models.SubscriptionEntitlement).values(
-            **_entitlement_row(workspace_id, auth_user_id, provider, verdict)
-        )
-        await self._session.execute(
-            stmt.on_conflict_do_update(
-                constraint="uq_subscription_entitlement_scope",
-                set_=_entitlement_conflict_update(stmt),
-            )
+        await self._entitlements.upsert_rows(
+            self._session, [_entitlement_row(workspace_id, auth_user_id, provider, verdict)]
         )
 
     async def upsert_many(
@@ -179,39 +127,25 @@ class SqlEntitlementStore:
         provider: str,
         verdicts: Mapping[int, SubscriptionVerdict],
     ) -> None:
-        """One INSERT ... ON CONFLICT covering every ``auth_user_id`` in ``verdicts``.
-
-        Postgres resolves the conflict independently per row in a multi-row
-        VALUES list, so this is a straight drop-in for what used to be a
-        Python-side loop calling ``upsert`` once per user -- same statement
-        shape, one round trip instead of ``len(verdicts)``.
-        """
         if not verdicts:
             return
         rows = [
             _entitlement_row(workspace_id, auth_user_id, provider, verdict)
             for auth_user_id, verdict in verdicts.items()
         ]
-        stmt = pg_insert(models.SubscriptionEntitlement).values(rows)
-        await self._session.execute(
-            stmt.on_conflict_do_update(
-                constraint="uq_subscription_entitlement_scope",
-                set_=_entitlement_conflict_update(stmt),
-            )
-        )
+        await self._entitlements.upsert_rows(self._session, rows)
 
 
 class SqlCheckLogSink:
     """Appends check attempts to ``subscriptions.check_log``.
 
-    ``session.add`` only — no flush, no commit. The row lands with whatever
-    transaction the caller commits, so a rolled-back admission decision leaves no
-    misleading history behind, and a collector tick pays one INSERT per attempt
-    at its own commit boundary rather than a round trip per row.
+    ``add`` only — no flush, no commit. The row lands with whatever
+    transaction the caller commits.
     """
 
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
+        self._logs = SubscriptionCheckLogRepository()
 
     async def log_check(
         self,
@@ -226,7 +160,8 @@ class SqlCheckLogSink:
     ) -> None:
         evidence = verdict.evidence if verdict is not None else None
         reason = evidence.get("reason") if isinstance(evidence, dict) else None
-        self._session.add(
+        self._logs.add(
+            self._session,
             models.SubscriptionCheckLog(
                 workspace_id=workspace_id,
                 auth_user_id=auth_user_id,
@@ -236,9 +171,7 @@ class SqlCheckLogSink:
                 tier_label=verdict.tier_label if verdict is not None else None,
                 source=str(source),
                 mechanism=verdict.source if verdict is not None else None,
-                # `reason` is a String(64); provider reason vocabularies are short
-                # constants, but a future one must truncate rather than fail an INSERT.
                 reason=str(reason)[:64] if reason else None,
                 error=error[:2000] if error else None,
-            )
+            ),
         )

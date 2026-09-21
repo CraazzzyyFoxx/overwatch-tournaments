@@ -1,13 +1,10 @@
 "use client";
 
-import { useEffect, useId, useState } from "react";
+import { useId, useState } from "react";
 import { X } from "lucide-react";
-import type { BuiltInFieldConfig } from "@/types/registration.types";
+import type { FormField as FormFieldSchema } from "@/types/forms.types";
 import { useTranslations } from "next-intl";
-import {
-  getBuiltInValueValidationError,
-  normalizeBuiltInFieldValue,
-} from "./validation";
+import { normalizeAnswerText, validateAnswer } from "@/lib/forms/validate";
 import FormField from "./FormField";
 
 interface SmurfTagsInputProps {
@@ -17,8 +14,10 @@ interface SmurfTagsInputProps {
   label?: string;
   icon?: string;
   required?: boolean;
-  config?: BuiltInFieldConfig;
-  onValidationChange?: (error: string | null) => void;
+  /** The schema field this control answers; drives the per-tag format check. */
+  field?: FormFieldSchema;
+  /** Error owned by the form: a server rejection, or a revealed step objection. */
+  error?: string | null;
 }
 
 export default function SmurfTagsInput({
@@ -28,26 +27,30 @@ export default function SmurfTagsInput({
   label,
   icon,
   required = false,
-  config,
-  onValidationChange,
+  field,
+  error = null,
 }: Readonly<SmurfTagsInputProps>) {
   const t = useTranslations();
+  const tErrors = useTranslations("forms.errors");
   const inputId = useId();
   const [inputValue, setInputValue] = useState("");
   const trimmedInputValue = inputValue.trim();
-  const normalizedInputValue = normalizeBuiltInFieldValue("smurf_tags", inputValue);
-  const inputValidationError = trimmedInputValue
-    ? getBuiltInValueValidationError("smurf_tags", inputValue, config, t)
-    : null;
+  /** Canonical form of the pending tag, or the raw text when this control is
+   *  not bound to a field (nothing to normalize against). */
+  const normalize = (tag: string): string =>
+    field ? normalizeAnswerText(field, tag) : tag.trim();
+  const normalizedInputValue = normalize(inputValue);
 
-  useEffect(() => {
-    onValidationChange?.(inputValidationError);
-  }, [inputValidationError, onValidationChange]);
+  /** One tag at a time: the field's pattern describes a single BattleTag, and
+   *  the pending box is not yet part of the stored list. */
+  const tagError = (tag: string): string | null =>
+    field && tag.trim() ? validateAnswer(field, tag, tErrors) : null;
+
+  const inputValidationError = tagError(inputValue);
 
   const addTag = (tag: string, options?: { clearInput?: boolean }) => {
-    const normalized = normalizeBuiltInFieldValue("smurf_tags", tag);
-    const validationError = getBuiltInValueValidationError("smurf_tags", tag, config);
-    if (!normalized || validationError || tags.includes(normalized)) return;
+    const normalized = normalize(tag);
+    if (!normalized || tagError(tag) || tags.includes(normalized)) return;
     onChange([...tags, normalized]);
     if (options?.clearInput ?? true) {
       setInputValue("");
@@ -110,7 +113,7 @@ export default function SmurfTagsInput({
         value={inputValue}
         onChange={setInputValue}
         onKeyDown={handleKeyDown}
-        error={inputValidationError}
+        error={error ?? inputValidationError}
         className="pr-16"
         endAdornment={
           <button

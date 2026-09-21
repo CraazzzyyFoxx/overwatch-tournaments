@@ -13,6 +13,7 @@
 //   Z2  nothing outside src/app may import from src/app
 //   Z3  src/components/admin is admin-private
 //   Z4  i18n zone bundles cover every namespace their zone can reach
+//   Z5  every zone layout mounts its own i18n bundle
 //
 // Usage: node scripts/check-zone-boundaries.mjs [--json] [--graph]
 //        node scripts/check-zone-boundaries.mjs --write-i18n   # regenerate Z4's map
@@ -63,10 +64,18 @@ function files(dir = SRC, out = []) {
 /** src-relative module id, extension stripped, so `@/x` and `./x.tsx` unify. */
 const idOf = (abs) => norm(relative(SRC, abs)).replace(CODE, "");
 
+const ALL = files();
+const IDS = new Set(ALL.map(idOf));
+
 function resolveSpec(spec, fromFile) {
-  if (spec.startsWith("@/")) return idOf(join(SRC, spec.slice(2)));
-  if (spec.startsWith(".")) return idOf(resolve(dirname(fromFile), spec));
-  return null; // package
+  let id;
+  if (spec.startsWith("@/")) id = idOf(join(SRC, spec.slice(2)));
+  else if (spec.startsWith(".")) id = idOf(resolve(dirname(fromFile), spec));
+  else return null; // package
+  // A directory import (`@/components/data-table`) is its `index`. Without
+  // this the edge dangles and Z4 silently loses the whole subtree behind it —
+  // 33 importers and 29 modules, in the one case that exists today.
+  return IDS.has(id) || !IDS.has(`${id}/index`) ? id : `${id}/index`;
 }
 
 const zoneOf = (id) => {
@@ -97,7 +106,7 @@ const isTest = (id) => /\.(test|spec)\.|\.behavior\./.test(id);
  */
 const MENTION = NAMESPACES.map((ns) => [ns, new RegExp(`["'\`]${ns}[."'\`]`)]);
 
-for (const file of files()) {
+for (const file of ALL) {
   const from = idOf(file);
   const fromZone = zoneOf(from);
   const source = readFileSync(file, "utf8");
@@ -138,13 +147,15 @@ for (const file of files()) {
 
 // ---------------------------------------------------------------- Z4: i18n
 //
-// `src/i18n/request.ts` hands the client only its zone's namespaces, so each
-// bundle must be a superset of every namespace reachable from that zone's route
-// entries. The map is committed data (runtime cannot walk the import graph);
-// this recomputes it and fails on drift. `--write-i18n` regenerates it.
+// Each zone layout hands the client only its zone's namespaces, so each bundle
+// must be a superset of every namespace reachable from that zone's route
+// entries. `root` is its own bundle: `app/layout.tsx` renders chrome outside
+// `{children}` and is the only provider a root-level page (`not-found`) gets.
+// The map is committed data (runtime cannot walk the import graph); this
+// recomputes it and fails on drift. `--write-i18n` regenerates it.
 
 const ZONE_FILE = join(SRC, "i18n/zone-namespaces.json");
-const ZONES = ["web", "admin", "tools"];
+const ZONES = ["root", "web", "admin", "tools"];
 
 function reachableFrom(seeds) {
   const seen = new Set();
@@ -166,8 +177,9 @@ for (const id of edges.keys()) {
 }
 
 // The root layout's chrome (auth modal, account settings, cookie notice,
-// toaster) renders on every page under every zone, so its namespaces belong to
-// all three bundles rather than a fourth one nothing would select.
+// toaster) renders on every page under every zone, so its namespaces are in
+// every bundle as well as in `root`: a zone provider REPLACES the root one for
+// everything under it (`use-intl`'s IntlProvider does not merge messages).
 const rootNamespaces = new Set();
 for (const id of reachableFrom(seeds.root)) for (const ns of mentions.get(id) ?? []) rootNamespaces.add(ns);
 
@@ -211,6 +223,31 @@ if (committed !== null) {
   }
 }
 
+// ------------------------------------- Z5: every zone mounts its own bundle
+//
+// A bundle is only correct if the layout that owns the zone mounts it: a
+// client-side navigation re-renders nothing above the deepest shared layout,
+// so a zone whose layout does not mount `ZoneIntlProvider` inherits whichever
+// bundle the first page load picked and renders dotted keys.
+
+for (const [segment, zone] of [...Object.entries(ROUTE_ZONES), [".", "root"]]) {
+  const layout = join(SRC, "app", segment, "layout.tsx");
+  let source = "";
+  try {
+    source = readFileSync(layout, "utf8");
+  } catch {
+    source = "";
+  }
+  if (!new RegExp(`ZoneIntlProvider\\s+zone="${zone}"`).test(source)) {
+    findings.push({
+      rule: "Z5",
+      from: `app/${segment}/layout.tsx`,
+      to: `zone="${zone}"`,
+      what: "layout does not mount its message bundle",
+    });
+  }
+}
+
 if (process.argv.includes("--graph")) {
   console.log(JSON.stringify(graph, null, 2));
 } else if (process.argv.includes("--json")) {
@@ -221,6 +258,7 @@ if (process.argv.includes("--graph")) {
     ["Z2", "nothing outside src/app may import from src/app"],
     ["Z3", "src/components/admin is admin-private"],
     ["Z4", "i18n zone bundles cover every reachable namespace"],
+    ["Z5", "every zone layout mounts its own message bundle"],
   ];
   for (const [id, what] of RULES) {
     const hits = findings.filter((f) => f.rule === id);

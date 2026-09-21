@@ -27,6 +27,7 @@ from shared import models
 from shared.core import http_status as status
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.models.identity.auth_user import AuthUser
+from shared.repository.notification import NotificationRepository
 from shared.services.audit import record_admin_audit
 from shared.services.notifications import notify, validate_notification_payload
 from src import schemas
@@ -34,6 +35,8 @@ from src import schemas
 __all__ = ("ANNOUNCEMENT_KIND", "create", "get", "list_for_scope", "retire", "update")
 
 ANNOUNCEMENT_KIND = "announcement.published"
+
+_notifications = NotificationRepository()
 
 DEFAULT_LIST_LIMIT = 50
 MAX_LIST_LIMIT = 200
@@ -84,7 +87,7 @@ async def get(session: AsyncSession, announcement_id: int) -> models.Notificatio
     shared across every audience, so without it an operator could edit the text
     of somebody's team invite or retire it out of their inbox.
     """
-    row = await session.get(models.Notification, announcement_id)
+    row = await _notifications.get(session, announcement_id)
     if row is None or row.kind != ANNOUNCEMENT_KIND or row.audience == "user":
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Announcement not found")
     return row

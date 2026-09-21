@@ -32,9 +32,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from shared.core import http_status as status
 from shared.core.enums import MapPoolEntryStatus, MapVetoSessionStatus, PickBanKind
 from shared.core.errors import BaseAPIException as HTTPException
+from shared.domain import pick_ban_engine as engine
 from shared.models.tournament.pick_ban import EncounterPickBanLedger, PickBanEntry, PickBanSession
 from shared.repository import EncounterPickBanLedgerRepository, PickBanEntryRepository
-from shared.services import pick_ban_engine as engine
 from src.services.encounter.pick_ban_session import PickBanSessionService, pick_ban_session_service
 from src.services.encounter.realtime_commit import emit_pick_ban_update
 

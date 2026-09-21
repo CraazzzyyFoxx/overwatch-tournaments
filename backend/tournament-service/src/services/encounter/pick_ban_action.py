@@ -26,6 +26,7 @@ from shared.core.enums import (
     PickBanNoRepeatScope,
 )
 from shared.core.errors import BaseAPIException as HTTPException
+from shared.domain import pick_ban_engine as engine
 from shared.models.catalog.hero import Hero
 from shared.models.tournament.encounter import Encounter
 from shared.models.tournament.pick_ban import EncounterPickBanLedger, PickBanEntry, PickBanSession
@@ -36,7 +37,6 @@ from shared.repository import (
     PickBanConfigRepository,
     PickBanEntryRepository,
 )
-from shared.services import pick_ban_engine as engine
 from src.services.encounter import pick_ban_undo
 from src.services.encounter.pick_ban_session import PickBanSessionService, pick_ban_session_service
 from src.services.encounter.realtime_commit import emit_pick_ban_update

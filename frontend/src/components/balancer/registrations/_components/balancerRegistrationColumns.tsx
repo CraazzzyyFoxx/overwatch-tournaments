@@ -7,7 +7,7 @@ import { adminColumnMeta } from "@/components/data-table";
 import { InlineEditText } from "@/components/kit/InlineEditText";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { StatusPill } from "@/components/kit/StatusPill";
-import { TONE_CLASS, TONE_TEXT } from "@/components/kit/tone";
+import { TONE_CLASS } from "@/components/kit/tone";
 import { Badge } from "@/components/ui/badge";
 import {
   AdmissionStatusBadge,
@@ -29,8 +29,44 @@ import type {
   AdminRegistration,
   AdminRegistrationRole,
 } from "@/types/balancer-admin.types";
-import type { CustomFieldDefinition, SubroleCatalog } from "@/types/registration.types";
-import { renderCustomFieldValue } from "@/components/registration/customFieldValue";
+import type { SubroleCatalog } from "@/types/registration.types";
+import type { FormField } from "@/types/forms.types";
+import { AnswerValue } from "@/components/forms/AnswerValue";
+import { answerSearchText, answerText } from "@/lib/forms/answers";
+import { identityProvider } from "@/lib/forms/builtin-keys";
+
+/**
+ * Labels for the builtin questions, shared by the columns and the row
+ * inspector. A builtin carries no label of its own — the server owns its
+ * wording and each client localises it — and this table is English throughout,
+ * like every other header here.
+ */
+export const BUILTIN_ANSWER_LABELS: Record<string, string> = {
+  smurf_tags: "Smurfs",
+  stream_pov: "Stream POV",
+  public_notes: "Notes",
+  organizer_notes: "Organizer Notes",
+  identity_discord: "Discord",
+  identity_twitch: "Twitch",
+  identity_boosty: "Boosty",
+  identity_vk: "VK",
+  identity_youtube: "YouTube",
+};
+
+/** The answers that had a visible column before the schema existed. Every other
+ *  question starts hidden: a form may ask a dozen of them. */
+const DEFAULT_VISIBLE_ANSWER_KEYS: Record<string, true> = { smurf_tags: true };
+
+/** The identity handles this form asks for, in schema order, off the row's own
+ *  answers — a form that asks for VK shows VK without a code change here. */
+function identityHandles(
+  registration: AdminRegistration,
+  keys: readonly string[],
+): string[] {
+  return keys
+    .map((key) => answerText(registration.answers, key))
+    .filter((handle): handle is string => handle !== null);
+}
 
 /**
  * The slice of next-intl's formatter the timestamp cells need. These helpers are
@@ -93,7 +129,10 @@ function formatFullTimestamp(format: DateFormatter, dateString: string | null | 
   });
 }
 
-function ParticipantCell({ registration }: Readonly<{ registration: AdminRegistration }>) {
+function ParticipantCell({
+  registration,
+  identityKeys,
+}: Readonly<{ registration: AdminRegistration; identityKeys: readonly string[] }>) {
   const primary =
     registration.battle_tag ??
     registration.display_name ??
@@ -103,9 +142,7 @@ function ParticipantCell({ registration }: Readonly<{ registration: AdminRegistr
     registration.battle_tag && registration.display_name && registration.display_name !== registration.battle_tag
       ? registration.display_name
       : null,
-    registration.discord_nick,
-    registration.twitch_nick,
-    registration.boosty_nick,
+    ...identityHandles(registration, identityKeys),
     registration.source_record_key,
   ].filter(Boolean);
 
@@ -194,30 +231,6 @@ function SourceCell({ source }: Readonly<{ source: AdminRegistration["source"] }
     >
       {isSheets ? "Sheets" : "Manual"}
     </Badge>
-  );
-}
-
-function CompactListCell({ values }: Readonly<{ values: string[] }>) {
-  if (values.length === 0) {
-    return <span className="text-[color:var(--aqt-fg-dim)]">—</span>;
-  }
-
-  const visibleValues = values.slice(0, 2);
-  const hiddenCount = values.length - visibleValues.length;
-
-  return (
-    <div className="max-w-[220px] space-y-1">
-      {visibleValues.map((value, index) => (
-        <div key={`${value}-${index}`} className="truncate text-xs text-[color:var(--aqt-fg-muted)]" title={value}>
-          {value}
-        </div>
-      ))}
-      {hiddenCount > 0 ? (
-        <div className={cn("text-xs font-medium", TONE_TEXT.success)}>
-          +{hiddenCount} more
-        </div>
-      ) : null}
-    </div>
   );
 }
 
@@ -310,7 +323,13 @@ export function buildBalancerRegistrationColumns(
    *  is read off each row, so the old `requireOpenProfile` twin of this flag is
    *  gone: nothing outside that column needed either of them. */
   requireSubscription = false,
-  customFields: CustomFieldDefinition[] = [],
+  /** Every question the tournament's CURRENT schema asks. `battle_tag` and
+   *  `roles` are dropped here — they keep their own columns — and the rest
+   *  become one column each. A row filed against an OLDER version still renders
+   *  in these columns (its answers are read by key); an answer whose question
+   *  the current schema no longer asks has no column to live in and is shown in
+   *  the row's inspector instead, under its stale-version notice. */
+  fields: FormField[] = [],
   /** Values offered by the `status` header filter, as the endpoint reports them. */
   statusOptions: readonly { value: string; label: string }[] = [],
   /** Inline editing of the Admin Notes cell. Omitted, that column stays read-only;
@@ -344,23 +363,30 @@ export function buildBalancerRegistrationColumns(
       ]
     : [];
 
-  // One column per organizer-defined field, same definitions the public
-  // roster renders. Off by default: a form may define a dozen of them.
-  const customFieldColumns: ColumnDef<AdminRegistration>[] = customFields.map((field) => ({
-    id: `custom_${field.key}`,
-    header: field.label,
+  const answerFields = fields.filter(
+    (field) => field.key !== "battle_tag" && field.key !== "roles",
+  );
+  const identityKeys = answerFields
+    .map((field) => field.key)
+    .filter((key) => identityProvider(key) !== null);
+
+  // One column per question, all reading the same flat `answers` document
+  // through the same renderer — the organizer-defined ones and the builtins
+  // alike, since a schema knows no difference between them.
+  const answerColumns: ColumnDef<AdminRegistration>[] = answerFields.map((field) => ({
+    id: `answer_${field.key}`,
+    header: field.label || BUILTIN_ANSWER_LABELS[field.key] || field.key,
     // Free-form answers: the old client-side sort had no case for them either.
     enableSorting: false,
-    cell: ({ row }) =>
-      renderCustomFieldValue(field, row.original.custom_fields_json?.[field.key] ?? null),
+    cell: ({ row }) => (
+      <AnswerValue value={row.original.answers?.[field.key] ?? null} kind={field.kind} />
+    ),
     meta: adminColumnMeta<AdminRegistration>({
       category: "admin",
-      defaultHidden: true,
+      defaultHidden: DEFAULT_VISIBLE_ANSWER_KEYS[field.key] !== true,
       responsive: "lg",
-      searchValue: (registration) => {
-        const value = registration.custom_fields_json?.[field.key];
-        return value == null || value === "" ? null : String(value);
-      },
+      className: "min-w-[180px]",
+      searchValue: (registration) => answerSearchText(registration.answers?.[field.key]),
     }),
   }));
 
@@ -370,7 +396,7 @@ export function buildBalancerRegistrationColumns(
       header: "Participant",
       accessorFn: (registration) => registration.battle_tag || registration.display_name || "",
       sortingFn: localeTextSort,
-      cell: ({ row }) => <ParticipantCell registration={row.original} />,
+      cell: ({ row }) => <ParticipantCell registration={row.original} identityKeys={identityKeys} />,
       meta: adminColumnMeta<AdminRegistration>({
         category: "core",
         defaultHidden: false,
@@ -381,29 +407,14 @@ export function buildBalancerRegistrationColumns(
           [
             registration.battle_tag,
             registration.display_name,
-            registration.discord_nick,
-            registration.twitch_nick,
-            registration.boosty_nick,
+            ...identityHandles(registration, identityKeys),
             registration.source_record_key,
           ]
             .filter(Boolean)
             .join(" "),
       }),
     },
-    {
-      id: "smurfs",
-      header: "Smurfs",
-      accessorFn: (registration) => (registration.smurf_tags_json || []).join(" "),
-      sortingFn: localeTextSort,
-      cell: ({ row }) => <CompactListCell values={row.original.smurf_tags_json ?? []} />,
-      meta: adminColumnMeta<AdminRegistration>({
-        category: "admin",
-        defaultHidden: false,
-        responsive: "md",
-        className: "min-w-[180px]",
-        searchValue: (registration) => registration.smurf_tags_json.join(" "),
-      }),
-    },
+    ...answerColumns,
     {
       id: "roles",
       header: "Roles",
@@ -604,20 +615,6 @@ export function buildBalancerRegistrationColumns(
       }),
     },
     {
-      id: "notes",
-      header: "Notes",
-      accessorFn: (registration) => registration.notes || "",
-      sortingFn: localeTextSort,
-      cell: ({ row }) => <TextBlockCell value={row.original.notes} />,
-      meta: adminColumnMeta<AdminRegistration>({
-        category: "admin",
-        defaultHidden: true,
-        responsive: "lg",
-        className: "min-w-[220px]",
-        searchValue: (registration) => registration.notes,
-      }),
-    },
-    {
       id: "admin_notes",
       header: "Admin Notes",
       accessorFn: (registration) => registration.admin_notes || "",
@@ -671,6 +668,5 @@ export function buildBalancerRegistrationColumns(
             : null,
       }),
     },
-    ...customFieldColumns,
   ];
 }

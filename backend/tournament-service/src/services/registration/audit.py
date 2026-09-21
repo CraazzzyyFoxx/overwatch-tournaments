@@ -25,33 +25,39 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.domain.forms import IDENTITY_PROVIDERS, identity_key
 from shared.services.audit import record_audit
 from src import models
 from src.domain.registration.utils import normalize_battle_tag
+from src.services.registration.answers import custom_answers, merge_custom_answers
 
 __all__ = ("ENTITY", "audit_service", "label", "profile_changes", "role_snapshot")
 
 ENTITY = "registration"
 
-# Request field -> model attribute for everything the admin profile editor can
-# change. ``roles`` is not here: it is a list of rows, handled below.
-_PROFILE_FIELDS: dict[str, str] = {
+# Admin-only request fields -> model attribute. These are not questions the form
+# asks; they are the organizer's own state. ``None`` means "left alone".
+_ADMIN_FIELDS: dict[str, str] = {
     "display_name": "display_name",
-    "battle_tag": "battle_tag",
-    "smurf_tags_json": "smurf_tags_json",
-    "discord_nick": "discord_nick",
-    "twitch_nick": "twitch_nick",
-    "boosty_nick": "boosty_nick",
-    "stream_pov": "stream_pov",
-    "notes": "notes",
     "admin_notes": "admin_notes",
-    "custom_fields_json": "custom_fields_json",
     "status": "status",
     "balancer_status": "balancer_status",
     "exclude_reason": "exclude_reason",
 }
 
-# Fields the service persists as NULL when handed an empty container, so an
+# Answer key -> model attribute for the builtin questions that land in a column.
+# Keyed by the ANSWER key, which is what the feed should name: the wire says
+# ``smurf_tags``, the column happens to be ``smurf_tags_json``. ``roles`` and
+# ``identity_*`` are rows, handled below.
+_ANSWER_FIELDS: dict[str, str] = {
+    "battle_tag": "battle_tag",
+    "smurf_tags": "smurf_tags_json",
+    "stream_pov": "stream_pov",
+    "public_notes": "public_notes",
+    "organizer_notes": "organizer_notes",
+}
+
+# Columns the service persists as NULL when handed an empty container, so an
 # empty request value and a stored NULL are the same state -- not a change.
 _EMPTY_IS_NULL = frozenset({"smurf_tags_json", "custom_fields_json"})
 
@@ -99,12 +105,12 @@ def _requested_roles(roles: list[dict[str, Any]]) -> list[dict[str, Any]]:
     )
 
 
-def _requested_value(field: str, value: Any) -> Any:
-    if field == "battle_tag":
+def _requested_value(attr: str, value: Any) -> Any:
+    if attr == "battle_tag":
         # Compared against the stored, already-normalised tag: without this a
         # resave of the same tag in different casing reads as an edit.
         return normalize_battle_tag(value)
-    if field in _EMPTY_IS_NULL and not value:
+    if attr in _EMPTY_IS_NULL and not value:
         return None
     return value
 
@@ -115,23 +121,42 @@ def profile_changes(
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """Before/after images narrowed to the fields this request really changes.
 
-    ``requested`` is the update request dumped to a dict; ``None`` means "left
-    alone" on every field of it (see ``BalancerRegistrationUpdateRequest``), so
-    those are skipped rather than recorded as clears.
+    ``requested`` is the update request dumped to a dict. On the admin-only
+    fields ``None`` means "left alone"; inside ``answers`` ABSENCE means that,
+    because an explicit blank there is how the editor CLEARS an answer and the
+    feed has to show it.
     """
     before: dict[str, Any] = {}
     after: dict[str, Any] = {}
+    answers: dict[str, Any] = requested.get("answers") or {}
 
-    for field, attr in _PROFILE_FIELDS.items():
+    def record(field: str, old: Any, new: Any) -> None:
+        if new == old:
+            return
+        before[field] = old
+        after[field] = new
+
+    for field, attr in _ADMIN_FIELDS.items():
         new = requested.get(field)
         if new is None:
             continue
-        new = _requested_value(field, new)
-        old = getattr(registration, attr)
-        if new == old:
+        record(field, getattr(registration, attr), _requested_value(attr, new))
+
+    for key, attr in _ANSWER_FIELDS.items():
+        if key not in answers:
             continue
-        before[field] = old
-        after[field] = new
+        record(key, getattr(registration, attr), _requested_value(attr, answers[key]))
+
+    stored_handles = {row.provider: row.handle for row in (registration.identities or [])}
+    for provider in IDENTITY_PROVIDERS:
+        key = identity_key(provider)
+        if key in answers:
+            record(key, stored_handles.get(provider), answers[key] or None)
+
+    custom = custom_answers(answers)
+    if custom:
+        stored_custom = registration.custom_fields_json or None
+        record("custom_fields_json", stored_custom, merge_custom_answers(stored_custom, custom) or None)
 
     roles = requested.get("roles")
     if roles is not None:
