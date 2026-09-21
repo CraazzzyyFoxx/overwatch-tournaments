@@ -40,9 +40,13 @@ export default function TournamentRulesPage({ slug }: Readonly<{ slug: string }>
         //
         // 64ch, not 72: `ch` is the width of Inter's `0`, which is wider than
         // the average letter, so a `ch` cap always renders MORE characters than
-        // it names — 72ch measured ~83 characters, and Cyrillic runs wider
-        // still.
-        <Markdown source={rules} className="max-w-[64ch] py-2" />
+        // it names — 64ch measures 65-73 Cyrillic characters, already at the
+        // top of the range.
+        //
+        // Centred, because the cap cannot be spent instead: on a wide desktop
+        // the column leaves half the tab empty, and empty space on ONE side
+        // reads as a layout that broke rather than a document that ends.
+        <Markdown source={rules} className="mx-auto max-w-[64ch] py-2" />
       ) : (
         // Reachable by a direct link after an organizer clears the document:
         // the tab is gone from the rail, the URL still resolves.
