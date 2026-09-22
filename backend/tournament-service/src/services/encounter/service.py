@@ -120,6 +120,11 @@ def encounter_entities(in_entities: list[str], child: typing.Any | None = None) 
         matches_entity = utils.join_entity(child, models.Encounter.matches)
         entities.append(matches_entity)
         entities.extend(match_entities(utils.prepare_entities(in_entities, "matches"), matches_entity))
+        # ``to_pydantic`` fills ``games`` off the SAME switch: a position and its
+        # map exist before any parsed log does, and the read carries both.
+        # selectin, never joined -- two to-many collections joined onto one
+        # encounter multiply each other's rows.
+        entities.append(utils.selectin_entity(child, models.Encounter.games).selectinload(models.EncounterGame.map))
 
     return entities
 

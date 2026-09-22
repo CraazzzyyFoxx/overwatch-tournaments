@@ -98,6 +98,7 @@ TABLE_NAMES = (
     "balancer.draft_player",
     "balancer.draft_pick",
     "tournament.encounter_captain_report",
+    "tournament.encounter_game",
     "tournament.encounter_map_report",
     "tournament.encounter_map_code",
     "tournament.encounter_readiness",

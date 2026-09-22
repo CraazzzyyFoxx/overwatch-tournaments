@@ -22,7 +22,11 @@ var PublicWriteRoutes = []edge.RouteSpec{
 	{Method: "GET", Pattern: "/api/v1/encounters/{encounter_id}/my-role", Queue: "rpc.tournament.captain_my_role", IDParam: "encounter_id", Auth: edge.AuthRequired},
 	{Method: "POST", Pattern: "/api/v1/encounters/{encounter_id}/report", Queue: "rpc.tournament.captain_submit_report", IDParam: "encounter_id", Body: true, Auth: edge.AuthRequired},
 	{Method: "GET", Pattern: "/api/v1/encounters/{encounter_id}/reports", Queue: "rpc.tournament.captain_reports", IDParam: "encounter_id", Auth: edge.AuthOptional},
-	{Method: "POST", Pattern: "/api/v1/encounters/{encounter_id}/map-pool/{map_id}/report", Queue: "rpc.tournament.captain_report_map", IDParam: "encounter_id", Path: []string{"map_id"}, Body: true, Auth: edge.AuthRequired},
+	// encounter_game / map_report — a claim and a freeplay map choice both target
+	// a GAME (one series position), never a map id: a series may play the same
+	// map twice and only the position tells the two plays apart.
+	{Method: "POST", Pattern: "/api/v1/encounters/{encounter_id}/games/{game_id}/report", Queue: "rpc.tournament.captain_report_game", IDParam: "encounter_id", Path: []string{"game_id"}, Body: true, Auth: edge.AuthRequired},
+	{Method: "POST", Pattern: "/api/v1/encounters/{encounter_id}/games/{game_id}/map", Queue: "rpc.tournament.captain_select_game_map", IDParam: "encounter_id", Path: []string{"game_id"}, Body: true, Auth: edge.AuthRequired},
 	// pick_ban_session.py — captain ready-up gate, shared by BOTH pick-ban kinds
 	// (one confirmation per side covers map veto and hero bans together).
 	{Method: "POST", Pattern: "/api/v1/encounters/{encounter_id}/ready", Queue: "rpc.tournament.captain_ready", IDParam: "encounter_id", Auth: edge.AuthRequired},

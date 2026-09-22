@@ -75,23 +75,32 @@ class _ParticipationFixture(_scrim._Fixture):
         )
         return report_id
 
+    def game(self, encounter_id: int, position: int, *, map_id: int = 1) -> int:
+        """One series position. A claim hangs off THIS, not off the encounter."""
+        row_id = self._id()
+        self.insert(
+            models.EncounterGame.__table__,
+            id=row_id,
+            encounter_id=encounter_id,
+            position=position,
+            map_id=map_id,
+            state="awaiting_result",
+            result_version=0,
+        )
+        return row_id
+
     def map_report(
         self,
-        encounter_id: int,
-        team_id: int,
+        game_id: int,
+        side: str,
         reporter_user_id: int | None,
-        *,
-        map_id: int = 1,
-        map_index: int = 1,
     ) -> int:
         row_id = self._id()
         self.insert(
             models.EncounterMapReport.__table__,
             id=row_id,
-            encounter_id=encounter_id,
-            map_id=map_id,
-            map_index=map_index,
-            team_id=team_id,
+            game_id=game_id,
+            side=side,
             reporter_user_id=reporter_user_id,
             home_score=1,
             away_score=0,
@@ -243,10 +252,15 @@ class CaptainReportActivityTests(_ParticipationCase):
         self.assertEqual(2, context.evidence[(REAL_HOME_USER, REAL_TOURNAMENT_ID)]["count"])
 
     async def test_map_reports_and_readiness_count_their_own_rows(self) -> None:
-        home, away, first, second = self._two_encounters()
-        self.db.map_report(first, home, REAL_HOME_USER, map_id=1, map_index=1)
-        self.db.map_report(first, home, REAL_HOME_USER, map_id=2, map_index=2)
-        self.db.map_report(first, away, REAL_AWAY_USER, map_id=1, map_index=1)
+        _home, _away, first, second = self._two_encounters()
+        # Two positions of the SAME encounter, and the opposing captain's claim
+        # for one of them: a claim belongs to a game, and the game carries the
+        # encounter the tournament is read from.
+        game_one = self.db.game(first, 1, map_id=1)
+        game_two = self.db.game(first, 2, map_id=2)
+        self.db.map_report(game_one, "home", REAL_HOME_USER)
+        self.db.map_report(game_two, "home", REAL_HOME_USER)
+        self.db.map_report(game_one, "away", REAL_AWAY_USER)
         self.db.readiness(first, "home", REAL_HOME_USER)
         self.db.readiness(first, "away", REAL_AWAY_USER)
         self.db.readiness(second, "home", REAL_HOME_USER)

@@ -25,6 +25,7 @@ from shared.services.chat import (
     ChatSettingsInput,
 )
 from src import schemas
+from src.rpc import pick_ban_admin
 from src.schemas import captain as captain_schemas
 from src.schemas import encounter_report_form as report_form_schemas
 from src.schemas import registration as reg_schemas
@@ -438,7 +439,9 @@ OPERATIONS: dict[str, Op] = {
     "rpc.tournament.captain_pick_ban_act": Op(request=captain_schemas.PickBanActionInput),
     "rpc.tournament.captain_pick_ban_elect_opener": Op(request=captain_schemas.ElectOpenerInput),
     "rpc.tournament.captain_pick_ban_undo": Op(request=captain_schemas.PickBanUndoInput),
-    "rpc.tournament.captain_report_map": Op(request=captain_schemas.MapReportInput),
+    "rpc.tournament.captain_report_game": Op(request=captain_schemas.GameReportInput),
+    "rpc.tournament.captain_select_game_map": Op(request=captain_schemas.GameMapSelectInput),
+    "rpc.tournament.admin_game_result": Op(request=pick_ban_admin.AdminGameResultInput),
     # ── pre-game room chat (shared chat service; same shapes in balancer) ──
     # chat_delete / chat_mute_clear answer a bare {"deleted": true}, so they are
     # documented in DOCS only — this module maps whole models.

@@ -38,13 +38,22 @@ class PickBanUndoInput(BaseModel):
     consent: bool = True
 
 
-class MapReportInput(BaseModel):
-    """One captain's independent claim of a single played map's result —
-    submitted immediately after that map, not at series end (contrast
-    ``CaptainReportSubmission``). See ``services.encounter.map_report``."""
+class GameReportInput(BaseModel):
+    """One captain's independent claim of a single played GAME's result —
+    submitted immediately after that position, not at series end (contrast
+    ``CaptainReportSubmission``). The position, not the map, identifies what is
+    being claimed: a series may play the same map twice. See
+    ``services.encounter.map_report``."""
 
     home_score: int = Field(ge=0)
     away_score: int = Field(ge=0)
+
+
+class GameMapSelectInput(BaseModel):
+    """Freeplay's half of what the map pick-ban does automatically: a captain
+    names the map an open position is played on."""
+
+    map_id: int
 
 
 class CaptainMapCodeInput(BaseModel):

@@ -20,6 +20,7 @@ from src.schemas import (
 __all__ = (
     "EncounterFeaturedRead",
     "EncounterFiltersRead",
+    "EncounterGameRead",
     "EncounterHistogramBucketRead",
     "EncounterKpiRead",
     "EncounterMapMetricRead",
@@ -70,6 +71,25 @@ class EncounterSlotSourceRead(BaseModel):
     slot: str
 
 
+class EncounterGameRead(BaseRead):
+    """One position of the series and what the tournament DECIDED for it.
+
+    Distinct from ``MatchRead``, which is what a parsed log OBSERVED: a position
+    exists (and names its map) long before any log arrives, and a series may
+    play the same map twice — only ``position`` tells those two plays apart.
+    """
+
+    position: int
+    map_id: int | None = None
+    map: MapRead | None = None
+    state: str
+    accepted_home_score: int | None = None
+    accepted_away_score: int | None = None
+    result_source: str | None = None
+    result_version: int = 0
+    confirmed_at: datetime | None = None
+
+
 class EncounterRead(BaseRead):
     name: str
     home_team_id: int | None = None
@@ -98,6 +118,7 @@ class EncounterRead(BaseRead):
     home_team: TeamRead | None
     away_team: TeamRead | None
     matches: list[MatchRead]
+    games: list[EncounterGameRead] = []
 
 
 class MatchRead(BaseRead):

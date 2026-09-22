@@ -72,7 +72,8 @@ from src.rpc._helpers import (
 from src.schemas.captain import (
     CaptainReportSubmission,
     ElectOpenerInput,
-    MapReportInput,
+    GameMapSelectInput,
+    GameReportInput,
     PickBanActionInput,
     PickBanUndoInput,
     resolve_optional_viewer_side,
@@ -110,6 +111,7 @@ from src.services.encounter import flows as encounter_flows
 from src.services.encounter import pick_ban_action as pick_ban_action
 from src.services.encounter.captain import captain_service
 from src.services.encounter.chat_access import encounter_chat_service
+from src.services.encounter.games import encounter_game_service
 from src.services.encounter.map_report import map_report_service
 from src.services.encounter.pick_ban_session import pick_ban_session_service
 from src.services.encounter.pick_ban_undo import pick_ban_undo_service
@@ -376,25 +378,48 @@ def register(broker: Any, logger: Any) -> None:
 
         return await _run(logger, op)
 
-    @broker.subscriber("rpc.tournament.captain_report_map")
-    async def _captain_report_map(data: dict, msg: RabbitMessage) -> dict:
+    @broker.subscriber("rpc.tournament.captain_report_game")
+    async def _captain_report_game(data: dict, msg: RabbitMessage) -> dict:
         async def op(session: Any) -> Any:
             user = _identity(data)
             encounter_id = _require_id(data)
-            map_id = _path_int(data, "map_id")
-            body = MapReportInput.model_validate(_payload(data))
+            game_id = _path_int(data, "game_id")
+            body = GameReportInput.model_validate(_payload(data))
             encounter = await captain_service._load_encounter(session, encounter_id)
-            captain_side = await captain_service.resolve_captain_side(session, user, encounter)
-            team_id = encounter.home_team_id if captain_side == "home" else encounter.away_team_id
+            # The side is the CALLER's, never the body's: a captain files their
+            # own claim and nobody else's.
+            side = await captain_service.resolve_captain_side(session, user, encounter)
+            # Commits internally once the pair of claims is reconciled.
             return await map_report_service.submit_map_report(
                 session,
                 encounter,
-                map_id=map_id,
-                team_id=team_id,
+                game_id=game_id,
+                side=side,
                 reporter_user_id=user.id,
                 home_score=body.home_score,
                 away_score=body.away_score,
             )
+
+        return await _run(logger, op)
+
+    @broker.subscriber("rpc.tournament.captain_select_game_map")
+    async def _captain_select_game_map(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            user = _identity(data)
+            encounter_id = _require_id(data)
+            game_id = _path_int(data, "game_id")
+            body = GameMapSelectInput.model_validate(_payload(data))
+            encounter = await captain_service._load_encounter(session, encounter_id)
+            await captain_service.resolve_captain_side(session, user, encounter)
+            # Locked for the same reason a claim locks it: two captains naming a
+            # map at once must not both win.
+            game = await encounter_game_service.game_repo.get_for_update(session, game_id)
+            if game is None or game.encounter_id != encounter.id:
+                raise HTTPException(status_code=404, detail="Game not found")
+            await encounter_game_service.select_map(session, encounter, game, map_id=body.map_id)
+            await session.commit()
+            reports = (await encounter_game_service.reports_by_game(session, [game])).get(game.id) or []
+            return {"game": encounter_game_service.serialize(game, reports)}
 
         return await _run(logger, op)
 

@@ -3,6 +3,7 @@ import typing
 from cashews import cache
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.core.enums import EncounterGameState
 from shared.services.bracket.advancement import SlotSource, resolve_slot_sources
 from shared.services.challonge_refs import (
     ChallongeRef,
@@ -132,6 +133,7 @@ class EncounterFlowsService:
         home_team: schemas.TeamRead | None = None
         away_team: schemas.TeamRead | None = None
         matches_read: list[schemas.MatchRead] = []
+        games_read: list[schemas.EncounterGameRead] = []
 
         if "stage" in entities and encounter.stage is not None:
             # Nested stage challonge is derived at the top-level tournament read, not
@@ -186,6 +188,26 @@ class EncounterFlowsService:
                 )
                 for match in encounter.matches
             ]
+            # Same entity switch as `matches`: the encounter read carries both
+            # what the tournament DECIDED per position (games) and what a parsed
+            # log OBSERVED (matches), so a position can be named before any log
+            # exists. Cancelled positions are history, not the live series.
+            games_read = [
+                schemas.EncounterGameRead(
+                    id=game.id,
+                    position=game.position,
+                    map_id=game.map_id,
+                    map=map_to_read(game.map, []) if game.map is not None else None,
+                    state=game.state.value,
+                    accepted_home_score=game.accepted_home_score,
+                    accepted_away_score=game.accepted_away_score,
+                    result_source=game.result_source.value if game.result_source is not None else None,
+                    result_version=game.result_version,
+                    confirmed_at=game.confirmed_at,
+                )
+                for game in sorted(encounter.games, key=lambda game: (game.position, game.id or 0))
+                if game.state != EncounterGameState.CANCELLED
+            ]
 
         encounter_dict = encounter.to_dict()
         # ``challonge_id`` (a bracket key) is DERIVED from challonge_match_mapping, not
@@ -203,6 +225,7 @@ class EncounterFlowsService:
 
         return schemas.EncounterRead(
             **encounter_dict,
+            games=games_read,
             score=schemas.Score(home=encounter.home_score, away=encounter.away_score),
             stage=stage,
             stage_item=stage_item,
