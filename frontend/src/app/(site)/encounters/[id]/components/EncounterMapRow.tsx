@@ -113,7 +113,10 @@ export default function EncounterMapRow({
     );
   }
 
-  const mapName = match?.map?.name ?? t("encounters.match.mapAlt");
+  // The position names its map from the moment it is picked; the parsed log
+  // names the same map later. Prefer the match's object when both exist.
+  const map = match?.map ?? game?.map ?? null;
+  const mapName = map?.name ?? t("encounters.match.mapAlt");
   const duration = match != null ? formatSeriesClock(match.time, clockUnits) : null;
   const shown = accepted ?? (game == null && match != null ? match.score : null);
   const scoreLabel =
@@ -130,15 +133,9 @@ export default function EncounterMapRow({
     <div className={cn(styles.mapRow, slot.isLive && styles.mapRowLive)}>
       <span className={styles.mapIndex}>{slot.index}</span>
 
-      <span className={cn(styles.mapThumb, !match?.map && styles.mapThumbPlaceholder)}>
-        {match?.map ? (
-          <Image
-            src={match.map.image_path}
-            alt=""
-            fill
-            sizes="104px"
-            className={styles.mapThumbImage}
-          />
+      <span className={cn(styles.mapThumb, !map && styles.mapThumbPlaceholder)}>
+        {map ? (
+          <Image src={map.image_path} alt="" fill sizes="104px" className={styles.mapThumbImage} />
         ) : (
           <ImageOff aria-hidden width={18} height={18} />
         )}
@@ -147,16 +144,10 @@ export default function EncounterMapRow({
       <span className={styles.mapIdentity}>
         <span className={styles.mapName}>{mapName}</span>
         <span className={styles.mapMode}>
-          {match?.map?.gamemode ? (
+          {map?.gamemode ? (
             <>
-              <Image
-                src={match.map.gamemode.image_path}
-                alt=""
-                width={14}
-                height={14}
-                aria-hidden
-              />
-              {match.map.gamemode.name}
+              <Image src={map.gamemode.image_path} alt="" width={14} height={14} aria-hidden />
+              {map.gamemode.name}
             </>
           ) : (
             t("encounters.match.gamemodeAlt")
@@ -245,7 +236,7 @@ export default function EncounterMapRow({
             </span>
           </span>
         ) : null}
-        {match?.map && match.map.in_competitive === false ? (
+        {map?.in_competitive === false ? (
           <Pill tone="warn" className={styles.mapFactWide}>
             {t("encounters.match.nonCompetitive")}
           </Pill>

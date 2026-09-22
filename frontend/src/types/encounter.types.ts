@@ -25,6 +25,15 @@ export interface EncounterSlotSource {
   slot: "home" | "away";
 }
 
+/**
+ * A game as the public encounter read serves it: the position also names its
+ * map, so a map can be pictured before (or without) a parsed log. The pick-ban
+ * room's `PickBanGame` carries no map object — only `map_id`.
+ */
+export interface EncounterGameWithMap extends EncounterGame {
+  map: Match["map"];
+}
+
 export interface Encounter {
   id: number;
   created_at: Date;
@@ -59,7 +68,7 @@ export interface Encounter {
    * result authority. A `Match` row is a parsed log, a separate contract: the
    * two are rendered as two facts, never merged (spec §11).
    */
-  games: EncounterGame[];
+  games: EncounterGameWithMap[];
   home_team: Team;
   away_team: Team;
   tournament: Tournament;

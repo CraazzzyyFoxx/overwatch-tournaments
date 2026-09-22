@@ -1,5 +1,9 @@
-import type { Encounter, Match, MatchWithStats } from "@/types/encounter.types";
-import type { EncounterGame } from "@/types/tournament.types";
+import type {
+  Encounter,
+  EncounterGameWithMap,
+  Match,
+  MatchWithStats
+} from "@/types/encounter.types";
 import { acceptedScore, seriesMatchesByPosition } from "@/components/pick-ban/pick-ban-model";
 import type { PlayerWithStats, TeamWithStats } from "@/types/team.types";
 import { LogStatsName } from "@/types/stats.types";
@@ -35,7 +39,7 @@ export interface SeriesSlot {
   /** 1-based position in the series. */
   index: number;
   /** The encounter's own result for this position; null on a pre-games payload. */
-  game: EncounterGame | null;
+  game: EncounterGameWithMap | null;
   match: Match | null;
   winner: SeriesSide | null;
   /** The map the encounter says is being played right now. */

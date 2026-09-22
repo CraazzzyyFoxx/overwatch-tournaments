@@ -129,6 +129,7 @@ describe("buildSeriesSlots", () => {
             id: 1,
             position: 1,
             map_id: 21,
+            map: null,
             state: "confirmed",
             accepted_home_score: 2,
             accepted_away_score: 1,
@@ -140,6 +141,7 @@ describe("buildSeriesSlots", () => {
             id: 2,
             position: 2,
             map_id: 21,
+            map: null,
             state: "awaiting_result",
             accepted_home_score: null,
             accepted_away_score: null,
@@ -153,6 +155,33 @@ describe("buildSeriesSlots", () => {
     expect(slots.map((slot) => slot.match?.id)).toEqual([8, 7, undefined]);
     // The 9:9 logs decide nothing: only the game's accepted score does.
     expect(slots.map((slot) => slot.winner)).toEqual(["home", null, null]);
+  });
+
+  it("keeps the map of a position that has no parsed log yet", () => {
+    // A picked position names its map long before a log exists, so the row can
+    // still be titled and pictured.
+    const slots = buildSeriesSlots(
+      encounter({
+        best_of: 1,
+        matches: [],
+        games: [
+          {
+            id: 1,
+            position: 1,
+            map_id: 21,
+            map: { id: 21, name: "Ilios", image_path: "/ilios.jpg" } as Encounter["games"][number]["map"],
+            state: "awaiting_result",
+            accepted_home_score: null,
+            accepted_away_score: null,
+            result_source: null,
+            result_version: 0,
+            confirmed_at: null
+          }
+        ]
+      })
+    );
+    expect(slots[0].match).toBeNull();
+    expect(slots[0].game?.map?.name).toBe("Ilios");
   });
 });
 
