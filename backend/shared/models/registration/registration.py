@@ -408,9 +408,18 @@ class BalancerRegistrationRoleHero(db.TimeStampIntegerMixin):
     """Ordered hero preference ("top hero") for a registration role entry."""
 
     __tablename__ = "registration_role_hero"
+    # DEFERRED (migration ``reghero01``): a pick list is replaced wholesale, and
+    # SQLAlchemy emits every INSERT for a table before the DELETEs on it -- so a
+    # resave that keeps a hero, or a reorder, passes through a duplicate state
+    # mid-flush and ends in a valid one. Checking at COMMIT is what makes both
+    # legal without weakening the invariant on any observable state.
     __table_args__ = (
-        UniqueConstraint("role_id", "priority", name="uq_reg_role_hero_role_priority"),
-        UniqueConstraint("role_id", "hero_id", name="uq_reg_role_hero_role_hero"),
+        UniqueConstraint(
+            "role_id", "priority", name="uq_reg_role_hero_role_priority", deferrable=True, initially="DEFERRED"
+        ),
+        UniqueConstraint(
+            "role_id", "hero_id", name="uq_reg_role_hero_role_hero", deferrable=True, initially="DEFERRED"
+        ),
         {"schema": "balancer"},
     )
 
