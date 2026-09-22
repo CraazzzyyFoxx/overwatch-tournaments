@@ -3,6 +3,7 @@
 import { useId, type KeyboardEventHandler, type ReactNode } from "react";
 
 import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/components/ui/number-input";
 import { cn } from "@/lib/utils";
 import FieldLabel from "./FieldLabel";
 
@@ -78,6 +79,13 @@ export default function FormField({
 
   const controlClass = cn(fieldControlClass, invalid && fieldInvalidClass, className);
 
+  // The value stays a STRING across this component's API — every caller keeps a
+  // string answer — so the numeric control gets a parsed view of it. A stored
+  // non-number renders empty rather than as `NaN`; the server refuses one
+  // anyway (`_coerce_number`).
+  const parsed = Number(value);
+  const numericValue = value !== "" && Number.isFinite(parsed) ? parsed : null;
+
   const control = multiline ? (
     <textarea
       id={id}
@@ -90,6 +98,21 @@ export default function FormField({
       aria-invalid={invalid}
       aria-describedby={invalid ? errorId : undefined}
       className={cn(controlClass, "py-2")}
+    />
+  ) : type === "number" ? (
+    // The library's text-based numeric input: the native spinner's arrows are
+    // an unreadable 10px stub in this theme, and its wheel/arrow-key stepping
+    // silently edits an answer the user only meant to scroll past.
+    <NumberInput
+      id={id}
+      placeholder={placeholder}
+      value={numericValue}
+      onValueChange={(next) => onChange(next === null ? "" : String(next))}
+      onKeyDown={onKeyDown}
+      disabled={disabled}
+      aria-invalid={invalid}
+      aria-describedby={invalid ? errorId : undefined}
+      className={cn(controlClass, "h-9")}
     />
   ) : (
     <Input
