@@ -30,6 +30,7 @@ from shared.models.tournament.encounter_report import EncounterCaptainReport
 from shared.models.tournament.stage import Stage
 from shared.models.tournament.team import Team
 from shared.services.bracket.types import AdvancementEdge
+from shared.services.encounter.game_audit import cancel_games
 from shared.services.encounter.result_audit import record_result_transition
 
 __all__ = (
@@ -254,14 +255,19 @@ async def reset_encounter_result(
         await session.execute(
             sa.delete(EncounterCaptainReport).where(EncounterCaptainReport.encounter_id == encounter.id)
         )
-        await session.execute(
-            sa.update(EncounterGame)
-            .where(
-                EncounterGame.encounter_id == encounter.id,
-                EncounterGame.state != enums.EncounterGameState.CANCELLED,
+        live_games = (
+            (
+                await session.execute(
+                    sa.select(EncounterGame).where(
+                        EncounterGame.encounter_id == encounter.id,
+                        EncounterGame.state != enums.EncounterGameState.CANCELLED,
+                    )
+                )
             )
-            .values(state=enums.EncounterGameState.CANCELLED)
+            .scalars()
+            .all()
         )
+        cancel_games(session, encounter, live_games, actor_user_id=actor_user_id, reason="cascade_reset")
         encounter.ended_at = None
         encounter.current_map_index = None
     else:

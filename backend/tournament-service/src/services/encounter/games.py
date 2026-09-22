@@ -40,6 +40,7 @@ from shared.repository import (
     EncounterMapReportRepository,
     PickBanEntryRepository,
 )
+from shared.services.encounter.game_audit import cancel_games as _cancel_games
 from shared.services.encounter.game_audit import record_game_result_transition
 
 # States a game can still move out of. `cancelled` is terminal history and
@@ -242,23 +243,7 @@ class EncounterGameService:
     ) -> None:
         """Retire positions as history. A cancelled confirmed game loses its wins
         from the live score, so the journal has to say who dropped them."""
-        for game in games:
-            if game.state == EncounterGameState.CANCELLED:
-                continue
-            was_confirmed = game.state == EncounterGameState.CONFIRMED
-            game.state = EncounterGameState.CANCELLED
-            if was_confirmed:
-                record_game_result_transition(
-                    session,
-                    encounter,
-                    game,
-                    action=EncounterResultAuditAction.GAME_CANCEL,
-                    source="admin" if actor_user_id is not None else "system",
-                    actor_user_id=actor_user_id,
-                    home_score_before=game.accepted_home_score,
-                    away_score_before=game.accepted_away_score,
-                    reason=reason,
-                )
+        _cancel_games(session, encounter, games, actor_user_id=actor_user_id, reason=reason)
         self.materialize_series_score(encounter, await self.list_games(session, encounter.id))
         await session.flush()
 

@@ -50,7 +50,22 @@ _serialize_config = pick_ban_session.serialize_pick_ban_config
 
 
 async def _load_encounter(session: Any, encounter_id: int) -> models.Encounter:
-    encounter = await session.scalar(select(models.Encounter).where(models.Encounter.id == encounter_id))
+    """Load the encounter under ``FOR UPDATE``.
+
+    Every admin handler here mutates the live session or a game result, and the
+    game-result path re-derives the encounter score from its games -- so it takes
+    the same Encounter -> Game lock order the captain path uses (spec §7). Without
+    it a concurrent captain claim and an admin correction can each materialise a
+    score from a stale read. ``populate_existing`` rides along: a row already in
+    the identity map would otherwise be served at the version this session first
+    saw, defeating the lock.
+    """
+    encounter = await session.scalar(
+        select(models.Encounter)
+        .where(models.Encounter.id == encounter_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
     if encounter is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Encounter not found")
     return encounter

@@ -17,15 +17,17 @@ Like its sibling, this never commits: the row rides the caller's transaction.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from shared.core.enums import EncounterResultAuditAction
+from shared.core.enums import EncounterGameState, EncounterResultAuditAction
 from shared.models.tournament.encounter import Encounter
 from shared.models.tournament.encounter_game import EncounterGame
 from shared.models.tournament.encounter_result_audit import EncounterResultAudit
 from shared.repository import EncounterResultAuditRepository
 
-__all__ = ("record_game_result_transition",)
+__all__ = ("cancel_games", "record_game_result_transition")
 
 _result_audit = EncounterResultAuditRepository()
 
@@ -59,3 +61,37 @@ def record_game_result_transition(
         source=source,
     )
     return _result_audit.add(session, row)
+
+
+def cancel_games(
+    session: AsyncSession,
+    encounter: Encounter,
+    games: Sequence[EncounterGame],
+    *,
+    actor_user_id: int | None,
+    reason: str,
+) -> None:
+    """Retire positions as history. A cancelled confirmed game loses its wins
+    from the live score, so the journal has to say who dropped them.
+
+    Shared because both the service path and the bracket's cascade reset cancel
+    games, and an unaudited cancellation is a score change nobody signed for.
+    Callers own re-materialising the series score.
+    """
+    for game in games:
+        if game.state == EncounterGameState.CANCELLED:
+            continue
+        was_confirmed = game.state == EncounterGameState.CONFIRMED
+        game.state = EncounterGameState.CANCELLED
+        if was_confirmed:
+            record_game_result_transition(
+                session,
+                encounter,
+                game,
+                action=EncounterResultAuditAction.GAME_CANCEL,
+                source="admin" if actor_user_id is not None else "system",
+                actor_user_id=actor_user_id,
+                home_score_before=game.accepted_home_score,
+                away_score_before=game.accepted_away_score,
+                reason=reason,
+            )

@@ -318,6 +318,30 @@ class AdminGameResultTests(IsolatedAsyncioTestCase):
         self.assertNotIn("game_id", calls)
 
 
+class AdminEncounterLoadTakesTheRowLock(IsolatedAsyncioTestCase):
+    """Every admin handler in ``pick_ban_admin`` moves the live session or a game
+    result, and the correction path re-derives the encounter score from its games.
+    Reading the encounter unlocked lets a concurrent captain claim and an admin
+    correction each materialise a score from a stale row, so the loader takes the
+    same Encounter -> Game lock order the captain path uses (spec §7)."""
+
+    async def test_the_admin_loader_selects_the_encounter_for_update(self) -> None:
+        captured: list = []
+
+        class _LockSession:
+            async def scalar(self, statement):
+                captured.append(statement)
+                return _encounter()
+
+        encounter = await pick_ban_admin._load_encounter(_LockSession(), ENCOUNTER_ID)
+
+        self.assertEqual(ENCOUNTER_ID, encounter.id)
+        self.assertIn("FOR UPDATE", str(captured[0]))
+        # Without it the locked row is served from the identity map at whatever
+        # version this session first saw, which defeats the lock.
+        self.assertTrue(captured[0].get_execution_options().get("populate_existing"))
+
+
 async def _unused(*args, **kwargs):  # pragma: no cover - replaced per test
     raise AssertionError("select_map was called unexpectedly")
 
