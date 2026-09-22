@@ -92,6 +92,7 @@ OPERATIONS: dict[str, Op] = {
     # ── draft: pick actions (all -> DraftSessionRead) ──────────────────────
     "rpc.balancer.draft.pick_select": Op(request=schemas.DraftPickSelectRequest, response=schemas.DraftSessionRead),
     "rpc.balancer.draft.pick_autopick": Op(request=schemas.DraftPickAutopickRequest, response=schemas.DraftSessionRead),
+    "rpc.balancer.draft.pick_extend": Op(request=schemas.DraftPickExtendRequest, response=schemas.DraftSessionRead),
     "rpc.balancer.draft.pick_override": Op(request=schemas.DraftPickOverrideRequest, response=schemas.DraftSessionRead),
     # ── pickup mixes: writes (responses are hand-built dicts, see DOCS) ─────
     "rpc.balancer.custom.create": Op(request=custom_game.CustomGameCreate),

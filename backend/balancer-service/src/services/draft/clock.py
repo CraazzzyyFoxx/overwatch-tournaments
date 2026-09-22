@@ -13,7 +13,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from loguru import logger
 from redis.asyncio import Redis
@@ -102,10 +102,13 @@ class DraftClockService:
         session_factory: SessionFactory,
         session_id: int,
     ) -> bool:
-        """If the current pick is ON_CLOCK and past its deadline, autopick it.
+        """Resolve an expired pick: enter overtime once, then autopick.
 
-        Returns True if an autopick was applied. Safe to call redundantly: a manual
-        pick that already finalized makes this a no-op (status/version guard).
+        Returns True if the pick was mutated (overtime entered or autopick
+        applied). Safe to call redundantly: a manual pick that already finalized
+        makes this a no-op (status/version guard). The caller re-reads the clock
+        state afterwards, so entering overtime makes the loop sleep to the new
+        deadline instead of firing again immediately.
         """
         async with session_factory() as session:
             draft = await self.sessions_repo.get(session, session_id)
@@ -117,6 +120,29 @@ class DraftClockService:
             now = datetime.now(UTC)
             if pick.clock_expires_at is None or pick.clock_expires_at > now:
                 return False  # paused or not yet due
+
+            # The main clock ran out and this pick has not used its grace period:
+            # re-arm to the overtime deadline instead of picking for the captain.
+            if pick.overtime_started_at is None and draft.overtime_seconds > 0:
+                pick.overtime_started_at = now
+                pick.clock_expires_at = now + timedelta(seconds=draft.overtime_seconds)
+                pick.version += 1
+                await session.flush()
+                await draft_rt.publish_draft_event(
+                    session,
+                    draft_session=draft,
+                    event_type="draft.overtime_started",
+                    payload={
+                        "session_id": draft.id,
+                        "pick_id": pick.id,
+                        "draft_team_id": pick.draft_team_id,
+                        "overtime_started_at": pick.overtime_started_at.isoformat(),
+                        "clock_expires_at": pick.clock_expires_at.isoformat(),
+                        "pick_version": pick.version,
+                    },
+                )
+                await session.commit()
+                return True
 
             try:
                 result = await self.selection.autopick(session, draft, pick, expected_version=pick.version)

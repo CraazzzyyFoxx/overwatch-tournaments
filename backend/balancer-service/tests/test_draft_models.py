@@ -47,6 +47,19 @@ def test_pick_has_version_and_clock_columns() -> None:
     assert {"version", "clock_started_at", "clock_expires_at", "clock_remaining_ms"} <= cols
 
 
+def test_pick_records_its_overtime_phase_on_the_row() -> None:
+    # The phase has to survive a pause/resume, which only moves the deadline, so
+    # it lives on the pick rather than being inferred from the clock fields.
+    column = DraftPick.__table__.c.overtime_started_at
+    assert column.nullable is True
+
+
+def test_session_configures_overtime_and_defaults_to_none() -> None:
+    column = DraftSession.__table__.c.overtime_seconds
+    assert column.nullable is False
+    assert str(column.server_default.arg) == "0"
+
+
 def test_player_has_version_for_role_edit_concurrency() -> None:
     version = DraftPlayer.__table__.c.version
     assert version.nullable is False

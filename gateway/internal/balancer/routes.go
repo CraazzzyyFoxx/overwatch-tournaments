@@ -164,6 +164,7 @@ var DraftRoutes = []edge.RouteSpec{
 	// pick actions
 	{Method: "POST", Pattern: "/api/v1/balancer/draft/picks/{pick_id}/select", Queue: "rpc.balancer.draft.pick_select", IDParam: "pick_id", Body: true, Auth: edge.AuthRequired},
 	{Method: "POST", Pattern: "/api/v1/balancer/draft/picks/{pick_id}/autopick", Queue: "rpc.balancer.draft.pick_autopick", IDParam: "pick_id", Body: true, Auth: edge.AuthRequired},
+	{Method: "POST", Pattern: "/api/v1/balancer/draft/picks/{pick_id}/extend", Queue: "rpc.balancer.draft.pick_extend", IDParam: "pick_id", Body: true, Auth: edge.AuthRequired},
 	{Method: "POST", Pattern: "/api/v1/balancer/draft/picks/{pick_id}/override", Queue: "rpc.balancer.draft.pick_override", IDParam: "pick_id", Body: true, Auth: edge.AuthRequired},
 	// draft room chat, on the shared chat tables
 	// (docs/plans/2026-09-21-shared-room-chat.md). Same six-endpoint shape as

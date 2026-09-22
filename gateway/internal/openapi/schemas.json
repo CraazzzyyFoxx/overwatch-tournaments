@@ -4076,6 +4076,18 @@
       },
       "summary": "Autopick draft pick"
     },
+    "rpc.balancer.draft.pick_extend": {
+      "description": "Permission: workspace `team.create`. Adds seconds to the current on-clock pick \u2014 to its deadline while the draft is live, to the frozen remainder while it is paused \u2014 and broadcasts the new deadline.",
+      "request": {
+        "array": false,
+        "ref": "balancer.DraftPickExtendRequest"
+      },
+      "response": {
+        "array": false,
+        "ref": "balancer.DraftSessionRead"
+      },
+      "summary": "Extend draft pick clock"
+    },
     "rpc.balancer.draft.pick_options": {
       "description": "Permission: the on-clock captain of the pick's team, or a workspace admin. Returns safe and blocked player-role choices for the current pick.",
       "response": {
@@ -7547,8 +7559,8 @@
           "schema": {
             "anyOf": [
               {
-                "maximum": 1,
-                "minimum": 0,
+                "maximum": 1.0,
+                "minimum": 0.0,
                 "type": "number"
               },
               {
@@ -7565,8 +7577,8 @@
           "schema": {
             "anyOf": [
               {
-                "maximum": 1,
-                "minimum": 0,
+                "maximum": 1.0,
+                "minimum": 0.0,
                 "type": "number"
               },
               {
@@ -8155,8 +8167,8 @@
           "schema": {
             "anyOf": [
               {
-                "maximum": 1,
-                "minimum": 0,
+                "maximum": 1.0,
+                "minimum": 0.0,
                 "type": "number"
               },
               {
@@ -8173,8 +8185,8 @@
           "schema": {
             "anyOf": [
               {
-                "maximum": 1,
-                "minimum": 0,
+                "maximum": 1.0,
+                "minimum": 0.0,
                 "type": "number"
               },
               {
@@ -20971,8 +20983,8 @@
         "average_mmr_balance_weight": {
           "anyOf": [
             {
-              "maximum": 10000,
-              "minimum": 0,
+              "maximum": 10000.0,
+              "minimum": 0.0,
               "type": "number"
             },
             {
@@ -20986,8 +20998,8 @@
         "convergence_epsilon": {
           "anyOf": [
             {
-              "maximum": 1,
-              "minimum": 0,
+              "maximum": 1.0,
+              "minimum": 0.0,
               "type": "number"
             },
             {
@@ -21016,8 +21028,8 @@
         "crossover_rate": {
           "anyOf": [
             {
-              "maximum": 1,
-              "minimum": 0,
+              "maximum": 1.0,
+              "minimum": 0.0,
               "type": "number"
             },
             {
@@ -21031,8 +21043,8 @@
         "damage_impact_weight": {
           "anyOf": [
             {
-              "maximum": 10000,
-              "minimum": 0,
+              "maximum": 10000.0,
+              "minimum": 0.0,
               "type": "number"
             },
             {
@@ -21046,8 +21058,8 @@
         "effective_total_std_weight": {
           "anyOf": [
             {
-              "maximum": 10000,
-              "minimum": 0,
+              "maximum": 10000.0,
+              "minimum": 0.0,
               "type": "number"
             },
             {
@@ -21091,8 +21103,8 @@
         "internal_role_spread_weight": {
           "anyOf": [
             {
-              "maximum": 10000,
-              "minimum": 0,
+              "maximum": 10000.0,
+              "minimum": 0.0,
               "type": "number"
             },
             {
@@ -21106,8 +21118,8 @@
         "intra_team_std_weight": {
           "anyOf": [
             {
-              "maximum": 10000,
-              "minimum": 0,
+              "maximum": 10000.0,
+              "minimum": 0.0,
               "type": "number"
             },
             {
@@ -21136,8 +21148,8 @@
         "low_rank_collision_weight": {
           "anyOf": [
             {
-              "maximum": 10000,
-              "minimum": 0,
+              "maximum": 10000.0,
+              "minimum": 0.0,
               "type": "number"
             },
             {
@@ -21181,8 +21193,8 @@
         "max_role_discomfort_weight": {
           "anyOf": [
             {
-              "maximum": 10000,
-              "minimum": 0,
+              "maximum": 10000.0,
+              "minimum": 0.0,
               "type": "number"
             },
             {
@@ -21196,8 +21208,8 @@
         "max_team_gap_weight": {
           "anyOf": [
             {
-              "maximum": 10000,
-              "minimum": 0,
+              "maximum": 10000.0,
+              "minimum": 0.0,
               "type": "number"
             },
             {
@@ -21211,8 +21223,8 @@
         "mix_comfort_tilt": {
           "anyOf": [
             {
-              "maximum": 1,
-              "minimum": 0,
+              "maximum": 1.0,
+              "minimum": 0.0,
               "type": "number"
             },
             {
@@ -21227,8 +21239,8 @@
           "anyOf": [
             {
               "additionalProperties": {
-                "maximum": 100,
-                "minimum": 0,
+                "maximum": 100.0,
+                "minimum": 0.0,
                 "type": "number"
               },
               "type": "object"
@@ -21244,8 +21256,8 @@
         "mutation_rate": {
           "anyOf": [
             {
-              "maximum": 1,
-              "minimum": 0,
+              "maximum": 1.0,
+              "minimum": 0.0,
               "type": "number"
             },
             {
@@ -21259,8 +21271,8 @@
         "mutation_rate_max": {
           "anyOf": [
             {
-              "maximum": 1,
-              "minimum": 0,
+              "maximum": 1.0,
+              "minimum": 0.0,
               "type": "number"
             },
             {
@@ -21274,8 +21286,8 @@
         "mutation_rate_min": {
           "anyOf": [
             {
-              "maximum": 1,
-              "minimum": 0,
+              "maximum": 1.0,
+              "minimum": 0.0,
               "type": "number"
             },
             {
@@ -21334,8 +21346,8 @@
         "rank_comfort_tilt": {
           "anyOf": [
             {
-              "maximum": 1,
-              "minimum": 0,
+              "maximum": 1.0,
+              "minimum": 0.0,
               "type": "number"
             },
             {
@@ -21349,8 +21361,8 @@
         "role_discomfort_weight": {
           "anyOf": [
             {
-              "maximum": 10000,
-              "minimum": 0,
+              "maximum": 10000.0,
+              "minimum": 0.0,
               "type": "number"
             },
             {
@@ -21364,8 +21376,8 @@
         "role_line_balance_weight": {
           "anyOf": [
             {
-              "maximum": 10000,
-              "minimum": 0,
+              "maximum": 10000.0,
+              "minimum": 0.0,
               "type": "number"
             },
             {
@@ -21394,8 +21406,8 @@
         "sub_role_collision_weight": {
           "anyOf": [
             {
-              "maximum": 10000,
-              "minimum": 0,
+              "maximum": 10000.0,
+              "minimum": 0.0,
               "type": "number"
             },
             {
@@ -21409,8 +21421,8 @@
         "support_impact_weight": {
           "anyOf": [
             {
-              "maximum": 10000,
-              "minimum": 0,
+              "maximum": 10000.0,
+              "minimum": 0.0,
               "type": "number"
             },
             {
@@ -21424,8 +21436,8 @@
         "tank_gap_weight": {
           "anyOf": [
             {
-              "maximum": 10000,
-              "minimum": 0,
+              "maximum": 10000.0,
+              "minimum": 0.0,
               "type": "number"
             },
             {
@@ -21439,8 +21451,8 @@
         "tank_impact_weight": {
           "anyOf": [
             {
-              "maximum": 10000,
-              "minimum": 0,
+              "maximum": 10000.0,
+              "minimum": 0.0,
               "type": "number"
             },
             {
@@ -21454,8 +21466,8 @@
         "tank_std_weight": {
           "anyOf": [
             {
-              "maximum": 10000,
-              "minimum": 0,
+              "maximum": 10000.0,
+              "minimum": 0.0,
               "type": "number"
             },
             {
@@ -21469,8 +21481,8 @@
         "team_max_pain_weight": {
           "anyOf": [
             {
-              "maximum": 10000,
-              "minimum": 0,
+              "maximum": 10000.0,
+              "minimum": 0.0,
               "type": "number"
             },
             {
@@ -21484,8 +21496,8 @@
         "team_total_balance_weight": {
           "anyOf": [
             {
-              "maximum": 10000,
-              "minimum": 0,
+              "maximum": 10000.0,
+              "minimum": 0.0,
               "type": "number"
             },
             {
@@ -22074,6 +22086,25 @@
       "title": "DraftPickAutopickRequest",
       "type": "object"
     },
+    "balancer.DraftPickExtendRequest": {
+      "description": "An admin hands the on-clock captain more time.\n\nAdditive, not absolute: the deadline moves by ``seconds``, so two admins\npressing the button twice give twice the time instead of racing to set the\nsame value. ``expected_version`` is the same optimistic token the pick\nactions use -- extending a pick that has already resolved is a conflict.",
+      "properties": {
+        "expected_version": {
+          "title": "Expected Version",
+          "type": "integer"
+        },
+        "seconds": {
+          "title": "Seconds",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "expected_version",
+        "seconds"
+      ],
+      "title": "DraftPickExtendRequest",
+      "type": "object"
+    },
     "balancer.DraftPickOptionRead": {
       "properties": {
         "blocking_player_ids": {
@@ -22283,6 +22314,18 @@
           "title": "Overall No",
           "type": "integer"
         },
+        "overtime_started_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Overtime Started At"
+        },
         "pick_in_round": {
           "title": "Pick In Round",
           "type": "integer"
@@ -22363,6 +22406,7 @@
         "is_admin_override",
         "clock_started_at",
         "clock_expires_at",
+        "overtime_started_at",
         "version"
       ],
       "title": "DraftPickRead",
@@ -22415,7 +22459,7 @@
       "type": "string"
     },
     "balancer.DraftPlayerCustomFieldRead": {
-      "description": "One organizer-approved registration answer, ready to render.\n\nCarries the definition's current ``label``/``type`` alongside the value so\nthe draft client renders it without knowing anything about registration\nforms. Built by ``services.draft.board.player_custom_fields``; only fields\nflagged ``show_in_draft`` on the registration form ever appear here, because\nthe board snapshot is public.",
+      "description": "One public registration answer, ready to render.\n\nCarries the definition's current ``label``/``type`` alongside the value so\nthe draft client renders it without knowing anything about registration\nforms. Built by ``services.draft.board.player_custom_fields``; only custom\nquestions the organizer left PUBLIC ever appear here, because the board\nsnapshot is public.",
       "properties": {
         "key": {
           "title": "Key",
@@ -22880,6 +22924,11 @@
           "$ref": "#/components/schemas/balancer.DraftFormat",
           "default": "snake"
         },
+        "overtime_seconds": {
+          "default": 0,
+          "title": "Overtime Seconds",
+          "type": "integer"
+        },
         "pick_time_seconds": {
           "default": 45,
           "title": "Pick Time Seconds",
@@ -22934,6 +22983,18 @@
             }
           ],
           "default": null
+        },
+        "overtime_seconds": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Overtime Seconds"
         },
         "pick_time_seconds": {
           "anyOf": [
@@ -23050,6 +23111,10 @@
           "title": "Id",
           "type": "integer"
         },
+        "overtime_seconds": {
+          "title": "Overtime Seconds",
+          "type": "integer"
+        },
         "pick_time_seconds": {
           "title": "Pick Time Seconds",
           "type": "integer"
@@ -23105,6 +23170,7 @@
         "format",
         "rounds",
         "pick_time_seconds",
+        "overtime_seconds",
         "roster_shape",
         "current_pick_id",
         "pool_source",
@@ -23987,8 +24053,8 @@
         "mix_comfort_tilt": {
           "anyOf": [
             {
-              "maximum": 1,
-              "minimum": 0,
+              "maximum": 1.0,
+              "minimum": 0.0,
               "type": "number"
             },
             {
@@ -24003,8 +24069,8 @@
           "anyOf": [
             {
               "additionalProperties": {
-                "maximum": 100,
-                "minimum": 0,
+                "maximum": 100.0,
+                "minimum": 0.0,
                 "type": "number"
               },
               "propertyNames": {
@@ -24088,8 +24154,8 @@
         "mix_comfort_tilt": {
           "anyOf": [
             {
-              "maximum": 1,
-              "minimum": 0,
+              "maximum": 1.0,
+              "minimum": 0.0,
               "type": "number"
             },
             {
@@ -24103,8 +24169,8 @@
           "anyOf": [
             {
               "additionalProperties": {
-                "maximum": 100,
-                "minimum": 0,
+                "maximum": 100.0,
+                "minimum": 0.0,
                 "type": "number"
               },
               "propertyNames": {
@@ -36921,8 +36987,8 @@
         "closeness_max": {
           "anyOf": [
             {
-              "maximum": 1,
-              "minimum": 0,
+              "maximum": 1.0,
+              "minimum": 0.0,
               "type": "number"
             },
             {
@@ -36935,8 +37001,8 @@
         "closeness_min": {
           "anyOf": [
             {
-              "maximum": 1,
-              "minimum": 0,
+              "maximum": 1.0,
+              "minimum": 0.0,
               "type": "number"
             },
             {
@@ -37366,8 +37432,8 @@
         "closeness": {
           "anyOf": [
             {
-              "maximum": 1,
-              "minimum": 0,
+              "maximum": 1.0,
+              "minimum": 0.0,
               "type": "number"
             },
             {
@@ -37650,11 +37716,6 @@
         "required": {
           "default": false,
           "title": "Required",
-          "type": "boolean"
-        },
-        "show_in_draft": {
-          "default": false,
-          "title": "Show In Draft",
           "type": "boolean"
         },
         "validation": {
@@ -45125,7 +45186,7 @@
           "type": "boolean"
         },
         "loss_points": {
-          "default": 0,
+          "default": 0.0,
           "title": "Loss Points",
           "type": "number"
         },
@@ -45175,7 +45236,7 @@
           "type": "string"
         },
         "win_points": {
-          "default": 1,
+          "default": 1.0,
           "title": "Win Points",
           "type": "number"
         },
@@ -45723,7 +45784,7 @@
           "title": "Logo Url"
         },
         "loss_points": {
-          "default": 0,
+          "default": 0.0,
           "title": "Loss Points",
           "type": "number"
         },
@@ -45862,7 +45923,7 @@
           "title": "Teams Count"
         },
         "win_points": {
-          "default": 1,
+          "default": 1.0,
           "title": "Win Points",
           "type": "number"
         },

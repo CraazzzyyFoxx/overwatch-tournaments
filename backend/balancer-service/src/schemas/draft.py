@@ -33,6 +33,7 @@ __all__ = (
     "DraftOrderEntry",
     "DraftOrderRequest",
     "DraftPickAutopickRequest",
+    "DraftPickExtendRequest",
     "DraftPickOverrideRequest",
     "DraftPickOptionRead",
     "DraftPickOptionsResponse",
@@ -87,6 +88,8 @@ class DraftSessionCreateRequest(BaseModel):
     source_balance_id: int | None = None
     format: DraftFormat = DraftFormat.SNAKE
     pick_time_seconds: int = 45
+    # Grace period after the main clock, before the autopick. 0 = no overtime.
+    overtime_seconds: int = 0
     autopick_strategy: DraftAutopickStrategy = DraftAutopickStrategy.BEST_FIT
     allow_admin_override: bool = True
     settings: dict[str, Any] = Field(default_factory=dict)
@@ -96,6 +99,13 @@ class DraftSessionCreateRequest(BaseModel):
     def _pick_time_range(cls, v: int) -> int:
         if not 10 <= v <= 600:
             raise ValueError("pick_time_seconds must be between 10 and 600")
+        return v
+
+    @field_validator("overtime_seconds")
+    @classmethod
+    def _overtime_range(cls, v: int) -> int:
+        if not 0 <= v <= 300:
+            raise ValueError("overtime_seconds must be between 0 and 300")
         return v
 
 
@@ -127,6 +137,7 @@ class DraftSeedRequest(BaseModel):
 
 class DraftSessionPatchRequest(BaseModel):
     pick_time_seconds: int | None = None
+    overtime_seconds: int | None = None
     autopick_strategy: DraftAutopickStrategy | None = None
     allow_admin_override: bool | None = None
     rounds: int | None = None
@@ -137,6 +148,13 @@ class DraftSessionPatchRequest(BaseModel):
     def _pick_time_range(cls, v: int | None) -> int | None:
         if v is not None and not 10 <= v <= 600:
             raise ValueError("pick_time_seconds must be between 10 and 600")
+        return v
+
+    @field_validator("overtime_seconds")
+    @classmethod
+    def _overtime_range(cls, v: int | None) -> int | None:
+        if v is not None and not 0 <= v <= 300:
+            raise ValueError("overtime_seconds must be between 0 and 300")
         return v
 
 
@@ -168,6 +186,27 @@ class DraftPickSelectRequest(BaseModel):
 class DraftPickAutopickRequest(BaseModel):
     expected_version: int
     reason: Literal["expiry", "admin"] = "expiry"
+
+
+class DraftPickExtendRequest(BaseModel):
+    """An admin hands the on-clock captain more time.
+
+    Additive, not absolute: the deadline moves by ``seconds``, so two admins
+    pressing the button twice give twice the time instead of racing to set the
+    same value. ``expected_version`` is the same optimistic token the pick
+    actions use -- extending a pick that has already resolved is a conflict.
+    """
+
+    expected_version: int
+    seconds: int
+
+    @field_validator("seconds")
+    @classmethod
+    def _seconds_range(cls, v: int) -> int:
+        if not 5 <= v <= 300:
+            raise ValueError("seconds must be between 5 and 300")
+        return v
+
 
 
 class DraftPickOverrideRequest(BaseModel):
@@ -216,13 +255,13 @@ class DraftTeamRead(BaseRead):
 
 
 class DraftPlayerCustomFieldRead(BaseModel):
-    """One organizer-approved registration answer, ready to render.
+    """One public registration answer, ready to render.
 
     Carries the definition's current ``label``/``type`` alongside the value so
     the draft client renders it without knowing anything about registration
-    forms. Built by ``services.draft.board.player_custom_fields``; only fields
-    flagged ``show_in_draft`` on the registration form ever appear here, because
-    the board snapshot is public.
+    forms. Built by ``services.draft.board.player_custom_fields``; only custom
+    questions the organizer left PUBLIC ever appear here, because the board
+    snapshot is public.
     """
 
     key: str
@@ -338,6 +377,9 @@ class DraftPickRead(BaseRead):
     is_admin_override: bool
     clock_started_at: datetime | None
     clock_expires_at: datetime | None
+    # Null while the pick runs on its main clock; once set, ``clock_expires_at``
+    # is the OVERTIME deadline and no further grace period is granted.
+    overtime_started_at: datetime | None
     version: int
 
 
@@ -351,6 +393,7 @@ class DraftSessionRead(BaseRead):
     format: DraftFormat
     rounds: int
     pick_time_seconds: int
+    overtime_seconds: int
     roster_shape: RosterShapeRead
     current_pick_id: int | None
     pool_source: DraftPoolSource

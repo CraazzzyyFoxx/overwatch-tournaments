@@ -452,6 +452,7 @@ def register(broker: Any, logger: Any) -> None:
                 source_balance_id=payload.source_balance_id,
                 fmt=payload.format,
                 pick_time_seconds=payload.pick_time_seconds,
+                overtime_seconds=payload.overtime_seconds,
                 autopick_strategy=payload.autopick_strategy.value,
                 allow_admin_override=payload.allow_admin_override,
                 settings=payload.settings,
@@ -544,6 +545,8 @@ def register(broker: Any, logger: Any) -> None:
             draft = await _load_session(session, session_id)
             if payload.pick_time_seconds is not None:
                 draft.pick_time_seconds = payload.pick_time_seconds
+            if payload.overtime_seconds is not None:
+                draft.overtime_seconds = payload.overtime_seconds
             if payload.autopick_strategy is not None:
                 draft.autopick_strategy = payload.autopick_strategy.value
             if payload.allow_admin_override is not None:
@@ -733,6 +736,55 @@ def register(broker: Any, logger: Any) -> None:
             return await board_service.session_read(session, draft)
 
         return await c.envelope(logger, "draft.pick_autopick", op, session_factory=_SF)
+
+    @broker.subscriber("rpc.balancer.draft.pick_extend")
+    async def _pick_extend(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            user = c.active_actor(data)
+            pick_id = c.require_id(data)
+            ws_id = await _get_pick_workspace_id(session, pick_id)
+            c.require_workspace_permission(data, user, ws_id, "team", "create")
+            payload = schemas.DraftPickExtendRequest.model_validate(c.payload(data))
+            draft, pick = await _load_pick(session, pick_id)
+            await lifecycle_service.extend_pick(
+                session, draft, pick, seconds=payload.seconds, expected_version=payload.expected_version
+            )
+            await _audit_repo.create(
+                session,
+                DraftAuditEvent(
+                    session_id=draft.id,
+                    actor_auth_user_id=user.id,
+                    action="pick_extended",
+                    entity_type="draft_pick",
+                    entity_id=pick.id,
+                    reason="Admin extended the pick clock",
+                    before_json={"version": payload.expected_version},
+                    after_json={
+                        "seconds": payload.seconds,
+                        "clock_expires_at": pick.clock_expires_at.isoformat() if pick.clock_expires_at else None,
+                    },
+                ),
+            )
+            await draft_rt.publish_draft_event(
+                session,
+                draft_session=draft,
+                event_type="draft.clock_extended",
+                payload={
+                    "session_id": draft.id,
+                    "pick_id": pick.id,
+                    "clock_expires_at": pick.clock_expires_at.isoformat() if pick.clock_expires_at else None,
+                    "added_seconds": payload.seconds,
+                    "pick_version": pick.version,
+                },
+                actor_user_id=user.id,
+            )
+            await session.commit()
+            # The owning clock loop is asleep until the OLD deadline; without this
+            # nudge it would wake there and autopick the time we just granted away.
+            await clock_svc.notify_clock(_redis(logger), draft.id)
+            return await board_service.session_read(session, draft)
+
+        return await c.envelope(logger, "draft.pick_extend", op, session_factory=_SF)
 
     @broker.subscriber("rpc.balancer.draft.pick_override")
     async def _pick_override(data: dict, msg: RabbitMessage) -> dict:

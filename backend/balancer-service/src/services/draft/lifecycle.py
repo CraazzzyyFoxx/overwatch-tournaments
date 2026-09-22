@@ -103,6 +103,7 @@ class DraftLifecycleService:
         source_balance_id: int | None = None,
         fmt: DraftFormat = DraftFormat.SNAKE,
         pick_time_seconds: int = 45,
+        overtime_seconds: int = 0,
         autopick_strategy: str = "best_fit",
         allow_admin_override: bool = True,
         settings: dict | None = None,
@@ -116,6 +117,7 @@ class DraftLifecycleService:
             format=fmt.value,
             rounds=shape.draft_rounds,
             pick_time_seconds=pick_time_seconds,
+            overtime_seconds=overtime_seconds,
             pool_source=pool_source,
             source_balance_id=source_balance_id,
             autopick_strategy=autopick_strategy,
@@ -463,6 +465,44 @@ class DraftLifecycleService:
         draft_session.blocked_reason = None
         await session.flush()
         return draft_session
+
+    async def extend_pick(
+        self,
+        session: AsyncSession,
+        draft_session: DraftSession,
+        pick: DraftPick,
+        *,
+        seconds: int,
+        expected_version: int,
+    ) -> DraftPick:
+        """Give the on-clock captain more time, live or paused.
+
+        Additive on whichever representation of the clock is authoritative right
+        now: the absolute deadline while LIVE, the frozen remainder while PAUSED.
+        Overtime is untouched -- a pick already in its grace period just gets a
+        later overtime deadline, and one that is not keeps its grace period for
+        later.
+        """
+        if draft_session.status not in (DraftStatus.LIVE.value, DraftStatus.PAUSED.value):
+            raise _err("draft_not_live", "Draft is not live")
+        if pick.id != draft_session.current_pick_id or pick.status != DraftPickStatus.ON_CLOCK.value:
+            raise _err("pick_not_on_clock", "This is not the current on-clock pick")
+        if pick.version != expected_version:
+            raise _err("pick_already_resolved", "Pick was already resolved")
+
+        if draft_session.status == DraftStatus.LIVE.value:
+            base = pick.clock_expires_at or datetime.now(UTC)
+            pick.clock_expires_at = base + timedelta(seconds=seconds)
+        else:
+            remaining_ms = (
+                pick.clock_remaining_ms
+                if pick.clock_remaining_ms is not None
+                else draft_session.pick_time_seconds * 1000
+            )
+            pick.clock_remaining_ms = remaining_ms + seconds * 1000
+        pick.version += 1
+        await session.flush()
+        return pick
 
     async def cancel(self, session: AsyncSession, draft_session: DraftSession) -> DraftSession:
         draft_state.validate_transition(DraftStatus(draft_session.status), DraftStatus.CANCELLED)

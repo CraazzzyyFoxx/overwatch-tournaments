@@ -82,6 +82,7 @@ def test_session_read_from_session_projects_the_resolved_shape() -> None:
             format=DraftFormat.SNAKE.value,
             rounds=shape.draft_rounds,
             pick_time_seconds=45,
+            overtime_seconds=0,
             pool_source=DraftPoolSource.BALANCER_BALANCE.value,
             autopick_strategy=DraftAutopickStrategy.BEST_FIT.value,
             allow_admin_override=True,
@@ -153,3 +154,35 @@ def test_patch_request_pick_time_validation() -> None:
     assert schemas.DraftSessionPatchRequest().pick_time_seconds is None
     with pytest.raises(ValidationError):
         schemas.DraftSessionPatchRequest(pick_time_seconds=5)
+
+
+@pytest.mark.parametrize("seconds", [-1, 301])
+def test_create_request_rejects_overtime_outside_the_allowed_window(seconds: int) -> None:
+    with pytest.raises(ValidationError):
+        schemas.DraftSessionCreateRequest(overtime_seconds=seconds)
+
+
+def test_create_request_defaults_to_no_overtime() -> None:
+    # 0 keeps the pre-overtime behaviour: an expired clock autopicks at once.
+    assert schemas.DraftSessionCreateRequest().overtime_seconds == 0
+    assert schemas.DraftSessionCreateRequest(overtime_seconds=300).overtime_seconds == 300
+
+
+def test_patch_request_overtime_is_optional_and_range_checked() -> None:
+    assert schemas.DraftSessionPatchRequest().overtime_seconds is None
+    assert schemas.DraftSessionPatchRequest(overtime_seconds=0).overtime_seconds == 0
+    with pytest.raises(ValidationError):
+        schemas.DraftSessionPatchRequest(overtime_seconds=301)
+
+
+@pytest.mark.parametrize("seconds", [4, 301])
+def test_extend_request_rejects_seconds_outside_the_allowed_window(seconds: int) -> None:
+    with pytest.raises(ValidationError):
+        schemas.DraftPickExtendRequest(expected_version=0, seconds=seconds)
+
+
+def test_extend_request_requires_the_optimistic_token() -> None:
+    with pytest.raises(ValidationError):
+        schemas.DraftPickExtendRequest(seconds=30)
+    ok = schemas.DraftPickExtendRequest(expected_version=3, seconds=30)
+    assert (ok.expected_version, ok.seconds) == (3, 30)

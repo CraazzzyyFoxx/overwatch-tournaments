@@ -66,7 +66,6 @@ class FormField(BaseModel):
     options: list[str] | None = None
     validation: FieldValidation | None = None
     params: dict[str, Any] = Field(default_factory=dict)
-    show_in_draft: bool = False
     #: May the REGISTRANT change this answer after submitting? The organizer's own
     #: edit is never gated by it. Default FALSE: a question is frozen at submit
     #: unless the organizer deliberately opens it, so a form nobody re-opened in
@@ -124,8 +123,6 @@ class FormSchema(BaseModel):
                         raise ValueError(f"{path}.visibility: {field.key!r} is always {spec.fixed_visibility}")
                     if field.options is not None:
                         raise ValueError(f"{path}.options: builtins take no options")
-                    if field.show_in_draft:
-                        raise ValueError(f"{path}.show_in_draft: only custom fields may opt into the draft")
                 else:
                     if is_builtin_key(field.key) or field.key.startswith(IDENTITY_KEY_PREFIX):
                         raise ValueError(f"{path}.key: {field.key!r} is reserved for a builtin")
@@ -138,8 +135,6 @@ class FormSchema(BaseModel):
                             raise ValueError(f"{path}.options: non-empty unique options required")
                     elif field.options is not None:
                         raise ValueError(f"{path}.options: only select/multi_select take options")
-                if field.show_in_draft and field.visibility != "public":
-                    raise ValueError(f"{path}.show_in_draft: requires public visibility")
                 if field.visible_when is not None:
                     target = field.visible_when.field
                     if target == field.key or target not in seen_fields:
