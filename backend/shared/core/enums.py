@@ -629,6 +629,8 @@ __all__ = [
     "StageItemInputType",
     "EncounterResultStatus",
     "EncounterResultAuditAction",
+    "EncounterGameState",
+    "EncounterGameResultSource",
     "MapPoolEntryStatus",
     "MapPickSide",
     "MapVetoSessionStatus",

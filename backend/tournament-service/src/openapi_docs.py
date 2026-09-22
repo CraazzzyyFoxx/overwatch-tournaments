@@ -434,7 +434,7 @@ DOCS: dict[str, dict] = {
     # ── bespoke: admin correction of one series position's result ──────────
     "rpc.tournament.admin_game_result": {
         "summary": "Correct a game result",
-        "description": "Permission: workspace `match.update` on the encounter's workspace. Writes one series position's score as an `admin` result and journals the mandatory `reason`; this is the only way a `confirmed` game (locked against captains with 409 `result_locked`) ever changes. Flipping which side won a position scraps and re-opens the round that outcome had opened, so the response is `{game, rebuilt_rounds}`; 409 `downstream_started` when a later round was already acted in or a later position already has a claim, and 404 when the game belongs to another encounter or is cancelled.",
+        "description": "Permission: workspace `match.update` on the encounter's workspace. Writes one series position's score as an `admin` result and journals the mandatory `reason`; this is the only way a `confirmed` game (locked against captains with 409 `result_locked`) ever changes. Flipping which side won a position scraps and re-opens the round that outcome had opened, so the response is `{game, rebuilt_rounds}`; 409 `downstream_started` when a later round was already acted in or a later position already has a claim, 409 `map_not_selected` while the position still has no map (an organizer names it through the pick-ban or the captain map choice first), and 404 when the game belongs to another encounter or is cancelled.",
     },
     # ── bespoke: generic pick-ban config CRUD (map + hero) ──────────────────
     "rpc.tournament.admin_pick_ban_config_list": {
@@ -1040,8 +1040,10 @@ DOCS: dict[str, dict] = {
             "sides claim independently: matching claims accept the game's result and open whatever the "
             "series owes next, differing ones mark the game `disputed` for an organizer. Returns "
             "`{disputed, resolved, game}`. 404 when the game belongs to another encounter or is cancelled, "
-            "409 `result_locked` once the game is confirmed (only the admin correction changes it), and 409 "
-            "while the stage bracket is still a preview the organizer has not activated."
+            "409 `result_locked` once the game is confirmed (only the admin correction changes it), 409 "
+            "`map_not_selected` while the position still has no map (choose it first, through "
+            "captain_select_game_map or the map pick-ban), and 409 while the stage bracket is still a "
+            "preview the organizer has not activated."
         ),
     },
     "rpc.tournament.captain_select_game_map": {
