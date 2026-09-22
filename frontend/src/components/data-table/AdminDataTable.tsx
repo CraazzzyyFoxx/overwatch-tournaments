@@ -1110,11 +1110,16 @@ export function AdminDataTable<TData>({
           // this wrapper only aligns it.
           <div className="flex w-full items-center justify-end">{content}</div>
         ) : align === "left" ? (
-          content
+          // Clipped to the cell box: a dragged-narrow column sets width/max-width
+          // on the <td>, but content wider than that (a long unbreakable handle)
+          // paints straight over the next column unless something hides it.
+          // `truncate` also buys the ellipsis; stacked cells keep stacking (their
+          // rows are block/flex children, which `nowrap` does not join up).
+          <div className="min-w-0 truncate">{content}</div>
         ) : (
           // `text-center` on the <td> does not centre a Tooltip/icon
           // (inline-flex trigger inside a full-width cell). Match the header flex.
-          <div className={cn("flex w-full items-center", ALIGN_FLEX_CLASS[align])}>{content}</div>
+          <div className={cn("flex w-full items-center overflow-hidden", ALIGN_FLEX_CLASS[align])}>{content}</div>
         )}
       </TableCell>
     );
