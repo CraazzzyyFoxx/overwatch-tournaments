@@ -9,8 +9,8 @@ import { StatusPill } from "@/components/kit/StatusPill";
 import { EYEBROW_CLASS, TONE_CLASS, TONE_TEXT } from "@/components/kit/tone";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useDivisionGrid } from "@/hooks/useCurrentWorkspace";
-import { resolveDivisionFromRank } from "@/lib/division-grid";
-import { ROLE_LABELS, getRoleIconName } from "@/lib/roles";
+import { resolveDivisionFromRank } from "@/lib/divisions/grid";
+import { ROLE_LABELS, getRoleIconName } from "@/lib/roster/roles";
 import { cn } from "@/lib/utils";
 import type {
   RegistrationRankAutofillPlayer,

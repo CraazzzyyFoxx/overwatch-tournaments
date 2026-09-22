@@ -8,7 +8,7 @@ import { CompareScope } from "@/app/(site)/users/compare/types";
 import { getDivisionOptions, ROLE_FILTER_OPTIONS } from "@/app/(site)/users/compare/constants";
 import { useDivisionGrid } from "@/hooks/useCurrentWorkspace";
 import { parseOptionalInt, getMapIconSrc, roleLabelKey } from "@/app/(site)/users/compare/utils";
-import { roleImageSrc } from "@/lib/player-role";
+import { roleImageSrc } from "@/lib/roster/player-role";
 import UserSearchCombobox from "@/app/(site)/users/compare/components/UserSearchCombobox";
 import SearchableImageSelect, {
   type SearchableImageOption,

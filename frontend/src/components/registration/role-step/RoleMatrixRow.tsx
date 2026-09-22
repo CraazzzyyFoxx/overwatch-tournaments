@@ -11,7 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ROLE_ACCENTS, getRoleIconName, type RoleCode } from "@/lib/roles";
+import { ROLE_ACCENTS, getRoleIconName, type RoleCode } from "@/lib/roster/roles";
 import { cn } from "@/lib/utils";
 import type { Hero } from "@/types/hero.types";
 import type { SubroleOption } from "@/types/registration.types";

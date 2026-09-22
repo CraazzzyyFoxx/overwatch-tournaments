@@ -1,7 +1,7 @@
 import { PaginatedResponse } from "@/types/pagination.types";
 import { Team } from "@/types/team.types";
-import { apiFetch } from "@/lib/api-fetch";
-import { normalizePaginatedResponse } from "@/lib/normalize-paginated-response";
+import { apiFetch } from "@/lib/api/fetch";
+import { normalizePaginatedResponse } from "@/lib/api/normalize-paginated-response";
 
 export type GetTeamsOptions = {
   tournamentId?: number | null;

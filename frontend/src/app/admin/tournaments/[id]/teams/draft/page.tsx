@@ -6,7 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { PhaseStrip } from "@/components/kit/PhaseStrip";
 import { usePermissions } from "@/hooks/usePermissions";
-import { tournamentQueryKeys } from "@/lib/tournament-query-keys";
+import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 import draftService from "@/services/draft.service";
 
 import { draftPhases } from "../../components/draft/draft-phases";

@@ -21,7 +21,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { type Tone } from "@/components/kit/tone";
 import { notify } from "@/lib/notify";
-import { tournamentQueryKeys } from "@/lib/tournament-query-keys";
+import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 import draftService from "@/services/draft.service";
 import type { DraftSession, DraftStatus } from "@/types/draft.types";
 

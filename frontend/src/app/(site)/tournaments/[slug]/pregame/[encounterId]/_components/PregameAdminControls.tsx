@@ -20,7 +20,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NumberInput } from "@/components/ui/number-input";
 import { cn } from "@/lib/utils";
-import { ApiError } from "@/lib/api-error";
+import { ApiError } from "@/lib/api/error";
 import { notify } from "@/lib/notify";
 import adminService from "@/services/admin.service";
 import pickBanService from "@/services/pickBan.service";

@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
 import { notify } from "@/lib/notify";
 import adminService from "@/services/admin.service";
 import type { ChallongeSyncLogEntry } from "@/types/admin.types";
-import { invalidateTournamentWorkspace } from "@/lib/tournament-workspace-query-keys";
+import { invalidateTournamentWorkspace } from "@/lib/tournament/workspace-query-keys";
 import { EmptyNote } from "@/components/kit/EmptyNote";
 
 interface ChallongeIntegrationSectionProps {

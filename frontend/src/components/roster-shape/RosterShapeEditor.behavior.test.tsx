@@ -11,7 +11,7 @@ import { createRoot } from "react-dom/client";
 import { describe, expect, it } from "vitest";
 
 import en from "@/i18n/messages/en.json";
-import type { RosterShape, RosterSlotMap } from "@/lib/roster-shape";
+import type { RosterShape, RosterSlotMap } from "@/lib/roster/shape";
 
 import { RosterShapeEditor } from "./RosterShapeEditor";
 

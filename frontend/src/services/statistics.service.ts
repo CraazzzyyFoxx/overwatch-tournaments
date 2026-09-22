@@ -4,7 +4,7 @@ import {
   TournamentOverall,
   PlayerStatistics
 } from "@/types/statistics.types";
-import { apiFetch } from "@/lib/api-fetch";
+import { apiFetch } from "@/lib/api/fetch";
 import { PaginatedResponse } from "@/types/pagination.types";
 
 interface StatsOpts {

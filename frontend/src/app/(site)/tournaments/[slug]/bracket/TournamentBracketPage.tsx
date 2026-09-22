@@ -29,7 +29,7 @@ import type { Standings, Tournament, Stage, StageItem } from "@/types/tournament
 
 import { ListOrdered, Network } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { tournamentHref } from "@/lib/tournament-url";
+import { tournamentHref } from "@/lib/tournament/url";
 import { useTranslations } from "next-intl";
 import { TournamentPageState } from "../_components/TournamentPageState";
 import { TournamentBracketSkeleton } from "../_components/TournamentSkeletons";
@@ -37,7 +37,7 @@ import { UpdatingBadge } from "../_components/UpdatingBadge";
 import { useTournamentQuery } from "@/hooks/useTournamentClientData";
 import { useTournamentStreamsQuery } from "../_hooks/useTournamentStreams";
 import styles from "../TournamentDetail.module.css";
-import { isTournamentStatusEnded } from "@/lib/tournament-status";
+import { isTournamentStatusEnded } from "@/lib/tournament/status";
 import {
   createBracketQueryPlan,
   deriveBracketLoadState,

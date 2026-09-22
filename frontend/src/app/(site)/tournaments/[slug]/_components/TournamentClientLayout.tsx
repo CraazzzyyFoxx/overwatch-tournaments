@@ -13,11 +13,11 @@ import {
   areStreamsVisible,
   getTournamentStatusMeta,
   isTournamentStatusEnded,
-} from "@/lib/tournament-status";
-import { reachedAtLeast } from "@/lib/tournament-lifecycle";
+} from "@/lib/tournament/status";
+import { reachedAtLeast } from "@/lib/tournament/lifecycle";
 import { cn, formatDateRange } from "@/lib/utils";
 import { useInvalidation } from "@/hooks/useInvalidation";
-import { createTrailingCoalescer } from "@/lib/realtime-coalesce";
+import { createTrailingCoalescer } from "@/lib/realtime/coalesce";
 import { useTournamentQuery } from "@/hooks/useTournamentClientData";
 import { TournamentRouteProvider } from "../_hooks/useTournamentId";
 import { useSyncActiveWorkspace } from "@/hooks/useSyncActiveWorkspace";

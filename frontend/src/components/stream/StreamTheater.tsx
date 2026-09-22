@@ -6,13 +6,13 @@ import { useTranslations } from "next-intl";
 
 import { SocialIcon } from "@/components/social/SocialIcon";
 import { TwitchEmbed } from "@/components/stream/TwitchEmbed";
-import { getSocialProviderConfig } from "@/lib/social-providers";
+import { getSocialProviderConfig } from "@/lib/social/providers";
 import {
   embeddableTwitchChannel,
   formatStreamUptime,
   getStreamStatus,
   STREAM_STATUS_META
-} from "@/lib/stream-platform";
+} from "@/lib/social/stream-platform";
 import type { StreamEntry } from "@/types/stream.types";
 import { getPlayerSlug } from "@/utils/player";
 

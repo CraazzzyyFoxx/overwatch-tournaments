@@ -1,5 +1,5 @@
 import { PaginatedResponse } from "@/types/pagination.types";
-import { apiFetch } from "@/lib/api-fetch";
+import { apiFetch } from "@/lib/api/fetch";
 import {
   AlgorithmAnalytics,
   AnalyticsJob,

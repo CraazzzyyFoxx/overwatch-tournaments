@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { useRealtimeTopic } from "@/hooks/useRealtimeTopic";
-import { tournamentQueryKeys } from "@/lib/tournament-query-keys";
+import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 import draftService from "@/services/draft.service";
 import { realtimeClient } from "@/services/realtime.service";
 import { useRealtimeStore } from "@/stores/realtime.store";
@@ -19,7 +19,7 @@ import type {
 } from "@/types/draft.types";
 import type { RealtimeConnectionState, RealtimeEventEnvelope } from "@/types/realtime.types";
 
-import { applyDraftEvent, presenceFromEvent } from "@/lib/draft-logic";
+import { applyDraftEvent, presenceFromEvent } from "@/lib/draft/logic";
 
 const MAX_PENDING_DRAFT_EVENTS = 100;
 const EMPTY_DRAFT_PRESENCE: DraftPresenceState = { users: {}, anonymous_viewer_count: 0 };

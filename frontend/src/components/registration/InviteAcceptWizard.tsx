@@ -17,12 +17,12 @@ import {
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
-import { ApiError } from "@/lib/api-error";
+import { ApiError } from "@/lib/api/error";
 import { notify } from "@/lib/notify";
-import { translateRegistrationTeamError } from "@/lib/registration-team-errors";
-import { ROLES, type RoleCode } from "@/lib/roles";
-import { isRoleSlotCode } from "@/lib/roster-shape";
-import { tournamentQueryKeys } from "@/lib/tournament-query-keys";
+import { translateRegistrationTeamError } from "@/lib/registration/team-errors";
+import { ROLES, type RoleCode } from "@/lib/roster/roles";
+import { isRoleSlotCode } from "@/lib/roster/shape";
+import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 import meService from "@/services/me.service";
 import registrationService from "@/services/registration.service";
 import registrationTeamService from "@/services/registration-team.service";

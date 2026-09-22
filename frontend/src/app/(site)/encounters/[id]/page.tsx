@@ -9,7 +9,7 @@ import { StagePill } from "@/components/match/cells";
 import MatchLogIndicator from "@/components/match/MatchLogIndicator";
 import { SITE_NAME, SITE_URL } from "@/config/site";
 import encounterService from "@/services/encounter.service";
-import { getEncounterState } from "@/lib/encounter-status";
+import { getEncounterState } from "@/lib/encounter/status";
 import EncounterScoreboard from "./components/EncounterScoreboard";
 import EncounterMapRow from "./components/EncounterMapRow";
 import EncounterRosterPanel from "@/components/match/EncounterRosterPanel";
@@ -27,7 +27,7 @@ import {
   getSeriesSeconds,
   getSeriesVerdict,
   getStageKind
-} from "@/lib/encounter-detail";
+} from "@/lib/encounter/detail";
 import styles from "@/components/match/EncounterDetail.module.css";
 
 export const dynamic = "force-dynamic";

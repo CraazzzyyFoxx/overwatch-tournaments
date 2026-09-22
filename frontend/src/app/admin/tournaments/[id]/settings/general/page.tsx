@@ -16,14 +16,14 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { AuditTrailButton } from "@/components/kit/AuditTrailSheet";
 import { SaveBar } from "@/components/kit/SaveBar";
-import { MAX_AVATAR_BYTES } from "@/lib/avatar";
+import { MAX_AVATAR_BYTES } from "@/lib/uploads";
 import { notify } from "@/lib/notify";
 import adminService from "@/services/admin.service";
 import type { Tournament, TournamentImageSlot } from "@/types/tournament.types";
 import { flattenDivisionGridVersions, useHubDivisionGridsQuery } from "../../hubQueries";
 import { SettingsSectionPage } from "../SettingsSection";
 import { useTournamentSettingsForm } from "../useTournamentSettingsForm";
-import { invalidateTournamentWorkspace } from "@/lib/tournament-workspace-query-keys";
+import { invalidateTournamentWorkspace } from "@/lib/tournament/workspace-query-keys";
 
 export default function GeneralSettingsPage() {
   return (

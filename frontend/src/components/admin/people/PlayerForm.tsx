@@ -19,14 +19,14 @@ import {
   SelectValue
 } from "@/components/ui/select";
 import { useDivisionGrid } from "@/hooks/useCurrentWorkspace";
-import { resolveDivisionFromRank } from "@/lib/division-grid";
+import { resolveDivisionFromRank } from "@/lib/divisions/grid";
 import {
   PLAYER_ROLE_OPTIONS,
   filterSubRoleOptions,
   normalizePlayerRole,
   subRoleCatalogRole,
   type PlayerRoleOption
-} from "@/lib/player-role";
+} from "@/lib/roster/player-role";
 import type { PlayerCreateInput, PlayerSubRole, PlayerUpdateInput } from "@/types/admin.types";
 import type { Team } from "@/types/team.types";
 import type { DivisionGridVersion } from "@/types/workspace.types";

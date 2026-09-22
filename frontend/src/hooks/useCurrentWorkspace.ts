@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 
-import { getDefaultDivisionGrid } from "@/lib/division-grid";
+import { getDefaultDivisionGrid } from "@/lib/divisions/grid";
 import { useWorkspaceStore } from "@/stores/workspace.store";
 import { DivisionGrid, DivisionGridVersion } from "@/types/workspace.types";
 

@@ -10,13 +10,13 @@ import {
   DialogContent,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { getCurrentPathForAuthRedirect } from "@/lib/auth-redirect";
+import { getCurrentPathForAuthRedirect } from "@/lib/auth/redirect";
 import { cn } from "@/lib/utils";
-import { isRegistrationOpen } from "@/lib/tournament-status";
+import { isRegistrationOpen } from "@/lib/tournament/status";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
 import { useAuthModalStore } from "@/stores/auth-modal.store";
 import registrationService from "@/services/registration.service";
-import { tournamentHref } from "@/lib/tournament-url";
+import { tournamentHref } from "@/lib/tournament/url";
 import {
   TOURNAMENT_PRIMARY_ACTION_CLASS,
   TOURNAMENT_STATUS_BOX_CLASS,

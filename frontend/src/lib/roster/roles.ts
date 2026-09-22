@@ -1,0 +1,151 @@
+import type { RosterRoleSlotCode } from "@/lib/roster/shape";
+import type { SubroleCatalog, SubroleOption } from "@/types/registration.types";
+
+/**
+ * Single source of truth for registration role codes, display labels, accent
+ * colors, and sub-role resolution. Sub-role *options* are data-driven from the
+ * workspace `PlayerSubRole` catalog embedded in the form payload
+ * (`form.subrole_catalog`); the `roles` field's `params.subroles` only selects
+ * which catalog slugs are offered.
+ */
+
+export type RoleCode = RosterRoleSlotCode;
+
+export interface RoleDef {
+  code: RoleCode;
+  /** Short human label. */
+  display: string;
+  /** Icon name understood by PlayerRoleIcon. */
+  icon: "Tank" | "Damage" | "Support";
+}
+
+export const ROLES: readonly RoleDef[] = [
+  { code: "tank", display: "Tank", icon: "Tank" },
+  { code: "damage", display: "Damage", icon: "Damage" },
+  { code: "support", display: "Support", icon: "Support" },
+] as const;
+
+export const ROLE_LABELS: Record<string, string> = {
+  tank: "Tank",
+  damage: "DPS",
+  support: "Support",
+};
+
+/**
+ * Known registration role codes. The codes and the canonical `HeroClass` names
+ * are the same vocabulary now, so this table only validates membership.
+ */
+export const REGISTRATION_TO_CANONICAL: Record<RoleCode, string> = {
+  tank: "tank",
+  damage: "damage",
+  support: "support",
+};
+
+const CANONICAL_TO_REGISTRATION: Record<string, RoleCode> = {
+  tank: "tank",
+  damage: "damage",
+  support: "support",
+};
+
+/** Narrow a free-form catalog role string to a known role code, or `null`. */
+export function canonicalToRegistrationRole(role: string): RoleCode | null {
+  return CANONICAL_TO_REGISTRATION[role.trim().toLowerCase()] ?? null;
+}
+
+export interface RoleAccent {
+  tile: string;
+  selectedCard: string;
+  indicator: string;
+  mutedIndicator: string;
+}
+
+export const ROLE_ACCENTS: Record<string, RoleAccent> = {
+  tank: {
+    tile: "bg-sky-500/18 text-sky-200",
+    selectedCard: "border-sky-400/75 bg-sky-500/10 shadow-[0_0_0_1px_rgba(56,189,248,0.14)]",
+    indicator: "border-sky-300",
+    mutedIndicator: "border-sky-300/45",
+  },
+  damage: {
+    tile: "bg-orange-500/18 text-orange-200",
+    selectedCard: "border-orange-400/75 bg-orange-500/10 shadow-[0_0_0_1px_rgba(251,146,60,0.14)]",
+    indicator: "border-orange-300",
+    mutedIndicator: "border-orange-300/45",
+  },
+  support: {
+    tile: "bg-emerald-500/18 text-emerald-200",
+    selectedCard: "border-emerald-400/75 bg-emerald-500/10 shadow-[0_0_0_1px_rgba(52,211,153,0.14)]",
+    indicator: "border-emerald-300",
+    mutedIndicator: "border-emerald-300/45",
+  },
+  flex: {
+    tile: "bg-violet-500/18 text-violet-200",
+    selectedCard: "border-violet-400/75 bg-violet-500/10 shadow-[0_0_0_1px_rgba(167,139,250,0.14)]",
+    indicator: "border-violet-300",
+    mutedIndicator: "border-violet-300/45",
+  },
+};
+
+const ROLE_ICON_NAMES: Record<RoleCode, "Tank" | "Damage" | "Support"> = {
+  tank: "Tank",
+  damage: "Damage",
+  support: "Support",
+};
+
+/** A `flex` slot code has no icon of its own — narrow with `isRoleSlotCode` first. */
+export function getRoleIconName(roleCode: RoleCode): "Tank" | "Damage" | "Support" {
+  return ROLE_ICON_NAMES[roleCode];
+}
+
+/** Draft role accent colors (CSS custom properties) shared across the draft-room UI. */
+export const ROLE_ACCENT: Record<RoleCode, string> = {
+  tank: "var(--aqt-tank)",
+  damage: "var(--aqt-damage)",
+  support: "var(--aqt-support)"
+};
+
+const SUBROLE_ACRONYMS = new Set(["pov", "vk"]);
+
+/** Humanize a sub-role slug as a fallback when no catalog label is available. */
+export function formatSubroleSlug(slug: string): string {
+  return slug
+    .split(/[_\s]+/)
+    .filter(Boolean)
+    .map((word) => (SUBROLE_ACRONYMS.has(word) ? word.toUpperCase() : word.charAt(0).toUpperCase() + word.slice(1)))
+    .join(" ");
+}
+
+/**
+ * The sub-role options a role offers, from the workspace catalog narrowed by
+ * the `roles` builtin's `subroles` allowlist.
+ *
+ * - role absent from `subroles` → offer all catalog options for it.
+ * - role present with `[]` → explicit opt-out, offer none.
+ * - role present and non-empty → offer the catalog options it names.
+ *
+ * The allowlist no longer splits primary from additional: one map per role,
+ * whatever slot the role is taken in.
+ */
+export function getSubroleOptions(
+  catalog: SubroleCatalog | undefined,
+  subroles: Record<string, string[]>,
+  role: string,
+): SubroleOption[] {
+  const all = catalog?.[role] ?? [];
+  const selection = subroles[role];
+  if (selection === undefined) {
+    return all;
+  }
+  const enabled = new Set(selection);
+  return all.filter((option) => enabled.has(option.slug));
+}
+
+/** Look up a sub-role's display label from the catalog, with a humanized fallback. */
+export function getSubroleLabel(
+  catalog: SubroleCatalog | undefined,
+  role: string,
+  slug: string,
+): string {
+  const match = (catalog?.[role] ?? []).find((option) => option.slug === slug);
+  return match?.label ?? formatSubroleSlug(slug);
+}

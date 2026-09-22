@@ -2,7 +2,7 @@
  * The room chat wire shape (`shared/services/chat/schemas.py`). Identical for
  * every room kind by construction — one component, one hook and one service
  * serve the pre-game room and the draft room, parameterized only by the room
- * descriptor in `@/lib/chat-rooms`.
+ * descriptor in `@/lib/realtime/chat-rooms`.
  */
 
 /**

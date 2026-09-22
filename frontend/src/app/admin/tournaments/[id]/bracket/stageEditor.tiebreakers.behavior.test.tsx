@@ -73,7 +73,7 @@ vi.mock("next/link", () => ({
   )
 }));
 
-vi.mock("@/lib/tournament-workspace-query-keys", () => ({
+vi.mock("@/lib/tournament/workspace-query-keys", () => ({
   invalidateTournamentWorkspace: vi.fn()
 }));
 

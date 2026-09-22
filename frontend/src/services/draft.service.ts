@@ -1,4 +1,4 @@
-import { apiFetch } from "@/lib/api-fetch";
+import { apiFetch } from "@/lib/api/fetch";
 import type {
   DraftBoard,
   DraftFeasibility,

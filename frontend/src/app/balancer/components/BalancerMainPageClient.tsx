@@ -25,7 +25,7 @@ import {
 import { useDivisionGrid } from "@/hooks/useCurrentWorkspace";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useAuthProfileStore } from "@/stores/auth-profile.store";
-import { mergeStatusOptions } from "@/lib/balancer-statuses";
+import { mergeStatusOptions } from "@/lib/registration/balancer-statuses";
 import { notify } from "@/lib/notify";
 import balancerAdminService from "@/services/balancer-admin.service";
 import balancerService from "@/services/balancer.service";

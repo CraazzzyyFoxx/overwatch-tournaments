@@ -5,8 +5,8 @@ import { useId } from "react";
 import DivisionIcon from "@/components/DivisionIcon";
 import type { FieldRendererProps } from "@/components/forms/types";
 import { NumberInput } from "@/components/ui/number-input";
-import { getDivisionLabel, OW_REFERENCE_GRID, resolveDivisionFromRank } from "@/lib/division-grid";
-import { ROLES } from "@/lib/roles";
+import { getDivisionLabel, OW_REFERENCE_GRID, resolveDivisionFromRank } from "@/lib/divisions/grid";
+import { ROLES } from "@/lib/roster/roles";
 import { cn } from "@/lib/utils";
 
 import FieldLabel from "../FieldLabel";

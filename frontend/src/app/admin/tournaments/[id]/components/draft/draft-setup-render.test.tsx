@@ -1,7 +1,7 @@
 import { describe, expect, test, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import type { RosterShape } from "@/lib/roster-shape";
+import type { RosterShape } from "@/lib/roster/shape";
 import type { AdminRegistration } from "@/types/balancer-admin.types";
 import type { DraftSession } from "@/types/draft.types";
 import type { DivisionGrid } from "@/types/workspace.types";

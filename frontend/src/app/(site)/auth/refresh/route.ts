@@ -1,15 +1,14 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { getForwardedClientHeaders } from "@/lib/forward-client-headers";
-import { getTokenMaxAgeSeconds } from "@/lib/jwt";
+import { getForwardedClientHeaders } from "@/lib/auth/forward-client-headers";
+import { getTokenMaxAgeSeconds } from "@/lib/auth/jwt";
 import { authService } from "@/services/auth.service";
-import { PLATFORM_ZONE, isPlatformHost } from "@/lib/host";
-import { ACCESS_TOKEN_COOKIE, REFRESH_TOKEN_COOKIE, clearAuthCookies, getRefreshToken } from "@/lib/auth-cookies";
-import { ApiError } from "@/lib/api-error";
-import { publicHostname } from "@/lib/request-origin";
-
-// Cookie lifetime used when the access token's `exp` can't be decoded.
-const FALLBACK_ACCESS_COOKIE_MAX_AGE_SECONDS = 13 * 60;
+import { PLATFORM_ZONE, isPlatformHost } from "@/lib/site/host";
+import { clearAuthCookies, getRefreshToken } from "@/lib/auth/cookies";
+import { ACCESS_TOKEN_COOKIE, REFRESH_TOKEN_COOKIE } from "@/lib/auth/cookie-names";
+import { FALLBACK_ACCESS_COOKIE_MAX_AGE_SECONDS, REFRESH_COOKIE_MAX_AGE_SECONDS } from "@/lib/auth/oauth-callback";
+import { ApiError } from "@/lib/api/error";
+import { publicHostname } from "@/lib/site/request-origin";
 
 const IS_PROD = process.env.NODE_ENV === "production";
 // owt_access_token/owt_refresh_token are set Domain-wide (SSO across
@@ -56,7 +55,7 @@ export async function POST(request: Request) {
       sameSite: "lax",
       secure: IS_PROD,
       path: "/",
-      maxAge: 30 * 24 * 60 * 60,
+      maxAge: REFRESH_COOKIE_MAX_AGE_SECONDS,
       ...domainAttr
     });
 

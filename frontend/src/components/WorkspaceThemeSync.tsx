@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 
 import { useWorkspaceStore } from "@/stores/workspace.store";
-import { applyWorkspacePalette, deriveWorkspacePalette } from "@/lib/workspace-theme";
+import { applyWorkspacePalette, deriveWorkspacePalette } from "@/lib/workspace/theme";
 
 /**
  * Applies the site palette on the client.

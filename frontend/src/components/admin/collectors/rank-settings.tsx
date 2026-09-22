@@ -25,12 +25,12 @@ import {
   resolveDivisionFromRank,
   resolveRankFromDivision,
   sortTiersDescending
-} from "@/lib/division-grid";
+} from "@/lib/divisions/grid";
 import {
   DEFAULT_RANK_MAPPING_VERSION,
   buildMappingCells,
   defaultRankForCell
-} from "@/lib/ow-rank-mapping";
+} from "@/lib/divisions/ow-rank-mapping";
 import { cn } from "@/lib/utils";
 import adminService from "@/services/admin.service";
 import type {

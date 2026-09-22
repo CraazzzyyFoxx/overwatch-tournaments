@@ -9,10 +9,10 @@ import { useSyncExternalStore } from "react";
 import InviteAcceptWizard from "@/components/registration/InviteAcceptWizard";
 import { Button } from "@/components/ui/button";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
-import { readInviteTokenFromHash } from "@/lib/invite-link";
-import { translateRegistrationTeamError } from "@/lib/registration-team-errors";
-import { isRosterSlotCode } from "@/lib/roster-shape";
-import { tournamentQueryKeys } from "@/lib/tournament-query-keys";
+import { readInviteTokenFromHash } from "@/lib/registration/invite-link";
+import { translateRegistrationTeamError } from "@/lib/registration/team-errors";
+import { isRosterSlotCode } from "@/lib/roster/shape";
+import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 import { useAuthModalStore } from "@/stores/auth-modal.store";
 import registrationService from "@/services/registration.service";
 import registrationTeamService from "@/services/registration-team.service";
@@ -23,7 +23,7 @@ import registrationTeamService from "@/services/registration-team.service";
  * The token arrives in the URL **fragment**, which is why this must be a client
  * page: a fragment is never sent to a server, so no server render can see it.
  * That is the point — the credential stays out of every access log and `Referer`
- * header on the way here. See `lib/invite-link.ts`.
+ * header on the way here. See `lib/registration/invite-link.ts`.
  *
  * The preview is fetched ANONYMOUSLY and shown before any sign-in prompt. A link
  * invite exists to reach someone with no account; telling them to register before

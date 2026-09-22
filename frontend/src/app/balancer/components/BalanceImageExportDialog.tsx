@@ -13,7 +13,7 @@ import {
   DialogHeader,
   DialogTitle
 } from "@/components/ui/dialog";
-import { resolveDivisionFromRank, getDivisionIconSrc, getDivisionLabel } from "@/lib/division-grid";
+import { resolveDivisionFromRank, getDivisionIconSrc, getDivisionLabel } from "@/lib/divisions/grid";
 import {
   capturePngBlob,
   copyImageBlob,

@@ -9,12 +9,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import DivisionIcon from "@/components/DivisionIcon";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
-import { describeApiError } from "@/lib/api-error";
-import { resolveDivisionFromRank } from "@/lib/division-grid";
+import { describeApiError } from "@/lib/api/error";
+import { resolveDivisionFromRank } from "@/lib/divisions/grid";
 import { notify } from "@/lib/notify";
-import { getRoleIconName, ROLE_ACCENT } from "@/lib/roles";
+import { getRoleIconName, ROLE_ACCENT } from "@/lib/roster/roles";
 import { cn } from "@/lib/utils";
-import type { DraftGating } from "@/lib/draft-logic";
+import type { DraftGating } from "@/lib/draft/logic";
 import type { DraftMutations } from "@/hooks/useDraftData";
 import type { DraftBoard, DraftPlayer, DraftRole } from "@/types/draft.types";
 import type { RealtimeConnectionState } from "@/types/realtime.types";
@@ -22,8 +22,8 @@ import type { DivisionGrid } from "@/types/workspace.types";
 
 import { AdminDock } from "./AdminDock";
 import { DraftClockRing } from "./DraftClockRing";
-import { resolveDraftAccent } from "@/lib/draft-visual";
-import { picksUntilTeamTurn, slotRankForPlayer } from "@/lib/draft-workspace-model";
+import { resolveDraftAccent } from "@/lib/draft/visual";
+import { picksUntilTeamTurn, slotRankForPlayer } from "@/lib/draft/workspace-model";
 
 export interface PickSelection {
   player: DraftPlayer;

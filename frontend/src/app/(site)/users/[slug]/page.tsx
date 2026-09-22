@@ -19,7 +19,7 @@ import {
 } from "@/app/(site)/users/_views/UserTournamentsPage";
 import UserAchievementPage from "@/app/(site)/users/_views/UserAchievementPage";
 import { SITE_NAME, SITE_URL_OBJ } from "@/config/site";
-import { isNotFoundError } from "@/lib/api-error";
+import { isNotFoundError } from "@/lib/api/error";
 import { decodePlayerSlug } from "@/utils/player";
 import { Skeleton } from "@/components/ui/skeleton";
 import UserTabsClient from "@/app/(site)/users/components/tabs/UserTabsClient";

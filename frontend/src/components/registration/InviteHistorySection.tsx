@@ -15,8 +15,8 @@ import {
   SheetTrigger
 } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
-import { translateRegistrationTeamError } from "@/lib/registration-team-errors";
-import { tournamentQueryKeys } from "@/lib/tournament-query-keys";
+import { translateRegistrationTeamError } from "@/lib/registration/team-errors";
+import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 import registrationTeamService from "@/services/registration-team.service";
 
 interface InviteHistorySectionProps {

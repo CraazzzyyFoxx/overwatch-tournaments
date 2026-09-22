@@ -14,7 +14,7 @@ import { useFormatter, useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAccountSessions, useRevokeAccountSession } from "@/hooks/use-account-sessions";
-import { getApiErrorMessage } from "@/lib/api-error";
+import { getApiErrorMessage } from "@/lib/api/error";
 import { detectBrowser, detectPlatform } from "@/lib/user-agent";
 import { notify } from "@/lib/notify";
 import type { AccountSession, AccountSessionStatus } from "@/types/auth.types";

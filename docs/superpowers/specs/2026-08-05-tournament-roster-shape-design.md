@@ -21,7 +21,7 @@
 | `balancer/config/defaults.py:23` `role_mask` | `{"Tank":1,"Damage":2,"Support":2}` | **`Tank/Damage/Support`** |
 | `balancer/config/presets.py:23` `DEFAULT["role_mask"]` | вторая копия того же дефолта | **`Tank/Damage/Support`** |
 | `shared/balancer/types.py:48` `RoleMask` + `:62 overwatch_5v5()` | `{"tank":1,"dps":2,"support":2}` | `tank/dps/support` |
-| `frontend/src/lib/draft-workspace-model.ts:157` `roleTargetsForTeamSize` | построчный порт хардкода | `tank/dps/support` |
+| `frontend/src/lib/draft/workspace-model.ts:157` `roleTargetsForTeamSize` | построчный порт хардкода | `tank/dps/support` |
 | `frontend/.../draft/setup-model.ts:80` `roleTargets` | **второй** порт того же хардкода | `tank/dps/support` |
 | `frontend/src/components/draft/TeamRosters.tsx:23` `ROSTER_ROLES` | литерал `["tank","dps","support"]` | `tank/dps/support` |
 
@@ -446,7 +446,7 @@ tournament-service при записи `roster_slots_json` делает read-onl
 
 | Удаляется | Чем заменяется |
 |---|---|
-| `lib/draft-workspace-model.ts:157` `roleTargetsForTeamSize` + тест `:122-135` | `board.session.roster_shape.slots` с API |
+| `lib/draft/workspace-model.ts:157` `roleTargetsForTeamSize` + тест `:122-135` | `board.session.roster_shape.slots` с API |
 | `draft/setup-model.ts:80` `roleTargets` | то же |
 | `components/draft/TeamRosters.tsx:23` `ROSTER_ROLES` | `Object.keys(shape.slots)` в каноническом порядке |
 | `draft/setup-model.ts:76` `roundsForTeamSize` | `shape.draft_rounds` |
@@ -478,7 +478,7 @@ tournament-service при записи `roster_slots_json` делает read-onl
 Устройство:
 
 1. **Селект пресетов.** Хардкодный список в одном модуле
-   `frontend/src/lib/roster-shape.ts`: `Overwatch 5v5 · 1/2/2`,
+   `frontend/src/lib/roster/shape.ts`: `Overwatch 5v5 · 1/2/2`,
    `6 флексов`, `Своя форма`. Плюс опция `Наследовать от workspace`, активная
    когда `roster_shape.source !== "tournament"`. Пресет — это UI-сахар над той же
    картой, не сущность.
@@ -524,8 +524,8 @@ Workspace-дефолт — тот же компонент, переисполь�
 | `balancer-service/tests/test_player_loader_flex.py` (новый) | При маске с `flex` игрок с ролевыми рейтингами получает `ratings["flex"] == max(...)`, `preferences[0] == "flex"`, и **не** отбрасывается; дискомфорт 0; не off-role |
 | `balancer-service/tests/test_draft_schemas.py` | `team_size`/`rounds` больше не принимаются; `rounds` выводится |
 | `tournament-service/tests/test_roster_shape_api.py` (новый) | `TournamentRead.roster_shape.source` = tournament/workspace/default; PATCH невалидной карты → 422 с кодом; PATCH при активном драфте → `roster_locked_by_draft` |
-| `frontend/src/lib/roster-shape.test.ts` (новый) | Пресет ↔ карта в обе стороны; итог и раунды; порядок кодов |
-| Удаляется | `draft-workspace-model.test.ts:122-135` (`roleTargetsForTeamSize`) — вместе с функцией |
+| `frontend/src/lib/roster/shape.test.ts` (новый) | Пресет ↔ карта в обе стороны; итог и раунды; порядок кодов |
+| Удаляется | `lib/draft/workspace-model.test.ts:122-135` (`roleTargetsForTeamSize`) — вместе с функцией |
 
 Смоук: локальный запуск драфта на `{flex: 6}` от создания сессии до экспорта
 команд, и один прогон балансера на той же форме — именно эти два пути падали бы

@@ -1,6 +1,6 @@
 // Live Draft types — mirror the balancer-service DTOs (src/schemas/draft.py).
 
-import type { RosterRoleSlotCode, RosterShape, RosterSlotCode } from "@/lib/roster-shape";
+import type { RosterRoleSlotCode, RosterShape, RosterSlotCode } from "@/lib/roster/shape";
 import type { FormField } from "@/types/forms.types";
 
 export type DraftStatus = "setup" | "ready" | "live" | "paused" | "completed" | "cancelled";

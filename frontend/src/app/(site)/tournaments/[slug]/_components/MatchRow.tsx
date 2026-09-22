@@ -5,12 +5,12 @@ import { ArrowUpRight, ChevronDown } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import TeamName from "@/components/TeamName";
-import { withReturnTo } from "@/lib/return-to";
+import { withReturnTo } from "@/lib/auth/return-to";
+import { isEncounterCompleted } from "@/lib/encounter/status";
 import { cn } from "@/lib/utils";
 import type { Encounter } from "@/types/encounter.types";
 
 import styles from "../TournamentDetail.module.css";
-import { isEncounterCompleted } from "./MatchCard";
 
 export type MatchRowProps = {
   encounter: Encounter;

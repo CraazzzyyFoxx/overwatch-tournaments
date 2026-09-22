@@ -1,6 +1,6 @@
 import type { useTranslations } from "next-intl";
 
-import { getTournamentStatusMeta } from "@/lib/tournament-status";
+import { getTournamentStatusMeta } from "@/lib/tournament/status";
 import type { Encounter } from "@/types/encounter.types";
 import type { Tournament, TournamentStatus } from "@/types/tournament.types";
 
@@ -95,7 +95,7 @@ export interface StageProgress {
 //
 // Bucketed by the status's presentation variant rather than by listing statuses
 // again: which statuses read as "signing up" is already decided once, in
-// `@/lib/tournament-status`.
+// `@/lib/tournament/status`.
 export function stageProgress(
   tournament: Tournament,
   status: TournamentStatus,

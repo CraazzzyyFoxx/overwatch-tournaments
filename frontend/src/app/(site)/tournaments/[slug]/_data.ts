@@ -1,6 +1,6 @@
 import { cache } from "react";
 
-import { isNotFoundError } from "@/lib/api-error";
+import { isNotFoundError } from "@/lib/api/error";
 import tournamentService from "@/services/tournament.service";
 import type { Tournament } from "@/types/tournament.types";
 

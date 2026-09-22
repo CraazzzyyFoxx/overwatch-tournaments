@@ -7,7 +7,7 @@ import {
 } from "@/types/encounter.types";
 import { MatchKillFeed } from "@/types/killfeed.types";
 import { PaginatedResponse } from "@/types/pagination.types";
-import { apiFetch } from "@/lib/api-fetch";
+import { apiFetch } from "@/lib/api/fetch";
 
 export default class encounterService {
   static async getEncounter(id: number): Promise<Encounter> {

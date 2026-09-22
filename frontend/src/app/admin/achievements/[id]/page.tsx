@@ -88,7 +88,7 @@ import {
   ACHIEVEMENT_IMAGE_ACCEPT,
   ACHIEVEMENT_IMAGE_PREVIEW_CLASS,
   MAX_ACHIEVEMENT_IMAGE_BYTES
-} from "@/lib/achievement-image";
+} from "@/lib/uploads";
 import { useWorkspaceStore } from "@/stores/workspace.store";
 
 const CATEGORIES: AchievementCategory[] = [

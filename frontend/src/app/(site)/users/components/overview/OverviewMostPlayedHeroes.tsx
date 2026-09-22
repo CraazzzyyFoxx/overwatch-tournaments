@@ -3,7 +3,7 @@ import { ArrowRight, Star } from "lucide-react";
 import Link from "next/link";
 import { HeroPlaytime } from "@/types/hero.types";
 import { CardSurface } from "@/app/(site)/users/components/shared/atoms";
-import { normalizeRole } from "@/lib/player-role";
+import { normalizeRole } from "@/lib/roster/player-role";
 import HeroImage from "@/components/hero/HeroImage";
 import HeroUserStatsPopover from "@/components/hero/HeroUserStatsPopover";
 

@@ -15,7 +15,7 @@ import {
   playerRoleTint,
   type AqtRoleKey,
   type PlayerRoleTint
-} from "@/lib/player-role";
+} from "@/lib/roster/player-role";
 
 // Canonical English role names used ONLY for icon selection in PlayerRoleIcon.
 const ROLE_ICON: Record<PlayerRoleTint, string> = {
@@ -26,7 +26,7 @@ const ROLE_ICON: Record<PlayerRoleTint, string> = {
 };
 
 // A tint-keyed view of the one shared role-label map (common.roles); no message
-// key is restated here — `@/lib/player-role` owns them.
+// key is restated here — `@/lib/roster/player-role` owns them.
 const ROLE_LABEL_KEY = {
   tank: PLAYER_ROLE_LABEL_KEY.Tank,
   damage: PLAYER_ROLE_LABEL_KEY.Damage,

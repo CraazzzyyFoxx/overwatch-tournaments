@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 
-import type { BracketMatch } from "@/lib/bracket-view";
+import type { BracketMatch } from "@/lib/bracket/view";
 
 import {
   buildLayout,

@@ -6,7 +6,7 @@ import { ChevronRight } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { Hero, HeroLeaderboardEntry } from "@/types/hero.types";
-import { heroVariantFromRole } from "@/lib/player-role";
+import { heroVariantFromRole } from "@/lib/roster/player-role";
 import { PageHero, HeroCoord } from "@/components/site/PageHero";
 import { cn } from "@/lib/utils";
 

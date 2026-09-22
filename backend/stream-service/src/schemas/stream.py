@@ -71,7 +71,7 @@ class StreamEntryRead(BaseModel):
 
     ``None`` is NOT ``False``. "We do not know" must render as NO badge at all,
     not as a grey "offline" badge — see ``STREAM_STATUS_META`` in
-    ``frontend/src/lib/stream-platform.ts``. Claiming a caster is offline when
+    ``frontend/src/lib/social/stream-platform.ts``. Claiming a caster is offline when
     nobody ever checked is the one wrong answer here.
     """
     title: str | None = None

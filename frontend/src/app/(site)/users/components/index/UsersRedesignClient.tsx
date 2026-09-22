@@ -13,11 +13,11 @@ import DivisionIcon from "@/components/DivisionIcon";
 import { HeroStrip } from "@/components/hero/HeroImage";
 import { PageHero, HeroCoord } from "@/components/site/PageHero";
 import { useCurrentWorkspaceId, useDivisionGrid } from "@/hooks/useCurrentWorkspace";
-import { clampDivisionToGrid, getDivisionLabel, getDivisionOptions } from "@/lib/division-grid";
+import { clampDivisionToGrid, getDivisionLabel, getDivisionOptions } from "@/lib/divisions/grid";
 import { cn } from "@/lib/utils";
 import userService from "@/services/user.service";
 import { getPlayerSlug } from "@/utils/player";
-import { roleImageSrc } from "@/lib/player-role";
+import { roleImageSrc } from "@/lib/roster/player-role";
 import {
   UserCatalogEntry,
   UserOverviewRoleDivision,

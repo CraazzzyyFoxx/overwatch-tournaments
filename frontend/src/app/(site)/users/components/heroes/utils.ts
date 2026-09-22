@@ -8,27 +8,6 @@ export type NumberFormatter = Pick<ReturnType<typeof useFormatter>, "number">;
 
 const STAT_NUMBER_OPTIONS = { maximumFractionDigits: 2 } as const;
 
-export const formatPercent = (value: number, digits = 0) => {
-  const safe = Number.isFinite(value) ? value : 0;
-  return `${(safe * 100).toFixed(digits)}%`;
-};
-
-export const formatSeconds = (secondsRaw: number, options?: { withSeconds?: boolean }) => {
-  const seconds = Math.max(0, Math.floor(secondsRaw));
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  const s = seconds % 60;
-
-  if (options?.withSeconds) {
-    if (h > 0) return `${h}h ${m}m ${s}s`;
-    if (m > 0) return `${m}m ${s}s`;
-    return `${s}s`;
-  }
-
-  if (h > 0) return `${h}h ${m}m`;
-  return `${m}m`;
-};
-
 export const formatStatValue = (format: NumberFormatter, name: string, value: number) => {
   if (!Number.isFinite(value)) {
     return "-";

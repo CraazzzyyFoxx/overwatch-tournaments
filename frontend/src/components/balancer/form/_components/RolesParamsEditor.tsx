@@ -16,7 +16,7 @@ import {
   SelectValue
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { ROLES, ROLE_LABELS } from "@/lib/roles";
+import { ROLES, ROLE_LABELS } from "@/lib/roster/roles";
 import { cn } from "@/lib/utils";
 import type { RolesParams } from "@/types/forms.types";
 

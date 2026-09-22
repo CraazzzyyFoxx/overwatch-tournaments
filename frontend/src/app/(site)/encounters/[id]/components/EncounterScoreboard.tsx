@@ -8,7 +8,7 @@ import {
   getSeriesVerdict,
   type SeriesSide,
   type SeriesSlot
-} from "@/lib/encounter-detail";
+} from "@/lib/encounter/detail";
 import { Pill, PillFact } from "@/components/match/EncounterAtoms";
 import styles from "@/components/match/EncounterDetail.module.css";
 

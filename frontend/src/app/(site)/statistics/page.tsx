@@ -7,7 +7,7 @@ import { PlatformStatsGrid } from "@/components/stats/PlatformStatsGrid";
 import TournamentsChart from "@/components/TournamentsChart";
 import TournamentsDivisionChart from "@/components/TournamentsDivisionChart";
 import statisticsService from "@/services/statistics.service";
-import { isTenantHost } from "@/lib/tenant-host";
+import { isTenantHost } from "@/lib/site/tenant-host";
 import type {
   PlayerStatistics,
   TournamentDivisionStatistics,

@@ -1,6 +1,6 @@
 import type { EncounterWithUserStats, UserTournament } from "@/types/user.types";
 import type { ScoreKind } from "@/components/match/cells";
-import { playerRoleTint } from "@/lib/player-role";
+import { playerRoleTint } from "@/lib/roster/player-role";
 
 /** League grouping key: the prefix before " | " in the tournament name. */
 export const leagueKey = (t: UserTournament): string => t.name.split(" | ")[0];

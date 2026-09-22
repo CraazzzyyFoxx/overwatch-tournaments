@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 
-import { ApiError } from "@/lib/api-error";
+import { ApiError } from "@/lib/api/error";
 
 import { resolveToolState, type SummaryQuerySnapshot } from "./tool-context";
 

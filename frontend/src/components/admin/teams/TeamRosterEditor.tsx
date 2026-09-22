@@ -37,7 +37,7 @@ import {
   normalizePlayerRole,
   subRoleCatalogRole,
   type PlayerRoleOption
-} from "@/lib/player-role";
+} from "@/lib/roster/player-role";
 import { cn } from "@/lib/utils";
 import adminService from "@/services/admin.service";
 import type { PlayerCreateInput, PlayerUpdateInput } from "@/types/admin.types";

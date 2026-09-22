@@ -20,8 +20,8 @@ import {
 } from "@/components/ui/sidebar";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
 import { useAuthProfileStore } from "@/stores/auth-profile.store";
-import { getAuthProfileHref } from "@/lib/auth-profile-links";
-import { logout } from "@/lib/logout";
+import { getAuthProfileHref } from "@/lib/auth/profile-links";
+import { logout } from "@/lib/auth/logout";
 import { WorkspaceAvatar } from "@/components/WorkspaceSwitcher";
 import { filterAccessibleWorkspaces, useWorkspaceStore } from "@/stores/workspace.store";
 import { SITE_FAVICON, SITE_NAME } from "@/config/site";

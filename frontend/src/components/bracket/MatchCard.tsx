@@ -5,12 +5,12 @@ import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { ListChecks, Search } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import type { BracketMatch } from "@/lib/bracket-view";
+import type { BracketMatch } from "@/lib/bracket/view";
 import { EncounterRostersModal } from "@/components/EncounterRostersModal";
 import { HoverPrefetchLink } from "@/components/HoverPrefetchLink";
 import TeamName from "@/components/TeamName";
-import { withReturnTo } from "@/lib/return-to";
-import { STREAM_STATUS_META } from "@/lib/stream-platform";
+import { withReturnTo } from "@/lib/auth/return-to";
+import { STREAM_STATUS_META } from "@/lib/social/stream-platform";
 import { cn } from "@/lib/utils";
 import type { StreamEntry } from "@/types/stream.types";
 

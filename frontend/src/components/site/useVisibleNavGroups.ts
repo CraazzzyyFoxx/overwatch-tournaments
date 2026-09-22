@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 
 import { usePermissions } from "@/hooks/usePermissions";
-import { adminEntryPermissions } from "@/lib/admin-permissions";
+import { adminEntryPermissions } from "@/lib/auth/admin-permissions";
 import { useWorkspaceStore } from "@/stores/workspace.store";
 import { NAV_GROUPS, type NavGroupKey, type NavItem } from "./site-nav-groups";
 

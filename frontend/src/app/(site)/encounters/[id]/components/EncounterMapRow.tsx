@@ -21,7 +21,7 @@ import MatchStatsSection from "@/app/(site)/matches/[id]/components/MatchStatsSe
 import encounterService from "@/services/encounter.service";
 import type { DivisionGridVersion } from "@/types/workspace.types";
 import { acceptedScore } from "@/components/pick-ban/pick-ban-model";
-import { formatSeriesClock, type SeriesSlot } from "@/lib/encounter-detail";
+import { formatSeriesClock, type SeriesSlot } from "@/lib/encounter/detail";
 import { Pill } from "@/components/match/EncounterAtoms";
 import styles from "@/components/match/EncounterDetail.module.css";
 

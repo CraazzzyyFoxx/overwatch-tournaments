@@ -4,7 +4,7 @@ import { useEffect, useRef } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { shouldRefreshWorkspaceScope } from "./WorkspaceBootstrap.helpers";
-import { resolveHost } from "@/lib/host";
+import { resolveHost } from "@/lib/site/host";
 import {
   LEGACY_WORKSPACE_COOKIE,
   useWorkspaceStore,

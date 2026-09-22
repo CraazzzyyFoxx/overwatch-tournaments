@@ -10,7 +10,7 @@ import { StatTile, StatTileGrid } from "@/components/admin/StatTile";
 import { NextActionHero } from "@/components/kit/NextActionHero";
 import type { Tone } from "@/components/kit/tone";
 import adminService from "@/services/admin.service";
-import { getTournamentWorkspaceQueryKeys } from "@/lib/tournament-workspace-query-keys";
+import { getTournamentWorkspaceQueryKeys } from "@/lib/tournament/workspace-query-keys";
 import { tabFallback, useHubStagesQuery, useHubTournamentQuery } from "../hubQueries";
 import { buildChecklist, hasChallongeSource } from "@/components/admin/tournament-checklist";
 import { LifecycleChecklist } from "./LifecycleChecklist";

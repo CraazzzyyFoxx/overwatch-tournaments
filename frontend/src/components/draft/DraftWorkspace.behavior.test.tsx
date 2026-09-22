@@ -2,7 +2,7 @@ import { describe, expect, mock, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
-import type { DraftGating } from "@/lib/draft-logic";
+import type { DraftGating } from "@/lib/draft/logic";
 import type { DraftBoard, DraftPick, DraftPlayer, DraftTeam } from "@/types/draft.types";
 import type { DraftMutations } from "@/hooks/useDraftData";
 

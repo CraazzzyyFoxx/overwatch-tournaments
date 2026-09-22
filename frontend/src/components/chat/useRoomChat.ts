@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { useAuthProfile } from "@/hooks/useAuthProfile";
 import { useRealtimeTopic } from "@/hooks/useRealtimeTopic";
-import type { ChatRoomDescriptor } from "@/lib/chat-rooms";
+import type { ChatRoomDescriptor } from "@/lib/realtime/chat-rooms";
 import roomChatService from "@/services/roomChat.service";
 import type {
   ChatEnvelope,

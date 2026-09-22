@@ -10,7 +10,7 @@ import {
   AuditTrailProvider,
 } from "@/components/kit/AuditTrailSheet";
 import { parseAuditTrailScope } from "@/components/kit/audit-log";
-import { ApiError } from "@/lib/api-error";
+import { ApiError } from "@/lib/api/error";
 import type { AuditLogRead } from "@/types/admin.types";
 import type { PaginatedResponse } from "@/types/pagination.types";
 

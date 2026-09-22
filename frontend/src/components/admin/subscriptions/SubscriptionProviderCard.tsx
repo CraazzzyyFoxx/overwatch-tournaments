@@ -22,7 +22,7 @@ import { DiscordRoleSelect } from "@/components/discord/DiscordRoleSelect";
 import { DiscordServerStatus } from "@/components/discord/DiscordServerStatus";
 import { notify } from "@/lib/notify";
 import { cn } from "@/lib/utils";
-import { PROVIDER_LABELS } from "@/lib/subscription-requirement";
+import { PROVIDER_LABELS } from "@/lib/registration/subscription-requirement";
 import balancerAdminService from "@/services/balancer-admin.service";
 import type {
   SubscriptionCodeUpsert,

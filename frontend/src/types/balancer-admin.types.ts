@@ -1,4 +1,4 @@
-import type { PlayerRoleOption, PlayerRoleSlotCode } from "@/lib/player-role";
+import type { PlayerRoleOption, PlayerRoleSlotCode } from "@/lib/roster/player-role";
 import type { Statistics as BalancerStatistics } from "@/types/balancer.types";
 import type { Answers, FormField, FormSchema } from "@/types/forms.types";
 import type {

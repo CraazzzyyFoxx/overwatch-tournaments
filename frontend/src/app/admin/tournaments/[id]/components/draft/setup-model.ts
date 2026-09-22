@@ -1,4 +1,4 @@
-import type { RosterShape } from "@/lib/roster-shape";
+import type { RosterShape } from "@/lib/roster/shape";
 import type {
   DraftCaptainOrder,
   DraftFormat,

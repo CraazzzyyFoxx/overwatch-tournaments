@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 import DivisionIcon from "@/components/DivisionIcon";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { getDivisionLabel } from "@/lib/division-grid";
+import { getDivisionLabel } from "@/lib/divisions/grid";
 import type { TournamentHistoryEntry } from "@/types/registration.types";
 
 const ROLE_TO_ICON: Record<string, string> = {

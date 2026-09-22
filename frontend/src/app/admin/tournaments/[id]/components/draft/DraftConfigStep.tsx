@@ -18,10 +18,10 @@ import { Switch } from "@/components/ui/switch";
 import FlexIcon from "@/components/icons/FlexIcon";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { TONE_CLASS } from "@/components/kit/tone";
-import { getRoleIconName, ROLE_ACCENT } from "@/lib/roles";
+import { getRoleIconName, ROLE_ACCENT } from "@/lib/roster/roles";
 import { cn } from "@/lib/utils";
 import type { DraftAutopickStrategy, DraftFormat } from "@/types/draft.types";
-import { isRoleSlotCode, orderSlotCodes, type RosterShape } from "@/lib/roster-shape";
+import { isRoleSlotCode, orderSlotCodes, type RosterShape } from "@/lib/roster/shape";
 
 import { DRAFT_ROUND_RULES, MAX_DRAFT_TEAM_COUNT, MIN_DRAFT_TEAM_COUNT } from "./setup-model";
 import type { DraftSetupConfig } from "./setup-types";

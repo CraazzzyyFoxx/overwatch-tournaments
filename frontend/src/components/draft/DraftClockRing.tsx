@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 
-import { isUrgent, remainingMs } from "@/lib/draft-logic";
-import { accentToken, type DraftAccent } from "@/lib/draft-visual";
+import { isUrgent, remainingMs } from "@/lib/draft/logic";
+import { accentToken, type DraftAccent } from "@/lib/draft/visual";
 
 interface DraftClockRingProps {
   expiresAt: string | null;

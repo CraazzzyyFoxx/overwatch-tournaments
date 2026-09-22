@@ -1,4 +1,4 @@
-import { apiFetch } from "@/lib/api-fetch";
+import { apiFetch } from "@/lib/api/fetch";
 import type { BalancerStatus } from "@/types/balancer-admin.types";
 import {
   AdminRegistration,

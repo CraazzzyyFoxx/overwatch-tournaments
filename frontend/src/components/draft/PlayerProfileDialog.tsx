@@ -19,10 +19,10 @@ import {
   DialogTitle
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { getDivisionLabel, resolveDivisionFromRank } from "@/lib/division-grid";
-import { playerRoles, roleTopHeroes, rosterRoleForPlayer } from "@/lib/draft-workspace-model";
-import { normalizePlayerRole } from "@/lib/player-role";
-import { getRoleIconName, ROLE_ACCENT } from "@/lib/roles";
+import { getDivisionLabel, resolveDivisionFromRank } from "@/lib/divisions/grid";
+import { playerRoles, roleTopHeroes, rosterRoleForPlayer } from "@/lib/draft/workspace-model";
+import { normalizePlayerRole } from "@/lib/roster/player-role";
+import { getRoleIconName, ROLE_ACCENT } from "@/lib/roster/roles";
 import userService from "@/services/user.service";
 import type { DraftBoard, DraftPlayer } from "@/types/draft.types";
 import type { UserProfile } from "@/types/user.types";

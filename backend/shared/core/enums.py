@@ -20,7 +20,7 @@ class HeroClass(StrEnum):
     so the DB sees ``flex`` while the Python value is ``"Flex"``.
 
     THE single role enum for the whole backend (frontend mirror:
-    ``PlayerRoleOption`` in ``lib/player-role.ts``). One spelling per role, in
+    ``PlayerRoleOption`` in ``lib/roster/player-role.ts``). One spelling per role, in
     code, on the wire and in the database: :attr:`slot_code` is the lowercase
     member name. This docstring is the public OpenAPI description of the enum,
     so the retired spelling is documented on :attr:`slot_code` instead.

@@ -25,8 +25,8 @@ import {
   SelectTrigger,
   SelectValue
 } from "@/components/ui/select";
-import { getDivisionLabel, resolveDivisionFromRank } from "@/lib/division-grid";
-import { getRoleIconName, ROLE_ACCENT } from "@/lib/roles";
+import { getDivisionLabel, resolveDivisionFromRank } from "@/lib/divisions/grid";
+import { getRoleIconName, ROLE_ACCENT } from "@/lib/roster/roles";
 import { cn } from "@/lib/utils";
 import type {
   DraftPickOptionsResponse,
@@ -37,8 +37,8 @@ import type {
 import type { DivisionGrid } from "@/types/workspace.types";
 import { formatSubRoleLabel, getHeroIconUrl } from "@/utils/player";
 
-import type { DraftPoolRoleFilter, DraftPoolSort, DraftPoolTab } from "@/lib/draft-workspace-model";
-import { allPlayerHeroes, DRAFT_POOL_TABS, optionForSelection, playerRoles } from "@/lib/draft-workspace-model";
+import type { DraftPoolRoleFilter, DraftPoolSort, DraftPoolTab } from "@/lib/draft/workspace-model";
+import { allPlayerHeroes, DRAFT_POOL_TABS, optionForSelection, playerRoles } from "@/lib/draft/workspace-model";
 
 const POOL_ROLES: DraftRole[] = ["tank", "damage", "support"];
 const SEGMENT_CLASS =

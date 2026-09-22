@@ -143,7 +143,7 @@ generic `object` молча.
 Три подхода по ситуации:
 
 1. **Server-driven — когда бэкенд уже отдаёт данные, а фронт их игнорирует.** Самый
-   дешёвый случай, и он есть: баг №16 — `frontend/src/lib/balancer-statuses.ts` держит
+   дешёвый случай, и он есть: баг №16 — `frontend/src/lib/registration/balancer-statuses.ts` держит
    построчный порт `BUILTIN_STATUS_META` с 4 разошедшимися описаниями, **хотя бэкенд уже
    отдаёт каталог** по `rpc.tournament.regstatus_catalog`. Это удаление файла, не
    рефакторинг. Эталон правильного устройства в репозитории:
@@ -248,7 +248,7 @@ flowchart TD
 
 | Правило | Подход | Действие | Чинит |
 |---|---|---|---|
-| Статусы регистрации | Server-driven | **Удалить** `frontend/src/lib/balancer-statuses.ts`, читать `rpc.tournament.regstatus_catalog` (бэкенд уже отдаёт) | 16 |
+| Статусы регистрации | Server-driven | **Удалить** `frontend/src/lib/registration/balancer-statuses.ts`, читать `rpc.tournament.regstatus_catalog` (бэкенд уже отдаёт) | 16 |
 | Флекс | Единственный источник | Отдавать `is_flex` в ответе; убрать `serializers.py:87`, `sheet_parsing.py:460`, `workspace-helpers.ts:428` | 5 |
 | Off-role | Единственный источник | `balance_analytics.py:132-137` вызывает канон из `result_serializer` | 6 |
 | Playable-роль | Единственный источник **внутри драфта** | Свести `feasibility.py:139` и `rpc/draft.py:419-422` к `selection._playable_roles` | 10 |

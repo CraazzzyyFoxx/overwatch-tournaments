@@ -23,7 +23,7 @@ import type {
   BalancerPlayerRecord,
 } from "@/types/balancer-admin.types";
 import type { BalanceResponse, PlayerData } from "@/types/balancer.types";
-import { DEFAULT_DIVISION_GRID } from "@/lib/division-grid";
+import { DEFAULT_DIVISION_GRID } from "@/lib/divisions/grid";
 import type { StatusMeta, StatusScope } from "@/types/registration.types";
 
 type TestFunction = () => void | Promise<void>;

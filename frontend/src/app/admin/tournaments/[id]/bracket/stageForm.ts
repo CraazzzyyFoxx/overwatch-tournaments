@@ -13,7 +13,7 @@
  */
 import type { StageBestOfConfig, StageUpdateInput } from "@/types/admin.types";
 import type { Stage, StageType } from "@/types/tournament.types";
-import { parseStageBestOf } from "@/lib/best-of";
+import { parseStageBestOf } from "@/lib/tournament/best-of";
 
 import {
   BRACKET_STAGE_TYPES,
@@ -22,7 +22,7 @@ import {
   normalizeMaxRounds,
   type SeedRanking,
   type StageSettings
-} from "@/lib/bracket-projection";
+} from "@/lib/bracket/projection";
 
 export interface StageForm {
   name: string;

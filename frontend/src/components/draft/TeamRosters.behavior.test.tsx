@@ -1,7 +1,7 @@
 import { describe, expect, mock, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import type { RosterShape } from "@/lib/roster-shape";
+import type { RosterShape } from "@/lib/roster/shape";
 import type { DraftPick, DraftPlayer, DraftTeam } from "@/types/draft.types";
 
 mock.module("next-intl", () => ({

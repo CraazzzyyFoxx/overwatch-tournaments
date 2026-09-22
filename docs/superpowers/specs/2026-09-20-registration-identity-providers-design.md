@@ -17,9 +17,9 @@
 | Где | Что хранит |
 |---|---|
 | `backend/shared/services/admission/gates.py:48` `_PROVIDER_LABELS` | подписи для текста правила подписки |
-| `frontend/src/lib/social-providers.ts:39` `SOCIAL_PROVIDER_CONFIG` | label, icon, color, placeholder, profileUrl, oauthEligible |
+| `frontend/src/lib/social/providers.ts:39` `SOCIAL_PROVIDER_CONFIG` | label, icon, color, placeholder, profileUrl, oauthEligible |
 | `frontend/src/lib/oauth-providers.ts:3` `OAUTH_PROVIDER_META` | title + icon (подмножество предыдущего) |
-| `frontend/src/lib/subscription-requirement.ts:27` `PROVIDER_LABELS` | подписи |
+| `frontend/src/lib/registration/subscription-requirement.ts:27` `PROVIDER_LABELS` | подписи |
 | `frontend/src/components/admin/collectors/subscription-shared.tsx:47` `PROVIDER_LABELS` | подписи |
 | `frontend/src/components/admin/OAuthProviderBadge.tsx:7` `PROVIDER_META` | label + иконка |
 
@@ -179,10 +179,10 @@ class ProviderSpec:
 | `app-service/src/core/config.py:9`, `parser-service/src/core/config.py:10` `battle_tag_regex` | `PROVIDERS["battlenet"].handle_pattern` | 0 ✅ |
 | `tournament-service/.../export.py:37` `_registration_identity_handles` | цикл по `registration_identity` | 2c |
 | `frontend/src/lib/oauth-providers.ts` целиком | `lib/identity-providers.ts` | 1 |
-| `frontend/src/lib/subscription-requirement.ts:27` `PROVIDER_LABELS` | то же | 1 |
+| `frontend/src/lib/registration/subscription-requirement.ts:27` `PROVIDER_LABELS` | то же | 1 |
 | `frontend/.../subscription-shared.tsx:47` `PROVIDER_LABELS` | то же | 1 |
 | `frontend/.../OAuthProviderBadge.tsx:7` `PROVIDER_META` | то же | 1 |
-| `frontend/src/lib/social-providers.ts:39` (семантическая половина) | то же; иконка и цвет остаются локально | 1 |
+| `frontend/src/lib/social/providers.ts:39` (семантическая половина) | то же; иконка и цвет остаются локально | 1 |
 | `frontend/.../formConfig.ts:30-33` четыре regex | сервер присылает готовый | 1 |
 | `frontend/.../registration/validation.ts:24,30,39,44,146` | сервер присылает готовый | 1 |
 
@@ -498,8 +498,8 @@ reg.identities()           -> Mapping[str, tuple[str, ...]]
 |---|---|
 | `lib/identity-providers.ts` | новый; реестр из сети + локальная карта иконок/цветов по `id` с фолбэком |
 | `lib/oauth-providers.ts` | удалить |
-| `lib/social-providers.ts` | оставить только иконки/цвета/порядок отображения |
-| `lib/subscription-requirement.ts:27`, `subscription-shared.tsx:47`, `OAuthProviderBadge.tsx:7` | удалить таблицы, читать реестр |
+| `lib/social/providers.ts` | оставить только иконки/цвета/порядок отображения |
+| `lib/registration/subscription-requirement.ts:27`, `subscription-shared.tsx:47`, `OAuthProviderBadge.tsx:7` | удалить таблицы, читать реестр |
 | `registration/validation.ts:24,30,39,44,146` | удалить; regex и label приходят с сервера |
 | `balancer/form/_components/formConfig.ts:30-33` | удалить дефолтные regex; identity-поля строятся из реестра |
 | `registration/AccountStep.tsx:110-237` | `form.identity_fields.map(...)` → один компонент |

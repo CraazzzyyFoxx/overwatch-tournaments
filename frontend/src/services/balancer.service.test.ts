@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // exist before the mocked module factory runs.
 const { apiFetch } = vi.hoisted(() => ({ apiFetch: vi.fn() }));
 
-vi.mock("@/lib/api-fetch", () => ({ apiFetch }));
+vi.mock("@/lib/api/fetch", () => ({ apiFetch }));
 
 import balancerService from "./balancer.service";
 

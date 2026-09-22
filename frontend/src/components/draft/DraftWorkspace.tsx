@@ -4,14 +4,14 @@ import { useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { canConfirmPick } from "@/lib/draft-logic";
-import type { DraftGating } from "@/lib/draft-logic";
+import { canConfirmPick } from "@/lib/draft/logic";
+import type { DraftGating } from "@/lib/draft/logic";
 import {
   draftPoolView,
   DRAFT_MOBILE_VIEWS,
   type DraftMobileView,
   type DraftViewParams
-} from "@/lib/draft-workspace-model";
+} from "@/lib/draft/workspace-model";
 import { notify } from "@/lib/notify";
 import { cn } from "@/lib/utils";
 import type {

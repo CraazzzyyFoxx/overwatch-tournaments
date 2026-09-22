@@ -2,7 +2,7 @@ import { User } from "@/types/user.types";
 import { Team } from "@/types/team.types";
 import { Encounter } from "@/types/encounter.types";
 import { DivisionGridVersion } from "@/types/workspace.types";
-import type { RosterShape, RosterSlotMap } from "@/lib/roster-shape";
+import type { RosterShape, RosterSlotMap } from "@/lib/roster/shape";
 import type { TournamentLink } from "@/types/stream.types";
 
 // ─── Enums ──────────────────────────────────────────────────────────────────
@@ -93,7 +93,7 @@ export interface Tournament {
   updated_at: Date | null;
   workspace_id: number;
   name: string;
-  // Public-URL identity (`/tournaments/{slug}`); see lib/tournament-url.ts.
+  // Public-URL identity (`/tournaments/{slug}`); see lib/tournament/url.ts.
   slug: string;
   start_date: Date;
   end_date: Date;

@@ -4,25 +4,9 @@ import Link from "next/link";
 import { useTranslations } from "next-intl";
 
 import TeamName from "@/components/TeamName";
+import { isEncounterCompleted, isEncounterLive } from "@/lib/encounter/status";
 import { cn } from "@/lib/utils";
 import type { Encounter } from "@/types/encounter.types";
-
-/** Encounter statuses the platform treats as settled. Mirrors `BracketView`. */
-export const COMPLETED_ENCOUNTER_STATUSES: Record<string, true> = {
-  completed: true,
-  finished: true,
-  closed: true
-};
-
-export function isEncounterCompleted(encounter: Pick<Encounter, "status">): boolean {
-  return COMPLETED_ENCOUNTER_STATUSES[encounter.status] === true;
-}
-
-export function isEncounterLive(
-  encounter: Pick<Encounter, "status" | "started_at" | "ended_at">
-): boolean {
-  return !isEncounterCompleted(encounter) && Boolean(encounter.started_at) && !encounter.ended_at;
-}
 
 export type MatchCardProps = {
   encounter: Encounter;

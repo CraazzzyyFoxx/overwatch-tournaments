@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import type { RosterShape } from "@/lib/roster-shape";
+import type { RosterShape } from "@/lib/roster/shape";
 
 import type { AdminRegistration } from "@/types/balancer-admin.types";
 

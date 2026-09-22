@@ -10,11 +10,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { normalizeRole } from "@/lib/player-role";
+import { normalizeRole } from "@/lib/roster/player-role";
 import { useRealtimeTopic } from "@/hooks/useRealtimeTopic";
 import { usePermissions } from "@/hooks/usePermissions";
 import { notify } from "@/lib/notify";
-import { RETURN_TO_PARAM, safeReturnPath } from "@/lib/return-to";
+import { RETURN_TO_PARAM, safeReturnPath } from "@/lib/auth/return-to";
 import captainService from "@/services/captain.service";
 import encounterService from "@/services/encounter.service";
 import heroService from "@/services/hero.service";
@@ -24,7 +24,7 @@ import type { Encounter } from "@/types/encounter.types";
 import type { PickBanAction, PickBanKind, PickBanState } from "@/types/tournament.types";
 
 import { RoomChat } from "@/components/chat/RoomChat";
-import { encounterChatRoom } from "@/lib/chat-rooms";
+import { encounterChatRoom } from "@/lib/realtime/chat-rooms";
 import {
   PICK_BAN_UNAVAILABLE_COPY,
   acceptedScore,

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { startOAuthLogin } from "@/lib/oauth-login";
+import { startOAuthLogin } from "@/lib/auth/oauth-login";
 
 export async function GET(request: Request) {
   try {

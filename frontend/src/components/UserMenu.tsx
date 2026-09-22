@@ -17,7 +17,7 @@ import { useAuthProfileStore } from "@/stores/auth-profile.store";
 import { useAccountSettingsModalStore } from "@/stores/account-settings-modal.store";
 import { useTranslations } from "next-intl";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
-import { logout } from "@/lib/logout";
+import { logout } from "@/lib/auth/logout";
 
 type UserMenuProps = {
   username: string;

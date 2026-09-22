@@ -13,7 +13,7 @@ import {
   getStreamStatus,
   sortStreamsByAudience,
   streamEntryKey
-} from "@/lib/stream-platform";
+} from "@/lib/social/stream-platform";
 import { useRealtimeStore } from "@/stores/realtime.store";
 
 import { TournamentPageState } from "../_components/TournamentPageState";

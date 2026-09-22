@@ -1,5 +1,5 @@
 import { MapRead } from "@/types/map.types";
-import { PLAYER_ROLE_LABEL_KEY } from "@/lib/player-role";
+import { PLAYER_ROLE_LABEL_KEY } from "@/lib/roster/player-role";
 import { UserRoleType } from "@/types/user.types";
 import { CompareScope } from "@/app/(site)/users/compare/types";
 

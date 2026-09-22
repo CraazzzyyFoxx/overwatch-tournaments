@@ -5,7 +5,7 @@ import {
   bracketRoundLabel,
   withoutUpperPrefix,
   type BracketRoundShape
-} from "@/lib/bracket-round-name";
+} from "@/lib/bracket/round-name";
 
 /** Renders a signed round number as the name the bracket shows for it. */
 export type BracketRoundLabelFormatter = (round: number, shape: BracketRoundShape) => string;

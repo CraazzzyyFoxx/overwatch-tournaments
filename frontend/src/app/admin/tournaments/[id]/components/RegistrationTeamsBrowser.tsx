@@ -51,14 +51,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useQueryParams } from "@/hooks/useQueryParams";
 import { notify } from "@/lib/notify";
-import { formatShortfall } from "@/lib/registration-team-shortfall";
+import { formatShortfall } from "@/lib/registration/team-shortfall";
 import {
   REGISTRATION_TEAM_ERROR_CODES,
   translateRegistrationTeamError
-} from "@/lib/registration-team-errors";
-import { getRegistrationTeamStatus } from "@/lib/registration-team-tone";
-import { ROSTER_SLOT_CODES } from "@/lib/roster-shape";
-import { tournamentQueryKeys } from "@/lib/tournament-query-keys";
+} from "@/lib/registration/team-errors";
+import { getRegistrationTeamStatus } from "@/lib/registration/team-tone";
+import { ROSTER_SLOT_CODES } from "@/lib/roster/shape";
+import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 import { cn } from "@/lib/utils";
 import registrationTeamService from "@/services/registration-team.service";
 import type {
@@ -67,7 +67,7 @@ import type {
   RegistrationTeamInvite,
   RegistrationTeamMember
 } from "@/types/registration-team.types";
-import { invalidateTournamentWorkspace } from "@/lib/tournament-workspace-query-keys";
+import { invalidateTournamentWorkspace } from "@/lib/tournament/workspace-query-keys";
 
 /**
  * Organizer view of the registered teams (§8 of the team-registration design).

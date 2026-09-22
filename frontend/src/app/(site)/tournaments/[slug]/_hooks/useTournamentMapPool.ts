@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { useBracketRoundLabel } from "@/hooks/useBracketRoundLabel";
-import { UNKNOWN_ROUND_SHAPE } from "@/lib/bracket-round-name";
+import { UNKNOWN_ROUND_SHAPE } from "@/lib/bracket/round-name";
 import mapService from "@/services/map.service";
 import pickBanService from "@/services/pickBan.service";
 import tournamentService from "@/services/tournament.service";

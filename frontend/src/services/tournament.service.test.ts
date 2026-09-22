@@ -13,7 +13,7 @@ type Call = {
 };
 const calls: Call[] = [];
 
-mock.module("@/lib/api-fetch", () => ({
+mock.module("@/lib/api/fetch", () => ({
   apiFetch: (
     path: string,
     options?: { skipWorkspace?: boolean; query?: Record<string, unknown> },
@@ -23,7 +23,7 @@ mock.module("@/lib/api-fetch", () => ({
   },
 }));
 
-mock.module("@/lib/normalize-paginated-response", () => ({
+mock.module("@/lib/api/normalize-paginated-response", () => ({
   normalizePaginatedResponse: (r: unknown) => r,
 }));
 

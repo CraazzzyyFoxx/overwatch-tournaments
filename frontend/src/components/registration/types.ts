@@ -1,4 +1,4 @@
-import { ROLES, type RoleCode } from "@/lib/roles";
+import { ROLES, type RoleCode } from "@/lib/roster/roles";
 import type { RoleInput } from "@/types/registration.types";
 
 /**

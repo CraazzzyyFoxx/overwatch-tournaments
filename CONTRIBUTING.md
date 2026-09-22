@@ -74,7 +74,7 @@ Three files are committed but derived, and CI fails if they drift:
 | Artifact | Source of truth | Regenerate |
 | --- | --- | --- |
 | Gateway OpenAPI manifest | the services' Pydantic models | `cd backend && bash scripts/export_openapi_schemas.sh` |
-| `frontend/src/lib/ow-ladder.generated.json` | `backend/shared/domain/ow_ladder.py` | `cd backend && uv run python scripts/export_ow_ladder.py` |
+| `frontend/src/lib/divisions/ow-ladder.generated.json` | `backend/shared/domain/ow_ladder.py` | `cd backend && uv run python scripts/export_ow_ladder.py` |
 | Entity diagrams in `docs/database_erd.md` | `Base.metadata` (`backend/shared/models/`) | `cd backend && uv run python scripts/export_erd.py` |
 
 A new model **package** needs a new section in `docs/database_erd.md` — a heading, a sentence

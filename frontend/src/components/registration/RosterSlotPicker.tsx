@@ -3,7 +3,7 @@
 import { useTranslations } from "next-intl";
 
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
-import { getRoleIconName, ROLE_ACCENT, ROLE_ACCENTS, type RoleCode } from "@/lib/roles";
+import { getRoleIconName, ROLE_ACCENT, ROLE_ACCENTS, type RoleCode } from "@/lib/roster/roles";
 import { cn } from "@/lib/utils";
 
 /** One offerable slot plus how many of it the tournament's roster has. */

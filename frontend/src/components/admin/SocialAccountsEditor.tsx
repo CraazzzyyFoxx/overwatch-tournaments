@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/select";
 import { ConfirmDialog } from "@/components/kit/ConfirmDialog";
 import { SocialIcon } from "@/components/social/SocialIcon";
-import { getSocialProviderConfig, SOCIAL_PROVIDER_ORDER, socialAccountsForProvider } from "@/lib/social-providers";
+import { getSocialProviderConfig, SOCIAL_PROVIDER_ORDER, socialAccountsForProvider } from "@/lib/social/providers";
 import adminService from "@/services/admin.service";
 import { notify } from "@/lib/notify";
 import { cn } from "@/lib/utils";

@@ -10,7 +10,7 @@ import {
   type RealtimeResource,
   type ResourceKeyContext,
   resourceQueryKeys,
-} from "@/lib/realtime-resources";
+} from "@/lib/realtime/resources";
 
 /**
  * One invalidation consumer for the whole app.

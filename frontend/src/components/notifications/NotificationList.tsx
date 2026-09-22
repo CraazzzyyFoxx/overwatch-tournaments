@@ -17,8 +17,8 @@ import { useFormatter, useLocale, useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { PopoverClose } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
-import { announcementText } from "@/lib/announcement-text";
-import { notificationHref } from "@/lib/notification-href";
+import { announcementText } from "@/lib/notifications/announcement-text";
+import { notificationHref } from "@/lib/notifications/href";
 import { cn } from "@/lib/utils";
 import type { NotificationItem } from "@/types/notification.types";
 

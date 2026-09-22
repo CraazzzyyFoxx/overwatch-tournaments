@@ -23,16 +23,16 @@ import { EditableAvatar } from "@/components/ui/editable-avatar";
 import InviteHistorySection from "@/components/registration/InviteHistorySection";
 import RosterSlotGlyph from "@/components/registration/RosterSlotGlyph";
 import { notify } from "@/lib/notify";
-import { MAX_AVATAR_BYTES } from "@/lib/avatar";
-import { buildInviteLink } from "@/lib/invite-link";
+import { MAX_AVATAR_BYTES } from "@/lib/uploads";
+import { buildInviteLink } from "@/lib/registration/invite-link";
 import {
   registrationTeamErrorCode,
   translateRegistrationTeamError,
-} from "@/lib/registration-team-errors";
-import { formatShortfall } from "@/lib/registration-team-shortfall";
-import { getRegistrationTeamStatus, REGISTRATION_TEAM_STATUS_TONE } from "@/lib/registration-team-tone";
-import { ROSTER_SLOT_CODES, type RosterSlotCode } from "@/lib/roster-shape";
-import { tournamentQueryKeys } from "@/lib/tournament-query-keys";
+} from "@/lib/registration/team-errors";
+import { formatShortfall } from "@/lib/registration/team-shortfall";
+import { getRegistrationTeamStatus, REGISTRATION_TEAM_STATUS_TONE } from "@/lib/registration/team-tone";
+import { ROSTER_SLOT_CODES, type RosterSlotCode } from "@/lib/roster/shape";
+import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 import { cn } from "@/lib/utils";
 import registrationTeamService from "@/services/registration-team.service";
 import type { RegistrationTeam, RegistrationTeamMember } from "@/types/registration-team.types";

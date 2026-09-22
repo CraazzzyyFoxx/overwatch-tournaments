@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, mock } from "bun:test";
 // builds the correct gateway path.
 const calls: Array<{ path: string }> = [];
 
-mock.module("@/lib/api-fetch", () => ({
+mock.module("@/lib/api/fetch", () => ({
   apiFetch: (path: string) => {
     calls.push({ path });
     return Promise.resolve({ json: async () => [] });

@@ -12,9 +12,9 @@ import { useAuthProfile } from "@/hooks/useAuthProfile";
 import {
   readDismissedAnnouncements,
   rememberDismissedAnnouncement
-} from "@/lib/announcement-dismissed";
-import { announcementHref, announcementText } from "@/lib/announcement-text";
-import { notificationQueryKeys } from "@/lib/notification-query-keys";
+} from "@/lib/notifications/announcement-dismissed";
+import { announcementHref, announcementText } from "@/lib/notifications/announcement-text";
+import { notificationQueryKeys } from "@/lib/notifications/query-keys";
 import notificationService from "@/services/notification.service";
 import type { NotificationItem } from "@/types/notification.types";
 
@@ -79,7 +79,8 @@ const AnnouncementBanner = ({ initial }: AnnouncementBannerProps) => {
   const { user } = useAuthProfile();
   const authUserId = user?.id ?? null;
 
-  // Read persisted guest dismissals once; failed account writes restore the notice.
+  // This browser's dismissals: the server may answer as if anonymous (lapsed
+  // access cookie), and these keep a closed notice closed regardless.
   const [dismissed, setDismissed] = useState<number[]>(() => readDismissedAnnouncements());
 
   const query = useQuery({
@@ -97,7 +98,10 @@ const AnnouncementBanner = ({ initial }: AnnouncementBannerProps) => {
     onError: (_error, ids) => {
       setDismissed((current) => current.filter((id) => !ids.includes(id)));
     },
-    onSuccess: () => {
+    onSuccess: (_result, ids) => {
+      // Remembered only once the server has it, so a failed write restores the
+      // notice instead of hiding an unsaved dismissal on this browser forever.
+      for (const id of ids) rememberDismissedAnnouncement(id);
       // A read mark *is* the dismissal, and the bell counts the same rows — so
       // closing the banner has to drop its badge too.
       void queryClient.invalidateQueries({ queryKey: notificationQueryKeys.list() });

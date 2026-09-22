@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import { Avatar, AvatarImage, AvatarFallback, AvatarStack } from "@/components/ui/avatar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { heroInitials } from "@/components/hero/heroRole";
-import { heroVariantFromRole } from "@/lib/player-role";
+import { heroVariantFromRole } from "@/lib/roster/player-role";
 import { useHoverIntent } from "@/hooks/useHoverIntent";
 
 export type HeroImageSize = "sm" | "md" | "lg";

@@ -23,9 +23,9 @@ import {
   useDraftPickOptionsQuery,
   useDraftRealtime
 } from "@/hooks/useDraftData";
-import { computeGating } from "@/lib/draft-logic";
-import { draftChatRoom } from "@/lib/chat-rooms";
-import { parseDraftViewParams, type DraftViewParams } from "@/lib/draft-workspace-model";
+import { computeGating } from "@/lib/draft/logic";
+import { draftChatRoom } from "@/lib/realtime/chat-rooms";
+import { parseDraftViewParams, type DraftViewParams } from "@/lib/draft/workspace-model";
 import { DraftPageHero } from "./DraftPageHero";
 import { DraftWorkspace } from "./DraftWorkspace";
 

@@ -4,7 +4,7 @@
     "A resource names WHAT went stale, never WHY. Four tables mirror this file:",
     "  - backend/shared/services/realtime/resources.py            (Resource enum)",
     "  - gateway/internal/respcache/resources.go                  (URL substrings)",
-    "  - frontend/src/lib/realtime-resources.ts                   (query keys)",
+    "  - frontend/src/lib/realtime/resources.ts                   (query keys)",
     "  - per-service RESOURCE_CACHE_PATTERNS (cashews globs)",
     "Each of those has a parity test against this file, so a resource cannot be",
     "published without every consumer knowing what to drop, and a consumer",

@@ -15,7 +15,7 @@ server raises and a refusal the client renders now come from the same
 :class:`~shared.services.admission.types.RequirementVerdict` list.
 
 **One ``ApiExc`` per blocker, carrying the reason's machine ``code``** (D13, the
-convention ``teams.py`` already established and ``lib/registration-team-errors.ts``
+convention ``teams.py`` already established and ``lib/registration/team-errors.ts``
 already consumes). The code is what lets the client translate a refusal it did
 not compute: it never ran the Kleene composition, so without a stable code its
 only options are to re-derive the rule -- the duplication this layer deletes -- or

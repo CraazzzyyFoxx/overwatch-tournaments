@@ -13,7 +13,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { usePermissions } from "@/hooks/usePermissions";
 import { notify } from "@/lib/notify";
-import { ROLES, ROLE_LABELS, canonicalToRegistrationRole } from "@/lib/roles";
+import { ROLES, ROLE_LABELS, canonicalToRegistrationRole } from "@/lib/roster/roles";
 import adminService from "@/services/admin.service";
 import { useWorkspaceStore } from "@/stores/workspace.store";
 import type { PlayerSubRole } from "@/types/admin.types";

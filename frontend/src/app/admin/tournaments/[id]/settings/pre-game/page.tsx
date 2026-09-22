@@ -28,7 +28,7 @@ import type { PickBanConfig, PickBanKind } from "@/types/tournament.types";
 import {
   pickBanDraftToInput,
   type PickBanDraft
-} from "@/lib/pick-ban-config";
+} from "@/lib/tournament/pick-ban-config";
 import { useHubEncountersQuery, useHubStagesQuery } from "../../hubQueries";
 import { SettingsSectionPage } from "../SettingsSection";
 import { PreGameEditor } from "./PreGameEditor";

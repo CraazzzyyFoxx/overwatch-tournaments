@@ -1,4 +1,4 @@
-import type { RosterSlotCode, RosterSlotMap } from "@/lib/roster-shape";
+import type { RosterSlotCode, RosterSlotMap } from "@/lib/roster/shape";
 import type { MixBalancerPreferences } from "@/services/mix-preferences.service";
 
 /**

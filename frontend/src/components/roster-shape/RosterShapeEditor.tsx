@@ -18,7 +18,7 @@ import FlexIcon from "@/components/icons/FlexIcon";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { EYEBROW_CLASS, TONE_CLASS } from "@/components/kit/tone";
 import { cn } from "@/lib/utils";
-import { ROLE_ACCENT, getRoleIconName } from "@/lib/roles";
+import { ROLE_ACCENT, getRoleIconName } from "@/lib/roster/roles";
 import {
   ROSTER_SLOT_CODES,
   orderSlotCodes,
@@ -27,7 +27,7 @@ import {
   type RosterShape,
   type RosterSlotCode,
   type RosterSlotMap
-} from "@/lib/roster-shape";
+} from "@/lib/roster/shape";
 
 import {
   MAX_SLOT_COUNT,
@@ -40,7 +40,7 @@ import {
   setSlotCount,
   slotsPayload,
   type RosterShapeSelection
-} from "@/lib/roster-shape-editor-model";
+} from "@/lib/roster/shape-editor-model";
 
 /**
  * Role hues, straight off the design-book role tokens (`--aqt-tank`,

@@ -26,7 +26,7 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { getStatusIcon, STATUS_ICON_OPTIONS } from "@/lib/status-icons";
+import { getStatusIcon, STATUS_ICON_OPTIONS } from "@/lib/registration/status-icons";
 import { cn } from "@/lib/utils";
 import type { StatusScope } from "@/types/registration.types";
 

@@ -6,25 +6,25 @@ import { useTranslations } from "next-intl";
 import DivisionIcon from "@/components/DivisionIcon";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { TournamentTeamCardFrame } from "@/components/TournamentTeamCard";
-import { getDivisionLabel, resolveDivisionFromRank } from "@/lib/division-grid";
-import { getRoleIconName, ROLE_ACCENT } from "@/lib/roles";
+import { getDivisionLabel, resolveDivisionFromRank } from "@/lib/divisions/grid";
+import { getRoleIconName, ROLE_ACCENT } from "@/lib/roster/roles";
 import { cn } from "@/lib/utils";
 import type { DraftPick, DraftPlayer, DraftRole, DraftTeam } from "@/types/draft.types";
 import type { DivisionGrid } from "@/types/workspace.types";
 
-import { teamCrest } from "@/lib/draft-crest";
+import { teamCrest } from "@/lib/draft/crest";
 import {
   buildRosterByTeam,
   slotRankForPlayer,
   rosterRoleForPlayer
-} from "@/lib/draft-workspace-model";
+} from "@/lib/draft/workspace-model";
 import {
   isRoleSlotCode,
   orderSlotCodes,
   ROSTER_SLOT_CODES,
   type RosterRoleSlotCode,
   type RosterShape
-} from "@/lib/roster-shape";
+} from "@/lib/roster/shape";
 
 interface TeamRostersProps {
   teams: DraftTeam[];

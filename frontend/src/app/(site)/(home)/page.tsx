@@ -18,13 +18,13 @@ import { PlatformStatsGrid } from "@/components/stats/PlatformStatsGrid";
 import statisticsService from "@/services/statistics.service";
 import workspaceService from "@/services/workspace.service";
 import tournamentService from "@/services/tournament.service";
-import { isTenantHost } from "@/lib/tenant-host";
+import { isTenantHost } from "@/lib/site/tenant-host";
 import {
   ChartCardSkeleton,
   StatsGridSkeleton,
   TableCardSkeleton,
 } from "@/components/skeletons/dashboard-skeletons";
-import { isTournamentStatusActive } from "@/lib/tournament-status";
+import { isTournamentStatusActive } from "@/lib/tournament/status";
 import type { Workspace } from "@/types/workspace.types";
 import type { PlayerStatistics } from "@/types/statistics.types";
 

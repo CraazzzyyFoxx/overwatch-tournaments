@@ -1,4 +1,4 @@
-import type { PlayerRoleOption } from "@/lib/player-role";
+import type { PlayerRoleOption } from "@/lib/roster/player-role";
 import { Hero, HeroPlaytime } from "@/types/hero.types";
 import { Score } from "@/types/encounter.types";
 import { MapRead } from "@/types/map.types";
@@ -307,7 +307,7 @@ export interface MinimizedUser {
   name: string;
 }
 
-/** The canonical player role — re-exported from `@/lib/player-role` (single source of truth). */
+/** The canonical player role — re-exported from `@/lib/roster/player-role` (single source of truth). */
 export type UserRoleType = PlayerRoleOption;
 
 export interface UserOverviewRoleDivision {

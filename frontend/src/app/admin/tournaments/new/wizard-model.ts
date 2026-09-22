@@ -4,7 +4,7 @@
 
 import { getTournamentForm } from "@/app/admin/tournaments/[id]/components/tournamentWorkspace.helpers";
 import type { TournamentFormFieldsValue } from "@/components/admin/tournaments/TournamentFormFields";
-import type { SchedulablePhase } from "@/lib/tournament-lifecycle";
+import type { SchedulablePhase } from "@/lib/tournament/lifecycle";
 import type { TournamentCreateInput, TournamentUpdateInput } from "@/types/admin.types";
 import type { Tournament } from "@/types/tournament.types";
 

@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FilterChip, FilterChipGroup } from "@/components/ui/filter-chip";
 import { cn } from "@/lib/utils";
 import HeroImage from "@/components/hero/HeroImage";
-import { normalizeRole, type AqtRoleKey } from "@/lib/player-role";
+import { normalizeRole, type AqtRoleKey } from "@/lib/roster/player-role";
 import type { PickBanEntry, PickBanEntryStatus, PickBanKind } from "@/types/tournament.types";
 
 import {

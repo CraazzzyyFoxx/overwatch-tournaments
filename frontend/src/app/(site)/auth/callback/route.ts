@@ -1,4 +1,4 @@
-import { handleOAuthCallback } from "@/lib/oauth-callback";
+import { handleOAuthCallback } from "@/lib/auth/oauth-callback";
 
 // Single fixed apex callback for every OAuth provider (one registered
 // redirect_uri, per docs/superpowers/specs/2026-07-06-workspace-multidomain-design.md).

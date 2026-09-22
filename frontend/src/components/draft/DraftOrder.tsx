@@ -5,13 +5,13 @@ import { useTranslations } from "next-intl";
 
 import DivisionIcon from "@/components/DivisionIcon";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
-import { resolveDivisionFromRank } from "@/lib/division-grid";
-import { getRoleIconName, ROLE_ACCENT } from "@/lib/roles";
+import { resolveDivisionFromRank } from "@/lib/divisions/grid";
+import { getRoleIconName, ROLE_ACCENT } from "@/lib/roster/roles";
 import { cn } from "@/lib/utils";
 import type { DraftPick, DraftPlayer, DraftTeam } from "@/types/draft.types";
 import type { DivisionGrid } from "@/types/workspace.types";
 
-import { groupPicksByRound } from "@/lib/draft-workspace-model";
+import { groupPicksByRound } from "@/lib/draft/workspace-model";
 
 interface DraftOrderProps {
   picks: DraftPick[];

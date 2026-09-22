@@ -10,9 +10,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { PageStateCard } from "@/components/ui/page-state-card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { getApiErrorMessage } from "@/lib/api-error";
+import { getApiErrorMessage } from "@/lib/api/error";
 import { notify } from "@/lib/notify";
-import { RETURN_TO_PARAM, withReturnTo } from "@/lib/return-to";
+import { RETURN_TO_PARAM, withReturnTo } from "@/lib/auth/return-to";
 import scrimService from "@/services/scrim.service";
 import type { ScrimRoom } from "@/types/scrim.types";
 

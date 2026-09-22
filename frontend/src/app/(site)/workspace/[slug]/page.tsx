@@ -27,7 +27,7 @@ import {
   StatsGridSkeleton,
   TableCardSkeleton,
 } from "@/components/skeletons/dashboard-skeletons";
-import { isTournamentStatusActive } from "@/lib/tournament-status";
+import { isTournamentStatusActive } from "@/lib/tournament/status";
 import type { Workspace } from "@/types/workspace.types";
 
 export const dynamic = "force-dynamic";

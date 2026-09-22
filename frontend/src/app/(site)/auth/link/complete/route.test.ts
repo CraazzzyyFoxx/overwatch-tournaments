@@ -32,7 +32,7 @@ mock.module("next/headers", () => ({
 type CompleteLinkCall = { ticket: string; accessToken: string; guard: string };
 const completeLinkCalls: CompleteLinkCall[] = [];
 
-// safeRedirectTarget (imported by route.ts from @/lib/oauth-callback) in turn
+// safeRedirectTarget (imported by route.ts from @/lib/auth/oauth-callback) in turn
 // imports OAuthLinkAuthRequiredError and OAuthLinkFailedError from this module,
 // so the mock below must re-export both (route.ts narrows on the latter) or
 // those imports resolve to undefined and the `instanceof` check throws.

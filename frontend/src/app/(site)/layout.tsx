@@ -6,7 +6,11 @@ import AnnouncementBanner from "@/components/notifications/AnnouncementBanner";
 import { Separator } from "@/components/ui/separator";
 import notificationService from "@/services/notification.service";
 import workspaceService from "@/services/workspace.service";
-import { deriveWorkspacePalette } from "@/lib/workspace-theme";
+import {
+  DISMISSED_ANNOUNCEMENTS_COOKIE,
+  withoutDismissedAnnouncements
+} from "@/lib/notifications/announcement-dismissed";
+import { deriveWorkspacePalette } from "@/lib/workspace/theme";
 import { WorkspaceThemeSync } from "@/components/WorkspaceThemeSync";
 import { WorkspaceHostLock } from "@/components/WorkspaceHostLock";
 import ZoneIntlProvider from "@/i18n/ZoneIntlProvider";
@@ -60,9 +64,10 @@ export default async function SiteLayout({
   // Custom workspace branding is tenant-only: a subdomain / custom-domain host
   // paints its workspace's palette. The shared platform (apex) host applies no
   // customization at all, so it needs neither the workspace nor a palette seed.
-  const [workspace, announcements] = await Promise.all([
+  const [workspace, announcements, cookieStore] = await Promise.all([
     tenantMode ? resolveCurrentWorkspace() : null,
-    resolveActiveAnnouncements()
+    resolveActiveAnnouncements(),
+    cookies()
   ]);
 
   const seed = workspace ? deriveWorkspacePalette(workspace) : null;
@@ -84,7 +89,12 @@ export default async function SiteLayout({
         <WorkspaceThemeSync />
         <div className="w-full max-w-screen-3xl pt-6 mx-auto px-4 md:px-6 xl:px-10 h-full">
           <Header tenantMode={tenantMode} tenantWorkspace={tenantWorkspace} />
-          <AnnouncementBanner initial={announcements} />
+          <AnnouncementBanner
+            initial={withoutDismissedAnnouncements(
+              announcements,
+              cookieStore.get(DISMISSED_ANNOUNCEMENTS_COOKIE)?.value
+            )}
+          />
           <div className="flex w-full flex-col min-h-[95%]">
             <main id="main-content" tabIndex={-1} className="flex flex-1 flex-col gap-4 pt-4 md:gap-8 md:pt-8">
               {children}

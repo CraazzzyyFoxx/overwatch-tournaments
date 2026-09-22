@@ -30,7 +30,7 @@ import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { EYEBROW_CLASS } from "@/components/kit/tone";
 import { SocialIcon } from "@/components/social/SocialIcon";
-import { getSocialProviderConfig } from "@/lib/social-providers";
+import { getSocialProviderConfig } from "@/lib/social/providers";
 import { EmptyNote } from "@/components/kit/EmptyNote";
 
 interface UserMergeDialogProps {

@@ -5,7 +5,7 @@ import type { StreamPollHealth, StreamPollStatus } from "@/types/admin.types";
  * Wording and tone per recorded tick outcome.
  *
  * A registry rather than nested ternaries (the same reason `variant` in
- * `lib/tournament-status.ts` is a lookup): the compiler then holds this
+ * `lib/tournament/status.ts` is a lookup): the compiler then holds this
  * exhaustive against `StreamPollStatus`, so a status added backend-side fails
  * the build here instead of silently rendering as a raw enum token.
  *

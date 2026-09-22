@@ -105,7 +105,7 @@ The icons are the project's standard `TankIcon/DamageIcon/SupportIcon` (`PlayerR
 
 ### Divisions
 
-Icon only (`DivisionIcon`/`PlayerDivisionIcon` + `lib/division-grid.ts`), the division name goes in `alt`/`title`. We never spell the division out in text on display surfaces; a list of names is acceptable only in the rank-selection form (that is input, not display).
+Icon only (`DivisionIcon`/`PlayerDivisionIcon` + `lib/divisions/grid.ts`), the division name goes in `alt`/`title`. We never spell the division out in text on display surfaces; a list of names is acceptable only in the rank-selection form (that is input, not display).
 
 ### Hero avatars (`HeroImage` / `HeroStrip`)
 

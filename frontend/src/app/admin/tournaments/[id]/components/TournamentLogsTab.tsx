@@ -40,7 +40,7 @@ import { TournamentLogUploadDialog } from "./TournamentLogUploadDialog";
 import {
   getTournamentWorkspaceQueryKeys,
   invalidateTournamentWorkspace
-} from "@/lib/tournament-workspace-query-keys";
+} from "@/lib/tournament/workspace-query-keys";
 import { EmptyNote } from "@/components/kit/EmptyNote";
 
 const PAGE_SIZE = 25;

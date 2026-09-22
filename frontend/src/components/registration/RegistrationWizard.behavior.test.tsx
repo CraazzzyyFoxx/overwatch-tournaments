@@ -2,7 +2,7 @@ import { afterAll, describe, expect, it, mock } from "bun:test";
 import { Window } from "happy-dom";
 import { act, type ReactNode } from "react";
 
-import { ApiError } from "@/lib/api-error";
+import { ApiError } from "@/lib/api/error";
 import type { FormField, FormSchema } from "@/types/forms.types";
 import type { RegistrationForm } from "@/types/registration.types";
 

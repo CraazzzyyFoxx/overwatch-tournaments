@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
 
-import { resetRefreshStateForTests } from "@/lib/auth-tokens";
+import { resetRefreshStateForTests } from "@/lib/auth/tokens";
 import { useAuthProfileStore } from "@/stores/auth-profile.store";
 
 // Drives the REAL fetchMe / refreshAccessToken via a URL-aware fetch mock (no

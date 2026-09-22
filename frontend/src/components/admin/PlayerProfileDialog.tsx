@@ -21,7 +21,7 @@ import adminService from "@/services/admin.service";
 import { SocialAccountsEditor } from "@/components/admin/SocialAccountsEditor";
 import { revalidateUser } from "@/app/actions/users";
 import { notify } from "@/lib/notify";
-import { MAX_AVATAR_BYTES } from "@/lib/avatar";
+import { MAX_AVATAR_BYTES } from "@/lib/uploads";
 import type { User } from "@/types/user.types";
 
 // ─── Avatar section ─────────────────────────────────────────────────────────

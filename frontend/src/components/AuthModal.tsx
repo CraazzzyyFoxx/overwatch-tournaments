@@ -13,11 +13,11 @@ import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useOAuthProviders } from "@/hooks/use-oauth-providers";
-import { OAUTH_PROVIDER_META } from "@/lib/oauth-providers";
+import { getSocialProviderConfig } from "@/lib/social/providers";
 import { useAuthModalStore } from "@/stores/auth-modal.store";
 import { SITE_ICON, SITE_NAME } from "@/config/site";
 import WorkspaceBrandIcon from "@/components/WorkspaceBrandIcon";
-import type { TenantWorkspaceBranding } from "@/lib/tenant-host";
+import type { TenantWorkspaceBranding } from "@/lib/site/tenant-host";
 
 type ProviderButtonProps = {
   href: string;
@@ -116,22 +116,24 @@ const AuthModal = ({ tenantWorkspace }: AuthModalProps) => {
                 <Skeleton key={provider} className="h-10 rounded-lg" />
               ))
             : providers.map((provider) => {
-                const meta = OAUTH_PROVIDER_META[provider];
+                const { label, icon } = getSocialProviderConfig(provider);
 
                 return (
                   <ProviderButton
                     key={provider}
                     href={`/auth/${provider}/login?next=${next}`}
-                    title={t("auth.continueWith", { provider: meta.title })}
+                    title={t("auth.continueWith", { provider: label })}
                     icon={
-                      <Image
-                        src={meta.icon}
-                        alt=""
-                        width={16}
-                        height={16}
-                        aria-hidden
-                        className={provider === "battlenet" ? "brightness-125" : ""}
-                      />
+                      icon ? (
+                        <Image
+                          src={icon}
+                          alt=""
+                          width={16}
+                          height={16}
+                          aria-hidden
+                          className={provider === "battlenet" ? "brightness-125" : ""}
+                        />
+                      ) : null
                     }
                   />
                 );

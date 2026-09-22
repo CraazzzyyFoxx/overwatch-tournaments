@@ -2,7 +2,7 @@ import { dehydrate, HydrationBoundary, QueryClient } from "@tanstack/react-query
 import { notFound } from "next/navigation";
 
 import { getTournamentOverviewState } from "./_data";
-import { tournamentOverviewQueryOptions } from "@/lib/tournament-overview-query";
+import { tournamentOverviewQueryOptions } from "@/lib/tournament/overview-query";
 
 type TournamentOverviewBoundaryProps = {
   slug: string;

@@ -23,7 +23,7 @@ import {
   activeRoundNumber,
   orderEliminationRounds,
   type BracketMatch
-} from "@/lib/bracket-view";
+} from "@/lib/bracket/view";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useBracketRoundLabel } from "@/hooks/useBracketRoundLabel";
 import { cn } from "@/lib/utils";

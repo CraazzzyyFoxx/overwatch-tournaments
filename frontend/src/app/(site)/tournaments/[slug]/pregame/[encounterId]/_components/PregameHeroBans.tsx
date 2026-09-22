@@ -5,7 +5,7 @@ import { Ban, Shield } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import TeamName, { type TeamNameInput } from "@/components/TeamName";
-import type { AqtRoleKey } from "@/lib/player-role";
+import type { AqtRoleKey } from "@/lib/roster/player-role";
 import type { PickBanItemLike } from "@/components/pick-ban/PickBanGrid";
 import { PickBanItemThumb } from "@/components/pick-ban/PickBanItemThumb";
 import { cn } from "@/lib/utils";

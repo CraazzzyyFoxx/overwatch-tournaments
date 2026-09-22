@@ -2,8 +2,8 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { tournamentQueryKeys } from "@/lib/tournament-query-keys";
-import { PROVIDER_LABELS, requiredProviders } from "@/lib/subscription-requirement";
+import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
+import { PROVIDER_LABELS, requiredProviders } from "@/lib/registration/subscription-requirement";
 import registrationService from "@/services/registration.service";
 import type { SubscriptionRequirement } from "@/types/registration.types";
 import SubscriptionRow from "./SubscriptionRow";

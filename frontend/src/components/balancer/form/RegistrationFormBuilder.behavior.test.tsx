@@ -23,7 +23,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import en from "@/i18n/messages/en.json";
-import { ApiError } from "@/lib/api-error";
+import { ApiError } from "@/lib/api/error";
 import { notify } from "@/lib/notify";
 import type { FormField, FormSchema } from "@/types/forms.types";
 

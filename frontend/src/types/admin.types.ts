@@ -266,7 +266,7 @@ export interface StreamPollHealth {
 
 // ─── Tournament ──────────────────────────────────────────────────────────────
 
-import type { RosterSlotMap } from "@/lib/roster-shape";
+import type { RosterSlotMap } from "@/lib/roster/shape";
 import type {
   StageItemType,
   StageType,

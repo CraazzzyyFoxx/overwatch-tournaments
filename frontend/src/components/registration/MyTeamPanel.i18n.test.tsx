@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 //
 // `messages.parity.test.ts` proves en.json and ru.json agree with each other, and
-// `registration-team-errors.test.ts` proves every backend error code is
+// `lib/registration/team-errors.test.ts` proves every backend error code is
 // translated. Neither can see a key this component *asks for* that neither file
 // defines — next-intl then renders the raw key path, which reads as a broken page.
 //

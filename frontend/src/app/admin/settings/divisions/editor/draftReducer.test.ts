@@ -11,7 +11,7 @@
 // bit-identical, otherwise the editor silently re-bands every grid it opens.
 import { describe, expect, it } from "vitest";
 
-import { OW_REFERENCE_GRID } from "@/lib/division-grid";
+import { OW_REFERENCE_GRID } from "@/lib/divisions/grid";
 import type { DivisionTier } from "@/types/workspace.types";
 import {
   bandSize,

@@ -1,7 +1,7 @@
 import React from "react";
 
 import { cn } from "@/lib/utils";
-import type { PlayerRoleTint } from "@/lib/player-role";
+import type { PlayerRoleTint } from "@/lib/roster/player-role";
 
 /**
  * Editorial-Tactical page hero (design-book / OWT artifact).

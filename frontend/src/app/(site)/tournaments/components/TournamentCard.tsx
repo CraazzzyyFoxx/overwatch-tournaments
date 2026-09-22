@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 
-import { getTournamentStatusMeta } from "@/lib/tournament-status";
-import { tournamentHref } from "@/lib/tournament-url";
+import { getTournamentStatusMeta } from "@/lib/tournament/status";
+import { tournamentHref } from "@/lib/tournament/url";
 import { cn, formatDateRange } from "@/lib/utils";
 import type { Tournament } from "@/types/tournament.types";
 

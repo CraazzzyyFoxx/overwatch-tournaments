@@ -5,7 +5,7 @@ import React from "react";
 import type { Tournament } from "@/types/tournament.types";
 import { cn, formatDateRange } from "@/lib/utils";
 import { useTranslations, useLocale } from "next-intl";
-import { getTournamentStatusMeta } from "@/lib/tournament-status";
+import { getTournamentStatusMeta } from "@/lib/tournament/status";
 import { stageProgress } from "@/app/(site)/tournaments/components/tournaments-helpers";
 import { PageHero, HeroCoord, HeroStat } from "@/components/site/PageHero";
 import styles from "@/app/(site)/tournaments/analytics/components/AnalyticsRedesign.module.css";

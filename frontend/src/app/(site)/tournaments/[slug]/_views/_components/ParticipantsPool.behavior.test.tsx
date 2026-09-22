@@ -17,7 +17,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import en from "@/i18n/messages/en.json";
-import type { RosterShape } from "@/lib/roster-shape";
+import type { RosterShape } from "@/lib/roster/shape";
 import type { FormField } from "@/types/forms.types";
 import type { Registration, RegistrationForm, RegistrationRole } from "@/types/registration.types";
 import type { Tournament, TournamentStatus } from "@/types/tournament.types";

@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { NumberInput } from "@/components/ui/number-input";
 import { Slider } from "@/components/ui/slider";
 import { RosterShapeEditor } from "@/components/roster-shape/RosterShapeEditor";
-import { ROSTER_SLOT_CODES } from "@/lib/roster-shape";
+import { ROSTER_SLOT_CODES } from "@/lib/roster/shape";
 import { notify } from "@/lib/notify";
 import {
   mixPreferencesKeys,

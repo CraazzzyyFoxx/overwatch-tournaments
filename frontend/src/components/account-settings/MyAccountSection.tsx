@@ -20,14 +20,14 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { EditableAvatar } from "@/components/ui/editable-avatar";
 import { SocialIcon } from "@/components/social/SocialIcon";
-import { getSocialProviderConfig, sortSocialAccounts } from "@/lib/social-providers";
-import { logout } from "@/lib/logout";
+import { getSocialProviderConfig, sortSocialAccounts } from "@/lib/social/providers";
+import { logout } from "@/lib/auth/logout";
 import { notify } from "@/lib/notify";
 import { useAuthProfileStore } from "@/stores/auth-profile.store";
 import { usePermissions } from "@/hooks/usePermissions";
 import meService from "@/services/me.service";
 import { revalidateUser } from "@/app/actions/users";
-import { MAX_AVATAR_BYTES } from "@/lib/avatar";
+import { MAX_AVATAR_BYTES } from "@/lib/uploads";
 import type { User } from "@/types/user.types";
 
 // Providers a user can OAuth-link (and thereby verify).

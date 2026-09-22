@@ -11,7 +11,7 @@ import { beforeEach, describe, expect, it, mock } from "bun:test";
 // throttle (429). Both used to land in a bare `catch` that answered 401 AND wiped
 // the cookies, silently logging out every VPN user.
 
-import { ApiError } from "@/lib/api-error";
+import { ApiError } from "@/lib/api/error";
 
 let requestCookies: Record<string, { value: string } | undefined> = {};
 
@@ -25,7 +25,7 @@ let refreshOutcome: (() => Promise<{ access_token: string; refresh_token: string
 
 // `bun test` shares one module registry across the files in a run, so whichever
 // mock of this module registers first is the one every other auth-route test
-// sees. Re-export the link-error classes here too -- @/lib/oauth-callback
+// sees. Re-export the link-error classes here too -- @/lib/auth/oauth-callback
 // imports them, and a mock missing either name takes the sibling route tests
 // down with a SyntaxError at import time.
 mock.module("@/services/auth.service", () => ({

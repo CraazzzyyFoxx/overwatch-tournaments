@@ -16,8 +16,8 @@ import {
   SelectTrigger,
   SelectValue
 } from "@/components/ui/select";
-import { resolveDivisionFromRank } from "@/lib/division-grid";
-import { getRoleIconName, ROLE_ACCENT } from "@/lib/roles";
+import { resolveDivisionFromRank } from "@/lib/divisions/grid";
+import { getRoleIconName, ROLE_ACCENT } from "@/lib/roster/roles";
 import { cn } from "@/lib/utils";
 import type { DraftRole } from "@/types/draft.types";
 import type { DivisionGrid } from "@/types/workspace.types";

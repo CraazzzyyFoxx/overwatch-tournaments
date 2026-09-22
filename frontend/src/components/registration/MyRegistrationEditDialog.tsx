@@ -6,8 +6,8 @@ import { useState } from "react";
 
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
-import { ApiError, getApiErrorMessage } from "@/lib/api-error";
-import { tournamentQueryKeys } from "@/lib/tournament-query-keys";
+import { ApiError, getApiErrorMessage } from "@/lib/api/error";
+import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 import meService from "@/services/me.service";
 import registrationService from "@/services/registration.service";
 import type {

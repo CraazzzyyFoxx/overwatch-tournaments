@@ -1,6 +1,6 @@
 import { queryOptions } from "@tanstack/react-query";
 
-import { tournamentQueryKeys } from "@/lib/tournament-query-keys";
+import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 import encounterService from "@/services/encounter.service";
 import tournamentService from "@/services/tournament.service";
 import type { Encounter } from "@/types/encounter.types";

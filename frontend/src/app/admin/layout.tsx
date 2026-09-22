@@ -3,7 +3,11 @@ import { cookies } from "next/headers";
 
 import { AdminLayoutClient } from "@/app/admin/AdminLayoutClient";
 import ZoneIntlProvider from "@/i18n/ZoneIntlProvider";
-import { SIDEBAR_COOKIE_NAMES, parseSidebarOpenCookie } from "@/lib/sidebar-cookies";
+import {
+  DISMISSED_ANNOUNCEMENTS_COOKIE,
+  withoutDismissedAnnouncements
+} from "@/lib/notifications/announcement-dismissed";
+import { SIDEBAR_COOKIE_NAMES, parseSidebarOpenCookie } from "@/lib/site/sidebar-cookies";
 import notificationService from "@/services/notification.service";
 import type { NotificationItem } from "@/types/notification.types";
 
@@ -26,7 +30,10 @@ async function resolveActiveAnnouncements(): Promise<NotificationItem[] | undefi
 export default async function AdminLayout({ children }: Readonly<AdminLayoutProps>) {
   const cookieStore = await cookies();
   const defaultSidebarOpen = parseSidebarOpenCookie(cookieStore.get(SIDEBAR_COOKIE_NAMES.admin)?.value) ?? true;
-  const announcements = await resolveActiveAnnouncements();
+  const announcements = withoutDismissedAnnouncements(
+    await resolveActiveAnnouncements(),
+    cookieStore.get(DISMISSED_ANNOUNCEMENTS_COOKIE)?.value
+  );
 
   return (
     <ZoneIntlProvider zone="admin">

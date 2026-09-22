@@ -6,7 +6,7 @@ import {
   getInternalNavigationTarget,
   isChangedInternalNavigation,
   shouldIgnoreNavigationClick
-} from "@/lib/navigation-guard.mjs";
+} from "@/lib/navigation-guard";
 
 export interface UnsavedGuardOptions {
   /** Guard is armed only while there is something to lose. */

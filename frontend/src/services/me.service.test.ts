@@ -8,7 +8,7 @@ import { beforeEach, describe, expect, it, mock } from "bun:test";
 type Call = { path: string; options?: { method?: string; body?: unknown } };
 const calls: Call[] = [];
 
-mock.module("@/lib/api-fetch", () => ({
+mock.module("@/lib/api/fetch", () => ({
   apiFetch: (path: string, options?: { method?: string; body?: unknown }) => {
     calls.push({ path, options });
     return Promise.resolve({ json: async () => ({}) });

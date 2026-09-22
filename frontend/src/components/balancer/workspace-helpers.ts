@@ -12,13 +12,13 @@ import {
   SavedBalance
 } from "@/types/balancer-admin.types";
 import { BalanceResponse, BalancerConfig, PlayerData } from "@/types/balancer.types";
-import { playerRoleSlotCode } from "@/lib/player-role";
+import { playerRoleSlotCode } from "@/lib/roster/player-role";
 import { UserRoleType } from "@/types/user.types";
 import type { DivisionGrid, DivisionGridVersion } from "@/types/workspace.types";
-import { DEFAULT_DIVISION_GRID, getDivisionLabel, resolveDivisionFromRank } from "@/lib/division-grid";
+import { DEFAULT_DIVISION_GRID, getDivisionLabel, resolveDivisionFromRank } from "@/lib/divisions/grid";
 import userService from "@/services/user.service";
 import balancerAdminService from "@/services/balancer-admin.service";
-import { DivisionGridNormalizer } from "@/lib/division-grid-normalizer";
+import { DivisionGridNormalizer } from "@/lib/divisions/grid-normalizer";
 import { answerFlag, answerList, answerText } from "@/lib/forms/answers";
 
 const ROLE_ORDER: BalancerRoleCode[] = ["tank", "damage", "support"];

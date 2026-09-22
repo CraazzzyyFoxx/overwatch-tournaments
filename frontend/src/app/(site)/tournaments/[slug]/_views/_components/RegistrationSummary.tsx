@@ -2,8 +2,8 @@
 
 import { useTranslations } from "next-intl";
 
-import { normalizePlayerRole, playerRoleSlotCode } from "@/lib/player-role";
-import { ROSTER_SLOT_CODES, type RosterSlotCode } from "@/lib/roster-shape";
+import { normalizePlayerRole, playerRoleSlotCode } from "@/lib/roster/player-role";
+import { ROSTER_SLOT_CODES, type RosterSlotCode } from "@/lib/roster/shape";
 import { cn } from "@/lib/utils";
 
 import styles from "../../TournamentDetail.module.css";

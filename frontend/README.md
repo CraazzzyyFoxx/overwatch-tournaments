@@ -90,12 +90,12 @@ beside the version (`/api/auth/me`). Those spellings still answer — `apiver.Le
 rewrites them onto the canonical path — and every such response carries `Deprecation: true`, a
 `Sunset` date (`apiver.SunsetDate`) and `Link: <canonical>; rel="successor-version"`. Move the
 prefix; nothing else changes. Nothing in this app uses them any more, and
-`frontend/src/lib/api-fetch.ts` keys its per-domain behaviour off the domain segment, so a
+`frontend/src/lib/api/fetch.ts` keys its per-domain behaviour off the domain segment, so a
 legacy path would silently lose workspace injection here even while the gateway still served it.
 
 The browser uses **relative same-origin paths**; SSR and middleware use `NEXT_INTERNAL_API_URL`
 (the gateway, e.g. `http://gateway:8080`). The URL contract is documented once in
-`frontend/src/lib/api-routes.ts`. Multidomain / white-label tenancy is resolved in
+`frontend/src/lib/api/routes.ts`. Multidomain / white-label tenancy is resolved in
 `frontend/src/middleware.ts`, which maps the request `Host` to a workspace.
 
 ## Notifications
@@ -108,7 +108,7 @@ empty-inbox copy), and a row can be marked read on its own — following a row's
 read, because a read mark is also how the announcement banner is dismissed. A system row carries
 `kind` plus a payload snapshot and no text — the wording comes from `notifications.kinds.*` in
 `src/i18n/messages/*.json`, so a copy fix reaches rows written months ago; row destinations come
-from `src/lib/notification-href.ts`, never from payload URLs.
+from `src/lib/notifications/href.ts`, never from payload URLs.
 
 A row can also be deleted from the inbox (`POST /api/v1/notifications/delete`), one at a time or as
 "clear read" for everything already marked. That deletion is per viewer — the server writes

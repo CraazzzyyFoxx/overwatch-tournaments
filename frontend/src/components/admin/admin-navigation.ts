@@ -26,7 +26,7 @@ import {
   accessUsersPermissions,
   adminEntryPermissions,
   overviewPermissions,
-} from "@/lib/admin-permissions";
+} from "@/lib/auth/admin-permissions";
 
 /** One view of a multi-view browser, offered by the command palette (P1-5). */
 export type AdminNavView = {

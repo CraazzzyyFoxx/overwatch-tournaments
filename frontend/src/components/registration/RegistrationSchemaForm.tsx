@@ -18,8 +18,8 @@ import {
 import { fieldErrorsFrom } from "@/lib/forms/form-errors";
 import { visibleFields } from "@/lib/forms/visible-when";
 import { notify } from "@/lib/notify";
-import { ROLES, type RoleCode } from "@/lib/roles";
-import { tournamentQueryKeys } from "@/lib/tournament-query-keys";
+import { ROLES, type RoleCode } from "@/lib/roster/roles";
+import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 import { cn } from "@/lib/utils";
 import heroService from "@/services/hero.service";
 import registrationService from "@/services/registration.service";

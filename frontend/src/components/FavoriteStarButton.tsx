@@ -6,7 +6,7 @@ import { useTranslations } from "next-intl";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { getCurrentPathForAuthRedirect } from "@/lib/auth-redirect";
+import { getCurrentPathForAuthRedirect } from "@/lib/auth/redirect";
 import { useAuthModalStore } from "@/stores/auth-modal.store";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
 import { useFavoritePlayers } from "@/hooks/useFavoritePlayers";

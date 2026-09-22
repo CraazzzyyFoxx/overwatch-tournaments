@@ -1,4 +1,4 @@
-import { apiFetch } from "@/lib/api-fetch";
+import { apiFetch } from "@/lib/api/fetch";
 import { PaginatedResponse } from "@/types/pagination.types";
 import {
   Tournament,

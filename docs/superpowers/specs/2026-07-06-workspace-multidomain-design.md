@@ -2,7 +2,7 @@
 
 - **Date:** 2026-07-06
 - **Status:** Draft (awaiting review)
-- **Related:** per-workspace branding ([[project_workspace_branding]], `lib/workspace-theme.ts`), plan `distributed-sleeping-parrot.md`
+- **Related:** per-workspace branding ([[project_workspace_branding]], `lib/workspace/theme.ts`), plan `distributed-sleeping-parrot.md`
 
 ## Context & motivation
 
@@ -53,7 +53,7 @@ Schemas: add fields to `WorkspaceRead` + `WorkspaceUpdate` (`backend/app-service
 
 - **New backend RPC** `rpc.app.workspaces.by_host` (`backend/app-service/src/rpc/workspaces.py`, public + cached): given a host, returns `{workspace_id, slug}` matching `subdomain` (under the platform zone) or a **verified** `custom_domain`. Backed by new indexed lookups (reuse the `get_by_slug` pattern in `services/workspace/service.py:36`).
 - **New `frontend/src/middleware.ts`:** reads `x-forwarded-host`. Apex/`www` → platform mode (no forced workspace). Tenant host → call `by_host` (aggressively cached: small, rarely-changing map; TTL + invalidate on domain change) → inject `x-owt-workspace-id` request header via `NextResponse.rewrite`. Unknown/unverified tenant host → 404 "not configured" page (never silently fall through to the apex platform).
-- **Scope precedence:** `getServerWorkspaceId` (`frontend/src/lib/api-fetch.ts:77-85`) prefers the middleware header over the cookie (host beats cookie = white-label lock). Apex → no header → existing cookie behaviour. SSR branding seed (`app/(site)/layout.tsx:13-24`) resolves from the header on tenant hosts.
+- **Scope precedence:** `getServerWorkspaceId` (`frontend/src/lib/api/fetch.ts:77-85`) prefers the middleware header over the cookie (host beats cookie = white-label lock). Apex → no header → existing cookie behaviour. SSR branding seed (`app/(site)/layout.tsx:13-24`) resolves from the header on tenant hosts.
 - **White-label UI:** in tenant mode hide `WorkspaceSwitcher` and the home "communities" list; the workspace-scoped chrome stays.
 
 ### D. OAuth (core) — single callback + signed state
@@ -61,17 +61,17 @@ Schemas: add fields to `WorkspaceRead` + `WorkspaceUpdate` (`backend/app-service
 The redirect_uri problem is solved by funnelling **every** provider round-trip through one registered callback and carrying the originating host in the (already stateless-HMAC) `state`.
 
 1. **One registered `redirect_uri` per provider** = `https://owt.craazzzyyfoxx.me/auth/callback`, used for authorize *and* token exchange regardless of the tenant host the user started on. Replaces the single hardcoded `OAUTH_REDIRECT` semantics (`backend/identity-service/src/services/oauth_service.py:68/167/281`, config `core/config.py:77`) — the value becomes the fixed apex callback, no longer host-varying.
-2. **Signed-state payload** (extend `oauth_service.py:464-500`): `{origin, action(login|link), provider, post_login_redirect, nonce, exp}`, HMAC-signed with `JWT_SECRET_KEY`. **CSRF defence = the signature alone** (drop the host-only `owt_oauth_state` cookie cross-check, which is unreadable on the callback host, `frontend/src/lib/oauth-login.ts:36`, `oauth-callback.ts:47,61`). `origin` is validated against the known workspace-host set. The transient action/provider/redirect cookies are folded into the state too (no cross-host cookie reliance).
-3. **Start** (`startOAuthLogin`, `frontend/src/lib/oauth-login.ts`): records the current host as `origin` in state; clamps `post_login_redirect` to the origin host (not the single `SITE_URL`).
-4. **Callback** (`frontend/src/app/(site)/auth/callback/route.ts`, `lib/oauth-callback.ts`): validate signed state (HMAC + exp + nonce + origin allow-list), exchange code, mint access+refresh JWTs (unchanged — JWTs are already host-agnostic, `gateway/internal/auth/auth.go:61-85`), then deliver the session to `origin`:
+2. **Signed-state payload** (extend `oauth_service.py:464-500`): `{origin, action(login|link), provider, post_login_redirect, nonce, exp}`, HMAC-signed with `JWT_SECRET_KEY`. **CSRF defence = the signature alone** (drop the host-only `owt_oauth_state` cookie cross-check, which is unreadable on the callback host, `frontend/src/lib/auth/oauth-login.ts:36`, `oauth-callback.ts:47,61`). `origin` is validated against the known workspace-host set. The transient action/provider/redirect cookies are folded into the state too (no cross-host cookie reliance).
+3. **Start** (`startOAuthLogin`, `frontend/src/lib/auth/oauth-login.ts`): records the current host as `origin` in state; clamps `post_login_redirect` to the origin host (not the single `SITE_URL`).
+4. **Callback** (`frontend/src/app/(site)/auth/callback/route.ts`, `lib/auth/oauth-callback.ts`): validate signed state (HMAC + exp + nonce + origin allow-list), exchange code, mint access+refresh JWTs (unchanged — JWTs are already host-agnostic, `gateway/internal/auth/auth.go:61-85`), then deliver the session to `origin`:
    - **Subdomain / apex origin** → set `owt_access_token` / `owt_refresh_token` with **`Domain=.owt.craazzzyyfoxx.me`** → immediately valid on the origin subdomain (SSO across all subdomains). Redirect to `https://{origin}{post_login_redirect}`.
    - **Custom-domain origin** → cookies can't cross registrable domains → **one-time SSO ticket**: identity-svc mints an opaque code in Redis (TTL ~60s, single-use), redirect to `https://{custom}/auth/sso?ticket=...`.
 5. **SSO handoff endpoint** (new `frontend/src/app/(site)/auth/sso/route.ts`, Phase 2): reads `ticket`, calls new `rpc.identity.sso_exchange` (redeems the one-time code server-side → returns the token pair), sets **host** cookies on the custom domain, redirects to the destination. Refresh token never appears in a URL.
 
 ### E. Session / cookie strategy
 
-- **Cookie naming (aqt→owt rebrand, back-compat):** cookies are written under the new `owt_*` names (`owt_access_token`, `owt_refresh_token`, `owt-workspace-id`, `owt_oauth_*`) but **read as `owt_* ?? aqt_*`** during migration, so existing `aqt_*` sessions are not logged out. Every read site gets the fallback; every write site uses `owt_*` only. The `aqt_*` fallback is removed in a later cleanup. Read/write sites: gateway `internal/auth/auth.go:21` (name constant + read order), `frontend/src/lib/{oauth-callback,auth-tokens}.ts`, `auth/refresh/route.ts`, `stores/workspace.store.ts`, and `api-fetch.ts:77-85`.
-- Subdomains + apex: `Domain=.owt.craazzzyyfoxx.me` on `owt_access_token` (js-readable), `owt_refresh_token` (httpOnly), `owt-workspace-id`. Set in `frontend/src/lib/oauth-callback.ts:87-101`, `auth/refresh/route.ts:26-40`, `lib/auth-tokens.ts:46-51`, `stores/workspace.store.ts:71`.
+- **Cookie naming (aqt→owt rebrand, back-compat):** cookies are written under the new `owt_*` names (`owt_access_token`, `owt_refresh_token`, `owt-workspace-id`, `owt_oauth_*`) but **read as `owt_* ?? aqt_*`** during migration, so existing `aqt_*` sessions are not logged out. Every read site gets the fallback; every write site uses `owt_*` only. The `aqt_*` fallback is removed in a later cleanup. Read/write sites: gateway `internal/auth/auth.go:21` (name constant + read order), `frontend/src/lib/{oauth-callback,auth-tokens}.ts`, `auth/refresh/route.ts`, `stores/workspace.store.ts`, and `lib/api/fetch.ts:77-85`.
+- Subdomains + apex: `Domain=.owt.craazzzyyfoxx.me` on `owt_access_token` (js-readable), `owt_refresh_token` (httpOnly), `owt-workspace-id`. Set in `frontend/src/lib/auth/oauth-callback.ts:87-101`, `auth/refresh/route.ts:26-40`, `lib/auth/tokens.ts:46-51`, `stores/workspace.store.ts:71`.
 - Custom domains: host-only cookies on that domain, established via the SSO handoff (E.4/D.5). Each custom domain is an independent session island.
 - **Logout:** on subdomains/apex, clear the `.owt.craazzzyyfoxx.me` cookies → **global logout across all subdomains** (accepted). On a custom domain, clear that host's cookies only (`frontend/src/app/(site)/auth/logout/route.ts`).
 - **Account linking from a custom domain** (Phase 2 nuance): the callback can't read the custom-domain auth cookie to know who is linking → carry a short-lived signed "link intent" (user id) in the state.
@@ -86,7 +86,7 @@ The redirect_uri problem is solved by funnelling **every** provider round-trip t
 ### G. SEO / per-host metadata
 
 - Replace static `SITE_NAME`/`SITE_URL`/hardcoded `metadataBase` with **per-request, per-workspace** metadata. Root `layout.tsx` (`:35-50`) and section layouts (`app/(site)/{owal,statistics,encounters,matches,teams,tournaments,tournaments/analytics}/layout.tsx:8`, plus `users/*`) switch static `metadata` → async `generateMetadata` that resolves the host's workspace (via the middleware header + a cached fetch).
-- On tenant hosts: `title`/OG `siteName` = `seo_title ?? name`; `description` = `seo_description ?? description`; `icons.icon` (favicon) + OG image = `icon_url` (fallback to platform `/favicon.ico`, `/logo.webp`); `metadataBase`/canonical = the tenant host origin (host helper modelled on `getServerRequestOrigin`, `api-fetch.ts:87-109`).
+- On tenant hosts: `title`/OG `siteName` = `seo_title ?? name`; `description` = `seo_description ?? description`; `icons.icon` (favicon) + OG image = `icon_url` (fallback to platform `/favicon.ico`, `/logo.webp`); `metadataBase`/canonical = the tenant host origin (host helper modelled on `getServerRequestOrigin`, `lib/api/fetch.ts:87-109`).
 - `sitemap.ts` / `robots.ts` become host-scoped (emit only the current host / that workspace's URLs). Apex keeps platform-wide defaults.
 
 ### H. WebSockets
@@ -139,5 +139,5 @@ The redirect_uri problem is solved by funnelling **every** provider round-trip t
 ## Key affected files
 
 - Backend: `shared/models/tenancy/workspace.py`, `app-service/src/schemas/workspace.py`, `app-service/src/rpc/workspaces.py`, `app-service/src/services/workspace/service.py`, `identity-service/src/services/oauth_service.py`, `identity-service/src/core/config.py`, new migration.
-- Frontend: new `middleware.ts`, `lib/api-fetch.ts`, `lib/oauth-login.ts`, `lib/oauth-callback.ts`, `app/(site)/auth/{callback,logout,sso}/route.ts`, `config/site.ts`, root + section `layout.tsx` (generateMetadata), `sitemap.ts`, `robots.ts`, `components/WorkspaceSwitcher.tsx` + home communities, admin/settings workspace editor, `types/workspace.types.ts`.
+- Frontend: new `middleware.ts`, `lib/api/fetch.ts`, `lib/auth/oauth-login.ts`, `lib/auth/oauth-callback.ts`, `app/(site)/auth/{callback,logout,sso}/route.ts`, `config/site.ts`, root + section `layout.tsx` (generateMetadata), `sitemap.ts`, `robots.ts`, `components/WorkspaceSwitcher.tsx` + home communities, admin/settings workspace editor, `types/workspace.types.ts`.
 - Gateway: `internal/ws/handler.go`, `internal/config/config.go`.

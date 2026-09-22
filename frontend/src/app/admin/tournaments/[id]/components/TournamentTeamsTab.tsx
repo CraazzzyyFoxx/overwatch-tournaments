@@ -54,7 +54,7 @@ import type {
 } from "@/types/admin.types";
 import type { Team } from "@/types/team.types";
 import { TOURNAMENT_DETAIL_PREVIEW_LIMIT } from "./tournamentWorkspace.helpers";
-import { invalidateTournamentWorkspace } from "@/lib/tournament-workspace-query-keys";
+import { invalidateTournamentWorkspace } from "@/lib/tournament/workspace-query-keys";
 import { EmptyNote } from "@/components/kit/EmptyNote";
 
 interface TournamentTeamsTabProps {

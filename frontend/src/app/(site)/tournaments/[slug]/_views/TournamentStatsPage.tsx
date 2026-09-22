@@ -10,11 +10,11 @@ import { ImageOff } from "lucide-react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { FilterChip } from "@/components/ui/filter-chip";
-import { tournamentQueryKeys } from "@/lib/tournament-query-keys";
-import { tournamentHref } from "@/lib/tournament-url";
+import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
+import { tournamentHref } from "@/lib/tournament/url";
 import { cn } from "@/lib/utils";
 import heroService from "@/services/hero.service";
-import { normalizePlayerRole, playerRoleSlotCode, type PlayerRoleSlotCode } from "@/lib/player-role";
+import { normalizePlayerRole, playerRoleSlotCode, type PlayerRoleSlotCode } from "@/lib/roster/player-role";
 import type { Encounter } from "@/types/encounter.types";
 import type { HeroPlaytime } from "@/types/hero.types";
 import type { Tournament } from "@/types/tournament.types";

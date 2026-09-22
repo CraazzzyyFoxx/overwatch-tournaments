@@ -1,7 +1,7 @@
 "use client";
 
 import { useDivisionGrid } from "@/hooks/useCurrentWorkspace";
-import { getDivisionIconSrc, getDivisionLabel } from "@/lib/division-grid";
+import { getDivisionIconSrc, getDivisionLabel } from "@/lib/divisions/grid";
 import type { DivisionGrid, DivisionGridVersion } from "@/types/workspace.types";
 
 interface DivisionIconProps {

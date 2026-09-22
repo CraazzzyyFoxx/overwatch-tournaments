@@ -3,9 +3,10 @@
 import { useTranslations } from "next-intl";
 import { HeroWithUserStats } from "@/types/hero.types";
 import { LogStatsName } from "@/types/stats.types";
-import type { AqtRoleKey } from "@/lib/player-role";
+import type { AqtRoleKey } from "@/lib/roster/player-role";
 import HeroImage from "@/components/hero/HeroImage";
-import { formatDelta, formatSeconds } from "@/app/(site)/users/components/heroes/utils";
+import { formatSeconds } from "@/lib/format";
+import { formatDelta } from "@/app/(site)/users/components/heroes/utils";
 
 // Quick-stats shown in the spotlight (first 4 present, in this order).
 export const QUICK_CANDIDATES: LogStatsName[] = [
@@ -87,7 +88,7 @@ const HeroSpotlight = ({
           {selected.hero.hero.type ?? selected.hero.hero.role}
         </span>
         <span className="aqt-tnum text-caption text-[color:var(--aqt-fg-muted)]">
-          {t("users.heroes.played", { time: formatSeconds(selected.playtime, { withSeconds: false }) })}
+          {t("users.heroes.played", { time: formatSeconds(selected.playtime) })}
         </span>
         <span
           className="aqt-tnum inline-flex items-center gap-1.5 rounded-md border border-[color:var(--aqt-border-2)] bg-[hsl(0_0%_100%/0.06)] px-2 py-0.5 text-label"

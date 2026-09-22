@@ -13,7 +13,7 @@ import {
   COOKIE_CONSENT_COOKIE,
   COOKIE_CONSENT_TTL_DAYS,
   type CookieConsentValue
-} from "@/lib/cookie-consent";
+} from "@/lib/site/cookie-consent";
 import { useCookieConsentStore } from "@/stores/cookie-consent.store";
 
 // `--ring` resolves to `--primary`, so the shared Button's 1px ring is

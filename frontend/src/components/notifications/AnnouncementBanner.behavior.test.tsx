@@ -1,9 +1,9 @@
 // @vitest-environment happy-dom
 //
-// The banner is the one notification surface an anonymous visitor ever sees, so
-// its two dismissal paths are genuinely different mechanisms: an account gets a
-// read mark on the server (it travels between devices), a visitor without one
-// gets a `localStorage` id. These tests pin both, plus the three rendering
+// The banner is the one notification surface an anonymous visitor ever sees.
+// Every dismissal is remembered by this browser (a cookie the layout also reads
+// server-side); an account additionally gets a read mark on the server that
+// travels between devices. These tests pin both, plus the three rendering
 // claims that make it a banner rather than a list — the viewer's locale wins
 // with a fallback to the publisher's, only the newest announcement shows, and
 // an empty list renders nothing at all (not an empty box that still takes
@@ -16,7 +16,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import en from "@/i18n/messages/en.json";
 import ru from "@/i18n/messages/ru.json";
-import { DISMISSED_ANNOUNCEMENTS_STORAGE_KEY } from "@/lib/announcement-dismissed";
+import {
+  DISMISSED_ANNOUNCEMENTS_COOKIE,
+  readDismissedAnnouncements
+} from "@/lib/notifications/announcement-dismissed";
 import type { AnnouncementLocaleText, NotificationItem } from "@/types/notification.types";
 
 import AnnouncementBanner from "./AnnouncementBanner";
@@ -106,33 +109,19 @@ function dismiss(container: HTMLElement): Promise<void> {
   });
 }
 
-// Node exposes its own `localStorage` that is unusable without
-// `--localstorage-file`, and happy-dom does not shadow it. A per-test in-memory
-// store is also what "the same browser, one reload later" means here: it
-// survives a remount inside a test and never leaks into the next one.
+// The cookie jar is what "the same browser, one reload later" means here: it
+// survives a remount inside a test, and is emptied so it never leaks into the
+// next one.
 beforeEach(() => {
   authUser = null;
-  const stored = new Map<string, string>();
-  Object.defineProperty(window, "localStorage", {
-    configurable: true,
-    value: {
-      get length() {
-        return stored.size;
-      },
-      key: (index: number) => Array.from(stored.keys())[index] ?? null,
-      getItem: (key: string) => stored.get(key) ?? null,
-      setItem: (key: string, value: string) => void stored.set(key, String(value)),
-      removeItem: (key: string) => void stored.delete(key),
-      clear: () => stored.clear()
-    }
-  });
+  document.cookie = `${DISMISSED_ANNOUNCEMENTS_COOKIE}=; path=/; max-age=0`;
   activeAnnouncements.mockReset().mockResolvedValue([BILINGUAL]);
   markRead.mockReset().mockResolvedValue({ marked: 1, unread_count: 0 });
   document.body.innerHTML = "";
 });
 
 describe("announcement banner", () => {
-  it("remembers an anonymous visitor's dismissal in localStorage", async () => {
+  it("remembers an anonymous visitor's dismissal in this browser", async () => {
     const container = await mount();
     expect(container.textContent).toContain("Maintenance window");
 
@@ -142,15 +131,13 @@ describe("announcement banner", () => {
     expect(container.textContent).not.toContain("Maintenance window");
     // No account to hang a read mark on, so the id has to live in the browser.
     expect(markRead).not.toHaveBeenCalled();
-    expect(
-      JSON.parse(window.localStorage.getItem(DISMISSED_ANNOUNCEMENTS_STORAGE_KEY) ?? "[]")
-    ).toContain(31);
+    expect(readDismissedAnnouncements()).toContain(31);
 
     const remounted = await mount();
     expect(remounted.textContent).toBe("");
   });
 
-  it("sends the mark-read mutation when the viewer has an account", async () => {
+  it("marks an account's dismissal read and keeps it closed when the next read is anonymous", async () => {
     authUser = { id: 7, username: "alice" };
 
     const container = await mount();
@@ -159,9 +146,13 @@ describe("announcement banner", () => {
 
     expect(markRead).toHaveBeenCalledWith([31]);
     expect(container.textContent).not.toContain("Maintenance window");
-    // The read mark is the record, and it travels between devices; a second
-    // local copy would only be a thing to fall out of sync.
-    expect(window.localStorage.getItem(DISMISSED_ANNOUNCEMENTS_STORAGE_KEY)).toBeNull();
+
+    // The access cookie lapses long before the session does, and the banner
+    // read is AuthOptional: the next visit arrives anonymous and the server
+    // sends the dismissed row again. This browser must still keep it closed.
+    authUser = null;
+    const remounted = await mount();
+    expect(remounted.textContent).toBe("");
   });
 
   it("restores the announcement when saving its dismissal fails", async () => {
@@ -174,6 +165,8 @@ describe("announcement banner", () => {
 
     expect(container.textContent).toContain("Maintenance window");
     expect(container.querySelector("button")?.disabled).toBe(false);
+    // An unsaved dismissal must not be remembered either.
+    expect(readDismissedAnnouncements()).toEqual([]);
   });
 
   it("prefers the viewer's locale and falls back to the publisher's default", async () => {

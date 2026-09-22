@@ -1,4 +1,4 @@
-import { getTournamentWorkspaceQueryKeys } from "@/lib/tournament-workspace-query-keys";
+import { getTournamentWorkspaceQueryKeys } from "@/lib/tournament/workspace-query-keys";
 
 /**
  * Detail routes whose numeric id segment can be resolved to a real entity name.

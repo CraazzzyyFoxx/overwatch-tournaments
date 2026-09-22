@@ -56,7 +56,7 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(window.location.search)
 }));
 
-vi.mock("@/lib/tournament-workspace-query-keys", () => ({
+vi.mock("@/lib/tournament/workspace-query-keys", () => ({
   invalidateTournamentWorkspace: vi.fn()
 }));
 

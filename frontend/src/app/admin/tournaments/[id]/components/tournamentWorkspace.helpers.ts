@@ -1,15 +1,15 @@
 import type { Tournament, TournamentStatus } from "@/types/tournament.types";
 import type { Tone } from "@/components/kit/tone";
 import type { TournamentPhaseScheduleEntryInput, TournamentUpdateInput } from "@/types/admin.types";
-import { utcToZonedInput, zonedInputToUtc } from "@/lib/timezone";
+import { utcToZonedInput, zonedInputToUtc } from "@/lib/workspace/timezone";
 import {
   SCHEDULABLE_PHASES,
   isSchedulablePhase,
   type SchedulablePhase
-} from "@/lib/tournament-lifecycle";
-import type { RosterSlotMap } from "@/lib/roster-shape";
-import { normalizeSlots } from "@/lib/roster-shape-editor-model";
-import { normalizeChallongeSlug } from "@/lib/challonge";
+} from "@/lib/tournament/lifecycle";
+import type { RosterSlotMap } from "@/lib/roster/shape";
+import { normalizeSlots } from "@/lib/roster/shape-editor-model";
+import { normalizeChallongeSlug } from "@/lib/tournament/challonge";
 
 export type PhaseScheduleFormState = Record<
   SchedulablePhase,

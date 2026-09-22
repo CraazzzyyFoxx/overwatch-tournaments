@@ -21,7 +21,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useQueryParams } from "@/hooks/useQueryParams";
 import { notify } from "@/lib/notify";
-import { paginateResults, sortArray } from "@/lib/paginate-results";
+import { paginateResults, sortArray } from "@/lib/api/paginate-results";
 import { cn } from "@/lib/utils";
 import workspaceService from "@/services/workspace.service";
 import { useWorkspaceStore } from "@/stores/workspace.store";

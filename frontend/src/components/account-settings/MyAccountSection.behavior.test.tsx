@@ -44,7 +44,7 @@ vi.mock("@/stores/auth-profile.store", () => ({
 }));
 // A Next server action; importing the real module explodes outside Next.
 vi.mock("@/app/actions/users", () => ({ revalidateUser: vi.fn() }));
-vi.mock("@/lib/logout", () => ({ logout: vi.fn() }));
+vi.mock("@/lib/auth/logout", () => ({ logout: vi.fn() }));
 vi.mock("@/lib/notify", () => ({ notify: { success: vi.fn(), error: vi.fn(), apiError: vi.fn() } }));
 
 function user(overrides: Partial<User>): User {

@@ -11,7 +11,7 @@ import React from "react";
 
 import AuthBootstrap from "@/components/auth/AuthBootstrap";
 import WorkspaceBootstrap from "@/components/WorkspaceBootstrap";
-import { ApiError } from "@/lib/api-error";
+import { ApiError } from "@/lib/api/error";
 import { notify } from "@/lib/notify";
 
 function makeQueryClient() {

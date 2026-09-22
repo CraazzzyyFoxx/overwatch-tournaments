@@ -14,7 +14,7 @@
 import { declaredRoles } from "@/lib/forms/answers";
 import { identityProvider } from "@/lib/forms/builtin-keys";
 import type { Translate } from "@/lib/forms/form-errors";
-import { REGISTRATION_TO_CANONICAL } from "@/lib/roles";
+import { REGISTRATION_TO_CANONICAL } from "@/lib/roster/roles";
 import type { Answers, FormField } from "@/types/forms.types";
 
 /**

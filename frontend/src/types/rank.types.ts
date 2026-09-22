@@ -1,6 +1,6 @@
 // Rank history (OverFast) — mirrors parser-service src/schemas/rank_history.py
 
-import type { AqtRoleKey } from "@/lib/player-role";
+import type { AqtRoleKey } from "@/lib/roster/player-role";
 
 type RankPlatform = "pc" | "console";
 type RankRoleKey = AqtRoleKey;

@@ -28,17 +28,17 @@ import {
   SelectTrigger,
   SelectValue
 } from "@/components/ui/select";
-import { getDivisionLabel } from "@/lib/division-grid";
-import { normalizePlayerRole } from "@/lib/player-role";
-import { ROSTER_SLOT_CODES, type RosterSlotCode } from "@/lib/roster-shape";
-import { isTournamentStatusEnded } from "@/lib/tournament-status";
-import { tournamentQueryKeys } from "@/lib/tournament-query-keys";
+import { getDivisionLabel } from "@/lib/divisions/grid";
+import { isEncounterCompleted } from "@/lib/encounter/status";
+import { normalizePlayerRole } from "@/lib/roster/player-role";
+import { ROSTER_SLOT_CODES, type RosterSlotCode } from "@/lib/roster/shape";
+import { isTournamentStatusEnded } from "@/lib/tournament/status";
+import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 import { cn } from "@/lib/utils";
 import { useDivisionGrid } from "@/hooks/useCurrentWorkspace";
 import { useQueryParams } from "@/hooks/useQueryParams";
 import { formatSubRoleLabel, getPlayerSlug, sortTeamPlayers } from "@/utils/player";
 
-import { isEncounterCompleted } from "../_components/MatchCard";
 import { SectionToolbar } from "../_components/SectionToolbar";
 import { TournamentPageState } from "../_components/TournamentPageState";
 import { TournamentTeamsSkeleton } from "../_components/TournamentSkeletons";

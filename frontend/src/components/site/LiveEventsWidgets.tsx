@@ -4,8 +4,8 @@ import { Calendar, Users } from "lucide-react";
 
 import WorkspaceBrandIcon from "@/components/WorkspaceBrandIcon";
 import { formatDateRange } from "@/lib/utils";
-import { tournamentHref } from "@/lib/tournament-url";
-import { getTournamentStatusMeta } from "@/lib/tournament-status";
+import { tournamentHref } from "@/lib/tournament/url";
+import { getTournamentStatusMeta } from "@/lib/tournament/status";
 import type { Tournament } from "@/types/tournament.types";
 import type { Workspace } from "@/types/workspace.types";
 

@@ -8,7 +8,7 @@
  * Mirrors `backend/tournament-service/src/schemas/registration_team.py`.
  */
 
-import type { RosterSlotCode } from "@/lib/roster-shape";
+import type { RosterSlotCode } from "@/lib/roster/shape";
 import type { RegistrationSubmitInput } from "@/types/registration.types";
 
 /** A registered team's lifecycle. `complete` is NOT terminal — a captain may

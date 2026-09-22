@@ -21,7 +21,7 @@ import {
   SelectValue
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { getSingleLinkedPlayer } from "@/lib/auth-profile-links";
+import { getSingleLinkedPlayer } from "@/lib/auth/profile-links";
 import { notify } from "@/lib/notify";
 import { rbacService } from "@/services/rbac.service";
 import type { RbacRole } from "@/types/rbac.types";

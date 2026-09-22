@@ -21,8 +21,8 @@ import {
   getEncounterWinner,
   isEncounterLive,
   type EncounterState
-} from "@/lib/encounter-status";
-import { tournamentQueryKeys } from "@/lib/tournament-query-keys";
+} from "@/lib/encounter/status";
+import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
 import encounterService from "@/services/encounter.service";
 import { Encounter } from "@/types/encounter.types";
 import { PaginatedResponse } from "@/types/pagination.types";

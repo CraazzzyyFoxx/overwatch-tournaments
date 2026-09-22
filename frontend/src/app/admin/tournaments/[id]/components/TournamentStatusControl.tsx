@@ -17,10 +17,10 @@ import {
   TOURNAMENT_PHASES,
   TOURNAMENT_STATUS_LABELS,
   VALID_TRANSITIONS
-} from "@/lib/tournament-lifecycle";
+} from "@/lib/tournament/lifecycle";
 import adminService from "@/services/admin.service";
 import type { Tournament, TournamentStatus } from "@/types/tournament.types";
-import { invalidateTournamentWorkspace } from "@/lib/tournament-workspace-query-keys";
+import { invalidateTournamentWorkspace } from "@/lib/tournament/workspace-query-keys";
 
 /**
  * The one place the tournament's status is changed.

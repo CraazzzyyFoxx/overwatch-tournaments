@@ -24,7 +24,7 @@ import {
   SelectValue
 } from "@/components/ui/select";
 import { notify } from "@/lib/notify";
-import { nextStageOrder, phaseOrderForArrangement } from "@/lib/tournament-stages";
+import { nextStageOrder, phaseOrderForArrangement } from "@/lib/tournament/stages";
 import { cn } from "@/lib/utils";
 import adminService from "@/services/admin.service";
 import type { Stage, StageType } from "@/types/tournament.types";
@@ -38,7 +38,7 @@ import {
   normalizeMaxRounds,
   STAGE_TYPE_LABELS,
   type StageProgress
-} from "@/lib/bracket-projection";
+} from "@/lib/bracket/projection";
 
 interface StageListProps {
   tournamentId: number;

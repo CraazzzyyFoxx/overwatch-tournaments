@@ -6,7 +6,7 @@ import { useTranslations } from "next-intl";
 import type { ReactNode } from "react";
 
 import { DraftBoard } from "@/components/draft/DraftBoard";
-import { tournamentHref } from "@/lib/tournament-url";
+import { tournamentHref } from "@/lib/tournament/url";
 import { useTournamentQuery } from "@/hooks/useTournamentClientData";
 import { Button } from "@/components/ui/button";
 

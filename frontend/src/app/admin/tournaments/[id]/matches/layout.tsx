@@ -7,7 +7,7 @@ import { useQuery } from "@tanstack/react-query";
 import { AdminTabs, type AdminTabItem } from "@/components/kit/AdminTabs";
 import { usePermissions } from "@/hooks/usePermissions";
 import adminService from "@/services/admin.service";
-import { getTournamentWorkspaceQueryKeys } from "@/lib/tournament-workspace-query-keys";
+import { getTournamentWorkspaceQueryKeys } from "@/lib/tournament/workspace-query-keys";
 import { useHubTournamentQuery } from "../hubQueries";
 import { MATCHES_SUB_TABS, type MatchesSubTabKey } from "../tab-guards";
 

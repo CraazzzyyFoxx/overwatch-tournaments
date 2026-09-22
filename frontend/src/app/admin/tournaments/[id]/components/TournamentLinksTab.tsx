@@ -35,7 +35,7 @@ import {
   SelectTrigger,
   SelectValue
 } from "@/components/ui/select";
-import { ApiError } from "@/lib/api-error";
+import { ApiError } from "@/lib/api/error";
 import { hasUnsavedChanges } from "@/lib/form-change";
 import { notify } from "@/lib/notify";
 import adminService from "@/services/admin.service";
@@ -252,7 +252,7 @@ export function TournamentLinksTab({
     // `POST /api/v1/streams/tournament/{id}/repoll` already has a client in
     // `stream.service`, so there is no admin-service twin of it. `workspace_id`
     // rides along: `domainBehavior` injects it for every domain outside
-    // `UNSCOPED_DOMAINS` (api-fetch.ts keys on the domain segment, not a prefix),
+    // `UNSCOPED_DOMAINS` (lib/api/fetch.ts keys on the domain segment, not a prefix),
     // and the hub shell has already synced the store to this tournament's
     // workspace — which is exactly the scope the endpoint authorizes against.
     mutationFn: () => streamService.repollTournament(tournamentId),

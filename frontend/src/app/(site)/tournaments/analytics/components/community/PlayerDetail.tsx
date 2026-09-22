@@ -10,7 +10,7 @@ import type { DivisionGridVersion } from "@/types/workspace.types";
 import DivisionIcon from "@/components/DivisionIcon";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { Button } from "@/components/ui/button";
-import { normalizeRoleTint } from "@/lib/player-role";
+import { normalizeRoleTint } from "@/lib/roster/player-role";
 import { PlayerVM } from "@/app/(site)/tournaments/analytics/useAnalyticsViewModel";
 import { GlossaryTerm, isAnomalyGlossaryTerm } from "@/app/(site)/tournaments/analytics/analytics-glossary";
 import InfoDot from "@/app/(site)/tournaments/analytics/components/InfoDot";

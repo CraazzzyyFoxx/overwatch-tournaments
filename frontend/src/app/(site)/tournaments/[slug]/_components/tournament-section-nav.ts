@@ -1,4 +1,4 @@
-import { reachedAtLeast } from "@/lib/tournament-lifecycle";
+import { reachedAtLeast } from "@/lib/tournament/lifecycle";
 import type { StageSummary, TournamentStatus } from "@/types/tournament.types";
 
 export type TournamentSectionId =

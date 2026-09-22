@@ -6,12 +6,9 @@ import { cn } from "@/lib/utils";
 import type { Hero } from "@/types/hero.types";
 import HeroImage from "@/components/hero/HeroImage";
 import { CardSurface } from "@/app/(site)/users/components/shared/atoms";
-import { normalizeRole, type AqtRoleKey } from "@/lib/player-role";
-import {
-  formatSeconds,
-  formatStatValue,
-  type NumberFormatter
-} from "@/app/(site)/users/components/heroes/utils";
+import { normalizeRole, type AqtRoleKey } from "@/lib/roster/player-role";
+import { formatSeconds } from "@/lib/format";
+import { formatStatValue, type NumberFormatter } from "@/app/(site)/users/components/heroes/utils";
 import {
   Select,
   SelectContent,

@@ -10,7 +10,7 @@ import {
   ROLE_ACCENTS,
   getSubroleOptions,
   type RoleCode,
-} from "@/lib/roles";
+} from "@/lib/roster/roles";
 import type { RolesParams } from "@/types/forms.types";
 import type { Hero } from "@/types/hero.types";
 import type { RoleInput, SubroleCatalog } from "@/types/registration.types";
