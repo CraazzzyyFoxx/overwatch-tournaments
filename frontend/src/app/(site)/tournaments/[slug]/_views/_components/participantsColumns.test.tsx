@@ -152,28 +152,34 @@ describe("participant column model", () => {
     expect(withTeams?.render({} as never, 0)).toBeNull();
   });
 
-  it("marks the status cell on-call and late, and leaves a plain row unmarked", () => {
-    // The two marks an organizer scans the roster for. The on-call one used to
-    // be a whole separate group of rows, which read as "these people are not
-    // really in" — it is a note beside the status now, and it must survive.
+  it("marks the status cell late, and never stacks the on-call answer on it", () => {
+    // Lateness is the schedule's own mark and belongs beside the status. The
+    // registrant's "you can call me in" is organizer bookkeeping: under every
+    // Pending pill it read as a second status the player was in.
     const status = buildParticipantColumns(form(), t).find((column) => column.id === "_status")!;
-    const marked = renderToStaticMarkup(
-      <NextIntlClientProvider locale="en" messages={{}}>
-        {status.render(
-          { status: "approved", answers: { reserve: true }, submitted_late: true } as never,
-          0,
-        )}
-      </NextIntlClientProvider>,
-    );
-    const plain = renderToStaticMarkup(
-      <NextIntlClientProvider locale="en" messages={{}}>
-        {status.render({ status: "approved", answers: {}, submitted_late: false } as never, 0)}
-      </NextIntlClientProvider>,
+    const render = (reg: unknown) =>
+      renderToStaticMarkup(
+        <NextIntlClientProvider locale="en" messages={{}}>
+          {status.render(reg as never, 0)}
+        </NextIntlClientProvider>,
+      );
+
+    const late = render({ status: "approved", answers: { reserve: true }, submitted_late: true });
+    const plain = render({ status: "approved", answers: { reserve: true }, submitted_late: false });
+
+    expect(late).toContain('data-row-late="true"');
+    expect(plain).not.toContain("data-row-late");
+    expect(late).not.toContain("data-row-on-call");
+  });
+
+  it("offers the on-call answer as its own column, off by default", () => {
+    // Asked as a question, so it rides the schema like any other answer: the
+    // reader turns it on when they care who can be rung.
+    const onCall = buildParticipantColumns(form([field("reserve")]), t).find(
+      (column) => column.id === "reserve",
     );
 
-    expect(marked).toContain('data-row-on-call="true"');
-    expect(marked).toContain('data-row-late="true"');
-    expect(plain).not.toContain("data-row-on-call");
-    expect(plain).not.toContain("data-row-late");
+    expect(onCall?.defaultVisible).toBe(false);
+    expect(onCall?.label).toBe("registration.details.reserve");
   });
 });
