@@ -26,6 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from shared.core.enums import (
+    EncounterGameState,
     FirstBanRotation,
     MapPickSide,
     MapPoolEntryStatus,
@@ -36,9 +37,7 @@ from shared.core.enums import (
 )
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.domain import pick_ban_engine as engine
-from shared.models.matches.match import Match
 from shared.models.tournament.encounter import Encounter
-from shared.models.tournament.encounter_report import EncounterMapReport
 from shared.models.tournament.pick_ban import (
     EncounterReadiness,
     PickBanConfig,
@@ -49,12 +48,12 @@ from shared.models.tournament.pick_ban import (
 from shared.repository import (
     EncounterPickBanLedgerRepository,
     EncounterReadinessRepository,
-    MatchRepository,
     PickBanConfigRepository,
     PickBanEntryRepository,
     PickBanSessionRepository,
 )
 from shared.services.bracket.usability import is_encounter_live
+from src.services.encounter.games import EncounterGameService, encounter_game_service
 from src.services.encounter.realtime_commit import emit_pick_ban_update
 from src.services.encounter.veto_session import (
     BRACKET_PRESET,
@@ -154,14 +153,14 @@ class PickBanSessionService:
         config_repo: PickBanConfigRepository = PickBanConfigRepository(),
         readiness_repo: EncounterReadinessRepository = EncounterReadinessRepository(),
         ledger_repo: EncounterPickBanLedgerRepository = EncounterPickBanLedgerRepository(),
-        match_repo: MatchRepository = MatchRepository(),
+        games: EncounterGameService = encounter_game_service,
     ) -> None:
         self.session_repo = session_repo
         self.entry_repo = entry_repo
         self.config_repo = config_repo
         self.readiness_repo = readiness_repo
         self.ledger_repo = ledger_repo
-        self.match_repo = match_repo
+        self.games = games
 
     async def current_round_of(self, session: AsyncSession, pick_ban: PickBanSession) -> int | None:
         """The round `pick_ban` is currently resolving (see
@@ -313,8 +312,7 @@ class PickBanSessionService:
         return bool(config.slots) if config.mode == MapVetoMode.SLOTS else bool(config.items)
 
     async def settled_map_rounds(self, session: AsyncSession, encounter_id: int) -> int:
-        """How many maps of the series the map pick-ban has settled -- picked, and
-        possibly already played.
+        """How many maps of the series the map pick-ban has settled.
 
         Mode-agnostic on purpose: rounds resolve in order, so the count of decided
         entries IS the highest settled round for a slot-mode session (one pick per
@@ -331,7 +329,7 @@ class PickBanSessionService:
             .select_from(PickBanEntry)
             .where(
                 PickBanEntry.session_id == pick_ban.id,
-                PickBanEntry.status.in_((MapPoolEntryStatus.PICKED, MapPoolEntryStatus.PLAYED)),
+                PickBanEntry.status == MapPoolEntryStatus.PICKED,
             )
         )
         return int(settled or 0)
@@ -546,7 +544,20 @@ class PickBanSessionService:
         generalized: the ledger clear has no legacy equivalent because
         ``EncounterVetoSession`` never had cross-round memory -- a genuine
         from-scratch reset must also forget what an earlier, scrapped session
-        banned, or a later round would wrongly still exclude it."""
+        banned, or a later round would wrongly still exclude it.
+
+        A MAP reset also retires the series' live games: they were opened by the
+        picks this is about to scrap, so leaving them would let a position of the
+        OLD veto keep collecting claims (and counting into the live score) under
+        a pool that no longer names it."""
+        if kind == PickBanKind.MAP:
+            await self.games.cancel_games(
+                session,
+                encounter,
+                await self.games.list_games(session, encounter.id),
+                actor_user_id=None,
+                reason="map_session_reset",
+            )
         existing = await self.get_pick_ban_session(session, encounter.id, kind)
         if existing is not None:
             await self.session_repo.delete_by_id(session, existing.id)
@@ -571,30 +582,22 @@ class PickBanSessionService:
 
         Called after an encounter's home/away team ids changed. Both teams now
         set with no session -> ensure one. Session already exists -> the snapshot
-        is stale, reset it -- UNLESS an entry is already ``played`` while the
-        series still carries a score (the map is underway; an admin resets
-        manually). Runs inside the caller's transaction (no commit).
+        is stale, reset it -- UNLESS a game of the series is already CONFIRMED
+        (a map really was played; an admin untangles that by hand, spec §6.5).
+        Runs inside the caller's transaction (no commit).
+
+        The series SCORE is not consulted: a cascade reset cancels the old
+        pairing's games before this hook runs, so nothing confirmed survives it,
+        and a drawn first map — which scores 0:0 — is still a played map that
+        must not be silently re-vetoed.
         """
         pick_ban = await self.get_pick_ban_session(session, encounter.id, kind)
         if pick_ban is None:
             if encounter.home_team_id is not None and encounter.away_team_id is not None:
                 await self.ensure_pick_ban_session(session, encounter, kind, commit=False)
             return
-        # Aggregate COUNT ("is any map underway"), not a row fetch -- stays in
-        # the service rather than loading the played entries to count them.
-        played_count = await session.scalar(
-            select(sa.func.count())
-            .select_from(PickBanEntry)
-            .where(PickBanEntry.session_id == pick_ban.id, PickBanEntry.status == MapPoolEntryStatus.PLAYED)
-        )
-        # A cascade reset (advancement.reset_encounter_result) zeroes the series
-        # score before this hook runs, so a PLAYED entry there belongs to the
-        # REPLACED pairing -- exactly the state that must go. Only a series that
-        # still carries a score keeps its "a map is underway, admin resets
-        # manually" protection.
-        # ponytail: a first map that ended in a draw leaves 0:0 with a genuinely
-        # played entry, so a team change there resets the session too.
-        if played_count and (encounter.home_score or encounter.away_score):
+        games = await self.games.list_games(session, encounter.id)
+        if any(game.state == EncounterGameState.CONFIRMED for game in games):
             return
         await self.reset_pick_ban_session(session, encounter, kind, commit=False)
 
@@ -621,7 +624,7 @@ class PickBanSessionService:
         pick_ban: PickBanSession,
         *,
         completed_round: int,
-        winner: MapPickSide | str | None,
+        outcome: engine.MapOutcome | None,
         loser_choice: MapPickSide | None = None,
         commit: bool = True,
     ) -> PickBanSession:
@@ -641,10 +644,12 @@ class PickBanSessionService:
         - the config still describes that round (slot count) and the series still
           has that many maps (``best_of``).
 
-        ``winner`` is the previous map's winner, or ``None`` when it drew or is
-        unknown. A drawn map names no winner, so a result-dependent rotation has
-        nothing to rotate on and falls back to the session's established opener
-        rather than stalling the series.
+        ``outcome`` is the previous position's CONFIRMED result (``"home"``,
+        ``"away"`` or ``"draw"``), or ``None`` while it has none. A drawn map
+        names no winner, so a result-dependent rotation falls back to the
+        session's established opener (Task 2's ``resolve_round_opener``); an
+        undecided one simply owes the round, which is appended later, once the
+        result lands — opening it now would have to invent an opener.
 
         Raises ``pick_ban_engine.RotationNeedsChoice`` when the rotation is
         ``result_loser_choice`` and ``loser_choice`` was not supplied — the caller
@@ -710,17 +715,22 @@ class PickBanSessionService:
             candidate_item_ids = [item.item_id for item in sorted(config.items, key=lambda item: item.sort_order)]
 
         rotation = config.first_ban_rotation
-        if winner is None and rotation in (
-            FirstBanRotation.RESULT_WINNER_FIRST,
-            FirstBanRotation.RESULT_LOSER_FIRST,
-            FirstBanRotation.RESULT_LOSER_CHOICE,
+        if (
+            outcome is None
+            and next_round > 1
+            and rotation
+            in (
+                FirstBanRotation.RESULT_WINNER_FIRST,
+                FirstBanRotation.RESULT_LOSER_FIRST,
+                FirstBanRotation.RESULT_LOSER_CHOICE,
+            )
         ):
-            rotation = FirstBanRotation.FIXED
+            return pick_ban  # the round is owed until the previous position is confirmed
         opener = engine.resolve_round_opener(
             rotation=rotation,
             round_number=next_round,
             session_first_side=pick_ban.first_side or MapPickSide.HOME.value,
-            previous_round_winner=winner,
+            previous_round_outcome=outcome,
             previous_round_loser_choice=loser_choice,
         )
 
@@ -832,7 +842,9 @@ class PickBanSessionService:
         # otherwise either captain could dictate who opens the next round.
         if acting_side is not None and acting_side != pick_ban.pending_loser_side:
             raise HTTPException(status_code=403, detail="Only the losing captain may choose who opens the next round")
-        winner = (
+        # The side that did NOT lose is the outcome this rotation was suspended
+        # on; a draw never suspends it (`resolve_round_opener` falls back).
+        outcome = (
             MapPickSide.AWAY.value if pick_ban.pending_loser_side == MapPickSide.HOME.value else MapPickSide.HOME.value
         )
         choice = MapPickSide(first_side)
@@ -841,103 +853,40 @@ class PickBanSessionService:
             session,
             pick_ban,
             completed_round=await self.highest_round_of(session, pick_ban) or 0,
-            winner=winner,
+            outcome=outcome,
             loser_choice=choice,
         )
 
-    async def find_series_match(
-        self, session: AsyncSession, encounter_id: int, map_id: int, map_index: int
-    ) -> Match | None:
-        """The ``Match`` row for map ``map_index`` of this encounter's series, or
-        ``None`` when nothing has been written for it yet.
+    async def map_round_outcome(
+        self, session: AsyncSession, encounter: Encounter, round_number: int
+    ) -> engine.MapOutcome | None:
+        """Confirmed outcome of series position ``round_number``; None while pending.
 
-        A series can play the SAME map twice, so the POSITION identifies the row,
-        not the map: ``map_report.submit_map_report`` stamps ``Match.map_index`` on
-        the row it reconciles. Rows with no position -- every parsed log, and every
-        row written before that column existed -- are adopted, earliest first, by a
-        position that has no exact row of its own; that keeps a log uploaded before
-        the captains reported from being duplicated, without letting two positions
-        claim one row (the caller stamps what it adopts).
-
-        ``map_index=0`` means the position is unknown (no map pick-ban session, or a
-        map its pool never settled): nothing can tell two rows apart then, so the
-        earliest row for the map is the answer -- never a second row beside it.
-        """
-        rows = sorted(
-            await self.match_repo.list_for_encounter_map(session, encounter_id=encounter_id, map_id=map_id),
-            key=lambda match: match.id or 0,
-        )
-        if map_index == 0:
-            return rows[0] if rows else None
-        exact = next((match for match in rows if match.map_index == map_index), None)
-        if exact is not None:
-            return exact
-        return next((match for match in rows if match.map_index is None), None)
-
-    async def map_round_winner(self, session: AsyncSession, encounter: Encounter, round_number: int) -> str | None:
-        """Who won map ``round_number`` of the series, per the ``Match`` row its
-        result was reconciled into (``map_report.submit_map_report``).
-
-        ``None`` when that map is not decided yet, has no result in yet, or drew --
-        every caller treats all three the same way: there is no winner to rotate a
-        round's opener on.
+        The position's ``EncounterGame`` is the authority (spec §5.1): a parsed
+        ``Match`` is an observation, and a claim nobody agreed with is not a
+        result at all.
         """
         if round_number < 1:
             return None
-        map_pick_ban = await self.get_pick_ban_session(session, encounter.id, PickBanKind.MAP)
-        if map_pick_ban is None:
-            result = await session.execute(
-                select(Match).where(Match.encounter_id == encounter.id, Match.map_index == round_number)
-            )
-            match = result.scalars().first()
-            if match is None:
-                return None
-            return engine.winner_side(match.home_score, match.away_score)
-        decided = await self.entry_repo.list_by_status(
-            session, map_pick_ban.id, (MapPoolEntryStatus.PICKED, MapPoolEntryStatus.PLAYED)
+        game = next(
+            (game for game in await self.games.list_games(session, encounter.id) if game.position == round_number),
+            None,
         )
-        settled = engine.settled_in_order(list(decided))
-        if len(settled) < round_number:
+        if game is None or game.state != EncounterGameState.CONFIRMED:
             return None
-        match = await self.find_series_match(session, encounter.id, settled[round_number - 1].item_id, round_number)
-        if match is None:
-            return None
-        return engine.winner_side(match.home_score, match.away_score)
-
-    async def _resolved_report_rounds(self, session: AsyncSession, encounter_id: int) -> int:
-        """How many series positions both captains have agreed, with no map veto."""
-        rows = list(
-            (
-                await session.execute(
-                    select(EncounterMapReport).where(
-                        EncounterMapReport.encounter_id == encounter_id,
-                        EncounterMapReport.map_index > 0,
-                    )
-                )
-            )
-            .scalars()
-            .all()
-        )
-        by_index: dict[int, list[EncounterMapReport]] = {}
-        for row in rows:
-            by_index.setdefault(row.map_index, []).append(row)
-        resolved = 0
-        for group in by_index.values():
-            teams = {row.team_id for row in group}
-            scores = {(row.home_score, row.away_score) for row in group}
-            if len(teams) >= 2 and len(scores) == 1:
-                resolved += 1
-        return resolved
+        return engine.map_outcome(game.accepted_home_score, game.accepted_away_score)
 
     async def sync_hero_rounds(self, session: AsyncSession, encounter: Encounter, *, commit: bool = True) -> None:
-        """Keep the hero session's rounds in lockstep with the maps the map
-        pick-ban has settled: hero round N opens once map N is picked, and not
-        before, because heroes are banned for a KNOWN map (design §4).
+        """Keep the hero session's rounds in lockstep with the series: hero round
+        N opens once map N is picked AND position N-1 is confirmed, because
+        heroes are banned for a KNOWN map that is actually next (design §4, spec
+        V03).
 
-        No map pool: there is no veto, so the barrier is an agreed map report.
-        Round 1 still opens at ready; round N+1 waits until N reports are
-        resolved (``resolved + 1``). Consecutive hero rounds without a result
-        were a hole — captains had nothing to close a map.
+        With a map pool the ceiling is the lower of "maps the veto has picked"
+        and "confirmed positions + 1": picking map N+1 early (a decider can
+        settle it the moment round N's bans end) must not hand out its hero bans
+        before map N has a result. In freeplay there is no veto to bound it, so
+        the confirmed count alone does; a complete series opens nothing.
 
         Lazy and read-triggered, like the room's other self-healing steps
         (``auto_complete_decider``/``auto_resolve_timeout``): there is no event for
@@ -955,13 +904,18 @@ class PickBanSessionService:
         hero = await self.get_pick_ban_session(session, encounter.id, PickBanKind.HERO)
         if hero is None or hero.status == MapVetoSessionStatus.CANCELLED:
             return
+        games = await self.games.list_games(session, encounter.id)
+        score = self.games.live_score(games)
+        if engine.series_complete(score, encounter.best_of):
+            return
+        confirmed = score.played
         map_config = await self._resolve_config(session, encounter, PickBanKind.MAP)
         if map_config is not None and self.has_pool(map_config):
-            target = min(await self.settled_map_rounds(session, encounter.id), encounter.best_of)
-        elif engine.series_decided(encounter.home_score or 0, encounter.away_score or 0, encounter.best_of):
-            return
+            target = min(
+                await self.settled_map_rounds(session, encounter.id), confirmed + 1, int(encounter.best_of)
+            )
         else:
-            target = min(await self._resolved_report_rounds(session, encounter.id) + 1, int(encounter.best_of))
+            target = min(confirmed + 1, int(encounter.best_of))
         if (await self.highest_round_of(session, hero) or 0) >= target:
             return
 
@@ -970,15 +924,15 @@ class PickBanSessionService:
             return
         highest = await self.highest_round_of(session, hero) or 0
         while highest < target:
-            winner = await self.map_round_winner(session, encounter, highest)
+            outcome = await self.map_round_outcome(session, encounter, highest)
             try:
-                await self.advance_to_next_round(session, hero, completed_round=highest, winner=winner, commit=False)
+                await self.advance_to_next_round(session, hero, completed_round=highest, outcome=outcome, commit=False)
             except engine.RotationNeedsChoice:
                 # `result_loser_choice`: the round waits for the losing captain's
                 # `elect_opener` call, which resumes this same append.
                 hero.awaiting_choice = True
                 hero.pending_loser_side = (
-                    MapPickSide.AWAY.value if winner == MapPickSide.HOME.value else MapPickSide.HOME.value
+                    MapPickSide.AWAY.value if outcome == MapPickSide.HOME.value else MapPickSide.HOME.value
                 )
                 await session.flush()
                 break

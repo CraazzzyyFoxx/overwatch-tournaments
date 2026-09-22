@@ -49,9 +49,11 @@ backend_root = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(backend_root))
 sys.path.insert(0, str(backend_root / "tournament-service"))
 
+from shared.core import enums  # noqa: E402
 from shared.core.enums import TournamentStatus  # noqa: E402
 from shared.domain.roster_shape import parse_roster_slots  # noqa: E402
 from shared.models.platform.notification import Notification  # noqa: E402
+from shared.models.tournament.encounter_game import EncounterGame  # noqa: E402
 from shared.testing import install_postgres_type_shims  # noqa: E402
 from src import models  # noqa: E402
 from src.services.encounter import map_report as map_report_module  # noqa: E402
@@ -68,6 +70,7 @@ TABLE_NAMES = (
     "tournament.tournament_phase_schedule",
     "tournament.team",
     "tournament.encounter",
+    "tournament.encounter_game",
     "tournament.encounter_map_report",
     "matches.match",
     "workspace",
@@ -505,13 +508,19 @@ class DisputedMapReportTests(_ProducerTestCase):
         self.fx.session.flush()
         self.home_team_id = home.id
         self.away_team_id = away.id
-        # The opponent already reported a contradicting score for this map.
+        self.game = EncounterGame(
+            encounter_id=self.encounter.id,
+            position=1,
+            map_id=77,
+            state=enums.EncounterGameState.AWAITING_RESULT,
+        )
+        self.fx.session.add(self.game)
+        self.fx.session.flush()
+        # The opponent already claimed a contradicting score for this position.
         self.fx.session.add(
             models.EncounterMapReport(
-                encounter_id=self.encounter.id,
-                map_id=77,
-                map_index=0,
-                team_id=away.id,
+                game_id=self.game.id,
+                side="away",
                 home_score=1,
                 away_score=3,
             )
@@ -531,8 +540,8 @@ class DisputedMapReportTests(_ProducerTestCase):
         result = await map_report_module.map_report_service.submit_map_report(
             self.fx.shim,
             self.encounter,
-            map_id=77,
-            team_id=self.home_team_id,
+            game_id=self.game.id,
+            side="home",
             reporter_user_id=CAPTAIN_AUTH,
             home_score=3,
             away_score=1,
@@ -546,8 +555,9 @@ class DisputedMapReportTests(_ProducerTestCase):
             {
                 "encounter_id": self.encounter.id,
                 "tournament_id": TOURNAMENT_ID,
+                "game_id": self.game.id,
+                "position": 1,
                 "map_id": 77,
-                "map_index": 0,
             },
             rows[0].payload_json,
         )

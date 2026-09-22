@@ -21,8 +21,10 @@ from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.core import enums
+from shared.domain import pick_ban_engine as engine
 from shared.domain.encounter_naming import build_encounter_name_from_ids
 from shared.models.tournament.encounter import Encounter
+from shared.models.tournament.encounter_game import EncounterGame
 from shared.models.tournament.encounter_link import EncounterLink
 from shared.models.tournament.encounter_report import EncounterCaptainReport
 from shared.models.tournament.stage import Stage
@@ -245,12 +247,38 @@ async def reset_encounter_result(
         # A cascade means the MATCHUP changed, not just the score: every artefact
         # of the old pairing is void. Captain reports above all — a surviving
         # report from the replaced opponent would pair with the new team's report
-        # and auto-confirm a series that was never played (review item 7).
+        # and auto-confirm a series that was never played (review item 7). The
+        # series' games go the same way: a position played by the REPLACED team
+        # is not a position of this encounter any more, and leaving one confirmed
+        # would re-materialise its win onto the new pairing.
         await session.execute(
             sa.delete(EncounterCaptainReport).where(EncounterCaptainReport.encounter_id == encounter.id)
         )
+        await session.execute(
+            sa.update(EncounterGame)
+            .where(
+                EncounterGame.encounter_id == encounter.id,
+                EncounterGame.state != enums.EncounterGameState.CANCELLED,
+            )
+            .values(state=enums.EncounterGameState.CANCELLED)
+        )
         encounter.ended_at = None
         encounter.current_map_index = None
+    else:
+        # A REOPEN keeps the same two teams and their games: the encounter drops
+        # back to the LIVE score its confirmed positions still add up to, not to
+        # 0:0. Zeroing it would make the room disagree with every game row it
+        # renders, and the next captain claim would count from the wrong base.
+        rows = (
+            await session.execute(
+                sa.select(EncounterGame.accepted_home_score, EncounterGame.accepted_away_score).where(
+                    EncounterGame.encounter_id == encounter.id,
+                    EncounterGame.state == enums.EncounterGameState.CONFIRMED,
+                )
+            )
+        ).all()
+        score = engine.series_score(rows)
+        encounter.home_score, encounter.away_score = score.home_wins, score.away_wins
     record_result_transition(
         session,
         encounter,

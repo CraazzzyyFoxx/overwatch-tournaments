@@ -1,23 +1,19 @@
-"""Per-map result confirmation: two independent captain reports for ONE map
-of a series, reconciled the moment both arrive. This is what the pick-ban
-engine's progressive rounds wait on — closes the gap documented in
-``docs/plans/2026-08-09-generic-pickban-engine.md`` §5.5/§5.6/Decision 9-10
-(nothing else in the system reports "this map just finished" mid-series;
-``EncounterCaptainReport`` only fires once, at series end).
+"""Per-game result confirmation: two independent captain claims for ONE
+position of a series, reconciled the moment both arrive.
 
-Agreement -> upserts a ``matches.match`` row (``source=captain_report``),
-increments ``Encounter.home_score``/``away_score`` (never touches
-``result_status`` — that stays the exclusive job of
-``captain.set_encounter_result``), marks the map's ``PickBanEntry`` `played`
-in both the map and hero pick-ban sessions, and advances both to their next
-round. Disagreement -> leaves both reports standing for an admin to resolve
-(mirrors ``captain.set_encounter_result``'s own reconciliation, applied here
-at map granularity instead of series granularity).
+This is what the pick-ban engine's progressive rounds wait on — nothing else in
+the system reports "this map just finished" mid-series (``EncounterCaptainReport``
+only fires once, at series end). Agreement accepts the position's result on its
+``EncounterGame`` (``EncounterGameService.accept_result``, which is what moves
+the live series score) and opens the next map's bans; disagreement marks the
+game ``disputed`` and leaves both claims standing for an admin.
 
-A scrim room runs this same loop for the progression only: no ``matches.match``
-row is written for one, because the score is there to name the next map's opener
-rather than to record a result nobody publishes
-(``docs/plans/2026-08-12-scrim-rooms.md``).
+No ``matches.match`` row is written here, and none is read: that table records
+what a parsed log OBSERVED, while an ``EncounterGame`` records what the
+tournament DECIDED
+(docs/plans/2026-09-20-pregame-results-statistics-separation.md §5.1/§5.2). That
+also retires the scrim carve-out — a scrim ran this loop for the progression
+only, and there is no longer any bookkeeping beside the progression to skip.
 """
 
 from __future__ import annotations
@@ -26,44 +22,43 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.core import http_status as status
-from shared.core.enums import MapPoolEntryStatus, MatchSource, PickBanKind
+from shared.core.enums import EncounterGameResultSource, EncounterGameState, PickBanKind
+from shared.core.errors import ApiExc
 from shared.core.errors import BaseAPIException as HTTPException
 from shared.domain import pick_ban_engine as engine
 from shared.models.identity.user import User
-from shared.models.matches.match import Match
 from shared.models.tournament.encounter import Encounter
+from shared.models.tournament.encounter_game import EncounterGame
 from shared.models.tournament.encounter_report import EncounterMapReport
-from shared.models.tournament.pick_ban import PickBanEntry, PickBanSession
 from shared.models.tournament.team import Team
 from shared.models.tournament.tournament import Tournament
-from shared.repository import EncounterMapReportRepository, PickBanEntryRepository
+from shared.repository import EncounterMapReportRepository
 from shared.services.bracket.usability import is_encounter_live
 from shared.services.notifications import notify
 from shared.services.realtime import Resource, Scope, emit
-from shared.services.scrim_scope import is_scrim_container
+from src.services.encounter.games import EncounterGameService, encounter_game_service
 from src.services.encounter.pick_ban_session import pick_ban_session_service
 from src.services.encounter.realtime_commit import emit_pick_ban_update
 
 
 class MapReportService:
-    """The mid-series, per-map half of captain reporting."""
+    """The mid-series, per-game half of captain reporting."""
 
     def __init__(
         self,
         *,
         report_repo: EncounterMapReportRepository = EncounterMapReportRepository(),
-        entry_repo: PickBanEntryRepository = PickBanEntryRepository(),
+        games: EncounterGameService = encounter_game_service,
     ) -> None:
         self.report_repo = report_repo
-        self.entry_repo = entry_repo
+        self.games = games
 
     async def _notify_dispute(
         self,
         session: AsyncSession,
         encounter: Encounter,
         *,
-        map_id: int,
-        map_index: int,
+        game: EncounterGame,
         reporter_auth_user_id: int | None,
     ) -> None:
         """Both captains, not just the opponent.
@@ -103,235 +98,153 @@ class MapReportService:
                 payload={
                     "encounter_id": encounter.id,
                     "tournament_id": encounter.tournament_id,
-                    "map_id": map_id,
-                    "map_index": map_index,
+                    "game_id": game.id,
+                    "position": game.position,
+                    "map_id": game.map_id,
                 },
             )
-
-    async def _pending_play(
-        self, session: AsyncSession, map_pick_ban: PickBanSession | None, map_id: int, *, encounter_id: int
-    ) -> tuple[int, PickBanEntry | None]:
-        """Which play of ``map_id`` this report is for: its 1-based position in the
-        series and the pool entry that holds it.
-
-        A series may play the same map twice, and then the map alone names neither
-        the report nor the entry to flip `played`. The report belongs to the FIRST
-        play still awaiting a result -- exactly the map the room's result phase is
-        showing. With every play already `played` (an amendment of an already-agreed
-        report) it belongs to the LAST one, so the correction lands on the map it
-        was typed against instead of on an earlier play of it.
-
-        No map pick-ban session: captains name the map they played. An open slot
-        (one side already filed) locks that map; otherwise this is the next
-        1-based series position.
-        """
-        if map_pick_ban is None:
-            return await self._freeplay_index(session, encounter_id, map_id), None
-        entries = await self.entry_repo.list_by_session(session, map_pick_ban.id)
-        settled = engine.settled_in_order(list(entries))
-        plays = [(index, entry) for index, entry in enumerate(settled, start=1) if entry.item_id == map_id]
-        if not plays:
-            return 0, None
-        awaiting = [(index, entry) for index, entry in plays if entry.status != MapPoolEntryStatus.PLAYED.value]
-        return awaiting[0] if awaiting else plays[-1]
-
-    async def _freeplay_index(self, session: AsyncSession, encounter_id: int, map_id: int) -> int:
-        rows = list(await self.report_repo.list_for_encounter(session, encounter_id))
-        by_index: dict[int, list[EncounterMapReport]] = {}
-        for row in rows:
-            # Index 0 is the legacy free-play slot: every report filed before this
-            # became 1-based carries it. Dropping those rows would hide the
-            # opponent's half of a slot that is open right now, so an encounter
-            # mid-report at deploy time would answer the second captain with a
-            # fresh slot 1 -- no dispute, no agreement, the first report orphaned.
-            if row.map_index is None or row.map_index < 0:
-                continue
-            by_index.setdefault(row.map_index, []).append(row)
-
-        def resolved(group: list[EncounterMapReport]) -> bool:
-            teams = {row.team_id for row in group}
-            scores = {(row.home_score, row.away_score) for row in group}
-            return len(teams) >= 2 and len(scores) == 1
-
-        open_indexes = sorted(index for index, group in by_index.items() if not resolved(group))
-        if open_indexes:
-            index = open_indexes[0]
-            filed_map = by_index[index][0].map_id
-            if filed_map != map_id:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Report the map already filed for this round",
-                )
-            return index
-        return (max(by_index) if by_index else 0) + 1
 
     async def submit_map_report(
         self,
         session: AsyncSession,
         encounter: Encounter,
         *,
-        map_id: int,
-        team_id: int,
+        game_id: int,
+        side: str,
         reporter_user_id: int | None,
         home_score: int,
         away_score: int,
     ) -> dict:
-        """Upsert this captain's report for ``map_id``; reconcile if both sides
-        have now reported. Returns
-        ``{"disputed": bool, "resolved": bool, "match_id": int | None}``."""
+        """Upsert ``side``'s claim for one game; reconcile if both sides have now
+        claimed. Returns ``{"disputed": bool, "resolved": bool, "game": dict}``.
+
+        The claim targets a GAME, never a map: a series may play the same map
+        twice, and only the position tells the two plays apart.
+        """
         if not await is_encounter_live(session, encounter):
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Stage bracket is a preview and is not active yet; wait for the organizer to activate it",
             )
-        map_pick_ban = await pick_ban_session_service.get_pick_ban_session(session, encounter.id, PickBanKind.MAP)
-        map_index, entry = await self._pending_play(session, map_pick_ban, map_id, encounter_id=encounter.id)
+        # Locked: two captains filing at once both reconcile against the pair of
+        # claims, and the second one is what accepts the result.
+        game = await self.games.game_repo.get_for_update(session, game_id)
+        if game is None or game.encounter_id != encounter.id or game.state == EncounterGameState.CANCELLED:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Game not found")
+        if game.state == EncounterGameState.CONFIRMED:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=[
+                    ApiExc(
+                        code="result_locked",
+                        msg="This map's result is already accepted; ask an organizer to correct it",
+                    )
+                ],
+            )
+        if game.map_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=[ApiExc(code="map_not_selected", msg="Choose this map before reporting its result")],
+            )
 
-        # Both sides of the slot in ONE read: reconciliation needs the opponent's row
-        # anyway, and it cannot change under us inside this transaction.
-        slot_reports = await self.report_repo.list_for_map_slot(
-            session, encounter_id=encounter.id, map_id=map_id, map_index=map_index
-        )
-        other_team_id = encounter.away_team_id if team_id == encounter.home_team_id else encounter.home_team_id
-        row = next((report for report in slot_reports if report.team_id == team_id), None)
-        other_row = next((report for report in slot_reports if report.team_id == other_team_id), None)
-
+        # Both sides of the position in ONE read: reconciliation needs the
+        # opponent's row anyway, and it cannot change under us inside this
+        # transaction.
+        reports = list(await self.report_repo.list_for_games(session, [game.id]))
+        row = next((report for report in reports if report.side == side), None)
+        other = next((report for report in reports if report.side != side), None)
         if row is None:
-            row = EncounterMapReport(encounter_id=encounter.id, map_id=map_id, map_index=map_index, team_id=team_id)
-            session.add(row)
-        row.reporter_user_id = reporter_user_id
-        row.home_score = home_score
-        row.away_score = away_score
+            # Built complete: `home_score`/`away_score` are NOT NULL, so a row
+            # created bare and filled in afterwards fails on the create's flush.
+            row = await self.report_repo.create(
+                session,
+                EncounterMapReport(
+                    game_id=game.id,
+                    side=side,
+                    reporter_user_id=reporter_user_id,
+                    home_score=home_score,
+                    away_score=away_score,
+                ),
+            )
+            reports.append(row)
+        else:
+            row.reporter_user_id = reporter_user_id
+            row.home_score = home_score
+            row.away_score = away_score
         # Unconditional, on both branches below: the opponent's tile only flips
         # from "not reported" to "sealed" on this signal, and the FIRST
-        # captain's report -- the one that resolves nothing -- is exactly the
+        # captain's claim -- the one that resolves nothing -- is exactly the
         # case that used to commit silently. Both topics, because the room
         # refetches map and hero state together: two phases of one loop.
         await emit_pick_ban_update(session, encounter.id)
         await emit_pick_ban_update(session, encounter.id, kind=PickBanKind.HERO.value)
         await session.flush()
 
+        mine = (row.home_score, row.away_score)
+        theirs = (other.home_score, other.away_score) if other is not None else None
         pair = engine.MapReportPair(
-            home_report=(row.home_score, row.away_score)
-            if team_id == encounter.home_team_id
-            else ((other_row.home_score, other_row.away_score) if other_row else None),
-            away_report=(row.home_score, row.away_score)
-            if team_id == encounter.away_team_id
-            else ((other_row.home_score, other_row.away_score) if other_row else None),
+            home_report=mine if side == "home" else theirs,
+            away_report=mine if side == "away" else theirs,
         )
         reconciliation = engine.reconcile_map_reports(pair)
 
         if reconciliation.resolved is None:
             if reconciliation.disputed:
-                await self._notify_dispute(
-                    session,
-                    encounter,
-                    map_id=map_id,
-                    map_index=map_index,
-                    reporter_auth_user_id=reporter_user_id,
-                )
+                game.state = EncounterGameState.DISPUTED
+                await self._notify_dispute(session, encounter, game=game, reporter_auth_user_id=reporter_user_id)
             await session.commit()
-            return {"disputed": reconciliation.disputed, "resolved": False, "match_id": None}
+            return {
+                "disputed": reconciliation.disputed,
+                "resolved": False,
+                "game": self.games.serialize(game, reports),
+            }
 
         resolved_home, resolved_away = reconciliation.resolved
-        # `played` is the once-per-map transition, and the series score rides it:
-        # a captain amending an already-agreed report (or any other re-entry) must
-        # correct the map, never count it twice.
-        already_played = entry is not None and entry.status == MapPoolEntryStatus.PLAYED.value
+        # The service owns the accepted score AND the live series score, so the
+        # win is counted exactly once however often this position is re-claimed.
+        await self.games.accept_result(
+            session,
+            encounter,
+            game,
+            home_score=resolved_home,
+            away_score=resolved_away,
+            source=EncounterGameResultSource.CAPTAIN_AGREEMENT,
+            actor_user_id=None,
+        )
 
-        # A scrim's per-map score exists to run the SERIES, not to record it: it is
-        # what tells the engine who won and therefore who opens the next map's bans
-        # (``first_ban_rotation``, result-dependent in both real rulebooks). None of
-        # the bookkeeping that surrounds that is wanted -- a scrim has no result to
-        # publish and no organizer reading it -- so no ``matches.match`` row is
-        # written for one. Everything the loop itself needs still happens below:
-        # the entry flips to ``played``, the series score advances, and the next
-        # round opens. See docs/plans/2026-08-12-scrim-rooms.md.
-        match: Match | None = None
-        if not await is_scrim_container(session, encounter.tournament_id):
-            match = await pick_ban_session_service.find_series_match(session, encounter.id, map_id, map_index)
-            if match is None:
-                match = Match(
-                    encounter_id=encounter.id,
-                    map_id=map_id,
-                    map_index=map_index or None,
-                    home_team_id=encounter.home_team_id,
-                    away_team_id=encounter.away_team_id,
-                    home_score=resolved_home,
-                    away_score=resolved_away,
-                    time=None,
-                    log_name=None,
-                    source=MatchSource.CAPTAIN_REPORT.value,
-                )
-                session.add(match)
-            else:
-                already_played = True
-                # Claim the position for this play, so a second play of the same map
-                # writes its own row instead of adopting this one.
-                match.map_index = map_index or None
-                # A log arrived first (or a re-report after a dispute correction):
-                # never downgrade a real parsed log back to a captain claim, but do
-                # let the captains' agreement correct a captain-report row.
-                if match.source == MatchSource.CAPTAIN_REPORT.value:
-                    old_home, old_away = match.home_score or 0, match.away_score or 0
-                    match.home_score = resolved_home
-                    match.away_score = resolved_away
-                    # The row is rewritten, so the series score it already moved has
-                    # to move with it: drop the old map win, add the corrected one.
-                    # A parsed-log row is left alone above, and so is the series
-                    # score -- nothing was rewritten to correct.
-                    # ponytail: assumes the old row's win was counted into the
-                    # encounter when it was recorded. Deliberately not clamped at 0 --
-                    # a negative would mean it never was, and flooring it silently
-                    # would hide that instead of surfacing it.
-                    encounter.home_score = (
-                        (encounter.home_score or 0) + int(resolved_home > resolved_away) - int(old_home > old_away)
-                    )
-                    encounter.away_score = (
-                        (encounter.away_score or 0) + int(resolved_away > resolved_home) - int(old_away > old_home)
-                    )
-
-        played_round: int | None = None
-        if entry is not None:
-            entry.status = MapPoolEntryStatus.PLAYED.value
-            played_round = entry.round
-
-        if not already_played:
-            encounter.home_score = (encounter.home_score or 0) + (1 if resolved_home > resolved_away else 0)
-            encounter.away_score = (encounter.away_score or 0) + (1 if resolved_away > resolved_home else 0)
-
-        if played_round is not None and map_pick_ban is not None:
+        games = await self.games.list_games(session, encounter.id)
+        map_pick_ban = await pick_ban_session_service.get_pick_ban_session(session, encounter.id, PickBanKind.MAP)
+        if map_pick_ban is not None:
             # Only the MAP session advances here, and only while the series still
             # has a map to play: the next map's bans open on this result. That
             # map's HERO round opens later, once the map itself is picked --
             # `pick_ban_session.sync_hero_rounds`, because heroes are banned for a
             # known map, not for a map that is still being vetoed.
-            winner = engine.winner_side(resolved_home, resolved_away)
-            if not engine.series_decided(encounter.home_score or 0, encounter.away_score or 0, encounter.best_of):
+            if not engine.series_complete(self.games.live_score(games), encounter.best_of):
+                outcome = engine.map_outcome(resolved_home, resolved_away)
                 try:
                     await pick_ban_session_service.advance_to_next_round(
-                        session, map_pick_ban, completed_round=played_round, winner=winner, commit=False
+                        session, map_pick_ban, completed_round=game.position, outcome=outcome, commit=False
                     )
                 except engine.RotationNeedsChoice:
                     map_pick_ban.awaiting_choice = True
-                    map_pick_ban.pending_loser_side = "away" if winner == "home" else "home"
+                    map_pick_ban.pending_loser_side = "away" if outcome == "home" else "home"
                     await session.flush()
+        else:
+            # Freeplay: no veto to open a round, so the next position is opened
+            # directly (and not at all once the series is decided).
+            await self.games.ensure_freeplay_game(session, encounter)
 
-        # Unlike a veto/ban, an AGREED report moves the encounter's own score and
-        # writes the match row behind it -- the public encounter read is stale the
-        # moment this commits. The scrim branch above writes no match, but the
-        # encounter score still moved, so this is unconditional.
+        # Unlike a veto/ban, an AGREED claim moves the encounter's own score --
+        # the public encounter read is stale the moment this commits.
         await emit(
             session,
             scope=Scope.tournament(encounter.tournament_id),
             invalidates=[Resource.TOURNAMENT_ENCOUNTERS],
             entity_ids={"encounter_ids": [encounter.id]},
         )
-
         await session.commit()
-        # ``match_id`` is null for a scrim: there is no row to point at. The client
-        # only uses it to link a parsed match, which a scrim never has.
-        return {"disputed": False, "resolved": True, "match_id": match.id if match is not None else None}
+        return {"disputed": False, "resolved": True, "game": self.games.serialize(game, reports)}
 
 
 map_report_service = MapReportService()

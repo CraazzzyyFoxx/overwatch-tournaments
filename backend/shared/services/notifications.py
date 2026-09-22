@@ -109,8 +109,12 @@ class RegistrationDecisionPayload(_Payload):
 class EncounterReportDisputedPayload(_Payload):
     encounter_id: int
     tournament_id: int
+    #: The series position the contradiction is about. A series may play one map
+    #: twice, so the GAME identifies it; ``map_id``/``position`` are the labels
+    #: the inbox renders.
+    game_id: int
+    position: int
     map_id: int
-    map_index: int
 
 
 class TeamRosterEventPayload(_Payload):
