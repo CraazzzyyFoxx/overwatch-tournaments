@@ -865,7 +865,12 @@ export function AdminDataTable<TData>({
   const renderLeadingCell = (row: Row<TData>) => (
     <TableCell
       className={cn(
-        "w-10 pl-4",
+        // `pr-2` is not decoration: `cn` drops shadcn's own `p-2` the moment a
+        // one-axis padding lands next to it, and without a right pad the cell
+        // measured 32px against the 40 `ADMIN_LEADING_COLUMN_WIDTH` pins the
+        // next sticky column at — an 8px hole in the pinned block, with the
+        // first scrolling column tucked under it by the same 8px.
+        "w-10 min-w-10 pl-4 pr-2",
         cellPadding,
         cellAlign === "top" ? "align-top" : "align-middle",
         stickyLeft.size > 0 && "admin-sticky-col"
@@ -1110,11 +1115,16 @@ export function AdminDataTable<TData>({
           // this wrapper only aligns it.
           <div className="flex w-full items-center justify-end">{content}</div>
         ) : align === "left" ? (
-          content
+          // Clipped to the cell box: a dragged-narrow column sets width/max-width
+          // on the <td>, but content wider than that (a long unbreakable handle)
+          // paints straight over the next column unless something hides it.
+          // `truncate` also buys the ellipsis; stacked cells keep stacking (their
+          // rows are block/flex children, which `nowrap` does not join up).
+          <div className="min-w-0 truncate">{content}</div>
         ) : (
           // `text-center` on the <td> does not centre a Tooltip/icon
           // (inline-flex trigger inside a full-width cell). Match the header flex.
-          <div className={cn("flex w-full items-center", ALIGN_FLEX_CLASS[align])}>{content}</div>
+          <div className={cn("flex w-full items-center overflow-hidden", ALIGN_FLEX_CLASS[align])}>{content}</div>
         )}
       </TableCell>
     );
@@ -1132,10 +1142,12 @@ export function AdminDataTable<TData>({
         tabIndex={row.id === tabbableRowId ? 0 : -1}
         onFocus={(event) => { if (event.target === event.currentTarget) setFocusedRowId(row.id); }}
         className={cn(
-          "group border-b border-border/30 transition-colors hover:bg-accent/20 data-[selected]:bg-accent/30",
+          // Tints (hover / selected / current) live in `globals.css` under
+          // `.admin-row`: the pinned cells are opaque and must repaint the very
+          // same colour, and two copies of it drifted apart.
+          "admin-row group border-b border-border/30",
           "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/50 focus-visible:ring-inset",
           hasRowAction && "cursor-pointer",
-          row.id === inspectorId && "bg-primary/10",
         )}
         onPointerDown={gestures.rowPointerDown(row)}
         onClick={(event) => handleRowClick(event, row)}
@@ -1341,7 +1353,7 @@ export function AdminDataTable<TData>({
                 {hasLeadingColumn ? (
                   <TableHead
                     className={cn(
-                      "w-10 border-b border-border/40 pl-4 text-left",
+                      "w-10 min-w-10 border-b border-border/40 pl-4 pr-2 text-left",
                       density === "compact" ? "h-8" : "h-9",
                       stickyLeft.size > 0 ? "admin-sticky-col" : "admin-table-head"
                     )}
