@@ -431,10 +431,9 @@ describe("participants pool", () => {
     expect(withdrawn?.textContent).toContain("Gone#404");
   });
 
-  it("keeps reserves out of the role columns and lists them as their own group", async () => {
-    // A column answers "how deep is this role". Cover that only plays if
-    // somebody drops out is not depth — and the reserve still has to be
-    // findable, which is the whole point of agreeing to be one.
+  it("counts on-call players in their role column and still lists them separately", async () => {
+    // The answer is availability, not membership: it must not thin out a role
+    // column. The list below is a lookup aid — who can I ring — not a bucket.
     const reserve = makeRegistration(6, "Sub#1000", [role("damage", 3100)]);
     listRegistrations.mockResolvedValue({
       registrations: [...POOL_ROSTER, { ...reserve, answers: { reserve: true } }],
@@ -447,7 +446,7 @@ describe("participants pool", () => {
     });
     await mountPool();
 
-    expect(column("damage")?.textContent).not.toContain("Sub#1000");
+    expect(column("damage")?.textContent).toContain("Sub#1000");
     const group = container.querySelector<HTMLElement>("[data-pool-reserve]");
     expect(group?.textContent).toContain("Sub#1000");
   });

@@ -122,10 +122,6 @@ const BALANCER_STATUS_OPTIONS = [
   { value: "ready", name: "Ready" },
 ];
 
-/** The builtin whose answer the REGISTRATION SCHEDULE can overrule: a sign-up
- *  that lands after the window's `ends_at` is a reserve whatever it ticked. */
-const RESERVE_KEY = "reserve";
-
 /**
  * NOTE ON `visibility`: it decides who may READ an answer, never who is ASKED
  * the question. `organizer_notes` is the pair of `public_notes` — the player
@@ -287,17 +283,17 @@ export default function RegistrationSchemaForm({
   const isEditing = writableKeys !== undefined;
   /**
    * The registration window's `ends_at` is behind us and `allow_late_registration`
-   * is the only reason this form is still open, so the server writes this entry
-   * as a reserve whatever the switch says. Said here, before the submit — a
-   * player who discovers it afterwards reads it as a bug.
+   * is the only reason this form is still open, so the entry will be marked as a
+   * late sign-up. Said here, before the submit — nothing else about the entry
+   * changes, and a player who finds the mark afterwards reads it as a bug.
    */
-  const lateReserve = !isAdmin && form.registration_late === true;
+  const lateSignUp = !isAdmin && form.registration_late === true;
 
   /**
    * Every field this viewer may look at but not change, mapped to the sentence
-   * that says why. Two sources, deliberately worded apart: the allowlist
-   * ("frozen at submit") and the schedule ("you are in the reserve"), because
-   * "cannot be changed" would leave a forced-ON switch unexplained.
+   * that says why. One source: the edit allowlist ("frozen at submit"). The
+   * schedule locks nothing — it marks the entry late, it does not answer a
+   * question on the registrant's behalf.
    */
   const lockedFields: Record<string, string> = {};
   if (writableKeys) {
@@ -307,7 +303,6 @@ export default function RegistrationSchemaForm({
       }
     }
   }
-  if (lateReserve) lockedFields[RESERVE_KEY] = t("registration.reserve.lateLocked");
 
   const draftKey = draftKeyFor(mode, tournamentId, isEditing);
   // The draft is read at INIT, not in an effect: every host mounts this form
@@ -316,9 +311,6 @@ export default function RegistrationSchemaForm({
   const [answers, setAnswers] = useState<Answers>(() => ({
     ...initialAnswers(schema, mode, initial, userProfile, lockedRole),
     ...(draftKey ? readDraft(draftKey, lockedRole) : null),
-    // Last, so a draft saved while the window was still open cannot un-tick a
-    // flag the schedule has since imposed.
-    ...(lateReserve ? { [RESERVE_KEY]: true } : null),
   }));
   const [step, setStep] = useState(0);
   // Objections stay hidden until the registrant tries to advance: the form used
@@ -695,14 +687,12 @@ export default function RegistrationSchemaForm({
       {!isAdmin && (
         <>
           <SubscriptionRuleNotice subscription={subscriptionQuery.data} />
-          {/* Before the submit, on every step. The switch below (when the form
-              asks it) is forced on and disabled; when it does not ask at all
-              this paragraph is the whole of the warning, because the server
-              writes the flag either way. */}
-          {lateReserve && (
+          {/* Before the submit, on every step: the entry will carry a "late
+              sign-up" mark, and nothing else about it changes. */}
+          {lateSignUp && (
             <p
               role="status"
-              className="rounded-lg border border-[color:color-mix(in_srgb,var(--aqt-amber)_30%,transparent)] bg-[color:color-mix(in_srgb,var(--aqt-amber)_12%,transparent)] p-2.5 text-xs leading-5 text-[color:var(--aqt-fg)]"
+              className="rounded-lg border border-[color:var(--aqt-border)] bg-[color:var(--aqt-overlay-2)] p-2.5 text-xs leading-5 text-[color:var(--aqt-fg)]"
             >
               {t("registration.reserve.lateNotice")}
             </p>

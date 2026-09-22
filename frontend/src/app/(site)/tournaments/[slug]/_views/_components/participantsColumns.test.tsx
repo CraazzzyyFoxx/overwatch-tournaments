@@ -1,3 +1,6 @@
+import React from "react";
+import { NextIntlClientProvider } from "next-intl";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import type { FormField } from "@/types/forms.types";
@@ -127,16 +130,18 @@ describe("participant column model", () => {
     );
   });
 
-  it("offers the team column off by default until the roster actually carries teams", () => {
-    // A solo tournament leaves every team cell empty, so the column must stay out
-    // of the default set; on a team tournament it must be ON, because search only
-    // walks visible columns and finding players by team is the point of it.
+  it("builds the team column only when the roster actually carries teams", () => {
+    // A solo tournament leaves every team cell empty, so the column must not
+    // exist at all: a hidden column still prints a blank "Team" row in every
+    // expanded details panel. On a team tournament it must be ON, because
+    // search only walks visible columns and finding players by team is the
+    // point of it.
     const withoutTeams = buildParticipantColumns(form(), t).find((column) => column.id === "team");
     const withTeams = buildParticipantColumns(form(), t, "ru", null, undefined, true).find(
       (column) => column.id === "team",
     );
 
-    expect(withoutTeams?.defaultVisible).toBe(false);
+    expect(withoutTeams).toBeUndefined();
     expect(withTeams?.defaultVisible).toBe(true);
     expect(
       withTeams?.searchValue?.({
@@ -145,5 +150,30 @@ describe("participant column model", () => {
     ).toBe("Ночные совы");
     expect(withTeams?.searchValue?.({} as never)).toBeNull();
     expect(withTeams?.render({} as never, 0)).toBeNull();
+  });
+
+  it("marks the status cell on-call and late, and leaves a plain row unmarked", () => {
+    // The two marks an organizer scans the roster for. The on-call one used to
+    // be a whole separate group of rows, which read as "these people are not
+    // really in" — it is a note beside the status now, and it must survive.
+    const status = buildParticipantColumns(form(), t).find((column) => column.id === "_status")!;
+    const marked = renderToStaticMarkup(
+      <NextIntlClientProvider locale="en" messages={{}}>
+        {status.render(
+          { status: "approved", answers: { reserve: true }, submitted_late: true } as never,
+          0,
+        )}
+      </NextIntlClientProvider>,
+    );
+    const plain = renderToStaticMarkup(
+      <NextIntlClientProvider locale="en" messages={{}}>
+        {status.render({ status: "approved", answers: {}, submitted_late: false } as never, 0)}
+      </NextIntlClientProvider>,
+    );
+
+    expect(marked).toContain('data-row-on-call="true"');
+    expect(marked).toContain('data-row-late="true"');
+    expect(plain).not.toContain("data-row-on-call");
+    expect(plain).not.toContain("data-row-late");
   });
 });

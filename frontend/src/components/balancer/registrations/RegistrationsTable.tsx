@@ -362,9 +362,10 @@ export default function RegistrationsTable({
         options: [
           { value: "included", label: "Included", count: facets.included },
           { value: "excluded", label: "Excluded", count: facets.excluded },
-          // A second axis on the same chip: a reserve is always outside the pool,
-          // so "excluded" cannot single them out. These two go through the message
-          // catalogue because "резерв" is the word organizers actually use.
+          // A second axis on the same chip: the pool verdict says whether the
+          // row is in the balancer, this says whether the registrant offered to
+          // be called in. They go through the message catalogue because the
+          // organizer reads them as words, not as key paths.
           { value: "reserve", label: t("common.reserve"), count: facets.reserve },
           { value: "not_reserve", label: t("common.notReserve"), count: facets.notReserve }
         ]
@@ -848,11 +849,6 @@ export default function RegistrationsTable({
                   );
                 }}
                 disabled={bulkAddToBalancerMutation.isPending}
-                // The server skips reserves in a bulk sweep on purpose — the whole
-                // point of the flag is that they stay out until somebody needs a
-                // substitute — and a silent "N skipped" in the toast does not say
-                // why. A single-row add still promotes one.
-                title={t("common.bulkAddSkipsReserves")}
               >
                 {bulkAddToBalancerMutation.isPending ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />

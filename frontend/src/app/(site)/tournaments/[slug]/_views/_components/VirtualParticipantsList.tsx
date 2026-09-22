@@ -279,10 +279,14 @@ const VirtualParticipantsList = memo(function VirtualParticipantsList({
                     </div>
                   ))}
                   <div className={styles.participantExpanderCell} role="cell">
+                    {/* One name, whatever the state: `aria-expanded` and the
+                        chevron carry open/closed, and the details region below
+                        borrows this name via `aria-labelledby`, so a toggling
+                        "Collapse" here would name the region "Collapse". */}
                     <button
                       aria-controls={detailsId}
                       aria-expanded={expanded}
-                      aria-label={expanded ? t("common.collapse") : t("common.expand")}
+                      aria-label={t("registration.myCard.details")}
                       className={styles.participantExpander}
                       id={expanderId}
                       onClick={(event) => {
@@ -292,9 +296,7 @@ const VirtualParticipantsList = memo(function VirtualParticipantsList({
                       type="button"
                     >
                       <span className={styles.participantExpanderLabel}>
-                        {expanded
-                          ? t("common.collapse")
-                          : t("registration.myCard.details")}
+                        {t("registration.myCard.details")}
                       </span>
                       {expanded ? (
                         <ChevronUp aria-hidden="true" className="size-4" />

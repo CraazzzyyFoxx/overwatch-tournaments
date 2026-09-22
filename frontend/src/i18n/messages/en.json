@@ -130,10 +130,9 @@
     "vs": "vs",
     "switchLanguage": "Switch language",
     "checkedIn": "Checked in",
-    "reserve": "Reserve",
-    "notReserve": "Not reserve",
-    "reserveHint": "Agreed to stand in if a replacement is needed",
-    "bulkAddSkipsReserves": "Reserves are skipped by a bulk add — put them in the pool one at a time, when a replacement is actually needed",
+    "reserve": "On call",
+    "notReserve": "Not on call",
+    "reserveHint": "Plays as usual, and is fine being called in if somebody drops or they cannot start on time",
     "notCheckedIn": "Not checked in",
     "profileOpen": "Profile open",
     "profileClosed": "Profile closed",
@@ -292,11 +291,9 @@
       }
     },
     "reserve": {
-      "badge": "Reserve",
-      "explainer": "You are in the reserve: you play only if a replacement is needed.",
-      "lateImposed": "You signed up after registration closed, so you are in the reserve: you play only if a replacement is needed.",
-      "lateNotice": "Registration is closed — this sign-up goes into the reserve. You will play only if a replacement is needed.",
-      "lateLocked": "Registration is closed, so the reserve cannot be turned off."
+      "badge": "On call",
+      "explainer": "You play as usual. You have also said the organizers can call you in if somebody drops or you cannot make the start.",
+      "lateNotice": "Registration is closed — your sign-up will be marked as a late one. It changes nothing else about it."
     },
     "wizard": {
       "title": "Register",
@@ -386,8 +383,8 @@
     "details": {
       "streamPov": "Stream POV",
       "streamPovLabel": "I will stream my POV",
-      "reserve": "Reserve",
-      "reserveLabel": "Call me in if a replacement is needed",
+      "reserve": "On call",
+      "reserveLabel": "You can call me in if somebody drops or I cannot make the start",
       "notes": "Notes",
       "notesPlaceholder": "Anything the players and captains should know",
       "organizerNotesPlaceholder": "Anything you'd like organizers to know"
@@ -407,8 +404,6 @@
       "noSecondaryRoles": "No fallback roles",
       "accounts": "Linked Accounts",
       "details": "Additional Details",
-      "streamPovActive": "Will stream POV",
-      "streamPovInactive": "Won't stream POV",
       "checkInSuccess": "You have confirmed your participation!",
       "pendingCheckInDesc": "Registration approved. Check-in will start later.",
       "pendingReviewDesc": "The application is currently under review by the tournament organizers.",
@@ -2162,7 +2157,7 @@
         "total": "Registered",
         "teams": "Teams",
         "latest": "Latest",
-        "reserveNote": "{count, plural, one {# of them is in the reserve} other {# of them are in the reserve}}"
+        "reserveNote": "{count, plural, one {# of them can also be called in if needed} other {# of them can also be called in if needed}}"
       },
       "format": {
         "title": "Format",
@@ -2326,9 +2321,9 @@
     },
     "participants": {
       "resultCount": "{count, plural, one {# participant shown} other {# participants shown}}",
-      "countWithReserve": "{count, plural, one {# participant} other {# participants}} (+{reserve} in reserve)",
-      "reserveGroup": "Reserve · {count}",
-      "reserveGroupDesc": "They play only if a replacement is needed.",
+      "countWithReserve": "{count, plural, one {# participant} other {# participants}} ({reserve} on call)",
+      "lateBadge": "Late sign-up",
+      "lateHint": "Signed up after registration closed.",
       "hidden": {
         "title": "Participants list hidden",
         "description": "The organizer publishes only the size of the field and how it splits by role. Your own registration is still shown above."
@@ -2340,8 +2335,8 @@
     },
     "participantsPool": {
       "viewLabel": "Participant view",
-      "reserve": "Reserve · {count}",
-      "reserveDesc": "Outside the pool: they come in only if a replacement is needed.",
+      "reserve": "On call · {count}",
+      "reserveDesc": "They play as usual — they have also said they can be called in if somebody drops.",
       "view": {
         "pool": "By role",
         "table": "Table"
@@ -5041,7 +5036,7 @@
       "smurf_tags": "Smurf accounts",
       "roles": "Roles",
       "stream_pov": "Stream POV",
-      "reserve": "Reserve",
+      "reserve": "On call",
       "public_notes": "Notes",
       "organizer_notes": "Notes for organizers",
       "identity_discord": "Discord",

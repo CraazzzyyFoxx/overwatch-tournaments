@@ -47,7 +47,6 @@ from src.schemas.registration_build import (
     _public_rosters,
     _reg_to_read,
     _resolve_top_heroes_config,
-    _resolve_tournament_workspace,
     registration_public_keys,
     registration_read_loaders,
 )
@@ -55,10 +54,9 @@ from src.services.registration._common import (
     _common_service,
 )
 from src.services.registration.answers import answer_service
-from src.services.registration.self_edit import self_edit_policy
+from src.services.registration.self_edit import self_edit_policy, submitted_late
 from src.services.registration.windows import (
     is_check_in_window_active,
-    is_late_registration,
     is_registration_open,
 )
 from src.services.tournament.events import enqueue_registration_approved
@@ -534,7 +532,6 @@ class RegistrationService:
         form_version_id: int | None = None,
         auto_approve: bool = False,
         auth_user: models.AuthUser | None = None,
-        force_reserve: bool = False,
         commit: bool = True,
     ) -> models.BalancerRegistration:
         """Create a self-service registration and auto-enroll the registrant.
@@ -556,10 +553,9 @@ class RegistrationService:
         ``commit=False`` flushes instead, so a caller that must land this row
         together with something else (the team flows) really can.
 
-        ``force_reserve`` writes ``is_reserve`` regardless of what the answer
-        document said: it carries the schedule's verdict (a sign-up past the
-        registration window's ``ends_at`` is cover, not a starter), and the
-        registrant does not get a vote on that.
+        The registrant's ``reserve`` answer is theirs alone: it is an
+        availability note ("I play, and I am fine being called in if somebody
+        drops or I cannot start on time"), never a verdict this method imposes.
         """
         if auth_user is not None and not auth_user.can_capability(
             "registration", "self_register", workspace_id=workspace_id
@@ -580,10 +576,6 @@ class RegistrationService:
         # after, and ``ensure_player_identity`` below resolves the domain player
         # from it.
         answer_service.apply(registration, values, schema=schema, hero_catalog=hero_catalog)
-        if force_reserve:
-            # AFTER ``apply``: the schedule overrides the checkbox rather than
-            # racing it, whether or not the form even asks the question.
-            registration.is_reserve = True
         registration.display_name = registration.battle_tag
         registration = await self.registration_repo.create(session, registration)
         # Provision the domain player identity so first-time registrants are picked
@@ -836,11 +828,6 @@ class RegistrationService:
                 form_version_id=form.current_version_id,
                 auto_approve=form.auto_approve,
                 auth_user=auth_user,
-                # A sign-up admitted only by ``allow_late_registration`` is cover
-                # for the field, not part of it. Solo only: on a team the bench is
-                # ``is_substitute`` and the slot is the captain's decision, so a
-                # starter carrying ``is_reserve`` would mean two things at once.
-                force_reserve=team_placement is None and is_late_registration(tournament),
                 # One transaction for the row, its answers and (below) its team
                 # slot: a registration with a team_id but no slot_code would be
                 # counted by the roster reader and placed nowhere.
@@ -880,6 +867,7 @@ class RegistrationService:
             # The row the registrant lands on: the card renders its Edit affordance
             # straight from this, instead of showing none until the first refetch.
             self_edit=self_edit_policy(registration, tournament, schema),
+            submitted_late=submitted_late(registration, tournament),
         )
 
     async def resolve_admission_list(
@@ -1015,7 +1003,12 @@ class RegistrationService:
         flag on the shared cashews backend and races with every concurrent request
         on this worker (see lesson_cashews_disabling_shared_cache).
         """
-        workspace_id = await _resolve_tournament_workspace(session, tournament_id)
+        # One row for two answers: the workspace this list belongs to, and the
+        # phase schedule each row's ``submitted_late`` is measured against.
+        tournament = await self.tournament_repo.get(session, tournament_id)
+        if tournament is None:
+            raise HTTPException(status_code=404, detail="Tournament not found")
+        workspace_id = tournament.workspace_id
 
         form = await _common_service.get_registration_form(session, tournament_id)
         max_participants = form.max_participants if form is not None else None
@@ -1102,6 +1095,7 @@ class RegistrationService:
                 roster=rosters.get(r.id),
                 public_keys=public_keys_for(r),
                 current_version_id=current_version_id,
+                submitted_late=submitted_late(r, tournament),
             )
             # ``dict(read)``, not ``model_dump()``: the nested reads stay model
             # instances, which pydantic accepts as-is instead of dumping them to

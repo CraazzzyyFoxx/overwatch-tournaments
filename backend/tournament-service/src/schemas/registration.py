@@ -122,6 +122,12 @@ class RegistrationRead(BaseModel):
     team: RegistrationTeamBrief | None = None
     submitted_at: datetime | None = None
     reviewed_at: datetime | None = None
+    #: Signed up AFTER the registration window's ``ends_at`` (only possible when
+    #: the organizer switched ``allow_late_registration`` on). A fact about the
+    #: schedule, never about the player: it replaced the old "a late sign-up is
+    #: written as a reserve" rule, which put the registrant's own availability
+    #: answer to work saying something the registrant never said.
+    submitted_late: bool = False
     #: Place in submission order and the size of that order — overall, and inside
     #: this registration's primary role. The role pair is the one that answers
     #: "am I getting in": a field fills role by role, so 2nd of 119 says little

@@ -88,16 +88,14 @@ def _floor(
     balancer/draft has already consumed them, and on a team the slot is the
     captain's decision, not the member's.
 
-    ``reserve`` on a late sign-up: the flag was imposed by the schedule, so
-    unticking it would be a one-click promotion into the main field.
+    Nothing locks ``reserve``: it is the registrant's own availability note, not
+    a slot the schedule hands out.
     """
     locked: set[str] = set()
     if registration.reviewed_at is not None:
         locked.add("battle_tag")
     if is_included_in_balancer(registration) or registration.registration_team_id is not None:
         locked.add("roles")
-    if submitted_late(registration, tournament):
-        locked.add("reserve")
     return frozenset(locked)
 
 

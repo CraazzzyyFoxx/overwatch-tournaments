@@ -84,7 +84,11 @@ class HiddenListTests(IsolatedAsyncioTestCase):
             execute=AsyncMock(),
         )
         with (
-            patch.object(service, "_resolve_tournament_workspace", AsyncMock(return_value=7)),
+            patch.object(
+                service.registration_service.tournament_repo,
+                "get",
+                AsyncMock(return_value=SimpleNamespace(workspace_id=7, status=None, phase_schedule=[])),
+            ),
             patch.object(service._common_service, "get_registration_form", AsyncMock(return_value=form)),
         ):
             return session, await service.registration_service.build_public_registration_list(session, tournament_id=42)
@@ -104,8 +108,8 @@ class HiddenListTests(IsolatedAsyncioTestCase):
         self.assertEqual(response.total, 3)
         self.assertEqual(response.role_counts, {"tank": 1, "damage": 2})
         self.assertEqual(response.max_participants, 60)
-        # Reported BESIDE ``total``, never subtracted from it: ``total`` is the
-        # queue denominator, so the capacity line does its own arithmetic.
+        # Reported BESIDE ``total``, never subtracted from it: saying "you can
+        # call me in" does not take anybody out of the field.
         self.assertEqual(response.reserve_count, 1)
 
     async def test_a_hidden_list_never_reads_the_identities_it_is_hiding(self):
