@@ -448,6 +448,10 @@ export function buildBalancerRegistrationColumns(
         defaultHidden: false,
         responsive: "always",
         align: "center",
+        // Fits three role chips (32px each + gaps) plus cell padding on one
+        // line. Without a floor the column shrinks to one chip — flex-wrap
+        // then stacks the roles and the whole row grows to ~200px tall.
+        className: "min-w-[136px]",
         searchValue: (registration) =>
           registration.roles
             .map((role) => [role.role, role.subrole, role.rank_value].filter(Boolean).join(" "))
