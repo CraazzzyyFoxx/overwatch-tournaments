@@ -13,7 +13,13 @@ import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vite
 
 import en from "@/i18n/messages/en.json";
 import type { Encounter } from "@/types/encounter.types";
-import type { PickBanEntry, PickBanSession, PickBanState } from "@/types/tournament.types";
+import type {
+  PickBanEntry,
+  PickBanGame,
+  PickBanSession,
+  PickBanState
+} from "@/types/tournament.types";
+import { pickedItemsInOrder } from "@/components/pick-ban/pick-ban-model";
 
 import { PregameRoom } from "./PregameRoom";
 
@@ -32,6 +38,9 @@ const getAllHeroes = vi.fn();
 const getMyRole = vi.fn();
 const getReports = vi.fn();
 const submitReport = vi.fn();
+const reportGame = vi.fn();
+const selectGameMap = vi.fn();
+const correctGameResult = vi.fn();
 const routerPush = vi.fn();
 /** The room's `?from=` param, rewritten per test. */
 let search = new URLSearchParams();
@@ -48,7 +57,9 @@ vi.mock("@/services/pickBan.service", () => ({
     markReady: (...args: unknown[]) => markReady(...args),
     undoLastAction: (...args: unknown[]) => undoLastAction(...args),
     electOpener: vi.fn(),
-    reportMap: vi.fn()
+    reportGame: (...args: unknown[]) => reportGame(...args),
+    selectGameMap: (...args: unknown[]) => selectGameMap(...args),
+    correctGameResult: (...args: unknown[]) => correctGameResult(...args)
   }
 }));
 vi.mock("@/services/captain.service", () => ({
@@ -126,6 +137,39 @@ function entry(overrides: Partial<PickBanEntry>): PickBanEntry {
     status: "available",
     ...overrides
   };
+}
+
+/** One position of the series, awaiting its result unless told otherwise. */
+function game(overrides: Partial<PickBanGame> & { position: number }): PickBanGame {
+  return {
+    id: 900 + overrides.position,
+    map_id: 21,
+    state: "awaiting_result",
+    accepted_home_score: null,
+    accepted_away_score: null,
+    result_source: null,
+    result_version: 1,
+    confirmed_at: null,
+    reports: [],
+    ...overrides
+  };
+}
+
+/** A confirmed position, the way the server reports one both captains agreed. */
+function confirmed(position: number, mapId: number, home: number, away: number): PickBanGame {
+  return game({
+    position,
+    map_id: mapId,
+    state: "confirmed",
+    accepted_home_score: home,
+    accepted_away_score: away,
+    result_source: "captain_agreement",
+    confirmed_at: "2026-08-01T11:00:00Z",
+    reports: [
+      { side: "home", home_score: home, away_score: away },
+      { side: "away", home_score: home, away_score: away }
+    ]
+  });
 }
 
 function session(overrides: Partial<PickBanSession> = {}): PickBanSession {
@@ -242,10 +286,25 @@ async function render(props: { seriesReport?: boolean } = {}) {
   await settle();
 }
 
-/** Routes `getPickBanState(kind, id)` mock calls to per-kind canned responses. */
+/**
+ * Routes `getPickBanState(kind, id)` mock calls to per-kind canned responses.
+ *
+ * The server opens one game per picked position, so a map state that says
+ * nothing about results gets that default rather than restating it in every
+ * fixture; a case about a result passes its own `games`.
+ */
 function mockStates(map: PickBanState, hero: PickBanState) {
+  const mapState: PickBanState =
+    map.games != null
+      ? map
+      : {
+          ...map,
+          games: pickedItemsInOrder(map.pool).map((entry, index) =>
+            game({ position: index + 1, map_id: entry.item_id })
+          )
+        };
   getPickBanState.mockImplementation((kind: string) =>
-    Promise.resolve(kind === "map" ? map : hero)
+    Promise.resolve(kind === "map" ? mapState : hero)
   );
 }
 
@@ -624,8 +683,9 @@ describe("phase selection", () => {
         viewer_side: "home",
         sequence: ["ban_home", "ban_away", "decider"],
         current_round: 2,
+        games: [confirmed(1, 21, 2, 1)],
         pool: [
-          entry({ id: 1, item_id: 21, round: 1, status: "played", action_index: 2 }),
+          entry({ id: 1, item_id: 21, round: 1, status: "picked", action_index: 2 }),
           entry({ id: 2, item_id: 22, round: 2 }),
           entry({ id: 3, item_id: 23, round: 2 })
         ]
@@ -910,7 +970,13 @@ describe("phase selection", () => {
         is_complete: true,
         viewer_side: "home",
         pool: [entry({ id: 1, item_id: 21, round: 1, status: "picked", action_index: 2 })],
-        map_reports: [{ map_id: 21, map_index: 1, side: "home", home_score: 3, away_score: 1 }]
+        games: [
+          game({
+            position: 1,
+            map_id: 21,
+            reports: [{ side: "home", home_score: 3, away_score: 1 }]
+          })
+        ]
       }),
       readyState({
         session: session({ kind: "hero" }),
@@ -936,20 +1002,60 @@ describe("phase selection", () => {
     expect(document.body.textContent).toContain(ROOM.mapResult.amend);
   });
 
-  it("charts every settled map of the series with its confirmed score", async () => {
+  it("files the captain's claim against the position's game, not against the map", async () => {
+    // The map is not the identity of a result: a series can play the same map
+    // twice, and the claim belongs to the position the room is on.
+    reportGame.mockResolvedValue({
+      disputed: false,
+      resolved: false,
+      game: game({ position: 1, map_id: 21, id: 77 })
+    });
+    mockStates(
+      readyState({
+        session: session({ kind: "map" }),
+        is_complete: true,
+        viewer_side: "home",
+        games: [game({ position: 1, map_id: 21, id: 77 })],
+        pool: [entry({ id: 1, item_id: 21, round: 1, status: "picked", action_index: 2 })]
+      }),
+      readyState({
+        session: session({ kind: "hero" }),
+        is_complete: true,
+        sequence: ["ban_home"],
+        pool: [entry({ id: 3, item_id: 101, round: 1, status: "banned" })]
+      })
+    );
+    await render();
+
+    const byText = (label: string) =>
+      Array.from(document.body.querySelectorAll("button")).find(
+        (button) => button.textContent?.trim() === label
+      );
+    await act(async () => byText(ROOM.mapResult.report)!.click());
+    await settle();
+
+    const submit = byText(ROOM.mapReport.submit);
+    expect(submit).toBeTruthy();
+    await act(async () => submit!.click());
+    await settle();
+
+    expect(reportGame).toHaveBeenCalledWith(4242, 77, { home_score: 0, away_score: 0 });
+  });
+
+  it("charts every settled map of the series with its accepted score", async () => {
     getEncounter.mockResolvedValue({
       ...encounter(),
       best_of: 3,
-      score: { home: 1, away: 0 },
-      matches: [{ map_id: 21, map_index: 1, score: { home: 3, away: 1 } }]
+      score: { home: 1, away: 0 }
     } as unknown as Encounter);
     mockStates(
       readyState({
         session: session({ kind: "map" }),
         is_complete: true,
         viewer_side: "home",
+        games: [confirmed(1, 21, 3, 1), game({ position: 2, map_id: 22 })],
         pool: [
-          entry({ id: 1, item_id: 21, round: 1, status: "played", action_index: 2 }),
+          entry({ id: 1, item_id: 21, round: 1, status: "picked", action_index: 2 }),
           entry({ id: 2, item_id: 22, round: 2, status: "picked", action_index: 5 })
         ]
       }),
@@ -1031,31 +1137,23 @@ describe("phase selection", () => {
     // times. Keyed on `map_id` alone, the third play inherited the first play's
     // two agreeing claims — so the room told both captains the map was already
     // locked in — and both settled positions printed the same score, the one
-    // from whichever Match row happened to come first.
+    // from whichever row happened to come first. The POSITION keys a game.
     getEncounter.mockResolvedValue({
       ...encounter(),
       best_of: 3,
       score: { home: 1, away: 1 },
-      matches: [
-        { map_id: 21, map_index: 1, score: { home: 2, away: 1 } },
-        { map_id: 21, map_index: 2, score: { home: 0, away: 2 } }
-      ]
+      matches: []
     } as unknown as Encounter);
     mockStates(
       readyState({
         session: session({ kind: "map" }),
         is_complete: true,
         viewer_side: "home",
+        games: [confirmed(1, 21, 2, 1), confirmed(2, 21, 0, 2), game({ position: 3, map_id: 21 })],
         pool: [
-          entry({ id: 1, item_id: 21, round: 1, status: "played", action_index: 2 }),
-          entry({ id: 2, item_id: 21, round: 2, status: "played", action_index: 5 }),
+          entry({ id: 1, item_id: 21, round: 1, status: "picked", action_index: 2 }),
+          entry({ id: 2, item_id: 21, round: 2, status: "picked", action_index: 5 }),
           entry({ id: 3, item_id: 21, round: 3, status: "picked", action_index: 8 })
-        ],
-        map_reports: [
-          { map_id: 21, map_index: 1, side: "home", home_score: 2, away_score: 1 },
-          { map_id: 21, map_index: 1, side: "away", home_score: 2, away_score: 1 },
-          { map_id: 21, map_index: 2, side: "home", home_score: 0, away_score: 2 },
-          { map_id: 21, map_index: 2, side: "away", home_score: 0, away_score: 2 }
         ]
       }),
       readyState({
@@ -1118,8 +1216,9 @@ describe("phase selection", () => {
       readyState({
         session: session({ kind: "map" }),
         is_complete: true,
+        games: [confirmed(1, 21, 2, 1), game({ position: 2, map_id: 22 })],
         pool: [
-          entry({ id: 1, item_id: 21, round: 1, status: "played", action_index: 2 }),
+          entry({ id: 1, item_id: 21, round: 1, status: "picked", action_index: 2 }),
           entry({ id: 2, item_id: 22, round: 2, status: "picked", action_index: 5 })
         ]
       }),
@@ -1147,8 +1246,9 @@ describe("phase selection", () => {
         session: session({ kind: "map" }),
         is_complete: true,
         viewer_side: null,
+        games: [confirmed(1, 21, 2, 1), game({ position: 2, map_id: 22 })],
         pool: [
-          entry({ id: 1, item_id: 21, round: 1, status: "played", action_index: 2 }),
+          entry({ id: 1, item_id: 21, round: 1, status: "picked", action_index: 2 }),
           entry({ id: 2, item_id: 22, round: 2, status: "picked", action_index: 5 })
         ]
       }),
@@ -1172,14 +1272,15 @@ describe("phase selection", () => {
     );
   });
 
-  /** A series with every map picked, banned, played and reconciled. */
+  /** A series with every position picked, banned, played and confirmed. */
   function settledSeries(viewerSide: "home" | "away" | null) {
     mockStates(
       readyState({
         session: session({ kind: "map" }),
         is_complete: true,
         viewer_side: viewerSide,
-        pool: [entry({ id: 1, item_id: 21, round: 1, status: "played", action_index: 2 })]
+        games: [confirmed(1, 21, 2, 1)],
+        pool: [entry({ id: 1, item_id: 21, round: 1, status: "picked", action_index: 2 })]
       }),
       readyState({
         session: session({ kind: "hero" }),
@@ -1257,9 +1358,10 @@ describe("phase selection", () => {
         session: session({ kind: "map" }),
         is_complete: true,
         viewer_side: null,
+        games: [confirmed(1, 21, 2, 1), confirmed(2, 22, 2, 0)],
         pool: [
-          entry({ id: 1, item_id: 21, round: 1, status: "played", action_index: 2 }),
-          entry({ id: 2, item_id: 22, round: 2, status: "played", action_index: 5 })
+          entry({ id: 1, item_id: 21, round: 1, status: "picked", action_index: 2 }),
+          entry({ id: 2, item_id: 22, round: 2, status: "picked", action_index: 5 })
         ]
       }),
       readyState({
@@ -1305,9 +1407,10 @@ describe("phase selection", () => {
         session: session({ kind: "map" }),
         is_complete: true,
         viewer_side: null,
+        games: [confirmed(1, 21, 2, 1), confirmed(2, 22, 2, 0)],
         pool: [
-          entry({ id: 1, item_id: 21, round: 1, status: "played", action_index: 2 }),
-          entry({ id: 2, item_id: 22, round: 2, status: "played", action_index: 5 })
+          entry({ id: 1, item_id: 21, round: 1, status: "picked", action_index: 2 }),
+          entry({ id: 2, item_id: 22, round: 2, status: "picked", action_index: 5 })
         ]
       }),
       readyState({
@@ -1338,7 +1441,8 @@ describe("phase selection", () => {
             session: session({ kind: "map" }),
             is_complete: true,
             viewer_side: null,
-            pool: [entry({ id: 1, item_id: 21, round: 1, status: "played", action_index: 2 })]
+            games: [confirmed(1, 21, 2, 1)],
+            pool: [entry({ id: 1, item_id: 21, round: 1, status: "picked", action_index: 2 })]
           })
         : readyState({
             session: session({ kind: "hero" }),
@@ -1354,11 +1458,11 @@ describe("phase selection", () => {
     expect(document.body.querySelector("[data-hero-bans]")).toBeNull();
   });
 
-  it("charts a played map's score from the captains' claims when no Match row exists", async () => {
-    // A scrim writes no `matches.match` rows at all, so the filmstrip's score
-    // has to come from the agreed claims instead — otherwise every map of a
-    // scrim showed as played with nothing on it, which is what made the loop
-    // look stuck even though it was advancing correctly.
+  it("charts a confirmed position's accepted score with no Match row at all", async () => {
+    // A scrim writes no `matches.match` rows, so the filmstrip's score comes
+    // from the game the captains confirmed — otherwise every map of a scrim
+    // showed as played with nothing on it, which is what made the loop look
+    // stuck even though it was advancing correctly.
     getEncounter.mockResolvedValue({
       ...encounter(),
       best_of: 3,
@@ -1370,13 +1474,10 @@ describe("phase selection", () => {
         session: session({ kind: "map" }),
         is_complete: true,
         viewer_side: "home",
+        games: [confirmed(1, 21, 2, 1), game({ position: 2, map_id: 22 })],
         pool: [
-          entry({ id: 1, item_id: 21, round: 1, status: "played", action_index: 2 }),
+          entry({ id: 1, item_id: 21, round: 1, status: "picked", action_index: 2 }),
           entry({ id: 2, item_id: 22, round: 2, status: "picked", action_index: 5 })
-        ],
-        map_reports: [
-          { map_id: 21, map_index: 1, side: "home", home_score: 2, away_score: 1 },
-          { map_id: 21, map_index: 1, side: "away", home_score: 2, away_score: 1 }
         ]
       }),
       readyState({
@@ -1401,10 +1502,10 @@ describe("phase selection", () => {
     expect(items[1].textContent).not.toMatch(/\d:\d/);
   });
 
-  it("shows no score for a map whose captains disagree", async () => {
-    // A dispute is exactly when there is no agreed number, and the server will
-    // not advance the series either — inventing one here would tell the captains
-    // the map was settled.
+  it("shows no score for a position whose captains disagree", async () => {
+    // A dispute is exactly when there is no accepted number, and the server
+    // will not advance the series either — inventing one here would tell the
+    // captains the map was settled.
     getEncounter.mockResolvedValue({
       ...encounter(),
       best_of: 3,
@@ -1415,10 +1516,17 @@ describe("phase selection", () => {
         session: session({ kind: "map" }),
         is_complete: true,
         viewer_side: "home",
-        pool: [entry({ id: 1, item_id: 21, round: 1, status: "played", action_index: 2 })],
-        map_reports: [
-          { map_id: 21, map_index: 1, side: "home", home_score: 2, away_score: 1 },
-          { map_id: 21, map_index: 1, side: "away", home_score: 0, away_score: 2 }
+        pool: [entry({ id: 1, item_id: 21, round: 1, status: "picked", action_index: 2 })],
+        games: [
+          game({
+            position: 1,
+            map_id: 21,
+            state: "disputed",
+            reports: [
+              { side: "home", home_score: 2, away_score: 1 },
+              { side: "away", home_score: 0, away_score: 2 }
+            ]
+          })
         ]
       }),
       readyState({
@@ -1693,8 +1801,9 @@ describe("admin controls", () => {
       readyState({
         session: session({ kind: "map" }),
         is_complete: true,
+        games: [confirmed(1, 21, 2, 1), game({ position: 2, map_id: 22 })],
         pool: [
-          entry({ id: 10, item_id: 21, round: 1, status: "played", action_index: 2 }),
+          entry({ id: 10, item_id: 21, round: 1, status: "picked", action_index: 2 }),
           entry({ id: 11, item_id: 22, round: 2, status: "picked", action_index: 5 })
         ]
       }),

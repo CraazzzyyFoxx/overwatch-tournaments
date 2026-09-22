@@ -27,13 +27,13 @@ import { RoomChat } from "@/components/chat/RoomChat";
 import { encounterChatRoom } from "@/lib/chat-rooms";
 import {
   PICK_BAN_UNAVAILABLE_COPY,
-  agreedMapScore,
+  acceptedScore,
   attributeLocks,
+  gameAtPosition,
   highestPoolRound,
   isSessionActive,
   pickBanReserveMap,
   pickedItemsInOrder,
-  seriesMatchesByPosition,
   type PickBanSide,
   type PickBanUnavailableIcon
 } from "@/components/pick-ban/pick-ban-model";
@@ -116,7 +116,6 @@ function PregameRoomBody({ encounterId, seriesReport = true }: Readonly<PregameR
   const queryClient = useQueryClient();
   const { isSuperuser, isWorkspaceAdmin, hasWorkspacePermission } = usePermissions();
   const enabled = Number.isFinite(encounterId) && encounterId > 0;
-  const [freeplayMapId, setFreeplayMapId] = useState<number | null>(null);
   const searchParams = useSearchParams();
   const returnTo = safeReturnPath(searchParams?.get(RETURN_TO_PARAM), `/encounters/${encounterId}`);
   const mapKey = ["pregame-state", encounterId, "map"];
@@ -293,7 +292,16 @@ function PregameRoomBody({ encounterId, seriesReport = true }: Readonly<PregameR
   // `played` the moment both captains agree, and that is what opens the next
   // map's bans.
   const seriesMaps = pickedItemsInOrder(mapState.pool);
-  const pendingIndex = seriesMaps.findIndex((entry) => entry.status === "picked");
+  // One game per position of the series: the pool records that a map was
+  // PICKED, never that it was played, so the game's own state is what says a
+  // position is behind us.
+  const games = mapState.games ?? [];
+  const seriesSummary = mapState.series ?? null;
+  const settledAt = (position: number) => {
+    const state = gameAtPosition(games, position)?.state;
+    return state === "confirmed" || state === "cancelled";
+  };
+  const pendingIndex = seriesMaps.findIndex((_, index) => !settledAt(index + 1));
   const pendingMap = pendingIndex === -1 ? null : seriesMaps[pendingIndex];
   const pendingRound = pendingIndex === -1 ? null : pendingIndex + 1;
   const mapPhaseOpen = mapApplies && !(mapState.session != null && mapState.is_complete);
@@ -317,8 +325,10 @@ function PregameRoomBody({ encounterId, seriesReport = true }: Readonly<PregameR
   // hero round.
   const winsNeeded = Math.floor((encounter.best_of ?? 0) / 2) + 1;
   const seriesDecided =
-    (encounter.best_of ?? 0) > 0 &&
-    Math.max(encounter.score?.home ?? 0, encounter.score?.away ?? 0) >= winsNeeded;
+    seriesSummary != null
+      ? seriesSummary.complete
+      : (encounter.best_of ?? 0) > 0 &&
+        Math.max(encounter.score?.home ?? 0, encounter.score?.away ?? 0) >= winsNeeded;
   const freeplayRound = !mapApplies ? (heroRound ?? 1) : null;
   const awaitingFreeplayReport =
     !mapApplies &&
@@ -345,42 +355,28 @@ function PregameRoomBody({ encounterId, seriesReport = true }: Readonly<PregameR
       : [])
   ];
   // The series' history for the header filmstrip. Three distinct states, and
-  // the pool is what tells them apart -- NOT the presence of a `Match` row:
-  // a row exists for a map that a log parser touched or that was pre-created
-  // at 0:0, so keying "settled" off `match != null` marked an unplayed map of
-  // the series as finished and printed a 0:0 nobody scored.
+  // the GAMES are what tell them apart -- NOT the pool, which only records
+  // that a map was picked, and not the presence of a `Match` row: a row exists
+  // for a map a log parser touched or that was pre-created at 0:0, so keying
+  // "settled" off `match != null` marked an unplayed map as finished and
+  // printed a 0:0 nobody scored.
   //
-  // A `played` entry is settled and shows its confirmed score. Of the rest,
-  // the FIRST one is the map the loop is waiting on right now (see
-  // `pendingIndex`); every later one is simply a map of the series that has
-  // not been reached yet and has no result to show at all.
-  //
-  // Which `Match` row belongs to which map of the series is `map_index`, never
-  // `map_id`: a series may play the same map twice, and matching on the map
-  // alone printed the first play's score on both.
-  const seriesMatches = seriesMatchesByPosition(
-    encounter.matches ?? [],
-    seriesMaps.map((entry) => entry.item_id)
-  );
+  // A confirmed game is settled and shows its accepted score. Of the rest, the
+  // FIRST one is the position the loop is waiting on right now (see
+  // `pendingIndex`); every later one has not been reached yet.
   const series: PregameSeriesMap[] = seriesMaps.map((entry, index) => {
-    const played = entry.status === "played";
-    const match = played ? seriesMatches[index] : null;
-    // A `Match` row is authoritative where one exists — a parsed log corrects a
-    // captain claim. Where none does, the captains' own agreed claims are the
-    // score: a scrim writes no match rows at all, and without this fallback its
-    // played maps showed as played with nothing on them.
-    const score =
-      match != null
-        ? { home: match.score.home, away: match.score.away }
-        : played
-          ? agreedMapScore(mapState.map_reports ?? [], index + 1)
-          : null;
+    const game = gameAtPosition(games, index + 1);
     return {
       round: index + 1,
       name: mapsById[entry.item_id]?.name ?? t("map.itemNumber", { id: entry.item_id }),
       item: mapsById[entry.item_id],
-      score,
-      state: played ? "played" : index === pendingIndex ? "awaiting" : "upcoming"
+      score: acceptedScore(game),
+      state:
+        game?.state === "confirmed"
+          ? "played"
+          : index === pendingIndex
+            ? "awaiting"
+            : "upcoming"
     };
   });
   // The hero bans that apply to one map of the series, resolved against the
@@ -439,6 +435,12 @@ function PregameRoomBody({ encounterId, seriesReport = true }: Readonly<PregameR
       phases={phases}
       round={round}
       series={series}
+      seriesScore={
+        seriesSummary != null
+          ? { home: seriesSummary.home_wins, away: seriesSummary.away_wins }
+          : null
+      }
+      official={seriesSummary?.official ?? null}
       returnTo={returnTo}
     />
   );
@@ -465,32 +467,25 @@ function PregameRoomBody({ encounterId, seriesReport = true }: Readonly<PregameR
   }
 
   if (phase === "report" && reportRound != null) {
-    const lockedMapId = pendingMap?.item_id ??
-      (mapState.map_reports ?? []).find((report) => report.map_index === reportRound)?.map_id ??
-      null;
-    const reportMapId = lockedMapId ?? freeplayMapId;
-    const reportMap = reportMapId != null ? mapsById[reportMapId] : undefined;
+    const reportGame = gameAtPosition(games, reportRound);
+    const reportMapId = pendingMap?.item_id ?? reportGame?.map_id ?? null;
+    const reportMapItem = reportMapId != null ? mapsById[reportMapId] : undefined;
     return (
       <div className="flex flex-col gap-4">
         <PregameMapResult
           encounterId={encounterId}
-          mapId={reportMapId}
           mapName={
-            reportMap?.name ??
+            reportMapItem?.name ??
             (reportMapId != null ? t("map.itemNumber", { id: reportMapId }) : t("mapResult.pickMap"))
           }
-          mapImagePath={reportMap?.image_path ?? null}
+          mapImagePath={reportMapItem?.image_path ?? null}
           round={reportRound}
           viewerSide={mapState.viewer_side ?? viewerSide}
           homeName={sideNameOf("home")}
           awayName={sideNameOf("away")}
           homeTeam={encounter.home_team ?? null}
           awayTeam={encounter.away_team ?? null}
-          reports={(mapState.map_reports ?? []).filter((report) =>
-            pendingMap != null
-              ? report.map_id === pendingMap.item_id && report.map_index === reportRound
-              : report.map_index === reportRound
-          )}
+          game={reportGame}
           heroActions={heroActions}
           heroUndo={
             <PickBanUndoControl
@@ -510,8 +505,21 @@ function PregameRoomBody({ encounterId, seriesReport = true }: Readonly<PregameR
               ? (mapsQuery.data?.results ?? []).map((map) => ({ id: map.id, name: map.name }))
               : undefined
           }
-          onSelectMap={pendingMap == null ? setFreeplayMapId : undefined}
         />
+        {/* A dispute parks the room on this screen until an organizer rules on
+            it, and the pick-ban board — where these controls otherwise live —
+            is not on screen here. */}
+        {isAdmin ? (
+          <PregameAdminControls
+            kind="map"
+            encounterId={encounterId}
+            state={mapState}
+            allowProtect={false}
+            selectedItemId={null}
+            selectedItemName={null}
+            onMutated={invalidateRoom}
+          />
+        ) : null}
       </div>
     );
   }

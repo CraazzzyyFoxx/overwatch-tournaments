@@ -74,8 +74,7 @@ const STATUS_BADGE_VARIANT: Record<
   available: "outline",
   banned: "destructive",
   picked: "default",
-  protected: "secondary",
-  played: "secondary"
+  protected: "secondary"
 };
 
 /** Hero Pool role filter display order; each code is its own `common.roles.*` key. */
@@ -211,7 +210,6 @@ export function PickBanGrid({
               className={cn(
                 "object-cover transition-opacity",
                 dimmed ? "opacity-30 grayscale" : null,
-                entry.status === "played" ? "opacity-60" : null,
                 lockedRound != null ? "opacity-45 saturate-50" : null
               )}
             />

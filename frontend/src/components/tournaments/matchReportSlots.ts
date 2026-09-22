@@ -23,10 +23,9 @@ function playOrder(entry: PickBanEntry): number {
  * (backend `pick_ban_session.advance_to_next_round`), so using it sent
  * `map_index: 0` — which the server rejects — and `1000` for a second map.
  *
- * `played` counts as settled alongside `picked`: the series report is filed
- * once every map has been played and reconciled, at which point a picked-only
- * read finds nothing and the captain is offered anonymous slots for maps the
- * room just named.
+ * A picked map counts as settled whether or not its game is confirmed: the
+ * series report is filed once every map has been played, at which point the
+ * captain needs a slot per map the room just named.
  *
  * With no settled maps at all, fall back to `best_of` unnamed slots
  * (map_index 1..best_of), defaulting to 3 when the series length is unknown.
@@ -37,7 +36,7 @@ export function buildMapCodeSlots(
   bestOf: number | null | undefined
 ): MapCodeSlot[] {
   const settled = (poolState?.pool ?? [])
-    .filter((entry) => entry.status === "picked" || entry.status === "played")
+    .filter((entry) => entry.status === "picked")
     .slice()
     .sort((a, b) => playOrder(a) - playOrder(b));
 

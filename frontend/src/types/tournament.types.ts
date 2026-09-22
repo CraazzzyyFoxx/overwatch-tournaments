@@ -289,7 +289,7 @@ export interface OwalStack {
 
 export type PickBanKind = "map" | "hero";
 export type PickBanAction = "ban" | "pick" | "protect";
-export type PickBanEntryStatus = "available" | "picked" | "banned" | "protected" | "played";
+export type PickBanEntryStatus = "available" | "picked" | "banned" | "protected";
 
 export interface PickBanEntry {
   id: number;
@@ -327,19 +327,65 @@ export interface PickBanSession {
   current_step_started_at: string | null;
 }
 
-/** One captain's independent claim of ONE map's score (`EncounterMapReport`). */
-export interface PickBanMapReport {
-  map_id: number;
-  /**
-   * Which map OF THE SERIES the claim is for, 1-based in play order. This, not
-   * `map_id`, is what a claim is matched against: a series may play the same
-   * map twice, and keying on the map alone showed the earlier play's claims on
-   * the later one. 0 when the encounter has no map pick-ban session at all.
-   */
-  map_index: number;
+/**
+ * Where one game (one position of the series) stands. `planned` is a position
+ * whose map is not named yet; `awaiting_result` has a map and no accepted
+ * score; `disputed` holds two claims that clash; `confirmed` carries the
+ * accepted score, and only the admin correction command may change it.
+ */
+export type EncounterGameState =
+  | "planned"
+  | "awaiting_result"
+  | "disputed"
+  | "confirmed"
+  | "cancelled";
+
+/** Who put the accepted score on a game. A Match score is never one of them. */
+export type GameResultSource = "captain_agreement" | "admin" | "admin_log";
+
+/** One captain's independent claim of ONE game's score. */
+export interface PickBanGameReport {
   side: "home" | "away";
   home_score: number;
   away_score: number;
+}
+
+/**
+ * One position of the series, as the encounter's own result authority sees it.
+ * `position` is 1-based in play order — a series may play the same map twice,
+ * so the position, never `map_id`, is what identifies a game.
+ */
+export interface EncounterGame {
+  id: number;
+  position: number;
+  map_id: number | null;
+  state: EncounterGameState;
+  /** Both null until the game is `confirmed`. */
+  accepted_home_score: number | null;
+  accepted_away_score: number | null;
+  result_source: GameResultSource | null;
+  result_version: number;
+  confirmed_at: string | null;
+}
+
+/** A game inside the room, which also sees the claims behind its state. */
+export interface PickBanGame extends EncounterGame {
+  /** Both sides' claims, home first. Empty until a captain reports. */
+  reports: PickBanGameReport[];
+}
+
+/**
+ * The series score as the backend counts it: wins over confirmed games, with
+ * `played` counting positions that reached a result (a draw settles one
+ * without a win). `official` is set only once the encounter is finalized —
+ * until then the live count is all there is.
+ */
+export interface PickBanSeries {
+  home_wins: number;
+  away_wins: number;
+  played: number;
+  complete: boolean;
+  official: { home_score: number; away_score: number } | null;
 }
 
 /**
@@ -380,12 +426,15 @@ export interface PickBanState {
   current_round: number | null;
   is_complete: boolean;
   /**
-   * Per-map result claims filed for this encounter, `kind: "map"` only (a hero
-   * session has no results of its own). Drives the loop's third phase: a map is
+   * One entry per position of the series, `kind: "map"` only (a hero session
+   * has no results of its own). Drives the loop's third phase: a map is
    * picked, its heroes are banned, then it is played and BOTH captains report
-   * it — and that confirmation is what opens the next map's bans.
+   * it against its GAME — and that confirmation is what opens the next map's
+   * bans.
    */
-  map_reports?: PickBanMapReport[];
+  games?: PickBanGame[];
+  /** The live series score over those games, and the official one once set. */
+  series?: PickBanSeries;
   /**
    * The configured attribute-uniqueness rule (`"role"` or null), from
    * `PickBanConfig.unique_attribute_per_side_per_round`. The room greys out what
@@ -400,7 +449,7 @@ export interface PickBanState {
    * the room greys them out instead of letting a captain find out from the 400.
    */
   repeat_banned?: number[];
-  /** Never absent in practice; optional for the same reason `map_reports` is —
+  /** Never absent in practice; optional for the same reason `games` is —
    * a client reading an older payload must not crash on its absence. */
   undo?: PickBanUndo;
 }

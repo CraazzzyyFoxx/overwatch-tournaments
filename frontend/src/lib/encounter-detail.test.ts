@@ -61,6 +61,7 @@ function encounter(overrides: Partial<Encounter> = {}): Encounter {
     current_map_index: null,
     confirmed_at: null,
     matches: [],
+    games: [],
     home_team: { id: 1, name: "A", players: [] } as unknown as Encounter["home_team"],
     away_team: { id: 2, name: "B", players: [] } as unknown as Encounter["away_team"],
     tournament: {} as Encounter["tournament"],
@@ -110,6 +111,48 @@ describe("buildSeriesSlots", () => {
       encounter({ status: "completed", current_map_index: 1, matches: [match(1, 2, 0)] })
     );
     expect(done.some((slot) => slot.isLive)).toBe(false);
+  });
+
+  it("attaches the parsed log to the position it names, and scores from the game", () => {
+    // Two contracts for one position: the accepted score decides the map, the
+    // parsed log is a separate fact — and a series that plays one map twice
+    // would otherwise print the first play's log on the second.
+    const slots = buildSeriesSlots(
+      encounter({
+        best_of: 3,
+        matches: [
+          { ...match(7, 9, 9), map_id: 21, map_index: 2 },
+          { ...match(8, 9, 9), map_id: 21, map_index: 1 }
+        ],
+        games: [
+          {
+            id: 1,
+            position: 1,
+            map_id: 21,
+            state: "confirmed",
+            accepted_home_score: 2,
+            accepted_away_score: 1,
+            result_source: "captain_agreement",
+            result_version: 1,
+            confirmed_at: null
+          },
+          {
+            id: 2,
+            position: 2,
+            map_id: 21,
+            state: "awaiting_result",
+            accepted_home_score: null,
+            accepted_away_score: null,
+            result_source: null,
+            result_version: 1,
+            confirmed_at: null
+          }
+        ]
+      })
+    );
+    expect(slots.map((slot) => slot.match?.id)).toEqual([8, 7, undefined]);
+    // The 9:9 logs decide nothing: only the game's accepted score does.
+    expect(slots.map((slot) => slot.winner)).toEqual(["home", null, null]);
   });
 });
 

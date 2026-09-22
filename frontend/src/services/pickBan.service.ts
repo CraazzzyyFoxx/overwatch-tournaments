@@ -3,6 +3,7 @@ import type {
   PickBanConfig,
   PickBanConfigUpsertInput,
   PickBanEntry,
+  PickBanGame,
   PickBanKind,
   PickBanState,
   PickBanUndo
@@ -17,15 +18,15 @@ interface ElectOpenerInput {
   first_side: "home" | "away";
 }
 
-interface MapReportInput {
+interface GameReportInput {
   home_score: number;
   away_score: number;
 }
 
-interface MapReportResult {
+interface GameReportResult {
   disputed: boolean;
   resolved: boolean;
-  match_id: number | null;
+  game: PickBanGame;
 }
 
 interface ReadinessMap {
@@ -92,15 +93,51 @@ class PickBanService {
     return response.json();
   }
 
-  async reportMap(
+  /**
+   * Files the calling captain's claim for ONE game. Agreement confirms the
+   * game (`resolved`) and opens the next position; a clash leaves both claims
+   * standing (`disputed`). A confirmed game rejects this with 409
+   * `result_locked` — only `correctGameResult` may change it.
+   */
+  async reportGame(
     encounterId: number,
-    mapId: number,
-    data: MapReportInput
-  ): Promise<MapReportResult> {
-    const response = await apiFetch(`/api/v1/encounters/${encounterId}/map-pool/${mapId}/report`, {
+    gameId: number,
+    data: GameReportInput
+  ): Promise<GameReportResult> {
+    const response = await apiFetch(
+      `/api/v1/encounters/${encounterId}/games/${gameId}/report`,
+      { method: "POST", body: data }
+    );
+    return response.json();
+  }
+
+  /** Names the map a freeplay position was played on, before its result. */
+  async selectGameMap(
+    encounterId: number,
+    gameId: number,
+    data: { map_id: number }
+  ): Promise<{ game: PickBanGame }> {
+    const response = await apiFetch(`/api/v1/encounters/${encounterId}/games/${gameId}/map`, {
       method: "POST",
       body: data
     });
+    return response.json();
+  }
+
+  /**
+   * Admin correction of a confirmed or disputed game. `reason` is required —
+   * it is what the result audit records. 409 `downstream_started` when a later
+   * encounter of the bracket has already begun on the old result.
+   */
+  async correctGameResult(
+    encounterId: number,
+    gameId: number,
+    data: { home_score: number; away_score: number; reason: string }
+  ): Promise<{ game: PickBanGame; rebuilt_rounds: number[] }> {
+    const response = await apiFetch(
+      `/api/v1/admin/encounters/${encounterId}/games/${gameId}/result`,
+      { method: "POST", body: data }
+    );
     return response.json();
   }
 

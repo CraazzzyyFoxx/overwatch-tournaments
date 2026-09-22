@@ -1,4 +1,6 @@
 import type { Encounter, Match, MatchWithStats } from "@/types/encounter.types";
+import type { EncounterGame } from "@/types/tournament.types";
+import { acceptedScore, seriesMatchesByPosition } from "@/components/pick-ban/pick-ban-model";
 import type { PlayerWithStats, TeamWithStats } from "@/types/team.types";
 import { LogStatsName } from "@/types/stats.types";
 import { isEncounterCompleted } from "@/lib/encounter-status";
@@ -20,15 +22,20 @@ export function getMatchWinner(match: Pick<Match, "score">): SeriesSide | null {
 }
 
 /**
- * One slot of the series: a played map, or a placeholder for a map the format
- * allows but that was never needed (a 3–0 in a Bo5 leaves two empty slots).
+ * One slot of the series: a position the encounter opened a game for, or a
+ * placeholder for a map the format allows but that was never needed (a 3–0 in
+ * a Bo5 leaves two empty slots).
  *
- * The old page rendered `encounter.matches` only, so the format itself — the
- * single most load-bearing fact about a series — was invisible.
+ * `game` and `match` are two separate contracts for the same position. The
+ * game carries the RESULT — what the captains agreed or an admin ruled — and
+ * the match is the parsed log, which may exist for a position with no result
+ * and may disagree with one. Neither is derived from the other.
  */
 export interface SeriesSlot {
   /** 1-based position in the series. */
   index: number;
+  /** The encounter's own result for this position; null on a pre-games payload. */
+  game: EncounterGame | null;
   match: Match | null;
   winner: SeriesSide | null;
   /** The map the encounter says is being played right now. */
@@ -37,18 +44,56 @@ export interface SeriesSlot {
 
 export function buildSeriesSlots(encounter: Encounter): SeriesSlot[] {
   const matches = encounter.matches ?? [];
-  // `best_of` is the ceiling, but a series can carry more rows than its format
-  // (re-plays, organizer fixes), so never truncate the real maps.
-  const slotCount = Math.max(encounter.best_of || 0, matches.length);
+  const games = encounter.games ?? [];
+  // `best_of` is the ceiling, but a series can carry more positions than its
+  // format (re-plays, organizer fixes), so never truncate the real ones.
+  const slotCount = Math.max(encounter.best_of || 0, games.length, matches.length);
   const live = isEncounterCompleted(encounter) ? null : encounter.current_map_index;
+  const positions = Array.from({ length: slotCount }, (_, index) => index + 1);
 
-  return Array.from({ length: slotCount }, (_, position) => {
-    const match = matches[position] ?? null;
+  // Before the games backfill an encounter carries matches only; index them
+  // positionally, the way the page did when a Match row WAS the result.
+  if (games.length === 0) {
+    return positions.map((position) => {
+      const match = matches[position - 1] ?? null;
+      return {
+        index: position,
+        game: null,
+        match,
+        winner: match ? getMatchWinner(match) : null,
+        isLive: live != null && live === position - 1
+      };
+    });
+  }
+
+  // The parsed log belongs to the position it names (`map_index`), never to
+  // the map alone: a series may play one map twice. A positionless row (every
+  // parsed log) is adopted by the earliest position holding its map that has
+  // no exact row of its own.
+  const gameAt = (position: number) => games.find((game) => game.position === position) ?? null;
+  const byPosition = seriesMatchesByPosition(
+    matches,
+    positions.map((position) => gameAt(position)?.map_id ?? -1)
+  );
+
+  return positions.map((position, index) => {
+    const game = gameAt(position);
+    const accepted = acceptedScore(game);
     return {
-      index: position + 1,
-      match,
-      winner: match ? getMatchWinner(match) : null,
-      isLive: live != null && live === position
+      index: position,
+      game,
+      match: byPosition[index],
+      // The accepted score decides the position; the parsed log is a separate
+      // fact and never overrides it.
+      winner:
+        accepted == null
+          ? null
+          : accepted.home === accepted.away
+            ? null
+            : accepted.home > accepted.away
+              ? "home"
+              : "away",
+      isLive: live != null && live === index
     };
   });
 }

@@ -44,9 +44,9 @@ describe("buildMapCodeSlots", () => {
     // the veto's global action order, which IS the play order.
     const state = poolState([
       entry({ id: 1, item_id: 10, order: 2000, action_index: 7, status: "picked" }),
-      entry({ id: 2, item_id: 20, order: 0, action_index: 3, status: "played" }),
+      entry({ id: 2, item_id: 20, order: 0, action_index: 3, status: "picked" }),
       entry({ id: 3, item_id: 30, order: 1, action_index: 2, status: "banned" }),
-      entry({ id: 4, item_id: 40, order: 1000, action_index: 5, status: "played" }),
+      entry({ id: 4, item_id: 40, order: 1000, action_index: 5, status: "picked" }),
     ]);
 
     expect(buildMapCodeSlots(state, 3)).toEqual([
@@ -54,14 +54,6 @@ describe("buildMapCodeSlots", () => {
       { mapIndex: 2, mapId: 40 },
       { mapIndex: 3, mapId: 10 },
     ]);
-  });
-
-  it("counts a played map as settled", () => {
-    // By the time the series report is filed every map has been played, so a
-    // picked-only read went blind exactly when the codes are entered.
-    const state = poolState([entry({ id: 1, item_id: 10, action_index: 1, status: "played" })]);
-
-    expect(buildMapCodeSlots(state, 3)).toEqual([{ mapIndex: 1, mapId: 10 }]);
   });
 
   it("orders by the pool order when no action index was recorded", () => {

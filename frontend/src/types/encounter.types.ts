@@ -1,6 +1,7 @@
 import { MapRead } from "@/types/map.types";
 import { Team, TeamWithStats } from "@/types/team.types";
 import {
+  EncounterGame,
   EncounterResultStatus,
   Stage,
   StageItem,
@@ -53,6 +54,12 @@ export interface Encounter {
   sources?: EncounterSlotSource[];
 
   matches: Match[];
+  /**
+   * One entry per position of the series, in play order — the encounter's own
+   * result authority. A `Match` row is a parsed log, a separate contract: the
+   * two are rendered as two facts, never merged (spec §11).
+   */
+  games: EncounterGame[];
   home_team: Team;
   away_team: Team;
   tournament: Tournament;

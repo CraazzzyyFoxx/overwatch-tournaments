@@ -17,10 +17,19 @@ import {
   AlertDialogTrigger
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/components/ui/number-input";
 import { cn } from "@/lib/utils";
+import { ApiError } from "@/lib/api-error";
 import { notify } from "@/lib/notify";
 import adminService from "@/services/admin.service";
-import type { PickBanAction, PickBanKind, PickBanState } from "@/types/tournament.types";
+import pickBanService from "@/services/pickBan.service";
+import type {
+  PickBanAction,
+  PickBanGame,
+  PickBanKind,
+  PickBanState
+} from "@/types/tournament.types";
 
 import type { PickBanSide } from "@/components/pick-ban/pick-ban-model";
 
@@ -36,9 +45,10 @@ interface PregameAdminControlsProps {
 
 /**
  * Workspace-admin overrides: reset the whole pick-ban session (drop +
- * re-create with seeds re-resolved) and perform a step on behalf of either
- * side. Generalizes the retired `VetoAdminControls` with `kind` and the
- * `protect` action the generic engine adds.
+ * re-create with seeds re-resolved), perform a step on behalf of either side,
+ * and correct the accepted result of a game that is already confirmed or stuck
+ * in a dispute — the one command allowed to overwrite a confirmed score, and
+ * the only way a disputed position ever clears.
  */
 export function PregameAdminControls({
   kind,
@@ -107,6 +117,12 @@ export function PregameAdminControls({
     { value: "pick", label: t("action.pick") },
     ...(allowProtect ? [{ value: "protect" as const, label: t("action.protect") }] : [])
   ];
+  // Only a settled position can be corrected: `planned`/`awaiting_result` have
+  // no accepted score to overwrite, and a captain claim is the normal path
+  // there. A dispute is here because it is the ONLY way one ever clears.
+  const correctable = (state.games ?? []).filter(
+    (game) => game.state === "confirmed" || game.state === "disputed"
+  );
 
   return (
     <section className="rounded-xl border border-dashed border-[color:var(--aqt-amber)]/45 bg-[color:var(--aqt-card-2)]/40 p-4">
@@ -205,7 +221,112 @@ export function PregameAdminControls({
           </AlertDialogContent>
         </AlertDialog>
       </div>
+
+      {correctable.length > 0 ? (
+        <div className="mt-4 flex flex-col gap-2 border-t border-dashed border-[color:var(--aqt-amber)]/35 pt-3">
+          <span className="text-label uppercase tracking-label text-[color:var(--aqt-fg-faint)]">
+            {t("admin.correctLabel")}
+          </span>
+          {correctable.map((game) => (
+            <GameCorrection
+              key={game.id}
+              encounterId={encounterId}
+              game={game}
+              positionLabel={t("round.label", { n: game.position })}
+              onMutated={onMutated}
+            />
+          ))}
+        </div>
+      ) : null}
     </section>
+  );
+}
+
+/**
+ * One game's correction: both scores as the SERIES sees them (home first, not
+ * viewer-relative — the organizer is neither side) plus the reason the result
+ * audit records. The reason is required because this row is the only writer
+ * that can overwrite a confirmed score.
+ */
+function GameCorrection({
+  encounterId,
+  game,
+  positionLabel,
+  onMutated
+}: Readonly<{
+  encounterId: number;
+  game: PickBanGame;
+  positionLabel: string;
+  onMutated: () => void;
+}>) {
+  const t = useTranslations("pickBan.room");
+  const [homeScore, setHomeScore] = useState(game.accepted_home_score ?? 0);
+  const [awayScore, setAwayScore] = useState(game.accepted_away_score ?? 0);
+  const [reason, setReason] = useState("");
+
+  const mutation = useMutation({
+    mutationFn: () =>
+      pickBanService.correctGameResult(encounterId, game.id, {
+        home_score: homeScore,
+        away_score: awayScore,
+        reason
+      }),
+    onSuccess: () => {
+      notify.success(t("admin.correctSuccess"));
+      setReason("");
+      onMutated();
+    },
+    onError: (error) => {
+      // A later encounter of the bracket already started on the old result, so
+      // the correction would silently invalidate a match in progress. Naming it
+      // is the difference between "try again" and "go roll that back first".
+      if (
+        error instanceof ApiError &&
+        error.details.some((detail) => detail.code === "downstream_started")
+      ) {
+        notify.error(t("admin.downstreamStarted"));
+        return;
+      }
+      notify.apiError(error, { title: t("admin.correctFailed") });
+    }
+  });
+
+  return (
+    <div data-game-correction={game.id} className="flex flex-wrap items-end gap-2">
+      <span className="min-w-[5rem] text-xs font-semibold">{positionLabel}</span>
+      <NumberInput
+        min={0}
+        integer
+        className="w-16"
+        aria-label={t("admin.correctScore", { team: t("side.home") })}
+        value={homeScore}
+        onValueChange={(value) => setHomeScore(value ?? 0)}
+      />
+      <NumberInput
+        min={0}
+        integer
+        className="w-16"
+        aria-label={t("admin.correctScore", { team: t("side.away") })}
+        value={awayScore}
+        onValueChange={(value) => setAwayScore(value ?? 0)}
+      />
+      <Input
+        className="w-56"
+        aria-label={t("admin.correctReason")}
+        placeholder={t("admin.correctReasonPlaceholder")}
+        value={reason}
+        onChange={(event) => setReason(event.target.value)}
+      />
+      <Button
+        size="sm"
+        variant="outline"
+        disabled={reason.trim() === "" || mutation.isPending}
+        onClick={() => mutation.mutate()}
+      >
+        {mutation.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden /> : null}
+        {t("admin.correctSubmit")}
+      </Button>
+    </div>
   );
 }
 

@@ -8,23 +8,16 @@ import { useTranslations } from "next-intl";
 import { TeamLogo, type TeamNameInput } from "@/components/TeamName";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from "@/components/ui/select";
 import { MapReportDialog } from "@/components/pick-ban/MapReportDialog";
+import { acceptedScore } from "@/components/pick-ban/pick-ban-model";
 import { cn } from "@/lib/utils";
-import type { PickBanMapReport } from "@/types/tournament.types";
+import type { PickBanGame, PickBanGameReport } from "@/types/tournament.types";
 
 import { PregameHeroBans, type PregameHeroAction } from "./PregameHeroBans";
 
 interface PregameMapResultProps {
   encounterId: number;
-  /** Null until captains name the map they played (no veto). */
-  mapId: number | null;
+  /** The map's name, already resolved against the catalog by the room. */
   mapName: string;
   /** The map's still, for the phase's banner. Empty when the catalog has none. */
   mapImagePath: string | null;
@@ -37,8 +30,12 @@ interface PregameMapResultProps {
   /** The side's team, for its logo — undefined when the encounter has none. */
   homeTeam: TeamNameInput | null | undefined;
   awayTeam: TeamNameInput | null | undefined;
-  /** Every report filed for THIS map (both sides), from the map pick-ban state. */
-  reports: PickBanMapReport[];
+  /**
+   * This position's game — the result authority for it. Null only while the
+   * server has not opened one (an older payload); the screen then shows the
+   * map and no claims.
+   */
+  game: PickBanGame | null;
   /**
    * This map's committed hero bans/protects, from the hero pick-ban state.
    * Empty when the encounter runs no hero phase — the section then renders
@@ -56,7 +53,6 @@ interface PregameMapResultProps {
   invalidateKeys: unknown[][];
   /** Catalog for naming the played map when there was no veto pick. */
   mapChoices?: ReadonlyArray<{ id: number; name: string }>;
-  onSelectMap?: (mapId: number) => void;
 }
 
 /** What a side's claim tile may show, in the order the phase moves through. */
@@ -83,7 +79,6 @@ type ClaimState = "waiting" | "sealed" | "filed";
  */
 export function PregameMapResult({
   encounterId,
-  mapId,
   mapName,
   mapImagePath,
   round,
@@ -92,25 +87,23 @@ export function PregameMapResult({
   awayName,
   homeTeam,
   awayTeam,
-  reports,
+  game,
   heroActions,
   heroUndo,
   header,
   invalidateKeys,
-  mapChoices,
-  onSelectMap
+  mapChoices
 }: Readonly<PregameMapResultProps>) {
   const t = useTranslations("pickBan.room");
   const [dialogOpen, setDialogOpen] = useState(false);
 
+  const reports = game?.reports ?? [];
   const homeReport = reports.find((report) => report.side === "home") ?? null;
   const awayReport = reports.find((report) => report.side === "away") ?? null;
   const ownReport = viewerSide === "home" ? homeReport : viewerSide === "away" ? awayReport : null;
   const bothFiled = homeReport != null && awayReport != null;
-  const disputed =
-    bothFiled &&
-    (homeReport.home_score !== awayReport.home_score ||
-      homeReport.away_score !== awayReport.away_score);
+  const disputed = game?.state === "disputed";
+  const accepted = acceptedScore(game);
 
   /** A side's tile shows its numbers when both are in, or when they are the viewer's own. */
   const visibleTo = (side: "home" | "away") => bothFiled || viewerSide === side;
@@ -165,30 +158,9 @@ export function PregameMapResult({
                 <span className="text-label font-bold uppercase tracking-label text-[color:var(--aqt-teal)]">
                   {t("round.label", { n: round })} · {t("mapResult.eyebrow")}
                 </span>
-                {mapChoices != null && onSelectMap != null && reports.length === 0 ? (
-                  <Select
-                    value={mapId != null ? String(mapId) : ""}
-                    onValueChange={(value) => onSelectMap(Number(value))}
-                  >
-                    <SelectTrigger
-                      className="mt-2 max-w-sm bg-[color:var(--aqt-card)]"
-                      aria-label={t("mapResult.pickMap")}
-                    >
-                      <SelectValue placeholder={t("mapResult.pickMap")} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {mapChoices.map((map) => (
-                        <SelectItem key={map.id} value={String(map.id)}>
-                          {map.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                ) : (
-                  <h2 className="font-onest text-2xl font-semibold leading-tight tracking-[-0.015em] sm:text-3xl">
-                    {mapName}
-                  </h2>
-                )}
+                <h2 className="font-onest text-2xl font-semibold leading-tight tracking-[-0.015em] sm:text-3xl">
+                  {mapName}
+                </h2>
               </div>
             </div>
 
@@ -240,8 +212,19 @@ export function PregameMapResult({
                 />
               </div>
 
-              {disputed ? (
-                <p className="flex items-start gap-2 text-sm text-[color:var(--aqt-amber)]">
+              {accepted != null ? (
+                <p
+                  data-game-state="confirmed"
+                  className="flex items-start gap-2 text-sm text-[color:var(--aqt-support)]"
+                >
+                  <Check className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+                  {t("mapResult.accepted", { home: accepted.home, away: accepted.away })}
+                </p>
+              ) : disputed ? (
+                <p
+                  data-game-state="disputed"
+                  className="flex items-start gap-2 text-sm text-[color:var(--aqt-amber)]"
+                >
                   <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
                   {t("mapReport.disputedHint")}
                 </p>
@@ -251,14 +234,17 @@ export function PregameMapResult({
                 </p>
               )}
 
-              {viewerSide != null ? (
+              {viewerSide != null && game != null ? (
                 <div>
                   <Button
                     onClick={() => setDialogOpen(true)}
-                    variant={ownReport == null ? "default" : "outline"}
-                    disabled={mapId == null}
+                    variant={ownReport == null || accepted != null ? "default" : "outline"}
                   >
-                    {ownReport == null ? t("mapResult.report") : t("mapResult.amend")}
+                    {accepted != null
+                      ? t("mapResult.view")
+                      : ownReport == null
+                        ? t("mapResult.report")
+                        : t("mapResult.amend")}
                   </Button>
                 </div>
               ) : null}
@@ -267,15 +253,15 @@ export function PregameMapResult({
         </CardContent>
       </Card>
 
-      {viewerSide != null && dialogOpen && mapId != null ? (
+      {viewerSide != null && dialogOpen && game != null ? (
         <MapReportDialog
           encounterId={encounterId}
-          mapId={mapId}
+          game={game}
           mapName={mapName}
           side={viewerSide}
-          filed={ownReport}
           open={dialogOpen}
           onOpenChange={setDialogOpen}
+          mapChoices={mapChoices}
           invalidateKeys={invalidateKeys}
         />
       ) : null}
@@ -297,7 +283,7 @@ function ClaimTile({
 }: Readonly<{
   name: string;
   team: TeamNameInput | null | undefined;
-  report: PickBanMapReport | null;
+  report: PickBanGameReport | null;
   revealed: boolean;
   accentVar: "--aqt-teal" | "--aqt-rose";
 }>) {

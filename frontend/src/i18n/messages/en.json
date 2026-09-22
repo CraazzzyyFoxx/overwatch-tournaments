@@ -2856,11 +2856,17 @@
       "openNewTab": "Open in New Tab",
       "openStats": "Open the {map} scoreboard",
       "source": "Source",
-      "sourceLogParser": "Game log",
-      "sourceCaptainReport": "Captain report",
       "code": "Code",
       "logName": "Log",
       "nonCompetitive": "Outside the competitive pool"
+    },
+    "game": {
+      "parsedScore": "Parsed log",
+      "source": {
+        "captain_agreement": "Both captains",
+        "admin": "Organizer",
+        "admin_log": "Organizer (from a log)"
+      }
     },
     "team": {
       "colName": "Name",
@@ -3034,7 +3040,8 @@
         "opens": "Opens this round",
         "score": "Series",
         "bestOf": "Bo{n}",
-        "toWin": "first to {n}"
+        "toWin": "first to {n}",
+        "official": "Official {home}:{away}"
       },
       "series": {
         "label": "Maps of this series",
@@ -3103,7 +3110,6 @@
         "banned": "Banned",
         "picked": "Picked",
         "protected": "Protected",
-        "played": "Played",
         "remaining": "Remaining"
       },
       "by": {
@@ -3164,7 +3170,11 @@
         "waitingOpponent": "Waiting for the other captain's report",
         "disputed": "Reports disagree",
         "disputedHint": "Your report does not match the opponent's. An admin will resolve it.",
-        "resolved": "Result confirmed — moving to the next map"
+        "resolved": "Result confirmed — moving to the next map",
+        "mapLabel": "Map played",
+        "lockedTitle": "This map's result is confirmed",
+        "lockedHint": "The accepted score is {home}:{away}. Only an organizer can change it now.",
+        "close": "Close"
       },
       "admin": {
         "title": "Pick-ban controls (admin)",
@@ -3180,7 +3190,15 @@
         "resetSuccess": "Session reset",
         "resetFailed": "Failed to reset the session",
         "electLabel": "Opens next round",
-        "electFailed": "Failed to elect the round's opener"
+        "electFailed": "Failed to elect the round's opener",
+        "correctLabel": "Correct a result",
+        "correctScore": "Score for {team}",
+        "correctReason": "Reason",
+        "correctReasonPlaceholder": "Why this result changes",
+        "correctSubmit": "Save result",
+        "correctSuccess": "Result corrected",
+        "correctFailed": "Failed to correct the result",
+        "downstreamStarted": "A later match has already started on this result. Roll that one back first."
       },
       "waitingMapTitle": "Waiting for this round's map",
       "waitingMapHint": "Hero bans open once the map for this round of the series is picked — they are banned for a known map.",
@@ -3202,7 +3220,9 @@
         },
         "report": "Report the result",
         "amend": "Change my report",
-        "pickMap": "Which map did you play?"
+        "pickMap": "Which map did you play?",
+        "accepted": "Accepted score {home}:{away} — this map is locked in",
+        "view": "View the result"
       },
       "heroBans": {
         "eyebrow": "Hero bans for this map",
