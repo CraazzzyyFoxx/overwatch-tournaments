@@ -36,5 +36,7 @@ export function useFavoritePlayers() {
     isFavorited: (id: number) => favoriteIds.has(id),
     toggle: (id: number) => (favoriteIds.has(id) ? remove.mutate(id) : add.mutate(id)),
     isLoading: query.isLoading,
+    isError: query.isError,
+    refetch: query.refetch,
   };
 }

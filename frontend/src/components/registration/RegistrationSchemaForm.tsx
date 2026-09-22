@@ -365,7 +365,7 @@ export default function RegistrationSchemaForm({
   const onLinkAccounts = isAdmin
     ? undefined
     : () => {
-        // Close registration and open profile settings on the "My Account" tab;
+        // Close registration and open account settings on the Profile tab;
         // linking there redirects through OAuth and returns via
         // `?settings=profile`.
         onCancel();

@@ -1,296 +1,215 @@
 "use client";
 
-import {
-  AlertCircle,
-  Clock3,
-  LaptopMinimal,
-  MapPin,
-  RefreshCw,
-  Shield,
-  ShieldOff
-} from "lucide-react";
-import { useFormatter, useTranslations } from "next-intl";
+import { ChevronDown, HelpCircle, Loader2, LogOut, Monitor, Smartphone } from "lucide-react";
+import { useFormatter, useNow, useTranslations } from "next-intl";
 
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { PageStateCard } from "@/components/ui/page-state-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAccountSessions, useRevokeAccountSession } from "@/hooks/use-account-sessions";
-import { getApiErrorMessage } from "@/lib/api/error";
-import { detectBrowser, detectPlatform } from "@/lib/user-agent";
 import { notify } from "@/lib/notify";
-import type { AccountSession, AccountSessionStatus } from "@/types/auth.types";
+import { detectBrowser, detectPlatform } from "@/lib/user-agent";
+import { cn } from "@/lib/utils";
+import type { AccountSession } from "@/types/auth.types";
 
-const STATUS_CLASS: Record<
-  AccountSessionStatus,
-  { dotClassName: string; textClassName: string }
-> = {
-  active: {
-    dotClassName: "bg-[color:var(--aqt-emerald)]",
-    textClassName: "text-[color:var(--aqt-emerald)]"
-  },
-  revoked: {
-    dotClassName: "bg-[color:var(--aqt-amber)]",
-    textClassName: "text-[color:var(--aqt-amber)]"
-  },
-  expired: {
-    dotClassName: "bg-[color:var(--aqt-fg-faint)]",
-    textClassName: "text-[color:var(--aqt-fg-dim)]"
-  }
-};
+import { SETTINGS_GROUP_HEADING_CLASS, SettingsGroup } from "./SettingsGroup";
 
-const STATUS_KEY: Record<AccountSessionStatus, "statusActive" | "statusRevoked" | "statusExpired"> = {
-  active: "statusActive",
-  revoked: "statusRevoked",
-  expired: "statusExpired"
-};
+const ROW_CLASS =
+  "flex items-center gap-3 rounded-lg border border-[color:var(--aqt-border)] bg-[color:var(--aqt-overlay-2)] px-3 py-2.5";
 
-const SECTION_TITLE_CLASS =
-  "text-xs font-semibold uppercase tracking-wide text-[color:var(--aqt-fg-dim)]";
-const EMPTY_CLASS =
-  "rounded-lg border border-dashed border-[color:var(--aqt-border-2)] px-4 py-5 text-sm text-[color:var(--aqt-fg-muted)]";
+type Meta = { text: string; title?: string };
 
-function StatusText({ status }: Readonly<{ status: AccountSessionStatus }>) {
-  const t = useTranslations("accountSettings.sessions");
-  const meta = STATUS_CLASS[status];
-
-  return (
-    <span className={`inline-flex items-center gap-1.5 text-xs font-medium ${meta.textClassName}`}>
-      <span aria-hidden className={`size-1.5 rounded-full ${meta.dotClassName}`} />
-      {t(STATUS_KEY[status])}
-    </span>
-  );
-}
-
-function DetailCell({ label, value }: Readonly<{ label: string; value: string }>) {
-  return (
-    <div className="min-w-0 rounded-lg border border-[color:var(--aqt-border)] bg-[color:var(--aqt-overlay-1)] px-3 py-2">
-      <p className="text-label font-medium uppercase tracking-wide text-[color:var(--aqt-fg-dim)]">
-        {label}
-      </p>
-      <p className="mt-0.5 truncate text-xs text-[color:var(--aqt-fg-muted)]">{value}</p>
-    </div>
-  );
-}
-
-function SummaryCell({ label, value }: Readonly<{ label: string; value: number }>) {
-  return (
-    <div className="rounded-lg border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-overlay-3)] px-3 py-2">
-      <p className="text-label font-medium uppercase tracking-wide text-[color:var(--aqt-fg-dim)]">
-        {label}
-      </p>
-      <p className="mt-1 text-lg font-semibold tabular-nums text-[color:var(--aqt-fg)]">{value}</p>
-    </div>
-  );
-}
-
+/**
+ * One session as a device row: what it is, where from, and the one timestamp
+ * that answers "is this still me?". The raw user agent and the session id used
+ * to be printed on every row (plus four boxed timestamps); neither helps a
+ * person recognise a device, so the UA survives only as the name's tooltip.
+ */
 function SessionRow({
   session,
-  isRevoking,
+  now,
+  pending,
   onRevoke
 }: Readonly<{
   session: AccountSession;
-  isRevoking: boolean;
-  onRevoke: (sessionId: string) => void;
+  now: Date;
+  pending: boolean;
+  onRevoke?: (sessionId: string) => void;
 }>) {
   const t = useTranslations("accountSettings.sessions");
-  // next-intl's formatter already carries the active locale, so the timestamps
-  // follow it. This file used to hand-map `locale === "ru" ? "ru-RU" : "en-US"`.
   const format = useFormatter();
-  const canRevoke = !session.is_current && session.status === "active";
 
-  const formatTimestamp = (value: string | null | undefined): string =>
-    value
-      ? format.dateTime(new Date(value), { dateStyle: "medium", timeStyle: "short" })
-      : t("unavailable");
-
-  const ua = session.user_agent;
+  const ua = session.user_agent ?? null;
   const browser = ua ? detectBrowser(ua) : null;
   const platform = ua ? detectPlatform(ua) : null;
   const device = !ua
     ? t("unknownDevice")
     : browser && platform
       ? t("deviceOn", { browser, platform })
-      : (browser ?? platform ?? (ua.length > 72 ? `${ua.slice(0, 72)}...` : ua));
+      : (browser ?? platform ?? ua);
+  const day = (value: string) => format.dateTime(new Date(value), { dateStyle: "medium" });
+  const exact = (value: string) =>
+    format.dateTime(new Date(value), { dateStyle: "medium", timeStyle: "short" });
+  const DeviceIcon = !ua
+    ? HelpCircle
+    : platform === "iOS" || platform === "Android"
+      ? Smartphone
+      : Monitor;
+
+  const ended = session.status !== "active";
+  const meta: Meta[] = [];
+  if (session.ip_address) meta.push({ text: session.ip_address });
+  if (session.status === "revoked") {
+    const at = session.revoked_at ?? session.last_seen_at;
+    meta.push({ text: t("endedOn", { date: day(at) }), title: exact(at) });
+  } else if (session.status === "expired") {
+    meta.push({ text: t("expiredOn", { date: day(session.expires_at) }), title: exact(session.expires_at) });
+  } else {
+    if (!session.is_current) {
+      meta.push({
+        text: t("lastActive", { time: format.relativeTime(new Date(session.last_seen_at), now) }),
+        title: exact(session.last_seen_at)
+      });
+    }
+    meta.push({ text: t("signedInOn", { date: day(session.login_at) }), title: exact(session.login_at) });
+  }
 
   return (
-    <li className="rounded-lg border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-overlay-2)] p-3">
-      <div className="flex flex-col gap-3">
-        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-          <div className="flex min-w-0 items-start gap-3">
-            <div className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-overlay-3)] text-[color:var(--aqt-fg-muted)]">
-              <LaptopMinimal className="size-4" aria-hidden />
-            </div>
-            <div className="min-w-0">
-              <p className="truncate text-sm font-semibold text-[color:var(--aqt-fg)]">{device}</p>
-              <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-[color:var(--aqt-fg-muted)]">
-                <StatusText status={session.status} />
-                {session.is_current ? (
-                  <span className="inline-flex items-center gap-1 text-[color:var(--aqt-blue)]">
-                    <Shield className="size-3.5" aria-hidden />
-                    {t("currentSession")}
-                  </span>
-                ) : null}
-                {session.ip_address ? (
-                  <span className="inline-flex min-w-0 items-center gap-1">
-                    <MapPin className="size-3.5 shrink-0" aria-hidden />
-                    <span className="truncate">{session.ip_address}</span>
-                  </span>
-                ) : null}
-              </div>
-            </div>
-          </div>
+    <li className={ROW_CLASS}>
+      <span
+        aria-hidden
+        className={cn(
+          "flex size-9 shrink-0 items-center justify-center rounded-md bg-[color:var(--aqt-overlay-3)]",
+          ended ? "text-[color:var(--aqt-fg-dim)]" : "text-[color:var(--aqt-fg-muted)]"
+        )}
+      >
+        <DeviceIcon className="size-4" />
+      </span>
 
-          {canRevoke ? (
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={isRevoking}
-              onClick={() => onRevoke(session.session_id)}
-            >
-              <ShieldOff className="size-4" aria-hidden />
-              {t("revoke")}
-            </Button>
+      <div className="min-w-0 flex-1">
+        {/* Wraps rather than truncating the name to fit the badge on phones. */}
+        <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
+          <p
+            className={cn(
+              "max-w-full truncate text-ui font-medium",
+              ended ? "text-[color:var(--aqt-fg-muted)]" : "text-[color:var(--aqt-fg)]"
+            )}
+            title={ua ?? undefined}
+          >
+            {device}
+          </p>
+          {session.is_current ? (
+            <Badge tone="accent" shape="pill" className="shrink-0">
+              {t("thisDevice")}
+            </Badge>
           ) : null}
         </div>
-
-        <div className="grid gap-2 sm:grid-cols-2">
-          <DetailCell label={t("signedIn")} value={formatTimestamp(session.login_at)} />
-          <DetailCell label={t("lastSeen")} value={formatTimestamp(session.last_seen_at)} />
-          <DetailCell label={t("expires")} value={formatTimestamp(session.expires_at)} />
-          <DetailCell
-            label={session.status === "revoked" ? t("revokedLabel") : t("sessionLabel")}
-            value={
-              session.status === "revoked"
-                ? formatTimestamp(session.revoked_at)
-                : session.session_id
-            }
-          />
-        </div>
-
-        {session.user_agent ? (
-          <div className="flex items-start gap-2 text-xs text-[color:var(--aqt-fg-dim)]">
-            <Clock3 className="mt-0.5 size-3.5 shrink-0" aria-hidden />
-            <span className="break-all">{session.user_agent}</span>
-          </div>
-        ) : null}
+        <p className="break-words text-caption text-[color:var(--aqt-fg-dim)]">
+          {meta.map((item, index) => (
+            <span key={item.text}>
+              {index > 0 ? <span aria-hidden> · </span> : null}
+              <span title={item.title}>{item.text}</span>
+            </span>
+          ))}
+        </p>
       </div>
+
+      {onRevoke ? (
+        <Button
+          variant="outline"
+          size="sm"
+          className="shrink-0"
+          disabled={pending}
+          aria-label={t("signOutAria", { device })}
+          onClick={() => onRevoke(session.session_id)}
+        >
+          {pending ? <Loader2 className="animate-spin" aria-hidden /> : <LogOut aria-hidden />}
+          {/* Icon-only on phones; the aria-label still names the device. */}
+          <span className="sr-only sm:not-sr-only">{t("signOut")}</span>
+        </Button>
+      ) : null}
     </li>
   );
 }
 
 export default function AccountSessionsSection() {
   const t = useTranslations("accountSettings.sessions");
-  const { data, isLoading, isError, error, refetch } = useAccountSessions();
-  const revokeSessionMutation = useRevokeAccountSession();
-
-  const sessions = data ?? [];
-  const currentSession = sessions.find((session) => session.is_current) ?? null;
-  const otherActiveSessions = sessions.filter(
-    (session) => !session.is_current && session.status === "active"
-  );
-  const sessionHistory = sessions.filter(
-    (session) => !session.is_current && session.status !== "active"
-  );
-
-  const handleRevoke = (sessionId: string) => {
-    revokeSessionMutation.mutate(sessionId, {
-      onSuccess: () => {
-        notify.success(t("revokedToast"), {
-          description: t("revokedToastDesc")
-        });
-      }
-    });
-  };
+  // Frozen at mount: the tab unmounts when closed, so "5 minutes ago" never
+  // drifts far enough to matter and no row needs its own ticking clock.
+  const now = useNow();
+  const { data, isLoading, isError, refetch } = useAccountSessions();
+  const revoke = useRevokeAccountSession();
 
   if (isLoading) {
     return (
-      <div className="flex flex-col gap-3">
+      <div className="space-y-3" aria-hidden>
+        <Skeleton className="h-5 w-40" />
         {["a", "b", "c"].map((key) => (
-          <Skeleton key={key} className="h-24 rounded-lg" />
+          <Skeleton key={key} className="h-15 rounded-lg" />
         ))}
       </div>
     );
   }
 
   if (isError) {
-    return (
-      <div
-        role="alert"
-        className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive"
-      >
-        <p className="flex items-center gap-2">
-          <AlertCircle className="size-4" aria-hidden />
-          {getApiErrorMessage(error, t("loadFailed"))}
-        </p>
-        <Button
-          variant="outline"
-          size="sm"
-          className="mt-3 border-destructive/50 hover:bg-destructive/20"
-          onClick={() => {
-            void refetch();
-          }}
-        >
-          <RefreshCw className="size-4" aria-hidden />
-          {t("retry")}
-        </Button>
-      </div>
-    );
+    return <PageStateCard state="error" title={t("loadFailed")} onAction={() => void refetch()} />;
   }
 
+  const sessions = data ?? [];
+  // Current first, then the other live sessions in the order the server sends.
+  const active = sessions
+    .filter((session) => session.status === "active")
+    .sort((a, b) => Number(b.is_current) - Number(a.is_current));
+  const hasOthers = active.some((session) => !session.is_current);
+  const ended = sessions.filter((session) => session.status !== "active");
+
+  // Revoke failures surface through the global MutationCache toast.
+  const handleRevoke = (sessionId: string) => {
+    revoke.mutate(sessionId, {
+      onSuccess: () => notify.success(t("revokedToast"), { description: t("revokedToastDesc") })
+    });
+  };
+
   return (
-    <div className="flex flex-col gap-5">
-      <div className="grid gap-2 sm:grid-cols-3">
-        <SummaryCell label={t("summaryCurrent")} value={currentSession ? 1 : 0} />
-        <SummaryCell label={t("summaryOtherActive")} value={otherActiveSessions.length} />
-        <SummaryCell label={t("summaryHistory")} value={sessionHistory.length} />
-      </div>
+    <div className="space-y-8">
+      <SettingsGroup title={t("activeTitle")} description={t("activeDesc")}>
+        <ul className="space-y-2">
+          {active.map((session) => (
+            <SessionRow
+              key={session.session_id}
+              session={session}
+              now={now}
+              pending={revoke.isPending && revoke.variables === session.session_id}
+              onRevoke={session.is_current ? undefined : handleRevoke}
+            />
+          ))}
+        </ul>
+        {hasOthers ? null : (
+          <p className="text-caption text-[color:var(--aqt-fg-dim)]">{t("noOtherActive")}</p>
+        )}
+      </SettingsGroup>
 
-      {currentSession ? (
-        <section className="flex flex-col gap-2">
-          <h4 className={SECTION_TITLE_CLASS}>{t("currentSectionTitle")}</h4>
-          <ul className="flex flex-col gap-2">
-            <SessionRow session={currentSession} isRevoking={false} onRevoke={handleRevoke} />
+      {/* Ended sessions only matter when auditing, so they start collapsed. */}
+      {ended.length > 0 ? (
+        <details className="group space-y-3">
+          <summary className="flex cursor-pointer list-none items-center gap-2 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
+            <h4 className={SETTINGS_GROUP_HEADING_CLASS}>{t("historyTitle")}</h4>
+            <span className="text-caption tabular-nums text-[color:var(--aqt-fg-dim)]">
+              {ended.length}
+            </span>
+            <ChevronDown
+              aria-hidden
+              className="size-4 text-[color:var(--aqt-fg-muted)] transition-transform group-open:rotate-180"
+            />
+          </summary>
+          <ul className="space-y-2">
+            {ended.map((session) => (
+              <SessionRow key={session.session_id} session={session} now={now} pending={false} />
+            ))}
           </ul>
-        </section>
+        </details>
       ) : null}
-
-      <section className="flex flex-col gap-2">
-        <h4 className={SECTION_TITLE_CLASS}>{t("otherActiveTitle")}</h4>
-        {otherActiveSessions.length > 0 ? (
-          <ul className="flex flex-col gap-2">
-            {otherActiveSessions.map((session) => (
-              <SessionRow
-                key={session.session_id}
-                session={session}
-                isRevoking={
-                  revokeSessionMutation.isPending &&
-                  revokeSessionMutation.variables === session.session_id
-                }
-                onRevoke={handleRevoke}
-              />
-            ))}
-          </ul>
-        ) : (
-          <div className={EMPTY_CLASS}>{t("noOtherActive")}</div>
-        )}
-      </section>
-
-      <section className="flex flex-col gap-2">
-        <h4 className={SECTION_TITLE_CLASS}>{t("historyTitle")}</h4>
-        {sessionHistory.length > 0 ? (
-          <ul className="flex flex-col gap-2">
-            {sessionHistory.map((session) => (
-              <SessionRow
-                key={session.session_id}
-                session={session}
-                isRevoking={false}
-                onRevoke={handleRevoke}
-              />
-            ))}
-          </ul>
-        ) : (
-          <div className={EMPTY_CLASS}>{t("noHistory")}</div>
-        )}
-      </section>
     </div>
   );
 }

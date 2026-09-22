@@ -774,25 +774,33 @@
     }
   },
   "accountSettings": {
-    "title": "Account Settings",
-    "sidebarHeading": "User Settings",
+    "title": "Account settings",
     "tabs": {
-      "profile": "My Account",
-      "preferences": "Preferences",
+      "profile": "Profile",
+      "security": "Security",
       "favorites": "Favorites",
-      "sessions": "Sessions"
+      "mixes": "Mixes"
     },
     "profile": {
-      "title": "My Account",
-      "desc": "Manage your avatar and linked accounts."
+      "title": "Profile",
+      "desc": "Your avatar, linked accounts and what your public profile shows."
     },
-    "preferences": {
-      "title": "Preferences",
-      "desc": "Customize your tournament experience."
+    "security": {
+      "title": "Security",
+      "desc": "Devices signed in to your account, and account deletion."
+    },
+    "favorites": {
+      "title": "Favorites",
+      "desc": "Players you have starred for quick access.",
+      "empty": "No favorite players yet",
+      "emptyHint": "Star a player on their profile or in search to see them here."
+    },
+    "mixes": {
+      "title": "Mixes",
+      "desc": "How your pickup mixes are set up and balanced. Every mix you host uses these, so they are set once here instead of on every game."
     },
     "mixBalancer": {
-      "title": "Mixes",
-      "desc": "How your pickup mixes are set up and balanced. Every mix you host uses these, so they are set once here instead of on every game.",
+      "balancingTitle": "Balancing",
       "saving": "Saving…",
       "saved": "Saved",
       "loadError": "Could not load your mix preferences.",
@@ -818,15 +826,17 @@
         "hint": "Recording who won bumps every winning player's rank by this many points in your own book, and every losing player's down by the same. Leave empty to record results without touching ranks."
       }
     },
-    "favorites": {
-      "title": "Favorites",
-      "desc": "Players you have starred for quick access.",
-      "empty": "No favorite players yet — star a player from their profile or from search."
-    },
     "avatar": {
       "title": "Avatar",
-      "hint": "Click or drop an image to change it; hover to edit.",
-      "disabled": "Changing your avatar has been disabled by an administrator."
+      "hint": "Select your avatar or drop an image onto it to change it.",
+      "disabled": "Changing your avatar has been disabled by an administrator.",
+      "change": "Change your avatar",
+      "upload": "Add",
+      "edit": "Change",
+      "drop": "Drop",
+      "remove": "Remove your avatar",
+      "unsupported": "Choose a PNG, JPEG, WebP or GIF image.",
+      "tooLarge": "Choose an image under {mb} MB."
     },
     "linked": {
       "title": "Linked accounts",
@@ -843,7 +853,9 @@
       "disconnect": "Disconnect this OAuth account",
       "disconnectAria": "Disconnect {name}",
       "disconnectConfirm": "Disconnect your {provider} account? You can reconnect it later via OAuth.",
-      "footnote": "Accounts can only be added through OAuth, which also verifies them. Disconnect removes the OAuth link (the account stays, unverified, until you reconnect); hiding removes it from your public profile. Only an administrator can erase a linked account from your profile entirely."
+      "footnote": "Accounts can only be added through OAuth, which also verifies them. Disconnect removes the OAuth link (the account stays, unverified, until you reconnect); hiding removes it from your public profile. Only an administrator can erase a linked account from your profile entirely.",
+      "hidden": "Hidden",
+      "linkAria": "Link {provider}"
     },
     "stream": {
       "title": "Stream privacy",
@@ -852,7 +864,7 @@
       "footnote": "This switch is global and overrides everything else: while it is off, ticking “Stream POV” in a tournament registration will not put your stream on the site."
     },
     "danger": {
-      "title": "Danger zone",
+      "title": "Account deletion",
       "deleteDesc": "Delete this account permanently. Sessions, linked OAuth connections and API keys are removed and you are signed out immediately. This cannot be undone.",
       "deleteKeeps": "Your tournament history stays: matches, statistics, registrations and team results are kept on your player profile, which simply becomes unclaimed. The OAuth accounts you had linked become free to link to another account.",
       "delete": "Delete account",
@@ -862,33 +874,22 @@
       "confirmDelete": "Delete permanently"
     },
     "sessions": {
-      "title": "Sessions",
-      "desc": "Review active logins, session history, and revoke access on other devices.",
-      "statusActive": "Active",
-      "statusRevoked": "Revoked",
-      "statusExpired": "Expired",
-      "unavailable": "Unavailable",
+      "activeTitle": "Active sessions",
+      "activeDesc": "Don't recognize a device? Sign it out.",
+      "thisDevice": "This device",
       "unknownDevice": "Unknown device",
       "deviceOn": "{browser} on {platform}",
-      "currentSession": "Current session",
-      "revoke": "Revoke",
-      "signedIn": "Signed in",
-      "lastSeen": "Last seen",
-      "expires": "Expires",
-      "revokedLabel": "Revoked",
-      "sessionLabel": "Session",
-      "summaryCurrent": "Current",
-      "summaryOtherActive": "Other active",
-      "summaryHistory": "History",
-      "currentSectionTitle": "Current Session",
-      "otherActiveTitle": "Other Active Sessions",
-      "historyTitle": "Session History",
-      "noOtherActive": "No other active sessions.",
-      "noHistory": "No historical sessions yet.",
-      "loadFailed": "Failed to load sessions",
-      "retry": "Retry",
-      "revokedToast": "Session revoked",
-      "revokedToastDesc": "The selected session was signed out."
+      "lastActive": "Active {time}",
+      "signedInOn": "Signed in {date}",
+      "endedOn": "Signed out {date}",
+      "expiredOn": "Expired {date}",
+      "signOut": "Sign out",
+      "signOutAria": "Sign out {device}",
+      "noOtherActive": "You're only signed in on this device.",
+      "historyTitle": "Ended sessions",
+      "loadFailed": "Unable to load sessions",
+      "revokedToast": "Session signed out",
+      "revokedToastDesc": "That device has been signed out."
     }
   },
   "draft": {
