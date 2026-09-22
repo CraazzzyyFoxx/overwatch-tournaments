@@ -38,6 +38,7 @@ from shared.core.enums import (  # noqa: E402
     PickBanKind,
     VetoSeedSource,
 )
+from shared.core.errors import BaseAPIException as HTTPException  # noqa: E402
 from shared.domain.pick_ban_engine import SeriesScore  # noqa: E402
 from shared.models.tournament.encounter import Encounter  # noqa: E402
 from shared.models.tournament.encounter_game import EncounterGame  # noqa: E402
@@ -129,6 +130,55 @@ class GameLifecycleTests(IsolatedAsyncioTestCase):
         self.assertEqual(EncounterGameState.AWAITING_RESULT, games[0].state, "position 1 is untouched")
         cancelled = [game for game in self._games(include_cancelled=True) if game.position == 2]
         self.assertEqual([EncounterGameState.CANCELLED], [game.state for game in cancelled])
+
+    async def test_a_pick_landing_on_an_open_freeplay_game_names_its_map(self) -> None:
+        planned = await self.service.ensure_freeplay_game(self.store, self.encounter)
+        self.assertEqual((None, EncounterGameState.PLANNED), (planned.map_id, planned.state))
+
+        games = await self.service.sync_games_with_picks(self.store, self.encounter, self._map_session(11))
+
+        self.assertEqual([planned], games, "the pick reuses the open position rather than opening a second one")
+        self.assertEqual((11, EncounterGameState.AWAITING_RESULT), (planned.map_id, planned.state))
+
+    async def test_select_map_names_a_planned_games_map_and_locks_once_a_captain_has_claimed(self) -> None:
+        game = await self.service.ensure_freeplay_game(self.store, self.encounter)
+
+        await self.service.select_map(self.store, self.encounter, game, map_id=11)
+        self.assertEqual((11, EncounterGameState.AWAITING_RESULT), (game.map_id, game.state))
+
+        # Still nobody has reported: the captains may still re-pick the map.
+        await self.service.select_map(self.store, self.encounter, game, map_id=12)
+        self.assertEqual(12, game.map_id)
+
+        self.store.seed(EncounterMapReport(game_id=game.id, side="home", home_score=2, away_score=1))
+
+        await self.service.select_map(self.store, self.encounter, game, map_id=12)
+        self.assertEqual(12, game.map_id, "re-selecting the SAME map changes nothing and is allowed")
+
+        with self.assertRaises(HTTPException) as caught:
+            await self.service.select_map(self.store, self.encounter, game, map_id=13)
+        self.assertEqual(409, caught.exception.status_code)
+        self.assertEqual(["map_locked"], [item.code for item in caught.exception.detail])
+        self.assertEqual(12, game.map_id, "the refused select left the map alone")
+
+    async def test_select_map_refuses_a_confirmed_game(self) -> None:
+        games = await self.service.sync_games_with_picks(self.store, self.encounter, self._map_session(11))
+        await self.service.accept_result(
+            self.store,
+            self.encounter,
+            games[0],
+            home_score=2,
+            away_score=1,
+            source=EncounterGameResultSource.CAPTAIN_AGREEMENT,
+            actor_user_id=None,
+        )
+
+        with self.assertRaises(HTTPException) as caught:
+            await self.service.select_map(self.store, self.encounter, games[0], map_id=13)
+
+        self.assertEqual(409, caught.exception.status_code)
+        self.assertEqual(["result_locked"], [item.code for item in caught.exception.detail])
+        self.assertEqual(11, games[0].map_id)
 
     async def test_freeplay_opens_one_planned_game_at_a_time_until_the_series_is_complete(self) -> None:
         first = await self.service.ensure_freeplay_game(self.store, self.encounter)

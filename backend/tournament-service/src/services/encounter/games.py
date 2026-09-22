@@ -116,6 +116,9 @@ class EncounterGameService:
                 and not reports.get(game.id)
             ):
                 game.map_id = entry.item_id
+                if game.state == EncounterGameState.PLANNED:
+                    # A pick names the map a freeplay position was still missing.
+                    game.state = EncounterGameState.AWAITING_RESULT
 
         stale = [
             game
