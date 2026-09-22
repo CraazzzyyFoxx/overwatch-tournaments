@@ -35,6 +35,7 @@ import pytest  # noqa: E402
 from shared.core import enums  # noqa: E402
 from shared.core.errors import ApiHTTPException  # noqa: E402
 from shared.domain.forms import FormField, FormSchema, FormSection  # noqa: E402
+from shared.hero_catalog import HeroCatalogEntry  # noqa: E402
 from shared.models.identity.auth_user import AuthUser  # noqa: E402
 from shared.models.identity.social import SocialAccount  # noqa: E402
 from shared.models.registration.registration import (  # noqa: E402
@@ -308,6 +309,42 @@ def test_role_update_preserves_rank_value_on_surviving_roles() -> None:
     assert (by_role["damage"].rank_value, by_role["damage"].is_primary, by_role["damage"].priority) == (2500, True, 0)
     # A role the registrant just added has no rank yet -- nothing to preserve.
     assert by_role["support"].rank_value is None
+
+
+def test_a_role_edit_does_not_leave_a_parentless_role_row_in_the_session() -> None:
+    """The surviving row is handed the freshly built hero entries, and those were
+    built on a THROWAWAY ``BalancerRegistrationRole``. Handing over that row's live
+    collection drags the throwaway into the session through the backref: a second
+    role row with no ``registration_id``, so the next flush dies on the NOT NULL
+    constraint. Every self-edit of a form with the top-heroes ask switched on was
+    a 500."""
+    schema = FormSchema(
+        sections=[
+            FormSection(
+                key="all",
+                fields=[
+                    FormField(key="battle_tag", kind="builtin", required=True),
+                    FormField(key="roles", kind="builtin", params={"top_heroes": {"enabled": True, "max": 3}}),
+                ],
+            )
+        ]
+    )
+    catalog = {"ana": HeroCatalogEntry(id=11, slug="ana", hero_class=enums.HeroClass.support)}
+    registration = _registration()
+    registration.roles = [models.BalancerRegistrationRole(role="tank", is_primary=True, priority=0)]
+    session = sa.orm.Session()
+    session.add(registration)
+
+    answer_service.apply(
+        registration,
+        {"roles": [{"role": "tank", "is_primary": True, "top_heroes": ["ana"]}]},
+        schema=schema,
+        hero_catalog=catalog,
+    )
+
+    pending_roles = [row for row in session.new if isinstance(row, models.BalancerRegistrationRole)]
+    assert [row for row in pending_roles if row not in registration.roles] == []
+    assert [entry.hero_id for entry in registration.roles[0].hero_entries] == [11]
 
 
 def test_an_identity_answer_upserts_and_a_blank_one_deletes() -> None:
