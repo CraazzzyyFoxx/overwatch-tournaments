@@ -46,6 +46,7 @@ from shared.models.tenancy.workspace import Workspace  # noqa: E402
 from shared.models.tournament import Tournament, TournamentPhaseSchedule  # noqa: E402
 from src import models  # noqa: E402
 from src.schemas.registration import RegistrationSubmit  # noqa: E402
+from src.schemas.registration_build import _public_rosters  # noqa: E402
 from src.services.registration.answers import answer_service  # noqa: E402
 from src.services.registration.service import registration_service  # noqa: E402
 
@@ -669,7 +670,7 @@ def test_a_role_top_hero_list_survives_being_replaced_in_place(db_session) -> No
             registration = await registration_service.get_registration(
                 db_session, seeded["tournament_id"], seeded["auth_user"].id
             )
-            await registration_service.update_registration(
+            updated = await registration_service.update_registration(
                 db_session,
                 registration,
                 tournament=await registration_service.tournament_repo.get(db_session, seeded["tournament_id"]),
@@ -678,6 +679,10 @@ def test_a_role_top_hero_list_survives_being_replaced_in_place(db_session) -> No
                 hero_catalog=catalog,
                 form_version_id=seeded["version_id"],
             )
+            # The read the RPC builds from the row it just wrote. The roster
+            # engine walks roles -> hero_entries, so a row handed back with that
+            # chain unloaded raises MissingGreenlet instead of serving the edit.
+            assert await _public_rosters(db_session, [updated])
             rows = (
                 await db_session.execute(
                     sa.select(

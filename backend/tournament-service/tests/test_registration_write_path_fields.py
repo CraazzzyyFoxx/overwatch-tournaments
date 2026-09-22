@@ -109,6 +109,10 @@ class _RecordingSession:
     async def refresh(self, obj: Any) -> None:
         return None
 
+    async def get(self, _entity: Any, _ident: Any, **_kwargs: Any) -> Any:
+        """``_reload_for_read`` re-reads the written row with its loader set."""
+        return None
+
     async def scalar(self, *_args: Any, **_kwargs: Any) -> Any:
         return self._scalar_value
 

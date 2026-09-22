@@ -627,6 +627,29 @@ class RegistrationService:
             await session.flush()
         return registration
 
+    async def _reload_for_read(
+        self,
+        session: AsyncSession,
+        registration: models.BalancerRegistration,
+    ) -> models.BalancerRegistration:
+        """Re-read a just-written row with every loader its read model needs.
+
+        NOT ``session.refresh``: refresh re-runs the strategy each relationship
+        was loaded under but NOT the chain nested beneath it, so ``roles`` came
+        back with ``hero_entries`` unloaded and the roster engine's walk of it
+        raised ``MissingGreenlet`` -- a 500 on an edit that had already been
+        written. ``populate_existing`` also re-resolves the ``form_version`` an
+        edit just moved, which a stale relationship would keep pointing at the
+        version the row answered before.
+        """
+        await session.get(
+            models.BalancerRegistration,
+            registration.id,
+            options=list(registration_read_loaders()),
+            populate_existing=True,
+        )
+        return registration
+
     async def update_registration(
         self,
         session: AsyncSession,
@@ -665,8 +688,7 @@ class RegistrationService:
             registration.form_version_id = form_version_id
         await self._registration_changed(session, registration)
         await session.commit()
-        await session.refresh(registration)
-        return registration
+        return await self._reload_for_read(session, registration)
 
     async def get_registration_count_by_tournament(
         self,
@@ -735,8 +757,7 @@ class RegistrationService:
         registration.checked_in_by = checked_in_by
         await self._registration_changed(session, registration)
         await session.commit()
-        await session.refresh(registration)
-        return registration
+        return await self._reload_for_read(session, registration)
 
     # ── public self-service use-cases (called by rpc/public_rpc.py) ──────────
 
@@ -834,16 +855,7 @@ class RegistrationService:
         except IntegrityError:
             raise HTTPException(status_code=409, detail="Already registered for this tournament")
 
-        registration = await self.registration_repo.get(
-            session,
-            registration.id,
-            options=[
-                selectinload(models.BalancerRegistration.roles)
-                .selectinload(models.BalancerRegistrationRole.hero_entries)
-                .selectinload(models.BalancerRegistrationRoleHero.hero),
-                *registration_read_loaders(),
-            ],
-        )
+        registration = await self._reload_for_read(session, registration)
         status_meta_map = await get_status_metas_map(session, workspace_id=workspace_id)
         rosters = await _public_rosters(session, [registration])
         return _reg_to_read(
