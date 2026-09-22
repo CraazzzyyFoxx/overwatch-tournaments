@@ -3785,8 +3785,11 @@
   position: sticky;
   z-index: 2;
   background-color: var(--admin-sticky-bg);
-  /* Same curve as the row's Tailwind `transition-colors`, otherwise the pinned
-     cell snaps to the hover tint while the rest of the row is still fading. */
+  /* The row's state tint, painted as a layer ON TOP of that opaque base — the
+     exact compositing the translucent cells get from the row's own background,
+     so the pinned block and the scrolling one land on the same colour instead
+     of on two hand-matched approximations of it. */
+  background-image: linear-gradient(var(--admin-row-tint, transparent), var(--admin-row-tint, transparent));
   transition: background-color 150ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -3803,12 +3806,48 @@ th.admin-sticky-col {
   background-color: color-mix(in srgb, hsl(var(--muted)) 20%, var(--admin-sticky-bg));
 }
 
-tbody tr:hover > .admin-sticky-col {
-  background-color: color-mix(in srgb, hsl(var(--accent)) 20%, var(--admin-sticky-bg));
+/* ── Row state ───────────────────────────────────────────────────────────
+   One tint per state, declared once: the row paints it (translucent, over
+   whatever the table's surface is) and every pinned cell re-paints the same
+   colour over its own opaque base. Transitioning the registered property
+   fades both together. Later rules win where a row is in several states, so
+   selection — the state the user set on purpose — outranks hover and the
+   inspector's current-row mark. */
+@property --admin-row-tint {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: transparent;
 }
 
-tbody tr[data-selected] > .admin-sticky-col {
-  background-color: color-mix(in srgb, hsl(var(--accent)) 30%, var(--admin-sticky-bg));
+tbody tr.admin-row,
+/* Each state selector repeats the paint: shadcn's own `hover:bg-muted/50` on
+   `TableRow` is a (0,2,0) rule, and a bare `.admin-row` one would lose to it
+   exactly while a row is hovered. */
+tbody tr.admin-row:hover,
+tbody tr.admin-row[aria-current="true"],
+tbody tr.admin-row[data-selected] {
+  background-color: var(--admin-row-tint);
+  transition: --admin-row-tint 150ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+tbody tr.admin-row:hover {
+  --admin-row-tint: hsl(var(--accent) / 0.2);
+}
+
+tbody tr.admin-row[aria-current="true"] {
+  --admin-row-tint: hsl(var(--primary) / 0.1);
+}
+
+tbody tr.admin-row[aria-current="true"]:hover {
+  --admin-row-tint: hsl(var(--primary) / 0.16);
+}
+
+tbody tr.admin-row[data-selected] {
+  --admin-row-tint: hsl(var(--accent) / 0.3);
+}
+
+tbody tr.admin-row[data-selected]:hover {
+  --admin-row-tint: hsl(var(--accent) / 0.4);
 }
 
 /* Right edge of the pinned block — the only cue that the rest scrolls under. */
