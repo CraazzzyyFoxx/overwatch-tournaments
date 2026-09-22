@@ -625,7 +625,7 @@ Import-linter используется по существующей convention 
 
 ## 15. Последовательность реализации и завершение
 
-1. **Game/result authority:** новая identity игры и reports/corrections, общий live/official read-contract; прекращение captain-only Match writes. Результат этапа — V01/V02/R01/R05/R06 на Game без статистики.
+1. **Game/result authority:** новая identity игры и reports/corrections, общий live/official read-contract; прекращение captain-only Match writes. Результат этапа — V01/V02/R01/R05/R06 на Game без статистики. — ✅ implemented (branch `feat/pregame-game-authority`, alembic revision `encgame01`).
 2. **Veto lifecycle:** Round/snapshot/coordinator, команды с версией, worker, read-only room и перевод всех UI/RPC consumers. Результат — V03–V10 end-to-end.
 3. **Independent statistics:** MatchParticipant, raw schema, ingestion identity/provenance, optional binding/ACL, parser events. Результат — R03/R04/S01–S07 без фальшивых турниров/команд.
 4. **Read/analytics integration:** raw vs competitive extraction, achievements scope, public/MV gates, API/type cutover; parity A01–A05.
