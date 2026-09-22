@@ -337,26 +337,9 @@ def upgrade() -> None:
         "ck_encounter_map_report_side", "encounter_map_report", "side IN ('home', 'away')", schema="tournament"
     )
 
-    op.drop_constraint(
-        "uq_encounter_map_report_encounter_map_index_team",
-        "encounter_map_report",
-        schema="tournament",
-        type_="unique",
-    )
-    op.drop_constraint(
-        "ck_encounter_map_report_index", "encounter_map_report", schema="tournament", type_="check"
-    )
-    op.drop_index(
-        op.f("ix_tournament_encounter_map_report_encounter_id"),
-        table_name="encounter_map_report",
-        schema="tournament",
-    )
-    op.drop_index(
-        op.f("ix_tournament_encounter_map_report_map_id"), table_name="encounter_map_report", schema="tournament"
-    )
-    op.drop_index(
-        op.f("ix_tournament_encounter_map_report_team_id"), table_name="encounter_map_report", schema="tournament"
-    )
+    # DROP COLUMN takes every index and constraint on the dropped columns with
+    # it. Naming them would fail on the long-lived databases, whose index names
+    # predate ``initial_v6``'s ``op.f()`` spelling (see ``statdrop01``).
     for name in ("encounter_id", "map_id", "map_index", "team_id"):
         op.drop_column("encounter_map_report", name, schema="tournament")
 
