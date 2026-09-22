@@ -35,6 +35,7 @@ from .draft import (
 )
 from .encounter import (
     EncounterCaptainReportRepository,
+    EncounterGameRepository,
     EncounterLinkRepository,
     EncounterMapCodeRepository,
     EncounterMapReportRepository,
@@ -213,6 +214,7 @@ __all__ = (
     "DraftSessionRepository",
     "DraftTeamRepository",
     "EncounterCaptainReportRepository",
+    "EncounterGameRepository",
     "EncounterLinkRepository",
     "EncounterMapCodeRepository",
     "EncounterMapReportRepository",

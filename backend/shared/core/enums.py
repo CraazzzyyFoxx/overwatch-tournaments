@@ -424,13 +424,17 @@ class EncounterResultAuditAction(StrEnum):
     AUTO_DISPUTE = "auto_dispute"
     IMPORT = "import"
     CASCADE_RESET = "cascade_reset"
+    # Per-map decisions (Vertical 1). Score columns on the audit row carry the
+    # GAME's accepted score for these three actions, see EncounterResultAudit.
+    GAME_CONFIRM = "game_confirm"
+    GAME_CORRECT = "game_correct"
+    GAME_CANCEL = "game_cancel"
 
 
 class MapPoolEntryStatus(StrEnum):
     AVAILABLE = "available"
     PICKED = "picked"
     BANNED = "banned"
-    PLAYED = "played"
     PROTECTED = "protected"
 
 
@@ -445,6 +449,22 @@ class MapVetoSessionStatus(StrEnum):
     ACTIVE = "active"
     COMPLETED = "completed"
     CANCELLED = "cancelled"
+
+
+class EncounterGameState(StrEnum):
+    """Lifecycle of one position of a series (``tournament.encounter_game``)."""
+
+    PLANNED = "planned"  # position exists, map not chosen yet (freeplay)
+    AWAITING_RESULT = "awaiting_result"  # map known; waiting for both captains' claims
+    DISPUTED = "disputed"  # two claims that disagree
+    CONFIRMED = "confirmed"  # accepted score present
+    CANCELLED = "cancelled"  # kept as history after undo/reset; never revived
+
+
+class EncounterGameResultSource(StrEnum):
+    CAPTAIN_AGREEMENT = "captain_agreement"
+    ADMIN = "admin"
+    ADMIN_LOG = "admin_log"
 
 
 class VetoSeedSource(StrEnum):
