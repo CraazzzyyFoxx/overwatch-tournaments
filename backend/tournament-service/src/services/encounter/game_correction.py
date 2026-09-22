@@ -107,7 +107,7 @@ class GameCorrectionService:
         has nothing per-position to rebuild, which ``rounds_are_progressive``
         already says.
         """
-        config = await self.sessions._load_config(session, pick_ban.config_id) if pick_ban.config_id else None
+        config = await self.sessions.load_config(session, pick_ban.config_id) if pick_ban.config_id else None
         if config is None or not rounds_are_progressive(config, pick_ban.kind):
             return False
         entries = list(await self.entry_repo.list_by_session(session, pick_ban.id))
@@ -151,6 +151,15 @@ class GameCorrectionService:
         game = await self.games.game_repo.get_for_update(session, game_id)
         if game is None or game.encounter_id != encounter.id or game.state == EncounterGameState.CANCELLED:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Game not found")
+        if game.map_id is None:
+            # A result belongs to a MAP that was played. A freeplay position
+            # still waiting for its map has no map to have played, so accepting
+            # one here would confirm a game that never existed and open the next
+            # position off it.
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=[ApiExc(code="map_not_selected", msg="Choose this map before recording its result")],
+            )
 
         outcome = engine.map_outcome(home_score, away_score)
         rebuilt: list[int] = []

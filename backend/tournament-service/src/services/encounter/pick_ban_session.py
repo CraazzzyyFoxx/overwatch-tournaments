@@ -218,7 +218,7 @@ class PickBanSessionService:
         the row is gone (a concurrent reset dropped it)."""
         return await self.session_repo.lock_by_id(session, pick_ban.id)
 
-    async def _load_config(self, session: AsyncSession, config_id: int) -> PickBanConfig | None:
+    async def load_config(self, session: AsyncSession, config_id: int) -> PickBanConfig | None:
         """One config by id, pool eagerly loaded.
 
         A `select` rather than `session.get`: loader options are ignored when the
@@ -671,7 +671,7 @@ class PickBanSessionService:
         # otherwise serve that pre-lock snapshot back.
         entries = list(await self.entry_repo.list_by_session(session, pick_ban.id, populate_existing=True))
 
-        config = await self._load_config(session, pick_ban.config_id) if pick_ban.config_id else None
+        config = await self.load_config(session, pick_ban.config_id) if pick_ban.config_id else None
         if config is None:
             # `PickBanSession.config_id` is `ondelete=SET NULL`, so a config deleted
             # mid-series leaves a session that can never open another round. Declining

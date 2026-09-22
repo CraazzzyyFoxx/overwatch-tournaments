@@ -220,3 +220,50 @@ class GameCorrectionTests(IsolatedAsyncioTestCase):
         self.assertEqual(2, state["current_round"], "the admin's decision opened map 2's bans")
         self.assertEqual(MapPickSide.HOME.value, state["turn_side"])
         self.assertEqual((1, 0), (self.encounter.home_score, self.encounter.away_score))
+
+
+class MaplessGameTests(IsolatedAsyncioTestCase):
+    """A freeplay position that has no map yet is not a game anybody played, so
+    there is no result for an organizer to record on it either."""
+
+    async def asyncSetUp(self) -> None:
+        self.store = _Store()
+        self.encounter = _encounter()
+        self.store.seed(self.encounter)
+        self.store.seed(
+            EncounterReadiness(encounter_id=self.encounter.id, side=MapPickSide.HOME.value, ready_user_id=None),
+            EncounterReadiness(encounter_id=self.encounter.id, side=MapPickSide.AWAY.value, ready_user_id=None),
+        )
+
+    async def test_a_planned_freeplay_position_cannot_be_admin_confirmed(self) -> None:
+        # No map config at all: reading the room opens position 1 with no map on it.
+        state = await pick_ban_action_service.get_pick_ban_state(
+            self.store, self.encounter.id, PickBanKind.MAP, viewer_side=MapPickSide.HOME.value
+        )
+        self.assertIsNone(state["session"], "freeplay: there is no veto to run")
+        self.assertEqual([(1, None, EncounterGameState.PLANNED.value)], [
+            (game["position"], game["map_id"], game["state"]) for game in state["games"]
+        ])
+
+        with self.assertRaises(HTTPException) as caught:
+            await game_correction_service.correct(
+                self.store,
+                self.encounter,
+                game_id=state["games"][0]["id"],
+                home_score=2,
+                away_score=1,
+                actor_user_id=ADMIN_ID,
+                reason="VOD review",
+            )
+
+        self.assertEqual(409, caught.exception.status_code)
+        self.assertEqual(["map_not_selected"], [item.code for item in caught.exception.detail])
+        after = await pick_ban_action_service.get_pick_ban_state(
+            self.store, self.encounter.id, PickBanKind.MAP, viewer_side=MapPickSide.HOME.value
+        )
+        self.assertEqual(
+            [(1, EncounterGameState.PLANNED.value)],
+            [(game["position"], game["state"]) for game in after["games"]],
+            "nothing was accepted, so no second position opened",
+        )
+        self.assertEqual((0, 0), (self.encounter.home_score, self.encounter.away_score))
