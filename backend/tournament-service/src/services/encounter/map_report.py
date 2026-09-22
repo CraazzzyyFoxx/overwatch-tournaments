@@ -212,28 +212,7 @@ class MapReportService:
             actor_user_id=None,
         )
 
-        games = await self.games.list_games(session, encounter.id)
-        map_pick_ban = await pick_ban_session_service.get_pick_ban_session(session, encounter.id, PickBanKind.MAP)
-        if map_pick_ban is not None:
-            # Only the MAP session advances here, and only while the series still
-            # has a map to play: the next map's bans open on this result. That
-            # map's HERO round opens later, once the map itself is picked --
-            # `pick_ban_session.sync_hero_rounds`, because heroes are banned for a
-            # known map, not for a map that is still being vetoed.
-            if not engine.series_complete(self.games.live_score(games), encounter.best_of):
-                outcome = engine.map_outcome(resolved_home, resolved_away)
-                try:
-                    await pick_ban_session_service.advance_to_next_round(
-                        session, map_pick_ban, completed_round=game.position, outcome=outcome, commit=False
-                    )
-                except engine.RotationNeedsChoice:
-                    map_pick_ban.awaiting_choice = True
-                    map_pick_ban.pending_loser_side = "away" if outcome == "home" else "home"
-                    await session.flush()
-        else:
-            # Freeplay: no veto to open a round, so the next position is opened
-            # directly (and not at all once the series is decided).
-            await self.games.ensure_freeplay_game(session, encounter)
+        await self.open_next_round(session, encounter, game, engine.map_outcome(resolved_home, resolved_away))
 
         # Unlike a veto/ban, an AGREED claim moves the encounter's own score --
         # the public encounter read is stale the moment this commits.
@@ -245,6 +224,42 @@ class MapReportService:
         )
         await session.commit()
         return {"disputed": False, "resolved": True, "game": self.games.serialize(game, reports)}
+
+    async def open_next_round(
+        self,
+        session: AsyncSession,
+        encounter: Encounter,
+        game: EncounterGame,
+        outcome: engine.MapOutcome,
+    ) -> None:
+        """Open whatever the series owes after ``game``'s position was accepted.
+
+        Shared by captain agreement and by the admin correction: both settle ONE
+        position, and "what comes next" is a property of the series, not of who
+        settled it.
+        """
+        map_pick_ban = await pick_ban_session_service.get_pick_ban_session(session, encounter.id, PickBanKind.MAP)
+        if map_pick_ban is None:
+            # Freeplay: no veto to open a round, so the next position is opened
+            # directly (and not at all once the series is decided).
+            await self.games.ensure_freeplay_game(session, encounter)
+            return
+        # Only the MAP session advances here, and only while the series still has
+        # a map to play: the next map's bans open on this result. That map's HERO
+        # round opens later, once the map itself is picked --
+        # `pick_ban_session.sync_hero_rounds`, because heroes are banned for a
+        # known map, not for a map that is still being vetoed.
+        games = await self.games.list_games(session, encounter.id)
+        if engine.series_complete(self.games.live_score(games), encounter.best_of):
+            return
+        try:
+            await pick_ban_session_service.advance_to_next_round(
+                session, map_pick_ban, completed_round=game.position, outcome=outcome, commit=False
+            )
+        except engine.RotationNeedsChoice:
+            map_pick_ban.awaiting_choice = True
+            map_pick_ban.pending_loser_side = "away" if outcome == "home" else "home"
+            await session.flush()
 
 
 map_report_service = MapReportService()
