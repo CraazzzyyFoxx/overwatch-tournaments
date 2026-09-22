@@ -65,17 +65,12 @@ export function toRoleSlotCounts(
 export function RegistrationSummary({
   total,
   roleCounts,
-  maxParticipants,
-  reserveCount = 0
+  maxParticipants
 }: Readonly<{
   total: number;
   roleCounts: Readonly<Record<string, number>>;
   /** Advisory capacity. Rendered as a `/ N` suffix; never compared against `total`. */
   maxParticipants?: number | null;
-  /** How many of `total` also said they can be called in if needed. Never
-   *  subtracted from anything: the answer is an availability note, so those
-   *  players occupy a slot exactly like everybody else. */
-  reserveCount?: number;
 }>) {
   const t = useTranslations();
   const counts = toRoleSlotCounts(roleCounts);
@@ -102,11 +97,6 @@ export function RegistrationSummary({
           />
         ))}
       </div>
-      {reserveCount > 0 ? (
-        <p className="mt-2 text-xs text-[color:var(--aqt-fg-muted)]">
-          {t("tournamentDetail.overview.registration.reserveNote", { count: reserveCount })}
-        </p>
-      ) : null}
       {shares.length > 1 && shareTotal > 0 ? (
         <div aria-hidden className="mt-3 flex h-1.5 gap-px overflow-hidden rounded-sm">
           {shares.map((code) => (

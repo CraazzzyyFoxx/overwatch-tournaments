@@ -2156,8 +2156,7 @@
         "all": "all participants →",
         "total": "Registered",
         "teams": "Teams",
-        "latest": "Latest",
-        "reserveNote": "{count, plural, one {# of them can also be called in if needed} other {# of them can also be called in if needed}}"
+        "latest": "Latest"
       },
       "format": {
         "title": "Format",
@@ -2321,7 +2320,6 @@
     },
     "participants": {
       "resultCount": "{count, plural, one {# participant shown} other {# participants shown}}",
-      "countWithReserve": "{count, plural, one {# participant} other {# participants}} ({reserve} on call)",
       "lateBadge": "Late sign-up",
       "lateHint": "Signed up after registration closed.",
       "hidden": {

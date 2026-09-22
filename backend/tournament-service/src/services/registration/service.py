@@ -129,16 +129,6 @@ def _role_counts(registrations: Sequence[models.BalancerRegistration]) -> dict[s
     return counts
 
 
-def _reserve_count(registrations: Sequence[models.BalancerRegistration]) -> int:
-    """Rows that declared themselves cover (or signed up past the deadline).
-
-    Counted over the SAME row set as ``total`` and reported beside it, never
-    subtracted from it: ``total`` is the queue denominator and the capacity line
-    does its own arithmetic.
-    """
-    return sum(1 for registration in registrations if registration.is_reserve)
-
-
 def _primary_role_select(tournament_id: int) -> sa.Subquery:
     """``(registration_id, role)`` — one row per live registration, its primary role.
 
@@ -1037,7 +1027,6 @@ class RegistrationService:
                 hidden=True,
                 total=len(hidden_rows),
                 role_counts=_role_counts(hidden_rows),
-                reserve_count=_reserve_count(hidden_rows),
                 max_participants=max_participants,
             )
 
@@ -1112,7 +1101,6 @@ class RegistrationService:
             division_grids=division_grids,
             total=len(registrations),
             role_counts=_role_counts(registrations),
-            reserve_count=_reserve_count(registrations),
             max_participants=max_participants,
         )
 

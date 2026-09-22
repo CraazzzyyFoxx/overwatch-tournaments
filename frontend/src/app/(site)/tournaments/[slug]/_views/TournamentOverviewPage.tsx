@@ -878,7 +878,6 @@ export default function TournamentOverviewPage({
                     total={registrationList?.total ?? registrations.length}
                     roleCounts={registrationList?.role_counts ?? {}}
                     maxParticipants={registrationList?.max_participants}
-                    reserveCount={registrationList?.reserve_count ?? 0}
                   />
                   {latest.length > 0 ? (
                     <p className="mt-2 truncate text-caption text-[color:var(--aqt-fg-faint)]">
