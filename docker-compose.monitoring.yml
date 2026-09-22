@@ -13,12 +13,22 @@ name: owt-monitoring
 # `make monitoring-up`.
 # ==============================================================================
 
+# Same host as the production stack, same unbounded json-file logs: cap them
+# here too, or cadvisor/promtail alone keep ops/cleanup/cleanup.sh necessary.
+# 50 MiB x 3 per container, rotated by the daemon (docs/disk-cleanup.md).
+x-logging: &log-rotate
+  driver: json-file
+  options:
+    max-size: "50m"
+    max-file: "3"
+
 services:
   prometheus:
     # 3.13 is the current Prometheus LTS (bugfixes until 2027-07-31); 3.5 LTS
     # went EOL 2026-07-31. v3 derives GOMEMLIMIT from the container memory
     # limit below on its own, so the explicit env var v2 needed is gone.
     image: prom/prometheus:v3.13.3
+    logging: *log-rotate
     restart: unless-stopped
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"
@@ -52,6 +62,7 @@ services:
     # its receiver validation still demands `webhook_url`, so a file-backed Discord
     # webhook fails config load with "no discord webhook URL provided".
     image: prom/alertmanager:v0.34.1
+    logging: *log-rotate
     restart: unless-stopped
     command:
       - "--config.file=/etc/alertmanager/alertmanager.yml"
@@ -73,6 +84,7 @@ services:
 
   redis-exporter:
     image: oliver006/redis_exporter:v1.91.1
+    logging: *log-rotate
     restart: unless-stopped
     environment:
       REDIS_ADDR: "redis:6379"
@@ -91,6 +103,7 @@ services:
     # 1.0.0 (2024-03) is the last release; the project is dormant. If it ever
     # breaks, RabbitMQ's built-in rabbitmq_prometheus plugin replaces it.
     image: kbudde/rabbitmq-exporter:1.0.0
+    logging: *log-rotate
     restart: unless-stopped
     environment:
       RABBIT_URL: "http://rabbitmq:15672"
@@ -122,6 +135,7 @@ services:
   # (nginx_connections_{active,reading,writing,waiting}).
   nginx-exporter:
     image: nginx/nginx-prometheus-exporter:1.5.3
+    logging: *log-rotate
     restart: unless-stopped
     command:
       - "--nginx.scrape-uri=http://nginx:8081/stub_status"
@@ -140,6 +154,7 @@ services:
   # bind-mounts; no ports published — scraped over the compose network.
   node-exporter:
     image: prom/node-exporter:v1.12.1
+    logging: *log-rotate
     restart: unless-stopped
     pid: host
     command:
@@ -165,6 +180,7 @@ services:
     # Upstream moved publishing to ghcr.io at v0.53.0; gcr.io/cadvisor/cadvisor
     # stops at v0.55.1.
     image: ghcr.io/google/cadvisor:v0.60.5
+    logging: *log-rotate
     restart: unless-stopped
     privileged: true
     devices:
@@ -202,6 +218,7 @@ services:
   #   POSTGRES_EXPORTER_DSN=postgresql://user:pass@host.docker.internal:5432/anak_dev?sslmode=disable
   postgres-exporter:
     image: prometheuscommunity/postgres-exporter:v0.20.1
+    logging: *log-rotate
     restart: unless-stopped
     environment:
       DATA_SOURCE_NAME: "${POSTGRES_EXPORTER_DSN}"
@@ -225,6 +242,7 @@ services:
   loki:
     profiles: ["logs"]
     image: grafana/loki:3.7.8
+    logging: *log-rotate
     restart: unless-stopped
     environment:
       GOMEMLIMIT: 280MiB
@@ -249,6 +267,7 @@ services:
     # config blocks, requires vParquet4 blocks, and its metrics-generator reads
     # from Kafka instead of the distributor — a rewrite, not a bump.
     image: grafana/tempo:2.10.8
+    logging: *log-rotate
     restart: unless-stopped
     environment:
       GOMEMLIMIT: 400MiB
@@ -272,6 +291,7 @@ services:
     # 0.145.0 is the first release shipping the Sentry Exporter (alpha) used by
     # monitoring/otel/otel-collector.yml.
     image: otel/opentelemetry-collector-contrib:0.161.0
+    logging: *log-rotate
     restart: unless-stopped
     command: ["--config=/etc/otel-collector/config.yml"]
     environment:
@@ -305,6 +325,7 @@ services:
     # 3.6.x is the end of the line: Promtail is superseded by Grafana Alloy and
     # gets no 3.7 build. Migrate when this tier is turned on for real.
     image: grafana/promtail:3.6.11
+    logging: *log-rotate
     restart: unless-stopped
     command: -config.file=/etc/promtail/promtail.yml
     volumes:
@@ -325,6 +346,7 @@ services:
 
   grafana:
     image: grafana/grafana:13.2.2
+    logging: *log-rotate
     restart: unless-stopped
     environment:
       GF_SECURITY_ADMIN_USER: "${GRAFANA_ADMIN_USER:-admin}"

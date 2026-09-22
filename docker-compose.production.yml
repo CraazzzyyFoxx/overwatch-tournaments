@@ -1,8 +1,20 @@
 name: owt
 
+# Docker's default json-file driver has NO size cap, and every service mirrors
+# its structured logs to stderr on top of its own rotated file under ./logs —
+# so /var/lib/docker/containers/*/*-json.log grew unbounded between the weekly
+# ops/cleanup/cleanup.sh runs (docs/disk-cleanup.md). 50 MiB x 3 caps each
+# container at 150 MiB and the daemon rotates it: no cron in the path.
+x-logging: &log-rotate
+  driver: json-file
+  options:
+    max-size: "50m"
+    max-file: "3"
+
 services:
   redis:
     image: 'redis/redis-stack:latest'
+    logging: *log-rotate
     # maxmemory must be set explicitly: redis-server ignores the container's
     # cgroup limit below, so INFO memory reports maxmemory=0 (unlimited) and
     # `redis_memory_used_bytes / redis_memory_max_bytes` in the Prometheus
@@ -41,6 +53,7 @@ services:
 
   rabbitmq:
     image: rabbitmq:3.13-management
+    logging: *log-rotate
     # Backbone: every RPC round-trips through the broker, so give it real CPU
     # headroom — throttling here adds latency to the whole stack.
     deploy:
@@ -67,6 +80,7 @@ services:
 
   proxy:
     image: teddysun/xray:latest
+    logging: *log-rotate
     deploy:
       resources:
         limits:
@@ -102,6 +116,7 @@ services:
 
   discord-worker:
     image: ghcr.io/craazzzyyfoxx/owt-discord:${IMAGE_TAG:-latest}
+    logging: *log-rotate
     deploy:
       resources:
         limits:
@@ -188,6 +203,7 @@ services:
 
   parser-svc:
     image: ghcr.io/craazzzyyfoxx/owt-parser:${IMAGE_TAG:-latest}
+    logging: *log-rotate
     deploy:
       resources:
         limits:
@@ -235,6 +251,7 @@ services:
 
   tournament-svc:
     image: ghcr.io/craazzzyyfoxx/owt-tournament:${IMAGE_TAG:-latest}
+    logging: *log-rotate
     deploy:
       resources:
         limits:
@@ -279,6 +296,7 @@ services:
   # Headless RPC worker replacing the HTTP `backend` behind the gateway.
   app-svc:
     image: ghcr.io/craazzzyyfoxx/owt-app:${IMAGE_TAG:-latest}
+    logging: *log-rotate
     # Hottest read/write path (all of /api/v1/core). Single event loop per
     # process, so raise the CPU ceiling AND scale replicas (`make prod-scale`)
     # for real throughput — the two are complementary.
@@ -329,6 +347,7 @@ services:
 
   balancer-svc:
     image: ghcr.io/craazzzyyfoxx/owt-balancer:${IMAGE_TAG:-latest}
+    logging: *log-rotate
     deploy:
       resources:
         limits:
@@ -374,6 +393,7 @@ services:
 
   analytics-worker:
     image: ghcr.io/craazzzyyfoxx/owt-analytics:${IMAGE_TAG:-latest}
+    logging: *log-rotate
     deploy:
       resources:
         limits:
@@ -429,6 +449,7 @@ services:
   # analytics-worker; this is the light request/reply service (serve_rpc:app).
   analytics-svc:
     image: ghcr.io/craazzzyyfoxx/owt-analytics:${IMAGE_TAG:-latest}
+    logging: *log-rotate
     deploy:
       resources:
         limits:
@@ -479,6 +500,7 @@ services:
   # leader-locked, so extras only add RPC consumer capacity.
   stream-svc:
     image: ghcr.io/craazzzyyfoxx/owt-stream:${IMAGE_TAG:-latest}
+    logging: *log-rotate
     deploy:
       resources:
         limits:
@@ -539,6 +561,7 @@ services:
   # this 8-core box badly enough to starve nginx and the gateway under load.
   frontend:
     image: ghcr.io/craazzzyyfoxx/owt-frontend:${IMAGE_TAG:-latest}
+    logging: *log-rotate
     deploy:
       replicas: 1
       resources:
@@ -603,6 +626,7 @@ services:
 
   identity-svc:
     image: ghcr.io/craazzzyyfoxx/owt-identity:${IMAGE_TAG:-latest}
+    logging: *log-rotate
     # Auth hot path: every authenticated request validates its token via
     # gateway -> identity-svc. Under-provisioning this throttles all traffic.
     deploy:
@@ -653,6 +677,7 @@ services:
 
   gateway:
     image: ghcr.io/craazzzyyfoxx/owt-gateway:${IMAGE_TAG:-latest}
+    logging: *log-rotate
     # Single entry point for ALL REST + WS + JWT. 0.5 CPU here was the primary
     # ingress bottleneck (CFS throttling under load); give it headroom.
     deploy:
@@ -704,6 +729,7 @@ services:
 
   nginx:
     image: nginx:1.31-alpine
+    logging: *log-rotate
     deploy:
       resources:
         limits:
