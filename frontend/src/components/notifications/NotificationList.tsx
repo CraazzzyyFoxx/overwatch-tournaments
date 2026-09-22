@@ -22,6 +22,7 @@ import { useFormatter, useLocale, useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { PopoverClose } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { announcementText } from "@/lib/notifications/announcement-text";
 import { notificationHref } from "@/lib/notifications/href";
 import { cn } from "@/lib/utils";
@@ -240,62 +241,72 @@ const NotificationList = ({
             </span>
           )}
         </div>
-        <div className="ml-auto flex min-w-0 items-center gap-0.5">
-          <Button
-            static={false}
-            variant="ghost"
-            size="sm"
-            className="h-auto min-h-8 min-w-0 gap-1.5 px-2 text-xs text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground aria-disabled:pointer-events-none aria-disabled:opacity-50"
-            onClick={() => {
-              if (!markAllUnavailable) markAllRead();
-            }}
-            aria-label={t("notifications.markAllRead")}
-            aria-disabled={markAllUnavailable}
-            aria-busy={isMarkingRead && markingId == null}
-          >
-            <CheckCheck className="size-3.5 shrink-0" aria-hidden />
-            <span className="truncate">
-              {t(
-                isMarkingRead && markingId == null
-                  ? "notifications.markingAllRead"
-                  : "notifications.markAllRead"
-              )}
-            </span>
-          </Button>
-          <Button
-            static={false}
-            variant="ghost"
-            size="sm"
-            className="h-auto min-h-8 min-w-0 gap-1.5 px-2 text-xs text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive aria-disabled:pointer-events-none aria-disabled:opacity-50"
-            onClick={() => {
-              if (!clearReadUnavailable) clearRead();
-            }}
-            aria-label={t("notifications.clearRead")}
-            aria-disabled={clearReadUnavailable}
-            aria-busy={isDeleting && deletingId == null}
-          >
-            <Trash2 className="size-3.5 shrink-0" aria-hidden />
-            <span className="truncate">
-              {t(
-                isDeleting && deletingId == null
-                  ? "notifications.clearingRead"
-                  : "notifications.clearRead"
-              )}
-            </span>
-          </Button>
-          {/* The one place a reader can turn Discord copies off. The modal owns
-              `?settings=`, so this is a plain link on the current page rather
-              than a second way to open it. */}
-          <PopoverClose asChild>
-            <Link
-              href={`${pathname ?? "/"}?settings=notifications`}
-              className="inline-flex h-auto min-h-8 min-w-0 items-center gap-1.5 rounded-md px-2 text-xs text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
-            >
-              <Settings2 className="size-3.5 shrink-0" aria-hidden />
-              <span className="truncate">{t("notifications.configure")}</span>
-            </Link>
-          </PopoverClose>
-        </div>
+        {/* Icon-only so the actions share the title's row. Disabled buttons drop
+            pointer events, so each tooltip hangs off a wrapper that still
+            receives hover (and the button's bubbling focus). */}
+        <TooltipProvider delayDuration={200}>
+          <div className="ml-auto flex items-center gap-0.5">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="inline-flex">
+                  <Button
+                    static={false}
+                    variant="ghost"
+                    size="icon"
+                    className="size-8 text-muted-foreground hover:bg-accent/60 hover:text-foreground aria-disabled:pointer-events-none aria-disabled:opacity-50"
+                    onClick={() => {
+                      if (!markAllUnavailable) markAllRead();
+                    }}
+                    aria-disabled={markAllUnavailable}
+                    aria-busy={isMarkingRead && markingId == null}
+                  >
+                    <CheckCheck aria-hidden />
+                    <span className="sr-only">{t("notifications.markAllRead")}</span>
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>{t("notifications.markAllRead")}</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="inline-flex">
+                  <Button
+                    static={false}
+                    variant="ghost"
+                    size="icon"
+                    className="size-8 text-muted-foreground hover:bg-destructive/10 hover:text-destructive aria-disabled:pointer-events-none aria-disabled:opacity-50"
+                    onClick={() => {
+                      if (!clearReadUnavailable) clearRead();
+                    }}
+                    aria-disabled={clearReadUnavailable}
+                    aria-busy={isDeleting && deletingId == null}
+                  >
+                    <Trash2 aria-hidden />
+                    <span className="sr-only">{t("notifications.clearRead")}</span>
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>{t("notifications.clearRead")}</TooltipContent>
+            </Tooltip>
+            {/* The one place a reader can turn Discord copies off. The modal owns
+                `?settings=`, so this is a plain link on the current page rather
+                than a second way to open it. */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <PopoverClose asChild>
+                  <Link
+                    href={`${pathname ?? "/"}?settings=notifications`}
+                    className="inline-flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
+                  >
+                    <Settings2 className="size-4" aria-hidden />
+                    <span className="sr-only">{t("notifications.configure")}</span>
+                  </Link>
+                </PopoverClose>
+              </TooltipTrigger>
+              <TooltipContent>{t("notifications.configure")}</TooltipContent>
+            </Tooltip>
+          </div>
+        </TooltipProvider>
       </div>
 
       <div
