@@ -51,6 +51,22 @@ def test_captain_only_match_without_reports_becomes_a_confirmed_game() -> None:
     assert plan.deleted_match_ids == [77]
 
 
+def test_one_report_plus_captain_match_is_confirmed_from_the_match() -> None:
+    plan = plan_games(
+        [
+            LegacyReport(id=1, encounter_id=1, map_id=5, map_index=2, team_id=10, home_score=0, away_score=1, created_at=T0),
+        ],
+        [LegacyCaptainMatch(id=77, encounter_id=1, map_id=5, map_index=2, home_score=1, away_score=0, created_at=T0)],
+        SIDES,
+    )
+    assert plan.conflicts == []
+    [game] = plan.games
+    assert (game.state, game.accepted_home_score, game.accepted_away_score) == ("confirmed", 1, 0)
+    assert game.confirmed_at == T0
+    assert plan.report_keys == {1: (game.key, "home")}
+    assert plan.deleted_match_ids == [77]
+
+
 def test_legacy_zero_index_rows_are_ordered_after_explicit_positions_by_creation() -> None:
     plan = plan_games(
         [

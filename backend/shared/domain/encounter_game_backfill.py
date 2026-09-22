@@ -6,7 +6,9 @@ Inputs are the legacy shapes as they exist BEFORE migration ``encgame01``:
 migration applies verbatim. Rules (spec §13B): explicit ``map_index>0`` is the
 position; legacy index 0 / NULL rows are ordered by creation time AFTER every
 explicit position, one game per distinct map; the same map twice without a
-position is a conflict that aborts the migration; nothing is guessed.
+position is a conflict that aborts the migration; a ``captain_report`` match is
+an accepted result, so it confirms its position whatever the surviving reports
+say; nothing is guessed.
 """
 
 from __future__ import annotations
@@ -231,8 +233,16 @@ def _add_report(
 
 
 def _plan_game(encounter_id: int, position: int, group: _Group, conflicts: list[str]) -> PlannedGame:
-    """4. State from the evidence: agreement confirms, disagreement disputes,
-    a lone claim waits, a captain-only match confirms what it recorded."""
+    """4. State from the evidence.
+
+    A ``captain_report`` match IS an accepted result (spec §13B) -- the old
+    reconciliation only ever wrote one once a result was agreed -- so wherever
+    one exists it confirms the game, whatever the surviving reports say. A lone
+    report that disagrees stays attached as that side's claim and changes
+    nothing; only BOTH sides agreeing on a different score is a contradiction
+    worth aborting for. With no match: agreement confirms, disagreement
+    disputes, a lone claim waits.
+    """
     game = PlannedGame(
         key=(encounter_id, position),
         encounter_id=encounter_id,
@@ -242,22 +252,14 @@ def _plan_game(encounter_id: int, position: int, group: _Group, conflicts: list[
     )
     home = group.reports.get("home")
     away = group.reports.get("away")
-    if home is not None and away is not None:
-        if (home.home_score, home.away_score) == (away.home_score, away.away_score):
-            game.state = "confirmed"
-            game.accepted_home_score = home.home_score
-            game.accepted_away_score = home.away_score
-            game.confirmed_at = max(home.created_at, away.created_at)
-            for match in group.matches:
-                if (match.home_score, match.away_score) != (home.home_score, home.away_score):
-                    conflicts.append(
-                        f"encounter {encounter_id}: position {position} captain match {match.id} says "
-                        f"{match.home_score}-{match.away_score} but both captains agreed "
-                        f"{home.home_score}-{home.away_score}"
-                    )
-        else:
-            game.state = "disputed"
-    elif home is None and away is None and group.matches:
+    agreed: tuple[int, int] | None = None
+    if home is not None and away is not None and (home.home_score, home.away_score) == (
+        away.home_score,
+        away.away_score,
+    ):
+        agreed = (home.home_score, home.away_score)
+
+    if group.matches:
         match = min(group.matches, key=lambda m: (m.created_at, m.id))
         for other in group.matches:
             if (other.home_score, other.away_score) != (match.home_score, match.away_score):
@@ -265,8 +267,20 @@ def _plan_game(encounter_id: int, position: int, group: _Group, conflicts: list[
                     f"encounter {encounter_id}: position {position} has captain matches {match.id} and "
                     f"{other.id} with different scores"
                 )
+        if agreed is not None and agreed != (match.home_score, match.away_score):
+            conflicts.append(
+                f"encounter {encounter_id}: position {position} captain match {match.id} says "
+                f"{match.home_score}-{match.away_score} but both captains agreed {agreed[0]}-{agreed[1]}"
+            )
         game.state = "confirmed"
         game.accepted_home_score = match.home_score
         game.accepted_away_score = match.away_score
         game.confirmed_at = match.created_at
+    elif agreed is not None:
+        game.state = "confirmed"
+        game.accepted_home_score = agreed[0]
+        game.accepted_away_score = agreed[1]
+        game.confirmed_at = max(home.created_at, away.created_at)  # type: ignore[union-attr]
+    elif home is not None and away is not None:
+        game.state = "disputed"
     return game

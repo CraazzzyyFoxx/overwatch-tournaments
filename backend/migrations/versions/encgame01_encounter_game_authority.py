@@ -18,14 +18,17 @@ test rather than inside this file.
 
 What it converts
 ----------------
-* ``encounter_map_report`` rows: two agreeing sides become a ``confirmed`` game,
-  two disagreeing sides a ``disputed`` one, a lone claim ``awaiting_result``.
+* ``encounter_map_report`` rows, where no captain match covers the position: two
+  agreeing sides become a ``confirmed`` game, two disagreeing sides a
+  ``disputed`` one, a lone claim ``awaiting_result``.
 * ``matches.match`` rows with ``source='captain_report'``: these were written by
-  the old ``submit_map_report`` reconciliation purely to carry a score. They are
-  not observations of a log, so they become games and are **deleted** (spec
-  §5.1: a Match is what a log observed, never what the tournament decided). The
-  deleted ids are logged — that log is the dev manifest; production Stage A
-  produces its own.
+  the old ``submit_map_report`` reconciliation purely to carry a score, i.e.
+  only once both captains had agreed, so one IS an accepted result (spec §13B)
+  and confirms its position whatever reports survived beside it. They are not
+  observations of a log, so they become games and are **deleted** (spec §5.1: a
+  Match is what a log observed, never what the tournament decided). The deleted
+  ids are logged — that log is the dev manifest; production Stage A produces its
+  own.
 * ``pick_ban_entry.status='played'`` → ``'picked'``. "Played" is now the game's
   state, not the pick's. The ``played`` label stays on the PostgreSQL type
   ``tournament.pickbanentrystatus``: PostgreSQL cannot drop an enum label, and
