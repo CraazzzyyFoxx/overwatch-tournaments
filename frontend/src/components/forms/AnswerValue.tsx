@@ -5,8 +5,7 @@ import { Check, ExternalLink, Minus } from "lucide-react";
 
 import DivisionIcon from "@/components/DivisionIcon";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
-import { useDivisionGrid } from "@/hooks/useCurrentWorkspace";
-import { resolveDivisionFromRank } from "@/lib/division-grid";
+import { OW_REFERENCE_GRID, resolveDivisionFromRank } from "@/lib/division-grid";
 import { ROLE_LABELS, ROLES } from "@/lib/roles";
 import type { FieldKind } from "@/types/forms.types";
 
@@ -18,11 +17,10 @@ import type { FieldKind } from "@/types/forms.types";
  * document off the same schema, and a second copy of this switch would drift
  * the moment a kind is added.
  *
- * `AnswerValue` itself is hook-free, with the boolean wording passed in: the
+ * `AnswerValue` is hook-free, with the boolean wording passed in: the
  * public roster sits inside a next-intl provider and the admin table renders
  * plain English, and next-intl's translator type is keyed on the message
  * catalogue so it cannot be widened to a plain `(key: string) => string` here.
- * The one child that needs the workspace's division grid reads it itself.
  */
 export interface AnswerValueProps {
   value: unknown;
@@ -51,15 +49,19 @@ function roleRank(code: string): number {
  * One `role_ranks` answer as chips: role glyph, division crest, SR. The glyph
  * and the crest carry the role and division names for assistive tech, so the
  * number is the only text — the same reading the roster's roles column gives.
- * The SR is on the workspace scale, so the workspace grid resolves the crest.
+ *
+ * Crested off the PLATFORM grid, never the workspace's, exactly like the
+ * `RoleRanksField` that captured it: what the registrant typed is their
+ * Overwatch SR, and 3200 is Diamond 3 on the ladder no matter what a workspace
+ * calls its 14th division. Reading it through the workspace grid renamed every
+ * answer under the registrant.
  */
 function RoleRankChips({ entries }: Readonly<{ entries: [string, unknown][] }>) {
-  const grid = useDivisionGrid();
   return (
     <span className="flex flex-wrap gap-1">
       {entries.map(([role, rank]) => {
         const sr = Number(rank);
-        const division = Number.isFinite(sr) ? resolveDivisionFromRank(grid, sr) : null;
+        const division = Number.isFinite(sr) ? resolveDivisionFromRank(OW_REFERENCE_GRID, sr) : null;
         const icon = ROLES.find((def) => def.code === role)?.icon ?? null;
         return (
           <span key={role} className={`${CHIP} gap-1`}>
@@ -69,7 +71,13 @@ function RoleRankChips({ entries }: Readonly<{ entries: [string, unknown][] }>) 
               <span>{ROLE_LABELS[role] ?? role}</span>
             )}
             {division != null ? (
-              <DivisionIcon division={division} width={18} height={18} className="shrink-0" />
+              <DivisionIcon
+                division={division}
+                tournamentGrid={OW_REFERENCE_GRID}
+                width={18}
+                height={18}
+                className="shrink-0"
+              />
             ) : null}
             <span className="tabular-nums">{String(rank)}</span>
           </span>
