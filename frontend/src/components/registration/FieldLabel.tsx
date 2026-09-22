@@ -38,12 +38,13 @@ export default function FieldLabel({
       {icon ? <span className="flex shrink-0 items-center justify-center">{icon}</span> : null}
       <span className="text-label font-medium uppercase tracking-label text-[color:var(--aqt-fg-muted)]">
         {label}
+        {required && (
+          <span className="ml-0.5 text-destructive">
+            <span aria-hidden="true">*</span>
+            <span className="sr-only">{t("common.required")}</span>
+          </span>
+        )}
       </span>
-      {required && (
-        <span className="rounded-full border border-warning/25 bg-warning/10 px-1.5 py-0.5 text-label font-medium uppercase tracking-wide text-warning">
-          {t("common.required")}
-        </span>
-      )}
     </Tag>
   );
 }
