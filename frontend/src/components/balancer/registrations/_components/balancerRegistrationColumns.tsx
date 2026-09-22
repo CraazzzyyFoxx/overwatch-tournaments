@@ -44,7 +44,7 @@ import { identityProvider } from "@/lib/forms/builtin-keys";
 export const BUILTIN_ANSWER_LABELS: Record<string, string> = {
   smurf_tags: "Smurfs",
   stream_pov: "Stream POV",
-  reserve: "Reserve",
+  reserve: "On call",
   public_notes: "Notes",
   organizer_notes: "Organizer Notes",
   identity_discord: "Discord",
@@ -277,14 +277,13 @@ function ReviewedCell({ registration }: Readonly<{ registration: AdminRegistrati
 }
 
 /**
- * "This player agreed to be a substitute" — CONSENT, not a pool verdict.
+ * "Call me in if somebody drops or I cannot make the start" — the registrant's
+ * own availability note, not a pool verdict.
  *
  * It rides beside the balancer chip rather than replacing it because the two
- * answer different questions: a reserve is deliberately left out of the pool
- * until an organizer pulls them in, so the balancer chip says `not_in_balancer`
- * for a reserve and for a row nobody has got to yet alike. Folding them into one
- * chip would erase exactly the distinction an organizer looking for a
- * replacement needs.
+ * answer different questions: the chip says where the row stands in the pool,
+ * this says who the organizer can ring when a slot opens up mid-tournament. A
+ * player wearing it plays like anybody else.
  */
 function ReserveBadge() {
   const t = useTranslations();
@@ -484,10 +483,9 @@ export function buildBalancerRegistrationColumns(
       accessorFn: (registration) => registration.balancer_status || "",
       sortingFn: localeTextSort,
       // Two axes on ONE chip, deliberately: `included`/`excluded` is the pool
-      // verdict, `reserve`/`not_reserve` is the registrant's consent to be cover.
-      // They are not alternatives — every reserve is also out of the pool — so a
-      // reserve must not be answerable by the pool clause, or "who agreed to sub
-      // in" would return every unprocessed row alongside the volunteers.
+      // verdict, `reserve`/`not_reserve` is the registrant's own "you can call
+      // me in". They are independent — a player who offered is in the pool like
+      // anybody else — so the offer must not be answerable by the pool clause.
       filterFn: (row: Row<AdminRegistration>, _columnId: string, values: string[]) => {
         const [value] = values;
         if (!value) {
@@ -521,8 +519,8 @@ export function buildBalancerRegistrationColumns(
           options: [
             { value: "included", label: "Included" },
             { value: "excluded", label: "Excluded" },
-            { value: "reserve", label: "Reserve" },
-            { value: "not_reserve", label: "Not reserve" },
+            { value: "reserve", label: "On call" },
+            { value: "not_reserve", label: "Not on call" },
           ],
         },
         searchValue: (registration) =>

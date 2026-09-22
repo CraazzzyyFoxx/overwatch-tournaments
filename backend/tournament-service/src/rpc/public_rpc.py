@@ -121,7 +121,7 @@ from src.services.registration import subscription_config
 from src.services.registration import teams as team_service
 from src.services.registration.admission import assert_admitted_at
 from src.services.registration.answers import answer_service
-from src.services.registration.self_edit import SelfEditPolicy, self_edit_policy
+from src.services.registration.self_edit import SelfEditPolicy, self_edit_policy, submitted_late
 from src.services.registration.serializers import serialize_registration_form
 from src.services.registration.subscription_codes import redeem_challenge_code
 from src.services.registration.subscription_status import (
@@ -139,21 +139,23 @@ async def _require_tournament(session: Any, tournament_id: int) -> models.Tourna
     return tournament
 
 
-async def _self_edit_policy(
+async def _me_read_context(
     session: Any,
     registration: models.BalancerRegistration,
     tournament_id: int,
     form: models.BalancerRegistrationForm | None,
-) -> SelfEditPolicy | None:
-    """The caller's own edit rights, for their own registration read.
+) -> tuple[SelfEditPolicy | None, bool]:
+    """``(edit rights, signed up late)`` for the caller's own registration read.
 
-    ``None`` when there is no form or no schema to consult: the read then reports
-    ``can_edit=False``, which is the truth -- there are no questions to rewrite.
+    Both answers need the tournament's phase schedule, so they share ONE read of
+    it. The policy is ``None`` when there is no form or no schema to consult: the
+    read then reports ``can_edit=False``, which is the truth -- there are no
+    questions to rewrite.
     """
+    tournament = await _require_tournament(session, tournament_id)
     schema = schema_from_form(form)
-    if schema is None:
-        return None
-    return self_edit_policy(registration, await _require_tournament(session, tournament_id), schema)
+    policy = self_edit_policy(registration, tournament, schema) if schema is not None else None
+    return policy, submitted_late(registration, tournament)
 
 
 def _subscription_resolver(session: Any) -> Any:
@@ -585,6 +587,7 @@ def register(broker: Any, logger: Any) -> None:
                 form.workspace_id if form is not None else await _resolve_tournament_workspace(session, tournament_id)
             )
             status_meta_map = await get_status_metas_map(session, workspace_id=workspace_id)
+            policy, late = await _me_read_context(session, reg, tournament_id, form)
             return _dump(
                 _reg_to_read(
                     reg,
@@ -600,7 +603,8 @@ def register(broker: Any, logger: Any) -> None:
                     # The registrant's OWN card: no public-key filter (they wrote
                     # every answer), but it must say when the questions moved on.
                     current_version_id=form.current_version_id if form is not None else None,
-                    self_edit=await _self_edit_policy(session, reg, tournament_id, form),
+                    self_edit=policy,
+                    submitted_late=late,
                 )
             )
 
@@ -665,6 +669,7 @@ def register(broker: Any, logger: Any) -> None:
                 form_version_id=form.current_version_id,
             )
             status_meta_map = await get_status_metas_map(session, workspace_id=form.workspace_id)
+            policy, late = await _me_read_context(session, updated, tournament_id, form)
             return _dump(
                 _reg_to_read(
                     updated,
@@ -674,7 +679,8 @@ def register(broker: Any, logger: Any) -> None:
                     roster=(await _public_rosters(session, [updated])).get(updated.id),
                     queue=await reg_service.registration_service.queue_position(session, updated),
                     current_version_id=form.current_version_id,
-                    self_edit=await _self_edit_policy(session, updated, tournament_id, form),
+                    self_edit=policy,
+                    submitted_late=late,
                 )
             )
 
@@ -740,6 +746,7 @@ def register(broker: Any, logger: Any) -> None:
             )
             workspace_id = await _resolve_tournament_workspace(session, tournament_id)
             status_meta_map = await get_status_metas_map(session, workspace_id=workspace_id)
+            policy, late = await _me_read_context(session, checked_in, tournament_id, form)
             return _dump(
                 _reg_to_read(
                     checked_in,
@@ -751,7 +758,8 @@ def register(broker: Any, logger: Any) -> None:
                     current_version_id=form.current_version_id if form is not None else None,
                     # Now ``checked_in``, so the card's Edit affordance turns off with
                     # a reason instead of silently vanishing on the next refetch.
-                    self_edit=await _self_edit_policy(session, checked_in, tournament_id, form),
+                    self_edit=policy,
+                    submitted_late=late,
                 )
             )
 

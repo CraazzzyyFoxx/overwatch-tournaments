@@ -1,6 +1,12 @@
+"use client";
+
 import type { ReactNode } from "react";
 import { Check, ExternalLink, Minus } from "lucide-react";
 
+import DivisionIcon from "@/components/DivisionIcon";
+import PlayerRoleIcon from "@/components/PlayerRoleIcon";
+import { useDivisionGrid } from "@/hooks/useCurrentWorkspace";
+import { resolveDivisionFromRank } from "@/lib/division-grid";
 import { ROLE_LABELS, ROLES } from "@/lib/roles";
 import type { FieldKind } from "@/types/forms.types";
 
@@ -12,10 +18,11 @@ import type { FieldKind } from "@/types/forms.types";
  * document off the same schema, and a second copy of this switch would drift
  * the moment a kind is added.
  *
- * Deliberately hook-free, with the boolean wording passed in: the public roster
- * sits inside a next-intl provider and the admin table renders plain English,
- * and next-intl's translator type is keyed on the message catalogue so it
- * cannot be widened to a plain `(key: string) => string` here.
+ * `AnswerValue` itself is hook-free, with the boolean wording passed in: the
+ * public roster sits inside a next-intl provider and the admin table renders
+ * plain English, and next-intl's translator type is keyed on the message
+ * catalogue so it cannot be widened to a plain `(key: string) => string` here.
+ * The one child that needs the workspace's division grid reads it itself.
  */
 export interface AnswerValueProps {
   value: unknown;
@@ -38,6 +45,38 @@ const CHIP =
 function roleRank(code: string): number {
   const index = ROLES.findIndex((role) => role.code === code);
   return index < 0 ? ROLES.length : index;
+}
+
+/**
+ * One `role_ranks` answer as chips: role glyph, division crest, SR. The glyph
+ * and the crest carry the role and division names for assistive tech, so the
+ * number is the only text — the same reading the roster's roles column gives.
+ * The SR is on the workspace scale, so the workspace grid resolves the crest.
+ */
+function RoleRankChips({ entries }: Readonly<{ entries: [string, unknown][] }>) {
+  const grid = useDivisionGrid();
+  return (
+    <span className="flex flex-wrap gap-1">
+      {entries.map(([role, rank]) => {
+        const sr = Number(rank);
+        const division = Number.isFinite(sr) ? resolveDivisionFromRank(grid, sr) : null;
+        const icon = ROLES.find((def) => def.code === role)?.icon ?? null;
+        return (
+          <span key={role} className={`${CHIP} gap-1`}>
+            {icon ? (
+              <PlayerRoleIcon role={icon} size={14} label={ROLE_LABELS[role] ?? role} />
+            ) : (
+              <span>{ROLE_LABELS[role] ?? role}</span>
+            )}
+            {division != null ? (
+              <DivisionIcon division={division} width={18} height={18} className="shrink-0" />
+            ) : null}
+            <span className="tabular-nums">{String(rank)}</span>
+          </span>
+        );
+      })}
+    </span>
+  );
 }
 
 export function AnswerValue({
@@ -70,15 +109,7 @@ export function AnswerValue({
       .filter(([, rank]) => rank !== null && rank !== undefined && rank !== "")
       .sort(([a], [b]) => roleRank(a) - roleRank(b));
     if (entries.length === 0) return EMPTY;
-    return (
-      <span className="flex flex-wrap gap-1">
-        {entries.map(([role, rank]) => (
-          <span key={role} className={CHIP}>
-            {ROLE_LABELS[role] ?? role} {String(rank)}
-          </span>
-        ))}
-      </span>
-    );
+    return <RoleRankChips entries={entries} />;
   }
 
   // A checkbox that round-tripped through a form encoding arrives as the string

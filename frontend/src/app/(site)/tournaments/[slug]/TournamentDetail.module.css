@@ -808,6 +808,17 @@
   overflow-wrap: anywhere;
 }
 
+/* A question label is the organizer's own sentence, often a full line or
+   three: it reads as written, not as a tracked all-caps heading. Only the
+   section headings above keep the label treatment. */
+.participantHiddenField > .participantDetailLabel {
+  font-family: inherit;
+  font-weight: 500;
+  letter-spacing: normal;
+  line-height: 1.4;
+  text-transform: none;
+}
+
 .participantDetailLabel {
   color: var(--aqt-fg-dim);
   font-family: var(--aqt-data);

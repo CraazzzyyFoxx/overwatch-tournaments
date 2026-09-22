@@ -40747,6 +40747,11 @@
           "default": null,
           "title": "Submitted At"
         },
+        "submitted_late": {
+          "default": false,
+          "title": "Submitted Late",
+          "type": "boolean"
+        },
         "subscription_outcome": {
           "anyOf": [
             {

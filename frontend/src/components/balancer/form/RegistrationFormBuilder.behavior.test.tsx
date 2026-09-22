@@ -387,7 +387,7 @@ describe("registration form builder", () => {
     await mount();
 
     // The palette lists every builtin this form does not already ask for.
-    await menuItem("Add question", "Reserve");
+    await menuItem("Add question", "On call");
     // Adding a question selects it, so the panel below belongs to `reserve`.
     await click(labelled("Allow changes after submitting"));
 

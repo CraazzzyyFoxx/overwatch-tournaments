@@ -1,27 +1,34 @@
 #!/bin/bash
-# Weekly disk cleanup for the production host (Moscow, msk-1-vm-15za).
+# Daily disk cleanup for the production host (Moscow, msk-1-vm-15za).
 #
-# What actually fills the disk there and isn't bounded by anything else:
-#   - Docker's default json-file log driver has no size cap anywhere in
-#     docker-compose.production.yml, and every Python service also mirrors its
-#     structured logs to stderr (backend/shared/observability/logging.py) on
-#     top of its own rotated file under ./logs/<service> — so container
-#     stdout/stderr logs under /var/lib/docker/containers/*/*-json.log grow
-#     unbounded even though the app's own log files rotate fine.
+# What fills the disk there and isn't bounded by anything else:
 #   - Every release tags a NEW image (ops/deploy/remote-deploy.sh only prunes
 #     DANGLING layers on purpose, to keep past releases available for a fast
 #     rollback) — old release images past the rollback window are dead weight.
 #   - Build cache from an occasional `make prod-build` (hotfix path).
-# This script reclaims all three. It does not touch volumes or bind-mounted
-# app data: nothing here is a data-loss risk.
+#   - Container json-file logs. Since the `x-logging` anchor in
+#     docker-compose.{production,monitoring}.yml every service caps its own at
+#     50 MiB x 3, rotated by the daemon — the truncation step below is now only
+#     a backstop for containers created before that (they keep the old,
+#     uncapped driver until they are recreated) and for anything started
+#     outside those two compose files.
+# It does not touch volumes or bind-mounted app data: nothing here is a
+# data-loss risk.
 #
-# Prod (Moscow) crontab:
-#   0 5 * * 0 /root/disk-cleanup/cleanup.sh >> /var/log/disk-cleanup.log 2>&1
+# Prod (Moscow) crontab — the REPO copy, so every deploy updates it and there
+# is no hand-copied snapshot to go stale. DAILY, not weekly: at three releases
+# in a day (2026-09-21) a week's worth of dead images is ~30 GB on a 77 GB disk.
+#   15 5 * * * /root/overwatch-tournaments/ops/cleanup/cleanup.sh >> /var/log/disk-cleanup.log 2>&1
 set -euo pipefail
 
 # Unused (not attached to any container, running or stopped) images older than
-# this keep no rollback value. 14 days covers "roll back to last week's release".
-IMAGE_RETENTION="${IMAGE_RETENTION:-336h}"
+# this keep no rollback value. 72h, not the 14 days this started with: that box
+# ran out of disk at 147 images / 56 GB in /var/lib/containerd (2026-09-21),
+# because a full release set is ~9 GB unpacked and releases land several times
+# a day. Rolling back further than 72h still works — `docker compose pull
+# --policy missing` in ops/deploy/remote-deploy.sh re-pulls what is gone — it
+# just costs the download instead of a local restart.
+IMAGE_RETENTION="${IMAGE_RETENTION:-72h}"
 BUILD_CACHE_RETENTION="${BUILD_CACHE_RETENTION:-168h}"
 # Container json-file logs above this size get truncated in place. Docker
 # keeps writing to the same (now-empty) inode -- this is the documented
@@ -32,7 +39,9 @@ DOCKER_CONTAINERS_DIR="${DOCKER_CONTAINERS_DIR:-/var/lib/docker/containers}"
 echo "=== $(date -u +%FT%TZ) disk cleanup start"
 echo "-- disk usage before:"
 df -h / 2>/dev/null || true
-docker system df
+# Reporting only: `set -e` must not abort the reclaim because `df`/`system df`
+# hiccuped. A real docker failure still stops the script at the prunes below.
+docker system df || true
 
 echo "-- truncating oversized container logs (> $((MAX_LOG_BYTES / 1024 / 1024)) MiB)"
 if [ -d "$DOCKER_CONTAINERS_DIR" ]; then
@@ -59,5 +68,5 @@ docker builder prune -af --filter "until=${BUILD_CACHE_RETENTION}"
 
 echo "-- disk usage after:"
 df -h / 2>/dev/null || true
-docker system df
+docker system df || true
 echo "=== $(date -u +%FT%TZ) disk cleanup ok"

@@ -1,14 +1,15 @@
-"""Who may rewrite a registration's answers, and who is a reserve.
+"""Who may rewrite a registration's answers, and what the ``reserve`` answer is.
 
-Two rules meet here and both are refusals, which is why they are pinned:
+Two rules meet here and both are pinned:
 
 * **Editing is an allowlist.** ``FormField.editable`` is off by default, so a
-  form nobody re-opened in the builder keeps every answer frozen. Three keys are
+  form nobody re-opened in the builder keeps every answer frozen. Two keys are
   floored regardless of the flag, and one exception (a question never answered)
   opens in the other direction.
-* **A late sign-up is cover, not a starter.** Past the registration window's
-  ``ends_at`` the server writes ``is_reserve`` whatever the checkbox said, and
-  the registrant cannot untick it afterwards.
+* **``reserve`` is the registrant's own availability note** -- "I play, and you
+  can call me in if somebody drops or I cannot make the start". Nothing writes
+  it on their behalf and nothing acts on it: a late sign-up is marked late, and
+  a pool sweep enrols an on-call player like anybody else.
 
 Runs under stdlib unittest -- no pytest-asyncio in this repo.
 """
@@ -161,14 +162,14 @@ class PolicyTests(TestCase):
             "roles" not in self_edit_policy(_registration(registration_team_id=3), _tournament(), opened).writable_keys
         )
 
-    def test_a_late_registrant_cannot_untick_their_reserve_flag(self) -> None:
-        """The flag was imposed by the schedule, so unticking it would be a
-        one-click promotion into the main field."""
+    def test_a_late_registrant_still_owns_their_on_call_answer(self) -> None:
+        """The schedule marks the entry late; it never speaks for the player.
+        Locking this was the counterpart of the write that forced it on."""
         opened = _schema(editable_keys=frozenset({"reserve"}))
         late = _tournament(ends_in=-timedelta(days=3))
 
         assert "reserve" in self_edit_policy(_registration(), _tournament(), opened).writable_keys
-        assert "reserve" not in self_edit_policy(_registration(), late, opened).writable_keys
+        assert "reserve" in self_edit_policy(_registration(), late, opened).writable_keys
 
 
 class _RecordingSession:
@@ -241,7 +242,10 @@ class WritePathTests(IsolatedAsyncioTestCase):
         assert caught.exception.status_code == 409
         assert [(item["field"], item["code"]) for item in caught.exception.detail] == [("battle_tag", "locked")]
 
-    async def test_a_late_sign_up_is_a_reserve_whatever_the_answer_said(self) -> None:
+    async def test_a_late_sign_up_answers_nothing_on_the_registrants_behalf(self) -> None:
+        """The schedule marks the entry late; it does not tick a question for
+        them. Writing ``is_reserve`` here made the roster claim the player had
+        volunteered to be called in when they never said so."""
         session = _RecordingSession()
         with (
             mock.patch.object(reg_service.registration_service, "ensure_player_identity", _noop),
@@ -257,10 +261,9 @@ class WritePathTests(IsolatedAsyncioTestCase):
                 values={"battle_tag": "Player#1234", "reserve": False},
                 schema=_schema(),
                 form_version_id=3,
-                force_reserve=True,
             )
 
-        assert registration.is_reserve is True
+        assert registration.is_reserve is False
 
     async def test_an_on_time_sign_up_keeps_its_own_answer(self) -> None:
         session = _RecordingSession()
@@ -285,12 +288,11 @@ class WritePathTests(IsolatedAsyncioTestCase):
 
 
 class PoolSweepTests(TestCase):
-    def test_a_sweep_never_promotes_a_reserve(self) -> None:
-        """A reserve asked to be cover; only a deliberate single-row add enrols
-        them, which is the organizer's "we need a sub" action."""
-        reserve = _registration(is_reserve=True)
+    def test_the_on_call_answer_changes_nothing_about_a_sweep(self) -> None:
+        """The answer says "you can ring me", not "leave me out": holding these
+        rows back from the pool was the whole misreading. Same inputs, same
+        verdict, whichever way the switch was set."""
+        on_call = _rank_autofill_balancer_addition(_registration(is_reserve=True), [], add_to_balancer=True)
+        plain = _rank_autofill_balancer_addition(_registration(is_reserve=False), [], add_to_balancer=True)
 
-        added, reason = _rank_autofill_balancer_addition(reserve, [], add_to_balancer=True)
-
-        assert added is False
-        assert "reserve" in (reason or "")
+        assert on_call == plain

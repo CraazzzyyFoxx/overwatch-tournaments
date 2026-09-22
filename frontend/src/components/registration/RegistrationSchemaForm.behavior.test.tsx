@@ -369,7 +369,7 @@ describe("RegistrationSchemaForm editing an existing registration", () => {
 
 describe("RegistrationSchemaForm on a late sign-up", () => {
   /** The window's `ends_at` is behind us; `allow_late_registration` is the only
-   *  reason this form is open, so the server files the entry as cover. */
+   *  reason this form is open, so the entry is marked as a late one. */
   const LATE_FORM = {
     ...FORM,
     registration_late: true,
@@ -388,8 +388,9 @@ describe("RegistrationSchemaForm on a late sign-up", () => {
     },
   } as unknown as RegistrationForm;
 
-  it("warns before the submit and sends the reserve flag nobody ticked", async () => {
-    // A player who learns this only after submitting reads it as a bug.
+  it("warns before the submit and answers nothing on the player's behalf", async () => {
+    // A player who learns the mark only after submitting reads it as a bug --
+    // and the `reserve` question stays theirs, untouched and unticked.
     testWindow.localStorage.clear();
     let submitted: { answers: Record<string, unknown> } | null = null;
     container = testWindow.document.createElement("div");
@@ -412,9 +413,6 @@ describe("RegistrationSchemaForm on a late sign-up", () => {
     });
 
     expect(container.textContent).toContain("registration.reserve.lateNotice");
-    // The switch is forced ON and read-only: the schedule overrules the answer,
-    // so letting it be un-ticked would promise a main-field slot.
-    expect(container.textContent).toContain("registration.reserve.lateLocked");
 
     const buttons = container.querySelectorAll("button");
     await act(async () => {
@@ -422,15 +420,14 @@ describe("RegistrationSchemaForm on a late sign-up", () => {
         new testWindow.MouseEvent("click", { bubbles: true }) as unknown as Event,
       );
     });
-    expect(submitted?.answers.reserve).toBe(true);
+    expect(submitted?.answers.reserve).not.toBe(true);
   });
 
-  it("says nothing about a reserve while the window is still open", async () => {
+  it("says nothing while the window is still open", async () => {
     testWindow.localStorage.clear();
     mountForm({ form: { ...LATE_FORM, registration_late: false } as unknown as RegistrationForm });
 
     expect(container.textContent).not.toContain("registration.reserve.lateNotice");
-    expect(container.textContent).not.toContain("registration.reserve.lateLocked");
   });
 });
 

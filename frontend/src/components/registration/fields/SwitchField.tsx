@@ -28,7 +28,8 @@ const FALLBACK_COPY = {
 } as const;
 
 /** The boolean builtins: `stream_pov` ("I can provide a POV stream") and
- *  `reserve` ("call me in if a replacement is needed"). */
+ *  `reserve` ("you can call me in if somebody drops or I cannot make the
+ *  start"). */
 export default function SwitchField({
   field,
   value,

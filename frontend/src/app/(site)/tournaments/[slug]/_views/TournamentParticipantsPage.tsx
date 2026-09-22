@@ -23,7 +23,6 @@ import {
   ShieldBan,
   X,
   XCircle,
-  Tv,
   ChevronDown,
   ChevronUp,
   EyeOff,
@@ -58,7 +57,7 @@ import { normalizePlayerRole, playerRoleSlotCode } from "@/lib/player-role";
 import { reachedAtLeast } from "@/lib/tournament-lifecycle";
 import { isPhaseWindowActive } from "@/lib/tournament-status";
 import { answerFlag, answerText } from "@/lib/forms/answers";
-import { IDENTITY_PROVIDERS, identityKey } from "@/lib/forms/builtin-keys";
+import { IDENTITY_PROVIDERS, identityKey, identityProvider } from "@/lib/forms/builtin-keys";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
 import { tournamentQueryKeys } from "@/lib/tournament-query-keys";
 import { getApiErrorMessage } from "@/lib/api-error";
@@ -77,7 +76,8 @@ import ColumnPicker from "./_components/ColumnPicker";
 import {
   buildParticipantColumns,
   getRoleLabel,
-  useHeroesMap
+  useHeroesMap,
+  type ColumnDefinition
 } from "./_components/participantsColumns";
 import ParticipantsPool, { poolDivisionOptions } from "./_components/ParticipantsPool";
 import { RegistrationSummary, ROLE_TINT } from "./_components/RegistrationSummary";
@@ -338,6 +338,14 @@ function RegistrationRoleChip({
 const QUEUE_CHIP_CLASS =
   "rounded-full border border-[color:var(--aqt-border)] bg-[color:var(--aqt-overlay-2)] px-1.5 py-px text-label font-semibold tabular-nums text-[color:var(--aqt-fg-muted)]";
 
+/** Answers the card lays out by hand — chips for roles, brand chips for the
+ *  handles, a quote for the notes — so the generic details block skips them. */
+const CARD_OWN_COLUMN_IDS: Record<string, true> = {
+  battle_tag: true,
+  roles: true,
+  public_notes: true
+};
+
 function MyRegistrationCard({
   registration,
   canCheckIn,
@@ -346,7 +354,8 @@ function MyRegistrationCard({
   isCheckingIn,
   isWithdrawing,
   tournament,
-  form
+  form,
+  columns
 }: Readonly<{
   registration: Registration;
   canCheckIn: boolean;
@@ -358,6 +367,11 @@ function MyRegistrationCard({
   /** The CURRENT form. Self-edit needs its schema and version id, so the Edit
    *  action waits for it even when the server already said `can_edit`. */
   form: RegistrationForm | null;
+  /** The roster's column model, UNFILTERED: it is one column per public
+   *  question with the renderer the roster's own details panel uses, so the
+   *  card shows the same answers the same way. Organizer-surface columns stay
+   *  in — smurf tags are the reader's own answer here. */
+  columns: readonly ColumnDefinition[];
 }>) {
   const t = useTranslations();
   const tSlot = useTranslations("rosterShape.slotCodes");
@@ -449,8 +463,9 @@ function MyRegistrationCard({
     !canEdit && registration.edit_locked_reason !== "nothing_editable"
       ? registration.edit_locked_reason
       : null;
-  // A reserve plays only if somebody drops out, so it is a fact about this
-  // entry, not a status: it rides `answers` like any other public answer.
+  // An availability note the registrant volunteered ("call me in if somebody
+  // drops or I cannot make the start"), not a pool state: it rides `answers`
+  // like any other public answer and changes nothing about the entry.
   const isReserve = answerFlag(registration.answers, "reserve");
   // D3: `ready` is the server's own "the data is complete" — approved AND holding
   // a rank in the balancer pool. It is deliberately NOT a requirement and is
@@ -626,8 +641,16 @@ function MyRegistrationCard({
   // Public answers only: this read is stripped against the registration's own
   // form version, so an organizers-only answer is not merely empty here, it is
   // absent — and nothing below may render a placeholder for one.
-  const streamPov = answerFlag(registration.answers, "stream_pov");
   const publicNotes = answerText(registration.answers, "public_notes");
+  // Every question the form asks that the card does not lay out by hand, in
+  // form order: meta columns are the roster's own state (status, check-in,
+  // history) and already live in the header and the stepper above.
+  const detailColumns = columns.filter(
+    (column) =>
+      column.category !== "meta" &&
+      !CARD_OWN_COLUMN_IDS[column.id] &&
+      identityProvider(column.id) === null
+  );
 
   return (
     <div className="relative overflow-hidden rounded-xl border border-[color:var(--aqt-border)] bg-[color:var(--aqt-overlay-1)] shadow-md backdrop-blur-md">
@@ -705,9 +728,18 @@ function MyRegistrationCard({
               {isReserve ? (
                 <span
                   data-registration-reserve="true"
-                  className="rounded-full border border-[color:color-mix(in_srgb,var(--aqt-amber)_35%,transparent)] bg-[color:color-mix(in_srgb,var(--aqt-amber)_12%,transparent)] px-1.5 py-px text-label font-semibold uppercase tracking-label text-[color:var(--aqt-amber)]"
+                  className="rounded-full border border-[color:color-mix(in_srgb,var(--aqt-blue)_35%,transparent)] bg-[color:color-mix(in_srgb,var(--aqt-blue)_12%,transparent)] px-1.5 py-px text-label font-semibold uppercase tracking-label text-[color:var(--aqt-blue)]"
                 >
                   {t("registration.reserve.badge")}
+                </span>
+              ) : null}
+              {registration.submitted_late ? (
+                <span
+                  data-registration-late="true"
+                  title={t("tournamentDetail.participants.lateHint")}
+                  className="rounded-full border border-[color:var(--aqt-border)] px-1.5 py-px text-label font-semibold uppercase tracking-label text-[color:var(--aqt-fg-muted)]"
+                >
+                  {t("tournamentDetail.participants.lateBadge")}
                 </span>
               ) : null}
             </div>
@@ -715,15 +747,12 @@ function MyRegistrationCard({
               {statusName}
             </h3>
             <p className={cn("mt-0.5 text-xs", hintClass)}>{hintText}</p>
-            {/* Why they are in the reserve, not just that they are. The late
-                variant is the server's own decision stated plainly: past the
-                window's `ends_at` every sign-up is written as cover, and the
-                form read is what reports that the window is behind us. */}
+            {/* What the registrant volunteered, in their own words: they play,
+                and they are fine being called in. Info tone, never the amber
+                warning it used to wear — nothing here needs fixing. */}
             {isReserve ? (
-              <p className="mt-0.5 text-xs text-[color:var(--aqt-amber)]">
-                {form?.registration_late === true
-                  ? t("registration.reserve.lateImposed")
-                  : t("registration.reserve.explainer")}
+              <p className="mt-0.5 text-xs text-[color:var(--aqt-blue)]">
+                {t("registration.reserve.explainer")}
               </p>
             ) : null}
           </div>
@@ -853,7 +882,8 @@ function MyRegistrationCard({
         ))}
       </div>
 
-      {/* Expanded details: even groups in one row, notes as a quote below */}
+      {/* Expanded details: the hand-laid groups in one row, every other answer
+          as a label/value list below, notes as a quote last */}
       {isExpanded && (
         <div className="border-t border-[color:var(--aqt-border)] bg-[color:var(--aqt-overlay-1)] p-4 sm:px-5">
           <div className="grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -941,32 +971,27 @@ function MyRegistrationCard({
                 })}
               </div>
             </div>
-
-            {/* Only when the form asks it: `stream_pov` is public, so the key is
-                present on every read of a registration that was asked — and
-                absent on one that was not, where "will not stream" would be an
-                answer nobody gave. */}
-            {"stream_pov" in (registration.answers ?? {}) && (
-              <div className="space-y-2">
-                <h4 className="text-label font-semibold uppercase tracking-label text-[color:var(--aqt-fg-dim)]">
-                  {t("registration.details.streamPov")}
-                </h4>
-                <span
-                  className={cn(
-                    "inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium",
-                    streamPov
-                      ? "border-[color:color-mix(in_srgb,var(--aqt-emerald)_20%,transparent)] bg-[color:color-mix(in_srgb,var(--aqt-emerald)_10%,transparent)] text-[color:var(--aqt-emerald)]"
-                      : "border-[color:var(--aqt-border)] bg-[color:var(--aqt-overlay-1)] text-[color:var(--aqt-fg-dim)]"
-                  )}
-                >
-                  <Tv className="size-3.5" aria-hidden />
-                  {streamPov
-                    ? t("registration.myCard.streamPovActive")
-                    : t("registration.myCard.streamPovInactive")}
-                </span>
-              </div>
-            )}
           </div>
+
+          {detailColumns.length > 0 ? (
+            <div className="mt-4 space-y-2">
+              <h4 className="text-label font-semibold uppercase tracking-label text-[color:var(--aqt-fg-dim)]">
+                {t("registration.myCard.details")}
+              </h4>
+              <dl className="grid grid-cols-1 gap-x-8 gap-y-3 sm:grid-cols-2 lg:grid-cols-3">
+                {detailColumns.map((column) => (
+                  <div key={column.id} className="min-w-0 space-y-1">
+                    <dt className="text-label font-medium leading-snug text-[color:var(--aqt-fg-dim)]">
+                      {column.label}
+                    </dt>
+                    <dd className="flex flex-wrap text-xs text-[color:var(--aqt-fg)]">
+                      {column.render(registration, 0)}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+          ) : null}
 
           {publicNotes ? (
             <div className="mt-4 space-y-1.5">
@@ -1120,17 +1145,24 @@ function TournamentParticipantsView({ tournament }: Readonly<{ tournament: Tourn
   // carries no team-registration flag.
   const hasTeams = useMemo(() => registrations.some((reg) => reg.team != null), [registrations]);
 
-  // Dynamic columns. Organizer-only columns are dropped from the config here,
-  // which is the single place the table, the search and the column picker all
-  // read — a per-cell blank would still leak the column heading and the filter.
+  // Dynamic columns. Built once; the organizer-only columns are dropped from
+  // the ROSTER config here, which is the single place the table, the search and
+  // the column picker all read — a per-cell blank would still leak the column
+  // heading and the filter. The card gets the unfiltered model: those columns
+  // are the reader's own answers there.
   const { canAccessPermission } = usePermissions();
   const canReadOrganizerColumns = canAccessPermission("registration.read", tournament.workspace_id);
-  const allColumns = useMemo(() => {
-    const columns = buildParticipantColumns(form, t, locale, divisionGrid, heroesMap, hasTeams);
-    return canReadOrganizerColumns
-      ? columns
-      : columns.filter((column) => !ADMIN_ONLY_COLUMN_IDS[column.id]);
-  }, [canReadOrganizerColumns, form, t, locale, divisionGrid, heroesMap, hasTeams]);
+  const builtColumns = useMemo(
+    () => buildParticipantColumns(form, t, locale, divisionGrid, heroesMap, hasTeams),
+    [form, t, locale, divisionGrid, heroesMap, hasTeams]
+  );
+  const allColumns = useMemo(
+    () =>
+      canReadOrganizerColumns
+        ? builtColumns
+        : builtColumns.filter((column) => !ADMIN_ONLY_COLUMN_IDS[column.id]),
+    [builtColumns, canReadOrganizerColumns]
+  );
 
   // Status counts + chips present in the data.
   const statusCounts = useMemo(() => {
@@ -1268,14 +1300,17 @@ function TournamentParticipantsView({ tournament }: Readonly<{ tournament: Tourn
     [allColumns, visibleColumnIdSet]
   );
 
-  // The hero catalogue backs the top_heroes cells and every pool row, so its
-  // request stays unsent while neither is on screen. Latched on: toggling the
-  // column off must not discard a catalogue the user can re-reveal in one click.
+  // The hero catalogue backs the top_heroes cells, every pool row and the
+  // reader's own card, so its request stays unsent while none is on screen.
+  // Latched on: toggling the column off must not discard a catalogue the user
+  // can re-reveal in one click.
+  const cardShowsHeroes =
+    myRegistration != null && builtColumns.some((column) => column.id === "top_heroes");
   useEffect(() => {
-    if (view === "pool" || visibleColumnIdSet.has("top_heroes")) {
+    if (view === "pool" || visibleColumnIdSet.has("top_heroes") || cardShowsHeroes) {
       setNeedsHeroes(true);
     }
-  }, [view, visibleColumnIdSet]);
+  }, [cardShowsHeroes, view, visibleColumnIdSet]);
 
   useEffect(() => {
     latestParamsRef.current = searchParamsString;
@@ -1429,20 +1464,11 @@ function TournamentParticipantsView({ tournament }: Readonly<{ tournament: Tourn
     [divisionGrid, registrations, view]
   );
 
-  // Reserves are their own group, after the main field: they are in the
-  // tournament, but only if somebody drops out, and a name interleaved with the
-  // starters reads as one of them. Each half keeps its own virtual list rather
-  // than a header row inside one — the list is window-virtualized, and two
-  // lists is the whole of "two groups".
-  const reserveRows = useMemo(
-    () => filtered.filter((registration) => answerFlag(registration.answers, "reserve")),
-    [filtered]
-  );
-  const mainRows = useMemo(
-    () => filtered.filter((registration) => !answerFlag(registration.answers, "reserve")),
-    [filtered]
-  );
-  // The server's own count, covering the rows a hidden roster does not send.
+  // How many of the field also said they can be called in. Stated beside the
+  // total, never split out of it: the `reserve` answer says nothing about
+  // whether the row is in the field, so these names stay in submission order
+  // among everybody else. The server owns the count, so a hidden roster still
+  // reports it.
   const reserveCount = registrationList?.reserve_count ?? 0;
 
   if (listQuery.isPending && listQuery.data === undefined) {
@@ -1466,6 +1492,7 @@ function TournamentParticipantsView({ tournament }: Readonly<{ tournament: Tourn
           isWithdrawing={withdrawMutation.isPending}
           tournament={tournament}
           form={form}
+          columns={builtColumns}
         />
       )}
 
@@ -1559,9 +1586,9 @@ function TournamentParticipantsView({ tournament }: Readonly<{ tournament: Tourn
         </p>
       )}
 
-      {/* The one place the two numbers appear together. `total` is the server's
-          and counts reserves — it is the queue denominator — so the reserve
-          figure is stated beside it rather than subtracted out of it. */}
+      {/* `total` is the whole field, this many of whom also said they can be
+          called in. Stated beside the total, never subtracted from it: the
+          answer does not take anybody out of the field. */}
       {!listHidden && reserveCount > 0 && (
         <p
           data-reserve-count={reserveCount}
@@ -1725,44 +1752,13 @@ function TournamentParticipantsView({ tournament }: Readonly<{ tournament: Tourn
           onResetFilters={() => navigateParticipantUrl({ type: "reset" })}
         />
       ) : filtered.length > 0 ? (
-        <>
-          {mainRows.length > 0 ? (
-            <VirtualParticipantsList
-              allColumns={allColumns}
-              expandedIds={expandedIds}
-              onToggleExpanded={toggleExpanded}
-              registrations={mainRows}
-              visibleColumns={visibleColumns}
-            />
-          ) : null}
-          {reserveRows.length > 0 ? (
-            <section
-              aria-label={t("tournamentDetail.participants.reserveGroup", {
-                count: reserveRows.length
-              })}
-              className="mt-5 space-y-2"
-              data-reserve-group={reserveRows.length}
-            >
-              <div className="flex items-baseline gap-2">
-                <h3 className="text-label font-semibold uppercase tracking-label text-[color:var(--aqt-amber)]">
-                  {t("tournamentDetail.participants.reserveGroup", {
-                    count: reserveRows.length
-                  })}
-                </h3>
-                <p className="text-xs text-[color:var(--aqt-fg-dim)]">
-                  {t("tournamentDetail.participants.reserveGroupDesc")}
-                </p>
-              </div>
-              <VirtualParticipantsList
-                allColumns={allColumns}
-                expandedIds={expandedIds}
-                onToggleExpanded={toggleExpanded}
-                registrations={reserveRows}
-                visibleColumns={visibleColumns}
-              />
-            </section>
-          ) : null}
-        </>
+        <VirtualParticipantsList
+          allColumns={allColumns}
+          expandedIds={expandedIds}
+          onToggleExpanded={toggleExpanded}
+          registrations={filtered}
+          visibleColumns={visibleColumns}
+        />
       ) : filteredEmpty ? (
         <TournamentPageState
           state="filtered-empty"

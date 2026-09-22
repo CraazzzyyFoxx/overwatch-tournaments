@@ -72,14 +72,13 @@ vi.mock("@/lib/notify", () => ({
 }));
 
 // Only the keys this suite asserts on. Everything else on this screen is an
-// English literal by design, so an empty catalogue was enough until the reserve
+// English literal by design, so an empty catalogue was enough until the on-call
 // chip — which the organizer reads as a word, not as a key path.
 const MESSAGES = {
   common: {
-    reserve: "Reserve",
-    notReserve: "Not reserve",
-    reserveHint: "Agreed to stand in if a replacement is needed",
-    bulkAddSkipsReserves: "Reserves are skipped; add them one at a time"
+    reserve: "On call",
+    notReserve: "Not on call",
+    reserveHint: "Plays as usual, and is fine being called in"
   }
 };
 
@@ -340,8 +339,8 @@ describe("RegistrationsTable reserves", () => {
     listRegistrations.mockResolvedValue(RESERVE_POOL);
     const scope = await mount();
 
-    expect(scope.querySelector("tbody tr[data-row-id='1']")?.textContent).toContain("Reserve");
-    expect(scope.querySelector("tbody tr[data-row-id='2']")?.textContent).not.toContain("Reserve");
+    expect(scope.querySelector("tbody tr[data-row-id='1']")?.textContent).toContain("On call");
+    expect(scope.querySelector("tbody tr[data-row-id='2']")?.textContent).not.toContain("On call");
   });
 
   it("narrows the table to the reserves through the inclusion param", async () => {
@@ -353,9 +352,9 @@ describe("RegistrationsTable reserves", () => {
       node.textContent?.includes("Participation")
     );
     await click(participation);
-    // "Not reserve" is the other option and does not match this capitalisation.
+    // "Not on call" is the other option and does not match this capitalisation.
     const reserveOption = [...document.querySelectorAll("[cmdk-item]")].find((node) =>
-      node.textContent?.includes("Reserve")
+      node.textContent?.includes("On call")
     );
     await click(reserveOption);
 

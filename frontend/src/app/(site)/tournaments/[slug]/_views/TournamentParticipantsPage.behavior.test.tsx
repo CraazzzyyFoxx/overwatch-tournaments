@@ -166,6 +166,7 @@ function makeRegistration(overrides: Partial<Registration> = {}): Registration {
     },
     submitted_at: null,
     reviewed_at: null,
+    submitted_late: false,
     // The server's self-edit verdict. Closed by default, exactly as a
     // tournament whose organizer never opened a question reads.
     can_edit: false,
@@ -214,6 +215,34 @@ const FORM: RegistrationForm = {
             kind: "builtin",
             required: true,
             visibility: "public",
+            params: {},
+            show_in_draft: false
+          },
+          {
+            key: "stream_pov",
+            kind: "builtin",
+            required: false,
+            visibility: "public",
+            params: {},
+            show_in_draft: false
+          },
+          {
+            key: "scrims",
+            kind: "checkbox",
+            label: "Ready for scrims?",
+            required: false,
+            visibility: "public",
+            params: {},
+            show_in_draft: false
+          },
+          // Organizers-only: a public read never carries its answer, so the
+          // card must not build a row for it.
+          {
+            key: "organizer_notes",
+            kind: "textarea",
+            label: "For the organizers",
+            required: false,
+            visibility: "organizers",
             params: {},
             show_in_draft: false
           }
@@ -566,18 +595,19 @@ describe("a roster the organizer hid", () => {
     expect(onRole?.textContent).toBe(`${en.common.roles.damage} 4 / 24`);
   });
 
-  it("shows the identity handles and notes the registrant answered, and nothing they did not", async () => {
-    // The card reads the flat `answers` document. A public read is stripped
-    // against the registration's own form version, so an answer that is absent
-    // was either never asked or is not this reader's to see — either way the
-    // card must show no row for it rather than an empty one.
+  it("shows the handles, notes and every asked answer, and nothing the form did not ask", async () => {
+    // The card reads the flat `answers` document against the form's PUBLIC
+    // questions. An answer that is absent was either never asked or is not
+    // this reader's to see; a question the reader never answered is still a
+    // row, because the roster's own details panel shows it that way too.
     getMyRegistration.mockResolvedValue(
       makeRegistration({
         answers: {
           identity_discord: "anak",
           identity_youtube: "@anak",
           public_notes: "I can play late",
-          stream_pov: true
+          stream_pov: true,
+          scrims: false
         }
       })
     );
@@ -594,10 +624,20 @@ describe("a roster the organizer hid", () => {
     // No brand icon for YouTube, so the chip is labelled with the provider.
     expect(card).toContain(en.registration.accounts.youtube);
     expect(card).toContain("I can play late");
-    expect(card).toContain(en.registration.myCard.streamPovActive);
     // Twitch was not answered and Boosty was not asked: neither gets a chip.
     expect(card).not.toContain(en.registration.accounts.twitch);
     expect(card).not.toContain(en.registration.accounts.boosty);
+
+    // The toggles read as Yes/No rows, the same way as any other question —
+    // no bespoke "will stream" chip — and the organizers-only question is
+    // absent rather than blank.
+    const rows = Array.from(container.querySelectorAll("dl dt")).map((dt) => [
+      dt.textContent,
+      dt.nextElementSibling?.textContent
+    ]);
+    expect(rows).toContainEqual([en.registration.details.streamPov, en.common.yes]);
+    expect(rows).toContainEqual(["Ready for scrims?", en.common.no]);
+    expect(card).not.toContain("For the organizers");
   });
 
   it("says nothing about a role queue for a registration that declared no role", async () => {
@@ -744,41 +784,52 @@ describe("editing your own registration", () => {
   });
 });
 
-describe("reserves", () => {
-  const RESERVE = makeRegistration({
+describe("on-call players", () => {
+  const ON_CALL = makeRegistration({
     id: 402,
     user_id: 9,
     battle_tag: "Sub#1000",
     answers: { reserve: true }
   });
 
-  it("groups reserves after the main field and reports the server's count", async () => {
+  it("leaves them in the one list and states the count beside the total", async () => {
     listRegistrations.mockResolvedValue(
-      regList([makeRegistration(), RESERVE], { total: 2, reserve_count: 1 })
+      regList([makeRegistration(), ON_CALL], { total: 2, reserve_count: 1 })
     );
     await mount();
-
-    // Its OWN group: a reserve interleaved with the starters reads as one.
-    expect(container.querySelector("[data-reserve-group]")?.getAttribute("data-reserve-group")).toBe(
-      "1"
-    );
-    // Stated beside the total, never subtracted out of it: `total` is the
-    // queue denominator and the server counts reserves in it.
+    // The answer is availability, not membership: ONE list, no second one with
+    // its own header, and every row in it.
+    expect(container.querySelectorAll('[data-testid="roster"]').length).toBe(1);
+    expect(container.querySelector("[data-reserve-group]")).toBeNull();
     expect(container.querySelector("[data-reserve-count]")?.getAttribute("data-reserve-count")).toBe(
       "1"
     );
   });
 
-  it("says nothing about reserves when there are none", async () => {
+  it("says nothing when nobody offered", async () => {
     await mount();
-    expect(container.querySelector("[data-reserve-group]")).toBeNull();
     expect(container.querySelector("[data-reserve-count]")).toBeNull();
   });
 
-  it("marks the owner's own card as a reserve and explains what that means", async () => {
+  it("marks the owner's own card and explains what they agreed to", async () => {
     getMyRegistration.mockResolvedValue(makeRegistration({ answers: { reserve: true } }));
     await mount();
 
     expect(container.querySelector("[data-registration-reserve]")).not.toBeNull();
+    expect(container.textContent).toContain(en.registration.reserve.explainer);
+  });
+});
+
+describe("late sign-ups", () => {
+  it("marks a row the server flagged as late", async () => {
+    getMyRegistration.mockResolvedValue(makeRegistration({ submitted_late: true }));
+    await mount();
+
+    expect(container.querySelector("[data-registration-late]")).not.toBeNull();
+  });
+
+  it("says nothing for an on-time sign-up", async () => {
+    await mount();
+    expect(container.querySelector("[data-registration-late]")).toBeNull();
   });
 });

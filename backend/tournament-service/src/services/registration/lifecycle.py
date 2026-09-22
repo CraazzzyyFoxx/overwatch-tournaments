@@ -679,9 +679,9 @@ class RegistrationLifecycleService:
         """Bulk version of `add_to_balancer` -- only approved registrations
         qualify; every other id is silently skipped (counted, not errored).
 
-        Reserves are skipped too: they asked to be cover, and a "select all ->
-        add to pool" sweep must not quietly enrol them as starters. Adding ONE
-        reserve by hand still works and is exactly the "we need a sub" action.
+        The ``reserve`` answer is not a qualifier: it says the registrant is
+        happy to be called in, not that they are waiting outside the field, so a
+        sweep enrols them like anybody else.
         """
         result = await session.execute(
             self.registration_repo.select()
@@ -690,7 +690,6 @@ class RegistrationLifecycleService:
                 models.BalancerRegistration.deleted_at.is_(None),
                 models.BalancerRegistration.id.in_(registration_ids),
                 models.BalancerRegistration.status == "approved",
-                models.BalancerRegistration.is_reserve.is_(False),
             )
             # The engine reads roles, their heroes and the member anchor; none of
             # them may lazy-load on an async session.

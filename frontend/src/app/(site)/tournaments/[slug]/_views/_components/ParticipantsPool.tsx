@@ -97,9 +97,10 @@ function isWithdrawn(registration: Registration): boolean {
   return registration.status === WITHDRAWN_STATUS;
 }
 
-/** A reserve is in the tournament, but only as cover: they are outside the
- *  balancer pool until an organizer promotes them, so they are outside the role
- *  columns too. Read off the row's own public answer, exactly like the badge. */
+/** Volunteered to be called in if somebody drops or they cannot make the start.
+ *  An availability note, nothing more: they are in the field and in the role
+ *  columns like anybody else. Read off the row's own public answer, exactly like
+ *  the badge. */
 function isReserve(registration: Registration): boolean {
   return answerFlag(registration.answers, "reserve");
 }
@@ -353,15 +354,10 @@ export default function ParticipantsPool({
 }: Readonly<ParticipantsPoolProps>) {
   const t = useTranslations();
 
-  // The main field: neither withdrawn nor in the reserve. Reserves get their
-  // own group below rather than a row in every role column — the columns are
-  // read as "how deep is this role", and cover that only plays on a dropout is
-  // not depth.
+  // The field: everybody who has not withdrawn. The `reserve` answer says
+  // nothing about depth at a role, so it does not take a name out of a column.
   const active = useMemo(
-    () =>
-      registrations.filter(
-        (registration) => !isWithdrawn(registration) && !isReserve(registration)
-      ),
+    () => registrations.filter((registration) => !isWithdrawn(registration)),
     [registrations]
   );
 
@@ -440,9 +436,10 @@ export default function ParticipantsPool({
     [normalizedSearch, registrations]
   );
 
-  // Searchable like every other name — a reserve is exactly who an organizer
-  // looks up when a replacement is needed. Not division-filtered: a reserve
-  // usually has no rank yet, so a division filter would empty the group.
+  // A lookup aid, not a bucket: these names are already in the role columns
+  // above, and this is just "who did I say I could call". Searchable like every
+  // other name, and deliberately not division-filtered — a division filter
+  // would empty the list for anybody the balancer has not ranked yet.
   const reserves = useMemo(
     () =>
       registrations.filter(
@@ -511,10 +508,10 @@ export default function ParticipantsPool({
           aria-label={t("tournamentDetail.participantsPool.reserve", {
             count: reserves.length
           })}
-          className="rounded-xl border border-[color:color-mix(in_srgb,var(--aqt-amber)_25%,transparent)] bg-[color:var(--aqt-card)] px-3 py-2"
+          className="rounded-xl border border-[color:color-mix(in_srgb,var(--aqt-blue)_25%,transparent)] bg-[color:var(--aqt-card)] px-3 py-2"
           data-pool-reserve="true"
         >
-          <h3 className="text-label font-semibold uppercase tracking-label text-[color:var(--aqt-amber)]">
+          <h3 className="text-label font-semibold uppercase tracking-label text-[color:var(--aqt-blue)]">
             {t("tournamentDetail.participantsPool.reserve", { count: reserves.length })}
           </h3>
           <p className="mt-0.5 text-xs text-[color:var(--aqt-fg-dim)]">

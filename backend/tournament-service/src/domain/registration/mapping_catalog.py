@@ -200,11 +200,11 @@ def _build_builtin_specs() -> tuple[MappingTargetSpec, ...]:
         ),
         MappingTargetSpec(
             key="reserve",
-            label="Reserve",
+            label="Stand-in",
             group="profile",
             accepted_parsers=(PARSER_BOOLEAN,),
             default_parser=PARSER_BOOLEAN,
-            aliases=("reserve", "substitute", "резерв", "замена"),
+            aliases=("reserve", "substitute", "stand-in", "резерв", "замена"),
         ),
         MappingTargetSpec(
             key="public_notes",

@@ -259,6 +259,9 @@ def _reg_to_read(
     #: reads pay for it; every other surface leaves it ``None`` and the payload
     #: reports "no editing", which is what a third party may do anyway.
     self_edit: Any | None = None,
+    #: Resolved by the caller (``self_edit.submitted_late``), which needs the
+    #: tournament's phase schedule this module deliberately does not load.
+    submitted_late: bool = False,
 ) -> RegistrationRead:
     """Serialize a registration for public API responses.
 
@@ -356,6 +359,7 @@ def _reg_to_read(
         team=team,
         submitted_at=reg.submitted_at,
         reviewed_at=reg.reviewed_at,
+        submitted_late=submitted_late,
         queue_position=queue.position if queue is not None else None,
         queue_total=queue.total if queue is not None else None,
         queue_role=queue.role if queue is not None else None,

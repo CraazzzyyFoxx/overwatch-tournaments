@@ -1,7 +1,7 @@
 "use client";
 
 import { type ReactNode, useMemo } from "react";
-import { CheckCircle2, Crown, XCircle } from "lucide-react";
+import { Crown } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
@@ -363,30 +363,6 @@ function SmurfTagsCell({
 }
 
 // ---------------------------------------------------------------------------
-// Stream POV cell
-// ---------------------------------------------------------------------------
-
-function StreamPovCell({ value }: Readonly<{ value: boolean | null | undefined }>) {
-  const t = useTranslations();
-  const label = value ? t("common.yes") : t("common.no");
-  return (
-    <span
-      aria-label={label}
-      className={cn(
-        "inline-flex size-5 items-center justify-center",
-        value ? "text-[color:var(--aqt-emerald)]" : "text-[color:var(--aqt-rose)]",
-      )}
-    >
-      {value ? (
-        <CheckCircle2 className="size-4" aria-hidden />
-      ) : (
-        <XCircle className="size-4" aria-hidden />
-      )}
-    </span>
-  );
-}
-
-// ---------------------------------------------------------------------------
 // Date formatter
 // ---------------------------------------------------------------------------
 
@@ -485,15 +461,6 @@ const BUILT_IN_FIELD_DEFS: Record<string, BuiltInFieldDef> = {
     searchValue: (reg) =>
       reg.roles?.flatMap((r) => r.top_heroes).join(" ") ?? null,
   },
-  stream_pov: {
-    id: "stream_pov",
-    label: "Stream POV",
-    defaultVisible: false,
-    responsive: "lg",
-    align: "center",
-    width: "badge",
-    render: (reg) => <StreamPovCell value={answerFlag(reg.answers, "stream_pov")} />,
-  },
   public_notes: {
     id: "public_notes",
     label: "Notes",
@@ -543,9 +510,9 @@ export function buildParticipantColumns(
   locale: string = "ru",
   grid?: DivisionGrid | null,
   heroesMap?: Map<string, Hero>,
-  /** Whether the loaded roster actually carries teams. Drives the team column's
-   *  `defaultVisible`; there is no team flag on `RegistrationForm`, so the data
-   *  itself is the only per-tournament signal available. */
+  /** Whether the loaded roster actually carries teams. There is no team flag on
+   *  `RegistrationForm`, so the data itself is the only per-tournament signal;
+   *  without it the column is not built at all. */
   hasTeams: boolean = false,
 ): ColumnDefinition[] {
   const columns: ColumnDefinition[] = [];
@@ -598,44 +565,47 @@ export function buildParticipantColumns(
     ),
   });
 
-  // Meta: registered team. On by default ONLY when the roster actually carries
-  // teams: on a solo tournament every cell is empty, and a permanently blank
-  // column must not eat a grid track nor sit in the "Reset to defaults" set.
-  // A hardcoded `false` is equally wrong — search walks VISIBLE columns only,
-  // so it would kill find-players-by-team, which is the point of the column.
-  const teamCaptainLabel = t("registrationTeams.member.captain");
-  const teamSubstituteLabel = t("registrationTeams.member.substitute");
-  columns.push({
-    id: "team",
-    label: t("registrationTeams.myCard.teamLabel"),
-    category: "meta",
-    defaultVisible: hasTeams,
-    responsive: "sm",
-    width: "badge",
-    render: (reg) =>
-      reg.team ? (
-        <span className="inline-flex max-w-[200px] items-center gap-1.5">
-          <span className="truncate font-medium text-[color:var(--aqt-fg)]" title={reg.team.name}>
-            {reg.team.name}
+  // Meta: registered team. Built ONLY when the roster actually carries teams:
+  // on a solo tournament every cell is empty, so the column would eat a grid
+  // track, sit in the picker and the "Reset to defaults" set, and print a
+  // blank "Team" row in every expanded details panel. When teams exist it is
+  // on by default — search walks VISIBLE columns only, and finding players by
+  // team is the point of the column.
+  if (hasTeams) {
+    const teamCaptainLabel = t("registrationTeams.member.captain");
+    const teamSubstituteLabel = t("registrationTeams.member.substitute");
+    columns.push({
+      id: "team",
+      label: t("registrationTeams.myCard.teamLabel"),
+      category: "meta",
+      defaultVisible: true,
+      responsive: "sm",
+      width: "badge",
+      render: (reg) =>
+        reg.team ? (
+          <span className="inline-flex max-w-[200px] items-center gap-1.5">
+            <span className="truncate font-medium text-[color:var(--aqt-fg)]" title={reg.team.name}>
+              {reg.team.name}
+            </span>
+            {reg.team.is_captain ? (
+              <span
+                className="inline-flex shrink-0 items-center text-[color:var(--aqt-amber)]"
+                title={teamCaptainLabel}
+              >
+                <Crown className="size-3.5" aria-hidden />
+                <span className="sr-only">{teamCaptainLabel}</span>
+              </span>
+            ) : null}
+            {reg.team.is_substitute ? (
+              <span className="shrink-0 rounded border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-overlay-1)] px-1 py-px text-label font-semibold leading-4 text-[color:var(--aqt-fg-dim)]">
+                {teamSubstituteLabel}
+              </span>
+            ) : null}
           </span>
-          {reg.team.is_captain ? (
-            <span
-              className="inline-flex shrink-0 items-center text-[color:var(--aqt-amber)]"
-              title={teamCaptainLabel}
-            >
-              <Crown className="size-3.5" aria-hidden />
-              <span className="sr-only">{teamCaptainLabel}</span>
-            </span>
-          ) : null}
-          {reg.team.is_substitute ? (
-            <span className="shrink-0 rounded border border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-overlay-1)] px-1 py-px text-label font-semibold leading-4 text-[color:var(--aqt-fg-dim)]">
-              {teamSubstituteLabel}
-            </span>
-          ) : null}
-        </span>
-      ) : null,
-    searchValue: (reg) => reg.team?.name ?? null,
-  });
+        ) : null,
+      searchValue: (reg) => reg.team?.name ?? null,
+    });
+  }
 
   const pushBuiltIn = (key: string, label: string, defaultVisible: boolean) => {
     const def = BUILT_IN_FIELD_DEFS[key];
@@ -753,7 +723,11 @@ export function buildParticipantColumns(
     render: (reg) => formatDate(reg.submitted_at, locale),
   });
 
-  // Meta: registration status
+  // Meta: registration status, plus the two marks that ride beside it — the
+  // registrant's own "you can call me in" and the schedule's "signed up after
+  // the window closed". Neither changes the status; both are what an organizer
+  // scans this column for, and the on-call one used to be a separate group of
+  // rows, which read as "these people are not really in".
   columns.push({
     id: "_status",
     label: t("common.status"),
@@ -762,7 +736,29 @@ export function buildParticipantColumns(
     responsive: "always",
     align: "center",
     width: "badge",
-    render: (reg) => <RegistrationStatusBadge status={reg.status} meta={reg.status_meta} />,
+    render: (reg) => (
+      <div className="flex flex-col items-center gap-1">
+        <RegistrationStatusBadge status={reg.status} meta={reg.status_meta} />
+        {answerFlag(reg.answers, "reserve") ? (
+          <span
+            data-row-on-call="true"
+            title={t("common.reserveHint")}
+            className="rounded-full border border-[color:color-mix(in_srgb,var(--aqt-blue)_35%,transparent)] bg-[color:color-mix(in_srgb,var(--aqt-blue)_12%,transparent)] px-1.5 py-px text-label font-semibold uppercase tracking-label text-[color:var(--aqt-blue)]"
+          >
+            {t("common.reserve")}
+          </span>
+        ) : null}
+        {reg.submitted_late ? (
+          <span
+            data-row-late="true"
+            title={t("tournamentDetail.participants.lateHint")}
+            className="rounded-full border border-[color:var(--aqt-border)] px-1.5 py-px text-label font-semibold uppercase tracking-label text-[color:var(--aqt-fg-muted)]"
+          >
+            {t("tournamentDetail.participants.lateBadge")}
+          </span>
+        ) : null}
+      </div>
+    ),
   });
 
   // Meta: balancer status

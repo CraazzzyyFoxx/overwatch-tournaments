@@ -380,7 +380,13 @@ class RegistrationAnswerService:
             row.is_primary = entry.is_primary
             row.priority = entry.priority
             if hero_catalog is not None:
-                row.hero_entries = entry.hero_entries
+                # Emptied off ``entry`` FIRST. Handing its live collection over
+                # instead makes the backref cascade ``entry`` itself into the
+                # session -- a second role row nothing owns, whose INSERT then
+                # fails on ``registration_id`` NOT NULL and 500s the whole edit.
+                heroes = list(entry.hero_entries)
+                entry.hero_entries = []
+                row.hero_entries = heroes
             merged.append(row)
         # Slice assignment, not rebinding: the rows this drops must go through
         # the delete-orphan cascade rather than being detached from the list.

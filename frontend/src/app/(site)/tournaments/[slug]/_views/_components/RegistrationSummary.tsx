@@ -72,9 +72,9 @@ export function RegistrationSummary({
   roleCounts: Readonly<Record<string, number>>;
   /** Advisory capacity. Rendered as a `/ N` suffix; never compared against `total`. */
   maxParticipants?: number | null;
-  /** How many of `total` are reserves. `total` stays the server's number — it is
-   *  the queue denominator — so this is stated beside it, and only the CAPACITY
-   *  line nets it out: a reserve does not occupy a starting slot. */
+  /** How many of `total` also said they can be called in if needed. Never
+   *  subtracted from anything: the answer is an availability note, so those
+   *  players occupy a slot exactly like everybody else. */
   reserveCount?: number;
 }>) {
   const t = useTranslations();
@@ -91,13 +91,7 @@ export function RegistrationSummary({
         <StatTile
           label={t("tournamentDetail.overview.registration.total")}
           value={String(total)}
-          hint={
-            hasCapacity
-              ? reserveCount > 0
-                ? `${total - reserveCount} / ${maxParticipants}`
-                : `/ ${maxParticipants}`
-              : undefined
-          }
+          hint={hasCapacity ? `/ ${maxParticipants}` : undefined}
         />
         {shares.map((code) => (
           <StatTile

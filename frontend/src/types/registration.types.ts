@@ -335,6 +335,10 @@ export interface Registration {
   team?: RegistrationTeamBrief | null;
   submitted_at: string | null;
   reviewed_at: string | null;
+  /** Signed up after the registration window closed (only possible when the
+   *  organizer allowed late sign-ups). A fact about the schedule, never about
+   *  the player — it does not change anything else about the entry. */
+  submitted_late: boolean;
   /** Place in submission order and the size of that order — overall, and within
    *  this registration's primary role. The role pair is the one that answers
    *  "am I getting in": a field fills role by role. `queue_role` names the

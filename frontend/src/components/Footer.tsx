@@ -20,6 +20,12 @@ const COLUMN_HEADING_CLASS =
 const FOOTER_META_CLASS =
   "transition-colors hover:text-[color:var(--aqt-fg)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background";
 
+// The repository the app is built from. One constant, because the source link
+// and the version tag link must point at the same repo — they were written out
+// twice and both carried the old `anak-tournaments` name after the rename, so
+// every version chip in the footer 404'd.
+const REPO_URL = "https://github.com/CraazzzyyFoxx/overwatch-tournaments";
+
 /**
  * The footer renders on every page, so its links sit in the viewport of every
  * page — and Next prefetches links on viewport entry by default. Under
@@ -100,7 +106,7 @@ export function Footer() {
               {t("common.footer.getWorkspace")}
             </FooterLink>
             <FooterLink
-              href="https://github.com/CraazzzyyFoxx/anak-tournaments"
+              href={REPO_URL}
               className={`${FOOTER_LINK_CLASS} inline-flex items-center gap-1.5`}
             >
               <Github width={14} height={14} />
@@ -115,7 +121,7 @@ export function Footer() {
           {t("common.footer.copyright", { year, siteName: SITE_NAME })}
           {APP_VERSION ? (
             <FooterLink
-              href={`https://github.com/CraazzzyyFoxx/anak-tournaments/releases/tag/${APP_VERSION}`}
+              href={`${REPO_URL}/releases/tag/${APP_VERSION}`}
               className={FOOTER_META_CLASS}
             >
               {APP_VERSION}
