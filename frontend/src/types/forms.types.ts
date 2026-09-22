@@ -54,15 +54,13 @@ export interface FormField {
   /** Builtin-specific settings; `{}` for every custom field (the schema refuses
    *  params on one). `roles` holds {@link RolesParams}. */
   params: Record<string, unknown>;
-  /** Surface this answer in the live draft's player inspector. Public fields only. */
-  show_in_draft: boolean;
   /** The organizer's "may the REGISTRANT change this answer after submitting?"
    *  switch, mirroring `backend/shared/domain/forms/schema.py`. CLOSED by
    *  default: a question is frozen at submit until an organizer opens it.
    *
-   *  OPTIONAL here where `show_in_draft` is required, and that is the fail-safe
-   *  direction — a payload or fixture missing the key reads as locked, never as
-   *  open. Read it as `field.editable === true`, never as `!== false`.
+   *  OPTIONAL on the wire, and that is the fail-safe direction — a payload or
+   *  fixture missing the key reads as locked, never as open. Read it as
+   *  `field.editable === true`, never as `!== false`.
    *
    *  Not the whole answer for a registrant, either: the server folds the system
    *  floors and the never-answered exception into `edit_writable_keys` on the

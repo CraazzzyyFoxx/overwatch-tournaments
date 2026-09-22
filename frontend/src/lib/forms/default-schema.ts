@@ -23,7 +23,6 @@ function builtin(key: string, required = false): FormField {
     required,
     visibility: "public",
     params: {},
-    show_in_draft: false,
     // The server's own default: a question is frozen at submit until an
     // organizer opens it for self-editing.
     editable: false,

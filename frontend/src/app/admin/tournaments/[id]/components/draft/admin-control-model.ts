@@ -1,11 +1,8 @@
 import type {
   DraftFeasibility,
-  DraftPickOption,
   DraftPlayer,
-  DraftPresenceState,
   DraftRole,
-  DraftRoleEditResponse,
-  DraftTeam
+  DraftRoleEditResponse
 } from "@/types/draft.types";
 
 const ROLES: DraftRole[] = ["tank", "damage", "support"];
@@ -51,40 +48,3 @@ export function roleEditImpact(preview: {
   return "unchanged";
 }
 
-export interface CaptainPresenceRow {
-  teamId: number;
-  teamName: string;
-  connected: boolean;
-  lastActiveAt: string | null;
-}
-
-export function captainPresenceRows(
-  teams: DraftTeam[],
-  presence: DraftPresenceState
-): CaptainPresenceRow[] {
-  return [...teams]
-    .sort((left, right) => left.draft_position - right.draft_position)
-    .map((team) => {
-      const entry =
-        team.captain_auth_user_id == null ? undefined : presence.users[team.captain_auth_user_id];
-      return {
-        teamId: team.id,
-        teamName: team.name,
-        connected: entry != null,
-        lastActiveAt: entry?.last_active_at ?? null
-      };
-    });
-}
-
-export function buildOverrideRequest(
-  option: Pick<DraftPickOption, "player_id" | "role">,
-  expectedVersion: number,
-  note: string
-) {
-  return {
-    player_id: option.player_id,
-    target_role: option.role,
-    expected_version: expectedVersion,
-    note: note.trim()
-  };
-}

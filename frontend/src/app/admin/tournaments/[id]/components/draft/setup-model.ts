@@ -141,11 +141,23 @@ export interface DraftCaptainRow {
   id: number;
   label: string;
   roles: DraftRole[];
+  /** The captain's STRONGEST playable rank (`captainRankSummary`). */
   rank: number | null;
+  /** Which role that rank was earned on, so the list can say where it comes from. */
+  rankRole: DraftRole | null;
+}
+
+export interface DraftCaptainFilters {
+  query: string;
+  roles: readonly DraftRole[];
+  sort: DraftCaptainSort;
+  /** Restrict the list to the captains already chosen. */
+  selectedOnly?: boolean;
+  selectedIds?: readonly number[];
 }
 
 /**
- * Search + role filter + sort for the captain picker.
+ * Search + role filter + selection filter + sort for the captain picker.
  *
  * Roles are OR-ed and an empty selection means "any role", so unchecking every
  * role never hides the whole pool. Unranked players sort last in BOTH rank
@@ -154,13 +166,15 @@ export interface DraftCaptainRow {
  */
 export function filterCaptainRows(
   rows: readonly DraftCaptainRow[],
-  filters: { query: string; roles: readonly DraftRole[]; sort: DraftCaptainSort }
+  filters: DraftCaptainFilters
 ): DraftCaptainRow[] {
   const needle = filters.query.trim().toLocaleLowerCase();
+  const selected = new Set(filters.selectedIds ?? []);
   const matched = rows.filter(
     (row) =>
       (filters.roles.length === 0 || filters.roles.some((role) => row.roles.includes(role))) &&
-      (needle === "" || row.label.toLocaleLowerCase().includes(needle))
+      (needle === "" || row.label.toLocaleLowerCase().includes(needle)) &&
+      (!filters.selectedOnly || selected.has(row.id))
   );
   if (filters.sort === "name") {
     return matched.sort((left, right) => left.label.localeCompare(right.label));

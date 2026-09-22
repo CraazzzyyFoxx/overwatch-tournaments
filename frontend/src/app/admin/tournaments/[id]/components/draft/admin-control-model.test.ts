@@ -1,14 +1,8 @@
 import { describe, expect, it } from "vitest";
 
-import type { DraftFeasibility, DraftPlayer, DraftPresenceState, DraftRoleEditResponse, DraftTeam } from "@/types/draft.types";
+import type { DraftFeasibility, DraftPlayer, DraftRoleEditResponse } from "@/types/draft.types";
 
-import {
-  availableRolesForPlayer,
-  buildOverrideRequest,
-  canCommitRoleEdit,
-  captainPresenceRows,
-  roleEditImpact
-} from "./admin-control-model";
+import { availableRolesForPlayer, canCommitRoleEdit, roleEditImpact } from "./admin-control-model";
 
 const feasible = (matched: number, isFeasible = false): DraftFeasibility => ({
   is_feasible: isFeasible,
@@ -54,35 +48,5 @@ describe("admin draft control model", () => {
     expect(roleEditImpact({ before: feasible(1), after: feasible(2) })).toBe("improved");
     expect(roleEditImpact({ before: feasible(1), after: feasible(3, true) })).toBe("resolved");
     expect(roleEditImpact({ before: feasible(2), after: feasible(2) })).toBe("unchanged");
-  });
-
-  it("maps real authenticated presence to captains", () => {
-    const teams = [
-      { id: 1, name: "Alpha", draft_position: 1, captain_auth_user_id: 77 },
-      { id: 2, name: "Beta", draft_position: 2, captain_auth_user_id: 88 }
-    ] as DraftTeam[];
-    const presence: DraftPresenceState = {
-      users: { 88: { last_active_at: "2026-07-14T10:00:00Z" } },
-      anonymous_viewer_count: 3
-    };
-    expect(captainPresenceRows(teams, presence)).toEqual([
-      { teamId: 1, teamName: "Alpha", connected: false, lastActiveAt: null },
-      { teamId: 2, teamName: "Beta", connected: true, lastActiveAt: "2026-07-14T10:00:00Z" }
-    ]);
-  });
-
-  it("builds an explicit, auditable admin override request", () => {
-    expect(
-      buildOverrideRequest(
-        { player_id: 10, role: "support", is_safe: true } as never,
-        7,
-        "Captain disconnected"
-      )
-    ).toEqual({
-      player_id: 10,
-      target_role: "support",
-      expected_version: 7,
-      note: "Captain disconnected"
-    });
   });
 });

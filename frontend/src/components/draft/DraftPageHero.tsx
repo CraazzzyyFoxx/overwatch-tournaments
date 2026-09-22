@@ -19,7 +19,7 @@ interface DraftPageHeroProps {
 
 /**
  * Identification only: where am I, what is the draft doing, am I connected.
- * Everything about the current turn lives in `CurrentPick`, captain presence
+ * Everything about the current turn lives in `PickCommandBar`, captain presence
  * in the `TeamRosters` cards, and pool size in the pool heading — repeating
  * any of it here is what made the old header 380px tall on a phone.
  */

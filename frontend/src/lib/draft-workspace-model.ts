@@ -11,11 +11,15 @@ export type DraftPoolRoleFilter = DraftRole | "all";
 export type DraftPoolSort = "rank" | "name";
 export const DRAFT_MOBILE_VIEWS = ["pool", "team", "order"] as const;
 export type DraftMobileView = (typeof DRAFT_MOBILE_VIEWS)[number];
+/** Which list of the board the pool column is showing. */
+export const DRAFT_POOL_TABS = ["available", "shortlist", "drafted"] as const;
+export type DraftPoolTab = (typeof DRAFT_POOL_TABS)[number];
 
 export interface DraftViewParams {
   role: DraftPoolRoleFilter;
   sort: DraftPoolSort;
   view: DraftMobileView;
+  pool: DraftPoolTab;
   query: string;
 }
 
@@ -23,6 +27,7 @@ export function parseDraftViewParams(params: URLSearchParams): DraftViewParams {
   const roleValue = params.get("role");
   const sortValue = params.get("sort");
   const viewValue = params.get("view");
+  const poolValue = params.get("pool");
   return {
     role:
       roleValue === "tank" || roleValue === "damage" || roleValue === "support"
@@ -30,6 +35,7 @@ export function parseDraftViewParams(params: URLSearchParams): DraftViewParams {
         : "all",
     sort: sortValue === "name" ? "name" : "rank",
     view: viewValue === "team" || viewValue === "order" ? viewValue : "pool",
+    pool: poolValue === "shortlist" || poolValue === "drafted" ? poolValue : "available",
     query: params.get("q")?.trim() ?? ""
   };
 }
@@ -64,24 +70,43 @@ export function filterDraftPlayers(
 }
 
 export interface DraftPoolView {
+  /** Still pickable, unfiltered — the denominator every role count is about. */
   available: DraftPlayer[];
+  /** Already on a roster, with `drafted_by_team_id` set. */
+  drafted: DraftPlayer[];
+  /** The caller's shortlist, narrowed to players still available. */
+  shortlist: DraftPlayer[];
+  /** Whichever of the three `pool` names, with role/query/sort applied. */
   filtered: DraftPlayer[];
   roleCounts: Record<DraftRole, number>;
 }
 
-/** The pool as both workspaces show it: still-pickable players, filtered. */
+const NO_SHORTLIST: ReadonlySet<number> = new Set();
+
+/**
+ * The three lists the pool column can show, plus the filtered one it renders.
+ *
+ * `roleCounts` deliberately stays on AVAILABLE whichever tab is open: "who is
+ * left per role" is the question the role chips answer, and counting the
+ * shortlist or the drafted there would answer a question nobody asked.
+ */
 export function draftPoolView(
   players: DraftPlayer[],
-  filters: Pick<DraftViewParams, "role" | "sort" | "query">
+  filters: Pick<DraftViewParams, "role" | "sort" | "query" | "pool">,
+  shortlistIds: ReadonlySet<number> = NO_SHORTLIST
 ): DraftPoolView {
   const available = players.filter((player) => player.status === "available");
+  const drafted = players.filter((player) => player.status === "picked");
+  const shortlist = available.filter((player) => shortlistIds.has(player.id));
   const roleCounts: Record<DraftRole, number> = { tank: 0, damage: 0, support: 0 };
   for (const player of available) {
     for (const role of playerRoles(player)) {
       roleCounts[role] += 1;
     }
   }
-  return { available, filtered: filterDraftPlayers(available, filters), roleCounts };
+  const source =
+    filters.pool === "drafted" ? drafted : filters.pool === "shortlist" ? shortlist : available;
+  return { available, drafted, shortlist, filtered: filterDraftPlayers(source, filters), roleCounts };
 }
 
 export function optionForSelection(
@@ -111,26 +136,6 @@ export function playerRoles(player: DraftPlayer): DraftRole[] {
   return Array.from(
     new Set<DraftRole>(player.primary_role ? [player.primary_role, ...declared] : declared)
   );
-}
-
-/**
- * The role to preselect for a player: the first SAFE one in the player's own
- * order (primary, then the declared secondaries).
- *
- * The server emits an option per role in its own canonical order — tank, damage,
- * support (`evaluate_pick_options` iterates `HERO_TYPE_CLASSES`) — so reading
- * its first safe option handed a support main their tank option. `null` means
- * the player has no safe role at all, which is what blocks the row.
- */
-export function safeRoleForPlayer(
-  options: DraftPickOptionsResponse | null,
-  player: DraftPlayer
-): DraftRole | null {
-  const safe = (options?.options ?? []).filter(
-    (option) => option.player_id === player.id && option.is_safe
-  );
-  if (safe.length === 0) return null;
-  return playerRoles(player).find((role) => safe.some((option) => option.role === role)) ?? safe[0].role;
 }
 
 export function buildRosterByTeam(players: DraftPlayer[]): Map<number, DraftPlayer[]> {

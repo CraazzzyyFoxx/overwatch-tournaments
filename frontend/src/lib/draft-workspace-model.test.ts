@@ -1,16 +1,16 @@
 import { describe, expect, it } from "vitest";
 
-import type { DraftPickOption, DraftPickOptionsResponse, DraftPick, DraftPlayer, DraftRole } from "@/types/draft.types";
+import type { DraftPickOptionsResponse, DraftPick, DraftPlayer } from "@/types/draft.types";
 
 import {
   buildRosterByTeam,
+  draftPoolView,
   filterDraftPlayers,
   normalizeTopHeroes,
   groupPicksByRound,
   rosterRoleForPlayer,
   slotRankForPlayer,
   optionForSelection,
-  safeRoleForPlayer,
   playerRoles,
   parseDraftViewParams
 } from "./draft-workspace-model";
@@ -39,12 +39,15 @@ describe("draft workspace model", () => {
   it("filters and sorts the public pool with URL-safe values", () => {
     expect(filterDraftPlayers(players, { role: "all", sort: "name", query: "a" }).map((player) => player.id)).toEqual([2, 1]);
     expect(filterDraftPlayers(players, { role: "damage", sort: "rank", query: "" }).map((player) => player.id)).toEqual([2]);
-    expect(parseDraftViewParams(new URLSearchParams("role=oops&sort=name&view=team&q=abc"))).toEqual({
+    expect(parseDraftViewParams(new URLSearchParams("role=oops&sort=name&view=team&pool=drafted&q=abc"))).toEqual({
       role: "all",
       sort: "name",
       view: "team",
+      pool: "drafted",
       query: "abc"
     });
+    // An unknown pool name falls back to the one everybody starts on.
+    expect(parseDraftViewParams(new URLSearchParams("pool=oops")).pool).toBe("available");
   });
 
   it("derives role choices and rosters from the public board snapshot", () => {
@@ -55,6 +58,26 @@ describe("draft workspace model", () => {
     ] as DraftPlayer[]);
     expect(rosters.get(5)?.map((entry) => entry.id)).toEqual([1]);
     expect(rosters.has(0)).toBe(false);
+  });
+
+  it("splits the board into the three lists the pool column can show", () => {
+    const pool = [
+      { ...players[0], id: 1, status: "available" },
+      { ...players[1], id: 2, status: "picked", drafted_by_team_id: 5 }
+    ] as DraftPlayer[];
+    const base = { role: "all", sort: "rank", query: "" } as const;
+
+    const available = draftPoolView(pool, { ...base, pool: "available" }, new Set([1]));
+    expect(available.filtered.map((entry) => entry.id)).toEqual([1]);
+    expect(available.drafted.map((entry) => entry.id)).toEqual([2]);
+    // The role chips keep counting who is LEFT whichever tab is open.
+    expect(available.roleCounts.support).toBe(1);
+    expect(available.roleCounts.tank).toBe(0);
+
+    expect(draftPoolView(pool, { ...base, pool: "drafted" }, new Set([1])).filtered.map((e) => e.id)).toEqual([2]);
+    expect(draftPoolView(pool, { ...base, pool: "shortlist" }, new Set([1])).filtered.map((e) => e.id)).toEqual([1]);
+    // A shortlisted player who got drafted drops out of the shortlist tab.
+    expect(draftPoolView(pool, { ...base, pool: "shortlist" }, new Set([2])).filtered).toEqual([]);
   });
 });
 
@@ -97,24 +120,6 @@ describe("extended filterDraftPlayers search", () => {
     const strict = mkPlayer({ id: 4, primary_role: "damage", secondary_roles: ["tank"] });
     expect(playerRoles(strict)).toEqual(["damage", "tank"]);
     expect(filterDraftPlayers([strict], { role: "support", sort: "rank", query: "" })).toEqual([]);
-  });
-  it("preselects the primary role when it is safe, not the server's first safe option", () => {
-    // The server emits options in tank, damage, support order, so a support main
-    // who also plays tank used to open on tank.
-    const player = mkPlayer({ id: 5, primary_role: "support", secondary_roles: ["tank"] });
-    const option = (role: DraftRole, is_safe: boolean): DraftPickOption => ({
-      player_id: 5, role, is_safe, reason_code: is_safe ? null : "role_shortage",
-      unmatched_slots: [], blocking_player_ids: [], suggestion_score: null
-    });
-    const response = (options: DraftPickOption[]): DraftPickOptionsResponse => ({
-      pick_id: 1, pick_version: 0, draft_team_id: 2, options
-    });
-
-    expect(safeRoleForPlayer(response([option("tank", true), option("support", true)]), player)).toBe("support");
-    // Primary blocked: fall to the next declared role rather than to nothing.
-    expect(safeRoleForPlayer(response([option("tank", true), option("support", false)]), player)).toBe("tank");
-    expect(safeRoleForPlayer(response([option("tank", false), option("support", false)]), player)).toBeNull();
-    expect(safeRoleForPlayer(null, player)).toBeNull();
   });
 });
 

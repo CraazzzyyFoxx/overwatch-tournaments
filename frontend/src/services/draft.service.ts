@@ -2,6 +2,7 @@ import { apiFetch } from "@/lib/api-fetch";
 import type {
   DraftBoard,
   DraftFeasibility,
+  DraftPickExtendRequest,
   DraftPickOptionsResponse,
   DraftRole,
   DraftRoleEditRequest,
@@ -170,6 +171,15 @@ export default class draftService {
     }
   ): Promise<DraftSession> {
     const res = await apiFetch(`/api/v1/balancer/draft/picks/${pickId}/override`, {
+      method: "POST",
+      body
+    });
+    return res.json();
+  }
+
+  /** Admin: add seconds to the current pick's clock. */
+  static async extend(pickId: number, body: DraftPickExtendRequest): Promise<DraftSession> {
+    const res = await apiFetch(`/api/v1/balancer/draft/picks/${pickId}/extend`, {
       method: "POST",
       body
     });

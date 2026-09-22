@@ -13,6 +13,7 @@ import { RoomChat } from "@/components/chat/RoomChat";
 import { shouldShowInitialDraftSkeleton } from "@/components/draft/draft-loading-state";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
 import { useDivisionGrid } from "@/hooks/useCurrentWorkspace";
+import { usePermissions } from "@/hooks/usePermissions";
 import type { Tournament } from "@/types/tournament.types";
 import type { DivisionGrid } from "@/types/workspace.types";
 
@@ -25,9 +26,8 @@ import {
 import { computeGating } from "@/lib/draft-logic";
 import { draftChatRoom } from "@/lib/chat-rooms";
 import { parseDraftViewParams, type DraftViewParams } from "@/lib/draft-workspace-model";
-import { CaptainDraftWorkspace } from "./CaptainDraftWorkspace";
 import { DraftPageHero } from "./DraftPageHero";
-import { SpectatorDraftWorkspace } from "./SpectatorDraftWorkspace";
+import { DraftWorkspace } from "./DraftWorkspace";
 
 interface DraftBoardProps {
   tournament: Tournament;
@@ -43,13 +43,18 @@ export function DraftBoard({ tournament }: Readonly<DraftBoardProps>) {
   const { presence, connectionState } = useDraftRealtime(tournament.id, board);
   const mutations = useDraftMutations(tournament.id);
   const { user } = useAuthProfile();
+  const { canAccessPermission } = usePermissions();
+  // The same right the control room is gated on: whoever may build this
+  // tournament's teams runs its draft. Admin affordances are additive — an
+  // admin who also captains a team keeps the captain's confirm button.
+  const isAdmin = canAccessPermission("team.create", tournament.workspace_id);
   const myPlayerIds = useMemo(
     () => (user?.linkedPlayers ?? []).map((player) => player.playerId),
     [user]
   );
   const gating = useMemo(
-    () => (board ? computeGating(board, myPlayerIds, user?.id ?? null, false) : null),
-    [board, myPlayerIds, user?.id]
+    () => (board ? computeGating(board, myPlayerIds, user?.id ?? null, isAdmin) : null),
+    [board, myPlayerIds, user?.id, isAdmin]
   );
   const optionsQuery = useDraftPickOptionsQuery(
     board?.current_pick?.id ?? null,
@@ -79,6 +84,7 @@ export function DraftBoard({ tournament }: Readonly<DraftBoardProps>) {
     setOptionalParam(next, "role", values.role, "all");
     setOptionalParam(next, "sort", values.sort, "rank");
     setOptionalParam(next, "view", values.view, "pool");
+    setOptionalParam(next, "pool", values.pool, "available");
     setOptionalParam(next, "q", values.query.trim(), "");
 
     const query = next.toString();
@@ -130,29 +136,19 @@ export function DraftBoard({ tournament }: Readonly<DraftBoardProps>) {
         presence={presence}
         connectionState={connectionState}
       />
-      {gating.isCaptain ? (
-        <CaptainDraftWorkspace
-          board={board}
-          gating={gating}
-          options={optionsQuery.data ?? null}
-          optionsLoading={optionsQuery.isFetching}
-          onRetryOptions={() => void optionsQuery.refetch()}
-          connectionState={connectionState}
-          viewParams={viewParams}
-          onViewParamsChange={updateViewParams}
-          mutations={mutations}
-          divisionGrid={divisionGrid}
-          onlineCaptainIds={onlineCaptainIds}
-        />
-      ) : (
-        <SpectatorDraftWorkspace
-          board={board}
-          divisionGrid={divisionGrid}
-          viewParams={viewParams}
-          onViewParamsChange={updateViewParams}
-          onlineCaptainIds={onlineCaptainIds}
-        />
-      )}
+      <DraftWorkspace
+        board={board}
+        gating={gating}
+        options={optionsQuery.data ?? null}
+        optionsLoading={optionsQuery.isFetching}
+        onRetryOptions={() => void optionsQuery.refetch()}
+        connectionState={connectionState}
+        viewParams={viewParams}
+        onViewParamsChange={updateViewParams}
+        mutations={mutations}
+        divisionGrid={divisionGrid}
+        onlineCaptainIds={onlineCaptainIds}
+      />
       {/* Docked over the page, not a column of the board: the board wants
           every pixel of width it can get. Keyed by the SESSION — a re-seed is
           a different draft and deserves its own conversation. */}

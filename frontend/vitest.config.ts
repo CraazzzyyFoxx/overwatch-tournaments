@@ -270,7 +270,11 @@ export default defineConfig({
       "src/hooks/useInvalidation.test.ts",
       // The manifest parity gate: this one is the reason a resource cannot be
       // published without the client knowing which queries it stales.
-      "src/lib/realtime-resources.test.ts"
+      "src/lib/realtime-resources.test.ts",
+      // File-level, not `src/components/draft/**`: that folder also holds
+      // `bun:test` files (`DraftRoomSkeleton.test.ts`), which fail on the
+      // import the moment vitest collects them.
+      "src/components/draft/PlayerProfileDialog.behavior.test.tsx"
     ]
   }
 });

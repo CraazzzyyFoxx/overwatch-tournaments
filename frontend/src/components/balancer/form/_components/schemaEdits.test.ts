@@ -34,7 +34,6 @@ function field(key: string, extra: Partial<FormField> = {}): FormField {
     options: null,
     validation: null,
     params: {},
-    show_in_draft: false,
     ...extra
   };
 }
@@ -181,21 +180,6 @@ describe("sanitizeSchema", () => {
     );
     expect(clean.sections[0].fields[0].params).toEqual({});
     expect(clean.sections[0].fields[1].params).toEqual({ require_verified: true });
-  });
-
-  it("forces show_in_draft off where the server would refuse it", () => {
-    const clean = sanitizeSchema(
-      schemaOf([
-        "one",
-        [
-          field("hidden", { visibility: "organizers", show_in_draft: true }),
-          field("builtin_one", { kind: "builtin", key: "stream_pov", show_in_draft: true }),
-          field("shown", { show_in_draft: true })
-        ]
-      ])
-    );
-    const drafted = clean.sections[0].fields.map((f) => f.show_in_draft);
-    expect(drafted).toEqual([false, false, true]);
   });
 
   it("saves a missing editable flag as closed", () => {

@@ -113,7 +113,6 @@ function builtin(key: string, required = false) {
     options: null,
     validation: null,
     params: {},
-    show_in_draft: false,
     editable: false
   };
 }
@@ -331,7 +330,6 @@ describe("registration form builder", () => {
               options: ["Twitch", "YouTube"],
               validation: null,
               params: {},
-              show_in_draft: false,
               editable: false,
               visible_when: { field: "stream_pov", op: "truthy" }
             }

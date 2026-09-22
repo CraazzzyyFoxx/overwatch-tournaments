@@ -21,6 +21,11 @@ export interface DraftSession {
   format: DraftFormat;
   rounds: number;
   pick_time_seconds: number;
+  /**
+   * Extra seconds a pick gets AFTER its main clock runs out, before the
+   * autopick fires. `0` disables overtime: the deadline is then hard.
+   */
+  overtime_seconds: number;
   // The shape the session was created with. There is no `team_size` field: the
   // server resolves the shape and every derived number lives on it.
   roster_shape: RosterShape;
@@ -47,10 +52,10 @@ export interface DraftTeam {
   exported_team_id: number | null;
 }
 
-/** One organizer-approved registration answer, ready to render in the inspector.
- *  Only fields flagged `show_in_draft` on the registration form reach the
- *  public board, and the server sends the field's CURRENT label and schema kind
- *  with each value so the draft client needs no form schema of its own. */
+/** One public registration answer, ready to render on the player card.
+ *  Every custom question the organizer left PUBLIC reaches the draft board, and
+ *  the server sends the field's CURRENT label and schema kind with each value so
+ *  the draft client needs no form schema of its own. */
 interface DraftPlayerCustomField {
   key: string;
   label: string;
@@ -110,6 +115,12 @@ export interface DraftPick {
   is_admin_override: boolean;
   clock_started_at: string | null;
   clock_expires_at: string | null;
+  /**
+   * Set the moment the main clock expired and the overtime phase began;
+   * `clock_expires_at` then holds the OVERTIME deadline. Null while the pick
+   * is on its main clock (or when the session runs without overtime).
+   */
+  overtime_started_at: string | null;
   version: number;
 }
 
@@ -193,6 +204,10 @@ export interface DraftEventData {
   picked_player_id?: number | null;
   current_pick_index?: number | null;
   clock_expires_at?: string | null;
+  /** On `draft.overtime_started`: when the main clock ran out. */
+  overtime_started_at?: string | null;
+  /** On `draft.clock_extended`: how many seconds the admin added. */
+  added_seconds?: number;
   remaining_ms?: number;
   count_bucket?: string;
   /** Why the draft paused, on `draft.blocked`. */
@@ -216,6 +231,7 @@ export interface DraftSessionCreateRequest {
   source_balance_id?: number | null;
   format?: DraftFormat;
   pick_time_seconds?: number;
+  overtime_seconds?: number;
   autopick_strategy?: DraftAutopickStrategy;
   allow_admin_override?: boolean;
   settings?: Record<string, unknown>;
@@ -279,4 +295,10 @@ export interface DraftRoleEditResponse {
   committed: boolean;
   before: DraftFeasibility;
   after: DraftFeasibility;
+}
+
+/** Admin: add seconds to the current pick's clock (works while paused too). */
+export interface DraftPickExtendRequest {
+  expected_version: number;
+  seconds: number;
 }

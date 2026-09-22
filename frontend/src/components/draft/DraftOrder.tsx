@@ -79,7 +79,14 @@ export function DraftOrder({
                           </span>
                         )}
                       </span>
-                      <span className="block truncate text-xs text-[color:var(--aqt-fg-muted)]">{team?.name ?? t("unknownTeam")}</span>
+                      <span className="flex min-w-0 items-center gap-1">
+                        <span className="truncate text-xs text-[color:var(--aqt-fg-muted)]">{team?.name ?? t("unknownTeam")}</span>
+                        {/* How the pick was resolved, when it was not simply the
+                            captain choosing in time. */}
+                        {done && pick.is_autopick && <PickBadge>{t("badge.auto")}</PickBadge>}
+                        {done && pick.is_admin_override && <PickBadge>{t("badge.override")}</PickBadge>}
+                        {done && pick.overtime_started_at != null && <PickBadge>{t("badge.overtime")}</PickBadge>}
+                      </span>
                     </span>
                     {division != null ? (
                       <DivisionIcon
@@ -110,5 +117,14 @@ export function DraftOrder({
         ))}
       </div>
     </section>
+  );
+}
+
+/** How a completed pick was resolved: autopick, admin override, overtime. */
+function PickBadge({ children }: Readonly<{ children: string }>) {
+  return (
+    <span className="shrink-0 rounded border border-[color:var(--aqt-border-2)] px-1 text-label uppercase tracking-wide text-[color:var(--aqt-fg-muted)]">
+      {children}
+    </span>
   );
 }

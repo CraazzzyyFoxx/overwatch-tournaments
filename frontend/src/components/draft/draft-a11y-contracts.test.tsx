@@ -1,7 +1,7 @@
 import { describe, expect, mock, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import type { DraftPlayer } from "@/types/draft.types";
+import type { DraftPlayer, DraftTeam } from "@/types/draft.types";
 
 mock.module("next-intl", () => ({
   useLocale: () => "en",
@@ -24,51 +24,129 @@ const player = {
   is_flex: false,
   is_captain: false,
   effective_rank: 3000,
-  secondary_roles: [],
-  role_ranks: {},
+  secondary_roles: ["damage"],
+  role_ranks: { support: 3000, damage: 2800 },
   role_sources: {},
+  drafted_by_team_id: null,
   notes: null
 } as unknown as DraftPlayer;
 
-function renderPool(headingId: string) {
+const team: DraftTeam = {
+  id: 3,
+  session_id: 1,
+  captain_user_id: null,
+  captain_auth_user_id: null,
+  name: "Team Three",
+  draft_position: 1,
+  exported_team_id: null
+};
+
+const POOL_COUNTS = { available: 1, shortlist: 0, drafted: 0 };
+
+function renderPool(
+  overrides: Partial<Parameters<typeof PlayerPool>[0]> = {},
+  headingId = "player-pool-mobile-heading"
+) {
   return renderToStaticMarkup(
     <PlayerPool
       players={[player]}
       totalPlayers={1}
-      roleCounts={{ tank: 0, damage: 0, support: 1 }}
-      selectedPlayerId={null}
+      roleCounts={{ tank: 0, damage: 1, support: 1 }}
+      poolCounts={POOL_COUNTS}
+      pool="available"
+      selection={null}
       shortlist={new Set<number>()}
       role="all"
       sort="rank"
       query=""
       options={null}
       safetyRequired={false}
+      teams={[team]}
       onSelect={() => {}}
+      onOpenProfile={() => {}}
       onToggleShortlist={() => {}}
       onFiltersChange={() => {}}
       onResetFilters={() => {}}
       divisionGrid={{ tiers: [] }}
       headingId={headingId}
+      {...overrides}
     />
   );
 }
 
 describe("draft accessibility contracts", () => {
-  test("a pool row selects through a real button, never a div[role=button]", () => {
-    const html = renderPool("player-pool-mobile-heading");
+  test("every role a player may be picked on is its own named button", () => {
+    const html = renderPool();
 
     expect(html).not.toContain('role="button"');
-    expect(html).toContain('aria-label="selectPlayer:{&quot;player&quot;:&quot;Ana#1234&quot;}"');
-    // The select button is childless, so the profile link stays a sibling and
-    // never gets absorbed into the button's accessible name.
-    expect(html).toMatch(/aria-label="selectPlayer:[^"]*"[^>]*><\/button>/);
+    // Primary first, and each button names the role it would spend the player on.
+    expect(html).toContain(
+      'aria-label="pickAs:{&quot;player&quot;:&quot;Ana#1234&quot;,&quot;role&quot;:&quot;roles.support&quot;}"'
+    );
+    expect(html).toContain(
+      'aria-label="pickAs:{&quot;player&quot;:&quot;Ana#1234&quot;,&quot;role&quot;:&quot;roles.damage&quot;}"'
+    );
+    // The role's OWN rank, not the player's effective one.
+    expect(html).toContain("2800");
+    // The name opens the profile; it is not the pick target.
+    expect(html).toContain(
+      'aria-label="openProfile:{&quot;player&quot;:&quot;Ana#1234&quot;}"'
+    );
+  });
+
+  test("a blocked role stays reachable and says why", () => {
+    const html = renderPool({
+      safetyRequired: true,
+      options: {
+        pick_id: 1,
+        pick_version: 2,
+        draft_team_id: 3,
+        options: [
+          {
+            player_id: 7,
+            role: "support",
+            is_safe: false,
+            reason_code: "role_shortage",
+            unmatched_slots: [],
+            blocking_player_ids: [],
+            suggestion_score: null
+          }
+        ]
+      }
+    });
+
+    // aria-disabled, not `disabled`: the reason has to stay readable, and a
+    // disabled button is skipped by every screen reader's form controls list.
+    expect(html).toContain('aria-disabled="true"');
+    expect(html).toContain('title="optionReason.role_shortage"');
+  });
+
+  test("a spectator pool carries no pick buttons at all", () => {
+    const html = renderPool({ onSelect: undefined, onToggleShortlist: undefined });
+
+    expect(html).not.toContain("pickAs:");
+    expect(html).not.toContain("addShortlist");
+    // Still readable: the roles and their ranks are public information.
+    expect(html).toContain("2800");
+    expect(html).toContain("openProfile:");
+  });
+
+  test("the drafted tab names the team instead of offering roles", () => {
+    const html = renderPool({
+      pool: "drafted",
+      players: [{ ...player, status: "picked", drafted_by_team_id: 3 } as DraftPlayer],
+      poolCounts: { available: 0, shortlist: 0, drafted: 1 }
+    });
+
+    expect(html).toContain("Team Three");
+    expect(html).not.toContain("pickAs:");
   });
 
   test("each mounted pool owns a unique heading id", () => {
     // The mobile and desktop trees are both mounted, so a hardcoded id would
     // make aria-labelledby resolve to the wrong section.
-    const mobile = renderPool("player-pool-mobile-heading");
-    const desktop = renderPool("player-pool-desktop-heading");
+    const mobile = renderPool({}, "player-pool-mobile-heading");
+    const desktop = renderPool({}, "player-pool-desktop-heading");
 
     expect(mobile).toContain('id="player-pool-mobile-heading"');
     expect(desktop).toContain('id="player-pool-desktop-heading"');

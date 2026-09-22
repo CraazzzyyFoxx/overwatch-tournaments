@@ -143,3 +143,51 @@ describe.each(["grid", "column"] as const)("team roster rows (%s)", (variant) =>
     expect(html).not.toContain("SR");
   });
 });
+
+describe.each(["grid", "column"] as const)("open slot filters (%s)", (variant) => {
+  function renderMine(shape: RosterShape, activeSlotRole: "tank" | "damage" | "support" | null = null) {
+    return renderToStaticMarkup(
+      <TeamRosters
+        teams={[team]}
+        players={[drafted]}
+        picks={[pick]}
+        shape={shape}
+        variant={variant}
+        divisionGrid={GRID}
+        myTeamId={team.id}
+        onSlotFilter={() => {}}
+        activeSlotRole={activeSlotRole}
+      />
+    );
+  }
+
+  test("my own open role slots are buttons that filter the pool", () => {
+    // Shape wants 1 tank / 2 damage / 2 support and the roster holds one
+    // support, so four slots are open and each names the role it still wants.
+    const html = renderMine(ROLE_SHAPE);
+
+    expect(html).toContain('aria-label="filterBySlot:{&quot;role&quot;:&quot;roles.tank&quot;}"');
+    expect(html).toContain('aria-label="filterBySlot:{&quot;role&quot;:&quot;roles.damage&quot;}"');
+    expect(html).toContain('aria-pressed="false"');
+  });
+
+  test("the slot matching the active pool filter reads as pressed", () => {
+    const html = renderMine(ROLE_SHAPE, "tank");
+
+    expect(html).toContain('aria-pressed="true"');
+  });
+
+  test("an all-flex roster offers no slot buttons", () => {
+    // Nobody is assigned a role, so there is no role to filter the pool by.
+    const html = renderMine(FLEX_SHAPE);
+
+    expect(html).not.toContain("filterBySlot");
+  });
+
+  test("another captain's open slots stay inert", () => {
+    const html = render(ROLE_SHAPE, variant);
+
+    expect(html).not.toContain("filterBySlot");
+    expect(html).toContain("openSlot");
+  });
+});

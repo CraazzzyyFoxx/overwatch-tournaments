@@ -33,6 +33,23 @@ function setPick(
 }
 
 /**
+ * Patch one pick and keep `current_pick` pointing at the SAME object when it is
+ * that pick: the command bar reads the clock off `current_pick`, which is a
+ * separate reference from the row in `picks`.
+ */
+function patchPick(board: DraftBoard, pickId: number, patch: Partial<DraftPick>): DraftBoard {
+  const picks = setPick(board, pickId, patch);
+  return {
+    ...board,
+    picks,
+    current_pick:
+      board.current_pick?.id === pickId
+        ? picks.find((p) => p.id === pickId) ?? board.current_pick
+        : board.current_pick,
+  };
+}
+
+/**
  * Apply a realtime draft event to a board snapshot, immutably. Idempotent:
  * re-applying the same event converges to the same state.
  */
@@ -81,6 +98,9 @@ export function applyDraftEvent(
       const picks = setPick(board, data.pick_id, {
         status: "on_clock",
         clock_expires_at: data.clock_expires_at ?? null,
+        // A pick going on the clock starts on its MAIN clock, always: a
+        // rollback can put a pick that already ran into overtime back here.
+        overtime_started_at: null,
       });
       const current = picks.find((p) => p.id === data.pick_id) ?? null;
       return {
@@ -89,6 +109,25 @@ export function applyDraftEvent(
         current_pick: current,
         session: { ...board.session, current_pick_id: data.pick_id, status: "live" },
       };
+    }
+
+    // The main clock ran out and the grace period began: `clock_expires_at`
+    // now carries the OVERTIME deadline, so the ring switches its total too.
+    case "draft.overtime_started": {
+      if (data.pick_id == null) return board;
+      return patchPick(board, data.pick_id, {
+        overtime_started_at: data.overtime_started_at ?? null,
+        clock_expires_at: data.clock_expires_at ?? null,
+        version: data.pick_version ?? board.picks.find((p) => p.id === data.pick_id)?.version ?? 0,
+      });
+    }
+
+    case "draft.clock_extended": {
+      if (data.pick_id == null) return board;
+      return patchPick(board, data.pick_id, {
+        clock_expires_at: data.clock_expires_at ?? null,
+        version: data.pick_version ?? board.picks.find((p) => p.id === data.pick_id)?.version ?? 0,
+      });
     }
 
     case "draft.paused":

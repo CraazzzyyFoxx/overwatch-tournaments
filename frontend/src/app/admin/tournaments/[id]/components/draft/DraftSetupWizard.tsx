@@ -53,7 +53,7 @@ import {
   validateSetupStep
 } from "./setup-model";
 import type { DraftCaptainSetup, DraftSetupConfig } from "./setup-types";
-import { isInDraftPool, poolRegistrationSummary } from "./setup-types";
+import { captainRankSummary, isInDraftPool, poolRegistrationSummary } from "./setup-types";
 
 interface DraftSetupWizardProps {
   tournamentId: number;
@@ -70,6 +70,7 @@ function configFromSession(session: DraftSession | null, shape: RosterShape): Dr
   return {
     teamCount: typeof teamCount === "number" ? teamCount : 2,
     pickTimeSeconds: session?.pick_time_seconds ?? 45,
+    overtimeSeconds: session?.overtime_seconds ?? 0,
     format: session?.format ?? "snake",
     autopickStrategy: session?.autopick_strategy ?? "best_fit",
     allowAdminOverride: session?.allow_admin_override ?? true,
@@ -191,9 +192,7 @@ export function DraftSetupWizard({
   );
   const ranks = useMemo(
     () =>
-      new Map(
-        pool.map((registration) => [registration.id, poolRegistrationSummary(registration).rank])
-      ),
+      new Map(pool.map((registration) => [registration.id, captainRankSummary(registration).rank])),
     [pool]
   );
   const orderedCaptainIds = useMemo(
@@ -219,6 +218,7 @@ export function DraftSetupWizard({
         pool_source: "balancer_balance",
         format: config.format,
         pick_time_seconds: config.pickTimeSeconds,
+        overtime_seconds: config.overtimeSeconds,
         autopick_strategy: config.autopickStrategy,
         allow_admin_override: config.allowAdminOverride,
         settings: {

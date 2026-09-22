@@ -215,7 +215,6 @@ const FORM: RegistrationForm = {
             required: true,
             visibility: "public",
             params: {},
-            show_in_draft: false
           },
           {
             key: "stream_pov",
@@ -223,7 +222,6 @@ const FORM: RegistrationForm = {
             required: false,
             visibility: "public",
             params: {},
-            show_in_draft: false
           },
           {
             key: "scrims",
@@ -232,7 +230,6 @@ const FORM: RegistrationForm = {
             required: false,
             visibility: "public",
             params: {},
-            show_in_draft: false
           },
           // Organizers-only: a public read never carries its answer, so the
           // card must not build a row for it.
@@ -243,7 +240,6 @@ const FORM: RegistrationForm = {
             required: false,
             visibility: "organizers",
             params: {},
-            show_in_draft: false
           }
         ]
       }
@@ -735,7 +731,6 @@ describe("editing your own registration", () => {
                 required: true,
                 visibility: "public",
                 params: {},
-                show_in_draft: false
               },
               {
                 key: "public_notes",
@@ -743,7 +738,6 @@ describe("editing your own registration", () => {
                 required: false,
                 visibility: "public",
                 params: {},
-                show_in_draft: false
               }
             ]
           }

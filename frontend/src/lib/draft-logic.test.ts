@@ -70,6 +70,7 @@ function pick(id: number, teamId: number, status: DraftPick["status"]): DraftPic
     is_admin_override: false,
     clock_started_at: null,
     clock_expires_at: null,
+    overtime_started_at: null,
     version: 0,
   };
 }
@@ -85,6 +86,7 @@ function makeBoard(): DraftBoard {
       format: "snake",
       rounds: 2,
       pick_time_seconds: 45,
+      overtime_seconds: 15,
       roster_shape: {
         slots: { tank: 1, damage: 2 },
         team_size: 3,
@@ -237,6 +239,57 @@ describe("computeGating", () => {
     expect(g.isAdmin).toBe(true);
     expect(g.isSpectator).toBe(false);
     expect(g.isMyPick).toBe(false);
+  });
+});
+
+describe("overtime", () => {
+  it("overtime_started moves the deadline and marks the phase on the current pick", () => {
+    const next = applyDraftEvent(
+      makeBoard(),
+      ev("draft.overtime_started", {
+        pick_id: 1,
+        draft_team_id: 10,
+        overtime_started_at: "2026-06-05T00:00:45Z",
+        clock_expires_at: "2026-06-05T00:01:00Z",
+        pick_version: 3
+      })
+    );
+
+    // Both references: the command bar reads the clock off `current_pick`.
+    expect(next.current_pick!.overtime_started_at).toBe("2026-06-05T00:00:45Z");
+    expect(next.current_pick!.clock_expires_at).toBe("2026-06-05T00:01:00Z");
+    expect(next.current_pick!.version).toBe(3);
+    expect(next.picks.find((p) => p.id === 1)!.overtime_started_at).toBe("2026-06-05T00:00:45Z");
+  });
+
+  it("clock_extended moves the deadline and bumps the version", () => {
+    const next = applyDraftEvent(
+      makeBoard(),
+      ev("draft.clock_extended", {
+        pick_id: 1,
+        clock_expires_at: "2026-06-05T00:02:00Z",
+        added_seconds: 30,
+        pick_version: 5
+      })
+    );
+
+    expect(next.current_pick!.clock_expires_at).toBe("2026-06-05T00:02:00Z");
+    expect(next.current_pick!.version).toBe(5);
+  });
+
+  it("a pick going on the clock starts on its main clock", () => {
+    // A rollback can put a pick that already ran into overtime back on the
+    // clock; carrying the old marker over would render a fresh pick as expired.
+    const board = makeBoard();
+    board.picks = board.picks.map((p) =>
+      p.id === 2 ? { ...p, overtime_started_at: "2026-06-05T00:00:45Z" } : p
+    );
+    const next = applyDraftEvent(
+      board,
+      ev("draft.pick_started", { pick_id: 2, clock_expires_at: "2026-06-05T00:01:00Z" })
+    );
+
+    expect(next.current_pick!.overtime_started_at).toBeNull();
   });
 });
 

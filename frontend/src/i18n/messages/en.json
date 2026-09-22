@@ -932,7 +932,8 @@
       "autoCompact": "AUTO",
       "autopicking": "autopicking…",
       "remaining": "{seconds, plural, one {# second} other {# seconds}} left to pick",
-      "idle": "Pick clock is not running"
+      "idle": "Pick clock is not running",
+      "overtime": "Overtime"
     },
     "empty": {
       "title": "No draft yet",
@@ -4447,7 +4448,6 @@
     "poolCanContinue": "The pool meets the initial capacity and role-coverage checks.",
     "captainsSelected": "Captains selected",
     "searchCaptains": "Search by BattleTag or name…",
-    "roleFilter": "Filter by role",
     "captainSort": "Sort captains",
     "captainSorts": {
       "rank_desc": "Rank: high to low",
@@ -4566,8 +4566,6 @@
         "ready": "Ready",
         "setup": "Setup"
       },
-      "format": "Format",
-      "teamSize": "Roster size",
       "connection": "Realtime",
       "connectionState": {
         "idle": "Idle",
@@ -4575,8 +4573,6 @@
         "connected": "Connected",
         "reconnecting": "Reconnecting"
       },
-      "pickProgress": "Pick progress",
-      "round": "Round",
       "clock": "Clock",
       "systemPause": "System pause",
       "blockedReason": {
@@ -4585,15 +4581,9 @@
       },
       "resolveRoles": "Resolve role shortage",
       "onTheClock": "On the clock · round {round} · pick {pick}/{total}",
-      "watchPanel": "Feasibility and presence",
-      "currentPick": "Current operation",
       "noCurrentPick": "No current pick",
-      "currentPickMeta": "Pick #{pick} · round {round} · version {version}",
       "currentPickEmpty": "The session has no active pick.",
-      "openBoard": "Open public board",
-      "teams": "Teams",
-      "availablePlayers": "Available players",
-      "viewers": "Anonymous viewers",
+      "openBoard": "Open draft room",
       "feasibilityUnavailable": "Feasibility status is temporarily unavailable. It refreshes on its own — reload the page if it stays empty.",
       "feasible": "Completion remains feasible",
       "infeasible": "Role shortage detected",
@@ -4605,15 +4595,8 @@
         "flex": "Flex"
       },
       "deficit": "missing {missing} · eligible {eligible}",
-      "captainPresence": "Captain presence",
-      "captainPresenceCount": "{online} of {total} connected",
-      "connected": "Connected",
-      "offline": "Offline",
       "actions": {
-        "pause": "Pause",
-        "resume": "Resume manually",
         "autopick": "Run autopick",
-        "override": "Override pick",
         "rollback": "Roll back last pick",
         "cancel": "Cancel draft",
         "export": "Export teams"
@@ -4637,22 +4620,12 @@
         }
       },
       "actionSuccess": {
-        "pause": "Draft paused",
-        "resume": "Draft resumed",
         "autopick": "Autopick completed",
-        "override": "Admin override completed",
         "rollback": "Last pick rolled back",
         "cancel": "Draft cancelled",
         "export": "Teams exported"
       },
-      "dismiss": "Keep as is",
-      "overrideTitle": "Override the current pick",
-      "overrideDescription": "Only server-approved safe player-role options are available. This action is recorded in the private audit trail.",
-      "overrideOption": "Player and role",
-      "overrideSelect": "Choose a safe option",
-      "overrideReason": "Reason",
-      "overrideReasonPlaceholder": "Why is organizer intervention required?",
-      "overrideIncomplete": "Choose a safe player-role option and enter a reason before overriding the pick."
+      "dismiss": "Keep as is"
     },
     "roleConflict": {
       "title": "Add a missing player role",
@@ -4707,7 +4680,17 @@
       "exportRanks": "Re-export ranks",
       "exportRanksHint": "Refresh the ranks of the players this draft already exported. Teams stay untouched.",
       "exportRanksDone": "{count, plural, =0 {No player ranks needed updating} one {# player rank updated} other {# player ranks updated}}"
-    }
+    },
+    "overtime": "Overtime",
+    "overtimeOff": "Off",
+    "customOvertime": "Custom overtime in seconds",
+    "overtimeHint": "When the main clock runs out, the captain on the clock gets this grace period; the server autopicks only after it expires too. Off (0 s) means the main clock goes straight to autopick.",
+    "captainPoolFilters": "Filter the captain pool",
+    "captainFilters": {
+      "all": "All",
+      "selected": "Selected"
+    },
+    "captainRankOnRole": "Strongest on {role}"
   },
   "draftRedesign": {
     "room": {
@@ -4730,14 +4713,8 @@
     "captainOnline": "Online",
     "captainOffline": "Offline",
     "yourTurn": "Your turn",
-    "currentPick": "Current pick",
-    "noActivePick": "There is no active pick right now.",
     "pickMeta": "Pick {pick} of {total}",
     "pickWaiting": "Waiting for {team}",
-    "pickIdle": "Waiting for the next draft update.",
-    "roleShortagePaused": "Draft paused: the remaining role requirements cannot be fulfilled. The organizer must resolve the player roles before play resumes.",
-    "orderRecalculatedPaused": "Draft paused: this round's pick order was just recalculated from the live team averages. Check the new order — the organizer resumes the clock.",
-    "organizerPaused": "The draft is paused. Waiting for the organizer to resume.",
     "yourTurnInPicks": "You pick in {n, plural, one {# pick} other {# picks}}",
     "draftOrder": "Draft order",
     "round": "Round {n}",
@@ -4776,19 +4753,12 @@
     "unsafePlayerReason": "This player has no role that keeps every remaining roster feasible.",
     "removeShortlist": "Remove from shortlist",
     "addShortlist": "Add to shortlist",
-    "selectPlayer": "Select {player}",
-    "inspectorEmptyTitle": "Select a player",
-    "inspectorEmptyHint": "Player details and server-verified role options will appear here.",
-    "inspectorCoordinate": "Player inspector",
-    "closeInspector": "Close player details",
-    "inspectorHelp": "How the player inspector works",
     "captain": "Captain",
     "secondaryRoles": "Secondary roles",
     "note": "Note",
     "customFieldYes": "Yes",
     "customFieldNo": "No",
     "role": "Role",
-    "chooseRole": "Choose role",
     "primaryRole": "Primary role",
     "noRole": "No role",
     "noRoleHint": "This player has no ranked role, so there is nothing to pick them on. Add a rank in the balancer.",
@@ -4809,27 +4779,20 @@
       "slot_filled": "This roster slot is already filled.",
       "role_shortage": "Choosing this option would leave another required role impossible to fill."
     },
-    "shortlist": "Shortlist",
     "shortlistEmpty": "Save players here while you compare options. This list is private to this browser.",
-    "shortlistHelp": "How the shortlist works",
     "pickCommand": "Pick command",
     "selectionFor": "Selection for {team}",
     "noSelection": "Select a player and an available role to review the pick.",
     "waitingFreshData": "Confirmation waits for a live connection and options matching the current pick version.",
-    "reviewPick": "Review pick",
     "enterHint": "Enter",
-    "confirmPickTitle": "Confirm this pick?",
-    "confirmPickDescription": "Add {player} to {team} as {role}. This immediately advances the draft.",
     "confirmPick": "Confirm pick",
     "pickSuccess": "{player} was picked successfully.",
     "checkingSafeOptions": "Checking every player-role option against the remaining draft…",
     "safeOptionsUnavailable": "The safe-pick check could not be loaded, so no player is marked safe or blocked here.",
     "mobileViews": "Draft workspace sections",
     "mobileView": {
-      "pool": "Pool",
       "players": "Players",
       "rosters": "Rosters",
-      "team": "My team",
       "order": "Order"
     },
     "spectatorCompleted": "The draft is complete. These are the final rosters and recorded selections.",
@@ -4840,7 +4803,76 @@
     "loadErrorHint": "The server did not return a current board. Retry without losing your page context.",
     "retry": "Retry",
     "emptyTitle": "Draft is not configured yet",
-    "emptyHint": "The organizer needs to create and validate the draft before the public room becomes available."
+    "emptyHint": "The organizer needs to create and validate the draft before the public room becomes available.",
+    "profile": {
+      "tabRegistration": "Registration",
+      "tabStats": "Statistics",
+      "draftedBy": "Drafted by {team}",
+      "available": "Still in the pool",
+      "removed": "Removed from the pool",
+      "rolesHeading": "Roles",
+      "answersHeading": "Registration answers",
+      "noAnswers": "This player answered none of the public questions.",
+      "stats": {
+        "loading": "Loading statistics",
+        "error": "Could not load this player's statistics.",
+        "retry": "Try again",
+        "tournaments": "Tournaments",
+        "won": "Won",
+        "winrate": "Map winrate",
+        "avgPlacement": "Avg. placement",
+        "roles": "Roles played",
+        "topHeroes": "Most played heroes",
+        "recentTournaments": "Recent tournaments",
+        "maps": "{won}/{maps} maps",
+        "league": "League",
+        "empty": "No tournament history yet."
+      }
+    },
+    "openProfile": "Open {player}'s profile",
+    "pickAs": "Pick {player} as {role}",
+    "filterPool": "Which players to show",
+    "poolTab": {
+      "available": "Available ({count})",
+      "shortlist": "Shortlist ({count})",
+      "drafted": "Drafted ({count})"
+    },
+    "draftedEmpty": "Nobody has been drafted yet.",
+    "filterBySlot": "Show {role} players",
+    "selectionTaken": "{player} was just drafted by another team, so your selection was cleared.",
+    "overtime": "Overtime",
+    "overrideNote": "Why you are overriding this pick",
+    "applyOverride": "Apply override",
+    "overrideDisabled": "Admin overrides are disabled for this draft.",
+    "overrideSuccess": "{player} was assigned by override.",
+    "badge": {
+      "auto": "Auto",
+      "override": "Override",
+      "overtime": "OT"
+    },
+    "admin": {
+      "dock": "Organizer controls",
+      "pause": "Pause",
+      "resume": "Resume",
+      "addSeconds": "+{seconds}s",
+      "autopick": "Autopick",
+      "rollback": "Roll back",
+      "autopickTitle": "Autopick this turn?",
+      "autopickDescription": "The server picks the best remaining fit for the team on the clock and the draft moves on.",
+      "rollbackTitle": "Roll the last pick back?",
+      "rollbackDescription": "The last completed pick returns to the pool and that team goes back on the clock.",
+      "cancel": "Cancel",
+      "captainsOnline": "Captains {online}/{total}",
+      "feasible": "Feasible",
+      "infeasible": "Not feasible — fix roles",
+      "done": {
+        "pause": "The draft is paused.",
+        "resume": "The draft is running again.",
+        "rollback": "The last pick was rolled back.",
+        "extend": "Added {seconds} seconds to the clock.",
+        "autopick": "The pick was made automatically."
+      }
+    }
   },
   "auth": {
     "signIn": "Sign in",
@@ -5089,7 +5121,7 @@
       "visibility": "Who reads the answer",
       "visibilityPublic": "Everyone",
       "visibilityOrganizers": "Organizers only",
-      "visibilityHint": "Either way the registrant is asked. This decides who may read the answer afterwards.",
+      "visibilityHint": "Either way the registrant is asked. This decides who may read the answer afterwards — a public answer is also shown on the live draft board.",
       "visibilityFixed": "{field} always has the same readership — it cannot be changed per form.",
       "options": "Options (one per line)",
       "optionsPlaceholder": "Option A\nOption B\nOption C",
@@ -5110,9 +5142,6 @@
       "op_eq": "equals",
       "op_neq": "does not equal",
       "op_in": "is one of",
-      "showInDraft": "Show in the draft",
-      "showInDraftHint": "Show this answer on the live draft player card. The draft board is public — anyone watching can read it.",
-      "showInDraftBlocked": "Unavailable: the draft board is public and this answer is organizers-only.",
       "editable": "Allow changes after submitting",
       "editableHint": "The registrant may change this answer in their own application after submitting. Every other question stays frozen.",
       "editableHintBattleTag": "The registrant may change this until the application is reviewed — after review the BattleTag re-locks anyway, because every rank layer and the profile link hang off it.",
