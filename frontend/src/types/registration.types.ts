@@ -391,11 +391,6 @@ export interface RegistrationListResponse {
   /** Primary role code -> count. Server-computed on both paths. */
   role_counts: Record<string, number>;
   max_participants: number | null;
-  /** How many of `total` declared themselves (or were placed into) the reserve.
-   *  `total` and `role_counts` still count them — `total` is the queue
-   *  denominator — so the capacity line subtracts this client-side rather than
-   *  two server numbers disagreeing. */
-  reserve_count: number;
 }
 
 export interface RegistrationRole {

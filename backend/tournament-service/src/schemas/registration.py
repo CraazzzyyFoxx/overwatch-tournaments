@@ -427,13 +427,6 @@ class RegistrationListResponse(BaseModel):
     #: Primary role -> count, one bucket per registration. Mirrors what the overview
     #: card used to derive client-side from the rows it can no longer see.
     role_counts: dict[str, int] = Field(default_factory=dict)
-    #: How many of ``total`` declared themselves reserves (or were made one by
-    #: signing up late). Deliberately an EXTRA number rather than a subtraction:
-    #: ``total`` is the queue denominator (``queue_position`` counts the same
-    #: rows) and ``Tournament.registrations_count`` is cached separately, so a
-    #: reserve-adjusted ``total`` would disagree with both. The capacity line
-    #: subtracts this client-side.
-    reserve_count: int = 0
     #: Advisory capacity from the form, echoed here so a consumer that already reads
     #: this envelope needs no second request for it.
     max_participants: int | None = None

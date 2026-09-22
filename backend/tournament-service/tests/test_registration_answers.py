@@ -609,4 +609,128 @@ def test_a_gated_identity_is_refused_end_to_end(db_session) -> None:
     assert written == 0
 
 
+def _heroes_schema() -> FormSchema:
+    """A form whose ``roles`` question is open for editing and asks for top heroes."""
+    return FormSchema(
+        sections=[
+            FormSection(
+                key="all",
+                fields=[
+                    FormField(key="battle_tag", kind="builtin", required=True),
+                    FormField(
+                        key="roles",
+                        kind="builtin",
+                        editable=True,
+                        params={"top_heroes": {"enabled": True, "max": 5}},
+                    ),
+                ],
+            )
+        ]
+    )
+
+
+def test_a_role_top_hero_list_survives_being_replaced_in_place(db_session) -> None:
+    """A self-edit replaces the role's whole pick list, so a registrant resaving
+    picks they never touched asks the database to hold a row and its replacement
+    at once. The unit of work leaves the INSERTs and the DELETEs of one table
+    unordered, so both uniques on ``registration_role_hero`` have to hold at
+    COMMIT rather than per statement -- and did not, which is a 500 on the edit.
+
+    The raw insert/delete pair at the end is that same sequence in the form the
+    ORM's arbitrary sort will not reliably produce."""
+    suffix = uuid.uuid4().hex[:8]
+    slugs = [f"hero-{suffix}-{index}" for index in range(2)]
+
+    async def _run() -> list[tuple[str, int]]:
+        schema = _heroes_schema()
+        seeded = await _seed(db_session, schema=schema)
+        db_session.add_all(
+            models.Hero(slug=slug, name=slug, image_path="x", type=enums.HeroClass.tank) for slug in slugs
+        )
+        await db_session.commit()
+        catalog = {
+            row.slug: HeroCatalogEntry(id=row.id, slug=row.slug, hero_class=enums.HeroClass.tank)
+            for row in (await db_session.scalars(sa.select(models.Hero).where(models.Hero.slug.in_(slugs)))).all()
+        }
+        picks: list[dict[str, Any]] = [{"role": "tank", "is_primary": True, "top_heroes": slugs}]
+        try:
+            await registration_service.submit_public_registration(
+                db_session,
+                tournament_id=seeded["tournament_id"],
+                auth_user=seeded["auth_user"],
+                body=RegistrationSubmit(
+                    form_version_id=seeded["version_id"],
+                    # Run-unique: the BattleTag is the GLOBAL player anchor, so a
+                    # fixed one would re-resolve the player a previous run left
+                    # behind and this registration would belong to that account.
+                    answers={"battle_tag": f"H{suffix}#1234", "roles": picks},
+                ),
+            )
+            registration = await registration_service.get_registration(
+                db_session, seeded["tournament_id"], seeded["auth_user"].id
+            )
+            await registration_service.update_registration(
+                db_session,
+                registration,
+                tournament=await registration_service.tournament_repo.get(db_session, seeded["tournament_id"]),
+                values={"roles": picks},
+                schema=schema,
+                hero_catalog=catalog,
+                form_version_id=seeded["version_id"],
+            )
+            rows = (
+                await db_session.execute(
+                    sa.select(
+                        models.BalancerRegistrationRoleHero.id,
+                        models.BalancerRegistrationRoleHero.role_id,
+                        models.BalancerRegistrationRoleHero.hero_id,
+                        models.BalancerRegistrationRoleHero.priority,
+                    )
+                    .join(
+                        models.BalancerRegistrationRole,
+                        models.BalancerRegistrationRole.id == models.BalancerRegistrationRoleHero.role_id,
+                    )
+                    .where(models.BalancerRegistrationRole.registration_id == registration.id)
+                    .order_by(models.BalancerRegistrationRoleHero.priority)
+                )
+            ).all()
+            replaced = rows[0]
+            await db_session.execute(
+                sa.insert(models.BalancerRegistrationRoleHero).values(
+                    role_id=replaced.role_id, hero_id=replaced.hero_id, priority=replaced.priority
+                )
+            )
+            await db_session.execute(
+                sa.delete(models.BalancerRegistrationRoleHero).where(
+                    models.BalancerRegistrationRoleHero.id == replaced.id
+                )
+            )
+            await db_session.commit()
+            return [
+                (slug, priority)
+                for slug, priority in (
+                    await db_session.execute(
+                        sa.select(models.Hero.slug, models.BalancerRegistrationRoleHero.priority)
+                        .join(
+                            models.BalancerRegistrationRoleHero,
+                            models.BalancerRegistrationRoleHero.hero_id == models.Hero.id,
+                        )
+                        .join(
+                            models.BalancerRegistrationRole,
+                            models.BalancerRegistrationRole.id == models.BalancerRegistrationRoleHero.role_id,
+                        )
+                        .where(models.BalancerRegistrationRole.registration_id == registration.id)
+                        .order_by(models.BalancerRegistrationRoleHero.priority)
+                    )
+                ).all()
+            ]
+        finally:
+            await db_session.rollback()
+            await _drop(db_session, seeded["workspace_id"])
+            await db_session.execute(sa.delete(models.Hero).where(models.Hero.slug.in_(slugs)))
+            await db_session.commit()
+
+    assert asyncio.run(_run()) == [(slugs[0], 1), (slugs[1], 2)]
+
+
 assert SocialAccount is not None  # imported for the model registry the gate queries

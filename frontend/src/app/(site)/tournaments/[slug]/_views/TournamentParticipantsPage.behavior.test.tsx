@@ -192,7 +192,6 @@ function regList(
     total: registrations.length,
     role_counts: {},
     max_participants: null,
-    reserve_count: 0,
     ...overrides
   };
 }
@@ -792,22 +791,15 @@ describe("on-call players", () => {
     answers: { reserve: true }
   });
 
-  it("leaves them in the one list and states the count beside the total", async () => {
-    listRegistrations.mockResolvedValue(
-      regList([makeRegistration(), ON_CALL], { total: 2, reserve_count: 1 })
-    );
+  it("leaves them in the one list and says nothing about how many there are", async () => {
+    listRegistrations.mockResolvedValue(regList([makeRegistration(), ON_CALL], { total: 2 }));
     await mount();
+
     // The answer is availability, not membership: ONE list, no second one with
-    // its own header, and every row in it.
+    // its own header. And the roster does not publish a tally of who offered --
+    // that is organizer bookkeeping, readable through the opt-in column.
     expect(container.querySelectorAll('[data-testid="roster"]').length).toBe(1);
     expect(container.querySelector("[data-reserve-group]")).toBeNull();
-    expect(container.querySelector("[data-reserve-count]")?.getAttribute("data-reserve-count")).toBe(
-      "1"
-    );
-  });
-
-  it("says nothing when nobody offered", async () => {
-    await mount();
     expect(container.querySelector("[data-reserve-count]")).toBeNull();
   });
 

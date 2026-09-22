@@ -23,7 +23,6 @@ import type {
 } from "@/types/registration.types";
 import type { FormField, RolesParams } from "@/types/forms.types";
 import {
-  answerFlag,
   answerList,
   answerSearchText,
   answerText,
@@ -547,6 +546,8 @@ export function buildParticipantColumns(
         return t("registration.details.streamPov");
       case "public_notes":
         return t("registration.details.notes");
+      case "reserve":
+        return t("registration.details.reserve");
       default:
         return fallback;
     }
@@ -723,11 +724,11 @@ export function buildParticipantColumns(
     render: (reg) => formatDate(reg.submitted_at, locale),
   });
 
-  // Meta: registration status, plus the two marks that ride beside it — the
-  // registrant's own "you can call me in" and the schedule's "signed up after
-  // the window closed". Neither changes the status; both are what an organizer
-  // scans this column for, and the on-call one used to be a separate group of
-  // rows, which read as "these people are not really in".
+  // Meta: registration status, plus the schedule's "signed up after the window
+  // closed". The registrant's "you can call me in" does NOT ride here: it is
+  // organizer bookkeeping, and stacked under every Pending pill it read as a
+  // second status the player was in. It is a column of its own, off by default,
+  // built from the question like any other answer.
   columns.push({
     id: "_status",
     label: t("common.status"),
@@ -739,15 +740,6 @@ export function buildParticipantColumns(
     render: (reg) => (
       <div className="flex flex-col items-center gap-1">
         <RegistrationStatusBadge status={reg.status} meta={reg.status_meta} />
-        {answerFlag(reg.answers, "reserve") ? (
-          <span
-            data-row-on-call="true"
-            title={t("common.reserveHint")}
-            className="rounded-full border border-[color:color-mix(in_srgb,var(--aqt-blue)_35%,transparent)] bg-[color:color-mix(in_srgb,var(--aqt-blue)_12%,transparent)] px-1.5 py-px text-label font-semibold uppercase tracking-label text-[color:var(--aqt-blue)]"
-          >
-            {t("common.reserve")}
-          </span>
-        ) : null}
         {reg.submitted_late ? (
           <span
             data-row-late="true"

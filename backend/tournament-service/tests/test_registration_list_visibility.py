@@ -36,8 +36,8 @@ def _role(role: str, *, is_primary: bool = True, priority: int = 0) -> SimpleNam
     return SimpleNamespace(role=role, is_primary=is_primary, priority=priority)
 
 
-def _registration(reg_id: int, *roles: SimpleNamespace, is_reserve: bool = False) -> SimpleNamespace:
-    return SimpleNamespace(id=reg_id, roles=list(roles), is_reserve=is_reserve)
+def _registration(reg_id: int, *roles: SimpleNamespace) -> SimpleNamespace:
+    return SimpleNamespace(id=reg_id, roles=list(roles))
 
 
 def _form(**overrides) -> SimpleNamespace:
@@ -99,7 +99,7 @@ class HiddenListTests(IsolatedAsyncioTestCase):
             [
                 _registration(1, _role("tank")),
                 _registration(2, _role("damage")),
-                _registration(3, _role("damage"), is_reserve=True),
+                _registration(3, _role("damage")),
             ],
         )
 
@@ -108,9 +108,6 @@ class HiddenListTests(IsolatedAsyncioTestCase):
         self.assertEqual(response.total, 3)
         self.assertEqual(response.role_counts, {"tank": 1, "damage": 2})
         self.assertEqual(response.max_participants, 60)
-        # Reported BESIDE ``total``, never subtracted from it: saying "you can
-        # call me in" does not take anybody out of the field.
-        self.assertEqual(response.reserve_count, 1)
 
     async def test_a_hidden_list_never_reads_the_identities_it_is_hiding(self):
         session, _ = await self._build(_form(hide_registrations=True), [_registration(1, _role("tank"))])

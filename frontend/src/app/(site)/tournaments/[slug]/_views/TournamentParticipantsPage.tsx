@@ -1464,13 +1464,6 @@ function TournamentParticipantsView({ tournament }: Readonly<{ tournament: Tourn
     [divisionGrid, registrations, view]
   );
 
-  // How many of the field also said they can be called in. Stated beside the
-  // total, never split out of it: the `reserve` answer says nothing about
-  // whether the row is in the field, so these names stay in submission order
-  // among everybody else. The server owns the count, so a hidden roster still
-  // reports it.
-  const reserveCount = registrationList?.reserve_count ?? 0;
-
   if (listQuery.isPending && listQuery.data === undefined) {
     return <TournamentParticipantsSkeleton />;
   }
@@ -1583,21 +1576,6 @@ function TournamentParticipantsView({ tournament }: Readonly<{ tournament: Tourn
       {!listHidden && view === "table" && (
         <p aria-atomic="true" aria-live="polite" className="sr-only">
           {t("tournamentDetail.participants.resultCount", { count: filtered.length })}
-        </p>
-      )}
-
-      {/* `total` is the whole field, this many of whom also said they can be
-          called in. Stated beside the total, never subtracted from it: the
-          answer does not take anybody out of the field. */}
-      {!listHidden && reserveCount > 0 && (
-        <p
-          data-reserve-count={reserveCount}
-          className="text-xs text-[color:var(--aqt-fg-muted)]"
-        >
-          {t("tournamentDetail.participants.countWithReserve", {
-            count: registrationList?.total ?? registrations.length,
-            reserve: reserveCount
-          })}
         </p>
       )}
 
@@ -1735,7 +1713,6 @@ function TournamentParticipantsView({ tournament }: Readonly<{ tournament: Tourn
             total={registrationList?.total ?? 0}
             roleCounts={registrationList?.role_counts ?? {}}
             maxParticipants={registrationList?.max_participants}
-            reserveCount={reserveCount}
           />
           <p className="mt-3 text-caption text-[color:var(--aqt-fg-faint)]">
             {t("tournamentDetail.participants.hidden.description")}

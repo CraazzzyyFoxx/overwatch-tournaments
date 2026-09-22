@@ -309,8 +309,7 @@ beforeEach(() => {
     hidden: false,
     total: POOL_ROSTER.length,
     role_counts: {},
-    max_participants: null,
-    reserve_count: 0
+    max_participants: null
   });
   getForm.mockResolvedValue(makeForm());
   container = document.createElement("div");
@@ -441,8 +440,7 @@ describe("participants pool", () => {
       hidden: false,
       total: POOL_ROSTER.length + 1,
       role_counts: {},
-      max_participants: null,
-      reserve_count: 1
+      max_participants: null
     });
     await mountPool();
 
