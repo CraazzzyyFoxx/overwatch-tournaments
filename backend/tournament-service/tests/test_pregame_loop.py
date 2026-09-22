@@ -47,6 +47,7 @@ from shared.core.enums import (  # noqa: E402
 from shared.core.errors import BaseAPIException as HTTPException  # noqa: E402
 from shared.models.matches.match import Match  # noqa: E402
 from shared.models.tournament.encounter import Encounter  # noqa: E402
+from shared.models.tournament.encounter_game import EncounterGame  # noqa: E402
 from shared.models.tournament.pick_ban import (  # noqa: E402
     EncounterReadiness,
     PickBanConfig,
@@ -56,6 +57,7 @@ from shared.models.tournament.pick_ban import (  # noqa: E402
     PickBanEntry,
     PickBanSession,
 )
+from shared.models.tournament.stage import Stage  # noqa: E402
 from src.services.encounter.map_report import map_report_service  # noqa: E402
 from src.services.encounter.pick_ban_action import pick_ban_action_service  # noqa: E402
 from src.services.encounter.pick_ban_session import (  # noqa: E402
@@ -718,3 +720,61 @@ class DeletedConfigStallTests(IsolatedAsyncioTestCase):
             )
         self.assertEqual(422, caught.exception.status_code)
         self.assertIn("no longer", str(caught.exception.detail))
+
+
+class FreeplayPositionOpensOnlyForAPlayableRoomTests(IsolatedAsyncioTestCase):
+    """With no map veto configured the room offers one position at a time -- but
+    only once there is a series to play.
+
+    Reading the map room is a GET that every open client repeats, and an
+    organizer previews brackets long before they are activated. Opening the
+    position unconditionally wrote an ``encounter_game`` row for a matchup that
+    may never exist (a preview stage), or for one whose slots are still waiting
+    on an upstream result.
+    """
+
+    def _store(self, *, encounter: Encounter, stage: Stage | None = None) -> _Store:
+        store = _Store()
+        rows = [encounter, *( [stage] if stage is not None else [] )]
+        store.seed(*rows)
+        store.seed(
+            EncounterReadiness(encounter_id=encounter.id, side=MapPickSide.HOME.value, ready_user_id=None),
+            EncounterReadiness(encounter_id=encounter.id, side=MapPickSide.AWAY.value, ready_user_id=None),
+        )
+        return store
+
+    async def _map_state(self, store: _Store, encounter: Encounter) -> dict:
+        return await pick_ban_action_service.get_pick_ban_state(
+            store, encounter.id, PickBanKind.MAP, viewer_side=MapPickSide.HOME.value
+        )
+
+    async def test_a_live_freeplay_room_with_both_teams_opens_its_first_position(self) -> None:
+        encounter = _encounter()
+        store = self._store(encounter=encounter)
+
+        state = await self._map_state(store, encounter)
+
+        self.assertIsNone(state["session"], "no map config: there is no veto to run")
+        self.assertEqual([(1, None, "planned")], [(g["position"], g["map_id"], g["state"]) for g in state["games"]])
+        self.assertEqual(1, len(store.all_of(EncounterGame)))
+
+    async def test_a_preview_bracket_opens_nothing(self) -> None:
+        stage = Stage(tournament_id=7, name="Playoffs", is_published=False)
+        encounter = _encounter()
+        store = self._store(encounter=encounter, stage=stage)
+        encounter.stage_id = stage.id
+
+        state = await self._map_state(store, encounter)
+
+        self.assertEqual([], state["games"])
+        self.assertEqual([], store.all_of(EncounterGame))
+
+    async def test_an_encounter_still_missing_a_team_opens_nothing(self) -> None:
+        encounter = _encounter()
+        encounter.away_team_id = None
+        store = self._store(encounter=encounter)
+
+        state = await self._map_state(store, encounter)
+
+        self.assertEqual([], state["games"])
+        self.assertEqual([], store.all_of(EncounterGame))

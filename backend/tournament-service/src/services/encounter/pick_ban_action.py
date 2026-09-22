@@ -36,6 +36,7 @@ from shared.repository import (
     PickBanConfigRepository,
     PickBanEntryRepository,
 )
+from shared.services.bracket.usability import is_encounter_live
 from src.services.encounter import pick_ban_undo
 from src.services.encounter.games import EncounterGameService, encounter_game_service
 from src.services.encounter.pick_ban_session import PickBanSessionService, pick_ban_session_service
@@ -605,12 +606,21 @@ class PickBanActionService:
         return value only ever reaches the captain who filed it.
 
         With a map session the picks own the positions; without one (freeplay,
-        or a room that never opened) exactly one position is offered at a time.
+        or a room that never opened) exactly one position is offered at a time --
+        but only for a room that can actually be played. A preview bracket, or an
+        encounter whose slots are still waiting on an upstream result, has no
+        series to open: creating its position on a mere READ wrote an
+        ``encounter_game`` row for a matchup that may never exist.
         """
         if pick_ban is not None:
             games = await self.games.sync_games_with_picks(session, encounter, pick_ban)
         else:
-            await self.games.ensure_freeplay_game(session, encounter)
+            if (
+                encounter.home_team_id is not None
+                and encounter.away_team_id is not None
+                and await is_encounter_live(session, encounter)
+            ):
+                await self.games.ensure_freeplay_game(session, encounter)
             games = await self.games.list_games(session, encounter.id)
         reports = await self.games.reports_by_game(session, games)
         return (
