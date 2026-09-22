@@ -8,11 +8,16 @@ operator-written text lives *inside* the payload, one entry per locale.
 """
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from shared.services.notifications import BROADCASTABLE_KINDS
 from src.schemas.base import BaseRead
+
+#: The locales a workspace may pick for its channel posts, mirroring
+#: ``shared.services.notifications.SUPPORTED_LOCALES``.
+NotificationLocale = Literal["ru", "en"]
 
 __all__ = (
     "NotificationItem",
@@ -25,6 +30,12 @@ __all__ = (
     "NotificationAdminPage",
     "NotificationRetire",
     "NotificationRetireResult",
+    "NotificationDmGroups",
+    "NotificationDmGroupsUpdate",
+    "NotificationPreferencesRead",
+    "NotificationPreferencesUpdate",
+    "NotificationWorkspaceConfigRead",
+    "NotificationWorkspaceConfigUpdate",
 )
 
 
@@ -142,3 +153,79 @@ class NotificationRetire(BaseModel):
 class NotificationRetireResult(BaseModel):
     #: Rows that were live and now are not; a repeat call answers 0.
     retired: int
+
+
+class NotificationDmGroups(BaseModel):
+    """The three Discord-DM switches, defaults already filled in.
+
+    Spelled out as fields rather than a free dict because this is a public
+    response shape: the client renders one toggle per group and the generated
+    OpenAPI has to name them. ``test_notification_preferences_rpc`` pins the
+    field set against ``NOTIFICATION_GROUPS``, so a fourth group cannot be
+    added upstream without this following.
+    """
+
+    tournament: bool
+    matches: bool
+    team: bool
+
+
+class NotificationDmGroupsUpdate(BaseModel):
+    """A partial edit: an omitted group keeps whatever is stored for it."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    tournament: bool | None = None
+    matches: bool | None = None
+    team: bool | None = None
+
+
+class NotificationPreferencesRead(BaseModel):
+    discord_dm: NotificationDmGroups
+    #: False = the switches change nothing yet, so the UI offers the link flow
+    #: instead of silently doing nothing.
+    discord_linked: bool
+
+
+class NotificationPreferencesUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    discord_dm: NotificationDmGroupsUpdate
+
+
+class NotificationWorkspaceConfigRead(BaseModel):
+    """Where this workspace's broadcasts go, plus what the picker needs.
+
+    Discord snowflakes are strings: they exceed 2^53 and a JSON number loses
+    precision in the browser, the same way ``discord_guild_id`` is already
+    carried.
+    """
+
+    workspace_id: int
+    #: The verified guild, if any -- without it no channel may be stored.
+    discord_guild_id: str | None = None
+    discord_channel_id: str | None = None
+    locale: str
+    broadcast_kinds: list[str]
+    #: Everything that *may* be enabled, so the screen renders the checkboxes
+    #: without a second source of truth for the kind list.
+    broadcastable_kinds: list[str]
+
+
+class NotificationWorkspaceConfigUpdate(BaseModel):
+    """The settings form, submitted whole -- it edits one row of three values."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    discord_channel_id: str | None = None
+    locale: NotificationLocale = "ru"
+    broadcast_kinds: list[str] = Field(default_factory=list)
+
+    @field_validator("broadcast_kinds")
+    @classmethod
+    def _known_kinds(cls, value: list[str]) -> list[str]:
+        unknown = sorted(set(value) - BROADCASTABLE_KINDS)
+        if unknown:
+            raise ValueError(f"not broadcastable: {', '.join(unknown)}")
+        # Deduplicated and ordered so the stored JSON is stable across saves.
+        return [kind for kind in sorted(BROADCASTABLE_KINDS) if kind in set(value)]

@@ -258,6 +258,14 @@ DOCS: dict[str, dict] = {
         "summary": "List my administered Discord guilds",
         "description": "Permission: authenticated (active) user; self-service — the caller's own Discord guilds only. Returns the Discord guilds the caller owns or can manage (via identity-service, the `guilds` OAuth scope), for picking one to verify; 503 if identity-service is unreachable.",
     },
+    "rpc.app.workspaces.notification_config_get": {
+        "summary": "Read a workspace's notification delivery settings",
+        "description": "Permission: workspace `workspace.update`, like the sibling Discord pickers — the stored channel names a private guild. Returns where this workspace's broadcast notifications are posted (`discord_channel_id`, a snowflake as a string), the language they are written in, which kinds are posted (`broadcast_kinds`), and the full set that may be enabled (`broadcastable_kinds`) so the screen needs no second source of truth. A workspace that never saved anything reads as its defaults — no channel, `ru`, registration and check-in openings. 404 if workspace missing.",
+    },
+    "rpc.app.workspaces.notification_config_update": {
+        "summary": "Update a workspace's notification delivery settings",
+        "description": "Permission: workspace `workspace.update`. Stores the whole form. A non-null `discord_channel_id` must be a text channel of THIS workspace's verified guild — otherwise an administrator of one workspace could make the bot post into another organiser's server: 409 `discord_guild_not_linked` when no guild is bound, 422 `discord_channel_not_in_guild` when the channel is not one of its text channels, and 503 `discord_unavailable` when Discord cannot be asked (an unchecked channel is never stored). `broadcast_kinds` must be a subset of `broadcastable_kinds` and `locale` one of `ru`/`en`, both 422 otherwise. Returns the same shape as the read. 404 if workspace missing.",
+    },
     "rpc.app.workspaces.verification_set": {
         "summary": "Set workspace verification status",
         "description": "Permission: superuser only (a workspace owner may not self-certify). Moves a workspace between the `unverified`/`verified`/`trusted` trust tiers — the only way a self-service workspace is unblocked for GPU compute, inline achievement recompute and the public directory; audited on every call including a no-op set, 404 if workspace missing, 422 on an unknown status.",
@@ -604,6 +612,24 @@ DOCS: dict[str, dict] = {
             " dismissing a platform-wide announcement does not take it out of anybody else's inbox. Ids outside the"
             " caller's audience are dropped silently rather than rejected, and a repeat call deletes nothing and is not"
             " an error."
+        ),
+    },
+    "rpc.app.notification_preferences_get": {
+        "summary": "Read the caller's Discord DM preferences",
+        "description": (
+            "Permission: authenticated (active) user; self-service — the caller's own preferences only. Returns the"
+            " three Discord-DM switches (`tournament`, `matches`, `team`) with the defaults filled in: a group the user"
+            " never touched is on, so a new group reaches everybody without a backfill. `discord_linked` reports whether"
+            " the account has a Discord connection at all — the switches deliver nothing without one."
+        ),
+    },
+    "rpc.app.notification_preferences_update": {
+        "summary": "Update the caller's Discord DM preferences",
+        "description": (
+            "Permission: authenticated (active) user; self-service — the caller's own preferences only. The edit is"
+            " partial: an omitted group keeps its stored value, so one toggle flipped in a stale tab cannot re-assert"
+            " the other two. Unknown group names are a 422. Answers with the same effective shape as the read."
+            " In-app notifications are not switchable — this only governs delivery to Discord."
         ),
     },
     # ── notifications admin (workspace-scoped operator screen) ──────────────────────────────────────

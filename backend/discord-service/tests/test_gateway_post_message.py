@@ -147,3 +147,25 @@ class PostMessageCommandTests(IsolatedAsyncioTestCase):
         msg.reject.assert_awaited_once()
         msg.ack.assert_not_awaited()
         msg.nack.assert_not_awaited()
+
+    async def test_allow_mentions_false_suppresses_pings(self) -> None:
+        """Notification posts embed user-written names; an `@everyone` there must not ping."""
+        channel = MagicMock(send=AsyncMock())
+        processor = MagicMock(get_text_channel=AsyncMock(return_value=channel))
+        msg = _message()
+
+        await _command_handler(processor)(_body(embed=None, content="@everyone", allow_mentions=False), msg)
+
+        kwargs = channel.send.await_args.kwargs
+        self.assertEqual(kwargs["allowed_mentions"].to_dict(), discord.AllowedMentions.none().to_dict())
+        msg.ack.assert_awaited_once()
+
+    async def test_mix_posts_keep_default_mention_behaviour(self) -> None:
+        """The balancer pings its players; it never sets allow_mentions."""
+        channel = MagicMock(send=AsyncMock())
+        processor = MagicMock(get_text_channel=AsyncMock(return_value=channel))
+        msg = _message()
+
+        await _command_handler(processor)(_body(), msg)
+
+        self.assertNotIn("allowed_mentions", channel.send.await_args.kwargs)

@@ -64,6 +64,17 @@ def _attachment(event: DiscordCommandEvent) -> discord.File | None:
     return discord.File(io.BytesIO(raw), filename=event.image_filename)
 
 
+def _mention_policy(event: DiscordCommandEvent) -> dict[str, Any]:
+    """``channel.send`` kwargs that keep user-written text from pinging anyone.
+
+    Empty when the publisher allows mentions, so the balancer's mix posts keep
+    discord.py's default behaviour.
+    """
+    if event.allow_mentions:
+        return {}
+    return {"allowed_mentions": discord.AllowedMentions.none()}
+
+
 class DiscordRabbitGateway:
     """Owns the broker's lifecycle and every RabbitMQ subscriber this service exposes."""
 
@@ -170,11 +181,39 @@ class DiscordRabbitGateway:
                                 content=event.content,
                                 embed=discord.Embed.from_dict(event.embed) if event.embed else None,
                                 file=attachment,
+                                **_mention_policy(event),
                             )
                         except discord.Forbidden:
                             observation.set_status("forbidden")
                             logger.error(f"❌ No permission to post in channel {event.channel_id}")
                             await msg.reject()
+                            return
+
+                        await msg.ack()
+                        return
+
+                    if event.action == "send_dm":
+                        logger.info(f"📩 RabbitMQ command: send_dm user={event.discord_user_id}")
+                        try:
+                            user = self._bot.get_user(event.discord_user_id) or await self._bot.fetch_user(
+                                event.discord_user_id
+                            )
+                            await user.send(
+                                content=event.content,
+                                embed=discord.Embed.from_dict(event.embed) if event.embed else None,
+                                allowed_mentions=discord.AllowedMentions.none(),
+                            )
+                        except discord.Forbidden:
+                            # DMs closed or no mutual guild: a retry cannot fix either,
+                            # and the notification is already in the in-app inbox.
+                            observation.set_status("dm_closed")
+                            logger.warning(f"⚠️ Cannot DM user {event.discord_user_id}: DMs closed")
+                            await msg.ack()
+                            return
+                        except discord.NotFound:
+                            observation.set_status("not_found")
+                            logger.warning(f"⚠️ Discord user {event.discord_user_id} not found for send_dm")
+                            await msg.ack()
                             return
 
                         await msg.ack()

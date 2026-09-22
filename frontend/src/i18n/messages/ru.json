@@ -778,6 +778,7 @@
     "tabs": {
       "profile": "Профиль",
       "security": "Безопасность",
+      "notifications": "Уведомления",
       "favorites": "Избранное",
       "mixes": "Миксы"
     },
@@ -788,6 +789,30 @@
     "security": {
       "title": "Безопасность",
       "desc": "Устройства, на которых выполнен вход, и удаление аккаунта."
+    },
+    "notifications": {
+      "title": "Уведомления",
+      "desc": "Куда приходит то, что касается лично вас.",
+      "discordTitle": "Личные сообщения в Discord",
+      "discordDesc": "Бот пишет вам о ваших заявках, командах и матчах. Во входящие на сайте всё приходит в любом случае — эти переключатели решают только то, что продублирует Discord.",
+      "linkDiscordHint": "К аккаунту не привязан Discord, поэтому личные сообщения пока отправлять некуда.",
+      "linkDiscordAction": "Привязать Discord в «Профиле»",
+      "loadError": "Не удалось загрузить настройки уведомлений.",
+      "groups": {
+        "tournament": {
+          "label": "Турниры",
+          "desc": "Открытие чек-ина и решения по вашим заявкам."
+        },
+        "matches": {
+          "label": "Матчи",
+          "desc": "Назначение и перенос ваших матчей, оспоренные отчёты."
+        },
+        "team": {
+          "label": "Команды",
+          "desc": "Приглашения, ответы на них и исключение из состава."
+        }
+      },
+      "footnote": "Если личные сообщения в Discord закрыты (или у вас нет общего сервера с ботом), доставка просто не состоится — ничего не копится и не отправляется повторно."
     },
     "favorites": {
       "title": "Избранное",
@@ -5692,6 +5717,7 @@
     "emptyHint": "Здесь появятся приглашения в команду, решения по заявкам и оспоренные отчёты.",
     "markAllRead": "Отметить все",
     "loadMore": "Показать старые",
+    "configure": "Настроить",
     "banner": {
       "label": "Объявление",
       "eyebrow": "Объявление",
@@ -5705,10 +5731,15 @@
       },
       "registration": {
         "approved": "Ваша заявка на {tournament_name} одобрена",
-        "rejected": "Ваша заявка на {tournament_name} отклонена"
+        "rejected": "Ваша заявка на {tournament_name} отклонена",
+        "opened": "Регистрация на {tournament_name} открыта{closes_at, select, none {} other { до {closes_at}}}"
+      },
+      "check_in": {
+        "opened": "Чек-ин на {tournament_name} открыт{closes_at, select, none {} other { до {closes_at}}} — подтвердите участие"
       },
       "encounter": {
-        "report_disputed": "{map_index, plural, =0 {Отчёт по вашему матчу оспорен} other {Отчёт по карте # вашего матча оспорен}}"
+        "report_disputed": "{map_index, plural, =0 {Отчёт по вашему матчу оспорен} other {Отчёт по карте # вашего матча оспорен}}",
+        "scheduled": "Матч {home_team_name} — {away_team_name} на {tournament_name} назначен на {scheduled_at}"
       },
       "announcement": {
         "published": "Новое объявление"
@@ -5807,10 +5838,15 @@
         },
         "registration": {
           "approved": "Заявка принята",
-          "rejected": "Заявка отклонена"
+          "rejected": "Заявка отклонена",
+          "opened": "Регистрация открыта"
+        },
+        "check_in": {
+          "opened": "Чек-ин открыт"
         },
         "encounter": {
-          "report_disputed": "Отчёт оспорен"
+          "report_disputed": "Отчёт оспорен",
+          "scheduled": "Матч назначен"
         },
         "team": {
           "kicked": "Исключение из команды",

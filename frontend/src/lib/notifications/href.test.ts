@@ -54,6 +54,28 @@ describe("notification destinations", () => {
     ).toBeNull();
   });
 
+  it("opens the pregame room for a scheduled match, and the tournament for an opened phase", () => {
+    expect(
+      notificationHref({
+        ...item,
+        kind: "encounter.scheduled",
+        payload: {
+          tournament_id: 42,
+          encounter_id: 87,
+          scheduled_at: "2026-09-25T18:00:00Z",
+          home_team_name: "A",
+          away_team_name: "B"
+        }
+      })
+    ).toBe("/tournaments/42/pregame/87");
+    for (const kind of ["registration.opened", "check_in.opened"]) {
+      expect(
+        notificationHref({ ...item, kind, payload: { tournament_id: 42, tournament_name: "Cup" } })
+      ).toBe("/tournaments/42");
+      expect(notificationHref({ ...item, kind, payload: { tournament_name: "Cup" } })).toBeNull();
+    }
+  });
+
   it("rejects malformed IDs instead of coercing wire values into routes", () => {
     for (const tournament_id of [
       undefined,

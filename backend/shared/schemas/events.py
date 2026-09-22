@@ -25,28 +25,38 @@ class BaseEvent(BaseModel):
 class DiscordCommandEvent(BaseEvent):
     """Event for triggering Discord bot commands.
 
-    Published by: parser-service (``process_all``), balancer-service (``post_message``)
+    Published by: parser-service (``process_all``), balancer-service (``post_message``),
+    app-service notification delivery (``post_message``, ``send_dm``)
     Consumed by: discord-service
 
     Actions:
     - ``process_all``: re-scan every registered channel of a tournament.
     - ``process_message``: re-process one known message.
     - ``post_message``: send a message (content, embed and/or PNG attachment) to a channel.
+    - ``send_dm``: send a direct message (content and/or embed) to one Discord user.
     """
 
     event_type: str = Field(default="discord_command", frozen=True)
-    action: str = Field(..., description="Action to perform: 'process_all', 'process_message' or 'post_message'")
+    action: str = Field(
+        ..., description="Action to perform: 'process_all', 'process_message', 'post_message' or 'send_dm'"
+    )
     tournament_id: int | None = Field(default=None, description="Tournament ID to process (for 'process_all')")
     channel_id: int | None = Field(
         default=None, description="Discord channel ID (required for 'process_message' and 'post_message')"
     )
     message_id: int | None = Field(default=None, description="Discord message ID (required for 'process_message')")
-    content: str | None = Field(default=None, description="Plain message text (for 'post_message')")
+    discord_user_id: int | None = Field(default=None, description="Discord user ID (required for 'send_dm')")
+    content: str | None = Field(default=None, description="Plain message text (for 'post_message' and 'send_dm')")
     embed: dict[str, Any] | None = Field(
-        default=None, description="Discord embed object, as accepted by discord.Embed.from_dict (for 'post_message')"
+        default=None,
+        description="Discord embed object, as accepted by discord.Embed.from_dict (for 'post_message' and 'send_dm')",
     )
     image_b64: str | None = Field(default=None, description="Base64 PNG sent as an attachment (for 'post_message')")
     image_filename: str = Field(default="lineup.png", description="Filename for ``image_b64``")
+    # Defaults to True so the balancer's existing mix posts keep their behaviour;
+    # notifications carry user-written team/tournament names and pass False, so
+    # an ``@everyone`` in a team name pings nobody.
+    allow_mentions: bool = Field(default=True, description="False = the bot sends with AllowedMentions.none()")
 
     def model_post_init(self, __context) -> None:
         """Validate that required fields are present for specific actions."""
@@ -61,6 +71,38 @@ class DiscordCommandEvent(BaseEvent):
                 raise ValueError("channel_id is required for action='post_message'")
             if self.content is None and self.embed is None and self.image_b64 is None:
                 raise ValueError("content, embed or image_b64 is required for action='post_message'")
+        elif self.action == "send_dm":
+            if self.discord_user_id is None:
+                raise ValueError("discord_user_id is required for action='send_dm'")
+            if self.content is None and self.embed is None:
+                raise ValueError("content or embed is required for action='send_dm'")
+
+
+class NotificationCreatedEvent(BaseEvent):
+    """A personal notification row was written; deliver it outside the app.
+
+    Published by: ``shared.services.notifications.notify`` (outbox, same transaction)
+    Consumed by: app-service notification delivery
+    """
+
+    event_type: str = Field(default="notification.created", frozen=True)
+    notification_id: int = Field(..., description="notification.id of the personal row")
+
+
+class NotificationBroadcastEvent(BaseEvent):
+    """Post one event to the workspace's notification channel.
+
+    Carries the payload itself: a broadcast writes no notification row.
+
+    Published by: ``shared.services.notifications.broadcast`` (outbox, same transaction)
+    Consumed by: app-service notification delivery
+    """
+
+    event_type: str = Field(default="notification.broadcast", frozen=True)
+    workspace_id: int = Field(..., description="Workspace whose channel receives the post")
+    kind: str = Field(..., description="Notification kind, one of BROADCASTABLE_KINDS")
+    payload: dict[str, Any] = Field(..., description="Validated snapshot, same schema as the kind's inbox payload")
+    dedupe_key: str = Field(..., description="Producer identity of the event, the ledger key")
 
 
 class ProcessMatchLogEvent(BaseEvent):

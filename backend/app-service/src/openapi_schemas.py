@@ -173,6 +173,10 @@ OPERATIONS: dict[str, Op] = {
     ),
     "rpc.app.workspaces.discord_guild_clear": Op(response=schemas.WorkspaceRead),
     "rpc.app.workspaces.my_discord_guilds": Op(response=schemas.WorkspaceDiscordGuildsRead),
+    "rpc.app.workspaces.notification_config_get": Op(response=schemas.NotificationWorkspaceConfigRead),
+    "rpc.app.workspaces.notification_config_update": Op(
+        request=schemas.NotificationWorkspaceConfigUpdate, response=schemas.NotificationWorkspaceConfigRead
+    ),
     "rpc.app.workspaces.verification_set": Op(request=schemas.WorkspaceVerificationSet, response=schemas.WorkspaceRead),
     "rpc.app.workspaces.owner_get": Op(response=schemas.WorkspaceOwnerRead),
     "rpc.app.workspaces.owner_set": Op(request=schemas.WorkspaceOwnerSet, response=schemas.WorkspaceOwnerRead),
@@ -244,6 +248,10 @@ OPERATIONS: dict[str, Op] = {
         request=schemas.NotificationMarkRead, response=schemas.NotificationMarkReadResult
     ),
     "rpc.app.notifications_delete": Op(request=schemas.NotificationDelete, response=schemas.NotificationDeleteResult),
+    "rpc.app.notification_preferences_get": Op(response=schemas.NotificationPreferencesRead),
+    "rpc.app.notification_preferences_update": Op(
+        request=schemas.NotificationPreferencesUpdate, response=schemas.NotificationPreferencesRead
+    ),
     # ── notifications admin (workspace-scoped operator screen) ─────────────
     "rpc.app.notification_admin_list": Op(
         response=schemas.NotificationAdminPage,

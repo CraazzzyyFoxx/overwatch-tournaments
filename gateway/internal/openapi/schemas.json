@@ -1246,6 +1246,26 @@
       },
       "summary": "Retire notifications a workspace produced"
     },
+    "rpc.app.notification_preferences_get": {
+      "description": "Permission: authenticated (active) user; self-service \u2014 the caller's own preferences only. Returns the three Discord-DM switches (`tournament`, `matches`, `team`) with the defaults filled in: a group the user never touched is on, so a new group reaches everybody without a backfill. `discord_linked` reports whether the account has a Discord connection at all \u2014 the switches deliver nothing without one.",
+      "response": {
+        "array": false,
+        "ref": "app.NotificationPreferencesRead"
+      },
+      "summary": "Read the caller's Discord DM preferences"
+    },
+    "rpc.app.notification_preferences_update": {
+      "description": "Permission: authenticated (active) user; self-service \u2014 the caller's own preferences only. The edit is partial: an omitted group keeps its stored value, so one toggle flipped in a stale tab cannot re-assert the other two. Unknown group names are a 422. Answers with the same effective shape as the read. In-app notifications are not switchable \u2014 this only governs delivery to Discord.",
+      "request": {
+        "array": false,
+        "ref": "app.NotificationPreferencesUpdate"
+      },
+      "response": {
+        "array": false,
+        "ref": "app.NotificationPreferencesRead"
+      },
+      "summary": "Update the caller's Discord DM preferences"
+    },
     "rpc.app.notifications_delete": {
       "description": "Permission: authenticated (active) user; self-service \u2014 the caller's own inbox only. Removes rows from this caller's inbox and returns how many left it together with the refreshed unread count. An omitted or null `ids` targets the whole visible inbox, and `only_read: true` narrows that to rows already marked read (the \"clear read\" button). The deletion is per viewer: the underlying row survives, so one reader dismissing a platform-wide announcement does not take it out of anybody else's inbox. Ids outside the caller's audience are dropped silently rather than rejected, and a repeat call deletes nothing and is not an error.",
       "request": {
@@ -3645,6 +3665,26 @@
         "ref": "app.WorkspaceDiscordGuildsRead"
       },
       "summary": "List my administered Discord guilds"
+    },
+    "rpc.app.workspaces.notification_config_get": {
+      "description": "Permission: workspace `workspace.update`, like the sibling Discord pickers \u2014 the stored channel names a private guild. Returns where this workspace's broadcast notifications are posted (`discord_channel_id`, a snowflake as a string), the language they are written in, which kinds are posted (`broadcast_kinds`), and the full set that may be enabled (`broadcastable_kinds`) so the screen needs no second source of truth. A workspace that never saved anything reads as its defaults \u2014 no channel, `ru`, registration and check-in openings. 404 if workspace missing.",
+      "response": {
+        "array": false,
+        "ref": "app.NotificationWorkspaceConfigRead"
+      },
+      "summary": "Read a workspace's notification delivery settings"
+    },
+    "rpc.app.workspaces.notification_config_update": {
+      "description": "Permission: workspace `workspace.update`. Stores the whole form. A non-null `discord_channel_id` must be a text channel of THIS workspace's verified guild \u2014 otherwise an administrator of one workspace could make the bot post into another organiser's server: 409 `discord_guild_not_linked` when no guild is bound, 422 `discord_channel_not_in_guild` when the channel is not one of its text channels, and 503 `discord_unavailable` when Discord cannot be asked (an unchecked channel is never stored). `broadcast_kinds` must be a subset of `broadcastable_kinds` and `locale` one of `ru`/`en`, both 422 otherwise. Returns the same shape as the read. 404 if workspace missing.",
+      "request": {
+        "array": false,
+        "ref": "app.NotificationWorkspaceConfigUpdate"
+      },
+      "response": {
+        "array": false,
+        "ref": "app.NotificationWorkspaceConfigRead"
+      },
+      "summary": "Update a workspace's notification delivery settings"
     },
     "rpc.app.workspaces.owner_get": {
       "description": "Permission: workspace `workspace.update` (the public workspace model deliberately publishes no owner). Resolves `Workspace.owner_id` \u2014 the account accountable for the workspace and counted against the per-account create cap \u2014 to its username, email and avatar; returns null data when no owner is stamped, 404 if workspace missing.",
@@ -13043,7 +13083,7 @@
       "type": "object"
     },
     "app.HeroClass": {
-      "description": "A roster role OR a hero's class -- two concepts on one Postgres type.\n\n``tank``/``damage``/``support`` mean both things at once, which is why the\nsame ``heroclass`` type backs ``overwatch.hero.type``,\n``matches.stat_baselines.role`` and ``tournament.player.role``. ``flex``\nonly ever means the third: a player who holds no fixed role, which is what\na role-less (all-``flex``) roster shape drafts and balances for. No hero has\na class of \"flex\", so the two hero-side columns are narrowed back to\n:data:`HERO_TYPE_CLASSES` / :data:`HeroTypeClass` in the schema layer and by\nCHECK constraints in the database (migration ``heroflex0001``).\n\nMember NAMES are the stored Postgres labels (SQLAlchemy ``Enum`` default),\nso the DB sees ``flex`` while the Python value is ``\"Flex\"``.\n\nTHE single role enum for the whole backend (frontend mirror:\n``PlayerRoleOption`` in ``lib/player-role.ts``). One spelling per role, in\ncode, on the wire and in the database: :attr:`slot_code` is the lowercase\nmember name. This docstring is the public OpenAPI description of the enum,\nso the retired spelling is documented on :attr:`slot_code` instead.",
+      "description": "A roster role OR a hero's class -- two concepts on one Postgres type.\n\n``tank``/``damage``/``support`` mean both things at once, which is why the\nsame ``heroclass`` type backs ``overwatch.hero.type``,\n``matches.stat_baselines.role`` and ``tournament.player.role``. ``flex``\nonly ever means the third: a player who holds no fixed role, which is what\na role-less (all-``flex``) roster shape drafts and balances for. No hero has\na class of \"flex\", so the two hero-side columns are narrowed back to\n:data:`HERO_TYPE_CLASSES` / :data:`HeroTypeClass` in the schema layer and by\nCHECK constraints in the database (migration ``heroflex0001``).\n\nMember NAMES are the stored Postgres labels (SQLAlchemy ``Enum`` default),\nso the DB sees ``flex`` while the Python value is ``\"Flex\"``.\n\nTHE single role enum for the whole backend (frontend mirror:\n``PlayerRoleOption`` in ``lib/roster/player-role.ts``). One spelling per role, in\ncode, on the wire and in the database: :attr:`slot_code` is the lowercase\nmember name. This docstring is the public OpenAPI description of the enum,\nso the retired spelling is documented on :attr:`slot_code` instead.",
       "enum": [
         "Tank",
         "Damage",
@@ -14279,6 +14319,74 @@
       "title": "NotificationDeleteResult",
       "type": "object"
     },
+    "app.NotificationDmGroups": {
+      "description": "The three Discord-DM switches, defaults already filled in.\n\nSpelled out as fields rather than a free dict because this is a public\nresponse shape: the client renders one toggle per group and the generated\nOpenAPI has to name them. ``test_notification_preferences_rpc`` pins the\nfield set against ``NOTIFICATION_GROUPS``, so a fourth group cannot be\nadded upstream without this following.",
+      "properties": {
+        "matches": {
+          "title": "Matches",
+          "type": "boolean"
+        },
+        "team": {
+          "title": "Team",
+          "type": "boolean"
+        },
+        "tournament": {
+          "title": "Tournament",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "tournament",
+        "matches",
+        "team"
+      ],
+      "title": "NotificationDmGroups",
+      "type": "object"
+    },
+    "app.NotificationDmGroupsUpdate": {
+      "additionalProperties": false,
+      "description": "A partial edit: an omitted group keeps whatever is stored for it.",
+      "properties": {
+        "matches": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Matches"
+        },
+        "team": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Team"
+        },
+        "tournament": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tournament"
+        }
+      },
+      "title": "NotificationDmGroupsUpdate",
+      "type": "object"
+    },
     "app.NotificationInboxRead": {
       "description": "One inbox round trip: the page, the badge count and the continuation.\n\nThe bell renders the count and the list together on every open, so serving\nthem from two endpoints would double the requests for a header component\nthat mounts on every page.",
       "properties": {
@@ -14418,6 +14526,36 @@
       "title": "NotificationMarkReadResult",
       "type": "object"
     },
+    "app.NotificationPreferencesRead": {
+      "properties": {
+        "discord_dm": {
+          "$ref": "#/components/schemas/app.NotificationDmGroups"
+        },
+        "discord_linked": {
+          "title": "Discord Linked",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "discord_dm",
+        "discord_linked"
+      ],
+      "title": "NotificationPreferencesRead",
+      "type": "object"
+    },
+    "app.NotificationPreferencesUpdate": {
+      "additionalProperties": false,
+      "properties": {
+        "discord_dm": {
+          "$ref": "#/components/schemas/app.NotificationDmGroupsUpdate"
+        }
+      },
+      "required": [
+        "discord_dm"
+      ],
+      "title": "NotificationPreferencesUpdate",
+      "type": "object"
+    },
     "app.NotificationRetire": {
       "additionalProperties": false,
       "description": "Which of this workspace's notifications to take out of circulation.\n\n``ids`` and ``kind`` are filters over the same scoped statement and may be\ncombined. Naming neither is rejected \u2014 \"retire everything this workspace\never sent\" must be spelled out one kind at a time, not reached by omission.",
@@ -14471,6 +14609,101 @@
         "retired"
       ],
       "title": "NotificationRetireResult",
+      "type": "object"
+    },
+    "app.NotificationWorkspaceConfigRead": {
+      "description": "Where this workspace's broadcasts go, plus what the picker needs.\n\nDiscord snowflakes are strings: they exceed 2^53 and a JSON number loses\nprecision in the browser, the same way ``discord_guild_id`` is already\ncarried.",
+      "properties": {
+        "broadcast_kinds": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Broadcast Kinds",
+          "type": "array"
+        },
+        "broadcastable_kinds": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Broadcastable Kinds",
+          "type": "array"
+        },
+        "discord_channel_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Discord Channel Id"
+        },
+        "discord_guild_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Discord Guild Id"
+        },
+        "locale": {
+          "title": "Locale",
+          "type": "string"
+        },
+        "workspace_id": {
+          "title": "Workspace Id",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "workspace_id",
+        "locale",
+        "broadcast_kinds",
+        "broadcastable_kinds"
+      ],
+      "title": "NotificationWorkspaceConfigRead",
+      "type": "object"
+    },
+    "app.NotificationWorkspaceConfigUpdate": {
+      "additionalProperties": false,
+      "description": "The settings form, submitted whole -- it edits one row of three values.",
+      "properties": {
+        "broadcast_kinds": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Broadcast Kinds",
+          "type": "array"
+        },
+        "discord_channel_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Discord Channel Id"
+        },
+        "locale": {
+          "default": "ru",
+          "enum": [
+            "ru",
+            "en"
+          ],
+          "title": "Locale",
+          "type": "string"
+        }
+      },
+      "title": "NotificationWorkspaceConfigUpdate",
       "type": "object"
     },
     "app.Paginated_AchievementEarned_": {
@@ -37967,7 +38200,7 @@
       "type": "object"
     },
     "tournament.HeroClass": {
-      "description": "A roster role OR a hero's class -- two concepts on one Postgres type.\n\n``tank``/``damage``/``support`` mean both things at once, which is why the\nsame ``heroclass`` type backs ``overwatch.hero.type``,\n``matches.stat_baselines.role`` and ``tournament.player.role``. ``flex``\nonly ever means the third: a player who holds no fixed role, which is what\na role-less (all-``flex``) roster shape drafts and balances for. No hero has\na class of \"flex\", so the two hero-side columns are narrowed back to\n:data:`HERO_TYPE_CLASSES` / :data:`HeroTypeClass` in the schema layer and by\nCHECK constraints in the database (migration ``heroflex0001``).\n\nMember NAMES are the stored Postgres labels (SQLAlchemy ``Enum`` default),\nso the DB sees ``flex`` while the Python value is ``\"Flex\"``.\n\nTHE single role enum for the whole backend (frontend mirror:\n``PlayerRoleOption`` in ``lib/player-role.ts``). One spelling per role, in\ncode, on the wire and in the database: :attr:`slot_code` is the lowercase\nmember name. This docstring is the public OpenAPI description of the enum,\nso the retired spelling is documented on :attr:`slot_code` instead.",
+      "description": "A roster role OR a hero's class -- two concepts on one Postgres type.\n\n``tank``/``damage``/``support`` mean both things at once, which is why the\nsame ``heroclass`` type backs ``overwatch.hero.type``,\n``matches.stat_baselines.role`` and ``tournament.player.role``. ``flex``\nonly ever means the third: a player who holds no fixed role, which is what\na role-less (all-``flex``) roster shape drafts and balances for. No hero has\na class of \"flex\", so the two hero-side columns are narrowed back to\n:data:`HERO_TYPE_CLASSES` / :data:`HeroTypeClass` in the schema layer and by\nCHECK constraints in the database (migration ``heroflex0001``).\n\nMember NAMES are the stored Postgres labels (SQLAlchemy ``Enum`` default),\nso the DB sees ``flex`` while the Python value is ``\"Flex\"``.\n\nTHE single role enum for the whole backend (frontend mirror:\n``PlayerRoleOption`` in ``lib/roster/player-role.ts``). One spelling per role, in\ncode, on the wire and in the database: :attr:`slot_code` is the lowercase\nmember name. This docstring is the public OpenAPI description of the enum,\nso the retired spelling is documented on :attr:`slot_code` instead.",
       "enum": [
         "Tank",
         "Damage",

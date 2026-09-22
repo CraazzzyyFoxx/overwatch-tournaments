@@ -172,6 +172,9 @@ Behaviour-changing settings:
 - `AUTH_SERVICE_URL` — token validation; production overrides it to the gateway
   (`http://gateway:8080/api/auth`).
 - `PROJECT_URL` — required, used to build absolute URLs.
+- `PUBLIC_SITE_URL` — absolute base of the public site (default `http://localhost:3000`), used to
+  build the deep links notification DMs and channel posts carry. The frontend mirrors the same
+  value as `NEXT_PUBLIC_SITE_URL`.
 - Cache TTLs, all defaulting to 300s except one: `users_cache_ttl`, `tournaments_cache_ttl`,
   `heroes_cache_ttl`, `maps_cache_ttl`, `gamemodes_cache_ttl`, `statistics_cache_ttl`,
   `teams_cache_ttl`, `encounters_cache_ttl`, `achievements_cache_ttl`, and `user_profile_cache_ttl`

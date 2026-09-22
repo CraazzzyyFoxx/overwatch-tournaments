@@ -233,6 +233,7 @@ export default defineConfig({
       "src/components/account-settings/MyAccountSection.behavior.test.tsx",
       "src/components/account-settings/FavoritesSection.behavior.test.tsx",
       "src/components/account-settings/MixBalancerSection.behavior.test.tsx",
+      "src/components/account-settings/NotificationsSection.behavior.test.tsx",
       // Same file-level rule: `src/components/match` is otherwise untested, and
       // this pins that the log download is offered only to a signed-in viewer.
       "src/components/match/MatchLogIndicator.behavior.test.tsx",

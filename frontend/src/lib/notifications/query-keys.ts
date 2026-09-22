@@ -27,4 +27,9 @@ export const notificationQueryKeys = {
    */
   workspaceNotifications: (workspaceId: number | null, kind: string | null) =>
     ["notifications", "workspace", workspaceId, kind] as const,
+  /** The caller's own DM opt-outs; one row per account, like the inbox key. */
+  preferences: () => ["notifications", "preferences"] as const,
+  /** One workspace's broadcast channel and kinds, keyed by the scope it asks for. */
+  workspaceConfig: (workspaceId: number) =>
+    ["notifications", "workspace-config", workspaceId] as const,
 };

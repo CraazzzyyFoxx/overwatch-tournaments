@@ -47,6 +47,7 @@ from shared.tenancy.hostnames import normalize_custom_domain, subdomain_from_hos
 from src import models, schemas
 from src.core import config, db
 from src.rpc import _common as c
+from src.services import notification_config
 from src.services.workspace.service import MEMBERS_SORT_FIELDS, reject_reserved_slug
 from src.services.workspace.service import workspaces as workspace_service
 
@@ -169,6 +170,28 @@ async def _owner_payload(session: AsyncSession, workspace: models.Workspace) -> 
     )
 
 
+async def _gate_workspace(session: AsyncSession, data: dict[str, Any]) -> models.Workspace:
+    """The workspace named by the path, once the caller may administer it.
+
+    The same three lines every ``workspace_id``-scoped settings handler opens
+    with: active identity, ``workspace.update`` in *that* workspace, and a 404
+    for a workspace that is not there.
+    """
+    workspace_id = _path_int(data, "workspace_id")
+    user = c.actor(data)
+    c.require_active(user)
+    ensure_workspace_permission(user, workspace_id, "workspace", "update")
+    workspace = await workspace_service.get_by_id(session, workspace_id)
+    if not workspace:
+        raise HTTPException(status_code=404, detail="Workspace not found")
+    return workspace
+
+
+def _discord_client(broker: Any) -> DiscordClient:
+    """One client per call: discord-service first, Discord's REST as fallback."""
+    return DiscordClient(broker=broker, bot_token=config.settings.discord_token, proxy=config.settings.proxy_url)
+
+
 async def _discord_lookup(
     broker: Any,
     logger: Any,
@@ -191,22 +214,16 @@ async def _discord_lookup(
     transports fail. A settings picker with no options is the right answer for
     an unreachable bot — a 500 would take the whole settings page down with it.
     """
-    workspace_id = _path_int(data, "workspace_id")
-    user = c.actor(data)
-    c.require_active(user)
-    ensure_workspace_permission(user, workspace_id, "workspace", "update")
-    workspace = await workspace_service.get_by_id(session, workspace_id)
-    if not workspace:
-        raise HTTPException(status_code=404, detail="Workspace not found")
+    workspace = await _gate_workspace(session, data)
     guild_id = workspace.discord_guild_id
     if not guild_id:
         return {"guild_id": None, **empty}
 
-    discord = DiscordClient(broker=broker, bot_token=config.settings.discord_token, proxy=config.settings.proxy_url)
+    discord = _discord_client(broker)
     try:
         result = await read(discord, guild_id)
     except DiscordError as exc:  # the pickers degrade, they never 500
-        logger.warning(f"{label} lookup failed for workspace {workspace_id}: {exc}")
+        logger.warning(f"{label} lookup failed for workspace {workspace.id}: {exc}")
         return {"guild_id": guild_id, **(degraded if degraded is not None else empty), "error": str(exc)}
     body = {key: result} if key is not None else dict(result)
     body.setdefault("guild_id", guild_id)
@@ -818,3 +835,30 @@ def register(broker: Any, logger: Any) -> None:
             )
 
         return await c.envelope(logger, "workspaces.discord_guild", op, session_factory=_SF)
+
+    # --- notification delivery settings -------------------------------------
+    # Which channel this workspace's broadcasts are posted to, in which
+    # language, and which kinds are posted at all. Same workspace.update gate as
+    # the pickers above: it names a private channel and it makes the bot speak.
+    @broker.subscriber("rpc.app.workspaces.notification_config_get")
+    async def _notification_config_get(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            workspace = await _gate_workspace(session, data)
+            return await notification_config.read_config(session, workspace)
+
+        return await c.envelope(logger, "workspaces.notification_config_get", op, session_factory=_SF)
+
+    @broker.subscriber("rpc.app.workspaces.notification_config_update")
+    async def _notification_config_update(data: dict, msg: RabbitMessage) -> dict:
+        async def op(session: Any) -> Any:
+            workspace = await _gate_workspace(session, data)
+            body = schemas.NotificationWorkspaceConfigUpdate.model_validate(c.payload(data))
+            client = _discord_client(broker)
+            return await notification_config.write_config(
+                session,
+                workspace,
+                body,
+                list_channels=client.guild_channels,
+            )
+
+        return await c.envelope(logger, "workspaces.notification_config_update", op, session_factory=_SF)

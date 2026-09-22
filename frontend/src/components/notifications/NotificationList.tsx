@@ -3,15 +3,20 @@
 import {
   AlertTriangle,
   Bell,
+  CalendarClock,
+  CalendarPlus,
   Check,
   CheckCheck,
   CheckCircle2,
+  ClipboardCheck,
   Megaphone,
+  Settings2,
   Trash2,
   UserPlus,
   XCircle
 } from "lucide-react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useFormatter, useLocale, useTranslations } from "next-intl";
 
 import { Button } from "@/components/ui/button";
@@ -27,11 +32,21 @@ type KindMessageKey = `notifications.kinds.${
   | "team_invite.answered"
   | "registration.approved"
   | "registration.rejected"
+  | "registration.opened"
+  | "check_in.opened"
   | "encounter.report_disputed"
+  | "encounter.scheduled"
   | "announcement.published"
   | "team.kicked"
   | "team.rejected"
   | "team.disbanded"}`;
+
+/**
+ * Payload fields holding an ISO stamp. ICU has no argument type that formats
+ * one, so they are rendered before interpolation — otherwise the message would
+ * read `2026-09-25T18:00:00Z` in both locales.
+ */
+const DATE_FIELDS = ["scheduled_at", "closes_at"] as const;
 
 interface NotificationListProps {
   headingId: string;
@@ -98,6 +113,23 @@ function getKindConfig(kind: string) {
         icon: AlertTriangle,
         className: "bg-amber-500/10 text-amber-400 border-amber-500/20"
       };
+    case "registration.opened":
+      return {
+        icon: CalendarPlus,
+        className: "bg-primary/10 text-primary border-primary/20"
+      };
+    // Time-boxed and the reader has to act, so it wears the same alert tone as
+    // a disputed report rather than the neutral one of "registration is open".
+    case "check_in.opened":
+      return {
+        icon: ClipboardCheck,
+        className: "bg-amber-500/10 text-amber-400 border-amber-500/20"
+      };
+    case "encounter.scheduled":
+      return {
+        icon: CalendarClock,
+        className: "bg-blue-500/10 text-blue-400 border-blue-500/20"
+      };
     case "announcement.published":
       return {
         icon: Megaphone,
@@ -140,6 +172,9 @@ const NotificationList = ({
   const t = useTranslations<never>();
   const locale = useLocale();
   const format = useFormatter();
+  // The settings deep link stays on the page the reader is on, the way the
+  // OAuth return link does (`MyAccountSection`), rather than bouncing home.
+  const pathname = usePathname();
 
   const notificationText = (item: NotificationItem): string => {
     if (item.kind === "announcement.published") {
@@ -148,7 +183,23 @@ const NotificationList = ({
     }
     const key = `notifications.kinds.${item.kind}` as KindMessageKey;
     if (!t.has(key)) return t("notifications.unknownKind");
-    return t(key, messageValues(item.payload));
+    const values = messageValues(item.payload);
+    for (const field of DATE_FIELDS) {
+      const raw = values[field];
+      if (typeof raw === "string") {
+        values[field] = format.dateTime(new Date(raw), {
+          dateStyle: "medium",
+          timeStyle: "short"
+        });
+      }
+    }
+    // A phase with no end carries no `closes_at` at all, and an ICU `select`
+    // needs its argument in every case: the message branches on this sentinel
+    // rather than the key existing.
+    if (item.kind === "registration.opened" || item.kind === "check_in.opened") {
+      values.closes_at ??= "none";
+    }
+    return t(key, values);
   };
   // One mutation at a time: read-marking and deleting both rewrite the same
   // rows, and the list is refetched rather than patched, so overlapping them
@@ -232,6 +283,18 @@ const NotificationList = ({
               )}
             </span>
           </Button>
+          {/* The one place a reader can turn Discord copies off. The modal owns
+              `?settings=`, so this is a plain link on the current page rather
+              than a second way to open it. */}
+          <PopoverClose asChild>
+            <Link
+              href={`${pathname ?? "/"}?settings=notifications`}
+              className="inline-flex h-auto min-h-8 min-w-0 items-center gap-1.5 rounded-md px-2 text-xs text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring"
+            >
+              <Settings2 className="size-3.5 shrink-0" aria-hidden />
+              <span className="truncate">{t("notifications.configure")}</span>
+            </Link>
+          </PopoverClose>
         </div>
       </div>
 

@@ -63,3 +63,19 @@ class DiscordCommandEventTests(TestCase):
         with self.assertRaises(ValidationError) as ctx:
             DiscordCommandEvent(action="post_message", content="hello")
         self.assertIn("channel_id is required for action='post_message'", str(ctx.exception))
+
+    def test_send_dm_requires_a_user_and_something_to_say(self) -> None:
+        event = DiscordCommandEvent(action="send_dm", discord_user_id=42, embed={"title": "Check-in"})
+        self.assertEqual(event.discord_user_id, 42)
+
+        with self.assertRaises(ValidationError) as ctx:
+            DiscordCommandEvent(action="send_dm", content="hello")
+        self.assertIn("discord_user_id is required for action='send_dm'", str(ctx.exception))
+
+        with self.assertRaises(ValidationError) as ctx:
+            DiscordCommandEvent(action="send_dm", discord_user_id=42)
+        self.assertIn("content or embed is required for action='send_dm'", str(ctx.exception))
+
+    def test_mentions_stay_allowed_unless_the_publisher_opts_out(self) -> None:
+        # The balancer's mix posts predate the flag and keep their behaviour.
+        self.assertTrue(DiscordCommandEvent(action="post_message", channel_id=1, content="x").allow_mentions)

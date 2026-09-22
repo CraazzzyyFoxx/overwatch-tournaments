@@ -10,7 +10,9 @@ enforce, or an announcement published to the whole platform in one language.
 The session is a spy rather than a real engine on purpose: the invariant under
 test is *that the caller's transaction still owns the commit*, which a real
 session cannot show -- committing would look identical to not committing once
-the fixture tears down.
+the fixture tears down. It does answer ``flush`` (assigning ids, as the
+database would) and ``scalar`` (the dedupe lookup), because a personal row now
+needs its id for the delivery event.
 """
 
 from __future__ import annotations
@@ -24,7 +26,18 @@ from pydantic import ValidationError
 backend_root = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(backend_root))
 
-from shared.services.notifications import notify  # noqa: E402
+from shared.messaging.config import NOTIFICATIONS_EXCHANGE  # noqa: E402
+from shared.models.platform.notification import Notification  # noqa: E402
+from shared.models.platform.outbox import EventOutbox  # noqa: E402
+from shared.services.notifications import (  # noqa: E402
+    BROADCASTABLE_KINDS,
+    NOTIFICATION_KIND_GROUPS,
+    NOTIFICATION_KINDS,
+    broadcast,
+    effective_discord_dm,
+    notify,
+    wants_discord_dm,
+)
 from shared.services.realtime import Resource, Scope  # noqa: E402
 from shared.services.realtime.emit import _STAGED_KEY  # noqa: E402
 
@@ -40,16 +53,19 @@ _INVITE = {
 
 
 class _Session:
-    """Records the three session methods the helper could reach for.
+    """Records the session methods the helper could reach for.
 
-    ``commit``/``flush`` exist only so that calling them would be *visible*;
-    the tests assert they stay untouched.
+    ``commit`` exists only so that calling it would be *visible*; the tests
+    assert it stays untouched. ``flush`` stamps ids the way the database would.
+    ``scalar`` answers the dedupe lookup with ``existing``.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, existing: Notification | None = None) -> None:
         self.added: list[object] = []
         self.committed = 0
         self.flushed = 0
+        self.lookups = 0
+        self.existing = existing
         # ``emit`` hangs its staged events here, the same way SQLAlchemy's
         # Session.info does.
         self.info: dict[str, object] = {}
@@ -62,6 +78,19 @@ class _Session:
 
     async def flush(self) -> None:
         self.flushed += 1
+        for index, row in enumerate(self.added, start=1):
+            if getattr(row, "id", None) is None:
+                row.id = 100 + index
+
+    async def scalar(self, statement: object) -> Notification | None:
+        self.lookups += 1
+        return self.existing
+
+    def notifications(self) -> list[Notification]:
+        return [row for row in self.added if isinstance(row, Notification)]
+
+    def outbox(self) -> list[EventOutbox]:
+        return [row for row in self.added if isinstance(row, EventOutbox)]
 
 
 class RealtimeSignalTests(IsolatedAsyncioTestCase):
@@ -117,12 +146,11 @@ class NotifyTests(IsolatedAsyncioTestCase):
             recipient_auth_user_id=7,
         )
 
-        self.assertEqual([row], session.added)
+        self.assertEqual([row], session.notifications())
         self.assertEqual("team_invite.received", row.kind)
         self.assertEqual(7, row.recipient_auth_user_id)
         self.assertEqual(12, row.payload_json["team_id"])
         self.assertEqual(0, session.committed)
-        self.assertEqual(0, session.flushed)
 
     async def test_unknown_kind_is_rejected(self) -> None:
         session = _Session()
@@ -285,6 +313,162 @@ class NotifyTests(IsolatedAsyncioTestCase):
                 )
 
         self.assertEqual([], session.added)
+
+
+class DeliveryEventTests(IsolatedAsyncioTestCase):
+    """A personal row carries its own delivery event; nothing else does."""
+
+    async def test_a_personal_row_enqueues_its_created_event(self) -> None:
+        session = _Session()
+
+        row = await notify(
+            session,
+            kind="team_invite.received",
+            payload=dict(_INVITE),
+            audience="user",
+            recipient_auth_user_id=7,
+        )
+
+        (event,) = session.outbox()
+        self.assertIsNotNone(row.id)
+        self.assertEqual(row.id, event.payload_json["notification_id"])
+        self.assertEqual("notification.created", event.routing_key)
+        self.assertEqual(NOTIFICATIONS_EXCHANGE.name, event.exchange)
+
+    async def test_a_workspace_row_enqueues_nothing(self) -> None:
+        session = _Session()
+
+        await notify(
+            session,
+            kind="registration.opened",
+            payload={"tournament_id": 3, "tournament_name": "OWT Season 5"},
+            audience="workspace",
+            workspace_id=4,
+        )
+
+        self.assertEqual(1, len(session.notifications()))
+        self.assertEqual([], session.outbox())
+
+
+class DedupeKeyTests(IsolatedAsyncioTestCase):
+    async def test_a_repeat_returns_the_existing_row_and_writes_nothing(self) -> None:
+        first = Notification(id=55, kind="check_in.opened", dedupe_key="tournament:3")
+        session = _Session(existing=first)
+
+        row = await notify(
+            session,
+            kind="check_in.opened",
+            payload={"tournament_id": 3, "tournament_name": "OWT Season 5"},
+            audience="user",
+            recipient_auth_user_id=7,
+            dedupe_key="tournament:3",
+        )
+
+        self.assertIs(first, row)
+        self.assertEqual([], session.added)
+        # No inbox signal and no delivery for a row nobody wrote.
+        self.assertNotIn(_STAGED_KEY, session.info)
+
+    async def test_a_first_occurrence_is_written_with_its_key(self) -> None:
+        session = _Session(existing=None)
+
+        row = await notify(
+            session,
+            kind="check_in.opened",
+            payload={"tournament_id": 3, "tournament_name": "OWT Season 5"},
+            audience="user",
+            recipient_auth_user_id=7,
+            dedupe_key="tournament:3",
+        )
+
+        self.assertEqual(1, session.lookups)
+        self.assertEqual([row], session.notifications())
+        self.assertEqual("tournament:3", row.dedupe_key)
+        self.assertEqual(1, len(session.outbox()))
+
+    async def test_no_key_never_looks_up(self) -> None:
+        # An invite sent again is a legitimate repeat.
+        session = _Session(existing=Notification(id=1))
+
+        await notify(
+            session,
+            kind="team_invite.received",
+            payload=dict(_INVITE),
+            audience="user",
+            recipient_auth_user_id=7,
+        )
+
+        self.assertEqual(0, session.lookups)
+        self.assertEqual(1, len(session.notifications()))
+
+
+class BroadcastTests(IsolatedAsyncioTestCase):
+    async def test_broadcast_enqueues_a_validated_snapshot_and_no_row(self) -> None:
+        session = _Session()
+
+        await broadcast(
+            session,
+            kind="registration.opened",
+            payload={"tournament_id": 3, "tournament_name": "OWT Season 5", "closes_at": None},
+            workspace_id=4,
+            dedupe_key="tournament:3",
+        )
+
+        self.assertEqual([], session.notifications())
+        (event,) = session.outbox()
+        self.assertEqual("notification.broadcast", event.routing_key)
+        self.assertEqual(4, event.payload_json["workspace_id"])
+        self.assertEqual("tournament:3", event.payload_json["dedupe_key"])
+        # Same snapshot rules as the inbox row: absent optionals are dropped.
+        self.assertEqual({"tournament_id": 3, "tournament_name": "OWT Season 5"}, event.payload_json["payload"])
+        self.assertEqual(0, session.committed)
+
+    async def test_broadcast_rejects_a_personal_kind(self) -> None:
+        session = _Session()
+
+        with self.assertRaises(ValueError):
+            await broadcast(
+                session,
+                kind="team_invite.received",
+                payload=dict(_INVITE),
+                workspace_id=4,
+                dedupe_key="x",
+            )
+
+        self.assertEqual([], session.added)
+
+    async def test_broadcast_validates_the_payload(self) -> None:
+        session = _Session()
+
+        with self.assertRaises(ValidationError):
+            await broadcast(
+                session,
+                kind="encounter.scheduled",
+                payload={"encounter_id": 1, "tournament_id": 3},
+                workspace_id=4,
+                dedupe_key="encounter:1",
+            )
+
+        self.assertEqual([], session.added)
+
+
+class DiscordDmGroupTests(IsolatedAsyncioTestCase):
+    def test_every_personal_kind_has_exactly_one_group(self) -> None:
+        # A kind outside every group is silently never DMed; one that is not a
+        # registered kind is a typo.
+        never_personal = {"registration.opened", "announcement.published"}
+        self.assertEqual(set(NOTIFICATION_KINDS) - never_personal, set(NOTIFICATION_KIND_GROUPS))
+        self.assertTrue(BROADCASTABLE_KINDS <= set(NOTIFICATION_KINDS))
+
+    def test_groups_default_on_and_honour_an_opt_out(self) -> None:
+        self.assertEqual({"tournament": True, "matches": True, "team": True}, effective_discord_dm({}))
+        self.assertTrue(wants_discord_dm({}, "encounter.scheduled"))
+        self.assertFalse(wants_discord_dm({"matches": False}, "encounter.scheduled"))
+        self.assertTrue(wants_discord_dm({"matches": False}, "check_in.opened"))
+        # Not personal: never DMed, whatever is stored.
+        self.assertFalse(wants_discord_dm({}, "registration.opened"))
+        # Garbage in the JSONB is not an opt-out.
+        self.assertTrue(wants_discord_dm({"team": "no"}, "team.kicked"))
 
 
 _TEAM_EVENT = {

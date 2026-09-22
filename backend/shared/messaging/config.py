@@ -373,6 +373,34 @@ TOURNAMENT_STANDINGS_INVALIDATED_DLQ = RabbitQueue(
 )
 
 # ============================================================================
+# Notification delivery (notify()/broadcast() outbox -> app-service)
+# ============================================================================
+# Routing keys: ``notification.created`` (one personal row, DM) and
+# ``notification.broadcast`` (one workspace channel post). One queue, one owner:
+# app-service's delivery consumer.
+
+NOTIFICATIONS_EXCHANGE = RabbitExchange(
+    "notifications",
+    type=ExchangeType.TOPIC,
+    durable=True,
+)
+
+NOTIFICATION_DELIVERY_QUEUE = RabbitQueue(
+    "notification_delivery",
+    durable=True,
+    routing_key="notification.*",
+    arguments={
+        "x-dead-letter-exchange": "dlx",
+        "x-dead-letter-routing-key": "notification_delivery.dlq",
+    },
+)
+
+NOTIFICATION_DELIVERY_DLQ = RabbitQueue(
+    "notification_delivery.dlq",
+    durable=True,
+)
+
+# ============================================================================
 # Analytics v2 ML Queues
 # ============================================================================
 

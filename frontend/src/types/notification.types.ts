@@ -102,3 +102,51 @@ export interface AnnouncementCreateBody {
   /** `null` never expires. */
   expires_at: string | null;
 }
+
+/**
+ * Delivery groups a personal notification kind belongs to — the opt-out
+ * granularity of Discord DMs. Three groups rather than a switch per kind: a
+ * reader who does not want match pings wants none of them.
+ */
+export type NotificationGroup = "tournament" | "matches" | "team";
+
+/**
+ * `GET/PUT /api/v1/notifications/preferences`.
+ *
+ * Read answers with EFFECTIVE values — a group the account never touched comes
+ * back `true` — so the switches never have to reproduce the server's defaults.
+ * `discord_linked` is what turns the "link Discord first" hint on: every switch
+ * here is inert until there is an account to DM.
+ */
+export interface NotificationPreferences {
+  discord_dm: Record<NotificationGroup, boolean>;
+  discord_linked: boolean;
+}
+
+/** The write body. Partial: a switch sends its own group and nothing else. */
+export interface NotificationPreferencesUpdate {
+  discord_dm: Partial<Record<NotificationGroup, boolean>>;
+}
+
+/**
+ * `GET/PUT /api/v1/workspaces/{id}/notification-config`.
+ *
+ * Discord snowflakes travel as strings: a channel id does not survive a
+ * JSON number. `discord_guild_id` is read-only here (it is bound in the Discord
+ * section), and `broadcastable_kinds` is the server's catalogue — the checkbox
+ * list is rendered from it rather than from a client-side copy that would drift.
+ */
+export interface NotificationWorkspaceConfig {
+  workspace_id: number;
+  discord_guild_id: string | null;
+  discord_channel_id: string | null;
+  locale: "ru" | "en";
+  broadcast_kinds: string[];
+  broadcastable_kinds: string[];
+}
+
+export interface NotificationWorkspaceConfigUpdate {
+  discord_channel_id: string | null;
+  locale: "ru" | "en";
+  broadcast_kinds: string[];
+}

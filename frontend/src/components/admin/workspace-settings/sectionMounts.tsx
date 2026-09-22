@@ -7,12 +7,14 @@ import { BrandingSection } from "./BrandingSection";
 import { DiscordSection } from "./DiscordSection";
 import { DomainSection } from "./DomainSection";
 import { GeneralSection } from "./GeneralSection";
+import { NotificationsSection } from "./NotificationsSection";
 import { VisibilitySection } from "./VisibilitySection";
 import type { WorkspaceRecordSectionKey } from "./sections";
 
 /**
- * Each workspace-record section is implemented once and mounted twice, so the
- * only difference between the two shells is where the workspace id comes from.
+ * Each section that exists under both shells is implemented once and mounted
+ * twice, so the only difference between the two is where the workspace id
+ * comes from.
  */
 const SECTION_COMPONENTS: Record<
   WorkspaceRecordSectionKey,
@@ -22,7 +24,8 @@ const SECTION_COMPONENTS: Record<
   branding: BrandingSection,
   visibility: VisibilitySection,
   domain: DomainSection,
-  discord: DiscordSection
+  discord: DiscordSection,
+  notifications: NotificationsSection
 };
 
 /** `/admin/settings/*` — the workspace the admin is currently working in. */

@@ -46,7 +46,10 @@ const KINDS = [
   "team_invite.answered",
   "registration.approved",
   "registration.rejected",
+  "registration.opened",
+  "check_in.opened",
   "encounter.report_disputed",
+  "encounter.scheduled",
   "team.kicked",
   "team.rejected",
   "team.disbanded"

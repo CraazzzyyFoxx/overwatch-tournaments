@@ -23,9 +23,15 @@ export function notificationHref(item: NotificationItem): string | null {
         ? tournamentHref(payload.tournament_id, "/participants")
         : null;
     case "encounter.report_disputed":
+    case "encounter.scheduled":
       return isId(payload.tournament_id) && isId(payload.encounter_id)
         ? tournamentHref(payload.tournament_id, `/pregame/${payload.encounter_id}`)
         : null;
+    // The phase itself is the news, and the tournament page is where both the
+    // register and the check-in button live.
+    case "registration.opened":
+    case "check_in.opened":
+      return isId(payload.tournament_id) ? tournamentHref(payload.tournament_id) : null;
     // An answered invite has only a pre-formation team ID, not a tournament
     // reference. It cannot link to the unrelated post-balancer team routes.
     case "team_invite.answered":

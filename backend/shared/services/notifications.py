@@ -18,40 +18,60 @@ rows written a year ago and a deleted team still renders its name.
 ``announcement.published`` is the one kind whose payload *is* author-written
 text, in every locale the audience requires.
 
-``ponytail:`` no de-duplication in v1 -- a registration toggled
-approved -> rejected -> approved notifies three times. The upgrade path is a
-suppression window here in ``notify()`` (skip if the same recipient/kind/entity
-was notified in the last N minutes), not a partial unique index, which would
-also block the legitimate repeat ("you were invited to that team again").
+De-duplication is opt-in per call: a producer that can name "the same event"
+passes ``dedupe_key`` (``tournament:10``, ``encounter:5:<iso>``) and ``notify()``
+returns the existing row for that kind, key and recipient instead of writing a
+second one. Kinds with a legitimate repeat ("you were invited to that team
+again") pass no key. The check is a SELECT over a non-unique index, not
+``ON CONFLICT``: ``ponytail:`` two racing transactions can still write a rare
+duplicate; a unique index + ``ON CONFLICT`` is the upgrade if that is observed.
+
+Delivery outside the app rides the same transaction: a personal row enqueues a
+``NotificationCreatedEvent`` in the outbox (app-service turns it into a Discord
+DM), and ``broadcast()`` enqueues a channel post without writing any row.
 """
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from datetime import datetime
 from typing import Any, Literal, get_args
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator, model_validator
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.messaging.config import NOTIFICATIONS_EXCHANGE
+from shared.messaging.outbox import enqueue_outbox_event
 from shared.models.platform.notification import Notification
+from shared.schemas.events import NotificationBroadcastEvent, NotificationCreatedEvent
 from shared.services.realtime import DomainEvent, Resource, Scope, emit
 
 __all__ = (
+    "BROADCASTABLE_KINDS",
     "NOTIFICATION_CREATED_EVENT",
+    "NOTIFICATION_GROUPS",
     "NOTIFICATION_KINDS",
+    "NOTIFICATION_KIND_GROUPS",
     "SUPPORTED_LOCALES",
     "AnnouncementLocale",
     "AnnouncementPayload",
     "AnnouncementText",
     "Audience",
     "EncounterReportDisputedPayload",
+    "EncounterScheduledPayload",
+    "NotificationGroup",
     "RegistrationDecisionPayload",
     "TeamInviteAnsweredPayload",
     "TeamInviteReceivedPayload",
     "TeamRejectedPayload",
     "TeamRosterEventPayload",
+    "TournamentPhaseOpenedPayload",
+    "broadcast",
+    "effective_discord_dm",
     "notify",
     "validate_notification_payload",
+    "wants_discord_dm",
 )
 
 Audience = Literal["user", "workspace", "global"]
@@ -131,6 +151,25 @@ class TeamRejectedPayload(TeamRosterEventPayload):
     reason: str = ""
 
 
+class TournamentPhaseOpenedPayload(_Payload):
+    """Shared by ``registration.opened`` and ``check_in.opened`` -- the kind is
+    the phase. ``closes_at`` is the phase row's ``ends_at``; absent when the
+    window has no end (or late registration lifts it)."""
+
+    tournament_id: int
+    tournament_name: str
+    closes_at: datetime | None = None
+
+
+class EncounterScheduledPayload(_Payload):
+    encounter_id: int
+    tournament_id: int
+    tournament_name: str
+    home_team_name: str
+    away_team_name: str
+    scheduled_at: datetime
+
+
 class AnnouncementText(_Payload):
     title: str = Field(min_length=1, max_length=200)
     body: str | None = Field(default=None, max_length=4000)
@@ -201,7 +240,52 @@ NOTIFICATION_KINDS: dict[str, type[BaseModel]] = {
     "team.kicked": TeamRosterEventPayload,
     "team.disbanded": TeamRosterEventPayload,
     "team.rejected": TeamRejectedPayload,
+    "registration.opened": TournamentPhaseOpenedPayload,
+    "check_in.opened": TournamentPhaseOpenedPayload,
+    "encounter.scheduled": EncounterScheduledPayload,
 }
+
+#: Kinds ``broadcast()`` may post to a workspace channel. Everything else is
+#: either personal (a channel post would name one person's business) or an
+#: announcement (operator text that already has its own banner).
+BROADCASTABLE_KINDS: frozenset[str] = frozenset({"registration.opened", "check_in.opened", "encounter.scheduled"})
+
+#: The three switches a user sees for Discord DMs. Groups rather than one
+#: toggle per kind: twelve checkboxes is a settings page nobody reads.
+NotificationGroup = Literal["tournament", "matches", "team"]
+NOTIFICATION_GROUPS: tuple[NotificationGroup, ...] = get_args(NotificationGroup)
+
+#: Every personal kind -> its DM group. ``registration.opened`` and
+#: ``announcement.published`` are never personal, so they are absent: a kind
+#: missing here is never DMed.
+NOTIFICATION_KIND_GROUPS: dict[str, NotificationGroup] = {
+    "check_in.opened": "tournament",
+    "registration.approved": "tournament",
+    "registration.rejected": "tournament",
+    "encounter.scheduled": "matches",
+    "encounter.report_disputed": "matches",
+    "team_invite.received": "team",
+    "team_invite.answered": "team",
+    "team.kicked": "team",
+    "team.disbanded": "team",
+    "team.rejected": "team",
+}
+
+
+def effective_discord_dm(stored: Mapping[str, Any]) -> dict[NotificationGroup, bool]:
+    """A user's DM switches with the defaults filled in (every group on).
+
+    ``stored`` is ``notification_preference.discord_dm``: only what the user
+    changed, so a group added later is on for everyone without a backfill.
+    Unknown keys and non-bool values are ignored rather than trusted.
+    """
+    return {group: stored.get(group) is not False for group in NOTIFICATION_GROUPS}
+
+
+def wants_discord_dm(stored: Mapping[str, Any], kind: str) -> bool:
+    """Whether a personal row of ``kind`` should also reach the user's Discord DMs."""
+    group = NOTIFICATION_KIND_GROUPS.get(kind)
+    return group is not None and effective_discord_dm(stored)[group]
 
 
 def validate_notification_payload(
@@ -255,6 +339,7 @@ async def notify(
     actor_auth_user_id: int | None = None,
     published_at: datetime | None = None,
     expires_at: datetime | None = None,
+    dedupe_key: str | None = None,
 ) -> Notification:
     """Append one notification row. ``actor_auth_user_id=None`` means a machine actor.
 
@@ -270,9 +355,30 @@ async def notify(
     tournaments emitted -- ``workspace_id`` cannot serve that purpose because a
     personal row is forbidden to carry one. A workspace announcement is its own
     source, so it defaults rather than making every caller repeat the id.
+
+    ``dedupe_key`` names "the same event" for this kind: if a row with the same
+    kind, key and recipient (or workspace) already exists -- retired or not --
+    it is returned and nothing is written, signalled or delivered.
+
+    A personal row is flushed (the delivery event needs its id) and enqueues a
+    ``NotificationCreatedEvent`` in the outbox, so app-service can DM it.
+    Workspace and global rows stay in the app: channel posts go through
+    ``broadcast()``.
     """
     validated = validate_notification_payload(kind, payload, audience=audience)
     _check_audience(audience, recipient_auth_user_id, workspace_id)
+
+    if dedupe_key is not None:
+        existing = await _find_duplicate(
+            session,
+            kind=kind,
+            dedupe_key=dedupe_key,
+            audience=audience,
+            recipient_auth_user_id=recipient_auth_user_id,
+            workspace_id=workspace_id,
+        )
+        if existing is not None:
+            return existing
 
     row = Notification(
         audience=audience,
@@ -280,6 +386,7 @@ async def notify(
         workspace_id=workspace_id,
         source_workspace_id=source_workspace_id if source_workspace_id is not None else workspace_id,
         kind=kind,
+        dedupe_key=dedupe_key,
         # ``mode="json"`` so a datetime in a future payload lands as a string
         # JSONB can hold; absent optionals stay out of the snapshot instead of
         # storing a null the frontend would have to skip.
@@ -310,4 +417,68 @@ async def notify(
             ),
             actor_user_id=actor_auth_user_id,
         )
+        await session.flush()
+        await enqueue_outbox_event(
+            session,
+            NotificationCreatedEvent(notification_id=row.id),
+            exchange=NOTIFICATIONS_EXCHANGE,
+            routing_key="notification.created",
+        )
     return row
+
+
+async def _find_duplicate(
+    session: AsyncSession,
+    *,
+    kind: str,
+    dedupe_key: str,
+    audience: Audience,
+    recipient_auth_user_id: int | None,
+    workspace_id: int | None,
+) -> Notification | None:
+    """The row ``notify()`` already wrote for this event and recipient, if any.
+
+    No ``expires_at`` filter on purpose: an operator retiring the first row must
+    not make the next repeat of the same event write a fresh one.
+    """
+    statement = select(Notification).where(
+        Notification.kind == kind,
+        Notification.dedupe_key == dedupe_key,
+        Notification.audience == audience,
+    )
+    if audience == "user":
+        statement = statement.where(Notification.recipient_auth_user_id == recipient_auth_user_id)
+    elif audience == "workspace":
+        statement = statement.where(Notification.workspace_id == workspace_id)
+    return await session.scalar(statement.limit(1))
+
+
+async def broadcast(
+    session: AsyncSession,
+    *,
+    kind: str,
+    payload: dict[str, Any],
+    workspace_id: int,
+    dedupe_key: str,
+) -> None:
+    """Queue one post to the workspace's notification channel. Never commits.
+
+    Writes no notification row: whether and where it is posted is the
+    workspace's delivery config, read by app-service when the event arrives.
+    ``dedupe_key`` is the ledger key there, so repeating the call for the same
+    event posts once.
+    """
+    if kind not in BROADCASTABLE_KINDS:
+        raise ValueError(f"kind {kind!r} cannot be broadcast")
+    validated = validate_notification_payload(kind, payload, audience="workspace")
+    await enqueue_outbox_event(
+        session,
+        NotificationBroadcastEvent(
+            workspace_id=workspace_id,
+            kind=kind,
+            payload=validated.model_dump(mode="json", exclude_none=True),
+            dedupe_key=dedupe_key,
+        ),
+        exchange=NOTIFICATIONS_EXCHANGE,
+        routing_key="notification.broadcast",
+    )

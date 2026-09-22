@@ -31,6 +31,7 @@ from src import models, schemas
 from src.clients.challonge import challonge_client
 from src.services.admin.stage import stage_service
 from src.services.challonge.sync import sync_service
+from src.services.notifications.lifecycle import lifecycle_notifier
 from src.services.tournament.events import (
     STRUCTURE_RESOURCES,
     enqueue_tournament_state_changed,
@@ -589,6 +590,7 @@ class AdminTournamentService:
             old_status=old_status,
             new_status=_status_value(tournament.status),
         )
+        await lifecycle_notifier.on_status_entered(session, tournament)
         await publish_tournament_invalidation(session, tournament_id, STRUCTURE_RESOURCES)
         await session.commit()
         await self._maybe_auto_start_group_stage(

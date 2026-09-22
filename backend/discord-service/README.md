@@ -43,7 +43,7 @@ describe this service. Everything below is broker or gateway-event traffic.
 
 | Queue / exchange | Direction | Purpose |
 | --- | --- | --- |
-| `discord_commands` | consumes | `DiscordCommandEvent` — `process_all` (rescan every channel of a tournament) and `process_message` (re-ingest one message). Published by parser-service's `rpc.discord_channel.backfill`. |
+| `discord_commands` | consumes | `DiscordCommandEvent` — `process_all` (rescan every channel of a tournament), `process_message` (re-ingest one message), `post_message` (send content/embed/PNG to a channel) and `send_dm` (send content/embed to one user). `allow_mentions=false` makes the bot send with `AllowedMentions.none()`, so user-written names never ping; `send_dm` always suppresses mentions. Published by parser-service's `rpc.discord_channel.backfill`, balancer-service's mix posts, and app-service's notification delivery. |
 | `discord_member_roles` | consumes, replies | Role ids held by a set of users in a guild. Called by the shared Discord-role subscription strategy (`shared/services/subscriptions/strategies.py`, 5 s timeout). |
 | `discord_guild_roles` | consumes, replies | The guild's role list. |
 | `discord_guild_channels` | consumes, replies | The guild's text channels. |
@@ -200,7 +200,9 @@ port, so that check proves only that the interpreter runs, not that the gateway 
   for that reason.
 - **Failure handling on `discord_commands`.** A malformed payload, a missing channel, a deleted
   message, or a permissions error is `reject`ed straight to `discord_commands.dlq`; an unexpected
-  exception is `nack`ed and requeued. Retries are RabbitMQ's, there is no application-level backoff.
+  exception is `nack`ed and requeued. A `send_dm` the recipient cannot receive (DMs closed, no mutual
+  guild, unknown user) is `ack`ed instead — the notification already exists in the in-app inbox, and
+  no retry changes the outcome. Retries are RabbitMQ's, there is no application-level backoff.
 - **Upload timeout.** A parse result that does not arrive within 120 s leaves the message marked as
   timed out even if the parse later succeeds. The upload itself is not retried.
 - **Idempotency is by `(tournament_id, filename)`**, checked against `log_processing.record` before

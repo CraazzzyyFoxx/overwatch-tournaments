@@ -37,8 +37,11 @@ __all__ = (
     "DEFAULT_PAGE_LIMIT",
     "MAX_PAGE_LIMIT",
     "InvalidCursorError",
+    "NotificationDeliveryRepository",
     "NotificationPage",
+    "NotificationPreferenceRepository",
     "NotificationRepository",
+    "NotificationWorkspaceConfigRepository",
     "decode_cursor",
     "encode_cursor",
 )
@@ -363,3 +366,116 @@ class NotificationRepository(BaseRepository[models.Notification]):
             query.order_by(self.model.published_at.desc(), self.model.id.desc()),
         )
         return list(result.scalars().all())
+
+
+class NotificationDeliveryRepository(BaseRepository[models.NotificationDelivery]):
+    """The ledger that makes an outside send happen once.
+
+    One method, because the ledger has exactly one question: "am I the one who
+    gets to send this?". Asking and answering it in a single statement is the
+    point -- a SELECT-then-INSERT would let a redelivered event slip between
+    the two.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(models.NotificationDelivery)
+
+    async def claim(
+        self,
+        session: AsyncSession,
+        *,
+        channel: str,
+        target: str,
+        dedupe_key: str,
+        kind: str,
+        notification_id: int | None = None,
+        workspace_id: int | None = None,
+    ) -> bool:
+        """Record the send, or report that somebody already did.
+
+        ``True`` means this call owns the delivery and must enqueue it in the
+        same transaction; ``False`` means the row was already there (the event
+        was redelivered) and nothing more should be sent.
+        """
+        statement = (
+            pg_insert(models.NotificationDelivery.__table__)
+            .values(
+                channel=channel,
+                target=target,
+                dedupe_key=dedupe_key,
+                kind=kind,
+                notification_id=notification_id,
+                workspace_id=workspace_id,
+            )
+            # Named by columns rather than by the constraint: the same clause
+            # then compiles on SQLite, which the delivery tests run on.
+            .on_conflict_do_nothing(index_elements=["channel", "target", "dedupe_key"])
+            .returning(models.NotificationDelivery.__table__.c.id)
+        )
+        result = await session.execute(statement)
+        return result.scalar_one_or_none() is not None
+
+
+class NotificationPreferenceRepository(BaseRepository[models.NotificationPreference]):
+    """A user's Discord-DM opt-outs. Absent row = every default."""
+
+    def __init__(self) -> None:
+        super().__init__(models.NotificationPreference)
+
+    async def stored_discord_dm(self, session: AsyncSession, auth_user_id: int) -> dict[str, bool]:
+        """Only what this user changed -- ``{}`` when they never touched it."""
+        row = await self.get_by(session, auth_user_id=auth_user_id)
+        return dict(row.discord_dm or {}) if row is not None else {}
+
+    async def set_discord_dm(
+        self,
+        session: AsyncSession,
+        *,
+        auth_user_id: int,
+        discord_dm: dict[str, bool],
+    ) -> models.NotificationPreference:
+        """Upsert the whole switch map. Flushes, never commits."""
+        row = await self.get_by(session, auth_user_id=auth_user_id)
+        if row is None:
+            row = models.NotificationPreference(auth_user_id=auth_user_id, discord_dm=discord_dm)
+            session.add(row)
+        else:
+            # JSONB does not track in-place mutation -- reassign.
+            row.discord_dm = discord_dm
+        await session.flush()
+        return row
+
+
+class NotificationWorkspaceConfigRepository(BaseRepository[models.NotificationWorkspaceConfig]):
+    """Where a workspace posts its broadcasts, and which ones it posts."""
+
+    def __init__(self) -> None:
+        super().__init__(models.NotificationWorkspaceConfig)
+
+    async def for_workspace(
+        self,
+        session: AsyncSession,
+        workspace_id: int,
+    ) -> models.NotificationWorkspaceConfig | None:
+        return await self.get_by(session, workspace_id=workspace_id)
+
+    async def upsert(
+        self,
+        session: AsyncSession,
+        *,
+        workspace_id: int,
+        discord_channel_id: int | None,
+        locale: str,
+        broadcast_kinds: list[str],
+    ) -> models.NotificationWorkspaceConfig:
+        """Store the whole config (the screen edits it as one form). Flushes."""
+        row = await self.get_by(session, workspace_id=workspace_id)
+        if row is None:
+            row = models.NotificationWorkspaceConfig(workspace_id=workspace_id)
+            session.add(row)
+        row.discord_channel_id = discord_channel_id
+        row.locale = locale
+        # JSONB does not track in-place mutation -- reassign.
+        row.broadcast_kinds = broadcast_kinds
+        await session.flush()
+        return row

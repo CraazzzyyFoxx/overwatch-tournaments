@@ -778,6 +778,7 @@
     "tabs": {
       "profile": "Profile",
       "security": "Security",
+      "notifications": "Notifications",
       "favorites": "Favorites",
       "mixes": "Mixes"
     },
@@ -788,6 +789,30 @@
     "security": {
       "title": "Security",
       "desc": "Devices signed in to your account, and account deletion."
+    },
+    "notifications": {
+      "title": "Notifications",
+      "desc": "Where the things that happen to you are delivered.",
+      "discordTitle": "Discord direct messages",
+      "discordDesc": "The bot messages you about your own registrations, teams and matches. Everything still lands in the bell either way — these switches only decide what Discord repeats.",
+      "linkDiscordHint": "No Discord account is linked to this one, so there is nowhere to send a direct message yet.",
+      "linkDiscordAction": "Link Discord in Profile",
+      "loadError": "Could not load your notification settings.",
+      "groups": {
+        "tournament": {
+          "label": "Tournaments",
+          "desc": "Check-in opening, and decisions on your registrations."
+        },
+        "matches": {
+          "label": "Matches",
+          "desc": "Your match being scheduled or moved, and disputed reports."
+        },
+        "team": {
+          "label": "Teams",
+          "desc": "Invites, answers to them, and being removed from a roster."
+        }
+      },
+      "footnote": "A closed Discord inbox (or no server in common with the bot) stops delivery on its own — nothing is queued and nothing is retried."
     },
     "favorites": {
       "title": "Favorites",
@@ -5692,6 +5717,7 @@
     "emptyHint": "Team invites, registration decisions and disputed reports land here.",
     "markAllRead": "Mark all read",
     "loadMore": "Show older",
+    "configure": "Settings",
     "banner": {
       "label": "Announcement",
       "eyebrow": "Announcement",
@@ -5705,10 +5731,15 @@
       },
       "registration": {
         "approved": "Your registration for {tournament_name} was approved",
-        "rejected": "Your registration for {tournament_name} was rejected"
+        "rejected": "Your registration for {tournament_name} was rejected",
+        "opened": "Registration for {tournament_name} is open{closes_at, select, none {} other { until {closes_at}}}"
+      },
+      "check_in": {
+        "opened": "Check-in for {tournament_name} is open{closes_at, select, none {} other { until {closes_at}}} — confirm you are playing"
       },
       "encounter": {
-        "report_disputed": "{map_index, plural, =0 {A report in your match is disputed} other {The report for map # of your match is disputed}}"
+        "report_disputed": "{map_index, plural, =0 {A report in your match is disputed} other {The report for map # of your match is disputed}}",
+        "scheduled": "{home_team_name} vs {away_team_name} in {tournament_name} is scheduled for {scheduled_at}"
       },
       "announcement": {
         "published": "New announcement"
@@ -5807,10 +5838,15 @@
         },
         "registration": {
           "approved": "Registration approved",
-          "rejected": "Registration rejected"
+          "rejected": "Registration rejected",
+          "opened": "Registration opened"
+        },
+        "check_in": {
+          "opened": "Check-in opened"
         },
         "encounter": {
-          "report_disputed": "Report disputed"
+          "report_disputed": "Report disputed",
+          "scheduled": "Match scheduled"
         },
         "team": {
           "kicked": "Removed from team",

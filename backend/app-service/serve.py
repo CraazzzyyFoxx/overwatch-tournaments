@@ -16,6 +16,7 @@ from shared.messaging.config import (
     CACHE_INVALIDATION_APP_DLQ,
     CACHE_INVALIDATION_APP_QUEUE,
     CACHE_INVALIDATION_EXCHANGE,
+    NOTIFICATION_DELIVERY_DLQ,
 )
 from shared.messaging.topology import declare_dead_letter_queue
 from shared.observability import (
@@ -54,6 +55,7 @@ from src.rpc import (
 )
 from src.services import hero_stats_refresh
 from src.services.cache_resources import RESOURCE_CACHE_PATTERNS, invalidate_local
+from src.services.notification_delivery import consumer as notification_delivery_consumer
 
 logger = setup_logging(
     service_name="app-svc",
@@ -145,6 +147,10 @@ announcements.register(broker, logger)
 # retire that takes one back out of every recipient's inbox.
 notifications_admin.register(broker, logger)
 
+# Discord delivery of the rows ``notify()`` writes and the posts
+# ``broadcast()`` queues -- its own queue, its own channel, its own DLQ.
+notification_delivery_consumer.register(broker, logger)
+
 # Phase 3 — binary/multipart endpoints (icons, assets, match-log) over base64.
 binary.register(broker, logger)
 
@@ -159,6 +165,7 @@ async def start_worker() -> None:
     # The invalidation queue dead-letters here; without the declaration a
     # poison message routes to a non-existent queue and vanishes.
     await declare_dead_letter_queue(broker, CACHE_INVALIDATION_APP_DLQ)
+    await declare_dead_letter_queue(broker, NOTIFICATION_DELIVERY_DLQ)
     await clients.s3_client.start()
     setup_sentry(
         dsn=config.settings.sentry_dsn,
