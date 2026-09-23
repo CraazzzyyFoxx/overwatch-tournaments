@@ -66,6 +66,7 @@ class TournamentUpdate(BaseModel):
     end_date: date | None = None
     auto_transitions_enabled: bool | None = None
     allow_late_registration: bool | None = None
+    discord_broadcasts_enabled: bool | None = None
     win_points: float | None = None
     draw_points: float | None = None
     loss_points: float | None = None

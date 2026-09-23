@@ -348,6 +348,15 @@ class RegistrationOpenedTests(_LifecycleTestCase):
         self.assertEqual([], self.fx.notifications())
         self.assertEqual([], self.fx.broadcasts())
 
+    async def test_muted_discord_keeps_the_workspace_row_but_posts_nothing(self) -> None:
+        self.fx.tournament.discord_broadcasts_enabled = False
+        self.fx.schedule(TournamentStatus.REGISTRATION, starts_at=datetime.now(UTC) - timedelta(hours=1))
+
+        await self._enter(TournamentStatus.REGISTRATION)
+
+        self.assertEqual(1, len(self.fx.notifications("registration.opened")))
+        self.assertEqual([], self.fx.broadcasts())
+
     async def test_re_entering_the_phase_does_not_write_a_second_row(self) -> None:
         """Status flap (REGISTRATION -> ANNOUNCEMENT -> REGISTRATION)."""
         self.fx.schedule(TournamentStatus.REGISTRATION, starts_at=datetime.now(UTC) - timedelta(hours=1))
@@ -419,6 +428,15 @@ class CheckInOpenedTests(_LifecycleTestCase):
         self.assertEqual([601], self.fx.recipients("check_in.opened"))
         self.assertEqual([], self.fx.broadcasts())
 
+    async def test_muted_discord_still_tells_registrants_but_posts_nothing(self) -> None:
+        self.fx.tournament.discord_broadcasts_enabled = False
+        self.fx.schedule(TournamentStatus.CHECK_IN, starts_at=datetime.now(UTC) - timedelta(minutes=5))
+
+        await self._enter(TournamentStatus.CHECK_IN)
+
+        self.assertEqual([601], self.fx.recipients("check_in.opened"))
+        self.assertEqual([], self.fx.broadcasts())
+
     async def test_re_entering_the_phase_does_not_write_a_second_row(self) -> None:
         self.fx.schedule(TournamentStatus.CHECK_IN, starts_at=datetime.now(UTC) - timedelta(minutes=5))
 
@@ -459,6 +477,20 @@ class EncounterScheduledTests(_LifecycleTestCase):
         self.assertEqual("Away", payload["away_team_name"])
         self.assertEqual(self.later, _instant(payload["scheduled_at"]))
         self.assertEqual(1, len(self.fx.broadcasts()))
+
+    async def test_muted_discord_still_tells_both_rosters_but_posts_nothing(self) -> None:
+        self.fx.tournament.discord_broadcasts_enabled = False
+        self.fx.session.flush()
+        encounter = self.fx.encounter(
+            home_team_id=self.home.id,
+            away_team_id=self.away.id,
+            scheduled_at=self.later,
+        )
+
+        await self._changed(encounter)
+
+        self.assertEqual([701, 702], self.fx.recipients("encounter.scheduled"))
+        self.assertEqual([], self.fx.broadcasts())
 
     async def test_the_same_time_saved_again_writes_nothing(self) -> None:
         """The round scheduler sends one PATCH per encounter, carrying the time

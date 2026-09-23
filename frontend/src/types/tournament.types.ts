@@ -120,6 +120,11 @@ export interface Tournament {
    * pushing `ends_at` out. Lifts `ends_at` ONLY — see `isRegistrationOpen`.
    */
   allow_late_registration: boolean;
+  /**
+   * Posts registration/check-in/match-time announcements to the workspace's
+   * Discord notification channel. Personal DMs are not affected.
+   */
+  discord_broadcasts_enabled: boolean;
   phase_schedule: TournamentPhaseSchedule[];
   win_points: number;
   draw_points: number;

@@ -42,6 +42,7 @@ export const SETTINGS_SECTION_FIELDS = {
   schedule: ["start_date", "end_date", "auto_transitions_enabled", "allow_late_registration"],
   roster: ["roster_slots_json"],
   challonge: ["challonge_slug"],
+  discord: ["discord_broadcasts_enabled"],
   preview: ["is_hidden"]
 } as const satisfies Record<string, readonly (keyof TournamentUpdateInput)[]>;
 

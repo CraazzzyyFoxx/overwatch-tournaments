@@ -124,13 +124,14 @@ class LifecycleNotifier:
             payload=payload,
             dedupe_key=dedupe_key,
         )
-        await broadcast(
-            session,
-            kind="registration.opened",
-            payload=payload,
-            workspace_id=tournament.workspace_id,
-            dedupe_key=dedupe_key,
-        )
+        if tournament.discord_broadcasts_enabled:
+            await broadcast(
+                session,
+                kind="registration.opened",
+                payload=payload,
+                workspace_id=tournament.workspace_id,
+                dedupe_key=dedupe_key,
+            )
 
     async def _check_in_opened(self, session: AsyncSession, tournament: models.Tournament) -> None:
         schedule = await self.schedule_repo.list_for_tournament(session, tournament.id)
@@ -161,7 +162,7 @@ class LifecycleNotifier:
                 payload=payload,
                 dedupe_key=dedupe_key,
             )
-        if not tournament.is_hidden:
+        if not tournament.is_hidden and tournament.discord_broadcasts_enabled:
             await broadcast(
                 session,
                 kind="check_in.opened",
@@ -218,7 +219,7 @@ class LifecycleNotifier:
                 payload=payload,
                 dedupe_key=dedupe_key,
             )
-        if not tournament.is_hidden:
+        if not tournament.is_hidden and tournament.discord_broadcasts_enabled:
             await broadcast(
                 session,
                 kind="encounter.scheduled",

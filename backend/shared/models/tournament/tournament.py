@@ -91,6 +91,12 @@ class Tournament(db.TimeStampIntegerMixin):
     allow_late_registration: Mapped[bool] = mapped_column(
         Boolean(), default=False, server_default="false", nullable=False
     )
+    # Whether lifecycle events (registration/check-in opened, match scheduled)
+    # are posted to the workspace's Discord notification channel. Personal DMs
+    # and the in-app inbox are unaffected -- only the channel post is muted.
+    discord_broadcasts_enabled: Mapped[bool] = mapped_column(
+        Boolean(), default=True, server_default="true", nullable=False
+    )
     win_points: Mapped[float] = mapped_column(Float(), default=1.0, server_default="1.0", nullable=False)
     draw_points: Mapped[float] = mapped_column(Float(), default=0.5, server_default="0.5", nullable=False)
     loss_points: Mapped[float] = mapped_column(Float(), default=0.0, server_default="0.0", nullable=False)
