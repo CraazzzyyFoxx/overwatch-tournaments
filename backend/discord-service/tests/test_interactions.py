@@ -63,18 +63,18 @@ def _invite_card() -> DiscordCard:
             ],
             [
                 {"type": "link", "label": "View participants", "url": f"{SITE}/tournaments/3/participants"},
-                {"type": "action", "label": "Mute team DMs", "action": "notifications.mute", "target": "team"},
+                {"type": "action", "label": "🔕", "action": "notifications.menu", "target": "all"},
             ],
         ],
     )
 
 
-def _interaction(*, guild_id: int | None = None, locale: str = "ru") -> MagicMock:
+def _interaction(*, guild_id: int | None = None, locale: str = "ru", ephemeral: bool = False) -> MagicMock:
     return MagicMock(
         user=MagicMock(id=4242),
         locale=locale,
         guild_id=guild_id,
-        message=MagicMock(),
+        message=MagicMock(flags=MagicMock(ephemeral=ephemeral)),
         response=MagicMock(defer=AsyncMock(), send_message=AsyncMock()),
         followup=MagicMock(send=AsyncMock()),
         edit_original_response=AsyncMock(),
@@ -133,10 +133,10 @@ class ButtonContractTests(IsolatedAsyncioTestCase):
 
     def test_only_well_formed_buttons_reach_an_action(self) -> None:
         self.assertEqual(parse_custom_id("owt:invite.accept:42"), ("invite.accept", "42"))
-        self.assertEqual(parse_custom_id("owt:notifications.mute:team"), ("notifications.mute", "team"))
+        self.assertEqual(parse_custom_id("owt:notifications.mute:all"), ("notifications.mute", "all"))
         for refused in (
             "owt:invite.accept:abc",  # an id that is not one
-            "owt:notifications.mute:everything",  # a group that does not exist
+            "owt:notifications.mute:team",  # muting is all or nothing
             "owt:admin.delete:1",  # an action that is not on the list
             "someone-else:button",
             None,
@@ -166,7 +166,7 @@ class CardAfterTheClickTests(IsolatedAsyncioTestCase):
         (container,) = settled.to_components()
         *_, remaining, note = container["components"]
         labels = [button["label"] for button in remaining["components"]]
-        self.assertEqual(labels, ["View participants", "Mute team DMs"])
+        self.assertEqual(labels, ["View participants", "🔕"])
         self.assertEqual(note["content"], "-# accepted")
 
     async def test_a_dm_card_loses_its_spent_buttons_and_a_channel_post_is_never_edited(self) -> None:
@@ -203,3 +203,35 @@ class CardAfterTheClickTests(IsolatedAsyncioTestCase):
         dispatcher.handle.assert_not_awaited()
         self.assertIn("no longer works", stale.response.send_message.await_args.args[0])
         foreign.response.send_message.assert_not_awaited()
+
+
+class MuteEverythingTests(IsolatedAsyncioTestCase):
+    """The card only carries a small trigger; the switch itself is shown to the reader alone."""
+
+    async def test_the_trigger_opens_a_private_prompt_without_touching_the_platform(self) -> None:
+        rpc = _Rpc({})
+        dm = _interaction()
+
+        with patch.object(dispatcher_module, "request_rpc", rpc):
+            await _dispatcher().handle(dm, "notifications.menu", "all")
+
+        self.assertEqual(rpc.calls, [])
+        sent = dm.followup.send.await_args.kwargs
+        self.assertTrue(sent["ephemeral"])
+        (container,) = sent["view"].to_components()
+        custom_ids = [b.get("custom_id") for b in container["components"][-1]["components"]]
+        self.assertIn("owt:notifications.mute:all", custom_ids)
+
+    async def test_muting_switches_every_group_off_and_answers_in_place(self) -> None:
+        replies = {IDENTITY_SUBJECT: rpc_ok(IDENTITY), "rpc.app.notification_preferences_update": rpc_ok({})}
+        rpc = _Rpc(replies)
+        prompt = _interaction(ephemeral=True)
+
+        with patch.object(dispatcher_module, "request_rpc", rpc):
+            await _dispatcher().handle(prompt, "notifications.mute", "all")
+
+        (_, body) = rpc.calls[-1]
+        self.assertEqual(body["payload"], {"discord_dm": {"tournament": False, "matches": False, "team": False}})
+        # The prompt becomes the answer rather than gaining a second reply beneath it.
+        prompt.followup.send.assert_not_awaited()
+        self.assertIn("отключены", _reply_text(prompt.edit_original_response.await_args.kwargs["view"]))

@@ -39,19 +39,29 @@ def _tournament(target: str) -> dict[str, Any]:
     return {"tournament_id": int(target)}
 
 
+def _nothing(target: str) -> dict[str, Any]:
+    return {}
+
+
+def _everything(target: str) -> bool:
+    return target == "all"
+
+
 @dataclass(frozen=True, slots=True)
 class Action:
     """One button's platform call.
 
-    ``request`` turns the target into the RPC body next to ``identity``;
-    ``accepts`` is checked before anything is called, so a malformed target is
-    refused here rather than as a 422 from the service. ``settles`` names the
-    card buttons that stop making sense once this succeeded -- they are taken
-    off the DM it was clicked in (never off a channel post, which is everyone's).
+    ``subject`` is ``None`` for a button the bot answers alone (it only shows
+    the next button, so it needs neither an account nor a call). ``request``
+    turns the target into the RPC body next to ``identity``; ``accepts`` is
+    checked before anything is called, so a malformed target is refused here
+    rather than as a 422 from the service. ``settles`` names the card buttons
+    that stop making sense once this succeeded -- they are taken off the DM it
+    was clicked in (never off a channel post, which is everyone's).
     """
 
-    subject: str
-    request: Callable[[str], dict[str, Any]]
+    subject: str | None
+    request: Callable[[str], dict[str, Any]] = _nothing
     accepts: Callable[[str], bool] = str.isdigit
     settles: frozenset[str] = field(default_factory=frozenset)
 
@@ -66,12 +76,15 @@ ACTIONS: dict[str, Action] = {
     "invite.decline": Action("rpc.tournament.regteam_decline", _invite, settles=_INVITE_BUTTONS),
     "check_in": Action("rpc.tournament.reg_pub_check_in", _tournament, settles=frozenset({"check_in"})),
     "registration.view": Action("rpc.tournament.reg_pub_get_me", _tournament),
+    # The DM card's small button: opens, for the reader alone, the one that
+    # switches every Discord DM off, so the card itself carries no such switch.
+    "notifications.menu": Action(None, accepts=_everything),
     "notifications.mute": Action(
         "rpc.app.notification_preferences_update",
-        # A partial update: only this group changes, the others keep their value.
-        lambda group: {"payload": {"discord_dm": {group: False}}},
-        accepts=lambda group: group in NOTIFICATION_GROUPS,
-        settles=frozenset({"notifications.mute"}),
+        # Every group, not the card's: the reader asked for Discord to go quiet.
+        # In-app notifications are not affected, and settings turn DMs back on.
+        lambda _all: {"payload": {"discord_dm": dict.fromkeys(NOTIFICATION_GROUPS, False)}},
+        accepts=_everything,
     ),
 }
 

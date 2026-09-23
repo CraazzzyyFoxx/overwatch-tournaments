@@ -33,7 +33,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from shared.schemas.events import DiscordActionButton, DiscordButton, DiscordCard, DiscordLinkButton
-from shared.services.notifications import NOTIFICATION_KIND_GROUPS, NOTIFICATION_KINDS
+from shared.services.notifications import NOTIFICATION_KINDS
 
 __all__ = ("DELIVERABLE_KINDS", "TEMPLATES", "deep_link_path", "render_discord")
 
@@ -228,28 +228,24 @@ _LINK_LABELS: dict[str, dict[str, str]] = {
 }
 
 #: Captions of the buttons the bot answers itself (discord-service ``ACTIONS``).
-#: The mute caption names the group because that is what it switches off --
-#: every kind of it, not just the one on this card.
 _ACTION_LABELS: dict[str, dict[str, str]] = {
     "ru": {
         "invite.accept": "Принять",
         "invite.decline": "Отклонить",
         "check_in": "Пройти чек-ин",
         "registration.view": "Моя заявка",
-        "mute.tournament": "Не присылать о турнирах",
-        "mute.matches": "Не присылать о матчах",
-        "mute.team": "Не присылать о команде",
     },
     "en": {
         "invite.accept": "Accept",
         "invite.decline": "Decline",
         "check_in": "Check in",
         "registration.view": "My registration",
-        "mute.tournament": "Mute tournament DMs",
-        "mute.matches": "Mute match DMs",
-        "mute.team": "Mute team DMs",
     },
 }
+
+#: The DM's way out, deliberately small: it opens a reply only the reader sees,
+#: and the switch-everything-off button lives there, not on the card.
+_MENU_LABEL = "🔕"
 
 #: The kinds a Discord message exists for at all.
 DELIVERABLE_KINDS: frozenset[str] = frozenset(NOTIFICATION_KINDS) - {"announcement.published"}
@@ -362,8 +358,8 @@ def render_discord(
 
     ``workspace_name`` is the organizer line above the heading, ``image_url``
     the picture beside it (tournament logo, else workspace icon), and
-    ``personal`` marks a DM: it adds the button its reader switches this group
-    of DMs off with -- a channel post has no single reader to offer it to.
+    ``personal`` marks a DM: it adds the small button that opens its reader's
+    way to switch Discord DMs off -- a channel post has no single reader.
 
     An unknown locale falls back to ``ru`` (the platform default) rather than
     failing a delivery over a settings value; an unknown *kind* raises, because
@@ -391,16 +387,12 @@ def render_discord(
     color = _ANSWER_COLORS.get(str(payload.get("answer")), _BLUE) if kind == "team_invite.answered" else _COLORS[kind]
 
     base = site_url.rstrip("/")
-    action_labels = _ACTION_LABELS[locale]
     onward: list[DiscordButton] = []
     path = deep_link_path(kind, payload)
     if path is not None:
         onward.append(DiscordLinkButton(label=_LINK_LABELS[locale][_destination(kind)], url=f"{base}{path}"))
-    group = NOTIFICATION_KIND_GROUPS.get(kind)
-    if personal and group is not None:
-        onward.append(
-            DiscordActionButton(label=action_labels[f"mute.{group}"], action="notifications.mute", target=group)
-        )
+    if personal:
+        onward.append(DiscordActionButton(label=_MENU_LABEL, action="notifications.menu", target="all"))
 
     return DiscordCard(
         accent_color=color,
@@ -409,5 +401,5 @@ def render_discord(
         # Discord only fetches absolute http(s) media; anything else is a 400.
         thumbnail_url=image_url if image_url and image_url.startswith(("https://", "http://")) else None,
         # Answers first, then where to read more and how to stop hearing it.
-        rows=[row for row in (_action_row(kind, payload, action_labels), onward) if row],
+        rows=[row for row in (_action_row(kind, payload, _ACTION_LABELS[locale]), onward) if row],
     )

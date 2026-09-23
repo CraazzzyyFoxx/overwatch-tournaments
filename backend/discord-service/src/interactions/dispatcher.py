@@ -22,7 +22,7 @@ import discord
 from loguru import logger
 
 from shared.messaging.rpc import request_rpc
-from shared.schemas.events import DiscordCard, DiscordLinkButton
+from shared.schemas.events import DiscordActionButton, DiscordButton, DiscordCard, DiscordLinkButton
 from src.core.broker import optional_broker
 from src.interactions import copy
 from src.interactions.actions import ACTIONS
@@ -77,10 +77,14 @@ class ActionDispatcher:
 
     async def perform(self, discord_user_id: int, action_name: str, target: str) -> Outcome:
         """Act as the account linked to ``discord_user_id``. ``target`` is already validated."""
+        action = ACTIONS[action_name]
+        if action.subject is None:
+            # Answered by the bot alone: it only shows the next button, and that
+            # button is where the account is checked.
+            return Outcome("ok")
         broker = self._broker()
         if broker is None:
             return Outcome("unavailable")
-        action = ACTIONS[action_name]
 
         try:
             who = await request_rpc(
@@ -117,18 +121,21 @@ class ActionDispatcher:
     def reply(self, outcome: Outcome, action_name: str, locale: copy.Locale) -> discord.ui.LayoutView:
         """What the clicker alone sees."""
         if outcome.status == "ok":
+            if action_name == "notifications.menu":
+                mute_all = DiscordActionButton(
+                    label=copy.text(locale, "mute_all"), action="notifications.mute", target="all", style="danger"
+                )
+                return self._card(_AMBER, copy.text(locale, "mute_prompt"), mute_all, self._settings_link(locale))
+            if action_name == "notifications.mute":
+                return self._card(_GREEN, copy.success_text(locale, action_name), self._settings_link(locale))
             if action_name == "registration.view":
                 if not isinstance(outcome.data, Mapping):
                     return self._card(_AMBER, copy.text(locale, "not_registered"))
                 return self._card(_BLUE, copy.registration_text(locale, outcome.data))
-            link = None
-            if action_name == "notifications.mute":
-                link = (copy.text(locale, "notification_settings"), "/?settings=notifications")
-            return self._card(_GREEN, copy.success_text(locale, action_name), link)
+            return self._card(_GREEN, copy.success_text(locale, action_name))
         if outcome.status == "not_linked":
-            return self._card(
-                _AMBER, copy.text(locale, "not_linked"), (copy.text(locale, "link_discord"), "/?settings=profile")
-            )
+            link = DiscordLinkButton(label=copy.text(locale, "link_discord"), url=f"{self._site}/?settings=profile")
+            return self._card(_AMBER, copy.text(locale, "not_linked"), link)
         if outcome.status == "inactive":
             return self._card(_RED, copy.text(locale, "inactive"))
         if outcome.status == "unavailable":
@@ -139,9 +146,14 @@ class ActionDispatcher:
             return self._card(_AMBER, copy.text(locale, "not_registered"))
         return self._card(_RED, copy.error_text(locale, outcome.code, outcome.message))
 
-    def _card(self, color: int, text: str, link: tuple[str, str] | None = None) -> discord.ui.LayoutView:
-        rows = [[DiscordLinkButton(label=link[0], url=f"{self._site}{link[1]}")]] if link else []
-        return card_view(DiscordCard(accent_color=color, text=text, rows=rows))
+    def _settings_link(self, locale: copy.Locale) -> DiscordLinkButton:
+        return DiscordLinkButton(
+            label=copy.text(locale, "notification_settings"), url=f"{self._site}/?settings=notifications"
+        )
+
+    @staticmethod
+    def _card(color: int, text: str, *buttons: DiscordButton) -> discord.ui.LayoutView:
+        return card_view(DiscordCard(accent_color=color, text=text, rows=[list(buttons)] if buttons else []))
 
     async def handle(self, interaction: discord.Interaction, action_name: str, target: str) -> None:
         locale = copy.locale_of(interaction.locale)
@@ -162,11 +174,13 @@ class ActionDispatcher:
             discord_user_id=interaction.user.id,
         ).info(f"Discord action {action_name}: {outcome.status}")
 
-        await interaction.followup.send(
-            view=self.reply(outcome, action_name, locale),
-            ephemeral=True,
-            allowed_mentions=discord.AllowedMentions.none(),
-        )
+        view = self.reply(outcome, action_name, locale)
+        if _is_ephemeral(interaction.message):
+            # A button on a reply only the clicker sees (the mute prompt):
+            # answer by replacing that reply rather than stacking another under it.
+            await interaction.edit_original_response(view=view, allowed_mentions=discord.AllowedMentions.none())
+            return
+        await interaction.followup.send(view=view, ephemeral=True, allowed_mentions=discord.AllowedMentions.none())
         if outcome.status == "ok":
             await self._settle_dm(interaction, action_name, locale)
 
@@ -186,3 +200,7 @@ class ActionDispatcher:
         except discord.HTTPException as exc:
             # The action happened and the clicker was told; a stale card is cosmetic.
             logger.warning(f"Could not update the card after {action_name}: {exc!r}")
+
+
+def _is_ephemeral(message: discord.Message | None) -> bool:
+    return message is not None and message.flags.ephemeral is True

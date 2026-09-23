@@ -251,7 +251,8 @@ COMPLETED/ARCHIVED. Получатели — игроки обеих коман�
 | `team_invite.received` (DM) | `invite.accept:{invite_id}`, `invite.decline:{invite_id}` | `rpc.tournament.regteam_accept` / `regteam_decline` |
 | `check_in.opened` (DM и канал) | `check_in:{tournament_id}`, `registration.view:{tournament_id}` | `rpc.tournament.reg_pub_check_in` / `reg_pub_get_me` |
 | `registration.approved` / `rejected` (DM) | `registration.view:{tournament_id}` | `rpc.tournament.reg_pub_get_me` |
-| любой DM | `notifications.mute:{group}` («Не присылать о …») | `rpc.app.notification_preferences_update` (`discord_dm[group]=false`) |
+| любой DM | `notifications.menu:all` (маленькая «🔕») | без RPC: бот отвечает ephemeral-сообщением с «Отключить все» (`notifications.mute:all`) и ссылкой на настройки |
+| ephemeral-ответ на «🔕» | `notifications.mute:all` | `rpc.app.notification_preferences_update` (`discord_dm` = все группы `false`); ответ заменяет само ephemeral-сообщение |
 
 Поток (`src/interactions/dispatcher.py::ActionDispatcher`, слушатель `src/cogs/interactions.py`):
 1. `defer()` — отложенное обновление сообщения, в пределах 3 секунд.
@@ -344,7 +345,8 @@ def render_discord(kind, payload, *, locale, site_url, workspace_name=None, imag
   повторяющий `frontend/src/lib/notifications/href.ts:10`: участники — `/tournaments/{id}/participants`, диспут и
   `encounter.scheduled` — `/tournaments/{id}/pregame/{encounter_id}`, `registration.opened` / `check_in.opened` —
   `/tournaments/{id}`. `ponytail:` пути продублированы с фронтом вручную. В DM (`personal=True`) рядом —
-  `notifications.mute:{group}` с подписью по группе («Не присылать о турнирах / матчах / команде»).
+  маленькая `notifications.menu:all` («🔕»). Кнопки «отключить» на самой карточке нет: Discord разрешает
+  ephemeral только в ответ на нажатие, поэтому переключатель показывается нажавшему отдельно.
 - `site_url` — новая настройка `PUBLIC_SITE_URL` в `app-service/src/core/config.py` (платформенная зона; фронт
   держит её в `NEXT_PUBLIC_PLATFORM_ZONE`, `frontend/src/lib/site/host.ts:5`). Ссылки на поддомен/кастомный домен
   воркспейса — вне v1.

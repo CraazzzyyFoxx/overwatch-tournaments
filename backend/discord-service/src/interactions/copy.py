@@ -32,6 +32,12 @@ _TEXT: dict[Locale, dict[str, str]] = {
         "not_registered": "Вы не зарегистрированы на этот турнир.",
         "link_discord": "Привязать Discord",
         "notification_settings": "Настройки уведомлений",
+        "mute_prompt": (
+            "### Уведомления в Discord\n"
+            "Отключить все личные сообщения OWT в Discord? Уведомления на сайте останутся, "
+            "а включить Discord обратно можно в настройках."
+        ),
+        "mute_all": "Отключить все",
     },
     "en": {
         "not_linked": "This Discord account isn't linked to an OWT account. Link it in your profile and the buttons will work.",
@@ -42,6 +48,12 @@ _TEXT: dict[Locale, dict[str, str]] = {
         "not_registered": "You're not registered for this tournament.",
         "link_discord": "Link Discord",
         "notification_settings": "Notification settings",
+        "mute_prompt": (
+            "### Discord notifications\n"
+            "Turn off every OWT direct message in Discord? Site notifications stay, "
+            "and you can turn Discord back on in settings."
+        ),
+        "mute_all": "Turn all off",
     },
 }
 
@@ -50,13 +62,19 @@ _SUCCESS: dict[Locale, dict[str, str]] = {
         "invite.accept": "Вы в команде — приглашение принято.",
         "invite.decline": "Приглашение отклонено.",
         "check_in": "Чек-ин пройден. Удачи на турнире!",
-        "notifications.mute": "Готово: такие сообщения больше не придут в Discord. Включить обратно можно в настройках.",
+        "notifications.mute": (
+            "Готово: личные сообщения OWT в Discord отключены. Уведомления на сайте остаются, "
+            "а Discord можно включить обратно в настройках."
+        ),
     },
     "en": {
         "invite.accept": "You're on the team — invite accepted.",
         "invite.decline": "Invite declined.",
         "check_in": "You're checked in. Good luck!",
-        "notifications.mute": "Done — these won't reach your Discord DMs anymore. Turn them back on in settings.",
+        "notifications.mute": (
+            "Done — OWT won't message you in Discord anymore. Site notifications stay, "
+            "and you can turn Discord back on in settings."
+        ),
     },
 }
 
@@ -66,13 +84,11 @@ _SETTLED: dict[Locale, dict[str, str]] = {
         "invite.accept": "✅ Вы приняли приглашение",
         "invite.decline": "Вы отклонили приглашение",
         "check_in": "✅ Чек-ин пройден",
-        "notifications.mute": "🔕 Эти уведомления отключены",
     },
     "en": {
         "invite.accept": "✅ You accepted this invite",
         "invite.decline": "You declined this invite",
         "check_in": "✅ Checked in",
-        "notifications.mute": "🔕 These notifications are muted",
     },
 }
 

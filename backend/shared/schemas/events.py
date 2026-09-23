@@ -29,7 +29,14 @@ DISCORD_CARD_TEXT_LIMIT = 4000
 #: The actions discord-service answers itself (``src/interactions/actions.py``
 #: says what each one calls). A literal rather than a string so a producer
 #: cannot put a button on a card that the bot could only answer "unknown".
-DiscordAction = Literal["invite.accept", "invite.decline", "check_in", "registration.view", "notifications.mute"]
+DiscordAction = Literal[
+    "invite.accept",
+    "invite.decline",
+    "check_in",
+    "registration.view",
+    "notifications.menu",
+    "notifications.mute",
+]
 
 
 class DiscordLinkButton(BaseModel):

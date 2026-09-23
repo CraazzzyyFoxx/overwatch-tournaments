@@ -203,7 +203,7 @@ class RenderTests(IsolatedAsyncioTestCase):
             self.assertEqual(deep_link_path(kind, payload), expected, kind)
 
     def test_links_are_absolute_and_only_a_dm_offers_the_way_out(self) -> None:
-        """A channel post has no single reader whose DMs a mute button could switch off."""
+        """A channel post has no single reader whose DMs could be switched off."""
         payload = {"tournament_id": 3, "tournament_name": "Cup"}
 
         post = render_discord("check_in.opened", payload, locale="en", site_url=f"{SITE}/")
@@ -211,10 +211,10 @@ class RenderTests(IsolatedAsyncioTestCase):
 
         post_onward, dm_onward = post.rows[-1], dm.rows[-1]
         self.assertEqual([button.url for button in post_onward], [f"{SITE}/tournaments/3"])
-        link, mute = dm_onward
+        link, menu = dm_onward
         self.assertEqual(link.url, f"{SITE}/tournaments/3")
-        # The group the kind belongs to, so the button says what it switches off.
-        self.assertEqual((mute.action, mute.target), ("notifications.mute", "tournament"))
+        # Only a trigger: the switch itself is shown to the reader alone, by the bot.
+        self.assertEqual((menu.action, menu.target), ("notifications.menu", "all"))
 
     def test_one_click_answers_name_the_object_they_act_on(self) -> None:
         """The bot answers a button with ``owt:<action>:<target>``; a wrong target

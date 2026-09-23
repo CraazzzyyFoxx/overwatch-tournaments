@@ -95,11 +95,17 @@ click by `custom_id` (no per-message views, so cards keep working across restart
 2. `rpc.identity.discord_identity` for `interaction.user.id` — not linked → the clicker is told how to
    link, and **no platform call is made**; deactivated → refused;
 3. the action's own RPC with that identity (`src/interactions/actions.py` is the whole, fixed list:
-   accept/decline a team invite, self check-in, view my registration, mute a DM group);
+   accept/decline a team invite, self check-in, view my registration, switch every Discord DM off);
 4. an ephemeral reply in the clicker's Discord language, with refusals worded by the service's
    machine code (`invite_expired`, `check_in_closed`, …);
 5. in a DM only, the spent buttons come off the card and a status line takes their place. A channel
-   post is everyone's and is never edited.
+   post is everyone's and is never edited. A button on an ephemeral reply is answered by replacing
+   that reply rather than stacking another under it.
+
+The DM card carries only a small `🔕` (`notifications.menu`, answered by the bot alone): it opens,
+for the reader alone, a prompt with «turn all off» (`notifications.mute:all` — every DM group false;
+in-app notifications stay) and a notification-settings link. Discord allows ephemeral messages only
+as an answer to a click, hence the trigger rather than a separate DM.
 
 No identity is cached, so an unlink or a deactivation bites on the next click. Every click logs one
 line with `action`, `target`, `status` and `code`.
