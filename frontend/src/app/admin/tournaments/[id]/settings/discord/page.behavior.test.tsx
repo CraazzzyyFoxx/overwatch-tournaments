@@ -178,9 +178,12 @@ describe("Settings › Discord", () => {
     expect(dialogForm.querySelector("[role=alert]")?.textContent).toContain("Pick the channel");
   });
 
-  it("mutes channel posts with a save that carries only that switch", async () => {
+  it.each([
+    ["#settings-discord-broadcasts", "discord_broadcasts_enabled"],
+    ["#settings-discord-dms", "discord_dms_enabled"]
+  ])("switching %s off saves only %s", async (selector, field) => {
     await render();
-    const toggle = () => container.querySelector("#settings-discord-broadcasts")!;
+    const toggle = () => container.querySelector(selector)!;
     expect(toggle().getAttribute("aria-checked")).toBe("true");
 
     await act(async () => {
@@ -194,7 +197,7 @@ describe("Settings › Discord", () => {
     });
     await settle();
 
-    expect(updateTournament).toHaveBeenCalledWith(64, { discord_broadcasts_enabled: false });
+    expect(updateTournament).toHaveBeenCalledWith(64, { [field]: false });
     expect(setDiscordChannel).not.toHaveBeenCalled();
   });
 });

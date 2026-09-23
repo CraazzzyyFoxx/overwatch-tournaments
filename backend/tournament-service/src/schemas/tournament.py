@@ -64,6 +64,7 @@ class TournamentRead(BaseRead):
     auto_transitions_enabled: bool = True
     allow_late_registration: bool = False
     discord_broadcasts_enabled: bool = True
+    discord_dms_enabled: bool = True
     phase_schedule: list[TournamentPhaseScheduleRead] = []
     win_points: float = 1.0
     draw_points: float = 0.5

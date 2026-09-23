@@ -92,11 +92,14 @@ class Tournament(db.TimeStampIntegerMixin):
         Boolean(), default=False, server_default="false", nullable=False
     )
     # Whether lifecycle events (registration/check-in opened, match scheduled)
-    # are posted to the workspace's Discord notification channel. Personal DMs
-    # and the in-app inbox are unaffected -- only the channel post is muted.
+    # are posted to the workspace's Discord notification channel.
     discord_broadcasts_enabled: Mapped[bool] = mapped_column(
         Boolean(), default=True, server_default="true", nullable=False
     )
+    # Whether this tournament's personal notifications also reach players'
+    # Discord DMs. The in-app inbox row is written either way; checked at
+    # delivery (app-service), so a DM still queued when it is switched off stays unsent.
+    discord_dms_enabled: Mapped[bool] = mapped_column(Boolean(), default=True, server_default="true", nullable=False)
     win_points: Mapped[float] = mapped_column(Float(), default=1.0, server_default="1.0", nullable=False)
     draw_points: Mapped[float] = mapped_column(Float(), default=0.5, server_default="0.5", nullable=False)
     loss_points: Mapped[float] = mapped_column(Float(), default=0.0, server_default="0.0", nullable=False)

@@ -68,6 +68,19 @@ class NotificationDeliveryService:
         if not wants_discord_dm(stored, row.kind):
             return "skipped_pref_off"
 
+        payload = row.payload_json or {}
+        tournament_id = payload.get("tournament_id")
+        if isinstance(tournament_id, int):
+            # Read now, not at write time: the organizer's switch also stops a
+            # DM still waiting in the outbox. A deleted tournament mutes nothing.
+            dms_enabled = (
+                await session.execute(
+                    sa.select(models.Tournament.discord_dms_enabled).where(models.Tournament.id == tournament_id)
+                )
+            ).scalar_one_or_none()
+            if dms_enabled is False:
+                return "skipped_tournament_muted"
+
         linked = await load_provider_user_ids(
             session,
             auth_user_ids=[row.recipient_auth_user_id],
@@ -91,7 +104,6 @@ class NotificationDeliveryService:
         if not claimed:
             return "duplicate"
 
-        payload = row.payload_json or {}
         workspace_name, image_url = await _branding(session, row.source_workspace_id, payload)
         card = render_discord(
             row.kind,

@@ -310,6 +310,7 @@ export interface TournamentUpdateInput {
   auto_transitions_enabled?: boolean;
   allow_late_registration?: boolean;
   discord_broadcasts_enabled?: boolean;
+  discord_dms_enabled?: boolean;
   win_points?: number;
   draw_points?: number;
   loss_points?: number;

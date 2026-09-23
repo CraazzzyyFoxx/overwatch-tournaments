@@ -17,7 +17,7 @@ export default function DiscordSettingsPage() {
   return (
     <SettingsSectionPage
       section="discord"
-      description="Channel announcements for this tournament, and the Discord channel it reads match logs from."
+      description="What this tournament posts and sends on Discord, and the channel it reads match logs from."
     >
       {({ tournament, tournamentId, canUpdateTournament }) => (
         <DiscordSettings
@@ -54,23 +54,43 @@ function DiscordSettings({
     <>
       <Card>
         <CardContent className="pt-6">
-          <div className="flex items-center justify-between gap-4 rounded-lg border border-border bg-muted/20 p-3.5">
-            <div className="flex flex-col gap-0.5">
-              <Label htmlFor="settings-discord-broadcasts" className="cursor-pointer">
-                Post announcements to Discord
-              </Label>
-              <p className="text-xs text-muted-foreground">
-                Registration and check-in opening and match times go to the workspace&apos;s
-                notification channel. Participants&apos; direct messages and in-app notifications
-                are not affected.
-              </p>
+          <div className="flex flex-col gap-4 rounded-lg border border-border bg-muted/20 p-3.5">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex flex-col gap-0.5">
+                <Label htmlFor="settings-discord-broadcasts" className="cursor-pointer">
+                  Post announcements to Discord
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  Registration and check-in opening and match times go to the workspace&apos;s
+                  notification channel.
+                </p>
+              </div>
+              <Switch
+                id="settings-discord-broadcasts"
+                checked={form.discord_broadcasts_enabled}
+                disabled={!canUpdateTournament}
+                onCheckedChange={(checked) => patch({ discord_broadcasts_enabled: checked })}
+              />
             </div>
-            <Switch
-              id="settings-discord-broadcasts"
-              checked={form.discord_broadcasts_enabled}
-              disabled={!canUpdateTournament}
-              onCheckedChange={(checked) => patch({ discord_broadcasts_enabled: checked })}
-            />
+
+            <div className="flex items-center justify-between gap-4 border-t border-border pt-4">
+              <div className="flex flex-col gap-0.5">
+                <Label htmlFor="settings-discord-dms" className="cursor-pointer">
+                  Message players on Discord
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  Invites, registration decisions, check-in and match times for this tournament
+                  reach players as Discord direct messages. Switched off, they only appear in
+                  players&apos; in-app notifications.
+                </p>
+              </div>
+              <Switch
+                id="settings-discord-dms"
+                checked={form.discord_dms_enabled}
+                disabled={!canUpdateTournament}
+                onCheckedChange={(checked) => patch({ discord_dms_enabled: checked })}
+              />
+            </div>
           </div>
         </CardContent>
       </Card>

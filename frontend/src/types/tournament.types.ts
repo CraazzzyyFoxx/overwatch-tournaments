@@ -122,9 +122,14 @@ export interface Tournament {
   allow_late_registration: boolean;
   /**
    * Posts registration/check-in/match-time announcements to the workspace's
-   * Discord notification channel. Personal DMs are not affected.
+   * Discord notification channel.
    */
   discord_broadcasts_enabled: boolean;
+  /**
+   * Sends this tournament's personal notifications to players' Discord DMs.
+   * The in-app inbox gets them either way.
+   */
+  discord_dms_enabled: boolean;
   phase_schedule: TournamentPhaseSchedule[];
   win_points: number;
   draw_points: number;

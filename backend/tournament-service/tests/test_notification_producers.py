@@ -392,6 +392,7 @@ class TeamInviteAnsweredTests(_ProducerTestCase):
             {
                 "team_id": self.team.id,
                 "team_name": "Vanguard",
+                "tournament_id": self.team.tournament_id,
                 "invite_id": self.invite.id,
                 "answer": "accepted",
                 "responder_name": "Rook#2222",

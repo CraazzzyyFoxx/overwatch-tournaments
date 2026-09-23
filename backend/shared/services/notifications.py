@@ -111,6 +111,9 @@ class TeamInviteReceivedPayload(_Payload):
 class TeamInviteAnsweredPayload(_Payload):
     team_id: int
     team_name: str
+    #: Not rendered -- the team is pre-formation and has no page. Carried so
+    #: delivery can honour the tournament's DM mute like every other kind.
+    tournament_id: int
     invite_id: int
     answer: Literal["accepted", "declined"]
     responder_name: str

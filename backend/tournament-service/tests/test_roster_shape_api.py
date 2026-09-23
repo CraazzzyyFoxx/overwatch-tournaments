@@ -67,6 +67,7 @@ def _tournament(
         auto_transitions_enabled=True,
         allow_late_registration=False,
         discord_broadcasts_enabled=True,
+        discord_dms_enabled=True,
         win_points=1.0,
         draw_points=0.5,
         loss_points=0.0,

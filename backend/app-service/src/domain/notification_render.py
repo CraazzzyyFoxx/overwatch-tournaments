@@ -282,7 +282,7 @@ def deep_link_path(kind: str, payload: Mapping[str, Any]) -> str | None:
         return f"/tournaments/{tournament_id}/pregame/{encounter_id}" if isinstance(encounter_id, int) else None
     if kind in _TOURNAMENT_KINDS:
         return f"/tournaments/{tournament_id}"
-    # team_invite.answered carries a pre-formation team id and no tournament.
+    # team_invite.answered names a pre-formation team, which has no page.
     return None
 
 

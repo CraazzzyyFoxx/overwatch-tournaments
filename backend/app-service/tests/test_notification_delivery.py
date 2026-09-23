@@ -433,6 +433,22 @@ class DeliveryTests(IsolatedAsyncioTestCase):
         self.assertEqual(self.commands(), [])
         self.assertEqual(self.ledger(), [])
 
+    async def test_a_tournament_with_dms_muted_sends_nothing(self) -> None:
+        """The organizer's switch bites at delivery, so a DM already queued stays unsent."""
+        self.session.execute(
+            sa.insert(models.Tournament.__table__).values(
+                id=3, workspace_id=WORKSPACE, name="Cup", slug="cup", discord_dms_enabled=False
+            )
+        )
+        row = self.personal()
+        self.link_discord()
+
+        status = await self.service.deliver_personal(self.shim, NotificationCreatedEvent(notification_id=row.id))
+
+        self.assertEqual(status, "skipped_tournament_muted")
+        self.assertEqual(self.commands(), [])
+        self.assertEqual(self.ledger(), [])
+
     async def test_another_groups_switch_does_not_silence_this_one(self) -> None:
         """Groups are independent -- and an absent key is still the default."""
         row = self.personal(kind="encounter.scheduled")
