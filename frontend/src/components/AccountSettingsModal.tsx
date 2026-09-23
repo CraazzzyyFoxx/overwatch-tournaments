@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import { useEffect } from "react";
-import { Bell, type LucideIcon, ShieldCheck, Shuffle, Star, User as UserIcon } from "lucide-react";
+import { Bell, EyeOff, type LucideIcon, ShieldCheck, Shuffle, Star, User as UserIcon } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { useRouter, useSearchParams } from "next/navigation";
 
@@ -16,12 +16,15 @@ import FavoritesSection from "./account-settings/FavoritesSection";
 import MixBalancerSection from "./account-settings/MixBalancerSection";
 import MyAccountSection from "./account-settings/MyAccountSection";
 import NotificationsSection from "./account-settings/NotificationsSection";
+import PrivacySection from "./account-settings/PrivacySection";
 
-// Who you are, then who can act as you, then your own lists, then the
-// host-only mix tooling. Account deletion lives with the sessions, not beside
-// the avatar picker: it is the last word on access, not a profile edit.
+// Who you are, what others see of you, then who can act as you, then your own
+// lists, then the host-only mix tooling. Account deletion lives with the
+// sessions, not beside the avatar picker: it is the last word on access, not a
+// profile edit.
 const TABS: { id: SettingsTab; icon: LucideIcon; content: ReactNode }[] = [
   { id: "profile", icon: UserIcon, content: <MyAccountSection /> },
+  { id: "privacy", icon: EyeOff, content: <PrivacySection /> },
   {
     id: "security",
     icon: ShieldCheck,

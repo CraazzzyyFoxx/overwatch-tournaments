@@ -230,7 +230,7 @@ export default defineConfig({
       "src/components/CreateWorkspaceLauncher.behavior.test.tsx",
       // Same file-level rule: `account-settings` is under `src/components`, and
       // these are its only vitest files so far.
-      "src/components/account-settings/MyAccountSection.behavior.test.tsx",
+      "src/components/account-settings/PrivacySection.behavior.test.tsx",
       "src/components/account-settings/FavoritesSection.behavior.test.tsx",
       "src/components/account-settings/MixBalancerSection.behavior.test.tsx",
       "src/components/account-settings/NotificationsSection.behavior.test.tsx",

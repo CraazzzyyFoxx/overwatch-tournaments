@@ -6,7 +6,6 @@ import { useTranslations } from "next-intl";
 
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Switch } from "@/components/ui/switch";
 import { EditableAvatar } from "@/components/ui/editable-avatar";
 import { SocialIcon } from "@/components/social/SocialIcon";
 import { getSocialProviderConfig, sortSocialAccounts } from "@/lib/social/providers";
@@ -39,10 +38,6 @@ export default function MyAccountSection() {
     enabled: canSocial,
   });
   const accounts = sortSocialAccounts(socialQuery.data?.social_accounts ?? []);
-  // Only an explicit `false` is a veto: responses cached before the flag
-  // existed omit it entirely, and the backend default is "allowed" — the same
-  // rule the per-account row applies to `visible_global`.
-  const streamVisible = socialQuery.data?.stream_visible !== false;
 
   // Persist the fresh user into the query cache AND bust the Next Data Cache so
   // the public users/[slug] header / list / search reflect the change at once.
@@ -74,12 +69,6 @@ export default function MyAccountSection() {
   const setVisibility = useMutation({
     mutationFn: ({ id, visible }: { id: number; visible: boolean }) =>
       meService.setSocialVisibility(id, visible),
-    onSuccess: writeSocial,
-  });
-  // Same write-back path as the per-account toggle: the endpoint answers with
-  // the refreshed user, so the switch state comes straight from the server.
-  const setStreamVisibility = useMutation({
-    mutationFn: (visible: boolean) => meService.setStreamVisibility(visible),
     onSuccess: writeSocial,
   });
   // Self-service OAuth unlink. Returns no body (204), so refetch the list rather
@@ -251,30 +240,6 @@ export default function MyAccountSection() {
             <p className="text-caption text-pretty text-[color:var(--aqt-fg-dim)]">{t("linked.footnote")}</p>
           </>
         )}
-      </SettingsGroup>
-
-      <SettingsGroup title={t("stream.title")}>
-        <div className="flex items-start gap-3 rounded-lg border border-[color:var(--aqt-border)] bg-[color:var(--aqt-overlay-2)] px-3 py-2.5">
-          <div className="flex-1 space-y-1">
-            <p id="stream-visibility-label" className="text-sm text-[color:var(--aqt-fg)]">
-              {t("stream.toggleLabel")}
-            </p>
-            <p id="stream-visibility-desc" className="text-caption text-pretty text-[color:var(--aqt-fg-dim)]">
-              {t("stream.toggleDesc")}
-            </p>
-          </div>
-          <Switch
-            checked={streamVisible}
-            // Never let the switch act on a guess: without a loaded response
-            // there is no current value to invert, and a wrong payload here
-            // silently re-publishes a stream the user meant to hide.
-            disabled={!socialQuery.data || setStreamVisibility.isPending}
-            onCheckedChange={(next) => setStreamVisibility.mutate(next)}
-            aria-labelledby="stream-visibility-label"
-            aria-describedby="stream-visibility-desc"
-          />
-        </div>
-        <p className="text-caption text-pretty text-[color:var(--aqt-fg-dim)]">{t("stream.footnote")}</p>
       </SettingsGroup>
     </div>
   );

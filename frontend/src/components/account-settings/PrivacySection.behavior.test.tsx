@@ -10,7 +10,7 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import MyAccountSection from "@/components/account-settings/MyAccountSection";
+import PrivacySection from "@/components/account-settings/PrivacySection";
 import type { User } from "@/types/user.types";
 
 declare global {
@@ -25,12 +25,6 @@ vi.mock("@/services/me.service", () => ({
   default: {
     getSocialAccounts: (...args: unknown[]) => getSocialAccounts(...args),
     setStreamVisibility: (...args: unknown[]) => setStreamVisibility(...args),
-    setSocialPrimary: vi.fn(),
-    setSocialVisibility: vi.fn(),
-    unlinkOAuth: vi.fn(),
-    deleteAccount: vi.fn(),
-    setAvatar: vi.fn(),
-    deleteAvatar: vi.fn(),
   },
 }));
 
@@ -38,14 +32,8 @@ vi.mock("@/services/me.service", () => ({
 // keys the component is contracted to use.
 vi.mock("next-intl", () => ({ useTranslations: () => (key: string) => key }));
 vi.mock("@/hooks/usePermissions", () => ({ usePermissions: () => ({ canUseCapability: () => true }) }));
-vi.mock("@/stores/auth-profile.store", () => ({
-  useAuthProfileStore: (select: (state: unknown) => unknown) =>
-    select({ user: { username: "tester", avatarUrl: null, isSuperuser: false }, fetchMe: vi.fn(), clear: vi.fn() }),
-}));
 // A Next server action; importing the real module explodes outside Next.
 vi.mock("@/app/actions/users", () => ({ revalidateUser: vi.fn() }));
-vi.mock("@/lib/auth/logout", () => ({ logout: vi.fn() }));
-vi.mock("@/lib/notify", () => ({ notify: { success: vi.fn(), error: vi.fn(), apiError: vi.fn() } }));
 
 function user(overrides: Partial<User>): User {
   return { id: 7, name: "tester", avatar_url: null, social_accounts: [], ...overrides } as User;
@@ -67,7 +55,7 @@ async function mount() {
   await act(async () => {
     root.render(
       <QueryClientProvider client={client}>
-        <MyAccountSection />
+        <PrivacySection />
       </QueryClientProvider>
     );
   });
@@ -93,7 +81,7 @@ beforeEach(() => {
   );
 });
 
-describe("MyAccountSection stream privacy", () => {
+describe("PrivacySection stream privacy", () => {
   it("reads a missing stream_visible as allowed and hides the stream on toggle", async () => {
     getSocialAccounts.mockResolvedValue(user({}));
     const container = await mount();

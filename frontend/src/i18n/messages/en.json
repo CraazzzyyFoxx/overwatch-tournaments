@@ -777,6 +777,7 @@
     "title": "Account settings",
     "tabs": {
       "profile": "Profile",
+      "privacy": "Privacy",
       "security": "Security",
       "notifications": "Notifications",
       "favorites": "Favorites",
@@ -784,7 +785,11 @@
     },
     "profile": {
       "title": "Profile",
-      "desc": "Your avatar, linked accounts and what your public profile shows."
+      "desc": "Your avatar and linked accounts."
+    },
+    "privacy": {
+      "title": "Privacy",
+      "desc": "What the site shows about you on tournament pages."
     },
     "security": {
       "title": "Security",
@@ -883,7 +888,7 @@
       "linkAria": "Link {provider}"
     },
     "stream": {
-      "title": "Stream privacy",
+      "title": "Live stream",
       "toggleLabel": "Show my live stream on tournament pages",
       "toggleDesc": "While you are live on Twitch, your broadcast is surfaced on the pages of tournaments you take part in. Turn this off to keep it hidden — your Twitch account stays on your public profile, only the live broadcast is withheld.",
       "footnote": "This switch is global and overrides everything else: while it is off, ticking “Stream POV” in a tournament registration will not put your stream on the site."
