@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useEffect, useRef, useState } from "react";
 
 import styles from "./docs.module.css";
@@ -22,7 +23,6 @@ const THEME_FALLBACK = {
   "--aqt-bg": "#0d1117",
   "--aqt-card": "#12171f",
   "--aqt-card-2": "#161b22",
-  "--aqt-border-3": "#2b3440",
   "--aqt-fg": "#e6edf3",
   "--aqt-teal": "#2dd4bf"
 };
@@ -67,7 +67,7 @@ async function getMermaid(): Promise<MermaidApi> {
     mermaid.initialize({
       startOnLoad: false,
       theme: "dark",
-      securityLevel: "loose",
+      securityLevel: "strict",
       fontFamily: mono,
       themeVariables: {
         darkMode: true,
@@ -83,21 +83,12 @@ async function getMermaid(): Promise<MermaidApi> {
         // ER attribute rows
         attributeBackgroundColorOdd: c["--aqt-card"],
         attributeBackgroundColorEven: c["--aqt-bg"],
-        // Flowchart clusters (domain map)
-        clusterBkg: c["--aqt-card"],
-        clusterBorder: c["--aqt-border-3"],
-        nodeBorder: c["--aqt-teal"],
         edgeLabelBackground: c["--aqt-bg"]
       },
       er: {
         useMaxWidth: false,
         entityPadding: 15,
         layoutDirection: "TB"
-      },
-      flowchart: {
-        useMaxWidth: false,
-        htmlLabels: true,
-        curve: "basis"
       }
     });
     initialized = true;
@@ -112,16 +103,12 @@ const ZOOM_STEP = 0.15;
 interface MermaidDiagramProps {
   /** Verbatim Mermaid source. */
   code: string;
-  /** Stable key for the active diagram (used to build a unique render id). */
+  /** Stable key for the diagram (used to build a unique render id). */
   diagramKey: string;
-  /**
-   * `false` (default): fills the flex stage (absolute scroll region).
-   * `true`: grows to content height inside a normal-flow block.
-   */
-  inline?: boolean;
 }
 
-export function MermaidDiagram({ code, diagramKey, inline = false }: Readonly<MermaidDiagramProps>) {
+export function MermaidDiagram({ code, diagramKey }: Readonly<MermaidDiagramProps>) {
+  const t = useTranslations("docs.schema");
   const containerRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -139,17 +126,13 @@ export function MermaidDiagram({ code, diagramKey, inline = false }: Readonly<Me
         const mermaid = await getMermaid();
         // Unique id per render — mermaid errors if an id is reused.
         const renderId = `mermaid-${diagramKey}-${Math.random().toString(36).slice(2, 9)}`;
-        const { svg, bindFunctions } = await mermaid.render(renderId, code);
+        const { svg } = await mermaid.render(renderId, code);
         if (cancelled) return;
-        const el = containerRef.current;
-        if (el) {
-          el.innerHTML = svg;
-          bindFunctions?.(el);
-        }
+        if (containerRef.current) containerRef.current.innerHTML = svg;
         setLoading(false);
       } catch (err) {
         if (cancelled) return;
-        setError(err instanceof Error ? err.message : "Не удалось отрендерить диаграмму");
+        setError(err instanceof Error ? err.message : String(err));
         setLoading(false);
       }
     })();
@@ -161,16 +144,15 @@ export function MermaidDiagram({ code, diagramKey, inline = false }: Readonly<Me
 
   const zoomIn = () => setZoom((z) => Math.min(ZOOM_MAX, Math.round((z + ZOOM_STEP) * 100) / 100));
   const zoomOut = () => setZoom((z) => Math.max(ZOOM_MIN, Math.round((z - ZOOM_STEP) * 100) / 100));
-  const zoomReset = () => setZoom(1);
 
   return (
-    <div className={inline ? styles.diagramWrapInline : styles.diagramWrap}>
+    <div className={styles.diagram}>
       <div className={styles.zoomControls}>
         <button
           type="button"
           className={styles.zoomBtn}
           onClick={zoomOut}
-          aria-label="Уменьшить"
+          aria-label={t("zoomOut")}
           disabled={zoom <= ZOOM_MIN}
         >
           −
@@ -180,26 +162,22 @@ export function MermaidDiagram({ code, diagramKey, inline = false }: Readonly<Me
           type="button"
           className={styles.zoomBtn}
           onClick={zoomIn}
-          aria-label="Увеличить"
+          aria-label={t("zoomIn")}
           disabled={zoom >= ZOOM_MAX}
         >
           +
         </button>
-        <button type="button" className={styles.zoomBtn} onClick={zoomReset} aria-label="Сбросить">
-          ⟲
+        <button type="button" className={styles.zoomBtn} onClick={() => setZoom(1)} aria-label={t("zoomReset")}>
+          1:1
         </button>
       </div>
 
-      <div className={inline ? styles.diagramScrollInline : styles.diagramScroll}>
-        <div
-          ref={containerRef}
-          className={styles.diagramInner}
-          style={{ transform: `scale(${zoom})` }}
-        />
+      <div className={styles.diagramScroll}>
+        <div ref={containerRef} className={styles.diagramInner} style={{ transform: `scale(${zoom})` }} />
       </div>
 
-      {loading && !error && <div className={styles.diagramState}>Рендер диаграммы…</div>}
-      {error && <div className={styles.diagramError}>Ошибка Mermaid: {error}</div>}
+      {loading && !error && <div className={styles.diagramState}>{t("rendering")}</div>}
+      {error && <div className={styles.diagramError}>{t("renderError", { message: error })}</div>}
     </div>
   );
 }

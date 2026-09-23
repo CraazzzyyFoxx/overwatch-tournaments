@@ -1,0 +1,132 @@
+A tournament is the root competitive object inside a workspace: it owns a lifecycle, a phase schedule, a set of stages and a computed standings table. This article describes the model as an integrator sees it — which states exist, what moves them, how the bracket is wired, and what the standings actually count.
+
+## Lifecycle
+
+A tournament's `status` is one of `announcement`, `registration`, `check_in`, `draft`, `live`, `playoffs`, `completed`, `archived`. Those phases have a canonical order 0…7 in exactly that sequence, and automation only ever moves forward along it.
+
+Transitions are validated against a matrix; anything not in it is rejected.
+
+| From | Allowed targets |
+| --- | --- |
+| `announcement` | `registration`, `check_in`, `draft`, `live` |
+| `registration` | `check_in`, `draft`, `live`, `announcement` |
+| `check_in` | `draft`, `live`, `registration` |
+| `draft` | `live`, `check_in`, `registration` |
+| `live` | `playoffs`, `completed`, `draft`, `check_in` |
+| `playoffs` | `completed` |
+| `completed` | `archived` |
+| `archived` | `completed` |
+
+Three rules fall out of that matrix and are safe to rely on. Forward skips are legal: `registration → live` is a single hop, intermediate phases are optional. Rollback edges exist up to `live`, so an organizer can reopen a phase without the privileged bypass. And `playoffs` only leads to `completed` — there is no way back out of the playoffs.
+
+`is_finished` is stored, but derived from the status: it is true for exactly `completed` and `archived`, and is rewritten on every transition. Filter on it freely; do not treat it as an independent flag. "Ball in play" means `live` or `playoffs` — `check_in` is a lobby, not a match.
+
+## Phase schedule
+
+A tournament carries up to four schedule rows: `registration`, `check_in`, `draft`, `live`. `announcement`, `playoffs`, `completed` and `archived` are not schedulable — they depend on how play actually goes, not on the clock. There is exactly one row per phase, with a `starts_at` and an optional `ends_at`; the database requires `ends_at` to be strictly later than `starts_at`.
+
+The two fields mean different things, and that is the part to remember:
+
+- **`starts_at` moves the status.** When it comes due, that phase becomes current.
+- **`ends_at` never moves the status.** It only closes that phase's action window — check-in may close fifteen minutes before matches start while the tournament stays in `check_in` until something moves it on.
+
+The schedule ships with the tournament in `phase_schedule` and is written as a whole: `PUT /api/v1/admin/tournaments/{tournament_id}/schedule`.
+
+## What moves the status
+
+Exactly two things.
+
+**An admin**, through `PATCH /api/v1/admin/tournaments/{tournament_id}/status`. The transition is validated against the matrix unless `force` (the superuser bypass) is passed. Entering `registration` additionally requires a saved registration form, otherwise the call fails with 409 and the code `registration_form_missing` — the status is what the sign-up button reads, so advertising registration without a form is not allowed. Any manual transition disables `auto_transitions_enabled` in the same transaction, so automation never fights the organizer's decision.
+
+**The tournament service tick**, every 30 seconds. It moves forward only, only out of `announcement`, `registration`, `check_in` and `draft`, and no further than `live`. If several schedule rows are due at once, the tournament jumps to the latest due phase rather than stepping through the intermediate ones. Each tournament is handled in its own transaction under a row lock, so one failure never blocks the rest. Tournaments with `auto_transitions_enabled = false` are skipped entirely.
+
+Reaching `live` has one side effect: the first wave of group stages starts automatically. A wave is every unfinished group stage with the lowest `order`; stages sharing an `order` are one parallel phase (two divisions, say) and start together. A stage that already has encounters is simply activated; one that has none gets a bracket-generation job queued.
+
+## Visibility
+
+`is_hidden` is orthogonal to the status. A hidden tournament and everything nested under it answer 404 "not found" — not 403, so the response code cannot confirm that the event exists. Workspace admins see it, as do users on the preview allowlist (`GET` and `POST /api/v1/admin/tournaments/{tournament_id}/preview-access`, removal is `DELETE .../preview-access/{auth_user_id}`).
+
+The workspace's own hidden flag is a separate gate: a tournament hidden only because its workspace is hidden is readable by any member of that workspace, not just by admins.
+
+The one exception to the allowlist rule is the **scrim container**: a hidden service tournament, one per workspace, that holds scrim rooms. Any workspace member may read it, because an opponent has to open a room by link before claiming a side. The container still never appears in tournament listings. Rooms themselves are covered in [Encounters, results and logs](/docs/dev/matches).
+
+## Stages
+
+A stage is one competitive segment of a tournament. Its `stage_type` is `round_robin`, `single_elimination`, `double_elimination` or `swiss`.
+
+A stage has no state column — the state is derived from three booleans the API does expose:
+
+| State | Condition |
+| --- | --- |
+| Draft | no encounters yet |
+| Preview | encounters generated, `is_published` still `false` |
+| Live | `is_published` or `is_active` |
+| Done | `is_completed` |
+
+The split between `is_active` and `is_published` matters to an integrator. `is_active` means "the currently selected stage" and goes out as soon as the organizer activates the next one. `is_published` is sticky: set once on activation and never cleared. Every captain action and every pick-ban check gates on `is_published`, so a stage that has gone live stays usable forever, while writes against an unpublished preview bracket are rejected with 409.
+
+A stage decomposes into **items** (`stage_item`) of type `group`, `bracket_upper`, `bracket_lower` or `single_bracket`, and each item declares **inputs** (`stage_item_input`), one per slot. An input is `final` (the team is known), `tentative` (the slot is owed by another stage's result — it carries `source_stage_item_id` and `source_position`) or `empty`. How many teams advance is `advance_count` on the stage, overridable per group.
+
+```http
+GET /api/v1/tournaments/42/stages HTTP/1.1
+Host: owt.craazzzyyfoxx.me
+```
+
+## The bracket: encounters and links
+
+An **encounter** is a best-of series between two teams: `home_team_id`, `away_team_id`, `home_score`, `away_score`, `best_of`, `round`, `status` (`open`, `pending`, `completed`) and `result_status` (`none`, `pending_confirmation`, `confirmed`, `disputed`).
+
+The bracket is **not** an implied tree — it is a set of explicit edges. Each edge says: the winner or the loser (`role`: `winner` / `loser`) of a source encounter fills the `home` or `away` slot of a target encounter. Incoming edges are exposed on the encounter as `sources`, so an empty slot can be labelled ("loser of match 3") without inferring the bracket's shape from round numbers.
+
+Generation depends on the stage type:
+
+- **Round-robin** — circle method, `bye` skipped; no advancement edges at all.
+- **Single and double elimination** — a skeleton plus edges. Double elimination can additionally seed its lower bracket from the group stage (`split_lower_bracket` splits the advancing teams between upper and lower).
+- **Swiss** — one round at a time.
+
+**The double-elimination grand final reset is created lazily.** The stage must be configured with `de_grand_final_type = "with_reset"`, and the match only appears at the moment the grand final is won by the team that came up from the lower bracket. If the upper-bracket side wins, the tournament ends at the grand final and the leftover reset is dropped.
+
+**Swiss pairing** works like this. Teams are sorted by points and Buchholz; higher score groups are paired first; inside a group, top-half against bottom-half is preferred, and an opponent from the same group beats floating down into the next one. Rematches are avoided, and the generator looks one round ahead: a locally pretty pairing can strand the field in a state where no rematch-free round exists at all. When the field really has played itself into a corner, the round is still built with the fewest rematches a greedy pass manages — a full field is worth more than a first meeting — and only a genuinely unpairable field returns an error. On an odd field the `bye` goes to the lowest-ranked team that has not had one yet.
+
+**Advancement** fires when an encounter becomes `completed` with a non-drawn score. It is idempotent: if the target slot already holds the same team, nothing happens. A draw cannot complete an elimination encounter — such a score is rejected with 400, because otherwise the edges never fire and the bracket stalls.
+
+If an upstream result is corrected and the winner changes, everything the old result had advanced is **cascade-reset**: the target encounter is un-played, and so are its own descendants. Those transitions are recorded in the result journal as `cascade_reset`, while the admin action that started it is recorded as `reopen`.
+
+## Standings
+
+Standings are computed per stage and served from `GET /api/v1/tournaments/{id}/standings`.
+
+The central rule: **only fully closed rounds are counted**. A round is playable when both teams in it are known; if even one playable encounter in that round is still open, the whole round is excluded. Otherwise a team's form would run ahead of its own wins and losses.
+
+Points come from the tournament — `win_points` (1.0 by default), `draw_points` (0.5), `loss_points` (0.0) — and may be overridden per stage under the `scoring` key of its settings. A Swiss `bye` scores a win by default; `swiss_bye_points` sets its own value.
+
+A standings row carries `position`, `overall_position`, `matches`, `win`, `draw`, `lose`, `points`, `buchholz` (the trimmed, median one), `full_buchholz` (the untrimmed sum), `score_differential`, `tie_group`, plus `tiebreak_order` and `source_rule_profile` — the order that was actually applied and the preset it came from.
+
+The order itself is the stage's `tiebreak_order` setting; without one, a preset chosen by stage type is used. The known metrics are `points`, `match_wins`, `head_to_head`, `buchholz`, `median_buchholz`, `score_differential`, `map_differential`, `wins_as_higher_stage_specific_metric` and `manual_override`. Unknown entries in a configured order are dropped, duplicates collapse to their first occurrence, and `manual_override` is appended when the organizer did not mention it.
+
+`manual_override` is the pinned-position step: a `manual_positions` map in the stage settings, team to place. It never takes part in detecting ties — `tie_group` is computed from the other metrics only, so a manual arrangement does not hide the fact that no tiebreaker separated those teams.
+
+Recalculation is a background job: `POST /api/v1/admin/standings/recalculate/{tournament_id}` answers 202 and the job is readable through `/api/v1/admin/tournament-jobs`. For a Swiss stage, the same recalculation also materialises the next round once the current one has closed.
+
+## What to read and what to subscribe to
+
+The public reads are `/api/v1/tournaments`, `/api/v1/tournaments/{id}`, `/api/v1/tournaments/{id}/stages`, `/api/v1/tournaments/{id}/standings`, `/api/v1/encounters` and `/api/v1/encounters/{id}`. The tournament list filters on `workspace_id`, `status` and `is_league`; the encounter list on `tournament_id`, `stage_id`, `stage_item_id`, `best_of`, `status`, `has_logs`, `closeness_min`/`closeness_max` and `scope` (`all` or `my_team`). The full route list and response schemas live in the [endpoint reference](/api/docs).
+
+The admin surface sits under `/api/v1/admin/`: tournament status and schedule, CRUD for stages, items and inputs, `activate-and-generate` for bracket generation (202, a job), standings recalculation.
+
+Changes do not arrive as a per-object event stream. They arrive as the names of stale resources on the `tournament:{id}:invalidation` topic. The ones that matter here are `tournament.detail`, `tournament.stages`, `tournament.encounters`, `tournament.standings`, `tournament.teams` and `tournament.structure` — the last one meaning the set of sections the tournament page has changed. Subscribing and replay are described in [Realtime (WebSocket)](/docs/dev/realtime).
+
+```json
+{ "resources": ["tournament.encounters", "tournament.standings"] }
+```
+
+<Callout>
+A hidden tournament answers 404 over HTTP and is gated the same way in the topic ACL: an anonymous client is not granted a subscription to its topics.
+</Callout>
+
+## See also
+
+- [Encounters, results and logs](/docs/dev/matches) — series games, captain reports, pick-ban, log parsing.
+- [Registration and rosters](/docs/dev/registration) — applications, admission, check-in, team export.
+- [Realtime (WebSocket)](/docs/dev/realtime) — topics, subscriptions, event replay.
+- [Data model](/docs/dev/data-model) and [Database schema](/docs/dev/schema) — tables and relations.

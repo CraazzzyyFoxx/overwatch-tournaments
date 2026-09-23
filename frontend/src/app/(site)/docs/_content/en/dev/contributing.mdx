@@ -1,0 +1,121 @@
+How the repository is laid out, how to run the platform locally, which checks a change must pass, and how a change reaches production. The detailed documents live in the repository itself; this page is the map and the minimum set of commands to get started.
+
+## Repository layout
+
+| Directory | Owns |
+| --- | --- |
+| `frontend/` | The Next.js application: public site, admin, tools |
+| `gateway/` | The Go gateway — the single HTTP and WebSocket entry point |
+| `backend/shared/` | The shared kernel: ORM models, repositories, RBAC, tenancy, messaging, observability |
+| `backend/*-service/` | Headless domain workers: app, identity, tournament, parser, balancer, analytics, stream, discord |
+| `backend/migrations/` | One Alembic project for the whole database |
+| `backend/env/` | Environment templates (`*.env.example`), one per service |
+| `nginx/` | The internal HTTP edge in front of the gateway |
+| `monitoring/` | Prometheus, Grafana, Loki, Tempo, OpenTelemetry, alerts |
+| `ops/` | Deployment, backups, disk cleanup, release-note rendering |
+| `loadtests/` | Locust scenarios |
+| `docs/` | Architecture, data model, domain rules, runbooks, plans |
+
+The backend follows one layering — `rpc → services → domain → repository → models` — and a new REST route is always a route-table entry in the gateway plus an RPC method in the service that owns the data, never a new listening port.
+
+## Running locally
+
+You need Git, Docker Engine or Docker Desktop with Compose v2, and `make` (every target is a thin wrapper around `docker compose`). Working without containers additionally needs Python 3.14 with [uv](https://docs.astral.sh/uv/), Bun and Go 1.25.
+
+Copy the environment templates without modifying the templates themselves, then create the root `.env` that Compose reads — its contents for a local run are listed in the [README](https://github.com/CraazzzyyFoxx/overwatch-tournaments/blob/master/README.md):
+
+```bash
+for file in backend/env/*.env.example; do cp "$file" "${file%.example}"; done
+cp frontend/.env.example frontend/.env.local
+```
+
+The RabbitMQ and PostgreSQL values in the root `.env` must match `backend/env/common.env`, and `JWT_SECRET_KEY` in `backend/env/auth.env` must be replaced with at least 32 random characters — the gateway and the workers share it.
+
+```bash
+make dev-up      # start the core stack
+make migrate     # alembic upgrade head inside app-svc
+```
+
+The site is then on `http://localhost`, the API reference on `http://localhost/api/docs`, and the gateway directly on `http://localhost:8080`.
+
+| Command | Purpose |
+| --- | --- |
+| `make dev-up` | Start the core development stack (without the heavy workers) |
+| `make dev-up-full` | The same plus the `workers` profile (ML jobs, Discord bot) |
+| `make dev-rebuild` | Rebuild and restart the core stack |
+| `make dev-health` | Container state and health |
+| `make dev-logs` | Follow the logs |
+| `make dev-down` | Stop the stack |
+| `make migrate` | Apply migrations inside `app-svc` |
+| `make test` | Run the backend test suite inside `app-svc` |
+| `make help` | The full target list |
+
+The local database is enabled by the `db` profile in the root `.env`; without it Compose expects an external PostgreSQL configured in `backend/env/common.env`. The `workers` profile adds the long-running workers, the `monitoring` profile the exporters and collectors.
+
+There are several Compose files, each with its own job: `docker-compose.yml` is the development stack with hot reload, `docker-compose.production.yml` uses GHCR images and resource limits, `docker-compose.monitoring.yml` is a separate monitoring project, `docker-compose.gpu.yml` is the NVIDIA override for `analytics-worker`, `docker-compose.backup.yml` runs backups, and `docker-compose.test.yml` is an ephemeral PostgreSQL for tests run on the host.
+
+Service code is bind-mounted into the development containers and FastStream reloads it by itself, so rebuilds are rare. The frontend and the gateway are easier to run directly:
+
+```bash
+cd frontend && bun install --frozen-lockfile && bun run dev
+cd gateway && go run ./cmd/gateway
+```
+
+## What CI checks
+
+A change goes through five independent workflows. Run the ones covering the area you touched locally — a release calls these very workflows as its gates.
+
+| Check | What runs |
+| --- | --- |
+| lint-backend | `uv run bash scripts/lint.sh` (ruff check + format), the generated-artifact gates `scripts/export_openapi_schemas.sh --check`, `scripts/export_ow_ladder.py --check`, `scripts/export_erd.py --check`, and `scripts/check_rpc_docs.py` — every routed RPC subject must be documented |
+| test-backend | pytest per package with coverage; integration tests skip themselves when the database is unreachable |
+| ci-frontend | `bun run typecheck`, `bun run lint`, `bun run lint:zones`, `bun run test:split`, `bun run test:vitest`, `bun run test:bun`; the production build `bun run build` runs only on pushes to `master`, not on pull requests |
+| ci-gateway | `go mod tidy -diff`, `gofmt -l .`, `go vet ./...`, `go build ./...`, `go test -race ./...` |
+| ci-docs | `python3 scripts/check_doc_links.py` — relative documentation links must resolve |
+
+Three committed files are derived from code, and CI fails when they drift: the OpenAPI manifest the gateway builds its specs from, `frontend/src/lib/divisions/ow-ladder.generated.json`, and the entity diagrams in `docs/database_erd.md`. After changing an ORM model, regenerate them with the commands in the table above. Hooks are installed once — `pre-commit install` — and run ruff plus file hygiene on staged files.
+
+<Callout type="warning">
+A migration that drops a column or a table must not arrive through a plain `upgrade head` while running code still reads what it removes. The safe order is in the runbook [challonge_normalization_phase2_runbook.md](https://github.com/CraazzzyyFoxx/overwatch-tournaments/blob/master/docs/challonge_normalization_phase2_runbook.md).
+</Callout>
+
+## Commits
+
+Conventional Commits with a domain scope:
+
+```text
+type(scope): imperative subject in lower case
+```
+
+- `type` — `feat`, `fix`, `refactor`, `test`, `style`, `chore`, `docs`.
+- `scope` — the domain, not the directory: `tournament`, `draft`, `registration`, `roster`, `bracket`, `standings`, `pre-game`, `stream`, `rbac`, `admin`, `balancer`, `divisions`, `pick-ban`.
+- The subject says what the code now does, not what you did to it: `fix(draft): rank a player on their own role, not on their best one`, not `fix(draft): fix ranking bug`.
+
+This is not cosmetic: release notes are rendered from commit subjects, and a `!` after the type or a `BREAKING CHANGE:` trailer promotes a commit to its own section at the top.
+
+## How a release ships
+
+`develop` is the working branch, `master` the release source. A release is a `v*` tag push:
+
+```bash
+git tag -a v1.2.0 -m "..." && git push origin v1.2.0
+```
+
+`deploy-production.yml` does the rest: it runs the same four gates (lint-backend, test-backend, ci-frontend, ci-gateway), builds ten images on GitHub-hosted runners and pushes them to GHCR, opens one ssh session to the production host that pulls the tag, runs `alembic upgrade head` from the **new** image while the old containers still serve traffic, recreates the stack, and only then publishes the GitHub Release with notes rendered from the Conventional Commit subjects by `ops/release/changelog.sh`. The order is deliberate: the Release entry means "this is what production is running", not "somebody clicked publish".
+
+A manual run (`workflow_dispatch`) deploys a tag without the gates — an operator's call, and the only way out while CI is red; with `skip_build` it reuses images that already exist, which is also the rollback.
+
+## Where the deeper docs live
+
+- [docs/README.md](https://github.com/CraazzzyyFoxx/overwatch-tournaments/blob/master/docs/README.md) — the map of all documentation; a document that is not listed there does not exist.
+- [CONTRIBUTING.md](https://github.com/CraazzzyyFoxx/overwatch-tournaments/blob/master/CONTRIBUTING.md) — the full rules for getting a change merged.
+- [docs/architecture.md](https://github.com/CraazzzyyFoxx/overwatch-tournaments/blob/master/docs/architecture.md) — components, request flow, delivery guarantees, deployment.
+- [gateway/README.md](https://github.com/CraazzzyyFoxx/overwatch-tournaments/blob/master/gateway/README.md) — routes, authentication, caching, the realtime hub.
+- [backend/ARCHITECTURE.md](https://github.com/CraazzzyyFoxx/overwatch-tournaments/blob/master/backend/ARCHITECTURE.md) — backend layering.
+- [docs/business-logic-inventory.md](https://github.com/CraazzzyyFoxx/overwatch-tournaments/blob/master/docs/business-logic-inventory.md) — domain rules and invariants.
+
+## See also
+
+- [Developer overview](/docs/dev/overview) — what the platform exposes.
+- [Data model](/docs/dev/data-model) — the Postgres schemas and who owns them.
+- [HTTP API](/docs/dev/api) — the contract the gates protect.

@@ -1,0 +1,181 @@
+Two credentials reach the API through the same `Authorization: Bearer` header: a browser session token and an API key. This page covers what separates them, how to obtain each, what a key can and cannot do, and the limits you will run into.
+
+## An account is not a player
+
+A **login** (`auth.user`) is the account: password, sessions, OAuth connections, API keys, roles and workspace membership. A **player** (`players.user`) is the profile inside tournament data: BattleTag, ranks, encounter history, achievements. Players exist without accounts — imports and log parsing create them. The link is one-directional and at most one-to-one: the player row carries `auth_user_id`, and a login can be linked to at most one player. The layers are described in [Data model](/docs/dev/data-model).
+
+For the API this means ids from `/api/v1/auth/me` and from `/api/v1/users/...` live in different spaces, and the only thing that maps one to the other is that link.
+
+## How a browser authenticates
+
+A session starts with OAuth. The providers are Discord, Twitch and Battle.net; one counts as enabled when the deployment has its `client_id`, `client_secret` and the shared `redirect_uri` configured. The available ones are listed by a public endpoint:
+
+```http
+GET /api/v1/auth/providers HTTP/1.1
+Host: owt.craazzzyyfoxx.me
+```
+
+The browser then asks for an authorization URL (`GET /api/v1/auth/oauth/{provider}/url`), leaves for the provider and comes back with a code the site exchanges for a token pair (`POST /api/v1/auth/oauth/{provider}/callback`). A disabled provider answers 404.
+
+Password login also exists — `POST /api/v1/auth/login` with `{"email": ..., "password": ...}`. It only works for accounts that actually have a password: an account created through OAuth has none until its owner sets one via `POST /api/v1/auth/set-password`. A wrong pair and a password-less account are indistinguishable from outside — both answer 401.
+
+Both paths return the same pair:
+
+```json
+{
+  "access_token": "<JWT>",
+  "refresh_token": "<opaque>",
+  "token_type": "bearer"
+}
+```
+
+Lifetimes are service constants: the access token lives 15 minutes, the refresh token 30 days.
+
+### Refreshing a session
+
+`POST /api/v1/auth/refresh` with `{"refresh_token": ...}` returns a new pair and revokes the one you sent: a session always holds exactly one live refresh token. The session id (`sid`) is preserved, so the session list and session revocation keep pointing at the same record.
+
+Rotation forgives a lost response: replaying a token that was rotated less than 60 seconds ago exchanges it once more. Later, the same replay counts as reuse — the request gets 401 and the session that token belonged to is revoked (the account's other sessions stay alive).
+
+Revoking a session also closes an access token that has not expired yet: its `sid` is blacklisted, and the blacklist is checked on every validation. The only delay is the gateway's verdict cache — 30 seconds for a session token.
+
+### How the credential travels
+
+REST routes read the credential from the `Authorization` header **only**. Cookies are the site's own storage: the frontend keeps the access token in the `owt_access_token` cookie and the refresh token in the httpOnly `owt_refresh_token` cookie, and puts the access token into the header itself on every API call. The one exception is the match-log download (`GET /api/v1/matches/{match_id}/log`): the browser navigates to that link, no JavaScript runs to attach a header, so the route also accepts the session cookie. Even there the header wins.
+
+A `?token=` query parameter is never read by REST — it applies to the WebSocket handshake only, see [Realtime (WebSocket)](/docs/dev/realtime).
+
+## API keys
+
+Keys are created in the admin UI: **Admin → Access → API keys → Create key**. The form asks for a name, a workspace, a set of scopes and an optional expiry; issuing a key in a workspace takes the `team.create` permission — in that workspace or globally — or a superuser. The page calls the site's own `/bff/account/api-keys` endpoint, which authorizes with the session cookie and only then calls `POST /api/v1/auth/api-keys` — which is why a key can never mint another key.
+
+A key looks like this:
+
+```text
+owt_sk_<public_id>_<secret>
+```
+
+`public_id` is 16 hex characters, `secret` is 64. Only a hash of the secret is stored, and the full string is returned exactly once, in the create response, and nowhere else — the page says so explicitly. Keys issued before the project was renamed start with `aqt_sk_` and still validate.
+
+What a key is:
+
+- **One workspace.** Chosen at creation, never changed. A key cannot reach a second workspace by any route.
+- **Scopes are RBAC permission names** from the shared catalog: `team.create`, `registration.approve`, the `admin.*` wildcard. There is no separate "API scope" system, so endpoints authorize a key with the very same permission check they apply to a person.
+- **Intersected with the owner's rights.** On every validation the key's scopes are filtered down to what its owner currently holds in that workspace. The create form refuses up front too: granting a scope you do not hold answers 403.
+- **No global reach.** A key's payload carries no roles, no global permissions and never the superuser flag. The owner's denies do ride along — a deny outranks every allow.
+- **A key does not outlive its owner.** If the owner loses workspace membership or is deactivated, or the workspace is disabled, the key stops validating without anyone revoking it.
+- **A key with no scopes** authenticates but fails every permission check; the key list marks it as inert.
+
+Sending a key is identical to sending a session token:
+
+```bash
+curl -H "Authorization: Bearer owt_sk_a1b2c3d4e5f60718_…" \
+  "https://owt.craazzzyyfoxx.me/api/v1/tournaments?workspace_id=1"
+```
+
+A key can describe itself:
+
+```http
+GET /api/v1/auth/api-keys/self HTTP/1.1
+Host: owt.craazzzyyfoxx.me
+Authorization: Bearer owt_sk_a1b2c3d4e5f60718_…
+```
+
+```json
+{
+  "id": 12,
+  "name": "overlay-bot",
+  "workspace_id": 1,
+  "public_id": "a1b2c3d4e5f60718",
+  "owner_id": 4,
+  "owner_username": "craazzzyyfoxx",
+  "scopes": ["registration.read"],
+  "expires_at": null,
+  "revoked_at": null,
+  "last_used_at": "2026-09-23T10:15:00Z",
+  "created_at": "2026-09-01T12:00:00Z",
+  "updated_at": null
+}
+```
+
+Revocation (`DELETE /api/v1/auth/api-keys/{id}`) and `expires_at` are not instantaneous: the gateway caches a key's validation verdict for 5 seconds (30 seconds for a session token).
+
+### Session-only and key-only routes
+
+Everything under `/api/v1/auth/` acts on your own account, sessions or credentials, so those operations accept a session token only. An API key gets 401 there.
+
+| Route | Session | Key |
+| --- | --- | --- |
+| `GET /api/v1/auth/me` | yes | yes |
+| `GET /api/v1/auth/api-keys/self`, `.../self/quota` | no (403) | yes |
+| `/api/v1/auth/logout`, `/logout-all`, `/sessions`, `/set-password`, `DELETE /me` | yes | no (401) |
+| Creating, renaming, revoking keys and editing their quota | yes | no (401) |
+| Domain routes (`/api/v1/tournaments`, `/registration`, ...) | yes | yes, within its scopes |
+
+The rule behind the table is one sentence: a key cannot mint another key, extend a session, or touch the account.
+
+## Quotas
+
+Quotas are counted in three scopes, each checked on its own:
+
+| Scope | What it bounds |
+| --- | --- |
+| `workspace` | the whole community: every key and every member |
+| `key` | one API key |
+| `session` | one signed-in member's session |
+
+There are five dimensions. Three are counters:
+
+- `requests_per_minute` — metered calls per minute, on a 60-second window.
+- `heavy_per_day` — heavy units per day; an expensive operation spends its own cost, and the window rolls over at 00:00 UTC.
+- `concurrent_heavy` — how many heavy jobs are held at once; a finished or failed job releases its slot.
+
+Two are per-request caps: `max_upload_bytes` (body size) and `max_items_per_request` (batch size).
+
+Values come from three levels: the workspace's plan, a workspace override, a key override. For counters the nearest level that sets a value wins; for per-request caps the narrowest value at any level wins. An unset value means "inherit", not "zero".
+
+Heavy means the operations that are actually marked as such — team balancing, roster import and export, log upload and parsing, achievement recalculation, analytics training and inference, Google Sheets and Challonge synchronisation. Ordinary reads only spend `requests_per_minute`.
+
+### What the client sees
+
+Exceeding any counter is a 429 with a `Retry-After` header in seconds and a body whose `code` is `rate_limited`, with the specifics under `fields`:
+
+```json
+{
+  "fields": [
+    {
+      "field": null,
+      "msg": "quota exceeded",
+      "code": "quota_exceeded",
+      "limit_name": "heavy_per_day",
+      "scope": "workspace",
+      "limit": 50
+    }
+  ],
+  "retry_after": 1800,
+  "detail": "quota exceeded",
+  "code": "rate_limited"
+}
+```
+
+`limit_name` is the dimension that ran out, `scope` is whose budget it was. `concurrent_heavy` has no window, so its `Retry-After` is always 30 seconds. Per-request caps are settled before the body is parsed and spend no budget: an oversized body answers 413 with `code` `payload_too_large` and `quota_payload_too_large` in `fields`, an oversized batch answers 400 with `code` `bad_request` and `quota_items_too_many` in `fields`. In v2 the same data sits in `error.details` — see [HTTP API](/docs/dev/api).
+
+A key can read its own consumption: `GET /api/v1/auth/api-keys/self/quota` returns, per applicable scope, the ceiling, what has been spent and the time to reset. An unset dimension comes back as `null` (unlimited) with its counter still reported.
+
+<Callout>
+Quotas run on a shared counter, and the gateway meters every key against its own `requests_per_minute` at the edge as well. It is one budget, not two: both sides spend the same counter.
+</Callout>
+
+## 401 versus 403
+
+- **401** — no credential, an unrecognised one, or one that no longer works: a missing `Authorization` header on a route that requires it; an expired, revoked or malformed token; a key with a wrong secret, revoked, expired, or whose owner or workspace is disabled; an API key on a session-only route. The reasons are deliberately indistinguishable from outside.
+- **403** — the credential is recognised but the action is not allowed: a missing permission in the workspace, a scope the key was not granted, a deny on the owner, or a session token asking for something only a key can answer.
+
+There is a third case, **503**: the gateway could not get a verdict from the identity service (overload, disconnect, timeout). That is not "you are logged out"; the response carries `Retry-After: 1`, and the right reaction is to retry rather than to drop the session.
+
+## See also
+
+- [HTTP API](/docs/dev/api) — versions, the response envelope, error codes, caching and edge limits.
+- [Workspaces and permissions](/docs/dev/workspaces) — the RBAC model a key's scopes are intersected with.
+- [Realtime (WebSocket)](/docs/dev/realtime) — how the same two credentials work on a socket.
+- [Endpoint reference](/api/docs) — the full list of v1 and v2 routes.

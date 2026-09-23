@@ -1,0 +1,805 @@
+{
+  "_generated_by": "backend/scripts/export_erd.py -- do not edit by hand",
+  "alembic_head": "discdm01",
+  "packages": [
+    {
+      "key": "achievements",
+      "mermaid": "erDiagram\n    ACHIEVEMENTS_EVALUATION_RESULT {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint achievement_rule_id FK\n        bigint workspace_member_id FK\n        bigint tournament_id FK \"nullable\"\n        bigint encounter_id FK \"nullable\"\n        bigint match_id FK \"nullable\"\n        timestamptz qualified_at\n        json evidence_json \"nullable\"\n        int rule_version\n        uuid run_id FK \"nullable\"\n    }\n    ACHIEVEMENTS_EVALUATION_RUN {\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint workspace_id FK\n        varchar trigger\n        bigint tournament_id FK \"nullable\"\n        int rules_evaluated\n        int results_created\n        int results_removed\n        timestamptz started_at\n        timestamptz finished_at \"nullable\"\n        varchar status\n        varchar error_message \"nullable\"\n        uuid id PK\n    }\n    ACHIEVEMENTS_OVERRIDE {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint achievement_rule_id FK\n        bigint workspace_member_id FK\n        bigint tournament_id FK \"nullable\"\n        bigint match_id FK \"nullable\"\n        varchar action\n        varchar reason\n        bigint granted_by FK\n    }\n    ACHIEVEMENTS_RULE {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint workspace_id FK\n        varchar slug\n        varchar name\n        varchar description_ru\n        varchar description_en\n        varchar image_url \"nullable\"\n        bigint hero_id FK \"nullable\"\n        varchar category\n        varchar scope\n        varchar grain\n        json condition_tree\n        json depends_on\n        boolean enabled\n        int rule_version\n        int min_tournament_id \"nullable\"\n    }\n\n    ACHIEVEMENTS_EVALUATION_RUN |o--o{ ACHIEVEMENTS_EVALUATION_RESULT : \"run_id\"\n    ACHIEVEMENTS_RULE ||--o{ ACHIEVEMENTS_EVALUATION_RESULT : \"achievement_rule_id\"\n    ACHIEVEMENTS_RULE ||--o{ ACHIEVEMENTS_OVERRIDE : \"achievement_rule_id\"\n    AUTH_USER ||--o{ ACHIEVEMENTS_OVERRIDE : \"granted_by\"\n    MATCHES_MATCH |o--o{ ACHIEVEMENTS_EVALUATION_RESULT : \"match_id\"\n    MATCHES_MATCH |o--o{ ACHIEVEMENTS_OVERRIDE : \"match_id\"\n    OVERWATCH_HERO |o--o{ ACHIEVEMENTS_RULE : \"hero_id\"\n    PUBLIC_WORKSPACE ||--o{ ACHIEVEMENTS_EVALUATION_RUN : \"workspace_id\"\n    PUBLIC_WORKSPACE ||--o{ ACHIEVEMENTS_RULE : \"workspace_id\"\n    PUBLIC_WORKSPACE_MEMBER ||--o{ ACHIEVEMENTS_EVALUATION_RESULT : \"workspace_member_id\"\n    PUBLIC_WORKSPACE_MEMBER ||--o{ ACHIEVEMENTS_OVERRIDE : \"workspace_member_id\"\n    TOURNAMENT_ENCOUNTER |o--o{ ACHIEVEMENTS_EVALUATION_RESULT : \"encounter_id\"\n    TOURNAMENT_TOURNAMENT |o--o{ ACHIEVEMENTS_EVALUATION_RESULT : \"tournament_id\"\n    TOURNAMENT_TOURNAMENT |o--o{ ACHIEVEMENTS_EVALUATION_RUN : \"tournament_id\"\n    TOURNAMENT_TOURNAMENT |o--o{ ACHIEVEMENTS_OVERRIDE : \"tournament_id\"",
+      "schemas": [
+        "achievements"
+      ],
+      "tables": [
+        "achievements.evaluation_result",
+        "achievements.evaluation_run",
+        "achievements.override",
+        "achievements.rule"
+      ],
+      "unique_keys": [
+        {
+          "columns": [
+            "achievement_rule_id",
+            "workspace_member_id",
+            "tournament_id",
+            "encounter_id",
+            "match_id"
+          ],
+          "table": "ACHIEVEMENTS_EVALUATION_RESULT"
+        },
+        {
+          "columns": [
+            "workspace_id",
+            "slug"
+          ],
+          "table": "ACHIEVEMENTS_RULE"
+        }
+      ]
+    },
+    {
+      "key": "analytics",
+      "mermaid": "erDiagram\n    ANALYTICS_ALGORITHMS {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        varchar name UK\n        boolean produces_shifts\n    }\n    ANALYTICS_ANOMALY_FEEDBACK {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint tournament_id FK\n        bigint player_id FK\n        varchar(32) kind\n        varchar(16) verdict\n        bigint reviewer_user_id FK \"nullable\"\n        text note \"nullable\"\n    }\n    ANALYTICS_JOB {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint workspace_id FK \"nullable\"\n        bigint tournament_id FK\n        bigint requested_by_user_id FK \"nullable\"\n        varchar(16) kind\n        varchar(16) status\n        json algorithms \"nullable\"\n        json training_workspace_ids \"nullable\"\n        json progress\n        text error \"nullable\"\n        timestamptz started_at \"nullable\"\n        timestamptz finished_at \"nullable\"\n    }\n    ANALYTICS_MATCH_QUALITY {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint encounter_id FK\n        bigint algorithm_id FK\n        float competitiveness\n        float predictability\n        float skill_balance\n        float quality_score\n    }\n    ANALYTICS_ML_MODEL_ARTIFACT {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint algorithm_id FK\n        varchar(32) model_kind\n        varchar(16) role \"nullable\"\n        varchar(32) version\n        text storage_uri\n        varchar(32) feature_version\n        bigint training_cutoff_tournament_id FK \"nullable\"\n        json metrics \"nullable\"\n        json feature_importance \"nullable\"\n        boolean is_active\n    }\n    ANALYTICS_PERFORMANCE {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint tournament_id FK\n        bigint player_id FK\n        bigint algorithm_id FK\n        float impact_score\n        float raw_value\n        float confidence\n        float log_coverage\n        float local_mean\n        float local_std\n        float local_residual\n        float local_zscore\n        float local_percentile\n        int local_reference_n\n        int local_band_min_div \"nullable\"\n        int local_band_max_div \"nullable\"\n        json contributions \"nullable\"\n        float base_value \"nullable\"\n    }\n    ANALYTICS_PLAYER_ANOMALY {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint tournament_id FK\n        bigint player_id FK\n        varchar(32) kind\n        float score\n        float confidence\n        json reasons\n        json evidence \"nullable\"\n        bigint source_encounter_id FK \"nullable\"\n    }\n    ANALYTICS_PLAYER_SHIFT {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint tournament_id FK\n        bigint player_id FK\n        int wins\n        int losses\n        int shift_one \"nullable\"\n        int shift_two \"nullable\"\n        int shift \"nullable\"\n    }\n    ANALYTICS_SHIFTS {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint tournament_id FK\n        bigint algorithm_id FK\n        bigint player_id FK\n        float shift\n        float confidence\n        float effective_evidence\n        int sample_tournaments\n        int sample_matches\n        float log_coverage\n    }\n    ANALYTICS_STANDINGS_DISTRIBUTION {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint tournament_id FK\n        bigint team_id FK\n        bigint algorithm_id FK\n        float mean_position\n        float median_position\n        float p10_position\n        float p90_position\n        float prob_top1\n        float prob_top3\n        float prob_top8\n        json position_histogram\n    }\n\n    ANALYTICS_ALGORITHMS ||--o{ ANALYTICS_MATCH_QUALITY : \"algorithm_id\"\n    ANALYTICS_ALGORITHMS ||--o{ ANALYTICS_ML_MODEL_ARTIFACT : \"algorithm_id\"\n    ANALYTICS_ALGORITHMS ||--o{ ANALYTICS_PERFORMANCE : \"algorithm_id\"\n    ANALYTICS_ALGORITHMS ||--o{ ANALYTICS_SHIFTS : \"algorithm_id\"\n    ANALYTICS_ALGORITHMS ||--o{ ANALYTICS_STANDINGS_DISTRIBUTION : \"algorithm_id\"\n    AUTH_USER |o--o{ ANALYTICS_ANOMALY_FEEDBACK : \"reviewer_user_id\"\n    AUTH_USER |o--o{ ANALYTICS_JOB : \"requested_by_user_id\"\n    PUBLIC_WORKSPACE |o--o{ ANALYTICS_JOB : \"workspace_id\"\n    TOURNAMENT_ENCOUNTER |o--o{ ANALYTICS_PLAYER_ANOMALY : \"source_encounter_id\"\n    TOURNAMENT_ENCOUNTER ||--o{ ANALYTICS_MATCH_QUALITY : \"encounter_id\"\n    TOURNAMENT_PLAYER ||--o{ ANALYTICS_ANOMALY_FEEDBACK : \"player_id\"\n    TOURNAMENT_PLAYER ||--o{ ANALYTICS_PERFORMANCE : \"player_id\"\n    TOURNAMENT_PLAYER ||--o{ ANALYTICS_PLAYER_ANOMALY : \"player_id\"\n    TOURNAMENT_PLAYER ||--o{ ANALYTICS_PLAYER_SHIFT : \"player_id\"\n    TOURNAMENT_PLAYER ||--o{ ANALYTICS_SHIFTS : \"player_id\"\n    TOURNAMENT_TEAM ||--o{ ANALYTICS_STANDINGS_DISTRIBUTION : \"team_id\"\n    TOURNAMENT_TOURNAMENT |o--o{ ANALYTICS_ML_MODEL_ARTIFACT : \"training_cutoff_tournament_id\"\n    TOURNAMENT_TOURNAMENT ||--o{ ANALYTICS_ANOMALY_FEEDBACK : \"tournament_id\"\n    TOURNAMENT_TOURNAMENT ||--o{ ANALYTICS_JOB : \"tournament_id\"\n    TOURNAMENT_TOURNAMENT ||--o{ ANALYTICS_PERFORMANCE : \"tournament_id\"\n    TOURNAMENT_TOURNAMENT ||--o{ ANALYTICS_PLAYER_ANOMALY : \"tournament_id\"\n    TOURNAMENT_TOURNAMENT ||--o{ ANALYTICS_PLAYER_SHIFT : \"tournament_id\"\n    TOURNAMENT_TOURNAMENT ||--o{ ANALYTICS_SHIFTS : \"tournament_id\"\n    TOURNAMENT_TOURNAMENT ||--o{ ANALYTICS_STANDINGS_DISTRIBUTION : \"tournament_id\"",
+      "schemas": [
+        "analytics"
+      ],
+      "tables": [
+        "analytics.algorithms",
+        "analytics.anomaly_feedback",
+        "analytics.job",
+        "analytics.match_quality",
+        "analytics.ml_model_artifact",
+        "analytics.performance",
+        "analytics.player_anomaly",
+        "analytics.player_shift",
+        "analytics.shifts",
+        "analytics.standings_distribution"
+      ],
+      "unique_keys": [
+        {
+          "columns": [
+            "tournament_id",
+            "player_id",
+            "kind"
+          ],
+          "table": "ANALYTICS_ANOMALY_FEEDBACK"
+        },
+        {
+          "columns": [
+            "encounter_id",
+            "algorithm_id"
+          ],
+          "table": "ANALYTICS_MATCH_QUALITY"
+        },
+        {
+          "columns": [
+            "algorithm_id",
+            "model_kind",
+            "role",
+            "version"
+          ],
+          "table": "ANALYTICS_ML_MODEL_ARTIFACT"
+        },
+        {
+          "columns": [
+            "tournament_id",
+            "player_id",
+            "algorithm_id"
+          ],
+          "table": "ANALYTICS_PERFORMANCE"
+        },
+        {
+          "columns": [
+            "tournament_id",
+            "player_id",
+            "kind",
+            "source_encounter_id"
+          ],
+          "table": "ANALYTICS_PLAYER_ANOMALY"
+        },
+        {
+          "columns": [
+            "tournament_id",
+            "player_id"
+          ],
+          "table": "ANALYTICS_PLAYER_SHIFT"
+        },
+        {
+          "columns": [
+            "tournament_id",
+            "player_id",
+            "algorithm_id"
+          ],
+          "table": "ANALYTICS_SHIFTS"
+        },
+        {
+          "columns": [
+            "tournament_id",
+            "team_id",
+            "algorithm_id"
+          ],
+          "table": "ANALYTICS_STANDINGS_DISTRIBUTION"
+        }
+      ]
+    },
+    {
+      "key": "balancer",
+      "mermaid": "erDiagram\n    BALANCER_BALANCE {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint tournament_id FK,UK\n        bigint workspace_id FK \"nullable\"\n        varchar(32) algorithm \"nullable\"\n        json division_grid_json \"nullable\"\n        varchar(32) division_scope \"nullable\"\n        json config_json \"nullable\"\n        json result_json\n        bigint saved_by FK \"nullable\"\n        timestamptz saved_at\n        timestamptz exported_at \"nullable\"\n        varchar(32) export_status \"nullable\"\n        text export_error \"nullable\"\n    }\n    BALANCER_BALANCE_VARIANT {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint balance_id FK\n        int variant_number\n        varchar(32) algorithm\n        float objective_score \"nullable\"\n        json statistics_json \"nullable\"\n        boolean is_selected\n    }\n    BALANCER_DRAFT_AUDIT_EVENT {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint session_id FK\n        bigint actor_auth_user_id FK \"nullable\"\n        varchar(64) action\n        varchar(64) entity_type\n        bigint entity_id\n        text reason\n        json before_json\n        json after_json\n    }\n    BALANCER_DRAFT_PICK {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint session_id FK\n        int overall_no\n        int round_no\n        int pick_in_round\n        bigint draft_team_id FK\n        varchar(16) target_role \"nullable\"\n        int target_rank_value \"nullable\"\n        varchar(16) status\n        bigint picked_player_id FK \"nullable\"\n        bigint picked_by_workspace_member_id FK \"nullable\"\n        boolean is_autopick\n        boolean is_admin_override\n        timestamptz clock_started_at \"nullable\"\n        timestamptz clock_expires_at \"nullable\"\n        int clock_remaining_ms \"nullable\"\n        timestamptz overtime_started_at \"nullable\"\n        int version\n    }\n    BALANCER_DRAFT_PLAYER {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint session_id FK\n        bigint registration_id FK\n        bigint workspace_member_id FK \"nullable\"\n        varchar(16) status\n        boolean is_captain\n        bigint drafted_by_team_id FK \"nullable\"\n        int version\n    }\n    BALANCER_DRAFT_SESSION {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint tournament_id FK\n        bigint workspace_id FK\n        varchar(16) status\n        varchar(64) blocked_reason \"nullable\"\n        varchar(16) format\n        int rounds\n        int pick_time_seconds\n        int overtime_seconds\n        bigint current_pick_id FK \"nullable\"\n        varchar(32) pool_source\n        bigint source_balance_id FK \"nullable\"\n        varchar(16) autopick_strategy\n        boolean allow_admin_override\n        timestamptz exported_at \"nullable\"\n        varchar(32) export_status \"nullable\"\n        json settings_json\n        int version\n    }\n    BALANCER_DRAFT_TEAM {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint session_id FK\n        bigint captain_workspace_member_id FK \"nullable\"\n        bigint captain_auth_user_id FK \"nullable\"\n        varchar(255) name\n        int draft_position\n        bigint exported_team_id FK \"nullable\"\n    }\n    BALANCER_TEAM {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint balance_id FK\n        bigint variant_id FK \"nullable\"\n        bigint exported_team_id FK \"nullable\"\n        varchar(255) name\n        varchar(255) balancer_name\n        varchar(255) captain_battle_tag \"nullable\"\n        float avg_sr\n        int total_sr\n        int sort_order\n    }\n    BALANCER_TEAM_SLOT {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint team_id FK\n        varchar(255) battle_tag_normalized \"nullable\"\n        varchar(16) role\n        int assigned_rank\n        int discomfort\n        boolean is_captain\n        int sort_order\n    }\n    BALANCER_TOURNAMENT_CONFIG {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint tournament_id FK,UK\n        bigint workspace_id FK\n        json config_json\n        bigint updated_by FK \"nullable\"\n    }\n    BALANCER_USER_CONFIG {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint user_id FK,UK\n        jsonb config_json\n        jsonb role_slots_json \"nullable\"\n        int points_per_win \"nullable\"\n    }\n    BALANCER_WORKSPACE_CONFIG {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint workspace_id FK,UK\n        json config_json\n        bigint updated_by FK \"nullable\"\n    }\n\n    AUTH_USER |o--o{ BALANCER_BALANCE : \"saved_by\"\n    AUTH_USER |o--o{ BALANCER_DRAFT_AUDIT_EVENT : \"actor_auth_user_id\"\n    AUTH_USER |o--o{ BALANCER_DRAFT_TEAM : \"captain_auth_user_id\"\n    AUTH_USER |o--o{ BALANCER_TOURNAMENT_CONFIG : \"updated_by\"\n    AUTH_USER |o--o{ BALANCER_WORKSPACE_CONFIG : \"updated_by\"\n    AUTH_USER ||--o| BALANCER_USER_CONFIG : \"user_id\"\n    BALANCER_BALANCE |o--o{ BALANCER_DRAFT_SESSION : \"source_balance_id\"\n    BALANCER_BALANCE ||--o{ BALANCER_BALANCE_VARIANT : \"balance_id\"\n    BALANCER_BALANCE ||--o{ BALANCER_TEAM : \"balance_id\"\n    BALANCER_BALANCE_VARIANT |o--o{ BALANCER_TEAM : \"variant_id\"\n    BALANCER_DRAFT_PICK |o--o{ BALANCER_DRAFT_SESSION : \"current_pick_id\"\n    BALANCER_DRAFT_PLAYER |o--o{ BALANCER_DRAFT_PICK : \"picked_player_id\"\n    BALANCER_DRAFT_SESSION ||--o{ BALANCER_DRAFT_AUDIT_EVENT : \"session_id\"\n    BALANCER_DRAFT_SESSION ||--o{ BALANCER_DRAFT_PICK : \"session_id\"\n    BALANCER_DRAFT_SESSION ||--o{ BALANCER_DRAFT_PLAYER : \"session_id\"\n    BALANCER_DRAFT_SESSION ||--o{ BALANCER_DRAFT_TEAM : \"session_id\"\n    BALANCER_DRAFT_TEAM |o--o{ BALANCER_DRAFT_PLAYER : \"drafted_by_team_id\"\n    BALANCER_DRAFT_TEAM ||--o{ BALANCER_DRAFT_PICK : \"draft_team_id\"\n    BALANCER_REGISTRATION ||--o{ BALANCER_DRAFT_PLAYER : \"registration_id\"\n    BALANCER_TEAM ||--o{ BALANCER_TEAM_SLOT : \"team_id\"\n    PUBLIC_WORKSPACE |o--o{ BALANCER_BALANCE : \"workspace_id\"\n    PUBLIC_WORKSPACE ||--o{ BALANCER_DRAFT_SESSION : \"workspace_id\"\n    PUBLIC_WORKSPACE ||--o{ BALANCER_TOURNAMENT_CONFIG : \"workspace_id\"\n    PUBLIC_WORKSPACE ||--o| BALANCER_WORKSPACE_CONFIG : \"workspace_id\"\n    PUBLIC_WORKSPACE_MEMBER |o--o{ BALANCER_DRAFT_PICK : \"picked_by_workspace_member_id\"\n    PUBLIC_WORKSPACE_MEMBER |o--o{ BALANCER_DRAFT_PLAYER : \"workspace_member_id\"\n    PUBLIC_WORKSPACE_MEMBER |o--o{ BALANCER_DRAFT_TEAM : \"captain_workspace_member_id\"\n    TOURNAMENT_TEAM |o--o{ BALANCER_DRAFT_TEAM : \"exported_team_id\"\n    TOURNAMENT_TEAM |o--o{ BALANCER_TEAM : \"exported_team_id\"\n    TOURNAMENT_TOURNAMENT ||--o{ BALANCER_DRAFT_SESSION : \"tournament_id\"\n    TOURNAMENT_TOURNAMENT ||--o| BALANCER_BALANCE : \"tournament_id\"\n    TOURNAMENT_TOURNAMENT ||--o| BALANCER_TOURNAMENT_CONFIG : \"tournament_id\"",
+      "schemas": [
+        "balancer"
+      ],
+      "tables": [
+        "balancer.balance",
+        "balancer.balance_variant",
+        "balancer.draft_audit_event",
+        "balancer.draft_pick",
+        "balancer.draft_player",
+        "balancer.draft_session",
+        "balancer.draft_team",
+        "balancer.team",
+        "balancer.team_slot",
+        "balancer.tournament_config",
+        "balancer.user_config",
+        "balancer.workspace_config"
+      ],
+      "unique_keys": [
+        {
+          "columns": [
+            "balance_id",
+            "variant_number"
+          ],
+          "table": "BALANCER_BALANCE_VARIANT"
+        },
+        {
+          "columns": [
+            "session_id",
+            "overall_no"
+          ],
+          "table": "BALANCER_DRAFT_PICK"
+        },
+        {
+          "columns": [
+            "session_id",
+            "registration_id"
+          ],
+          "table": "BALANCER_DRAFT_PLAYER"
+        },
+        {
+          "columns": [
+            "session_id",
+            "draft_position"
+          ],
+          "table": "BALANCER_DRAFT_TEAM"
+        }
+      ]
+    },
+    {
+      "key": "casual",
+      "mermaid": "erDiagram\n    CASUAL_MATCH {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint custom_game_id FK\n        bigint map_id FK \"nullable\"\n        bigint recorded_by FK \"nullable\"\n        int points_per_win_applied \"nullable\"\n    }\n    CASUAL_PLAYER {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint team_id FK\n        bigint workspace_member_id FK \"nullable\"\n        varchar(255) display_name_snapshot\n        heroclass role \"nullable\"\n        int rank\n    }\n    CASUAL_TEAM {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint match_id FK\n        varchar(8) side\n        varchar(255) name\n        int score\n    }\n\n    AUTH_USER |o--o{ CASUAL_MATCH : \"recorded_by\"\n    BALANCER_CUSTOM_GAME ||--o{ CASUAL_MATCH : \"custom_game_id\"\n    CASUAL_MATCH ||--o{ CASUAL_TEAM : \"match_id\"\n    CASUAL_TEAM ||--o{ CASUAL_PLAYER : \"team_id\"\n    OVERWATCH_MAP |o--o{ CASUAL_MATCH : \"map_id\"\n    PUBLIC_WORKSPACE_MEMBER |o--o{ CASUAL_PLAYER : \"workspace_member_id\"",
+      "schemas": [
+        "casual"
+      ],
+      "tables": [
+        "casual.match",
+        "casual.player",
+        "casual.team"
+      ],
+      "unique_keys": [
+        {
+          "columns": [
+            "match_id",
+            "side"
+          ],
+          "table": "CASUAL_TEAM"
+        }
+      ]
+    },
+    {
+      "key": "catalog",
+      "mermaid": "erDiagram\n    OVERWATCH_CATALOG_ALIAS_MISS {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        catalogentitytype entity_type\n        varchar(128) raw_name\n        int occurrences\n        timestamptz first_seen_at\n        timestamptz last_seen_at\n        bigint last_log_record_id FK \"nullable\"\n        timestamptz resolved_at \"nullable\"\n    }\n    OVERWATCH_GAMEMODE {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        varchar slug UK\n        varchar name UK\n        varchar image_path\n        varchar description \"nullable\"\n        jsonb aliases\n    }\n    OVERWATCH_HERO {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        varchar slug UK\n        varchar name UK\n        varchar image_path\n        heroclass type\n        varchar color\n        jsonb aliases\n    }\n    OVERWATCH_MAP {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint gamemode_id FK\n        varchar name UK\n        varchar image_path\n        boolean in_competitive\n        jsonb aliases\n    }\n\n    LOG_PROCESSING_RECORD |o--o{ OVERWATCH_CATALOG_ALIAS_MISS : \"last_log_record_id\"\n    OVERWATCH_GAMEMODE ||--o{ OVERWATCH_MAP : \"gamemode_id\"",
+      "schemas": [
+        "overwatch"
+      ],
+      "tables": [
+        "overwatch.catalog_alias_miss",
+        "overwatch.gamemode",
+        "overwatch.hero",
+        "overwatch.map"
+      ],
+      "unique_keys": [
+        {
+          "columns": [
+            "entity_type",
+            "raw_name"
+          ],
+          "table": "OVERWATCH_CATALOG_ALIAS_MISS"
+        }
+      ]
+    },
+    {
+      "key": "custom_game",
+      "mermaid": "erDiagram\n    BALANCER_CUSTOM_GAME {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint workspace_id FK\n        bigint host_user_id FK \"nullable\"\n        varchar(255) name\n        varchar(16) status\n        bigint next_map_id FK \"nullable\"\n        int selected_variant_index\n        jsonb balance_result_json \"nullable\"\n        int balance_result_version\n    }\n    BALANCER_CUSTOM_GAME_CO_HOST {\n        bigint custom_game_id PK,FK\n        bigint user_id PK,FK\n    }\n    BALANCER_CUSTOM_GAME_PLAYER {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint custom_game_id FK\n        bigint workspace_member_id FK\n        int sort_order\n        varchar(16) participation\n        varchar(16) role_selection_mode\n        boolean is_flex\n    }\n    BALANCER_CUSTOM_GAME_PLAYER_ROLE {\n        bigint custom_game_player_id PK,FK\n        varchar(16) role PK\n        int priority\n    }\n    BALANCER_CUSTOM_GAME_TEAM_NAME {\n        bigint custom_game_id PK,FK\n        int team_index PK\n        varchar(60) name\n    }\n\n    AUTH_USER |o--o{ BALANCER_CUSTOM_GAME : \"host_user_id\"\n    AUTH_USER ||--o| BALANCER_CUSTOM_GAME_CO_HOST : \"user_id\"\n    BALANCER_CUSTOM_GAME ||--o{ BALANCER_CUSTOM_GAME_PLAYER : \"custom_game_id\"\n    BALANCER_CUSTOM_GAME ||--o| BALANCER_CUSTOM_GAME_CO_HOST : \"custom_game_id\"\n    BALANCER_CUSTOM_GAME ||--o| BALANCER_CUSTOM_GAME_TEAM_NAME : \"custom_game_id\"\n    BALANCER_CUSTOM_GAME_PLAYER ||--o| BALANCER_CUSTOM_GAME_PLAYER_ROLE : \"custom_game_player_id\"\n    OVERWATCH_MAP |o--o{ BALANCER_CUSTOM_GAME : \"next_map_id\"\n    PUBLIC_WORKSPACE ||--o{ BALANCER_CUSTOM_GAME : \"workspace_id\"\n    PUBLIC_WORKSPACE_MEMBER ||--o{ BALANCER_CUSTOM_GAME_PLAYER : \"workspace_member_id\"",
+      "schemas": [
+        "balancer"
+      ],
+      "tables": [
+        "balancer.custom_game",
+        "balancer.custom_game_co_host",
+        "balancer.custom_game_player",
+        "balancer.custom_game_player_role",
+        "balancer.custom_game_team_name"
+      ],
+      "unique_keys": [
+        {
+          "columns": [
+            "custom_game_id",
+            "workspace_member_id"
+          ],
+          "table": "BALANCER_CUSTOM_GAME_PLAYER"
+        },
+        {
+          "columns": [
+            "custom_game_player_id",
+            "priority"
+          ],
+          "table": "BALANCER_CUSTOM_GAME_PLAYER_ROLE"
+        }
+      ]
+    },
+    {
+      "key": "division_grid",
+      "mermaid": "erDiagram\n    PUBLIC_DIVISION_GRID {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint workspace_id FK \"nullable\"\n        varchar slug\n        varchar name\n        varchar description \"nullable\"\n        bigint source_workspace_id FK \"nullable\"\n        bigint source_grid_id FK \"nullable\"\n        varchar(255) source_key \"nullable\"\n        varchar(64) source_fingerprint \"nullable\"\n        timestamptz imported_at \"nullable\"\n        timestamptz archived_at \"nullable\"\n    }\n    PUBLIC_DIVISION_GRID_IMPORT_JOB {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint workspace_id FK\n        bigint source_workspace_id FK \"nullable\"\n        bigint requested_by_user_id FK \"nullable\"\n        varchar(16) status\n        int progress\n        json request_json\n        json result_json \"nullable\"\n        text error \"nullable\"\n        varchar(255) idempotency_key\n        timestamptz started_at \"nullable\"\n        timestamptz finished_at \"nullable\"\n    }\n    PUBLIC_DIVISION_GRID_MAPPING {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint source_version_id FK\n        bigint target_version_id FK\n        varchar name\n        boolean is_complete\n    }\n    PUBLIC_DIVISION_GRID_MAPPING_RULE {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint mapping_id FK\n        bigint source_tier_id FK\n        bigint target_tier_id FK\n        float weight\n        boolean is_primary\n    }\n    PUBLIC_DIVISION_GRID_TIER {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint version_id FK\n        varchar slug\n        bigint number\n        varchar name\n        bigint sort_order\n        bigint rank_min\n        bigint rank_max \"nullable\"\n        varchar icon_url\n        bigint ow_rank_min \"nullable\"\n        bigint ow_rank_max \"nullable\"\n    }\n    PUBLIC_DIVISION_GRID_VERSION {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint grid_id FK\n        bigint version\n        varchar label\n        varchar status\n        bigint created_from_version_id FK \"nullable\"\n        timestamptz published_at \"nullable\"\n    }\n\n    AUTH_USER |o--o{ PUBLIC_DIVISION_GRID_IMPORT_JOB : \"requested_by_user_id\"\n    PUBLIC_DIVISION_GRID |o--o{ PUBLIC_DIVISION_GRID : \"source_grid_id\"\n    PUBLIC_DIVISION_GRID ||--o{ PUBLIC_DIVISION_GRID_VERSION : \"grid_id\"\n    PUBLIC_DIVISION_GRID_MAPPING ||--o{ PUBLIC_DIVISION_GRID_MAPPING_RULE : \"mapping_id\"\n    PUBLIC_DIVISION_GRID_TIER ||--o{ PUBLIC_DIVISION_GRID_MAPPING_RULE : \"source_tier_id\"\n    PUBLIC_DIVISION_GRID_TIER ||--o{ PUBLIC_DIVISION_GRID_MAPPING_RULE : \"target_tier_id\"\n    PUBLIC_DIVISION_GRID_VERSION |o--o{ PUBLIC_DIVISION_GRID_VERSION : \"created_from_version_id\"\n    PUBLIC_DIVISION_GRID_VERSION ||--o{ PUBLIC_DIVISION_GRID_MAPPING : \"source_version_id\"\n    PUBLIC_DIVISION_GRID_VERSION ||--o{ PUBLIC_DIVISION_GRID_MAPPING : \"target_version_id\"\n    PUBLIC_DIVISION_GRID_VERSION ||--o{ PUBLIC_DIVISION_GRID_TIER : \"version_id\"\n    PUBLIC_WORKSPACE |o--o{ PUBLIC_DIVISION_GRID : \"source_workspace_id\"\n    PUBLIC_WORKSPACE |o--o{ PUBLIC_DIVISION_GRID : \"workspace_id\"\n    PUBLIC_WORKSPACE |o--o{ PUBLIC_DIVISION_GRID_IMPORT_JOB : \"source_workspace_id\"\n    PUBLIC_WORKSPACE ||--o{ PUBLIC_DIVISION_GRID_IMPORT_JOB : \"workspace_id\"",
+      "schemas": [
+        "public"
+      ],
+      "tables": [
+        "public.division_grid",
+        "public.division_grid_import_job",
+        "public.division_grid_mapping",
+        "public.division_grid_mapping_rule",
+        "public.division_grid_tier",
+        "public.division_grid_version"
+      ],
+      "unique_keys": [
+        {
+          "columns": [
+            "workspace_id",
+            "slug"
+          ],
+          "table": "PUBLIC_DIVISION_GRID"
+        },
+        {
+          "columns": [
+            "workspace_id",
+            "idempotency_key"
+          ],
+          "table": "PUBLIC_DIVISION_GRID_IMPORT_JOB"
+        },
+        {
+          "columns": [
+            "source_version_id",
+            "target_version_id"
+          ],
+          "table": "PUBLIC_DIVISION_GRID_MAPPING"
+        },
+        {
+          "columns": [
+            "version_id",
+            "slug"
+          ],
+          "table": "PUBLIC_DIVISION_GRID_TIER"
+        },
+        {
+          "columns": [
+            "version_id",
+            "sort_order"
+          ],
+          "table": "PUBLIC_DIVISION_GRID_TIER"
+        },
+        {
+          "columns": [
+            "grid_id",
+            "version"
+          ],
+          "table": "PUBLIC_DIVISION_GRID_VERSION"
+        }
+      ]
+    },
+    {
+      "key": "identity",
+      "mermaid": "erDiagram\n    AUTH_API_KEY {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint auth_user_id FK\n        bigint workspace_id FK\n        varchar(32) public_id UK\n        varchar(128) secret_hash\n        varchar(100) name\n        timestamptz expires_at \"nullable\"\n        timestamptz revoked_at \"nullable\"\n        timestamptz last_used_at \"nullable\"\n    }\n    AUTH_API_KEY_SCOPE {\n        bigint api_key_id PK,FK\n        varchar(64) scope PK\n    }\n    AUTH_OAUTH_CONNECTIONS {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint auth_user_id FK\n        varchar(50) provider\n        varchar(255) provider_user_id\n        varchar(255) email \"nullable\"\n        varchar(100) username\n        varchar(100) display_name \"nullable\"\n        varchar(500) avatar_url \"nullable\"\n        text access_token \"nullable\"\n        text refresh_token \"nullable\"\n        timestamptz token_expires_at \"nullable\"\n        json provider_data \"nullable\"\n    }\n    AUTH_PERMISSIONS {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        varchar(100) name UK\n        varchar(100) resource\n        varchar(50) action\n        text description \"nullable\"\n    }\n    AUTH_REFRESH_TOKEN {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        text token UK\n        bigint user_id FK\n        uuid session_id\n        timestamptz session_started_at\n        timestamptz expires_at\n        boolean is_revoked\n        timestamptz revoked_at \"nullable\"\n        varchar(500) user_agent \"nullable\"\n        varchar(45) ip_address \"nullable\"\n    }\n    AUTH_ROLE_PERMISSIONS {\n        int id PK\n        int role_id FK\n        int permission_id FK\n        timestamptz created_at\n    }\n    AUTH_ROLES {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        varchar(100) name\n        text description \"nullable\"\n        boolean is_system\n        bigint workspace_id FK \"nullable\"\n    }\n    AUTH_USER {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        varchar(255) email UK\n        varchar(100) username UK\n        varchar(255) hashed_password \"nullable\"\n        boolean is_active\n        boolean is_superuser\n        boolean is_verified\n        varchar(100) first_name \"nullable\"\n        varchar(100) last_name \"nullable\"\n        varchar(500) avatar_url \"nullable\"\n    }\n    AUTH_USER_PERMISSION_DENY {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint user_id FK\n        bigint permission_id FK\n        bigint workspace_id FK \"nullable\"\n        bigint created_by FK \"nullable\"\n        text reason \"nullable\"\n    }\n    AUTH_USER_ROLES {\n        int id PK\n        int user_id FK\n        int role_id FK\n        timestamptz created_at\n    }\n    PLAYERS_SOCIAL_ACCOUNT {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint user_id FK\n        varchar(64) provider\n        varchar(255) username\n        varchar(255) username_normalized \"nullable\"\n        varchar(500) url \"nullable\"\n        varchar(255) provider_user_id \"nullable\"\n        boolean is_verified\n        boolean is_primary\n    }\n    PLAYERS_SOCIAL_ACCOUNT_VISIBILITY {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint account_id FK\n        bigint workspace_id FK \"nullable\"\n    }\n    PLAYERS_USER {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        varchar name UK\n        varchar(500) avatar_url \"nullable\"\n        boolean stream_visible\n        bigint auth_user_id FK,UK \"nullable\"\n    }\n    PLAYERS_USER_MERGE_AUDIT {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint source_user_id FK \"nullable\"\n        bigint target_user_id FK \"nullable\"\n        bigint operator_auth_user_id FK \"nullable\"\n        json field_policy_json\n        json moved_identity_ids_json\n        json deduped_identity_ids_json\n        json affected_counts_json\n        json preview_snapshot_json\n    }\n\n    AUTH_API_KEY ||--o| AUTH_API_KEY_SCOPE : \"api_key_id\"\n    AUTH_PERMISSIONS ||--o{ AUTH_ROLE_PERMISSIONS : \"permission_id\"\n    AUTH_PERMISSIONS ||--o{ AUTH_USER_PERMISSION_DENY : \"permission_id\"\n    AUTH_ROLES ||--o{ AUTH_ROLE_PERMISSIONS : \"role_id\"\n    AUTH_ROLES ||--o{ AUTH_USER_ROLES : \"role_id\"\n    AUTH_USER |o--o{ AUTH_USER_PERMISSION_DENY : \"created_by\"\n    AUTH_USER |o--o{ PLAYERS_USER_MERGE_AUDIT : \"operator_auth_user_id\"\n    AUTH_USER |o--o| PLAYERS_USER : \"auth_user_id\"\n    AUTH_USER ||--o{ AUTH_API_KEY : \"auth_user_id\"\n    AUTH_USER ||--o{ AUTH_OAUTH_CONNECTIONS : \"auth_user_id\"\n    AUTH_USER ||--o{ AUTH_REFRESH_TOKEN : \"user_id\"\n    AUTH_USER ||--o{ AUTH_USER_PERMISSION_DENY : \"user_id\"\n    AUTH_USER ||--o{ AUTH_USER_ROLES : \"user_id\"\n    PLAYERS_SOCIAL_ACCOUNT ||--o{ PLAYERS_SOCIAL_ACCOUNT_VISIBILITY : \"account_id\"\n    PLAYERS_USER |o--o{ PLAYERS_USER_MERGE_AUDIT : \"source_user_id\"\n    PLAYERS_USER |o--o{ PLAYERS_USER_MERGE_AUDIT : \"target_user_id\"\n    PLAYERS_USER ||--o{ PLAYERS_SOCIAL_ACCOUNT : \"user_id\"\n    PUBLIC_WORKSPACE |o--o{ AUTH_ROLES : \"workspace_id\"\n    PUBLIC_WORKSPACE |o--o{ AUTH_USER_PERMISSION_DENY : \"workspace_id\"\n    PUBLIC_WORKSPACE |o--o{ PLAYERS_SOCIAL_ACCOUNT_VISIBILITY : \"workspace_id\"\n    PUBLIC_WORKSPACE ||--o{ AUTH_API_KEY : \"workspace_id\"",
+      "schemas": [
+        "auth",
+        "players"
+      ],
+      "tables": [
+        "auth.api_key",
+        "auth.api_key_scope",
+        "auth.oauth_connections",
+        "auth.permissions",
+        "auth.refresh_token",
+        "auth.role_permissions",
+        "auth.roles",
+        "auth.user",
+        "auth.user_permission_deny",
+        "auth.user_roles",
+        "players.social_account",
+        "players.social_account_visibility",
+        "players.user",
+        "players.user_merge_audit"
+      ],
+      "unique_keys": [
+        {
+          "columns": [
+            "provider",
+            "provider_user_id"
+          ],
+          "table": "AUTH_OAUTH_CONNECTIONS"
+        },
+        {
+          "columns": [
+            "user_id",
+            "provider",
+            "username_normalized"
+          ],
+          "table": "PLAYERS_SOCIAL_ACCOUNT"
+        }
+      ]
+    },
+    {
+      "key": "ingestion",
+      "mermaid": "erDiagram\n    LOG_PROCESSING_DISCORD_CHANNEL {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint tournament_id FK,UK\n        bigint channel_id UK\n        varchar(100) channel_name \"nullable\"\n        boolean is_active\n    }\n    LOG_PROCESSING_RECORD {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint tournament_id FK\n        varchar(500) filename\n        log_processing_status status\n        log_processing_source source\n        bigint uploader_id FK \"nullable\"\n        bigint attached_encounter_id FK \"nullable\"\n        text error_message \"nullable\"\n        timestamptz started_at \"nullable\"\n        timestamptz finished_at \"nullable\"\n        varchar(64) content_hash \"nullable\"\n        int attempts\n    }\n\n    PLAYERS_USER |o--o{ LOG_PROCESSING_RECORD : \"uploader_id\"\n    TOURNAMENT_ENCOUNTER |o--o{ LOG_PROCESSING_RECORD : \"attached_encounter_id\"\n    TOURNAMENT_TOURNAMENT ||--o{ LOG_PROCESSING_RECORD : \"tournament_id\"\n    TOURNAMENT_TOURNAMENT ||--o| LOG_PROCESSING_DISCORD_CHANNEL : \"tournament_id\"",
+      "schemas": [
+        "log_processing"
+      ],
+      "tables": [
+        "log_processing.discord_channel",
+        "log_processing.record"
+      ],
+      "unique_keys": []
+    },
+    {
+      "key": "matches",
+      "mermaid": "erDiagram\n    MATCHES_EVENT {\n        bigint id PK\n        bigint match_id FK\n        float time\n        int round\n        bigint team_id FK\n        bigint user_id FK\n        bigint hero_id FK \"nullable\"\n        bigint related_team_id FK \"nullable\"\n        bigint related_user_id FK \"nullable\"\n        bigint related_hero_id FK \"nullable\"\n        matchevent name\n    }\n    MATCHES_KILL_FEED {\n        bigint id PK\n        bigint match_id FK\n        float time\n        int round\n        int fight\n        abilityevent ability \"nullable\"\n        bigint killer_id FK\n        bigint killer_hero_id FK\n        bigint killer_team_id FK\n        bigint victim_id FK\n        bigint victim_team_id FK\n        bigint victim_hero_id FK\n        float damage\n        boolean is_critical_hit\n        boolean is_environmental\n    }\n    MATCHES_MATCH {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint home_team_id FK\n        bigint away_team_id FK\n        int home_score\n        int away_score\n        float time \"nullable\"\n        varchar log_name \"nullable\"\n        varchar code \"nullable\"\n        bigint log_record_id FK \"nullable\"\n        matchsource source\n        bigint encounter_id FK\n        bigint map_id FK\n        int map_index \"nullable\"\n    }\n    MATCHES_STAT_BASELINES {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        varchar(64) formula_version\n        heroclass role\n        smallint rank_bucket\n        logstatsname stat\n        float mean\n        float std\n        jsonb meta \"nullable\"\n        timestamptz computed_at\n    }\n    MATCHES_STATISTICS {\n        bigint id PK\n        bigint match_id FK\n        int round\n        bigint team_id FK\n        bigint user_id FK\n        bigint hero_id FK \"nullable\"\n        logstatsname name\n        float value\n    }\n\n    LOG_PROCESSING_RECORD |o--o{ MATCHES_MATCH : \"log_record_id\"\n    MATCHES_MATCH ||--o{ MATCHES_EVENT : \"match_id\"\n    MATCHES_MATCH ||--o{ MATCHES_KILL_FEED : \"match_id\"\n    MATCHES_MATCH ||--o{ MATCHES_STATISTICS : \"match_id\"\n    OVERWATCH_HERO |o--o{ MATCHES_EVENT : \"hero_id\"\n    OVERWATCH_HERO |o--o{ MATCHES_EVENT : \"related_hero_id\"\n    OVERWATCH_HERO |o--o{ MATCHES_STATISTICS : \"hero_id\"\n    OVERWATCH_HERO ||--o{ MATCHES_KILL_FEED : \"killer_hero_id\"\n    OVERWATCH_HERO ||--o{ MATCHES_KILL_FEED : \"victim_hero_id\"\n    OVERWATCH_MAP ||--o{ MATCHES_MATCH : \"map_id\"\n    PLAYERS_USER |o--o{ MATCHES_EVENT : \"related_user_id\"\n    PLAYERS_USER ||--o{ MATCHES_EVENT : \"user_id\"\n    PLAYERS_USER ||--o{ MATCHES_KILL_FEED : \"killer_id\"\n    PLAYERS_USER ||--o{ MATCHES_KILL_FEED : \"victim_id\"\n    PLAYERS_USER ||--o{ MATCHES_STATISTICS : \"user_id\"\n    TOURNAMENT_ENCOUNTER ||--o{ MATCHES_MATCH : \"encounter_id\"\n    TOURNAMENT_TEAM |o--o{ MATCHES_EVENT : \"related_team_id\"\n    TOURNAMENT_TEAM ||--o{ MATCHES_EVENT : \"team_id\"\n    TOURNAMENT_TEAM ||--o{ MATCHES_KILL_FEED : \"killer_team_id\"\n    TOURNAMENT_TEAM ||--o{ MATCHES_KILL_FEED : \"victim_team_id\"\n    TOURNAMENT_TEAM ||--o{ MATCHES_MATCH : \"away_team_id\"\n    TOURNAMENT_TEAM ||--o{ MATCHES_MATCH : \"home_team_id\"\n    TOURNAMENT_TEAM ||--o{ MATCHES_STATISTICS : \"team_id\"",
+      "schemas": [
+        "matches"
+      ],
+      "tables": [
+        "matches.event",
+        "matches.kill_feed",
+        "matches.match",
+        "matches.stat_baselines",
+        "matches.statistics"
+      ],
+      "unique_keys": [
+        {
+          "columns": [
+            "formula_version",
+            "role",
+            "rank_bucket",
+            "stat"
+          ],
+          "table": "MATCHES_STAT_BASELINES"
+        }
+      ]
+    },
+    {
+      "key": "member_rank",
+      "mermaid": "erDiagram\n    BALANCER_MEMBER_RANK {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint workspace_id FK\n        bigint workspace_member_id FK\n        bigint author_user_id FK \"nullable\"\n        varchar(16) role\n        int rank_value\n    }\n\n    AUTH_USER |o--o{ BALANCER_MEMBER_RANK : \"author_user_id\"\n    PUBLIC_WORKSPACE ||--o{ BALANCER_MEMBER_RANK : \"workspace_id\"\n    PUBLIC_WORKSPACE_MEMBER ||--o{ BALANCER_MEMBER_RANK : \"workspace_member_id\"",
+      "schemas": [
+        "balancer"
+      ],
+      "tables": [
+        "balancer.member_rank"
+      ],
+      "unique_keys": []
+    },
+    {
+      "key": "platform",
+      "mermaid": "erDiagram\n    PUBLIC_AUDIT_LOG {\n        bigint id PK\n        timestamptz created_at\n        bigint workspace_id \"nullable\"\n        bigint actor_auth_user_id \"nullable\"\n        varchar(255) actor_label \"nullable\"\n        varchar(16) source\n        varchar(64) action\n        varchar(64) entity_type \"nullable\"\n        bigint entity_id \"nullable\"\n        varchar(255) entity_label \"nullable\"\n        jsonb before_json \"nullable\"\n        jsonb after_json \"nullable\"\n        text reason \"nullable\"\n        varchar(45) ip_address \"nullable\"\n        varchar(255) user_agent \"nullable\"\n        varchar(64) correlation_id \"nullable\"\n    }\n    PUBLIC_CHAT_MESSAGE {\n        bigint id PK\n        varchar(16) room_kind\n        bigint room_ref_id\n        bigint auth_user_id\n        text author_name\n        varchar(16) author_role\n        text body\n        timestamptz created_at\n        timestamptz deleted_at \"nullable\"\n        bigint deleted_by_auth_user_id \"nullable\"\n    }\n    PUBLIC_CHAT_MUTE {\n        varchar(16) room_kind PK\n        bigint room_ref_id PK\n        bigint auth_user_id PK\n        timestamptz muted_until \"nullable\"\n        text reason \"nullable\"\n        bigint created_by_auth_user_id\n        timestamptz created_at\n    }\n    PUBLIC_CHAT_ROOM_SETTINGS {\n        varchar(16) room_kind PK\n        bigint room_ref_id PK\n        boolean spectators_can_read\n        bigint updated_by_auth_user_id\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n    }\n    PUBLIC_EVENT_OUTBOX {\n        bigint id PK\n        varchar(64) event_id UK\n        varchar(128) event_type\n        varchar(255) exchange \"nullable\"\n        varchar(255) routing_key\n        json payload_json\n        varchar(16) status\n        int attempts\n        timestamptz next_attempt_at\n        timestamptz created_at\n        timestamptz published_at \"nullable\"\n        text last_error \"nullable\"\n    }\n    PUBLIC_NOTIFICATION {\n        bigint id PK\n        varchar(16) audience\n        bigint recipient_auth_user_id \"nullable\"\n        bigint workspace_id \"nullable\"\n        bigint source_workspace_id \"nullable\"\n        varchar(64) kind\n        varchar(128) dedupe_key \"nullable\"\n        jsonb payload_json\n        bigint actor_auth_user_id \"nullable\"\n        timestamptz published_at\n        timestamptz expires_at \"nullable\"\n        timestamptz created_at\n    }\n    PUBLIC_NOTIFICATION_DELIVERY {\n        bigint id PK\n        varchar(32) channel\n        varchar(64) target\n        varchar(128) dedupe_key\n        bigint notification_id \"nullable\"\n        bigint workspace_id \"nullable\"\n        varchar(64) kind\n        timestamptz created_at\n    }\n    PUBLIC_NOTIFICATION_PREFERENCE {\n        bigint auth_user_id PK,FK\n        jsonb discord_dm\n        timestamptz updated_at\n    }\n    PUBLIC_NOTIFICATION_READ {\n        bigint auth_user_id PK\n        bigint notification_id PK\n        timestamptz read_at\n        timestamptz deleted_at \"nullable\"\n    }\n    PUBLIC_NOTIFICATION_WORKSPACE_CONFIG {\n        bigint workspace_id PK,FK\n        bigint discord_channel_id \"nullable\"\n        varchar(2) locale\n        jsonb broadcast_kinds\n        timestamptz updated_at\n    }\n    REALTIME_WORKSPACE_EVENT {\n        bigint id PK\n        text topic\n        varchar(128) event_type\n        bigint workspace_id \"nullable\"\n        bigint tournament_id \"nullable\"\n        bigint actor_user_id \"nullable\"\n        smallint schema_version\n        jsonb payload\n        timestamptz occurred_at\n    }\n\n    AUTH_USER ||--o| PUBLIC_NOTIFICATION_PREFERENCE : \"auth_user_id\"\n    PUBLIC_WORKSPACE ||--o| PUBLIC_NOTIFICATION_WORKSPACE_CONFIG : \"workspace_id\"",
+      "schemas": [
+        "public",
+        "realtime"
+      ],
+      "tables": [
+        "public.audit_log",
+        "public.chat_message",
+        "public.chat_mute",
+        "public.chat_room_settings",
+        "public.event_outbox",
+        "public.notification",
+        "public.notification_delivery",
+        "public.notification_preference",
+        "public.notification_read",
+        "public.notification_workspace_config",
+        "realtime.workspace_event"
+      ],
+      "unique_keys": [
+        {
+          "columns": [
+            "channel",
+            "target",
+            "dedupe_key"
+          ],
+          "table": "PUBLIC_NOTIFICATION_DELIVERY"
+        }
+      ]
+    },
+    {
+      "key": "preferences",
+      "mermaid": "erDiagram\n    PLAYERS_FAVORITE_PLAYER {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint auth_user_id FK\n        bigint player_id FK\n    }\n    TOURNAMENT_ENCOUNTER_SAVED_VIEW {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint workspace_id FK\n        bigint auth_user_id FK\n        varchar(80) name\n        json filters_json\n        int sort_order\n    }\n\n    AUTH_USER ||--o{ PLAYERS_FAVORITE_PLAYER : \"auth_user_id\"\n    AUTH_USER ||--o{ TOURNAMENT_ENCOUNTER_SAVED_VIEW : \"auth_user_id\"\n    PLAYERS_USER ||--o{ PLAYERS_FAVORITE_PLAYER : \"player_id\"\n    PUBLIC_WORKSPACE ||--o{ TOURNAMENT_ENCOUNTER_SAVED_VIEW : \"workspace_id\"",
+      "schemas": [
+        "players",
+        "tournament"
+      ],
+      "tables": [
+        "players.favorite_player",
+        "tournament.encounter_saved_view"
+      ],
+      "unique_keys": [
+        {
+          "columns": [
+            "auth_user_id",
+            "player_id"
+          ],
+          "table": "PLAYERS_FAVORITE_PLAYER"
+        },
+        {
+          "columns": [
+            "workspace_id",
+            "auth_user_id",
+            "name"
+          ],
+          "table": "TOURNAMENT_ENCOUNTER_SAVED_VIEW"
+        }
+      ]
+    },
+    {
+      "key": "quota",
+      "mermaid": "erDiagram\n    QUOTA_API_KEY_LIMIT {\n        bigint api_key_id PK,FK\n        int requests_per_minute \"nullable\"\n        int heavy_per_day \"nullable\"\n        int concurrent_heavy \"nullable\"\n        bigint max_upload_bytes \"nullable\"\n        int max_items_per_request \"nullable\"\n        bigint updated_by FK \"nullable\"\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n    }\n    QUOTA_OPERATION {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        varchar(64) slug UK\n        int cost\n        boolean enabled\n        text description \"nullable\"\n    }\n    QUOTA_PLAN {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        varchar(32) slug UK\n        varchar(64) title\n        text description \"nullable\"\n    }\n    QUOTA_PLAN_LIMIT {\n        bigint plan_id PK,FK\n        varchar(16) scope PK\n        int requests_per_minute \"nullable\"\n        int heavy_per_day \"nullable\"\n        int concurrent_heavy \"nullable\"\n        bigint max_upload_bytes \"nullable\"\n        int max_items_per_request \"nullable\"\n    }\n    QUOTA_WORKSPACE_LIMIT {\n        bigint workspace_id PK,FK\n        varchar(16) scope PK\n        int requests_per_minute \"nullable\"\n        int heavy_per_day \"nullable\"\n        int concurrent_heavy \"nullable\"\n        bigint max_upload_bytes \"nullable\"\n        int max_items_per_request \"nullable\"\n        bigint updated_by FK \"nullable\"\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n    }\n\n    AUTH_API_KEY ||--o| QUOTA_API_KEY_LIMIT : \"api_key_id\"\n    AUTH_USER |o--o{ QUOTA_API_KEY_LIMIT : \"updated_by\"\n    AUTH_USER |o--o{ QUOTA_WORKSPACE_LIMIT : \"updated_by\"\n    PUBLIC_WORKSPACE ||--o| QUOTA_WORKSPACE_LIMIT : \"workspace_id\"\n    QUOTA_PLAN ||--o| QUOTA_PLAN_LIMIT : \"plan_id\"",
+      "schemas": [
+        "quota"
+      ],
+      "tables": [
+        "quota.api_key_limit",
+        "quota.operation",
+        "quota.plan",
+        "quota.plan_limit",
+        "quota.workspace_limit"
+      ],
+      "unique_keys": []
+    },
+    {
+      "key": "ranks",
+      "mermaid": "erDiagram\n    OVERWATCH_RANK_BATTLE_TAG_STATE {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint social_account_id FK,UK\n        varchar(255) battle_tag\n        varchar(255) player_id_slug\n        timestamptz last_checked_at \"nullable\"\n        timestamptz last_success_at \"nullable\"\n        varchar(32) status\n        int consecutive_failures\n        timestamptz next_eligible_at \"nullable\"\n        text last_error \"nullable\"\n        smallint priority_tier\n    }\n    OVERWATCH_RANK_FETCH_LOG {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint social_account_id FK \"nullable\"\n        varchar(255) battle_tag\n        varchar(32) status\n        varchar(32) source\n        text error \"nullable\"\n        int snapshots_written\n    }\n    OVERWATCH_RANK_RANK_SNAPSHOT {\n        bigint id PK\n        bigint user_id FK\n        bigint social_account_id FK\n        varchar(255) battle_tag\n        varchar(16) platform\n        varchar(16) role\n        varchar(32) division \"nullable\"\n        smallint tier \"nullable\"\n        int season \"nullable\"\n        int rank_value \"nullable\"\n        varchar(64) mapping_version \"nullable\"\n        boolean is_ranked\n        timestamptz captured_at\n        varchar(32) source\n    }\n\n    PLAYERS_SOCIAL_ACCOUNT |o--o{ OVERWATCH_RANK_FETCH_LOG : \"social_account_id\"\n    PLAYERS_SOCIAL_ACCOUNT ||--o{ OVERWATCH_RANK_RANK_SNAPSHOT : \"social_account_id\"\n    PLAYERS_SOCIAL_ACCOUNT ||--o| OVERWATCH_RANK_BATTLE_TAG_STATE : \"social_account_id\"\n    PLAYERS_USER ||--o{ OVERWATCH_RANK_RANK_SNAPSHOT : \"user_id\"",
+      "schemas": [
+        "overwatch_rank"
+      ],
+      "tables": [
+        "overwatch_rank.battle_tag_state",
+        "overwatch_rank.fetch_log",
+        "overwatch_rank.rank_snapshot"
+      ],
+      "unique_keys": []
+    },
+    {
+      "key": "registration",
+      "mermaid": "erDiagram\n    BALANCER_REGISTRATION {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint tournament_id FK\n        bigint workspace_member_id FK \"nullable\"\n        varchar(255) display_name \"nullable\"\n        varchar(255) battle_tag \"nullable\"\n        varchar(255) battle_tag_normalized \"nullable\"\n        json smurf_tags_json \"nullable\"\n        boolean stream_pov\n        boolean is_reserve\n        bigint form_version_id FK \"nullable\"\n        text public_notes \"nullable\"\n        text organizer_notes \"nullable\"\n        varchar(64) exclude_reason \"nullable\"\n        text admin_notes \"nullable\"\n        json custom_fields_json \"nullable\"\n        varchar(32) status\n        varchar(32) balancer_status\n        boolean checked_in\n        timestamptz checked_in_at \"nullable\"\n        bigint checked_in_by FK \"nullable\"\n        timestamptz submitted_at\n        timestamptz reviewed_at \"nullable\"\n        bigint reviewed_by FK \"nullable\"\n        timestamptz deleted_at \"nullable\"\n        bigint deleted_by FK \"nullable\"\n        timestamptz balancer_profile_overridden_at \"nullable\"\n        bigint registration_team_id FK \"nullable\"\n        varchar(16) team_slot_code \"nullable\"\n        boolean is_substitute\n        boolean is_team_manager\n    }\n    BALANCER_REGISTRATION_FORM {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint tournament_id FK,UK\n        bigint workspace_id FK\n        boolean is_open\n        boolean auto_approve\n        bigint current_version_id FK \"nullable\"\n        boolean require_open_profile\n        varchar(8) open_profile_scope\n        boolean show_ranks\n        boolean hide_registrations\n        int max_participants \"nullable\"\n        int max_substitutes\n        boolean require_subscription\n        varchar(16) subscription_stage\n        varchar(16) subscription_scope\n        int team_rank_min \"nullable\"\n        int team_rank_max \"nullable\"\n        int team_max_rank_spread \"nullable\"\n        boolean team_unique_identity\n        boolean team_require_discord_guild\n    }\n    BALANCER_REGISTRATION_FORM_TEMPLATE {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint workspace_id FK\n        varchar(64) name\n        json schema_json\n        bigint created_by FK \"nullable\"\n    }\n    BALANCER_REGISTRATION_FORM_VERSION {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint form_id FK\n        int number\n        json schema_json\n        bigint created_by FK \"nullable\"\n    }\n    BALANCER_REGISTRATION_GOOGLE_SHEET_BINDING {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint feed_id FK\n        bigint registration_id FK,UK\n        varchar(255) source_record_key\n        json raw_row_json \"nullable\"\n        json parsed_fields_json \"nullable\"\n        varchar(128) row_hash \"nullable\"\n        timestamptz last_seen_at \"nullable\"\n    }\n    BALANCER_REGISTRATION_GOOGLE_SHEET_FEED {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint tournament_id FK,UK\n        text source_url\n        varchar(255) sheet_id\n        varchar(64) gid \"nullable\"\n        varchar(255) title \"nullable\"\n        boolean auto_sync_enabled\n        int auto_sync_interval_seconds\n        json header_row_json \"nullable\"\n        json mapping_config_json \"nullable\"\n        json value_mapping_json \"nullable\"\n        timestamptz last_synced_at \"nullable\"\n        varchar(32) last_sync_status \"nullable\"\n        text last_error \"nullable\"\n    }\n    BALANCER_REGISTRATION_IDENTITY {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint registration_id FK\n        varchar(32) provider\n        varchar(255) handle\n        varchar(255) handle_normalized\n    }\n    BALANCER_REGISTRATION_ROLE {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint registration_id FK\n        varchar(16) role\n        varchar(128) subrole \"nullable\"\n        boolean is_primary\n        int priority\n        int rank_value \"nullable\"\n        boolean is_active\n    }\n    BALANCER_REGISTRATION_ROLE_HERO {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint role_id FK\n        bigint hero_id FK\n        int priority\n    }\n    BALANCER_REGISTRATION_STATUS {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint workspace_id FK \"nullable\"\n        varchar(32) scope\n        varchar(32) slug\n        varchar(16) kind\n        varchar(128) icon_slug \"nullable\"\n        varchar(32) icon_color \"nullable\"\n        varchar(64) name\n        text description \"nullable\"\n        boolean excludes_from_balancer\n        boolean excludes_from_ready\n    }\n    BALANCER_REGISTRATION_TEAM {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint tournament_id FK\n        bigint workspace_id FK\n        varchar(255) name\n        varchar(255) name_normalized\n        varchar(255) image_url \"nullable\"\n        bigint captain_registration_id FK \"nullable\"\n        varchar(16) status\n        bigint exported_team_id FK \"nullable\"\n        timestamptz exported_at \"nullable\"\n        varchar(32) export_status \"nullable\"\n        text export_error \"nullable\"\n        timestamptz deleted_at \"nullable\"\n        bigint deleted_by FK \"nullable\"\n        timestamptz invite_cap_reset_at \"nullable\"\n        bigint invite_cap_reset_by FK \"nullable\"\n        varchar(16) admission\n        text rejection_reason \"nullable\"\n        text organizer_notes \"nullable\"\n        timestamptz roster_locked_at \"nullable\"\n        bigint roster_locked_by FK \"nullable\"\n        timestamptz subscription_covered_at \"nullable\"\n        bigint subscription_covered_by FK \"nullable\"\n        varchar(32) subscription_provider \"nullable\"\n        int subscription_tier_rank \"nullable\"\n        timestamptz subscription_expires_at \"nullable\"\n    }\n    BALANCER_REGISTRATION_TEAM_INVITE {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint team_id FK\n        varchar(16) slot_code\n        boolean is_substitute\n        bigint target_auth_user_id FK \"nullable\"\n        varchar(64) token_sha256 \"nullable\"\n        timestamptz expires_at \"nullable\"\n        varchar(16) state\n        bigint invited_by FK \"nullable\"\n        timestamptz invited_at\n        bigint revoked_by FK \"nullable\"\n        timestamptz revoked_at \"nullable\"\n        boolean revoked_by_organizer\n        timestamptz accepted_at \"nullable\"\n        bigint accepted_registration_id FK \"nullable\"\n    }\n\n    AUTH_USER |o--o{ BALANCER_REGISTRATION : \"checked_in_by\"\n    AUTH_USER |o--o{ BALANCER_REGISTRATION : \"deleted_by\"\n    AUTH_USER |o--o{ BALANCER_REGISTRATION : \"reviewed_by\"\n    AUTH_USER |o--o{ BALANCER_REGISTRATION_FORM_TEMPLATE : \"created_by\"\n    AUTH_USER |o--o{ BALANCER_REGISTRATION_FORM_VERSION : \"created_by\"\n    AUTH_USER |o--o{ BALANCER_REGISTRATION_TEAM : \"deleted_by\"\n    AUTH_USER |o--o{ BALANCER_REGISTRATION_TEAM : \"invite_cap_reset_by\"\n    AUTH_USER |o--o{ BALANCER_REGISTRATION_TEAM : \"roster_locked_by\"\n    AUTH_USER |o--o{ BALANCER_REGISTRATION_TEAM : \"subscription_covered_by\"\n    AUTH_USER |o--o{ BALANCER_REGISTRATION_TEAM_INVITE : \"invited_by\"\n    AUTH_USER |o--o{ BALANCER_REGISTRATION_TEAM_INVITE : \"revoked_by\"\n    AUTH_USER |o--o{ BALANCER_REGISTRATION_TEAM_INVITE : \"target_auth_user_id\"\n    BALANCER_REGISTRATION |o--o{ BALANCER_REGISTRATION_TEAM : \"captain_registration_id\"\n    BALANCER_REGISTRATION |o--o{ BALANCER_REGISTRATION_TEAM_INVITE : \"accepted_registration_id\"\n    BALANCER_REGISTRATION ||--o{ BALANCER_REGISTRATION_IDENTITY : \"registration_id\"\n    BALANCER_REGISTRATION ||--o{ BALANCER_REGISTRATION_ROLE : \"registration_id\"\n    BALANCER_REGISTRATION ||--o| BALANCER_REGISTRATION_GOOGLE_SHEET_BINDING : \"registration_id\"\n    BALANCER_REGISTRATION_FORM ||--o{ BALANCER_REGISTRATION_FORM_VERSION : \"form_id\"\n    BALANCER_REGISTRATION_FORM_VERSION |o--o{ BALANCER_REGISTRATION : \"form_version_id\"\n    BALANCER_REGISTRATION_FORM_VERSION |o--o{ BALANCER_REGISTRATION_FORM : \"current_version_id\"\n    BALANCER_REGISTRATION_GOOGLE_SHEET_FEED ||--o{ BALANCER_REGISTRATION_GOOGLE_SHEET_BINDING : \"feed_id\"\n    BALANCER_REGISTRATION_ROLE ||--o{ BALANCER_REGISTRATION_ROLE_HERO : \"role_id\"\n    BALANCER_REGISTRATION_TEAM |o--o{ BALANCER_REGISTRATION : \"registration_team_id\"\n    BALANCER_REGISTRATION_TEAM ||--o{ BALANCER_REGISTRATION_TEAM_INVITE : \"team_id\"\n    OVERWATCH_HERO ||--o{ BALANCER_REGISTRATION_ROLE_HERO : \"hero_id\"\n    PUBLIC_WORKSPACE |o--o{ BALANCER_REGISTRATION_STATUS : \"workspace_id\"\n    PUBLIC_WORKSPACE ||--o{ BALANCER_REGISTRATION_FORM : \"workspace_id\"\n    PUBLIC_WORKSPACE ||--o{ BALANCER_REGISTRATION_FORM_TEMPLATE : \"workspace_id\"\n    PUBLIC_WORKSPACE ||--o{ BALANCER_REGISTRATION_TEAM : \"workspace_id\"\n    PUBLIC_WORKSPACE_MEMBER |o--o{ BALANCER_REGISTRATION : \"workspace_member_id\"\n    TOURNAMENT_TEAM |o--o{ BALANCER_REGISTRATION_TEAM : \"exported_team_id\"\n    TOURNAMENT_TOURNAMENT ||--o{ BALANCER_REGISTRATION : \"tournament_id\"\n    TOURNAMENT_TOURNAMENT ||--o{ BALANCER_REGISTRATION_TEAM : \"tournament_id\"\n    TOURNAMENT_TOURNAMENT ||--o| BALANCER_REGISTRATION_FORM : \"tournament_id\"\n    TOURNAMENT_TOURNAMENT ||--o| BALANCER_REGISTRATION_GOOGLE_SHEET_FEED : \"tournament_id\"",
+      "schemas": [
+        "balancer"
+      ],
+      "tables": [
+        "balancer.registration",
+        "balancer.registration_form",
+        "balancer.registration_form_template",
+        "balancer.registration_form_version",
+        "balancer.registration_google_sheet_binding",
+        "balancer.registration_google_sheet_feed",
+        "balancer.registration_identity",
+        "balancer.registration_role",
+        "balancer.registration_role_hero",
+        "balancer.registration_status",
+        "balancer.registration_team",
+        "balancer.registration_team_invite"
+      ],
+      "unique_keys": [
+        {
+          "columns": [
+            "form_id",
+            "number"
+          ],
+          "table": "BALANCER_REGISTRATION_FORM_VERSION"
+        },
+        {
+          "columns": [
+            "feed_id",
+            "source_record_key"
+          ],
+          "table": "BALANCER_REGISTRATION_GOOGLE_SHEET_BINDING"
+        },
+        {
+          "columns": [
+            "registration_id",
+            "provider"
+          ],
+          "table": "BALANCER_REGISTRATION_IDENTITY"
+        },
+        {
+          "columns": [
+            "registration_id",
+            "role"
+          ],
+          "table": "BALANCER_REGISTRATION_ROLE"
+        },
+        {
+          "columns": [
+            "role_id",
+            "hero_id"
+          ],
+          "table": "BALANCER_REGISTRATION_ROLE_HERO"
+        },
+        {
+          "columns": [
+            "role_id",
+            "priority"
+          ],
+          "table": "BALANCER_REGISTRATION_ROLE_HERO"
+        },
+        {
+          "columns": [
+            "workspace_id",
+            "scope",
+            "slug",
+            "kind"
+          ],
+          "table": "BALANCER_REGISTRATION_STATUS"
+        }
+      ]
+    },
+    {
+      "key": "subscriptions",
+      "mermaid": "erDiagram\n    SUBSCRIPTIONS_CHECK_LOG {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint workspace_id FK \"nullable\"\n        bigint auth_user_id FK \"nullable\"\n        varchar(32) provider\n        varchar(16) state\n        int tier_rank \"nullable\"\n        varchar(64) tier_label \"nullable\"\n        varchar(32) source\n        varchar(32) mechanism \"nullable\"\n        varchar(64) reason \"nullable\"\n        text error \"nullable\"\n    }\n    SUBSCRIPTIONS_ENTITLEMENT {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint workspace_id FK\n        bigint auth_user_id FK\n        varchar(32) provider\n        varchar(16) state\n        int tier_rank \"nullable\"\n        varchar(64) tier_label \"nullable\"\n        varchar(32) source \"nullable\"\n        timestamptz checked_at \"nullable\"\n        timestamptz expires_at \"nullable\"\n        json evidence_json \"nullable\"\n    }\n    SUBSCRIPTIONS_PROVIDER_CONFIG {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint workspace_id FK\n        varchar(32) provider\n        boolean enabled\n        json config_json\n    }\n    SUBSCRIPTIONS_REQUIREMENT {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint workspace_id FK\n        varchar(64) name\n        json requirement_json\n        boolean is_default\n    }\n\n    AUTH_USER |o--o{ SUBSCRIPTIONS_CHECK_LOG : \"auth_user_id\"\n    AUTH_USER ||--o{ SUBSCRIPTIONS_ENTITLEMENT : \"auth_user_id\"\n    PUBLIC_WORKSPACE |o--o{ SUBSCRIPTIONS_CHECK_LOG : \"workspace_id\"\n    PUBLIC_WORKSPACE ||--o{ SUBSCRIPTIONS_ENTITLEMENT : \"workspace_id\"\n    PUBLIC_WORKSPACE ||--o{ SUBSCRIPTIONS_PROVIDER_CONFIG : \"workspace_id\"\n    PUBLIC_WORKSPACE ||--o{ SUBSCRIPTIONS_REQUIREMENT : \"workspace_id\"",
+      "schemas": [
+        "subscriptions"
+      ],
+      "tables": [
+        "subscriptions.check_log",
+        "subscriptions.entitlement",
+        "subscriptions.provider_config",
+        "subscriptions.requirement"
+      ],
+      "unique_keys": [
+        {
+          "columns": [
+            "workspace_id",
+            "auth_user_id",
+            "provider"
+          ],
+          "table": "SUBSCRIPTIONS_ENTITLEMENT"
+        },
+        {
+          "columns": [
+            "workspace_id",
+            "provider"
+          ],
+          "table": "SUBSCRIPTIONS_PROVIDER_CONFIG"
+        },
+        {
+          "columns": [
+            "workspace_id",
+            "name"
+          ],
+          "table": "SUBSCRIPTIONS_REQUIREMENT"
+        }
+      ]
+    },
+    {
+      "key": "tenancy",
+      "mermaid": "erDiagram\n    PUBLIC_SETTINGS {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        varchar key UK\n        json value\n        varchar description \"nullable\"\n        bigint updated_by FK \"nullable\"\n    }\n    PUBLIC_WORKSPACE {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        varchar slug UK\n        varchar name\n        varchar description \"nullable\"\n        varchar icon_url \"nullable\"\n        boolean is_active\n        boolean is_hidden\n        varchar(64) timezone\n        boolean branding_enabled\n        varchar brand_primary \"nullable\"\n        varchar brand_secondary \"nullable\"\n        varchar brand_background \"nullable\"\n        varchar brand_surface \"nullable\"\n        varchar brand_accent \"nullable\"\n        varchar brand_foreground \"nullable\"\n        varchar brand_muted \"nullable\"\n        varchar brand_border \"nullable\"\n        varchar brand_ring \"nullable\"\n        varchar brand_destructive \"nullable\"\n        varchar(63) subdomain UK \"nullable\"\n        varchar seo_title \"nullable\"\n        varchar seo_description \"nullable\"\n        varchar(255) custom_domain UK \"nullable\"\n        timestamptz custom_domain_verified_at \"nullable\"\n        varchar(64) custom_domain_verification_token \"nullable\"\n        varchar(32) discord_guild_id UK \"nullable\"\n        timestamptz discord_guild_verified_at \"nullable\"\n        bigint discord_guild_verified_by_auth_user_id FK \"nullable\"\n        bigint owner_id FK \"nullable\"\n        varchar(16) verification_status\n        bigint default_division_grid_version_id FK \"nullable\"\n        bigint quota_plan_id FK \"nullable\"\n        jsonb default_roster_slots_json \"nullable\"\n        varchar(16) newcomer_scope\n    }\n    PUBLIC_WORKSPACE_MEMBER {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint workspace_id FK\n        bigint player_id FK\n        varchar(255) display_name \"nullable\"\n    }\n\n    AUTH_USER |o--o{ PUBLIC_SETTINGS : \"updated_by\"\n    AUTH_USER |o--o{ PUBLIC_WORKSPACE : \"discord_guild_verified_by_auth_user_id\"\n    AUTH_USER |o--o{ PUBLIC_WORKSPACE : \"owner_id\"\n    PLAYERS_USER ||--o{ PUBLIC_WORKSPACE_MEMBER : \"player_id\"\n    PUBLIC_DIVISION_GRID_VERSION |o--o{ PUBLIC_WORKSPACE : \"default_division_grid_version_id\"\n    PUBLIC_WORKSPACE ||--o{ PUBLIC_WORKSPACE_MEMBER : \"workspace_id\"\n    QUOTA_PLAN |o--o{ PUBLIC_WORKSPACE : \"quota_plan_id\"",
+      "schemas": [
+        "public"
+      ],
+      "tables": [
+        "public.settings",
+        "public.workspace",
+        "public.workspace_member"
+      ],
+      "unique_keys": [
+        {
+          "columns": [
+            "id",
+            "workspace_id"
+          ],
+          "table": "PUBLIC_WORKSPACE_MEMBER"
+        },
+        {
+          "columns": [
+            "workspace_id",
+            "player_id"
+          ],
+          "table": "PUBLIC_WORKSPACE_MEMBER"
+        }
+      ]
+    },
+    {
+      "key": "tournament",
+      "mermaid": "erDiagram\n    TOURNAMENT_CHALLONGE_MATCH_MAPPING {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint source_id FK\n        int challonge_match_id\n        bigint encounter_id FK\n    }\n    TOURNAMENT_CHALLONGE_PARTICIPANT_MAPPING {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint source_id FK\n        int challonge_participant_id\n        bigint team_id FK\n    }\n    TOURNAMENT_CHALLONGE_SOURCE {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint tournament_id FK\n        bigint stage_id FK \"nullable\"\n        bigint stage_item_id FK \"nullable\"\n        int challonge_tournament_id\n        varchar slug \"nullable\"\n        varchar(32) source_type\n    }\n    TOURNAMENT_CHALLONGE_SYNC_LOG {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint tournament_id FK\n        bigint source_id FK \"nullable\"\n        varchar(10) direction\n        varchar(32) operation \"nullable\"\n        varchar(32) entity_type\n        int entity_id \"nullable\"\n        int challonge_id \"nullable\"\n        varchar(16) status\n        varchar(32) conflict_type \"nullable\"\n        json payload_json \"nullable\"\n        json before_json \"nullable\"\n        json after_json \"nullable\"\n        text error_message \"nullable\"\n    }\n    TOURNAMENT_COMPUTATION_JOB {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        varchar(16) kind\n        varchar(48) operation\n        bigint tournament_id FK\n        bigint stage_id FK \"nullable\"\n        bigint stage_item_id FK \"nullable\"\n        varchar(16) status\n        json payload_json\n        json result_json \"nullable\"\n        text error \"nullable\"\n        bigint requested_by_user_id FK \"nullable\"\n        varchar(255) idempotency_key\n        int attempts\n        timestamptz started_at \"nullable\"\n        timestamptz finished_at \"nullable\"\n    }\n    TOURNAMENT_ENCOUNTER {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        varchar name\n        bigint home_team_id FK \"nullable\"\n        bigint away_team_id FK \"nullable\"\n        int home_score\n        int away_score\n        int round\n        float closeness \"nullable\"\n        int best_of\n        timestamptz scheduled_at \"nullable\"\n        timestamptz started_at \"nullable\"\n        timestamptz ended_at \"nullable\"\n        int current_map_index \"nullable\"\n        bigint tournament_id FK\n        bigint stage_id FK \"nullable\"\n        bigint stage_item_id FK \"nullable\"\n        encounterstatus status\n        encounterresultstatus result_status\n        timestamptz confirmed_at \"nullable\"\n    }\n    TOURNAMENT_ENCOUNTER_CAPTAIN_REPORT {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint encounter_id FK\n        bigint team_id FK\n        bigint reporter_user_id FK \"nullable\"\n        int home_score\n        int away_score\n        int closeness \"nullable\"\n        text comment \"nullable\"\n        json custom_fields_json\n    }\n    TOURNAMENT_ENCOUNTER_GAME {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint encounter_id FK\n        int position\n        bigint map_id FK \"nullable\"\n        encountergamestate state\n        int accepted_home_score \"nullable\"\n        int accepted_away_score \"nullable\"\n        encountergameresultsource result_source \"nullable\"\n        int result_version\n        timestamptz confirmed_at \"nullable\"\n    }\n    TOURNAMENT_ENCOUNTER_LINK {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        int source_encounter_id FK\n        int target_encounter_id FK\n        encounterlinkrole role\n        encounterlinkslot target_slot\n    }\n    TOURNAMENT_ENCOUNTER_MAP_CODE {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint report_id FK\n        int map_index\n        bigint map_id FK \"nullable\"\n        varchar(32) code\n    }\n    TOURNAMENT_ENCOUNTER_MAP_REPORT {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint game_id FK\n        varchar(16) side\n        bigint reporter_user_id FK \"nullable\"\n        int home_score\n        int away_score\n    }\n    TOURNAMENT_ENCOUNTER_PICK_BAN_LEDGER {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint encounter_id FK\n        pickbankind kind\n        int item_id\n        pickbanside banned_by_side\n        int round\n    }\n    TOURNAMENT_ENCOUNTER_READINESS {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint encounter_id FK\n        varchar(16) side\n        bigint ready_user_id FK \"nullable\"\n    }\n    TOURNAMENT_ENCOUNTER_REPORT_FORM {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint tournament_id FK,UK\n        json built_in_fields_json\n        json custom_fields_json\n    }\n    TOURNAMENT_ENCOUNTER_RESULT_AUDIT {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint encounter_id FK\n        bigint actor_user_id FK \"nullable\"\n        encounterresultauditaction action\n        encounterresultstatus from_result_status \"nullable\"\n        encounterresultstatus to_result_status\n        int home_score_before \"nullable\"\n        int away_score_before \"nullable\"\n        int home_score_after\n        int away_score_after\n        bigint adopted_team_id FK \"nullable\"\n        bigint game_id FK \"nullable\"\n        int game_result_version \"nullable\"\n        text reason \"nullable\"\n        varchar(16) source\n    }\n    TOURNAMENT_PICK_BAN_CONFIG {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint tournament_id FK\n        pickbankind kind\n        bigint stage_id FK \"nullable\"\n        int round \"nullable\"\n        pickbanmode mode\n        pickbanfirstpickrule first_pick_rule\n        pickbanrotation first_ban_rotation\n        int turn_timer_seconds \"nullable\"\n        varchar(32) preset \"nullable\"\n        json sequence_json\n        pickbannorepeatscope no_repeat_scope\n        varchar(32) unique_attribute_per_side_per_round \"nullable\"\n        boolean allow_protect\n    }\n    TOURNAMENT_PICK_BAN_CONFIG_ITEM {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint pick_ban_config_id FK\n        int item_id\n        int sort_order\n    }\n    TOURNAMENT_PICK_BAN_CONFIG_SLOT {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint pick_ban_config_id FK\n        int position\n        int reserve_item_id \"nullable\"\n    }\n    TOURNAMENT_PICK_BAN_CONFIG_SLOT_ITEM {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint pick_ban_config_slot_id FK\n        int item_id\n        int sort_order\n    }\n    TOURNAMENT_PICK_BAN_ENTRY {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint session_id FK\n        int item_id\n        int order\n        int action_index \"nullable\"\n        int round \"nullable\"\n        pickbanside picked_by \"nullable\"\n        pickbanentrystatus status\n        bigint team_id FK \"nullable\"\n        pickbanside protected_by \"nullable\"\n    }\n    TOURNAMENT_PICK_BAN_SESSION {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint encounter_id FK\n        pickbankind kind\n        bigint config_id FK \"nullable\"\n        pickbanside first_side \"nullable\"\n        pickbanseedsource seed_source\n        int home_seed \"nullable\"\n        int away_seed \"nullable\"\n        json resolved_sequence_json\n        json slot_reserves_json \"nullable\"\n        int turn_timer_seconds \"nullable\"\n        pickbansessionstatus status\n        boolean awaiting_choice\n        pickbanside pending_loser_side \"nullable\"\n        pickbanside undo_requested_by \"nullable\"\n        int undo_target_index \"nullable\"\n        timestamptz started_at \"nullable\"\n        timestamptz current_step_started_at \"nullable\"\n    }\n    TOURNAMENT_PLAYER {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        varchar name\n        varchar(128) sub_role \"nullable\"\n        int rank\n        heroclass role \"nullable\"\n        boolean is_substitution\n        bigint related_player_id FK \"nullable\"\n        bigint tournament_id FK\n        boolean is_newcomer\n        boolean is_newcomer_role\n        bigint workspace_member_id FK\n        bigint team_id FK\n    }\n    TOURNAMENT_PLAYER_SUB_ROLE {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint workspace_id FK\n        varchar(64) role\n        varchar(128) slug\n        varchar(128) label\n        text description \"nullable\"\n        int sort_order\n        boolean is_active\n    }\n    TOURNAMENT_RECALCULATION_STATE {\n        bigint tournament_id PK,FK\n        bigint requested_generation\n        bigint completed_generation\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n    }\n    TOURNAMENT_SCRIM_ROOM {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        varchar(32) token UK\n        varchar(255) label\n        bigint workspace_id FK\n        bigint tournament_id FK\n        bigint stage_id FK\n        bigint encounter_id FK,UK\n        bigint created_by_auth_user_id FK\n        timestamptz closed_at \"nullable\"\n    }\n    TOURNAMENT_SLUG_REDIRECT {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        varchar old_slug UK\n        bigint tournament_id FK\n    }\n    TOURNAMENT_STAGE {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint tournament_id FK\n        varchar name\n        varchar description \"nullable\"\n        stagetype stage_type\n        int max_rounds\n        int advance_count \"nullable\"\n        boolean split_lower_bracket\n        int order\n        boolean is_active\n        boolean is_published\n        boolean is_completed\n        json settings_json \"nullable\"\n    }\n    TOURNAMENT_STAGE_ITEM {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint stage_id FK\n        varchar name\n        stageitemtype type\n        int order\n        int advance_count \"nullable\"\n    }\n    TOURNAMENT_STAGE_ITEM_INPUT {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint stage_item_id FK\n        int slot\n        stageiteminputtype input_type\n        bigint team_id FK \"nullable\"\n        bigint source_stage_item_id FK \"nullable\"\n        int source_position \"nullable\"\n    }\n    TOURNAMENT_STANDING {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        int tournament_id FK\n        int team_id FK\n        int stage_id FK \"nullable\"\n        int stage_item_id FK \"nullable\"\n        int position\n        int overall_position\n        int matches\n        int win\n        int draw\n        int lose\n        float points\n        float buchholz \"nullable\"\n        float full_buchholz \"nullable\"\n        int tie_group \"nullable\"\n        int tb \"nullable\"\n        int score_differential \"nullable\"\n    }\n    TOURNAMENT_TEAM {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        varchar balancer_name\n        varchar name\n        varchar image_url \"nullable\"\n        bigint captain_id FK \"nullable\"\n        bigint tournament_id FK\n    }\n    TOURNAMENT_TOURNAMENT {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint workspace_id FK\n        varchar name\n        varchar slug UK\n        varchar description \"nullable\"\n        text rules \"nullable\"\n        boolean is_league\n        boolean is_finished\n        boolean is_hidden\n        varchar team_formation\n        tournamentstatus status\n        timestamptz start_date \"nullable\"\n        timestamptz end_date \"nullable\"\n        boolean auto_transitions_enabled\n        boolean allow_late_registration\n        boolean discord_broadcasts_enabled\n        boolean discord_dms_enabled\n        float win_points\n        float draw_points\n        float loss_points\n        bigint division_grid_version_id FK \"nullable\"\n        jsonb roster_slots_json \"nullable\"\n        varchar cover_image_url \"nullable\"\n        varchar logo_url \"nullable\"\n    }\n    TOURNAMENT_TOURNAMENT_LINK {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint tournament_id FK\n        varchar(32) kind\n        varchar(128) label \"nullable\"\n        varchar(500) url\n        int sort_order\n        boolean is_active\n    }\n    TOURNAMENT_TOURNAMENT_PHASE_SCHEDULE {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint tournament_id FK\n        tournamentstatus status\n        timestamptz starts_at\n        timestamptz ends_at \"nullable\"\n    }\n    TOURNAMENT_TOURNAMENT_PREVIEW_ACCESS {\n        bigint id PK\n        timestamptz created_at\n        timestamptz updated_at \"nullable\"\n        bigint tournament_id FK\n        bigint auth_user_id FK\n    }\n\n    AUTH_USER |o--o{ TOURNAMENT_COMPUTATION_JOB : \"requested_by_user_id\"\n    AUTH_USER ||--o{ TOURNAMENT_SCRIM_ROOM : \"created_by_auth_user_id\"\n    AUTH_USER ||--o{ TOURNAMENT_TOURNAMENT_PREVIEW_ACCESS : \"auth_user_id\"\n    OVERWATCH_MAP |o--o{ TOURNAMENT_ENCOUNTER_GAME : \"map_id\"\n    OVERWATCH_MAP |o--o{ TOURNAMENT_ENCOUNTER_MAP_CODE : \"map_id\"\n    PLAYERS_USER |o--o{ TOURNAMENT_ENCOUNTER_CAPTAIN_REPORT : \"reporter_user_id\"\n    PLAYERS_USER |o--o{ TOURNAMENT_ENCOUNTER_MAP_REPORT : \"reporter_user_id\"\n    PLAYERS_USER |o--o{ TOURNAMENT_ENCOUNTER_READINESS : \"ready_user_id\"\n    PLAYERS_USER |o--o{ TOURNAMENT_ENCOUNTER_RESULT_AUDIT : \"actor_user_id\"\n    PLAYERS_USER |o--o{ TOURNAMENT_TEAM : \"captain_id\"\n    PUBLIC_DIVISION_GRID_VERSION |o--o{ TOURNAMENT_TOURNAMENT : \"division_grid_version_id\"\n    PUBLIC_WORKSPACE ||--o{ TOURNAMENT_PLAYER_SUB_ROLE : \"workspace_id\"\n    PUBLIC_WORKSPACE ||--o{ TOURNAMENT_SCRIM_ROOM : \"workspace_id\"\n    PUBLIC_WORKSPACE ||--o{ TOURNAMENT_TOURNAMENT : \"workspace_id\"\n    PUBLIC_WORKSPACE_MEMBER ||--o{ TOURNAMENT_PLAYER : \"workspace_member_id\"\n    TOURNAMENT_CHALLONGE_SOURCE |o--o{ TOURNAMENT_CHALLONGE_SYNC_LOG : \"source_id\"\n    TOURNAMENT_CHALLONGE_SOURCE ||--o{ TOURNAMENT_CHALLONGE_MATCH_MAPPING : \"source_id\"\n    TOURNAMENT_CHALLONGE_SOURCE ||--o{ TOURNAMENT_CHALLONGE_PARTICIPANT_MAPPING : \"source_id\"\n    TOURNAMENT_ENCOUNTER ||--o{ TOURNAMENT_CHALLONGE_MATCH_MAPPING : \"encounter_id\"\n    TOURNAMENT_ENCOUNTER ||--o{ TOURNAMENT_ENCOUNTER_CAPTAIN_REPORT : \"encounter_id\"\n    TOURNAMENT_ENCOUNTER ||--o{ TOURNAMENT_ENCOUNTER_GAME : \"encounter_id\"\n    TOURNAMENT_ENCOUNTER ||--o{ TOURNAMENT_ENCOUNTER_LINK : \"source_encounter_id\"\n    TOURNAMENT_ENCOUNTER ||--o{ TOURNAMENT_ENCOUNTER_LINK : \"target_encounter_id\"\n    TOURNAMENT_ENCOUNTER ||--o{ TOURNAMENT_ENCOUNTER_PICK_BAN_LEDGER : \"encounter_id\"\n    TOURNAMENT_ENCOUNTER ||--o{ TOURNAMENT_ENCOUNTER_READINESS : \"encounter_id\"\n    TOURNAMENT_ENCOUNTER ||--o{ TOURNAMENT_ENCOUNTER_RESULT_AUDIT : \"encounter_id\"\n    TOURNAMENT_ENCOUNTER ||--o{ TOURNAMENT_PICK_BAN_SESSION : \"encounter_id\"\n    TOURNAMENT_ENCOUNTER ||--o| TOURNAMENT_SCRIM_ROOM : \"encounter_id\"\n    TOURNAMENT_ENCOUNTER_CAPTAIN_REPORT ||--o{ TOURNAMENT_ENCOUNTER_MAP_CODE : \"report_id\"\n    TOURNAMENT_ENCOUNTER_GAME |o--o{ TOURNAMENT_ENCOUNTER_RESULT_AUDIT : \"game_id\"\n    TOURNAMENT_ENCOUNTER_GAME ||--o{ TOURNAMENT_ENCOUNTER_MAP_REPORT : \"game_id\"\n    TOURNAMENT_PICK_BAN_CONFIG |o--o{ TOURNAMENT_PICK_BAN_SESSION : \"config_id\"\n    TOURNAMENT_PICK_BAN_CONFIG ||--o{ TOURNAMENT_PICK_BAN_CONFIG_ITEM : \"pick_ban_config_id\"\n    TOURNAMENT_PICK_BAN_CONFIG ||--o{ TOURNAMENT_PICK_BAN_CONFIG_SLOT : \"pick_ban_config_id\"\n    TOURNAMENT_PICK_BAN_CONFIG_SLOT ||--o{ TOURNAMENT_PICK_BAN_CONFIG_SLOT_ITEM : \"pick_ban_config_slot_id\"\n    TOURNAMENT_PICK_BAN_SESSION ||--o{ TOURNAMENT_PICK_BAN_ENTRY : \"session_id\"\n    TOURNAMENT_PLAYER |o--o{ TOURNAMENT_PLAYER : \"related_player_id\"\n    TOURNAMENT_STAGE |o--o{ TOURNAMENT_CHALLONGE_SOURCE : \"stage_id\"\n    TOURNAMENT_STAGE |o--o{ TOURNAMENT_COMPUTATION_JOB : \"stage_id\"\n    TOURNAMENT_STAGE |o--o{ TOURNAMENT_ENCOUNTER : \"stage_id\"\n    TOURNAMENT_STAGE |o--o{ TOURNAMENT_PICK_BAN_CONFIG : \"stage_id\"\n    TOURNAMENT_STAGE |o--o{ TOURNAMENT_STANDING : \"stage_id\"\n    TOURNAMENT_STAGE ||--o{ TOURNAMENT_SCRIM_ROOM : \"stage_id\"\n    TOURNAMENT_STAGE ||--o{ TOURNAMENT_STAGE_ITEM : \"stage_id\"\n    TOURNAMENT_STAGE_ITEM |o--o{ TOURNAMENT_CHALLONGE_SOURCE : \"stage_item_id\"\n    TOURNAMENT_STAGE_ITEM |o--o{ TOURNAMENT_COMPUTATION_JOB : \"stage_item_id\"\n    TOURNAMENT_STAGE_ITEM |o--o{ TOURNAMENT_ENCOUNTER : \"stage_item_id\"\n    TOURNAMENT_STAGE_ITEM |o--o{ TOURNAMENT_STAGE_ITEM_INPUT : \"source_stage_item_id\"\n    TOURNAMENT_STAGE_ITEM |o--o{ TOURNAMENT_STANDING : \"stage_item_id\"\n    TOURNAMENT_STAGE_ITEM ||--o{ TOURNAMENT_STAGE_ITEM_INPUT : \"stage_item_id\"\n    TOURNAMENT_TEAM |o--o{ TOURNAMENT_ENCOUNTER : \"away_team_id\"\n    TOURNAMENT_TEAM |o--o{ TOURNAMENT_ENCOUNTER : \"home_team_id\"\n    TOURNAMENT_TEAM |o--o{ TOURNAMENT_ENCOUNTER_RESULT_AUDIT : \"adopted_team_id\"\n    TOURNAMENT_TEAM |o--o{ TOURNAMENT_PICK_BAN_ENTRY : \"team_id\"\n    TOURNAMENT_TEAM |o--o{ TOURNAMENT_STAGE_ITEM_INPUT : \"team_id\"\n    TOURNAMENT_TEAM ||--o{ TOURNAMENT_CHALLONGE_PARTICIPANT_MAPPING : \"team_id\"\n    TOURNAMENT_TEAM ||--o{ TOURNAMENT_ENCOUNTER_CAPTAIN_REPORT : \"team_id\"\n    TOURNAMENT_TEAM ||--o{ TOURNAMENT_PLAYER : \"team_id\"\n    TOURNAMENT_TEAM ||--o{ TOURNAMENT_STANDING : \"team_id\"\n    TOURNAMENT_TOURNAMENT ||--o{ TOURNAMENT_CHALLONGE_SOURCE : \"tournament_id\"\n    TOURNAMENT_TOURNAMENT ||--o{ TOURNAMENT_CHALLONGE_SYNC_LOG : \"tournament_id\"\n    TOURNAMENT_TOURNAMENT ||--o{ TOURNAMENT_COMPUTATION_JOB : \"tournament_id\"\n    TOURNAMENT_TOURNAMENT ||--o{ TOURNAMENT_ENCOUNTER : \"tournament_id\"\n    TOURNAMENT_TOURNAMENT ||--o{ TOURNAMENT_PICK_BAN_CONFIG : \"tournament_id\"\n    TOURNAMENT_TOURNAMENT ||--o{ TOURNAMENT_PLAYER : \"tournament_id\"\n    TOURNAMENT_TOURNAMENT ||--o{ TOURNAMENT_SCRIM_ROOM : \"tournament_id\"\n    TOURNAMENT_TOURNAMENT ||--o{ TOURNAMENT_SLUG_REDIRECT : \"tournament_id\"\n    TOURNAMENT_TOURNAMENT ||--o{ TOURNAMENT_STAGE : \"tournament_id\"\n    TOURNAMENT_TOURNAMENT ||--o{ TOURNAMENT_STANDING : \"tournament_id\"\n    TOURNAMENT_TOURNAMENT ||--o{ TOURNAMENT_TEAM : \"tournament_id\"\n    TOURNAMENT_TOURNAMENT ||--o{ TOURNAMENT_TOURNAMENT_LINK : \"tournament_id\"\n    TOURNAMENT_TOURNAMENT ||--o{ TOURNAMENT_TOURNAMENT_PHASE_SCHEDULE : \"tournament_id\"\n    TOURNAMENT_TOURNAMENT ||--o{ TOURNAMENT_TOURNAMENT_PREVIEW_ACCESS : \"tournament_id\"\n    TOURNAMENT_TOURNAMENT ||--o| TOURNAMENT_ENCOUNTER_REPORT_FORM : \"tournament_id\"\n    TOURNAMENT_TOURNAMENT ||--o| TOURNAMENT_RECALCULATION_STATE : \"tournament_id\"",
+      "schemas": [
+        "tournament"
+      ],
+      "tables": [
+        "tournament.challonge_match_mapping",
+        "tournament.challonge_participant_mapping",
+        "tournament.challonge_source",
+        "tournament.challonge_sync_log",
+        "tournament.computation_job",
+        "tournament.encounter",
+        "tournament.encounter_captain_report",
+        "tournament.encounter_game",
+        "tournament.encounter_link",
+        "tournament.encounter_map_code",
+        "tournament.encounter_map_report",
+        "tournament.encounter_pick_ban_ledger",
+        "tournament.encounter_readiness",
+        "tournament.encounter_report_form",
+        "tournament.encounter_result_audit",
+        "tournament.pick_ban_config",
+        "tournament.pick_ban_config_item",
+        "tournament.pick_ban_config_slot",
+        "tournament.pick_ban_config_slot_item",
+        "tournament.pick_ban_entry",
+        "tournament.pick_ban_session",
+        "tournament.player",
+        "tournament.player_sub_role",
+        "tournament.recalculation_state",
+        "tournament.scrim_room",
+        "tournament.slug_redirect",
+        "tournament.stage",
+        "tournament.stage_item",
+        "tournament.stage_item_input",
+        "tournament.standing",
+        "tournament.team",
+        "tournament.tournament",
+        "tournament.tournament_link",
+        "tournament.tournament_phase_schedule",
+        "tournament.tournament_preview_access"
+      ],
+      "unique_keys": [
+        {
+          "columns": [
+            "source_id",
+            "encounter_id"
+          ],
+          "table": "TOURNAMENT_CHALLONGE_MATCH_MAPPING"
+        },
+        {
+          "columns": [
+            "source_id",
+            "challonge_match_id"
+          ],
+          "table": "TOURNAMENT_CHALLONGE_MATCH_MAPPING"
+        },
+        {
+          "columns": [
+            "source_id",
+            "challonge_participant_id"
+          ],
+          "table": "TOURNAMENT_CHALLONGE_PARTICIPANT_MAPPING"
+        },
+        {
+          "columns": [
+            "tournament_id",
+            "challonge_tournament_id"
+          ],
+          "table": "TOURNAMENT_CHALLONGE_SOURCE"
+        },
+        {
+          "columns": [
+            "encounter_id",
+            "team_id"
+          ],
+          "table": "TOURNAMENT_ENCOUNTER_CAPTAIN_REPORT"
+        },
+        {
+          "columns": [
+            "source_encounter_id",
+            "role"
+          ],
+          "table": "TOURNAMENT_ENCOUNTER_LINK"
+        },
+        {
+          "columns": [
+            "report_id",
+            "map_index"
+          ],
+          "table": "TOURNAMENT_ENCOUNTER_MAP_CODE"
+        },
+        {
+          "columns": [
+            "game_id",
+            "side"
+          ],
+          "table": "TOURNAMENT_ENCOUNTER_MAP_REPORT"
+        },
+        {
+          "columns": [
+            "encounter_id",
+            "kind",
+            "item_id",
+            "banned_by_side"
+          ],
+          "table": "TOURNAMENT_ENCOUNTER_PICK_BAN_LEDGER"
+        },
+        {
+          "columns": [
+            "encounter_id",
+            "side"
+          ],
+          "table": "TOURNAMENT_ENCOUNTER_READINESS"
+        },
+        {
+          "columns": [
+            "pick_ban_config_id",
+            "item_id"
+          ],
+          "table": "TOURNAMENT_PICK_BAN_CONFIG_ITEM"
+        },
+        {
+          "columns": [
+            "pick_ban_config_id",
+            "position"
+          ],
+          "table": "TOURNAMENT_PICK_BAN_CONFIG_SLOT"
+        },
+        {
+          "columns": [
+            "pick_ban_config_slot_id",
+            "item_id"
+          ],
+          "table": "TOURNAMENT_PICK_BAN_CONFIG_SLOT_ITEM"
+        },
+        {
+          "columns": [
+            "encounter_id",
+            "kind"
+          ],
+          "table": "TOURNAMENT_PICK_BAN_SESSION"
+        },
+        {
+          "columns": [
+            "workspace_id",
+            "role",
+            "slug"
+          ],
+          "table": "TOURNAMENT_PLAYER_SUB_ROLE"
+        },
+        {
+          "columns": [
+            "stage_item_id",
+            "slot"
+          ],
+          "table": "TOURNAMENT_STAGE_ITEM_INPUT"
+        },
+        {
+          "columns": [
+            "tournament_id",
+            "kind",
+            "url"
+          ],
+          "table": "TOURNAMENT_TOURNAMENT_LINK"
+        },
+        {
+          "columns": [
+            "tournament_id",
+            "status"
+          ],
+          "table": "TOURNAMENT_TOURNAMENT_PHASE_SCHEDULE"
+        },
+        {
+          "columns": [
+            "tournament_id",
+            "auth_user_id"
+          ],
+          "table": "TOURNAMENT_TOURNAMENT_PREVIEW_ACCESS"
+        }
+      ]
+    }
+  ]
+}

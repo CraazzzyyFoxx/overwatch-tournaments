@@ -35,6 +35,11 @@ not match what the models would produce -- the CI gate in
 .github/workflows/lint-backend.yml, next to the OpenAPI manifest and OW ladder
 gates.
 
+The same diagrams also go to ``frontend/src/app/(site)/docs/schema.generated.json``,
+which the site's schema page renders. It used to hand-copy the Mermaid blocks out
+of this document and was a dozen migrations behind within two days; now both are
+written by one run and checked by one gate.
+
 Usage:
   uv run python scripts/export_erd.py            # write
   uv run python scripts/export_erd.py --check    # CI staleness gate
@@ -42,6 +47,7 @@ Usage:
 
 from __future__ import annotations
 
+import json
 import re
 import sys
 from collections import defaultdict
@@ -58,6 +64,7 @@ import shared.models  # noqa: E402, F401  -- importing registers every table
 from shared.core.db import Base  # noqa: E402
 
 DOCUMENT = BACKEND.parent / "docs" / "database_erd.md"
+ARTIFACT = BACKEND.parent / "frontend" / "src" / "app" / "(site)" / "docs" / "schema.generated.json"
 MIGRATIONS = BACKEND / "migrations" / "versions"
 
 
@@ -216,7 +223,7 @@ def render_relations(tables) -> list[str]:
     return sorted(lines)
 
 
-def composite_uniques(tables) -> list[str]:
+def unique_keys(tables) -> list[tuple[str, list[str]]]:
     """Multi-column unique constraints, which Mermaid cannot express.
 
     Marking each member column ``UK`` would be a lie -- neither column is unique
@@ -224,7 +231,7 @@ def composite_uniques(tables) -> list[str]:
     such as one membership per workspace per player. So they are listed under the
     diagram instead.
     """
-    lines: list[str] = []
+    keys: list[tuple[str, list[str]]] = []
     for table in tables:
         # ``table.constraints`` is a SET, so iteration order follows object
         # hashes and changes from process to process. Sorting on the name alone
@@ -241,25 +248,29 @@ def composite_uniques(tables) -> list[str]:
             columns = [c.name for c in constraint.columns]
             if len(columns) < 2:
                 continue
-            lines.append(f"- `{entity(table)}` unique on ({', '.join(f'`{c}`' for c in columns)})")
-    return lines
+            keys.append((entity(table), columns))
+    return keys
 
 
-def render_block(tables) -> str:
-    body = ["```mermaid", "erDiagram"]
+def render_diagram(tables) -> str:
+    body = ["erDiagram"]
     for table in tables:
         body.extend(render_entity(table))
     relations = render_relations(tables)
     if relations:
         body.append("")
         body.extend(relations)
-    body.append("```")
-    uniques = composite_uniques(tables)
+    return "\n".join(body)
+
+
+def render_block(tables) -> str:
+    body = ["```mermaid", render_diagram(tables), "```"]
+    uniques = unique_keys(tables)
     if uniques:
         body.append("")
         body.append("Composite unique keys:")
         body.append("")
-        body.extend(uniques)
+        body.extend(f"- `{name}` unique on ({', '.join(f'`{c}`' for c in columns)})" for name, columns in uniques)
     return "\n".join(body)
 
 
@@ -288,13 +299,37 @@ def render_head_block() -> str:
     )
 
 
+def render_artifact(blocks: dict[str, list]) -> str:
+    """The schema page's data: one entry per package, same grouping as the document.
+
+    ``sort_keys`` + fixed indent keep the output stable across runs. Newlines are
+    LF here and the file is written as bytes, so a Windows checkout does not
+    turn the artifact into CRLF -- ``--check`` reads it back as text, which
+    normalises either way.
+    """
+    document = {
+        "_generated_by": "backend/scripts/export_erd.py -- do not edit by hand",
+        "alembic_head": alembic_head(),
+        "packages": [
+            {
+                "key": key,
+                "schemas": sorted({t.schema or "public" for t in tables}),
+                "tables": [f"{t.schema or 'public'}.{t.name}" for t in tables],
+                "mermaid": render_diagram(tables),
+                "unique_keys": [{"table": name, "columns": columns} for name, columns in unique_keys(tables)],
+            }
+            for key, tables in blocks.items()
+        ],
+    }
+    return json.dumps(document, indent=2, sort_keys=True, ensure_ascii=False) + "\n"
+
+
 # --------------------------------------------------------------------------- #
 # splice
 # --------------------------------------------------------------------------- #
 
 
-def render_document(current: str) -> str:
-    blocks = table_groups()
+def render_document(current: str, blocks: dict[str, list]) -> str:
     expected = {"_alembic_head": render_head_block()}
     expected.update({key: render_block(tables) for key, tables in blocks.items()})
 
@@ -330,27 +365,39 @@ def main(argv: list[str]) -> int:
         print(f"usage: {Path(__file__).name} [--check]", file=sys.stderr)
         return 2
 
+    blocks = table_groups()
     current = DOCUMENT.read_text(encoding="utf-8")
-    updated = render_document(current)
+    updated = render_document(current, blocks)
+    artifact = render_artifact(blocks)
+    committed_artifact = ARTIFACT.read_text(encoding="utf-8") if ARTIFACT.exists() else ""
 
     if argv == ["--check"]:
-        if current == updated:
-            print(f"{DOCUMENT.name} is up to date", file=sys.stderr)
+        stale = [
+            path.relative_to(BACKEND.parent).as_posix()
+            for path, fresh in ((DOCUMENT, current == updated), (ARTIFACT, committed_artifact == artifact))
+            if not fresh
+        ]
+        if not stale:
+            print(f"{DOCUMENT.name} and {ARTIFACT.name} are up to date", file=sys.stderr)
             return 0
         print(
-            f"ERROR: {DOCUMENT.name} is STALE — the models moved on but the ERD was "
+            f"ERROR: {', '.join(stale)} STALE — the models moved on but the ERD was "
             "not regenerated.\n"
             "Fix: cd backend && uv run python scripts/export_erd.py && "
-            "git add ../docs/database_erd.md",
+            f"git add {' '.join(f'../{p}' for p in stale)}",
             file=sys.stderr,
         )
         return 1
 
-    if current == updated:
-        print(f"{DOCUMENT.name} already up to date", file=sys.stderr)
-        return 0
-    DOCUMENT.write_text(updated, encoding="utf-8")
-    print(f"wrote {DOCUMENT} ({len(updated)} bytes)", file=sys.stderr)
+    for path, fresh, content in (
+        (DOCUMENT, current == updated, updated),
+        (ARTIFACT, committed_artifact == artifact, artifact),
+    ):
+        if fresh:
+            print(f"{path.name} already up to date", file=sys.stderr)
+            continue
+        path.write_bytes(content.encode("utf-8"))
+        print(f"wrote {path} ({len(content)} bytes)", file=sys.stderr)
     return 0
 
 

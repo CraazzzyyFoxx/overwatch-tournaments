@@ -48,7 +48,9 @@ jobs:
       # and from architecture.md. Hand-maintained, it drifted to missing 32 of 124
       # tables — every custom-game table, the whole pick/ban engine, team
       # registration — while still pinning an Alembic head that no longer exists.
-      # Its diagrams are generated now; this stops them going stale again.
+      # Its diagrams are generated now; this stops them going stale again. The
+      # same run writes the site's schema page data
+      # (frontend/src/app/(site)/docs/schema.generated.json), checked here too.
       - name: Database ERD is up to date
         run: uv run python scripts/export_erd.py --check
         working-directory: backend

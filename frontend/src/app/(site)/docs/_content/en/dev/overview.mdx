@@ -1,0 +1,55 @@
+This section is for people who write code next to OWT: integrators building bots, overlays, stats sites and tools on top of the public HTTP API and WebSocket, and contributors who run and change the repository itself. What the product does for people is covered in the [player guide](/docs/players/quickstart) and the [organizer guide](/docs/organizers/getting-started); this section is the contract and the machinery.
+
+## What the platform exposes
+
+- **One entry point.** The Go gateway is the only process that speaks HTTP and WebSocket to the outside world. The Python services expose no HTTP at all.
+- **Version in the path.** Every route looks like `/api/v{n}/<domain>/...`: the version is always the second segment, with nothing beside it. `/api/v1/...` returns plain JSON; `/api/v2/...` serves the same paths, handlers and statuses with the body wrapped in an envelope.
+- **Endpoint reference.** Scalar at [`/api/docs`](/api/docs) with a v1/v2 switch in its header; the specs themselves are at `/api/openapi.json` (v1) and `/api/openapi.v2.json` (v2).
+- **Two credentials, one header.** `Authorization: Bearer` accepts either a session JWT or an API key. A key is pinned to exactly one workspace and can never be wider than its owner's rights there.
+- **Realtime.** A WebSocket at `/api/v1/realtime/ws`: subscribe to topics and replay the events you missed while disconnected.
+
+```http
+GET /api/v1/tournaments?workspace_id=1 HTTP/1.1
+Host: owt.craazzzyyfoxx.me
+Authorization: Bearer <token or API key>
+```
+
+The articles do not duplicate the full route list — that lives in the [endpoint reference](/api/docs). They explain the model and the rules instead.
+
+## How it is built
+
+A request reaches the gateway (in production through Traefik, which terminates TLS, and an internal nginx); the gateway resolves the presented credential, applies edge policy — per-IP rate limits, an in-process cache of anonymous public reads, path versioning — and turns the REST route into a typed request/reply call over RabbitMQ to the domain worker that owns it, carrying a deadline budget with it. The workers are Python, serve no HTTP, share one PostgreSQL database with a schema per domain, and talk to the gateway and to each other only over RabbitMQ and Redis; the Next.js frontend sits behind the same gateway on the same origin, which is why the browser calls the API with relative `/api/...` paths. Long computations (team balancing, analytics) never hold an HTTP connection open: the request queues a job and returns 202, and the result is fetched by a separate status read.
+
+| Component | What it means from outside |
+| --- | --- |
+| Gateway (Go) | The single address: authentication, API versions, response cache, rate limits, the WebSocket hub, `/api/docs` |
+| Domain RPC workers (Python) | All business logic and every permission check; they have no network address of their own |
+| PostgreSQL | One database, a schema per domain — the domain boundaries are visible in the [data model](/docs/dev/data-model) |
+| Redis | The realtime event bus, response-cache invalidation, active-user counters |
+| RabbitMQ | Transport for all RPC, domain events and long-job queues |
+| Frontend (Next.js) | The site, on the same host and origin as the API |
+
+Domains are split across workers: tournaments, registration, brackets and pick/ban live in the tournament service; accounts, RBAC, keys and workspace domains in identity; public reads, statistics and catalogs in app; log parsing, ranks and achievements in parser; balancing and draft in balancer; analytics in analytics; stream live status in stream. For an integrator this is one HTTP contract, but the split explains why different parts of the API have different pacing and different failure modes.
+
+## Multitenancy
+
+The tenant root is a **workspace**: the request host decides which community is meant (a subdomain of the platform zone, or a verified custom domain), and a community's own domain answers exactly the same `/api/...` paths as the platform host. The request itself names the workspace explicitly through `workspace_id`, and a domain read without it answers 400: when the presented session or key holds exactly one workspace the gateway fills it in, but with several it does not guess.
+
+<Callout>
+The live platform is `https://owt.craazzzyyfoxx.me`. Everything described in this section is reachable there under the same paths.
+</Callout>
+
+## Where to go next
+
+- [Contributing](/docs/dev/contributing) — repository layout, running locally, the CI gates, releases.
+- [Authentication and API keys](/docs/dev/identity) — sessions, API keys, scopes, quotas.
+- [HTTP API](/docs/dev/api) — v1 and v2, error shape, pagination, caching.
+- [Realtime (WebSocket)](/docs/dev/realtime) — handshake, topics, subscriptions, replay.
+- [Workspaces and permissions](/docs/dev/workspaces) — tenants, domains, members, RBAC.
+- [Tournaments, stages and brackets](/docs/dev/tournaments) — phases, stages, encounters, standings.
+- [Registration and rosters](/docs/dev/registration) — applications, admission, check-in, roster shape.
+- [Encounters, results and logs](/docs/dev/matches) — reports, pick/ban, log parsing, statistics.
+- [Balancer, draft and mixes](/docs/dev/balancer) — team building, live draft, custom games.
+- [Data model](/docs/dev/data-model) — Postgres schemas, identity layers, the outbox and the event journal.
+- [Database schema](/docs/dev/schema) — generated table diagrams, always current.
+- [Endpoint reference](/api/docs) — the full list of v1 and v2 routes.

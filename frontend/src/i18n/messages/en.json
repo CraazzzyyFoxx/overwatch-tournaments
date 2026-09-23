@@ -6080,7 +6080,7 @@
   },
   "docs": {
     "title": "Documentation",
-    "lead": "Guides for players and organizers: how tournaments work, how to take part and how to run them.",
+    "lead": "Guides for players, organizers and developers: how tournaments work, how to take part, how to run them and how to build on the platform.",
     "sections": {
       "players": {
         "title": "For players",
@@ -6092,7 +6092,7 @@
       },
       "dev": {
         "title": "For developers",
-        "description": "Platform architecture, HTTP API and database schema. Available in Russian only."
+        "description": "How the platform is built, the HTTP API, realtime and the data model."
       }
     },
     "search": {
@@ -6104,6 +6104,23 @@
       "audience": "Who it's for",
       "label": "Documentation pages",
       "select": "Documentation page"
+    },
+    "schema": {
+      "title": "Database schema",
+      "lead": "Generated from the models on every change: {tables, plural, one {# table} other {# tables}} in {packages, plural, one {# package} other {# packages}}, Alembic head {head}.",
+      "erd": "How to read the diagrams, the domain map and the change history are in the full document:",
+      "searchLabel": "Search tables",
+      "searchPlaceholder": "Table, schema or package…",
+      "empty": "No table matches “{query}”.",
+      "tables": "{count, plural, one {# table} other {# tables}}",
+      "showDiagram": "Show diagram",
+      "hideDiagram": "Hide diagram",
+      "uniques": "Composite unique keys",
+      "zoomIn": "Zoom in",
+      "zoomOut": "Zoom out",
+      "zoomReset": "Reset zoom",
+      "rendering": "Rendering the diagram…",
+      "renderError": "The diagram failed to render: {message}"
     }
   }
 }

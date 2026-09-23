@@ -1,0 +1,130 @@
+A workspace is OWT's tenant root: a community with its own site, its own tournaments, its own members and its own permissions. Almost every domain row carries a `workspace_id`, directly or through a tournament or a member row. This page explains how a host becomes a workspace, how a workspace enters an API request, what is visible from another tenant, and how roles, permissions and key scopes work.
+
+## The host picks the community
+
+There are exactly two mutually exclusive ways to bind a host to a workspace.
+
+**A subdomain of the platform zone.** A label of 1–63 characters from `a-z`, `0-9` and the hyphen, with no leading or trailing hyphen, and not one of the reserved labels: `www`, `api`, `auth`, `admin`, `app`, `assets`, `static`, `cdn`, `mail`, `ws`. A multi-segment label is rejected, and the zone apex is the platform itself, not a tenant.
+
+**A custom domain.** A fully qualified name of at least two labels, unique, and explicitly **not** under the platform zone. The domain is served only after ownership is proven with a DNS TXT record; until then it resolves to nothing at all — fail-closed by design.
+
+Resolution is public and needs no authentication:
+
+```http
+GET /api/v1/workspaces/by-host?host=example.org HTTP/1.1
+```
+
+```json
+{"workspace_id": 7, "slug": "example"}
+```
+
+A `null` answer means "the host is missing, invalid, or belongs to no workspace" — including a custom domain that has been added but not yet verified. The site uses the same call: a host that looks like a tenant but does not resolve gets a 404, while a transient resolution failure gets a 503 with `Retry-After`, so a live tenant does not disappear over one failed lookup.
+
+<Callout>
+API routes are not host-scoped. A community site on a subdomain or on its own domain answers the same `/api/...` paths as `https://owt.craazzzyyfoxx.me`.
+</Callout>
+
+A workspace also has two independent flags that are easy to confuse. `is_active` switches the workspace off, while `is_hidden` only removes it from the public directory and from other workspaces' pickers — direct access by slug, subdomain or verified domain still works. A separate axis is the trust tier `verification_status` (`unverified`, `verified`, `trusted`), which only a superuser changes: it governs access to heavy compute and listing in the public directory.
+
+## The workspace in a request
+
+The host picks the community for the site, but an API request names the workspace explicitly, with a `workspace_id` parameter. Domain reads without it answer 400: returning rows from every tenant at once would be a cross-community leak, so a missing scope is an error rather than "read everything".
+
+```http
+GET /api/v1/tournaments?workspace_id=7 HTTP/1.1
+Authorization: Bearer <token or API key>
+```
+
+The gateway grants one convenience: when the presented credential is pinned to exactly one workspace — and an API key always is — and `workspace_id` was not sent, the gateway fills it in from the credential itself. An explicitly sent value always wins. When the credential covers several workspaces the gateway does not guess and the 400 stands.
+
+The fill-in cannot widen authority: it only ever names a workspace the credential already holds, and the domain worker still runs its own permission check there.
+
+## What another tenant looks like from outside
+
+Three different mechanisms hold the boundary, and they look different from the outside:
+
+- **Lists and collections** are filtered by `workspace_id`. Foreign rows are not "forbidden" — they are simply not in the response.
+- **Operations on an object** (edits, admin actions) first resolve the object's own workspace and then require the matching permission there. No permission gives a 403 reading like `Permission denied for workspace 7: tournament.update required`. A non-existent object gives a 404.
+- **Hidden tournaments** answer 404 "not found" to everyone except insiders: a superuser, a member of the organizing workspace, and accounts on the preview allowlist. The same rule governs WebSocket subscriptions, see [Realtime](/docs/dev/realtime).
+
+Public platform reads (a player profile, catalogues, a tournament page by id) stay public: tenancy scopes domain queries and every write, it does not turn open data into closed data.
+
+## Members
+
+`workspace_member` is the anchor everything community-local hangs off: rosters, registrations, drafts, achievements and ranks. The row is unique on `(workspace_id, player_id)` and is deliberately thin — it holds neither an `auth_user_id` nor a role column.
+
+That is because identity is split into layers:
+
+| Layer | What it is | Key property |
+| --- | --- | --- |
+| `auth.user` | The account: login, sessions, roles | May not exist at all |
+| `players.user` | The player: BattleTag, history | `auth_user_id` is unique and may be `NULL` — a shadow player from a log or a spreadsheet, who cannot sign in |
+| `public.workspace_member` | The player inside one community | Unique per workspace and player; carries a local `display_name` |
+| `balancer.member_rank` | The member's ranks | A layer on the member, not on the account |
+
+Two practical consequences follow. First, a registration, a roster slot and a rank all reference the member, not the account, so an organizer can enter a player who has no account. Second, a member's role does not live here but in the account's workspace-scoped roles — and a member without an account has no role at all. When an account first appears in a workspace with no role there yet, it is automatically given the `member` system role; the autofill never touches an existing role and never downgrades one.
+
+## Roles and permissions
+
+Permissions are a flat catalogue of `resource.action` grants (`tournament.update`, `registration.approve`) plus the single wildcard `admin.*`. The catalogue is the allowlist: a permission that is not in it cannot be granted. On top of it sit five workspace system roles:
+
+| Role | What it grants |
+| --- | --- |
+| `owner` | `admin.*` — everything in this workspace |
+| `admin` | Everything except managing roles and permissions, and except deleting the workspace or its members |
+| `host` | `member`-level reads plus the full `custom_game` lifecycle — this **is** the right to run mixes |
+| `member` | `*.read` on the community's domain resources only |
+| `player` | Nothing |
+
+Separate from those are capabilities allowed by default for everyone: `account.avatar`, `account.social`, `registration.self_register`, `workspace.self_create`. They exist not to be granted but so they can be taken away from one account.
+
+Taking them away is the job of the **deny overlay**: a per-account record saying "this account is denied `resource.action`", either globally or scoped to one workspace. A deny beats every grant, superuser included, but it matches exactly: it is never a wildcard, so denying `tournament.update` leaves `tournament.delete` untouched.
+
+Evaluation order for a permission in a workspace:
+
+1. A deny on that exact `resource.action` — immediately no.
+2. Superuser, or the global `admin` role — yes.
+3. A global grant (wildcards apply) — yes.
+4. The `owner` or `admin` role in this workspace — yes, except the `role` and `permission` resources and except `workspace.delete` and `workspace_member.delete`.
+5. A grant issued inside this workspace (wildcards apply) — yes.
+6. Otherwise no.
+
+## The permissions an integrator needs
+
+These names are exactly what the endpoint checks, and exactly what you list in a key's scopes.
+
+| Permission | Why an integrator wants it |
+| --- | --- |
+| `tournament.read`, `stage.read`, `match.read`, `standing.read`, `team.read`, `player.read` | Reading the community's tournament picture |
+| `tournament.create`, `tournament.update` | Creating and editing tournaments |
+| `registration.read` | Reading registrations |
+| `registration.approve`, `registration.reject`, `registration.check_in` | Admission, rejection, check-in |
+| `registration_form.read`, `registration_form.update` | The registration form |
+| `team.create` | Creating teams, including as the result of a balancer job |
+| `balancer.read`, `balancer.create` | Balancer jobs |
+| `custom_game.create`, `custom_game.update`, `custom_game.delete` | Running mixes |
+| `log.create`, `log.read` | Uploading and reading match-log processing |
+| `analytics.read` | Community analytics |
+| `stream.update`, `rank.update`, `subscription.update` | Manually re-polling stream statuses, ranks and subscriptions |
+| `admin.*` | Everything at once; grant it only when listing what you need is genuinely impossible |
+
+## Key scopes are the same permissions
+
+An API key has no permission vocabulary of its own: a key's scope is a permission name from that same catalogue. When a key is presented, its scopes are intersected with the owner's real permissions in the single workspace the key is pinned to, and the result is injected as an ordinary permission set. That is why endpoints authorize a key with the same check they use for a session, with no separate branch.
+
+Consequences worth planning around when you hand out keys:
+
+- A key is never wider than its owner: take a permission away from the owner and the key loses it at the same moment.
+- A key sees exactly one workspace, and its set never contains global permissions.
+- A key with no scopes can do nothing at all, including authenticating a socket.
+- `admin.*` is the only wildcard; there is no `tournament.*` form.
+- An unknown scope name is rejected when the key is created, and a permission later retired from the catalogue simply degrades that key's authority instead of breaking it.
+
+Issuing, rotating and revoking keys is session-only, never key-to-key; details and quotas are in [Authentication and API keys](/docs/dev/identity).
+
+## See also
+
+- [Authentication and API keys](/docs/dev/identity) — sessions, keys, scopes, limits.
+- [HTTP API](/docs/dev/api) — versions, errors, pagination.
+- [Realtime (WebSocket)](/docs/dev/realtime) — workspace topics and subscription rules.
+- [Data model](/docs/dev/data-model) — where `workspace`, `workspace_member` and roles live.

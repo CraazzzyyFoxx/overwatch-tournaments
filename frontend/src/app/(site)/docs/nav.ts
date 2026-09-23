@@ -15,21 +15,24 @@ export type DocGroup = {
   items: DocLink[];
 };
 
-export type GuideId = "players" | "organizers";
-export type SectionId = GuideId | "dev";
+export type GuideId = "players" | "organizers" | "dev";
 
 export type DocSection = {
-  id: SectionId;
+  id: GuideId;
   label: string;
   href: string;
   groups: DocGroup[];
 };
 
 type GuideArticle = { slug: string; title: Localized; keywords: Localized };
-type GuideGroup = { label: Localized; articles: GuideArticle[] };
+/** A sidebar entry that is not an MDX article: the schema page, the gateway's API reference. */
+type GuideLink = { href: string; title: Localized; keywords: Localized; bypassNext?: boolean };
+type GuideGroup = { label: Localized; articles: GuideArticle[]; links?: GuideLink[] };
+
+export const GUIDE_IDS: GuideId[] = ["players", "organizers", "dev"];
 
 /**
- * Player and organizer guides. Each article is one MDX file per locale at
+ * Every guide. Each article is one MDX file per locale at
  * `_content/<locale>/<guide>/<slug>.mdx`; `content.parity.test.ts` holds the
  * two in step. The title lives here, not in the file, because the sidebar
  * needs every title without loading every article.
@@ -389,67 +392,135 @@ export const GUIDES: Record<GuideId, GuideGroup[]> = {
       ],
     },
   ],
+  dev: [
+    {
+      label: { ru: "Начало", en: "Getting started" },
+      articles: [
+        {
+          slug: "overview",
+          title: { ru: "Обзор для разработчиков", en: "Developer overview" },
+          keywords: {
+            ru: "архитектура шлюз gateway интеграция api",
+            en: "architecture gateway integration api",
+          },
+        },
+        {
+          slug: "contributing",
+          title: { ru: "Участие в разработке", en: "Contributing" },
+          keywords: {
+            ru: "репозиторий локальный запуск docker ci pull request",
+            en: "repository local setup docker ci pull request",
+          },
+        },
+      ],
+    },
+    {
+      label: { ru: "API", en: "API" },
+      articles: [
+        {
+          slug: "identity",
+          title: { ru: "Аутентификация и ключи API", en: "Authentication and API keys" },
+          keywords: {
+            ru: "jwt api-ключ токен скоупы oauth сессия квоты",
+            en: "jwt api key token scopes oauth session quota",
+          },
+        },
+        {
+          slug: "api",
+          title: { ru: "HTTP API", en: "HTTP API" },
+          keywords: {
+            ru: "v1 v2 envelope ошибки коды версии пагинация кэш",
+            en: "v1 v2 envelope errors codes versions pagination cache",
+          },
+        },
+        {
+          slug: "realtime",
+          title: { ru: "Realtime (WebSocket)", en: "Realtime (WebSocket)" },
+          keywords: {
+            ru: "websocket топик подписка replay события",
+            en: "websocket topic subscribe replay events",
+          },
+        },
+      ],
+      links: [
+        {
+          href: "/api/docs",
+          title: { ru: "Справочник эндпоинтов", en: "Endpoint reference" },
+          keywords: { ru: "scalar openapi swagger v1 v2", en: "scalar openapi swagger v1 v2" },
+          bypassNext: true,
+        },
+      ],
+    },
+    {
+      label: { ru: "Предметная область", en: "Domain model" },
+      articles: [
+        {
+          slug: "workspaces",
+          title: { ru: "Воркспейсы и права", en: "Workspaces and permissions" },
+          keywords: {
+            ru: "tenant домен поддомен rbac роли участники",
+            en: "tenant domain subdomain rbac roles members",
+          },
+        },
+        {
+          slug: "tournaments",
+          title: { ru: "Турниры, стадии и сетка", en: "Tournaments, stages and brackets" },
+          keywords: {
+            ru: "фазы стадии сетка встречи таблица",
+            en: "phases stages bracket encounters standings",
+          },
+        },
+        {
+          slug: "registration",
+          title: { ru: "Регистрация и составы", en: "Registration and rosters" },
+          keywords: {
+            ru: "заявка допуск чек-ин ростер форма ростера команды капитанов",
+            en: "registration admission check-in roster shape captain teams",
+          },
+        },
+        {
+          slug: "matches",
+          title: { ru: "Встречи, результаты и логи", en: "Encounters, results and logs" },
+          keywords: {
+            ru: "встреча игра отчёт пик-бан лог матч статистика",
+            en: "encounter game report pick ban log match statistics",
+          },
+        },
+        {
+          slug: "balancer",
+          title: { ru: "Балансировщик, драфт и миксы", en: "Balancer, draft and mixes" },
+          keywords: {
+            ru: "балансировщик драфт микс кастомка капитаны",
+            en: "balancer draft mix custom game captains",
+          },
+        },
+      ],
+    },
+    {
+      label: { ru: "Данные", en: "Data" },
+      articles: [
+        {
+          slug: "data-model",
+          title: { ru: "Модель данных", en: "Data model" },
+          keywords: {
+            ru: "postgres схемы таблицы идентичность erd",
+            en: "postgres schemas tables identity erd",
+          },
+        },
+      ],
+      links: [
+        {
+          href: "/docs/dev/schema",
+          title: { ru: "Схема БД", en: "Database schema" },
+          keywords: { ru: "erd таблицы диаграмма alembic", en: "erd tables diagram alembic" },
+        },
+      ],
+    },
+  ],
 };
 
-/** Developer articles. Russian only, like their content in `articles.tsx`. */
-const DEV_GROUPS: DocGroup[] = [
-  {
-    label: "Платформа",
-    items: [
-      { href: "/docs/dev", title: "Обзор", keywords: "owt платформа воркспейс tenant" },
-      { href: "/docs/dev/workspaces", title: "Воркспейсы", keywords: "домен rbac members branding" },
-      { href: "/docs/dev/identity", title: "Аккаунты и доступ", keywords: "oauth jwt api key player session" },
-    ],
-  },
-  {
-    label: "Турниры",
-    items: [
-      { href: "/docs/dev/tournaments", title: "Турниры и сетка", keywords: "stage bracket standings phase" },
-      { href: "/docs/dev/registration", title: "Регистрация и ростер", keywords: "check-in roster shape sheets" },
-      { href: "/docs/dev/matches", title: "Встречи и логи", keywords: "encounter match report veto log" },
-      { href: "/docs/dev/balancer", title: "Балансировщик и драфт", keywords: "balancer draft captains" },
-      { href: "/docs/dev/realtime", title: "Realtime", keywords: "websocket topic replay" },
-    ],
-  },
-  {
-    label: "API",
-    items: [
-      { href: "/docs/dev/api", title: "HTTP API", keywords: "v1 v2 envelope auth errors openapi" },
-      {
-        href: "/api/docs",
-        title: "Справочник эндпоинтов",
-        keywords: "scalar swagger openapi v1 v2",
-        bypassNext: true,
-      },
-    ],
-  },
-  {
-    label: "Данные",
-    items: [
-      { href: "/docs/dev/schema", title: "Схема БД", keywords: "erd postgres таблицы alembic" },
-    ],
-  },
-];
-
-export const ARTICLE_SLUGS = [
-  "workspaces",
-  "identity",
-  "tournaments",
-  "registration",
-  "matches",
-  "balancer",
-  "realtime",
-  "api",
-] as const;
-
-export type ArticleSlug = (typeof ARTICLE_SLUGS)[number] | "";
-
-export function isArticleSlug(slug: string): slug is Exclude<ArticleSlug, ""> {
-  return (ARTICLE_SLUGS as readonly string[]).includes(slug);
-}
-
 export function isGuideId(value: string): value is GuideId {
-  return value === "players" || value === "organizers";
+  return (GUIDE_IDS as string[]).includes(value);
 }
 
 export function toDocLocale(locale: string): Locale {
@@ -463,23 +534,27 @@ export function findGuideArticle(guide: GuideId, slug: string): GuideArticle | u
 export function guideGroups(guide: GuideId, locale: Locale): DocGroup[] {
   return GUIDES[guide].map((group) => ({
     label: group.label[locale],
-    items: group.articles.map((article) => ({
-      href: `/docs/${guide}/${article.slug}`,
-      title: article.title[locale],
-      keywords: article.keywords[locale],
-    })),
+    items: [
+      ...group.articles.map((article) => ({
+        href: `/docs/${guide}/${article.slug}`,
+        title: article.title[locale],
+        keywords: article.keywords[locale],
+      })),
+      ...(group.links ?? []).map((link) => ({
+        href: link.href,
+        title: link.title[locale],
+        keywords: link.keywords[locale],
+        bypassNext: link.bypassNext,
+      })),
+    ],
   }));
 }
 
-export function docSections(locale: Locale, labels: Record<SectionId, string>): DocSection[] {
-  return [
-    { id: "players", label: labels.players, href: "/docs/players", groups: guideGroups("players", locale) },
-    {
-      id: "organizers",
-      label: labels.organizers,
-      href: "/docs/organizers",
-      groups: guideGroups("organizers", locale),
-    },
-    { id: "dev", label: labels.dev, href: "/docs/dev", groups: DEV_GROUPS },
-  ];
+export function docSections(locale: Locale, labels: Record<GuideId, string>): DocSection[] {
+  return GUIDE_IDS.map((id) => ({
+    id,
+    label: labels[id],
+    href: `/docs/${id}`,
+    groups: guideGroups(id, locale),
+  }));
 }

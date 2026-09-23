@@ -1,0 +1,146 @@
+A tournament entry is a form, a window, a status and an admission decision; a captain-formed team is a separate object that exists before the balancer and the draft ever run. This page describes the rules the server applies to all of it. The full route list lives in the [endpoint reference](/api/docs).
+
+## The registration window
+
+Whether self-service registration is open is decided by exactly one schedule row — the tournament's `REGISTRATION` phase row — plus one tournament flag. The tournament's current phase plays no part: a window that reaches past the start of `LIVE` keeps registration open by itself.
+
+- **No row means closed.** This inverts the usual phase-window contract (where a missing row spans the whole phase), and the inversion applies to registration only: a freshly created tournament must not accept entries before its form is configured.
+- **`COMPLETED` and `ARCHIVED` are always closed**, whatever the dates say. A mis-set `ends_at` cannot reopen a finished tournament.
+- **`allow_late_registration` lifts `ends_at` and nothing else.** It does not open a tournament with no `REGISTRATION` row, and it does not open a window that has not started yet — *late* means after the end, never before the start. The intended closing date stays on the tournament page.
+
+Check-in is a different window with a different rule: the tournament status must be `CHECK_IN` **and** the current moment must fall inside the `CHECK_IN` row. Here the ordinary phase-window contract applies — a missing row, or `ends_at` set to `null`, spans the whole phase.
+
+## Form and entry
+
+One form per tournament, versioned, and an entry is always submitted against the current version.
+
+| Route | Purpose |
+| --- | --- |
+| `GET /api/v1/tournaments/{tournament_id}/registration/form` | Public form plus the sub-role catalog; `null` when there is no form |
+| `POST /api/v1/tournaments/{tournament_id}/registration` | Sign yourself up (201) |
+| `GET /api/v1/tournaments/{tournament_id}/registration/me` | Your own entry, or `null` |
+| `PATCH /api/v1/tournaments/{tournament_id}/registration/me` | Edit your own entry while it is still pending |
+| `DELETE /api/v1/tournaments/{tournament_id}/registration/me` | Withdraw |
+| `POST /api/v1/tournaments/{tournament_id}/registration/me/check-in` | Check in |
+| `GET /api/v1/tournaments/{tournament_id}/registration/list` | Public participant list |
+
+The body is a flat answer map plus the form version the answers were written against. A stale version is refused with `form_version_stale` (409): validation always runs against the current schema.
+
+```http
+POST /api/v1/tournaments/42/registration HTTP/1.1
+Host: owt.craazzzyyfoxx.me
+Authorization: Bearer <session token or API key>
+Content-Type: application/json
+
+{
+  "form_version_id": 7,
+  "answers": {
+    "battle_tag": "Player#2100",
+    "roles": [
+      { "role": "damage", "is_primary": true, "subrole": "hitscan" },
+      { "role": "support", "is_primary": false }
+    ],
+    "identity_discord": "player",
+    "stream_pov": true
+  }
+}
+```
+
+The builtin question keys are fixed: `battle_tag`, `smurf_tags`, `roles`, `stream_pov`, `reserve`, `public_notes`, `organizer_notes`, and `identity_<provider>` for `discord`, `twitch`, `boosty`, `vk`, `youtube`. The BattleTag is its own builtin with its own grammar and is deliberately absent from `identity_*`. Order inside `roles` is the role priority; unknown and duplicate codes are dropped.
+
+The `roles` question's flex mode is `optional` (the registrant names the roles they play), `all_roles` (every role is playable, the registrant still names a priority) or `forced` (every role is playable and primary). A form whose schema cannot be read behaves as `optional`.
+
+The rest of what the form configures, and what a client sees: `auto_approve`, `show_ranks`, `hide_registrations` (the public list collapses to an aggregate server-side), `max_participants` (advisory capacity, not a limit — signing up past it succeeds), `max_substitutes` (bench size for team registration), the open-profile requirement with scope `main` or `all`, the subscription toggle with its stage and scope, and the captain-team rules `team_rank_min`, `team_rank_max`, `team_max_rank_spread`, `team_unique_identity`, `team_require_discord_guild`.
+
+## Statuses
+
+There are two independent status axes, and each is a per-workspace catalog: builtin values can be renamed and recoloured, and custom ones can be added beside them.
+
+| Scope | Builtin values |
+| --- | --- |
+| `registration` | `pending`, `approved`, `rejected`, `withdrawn`, `banned`, `insufficient_data` |
+| `balancer` | `not_in_balancer`, `excluded`, `incomplete`, `ready` |
+
+Custom `balancer`-scope statuses carry two flags: `excludes_from_balancer` (the entry stays out of the pool) and `excludes_from_ready` (the entry never counts as ready). For builtins the first is hard-coded — true only for `not_in_balancer` and `excluded` — and the second is always false.
+
+<Callout type="warning">
+`ready` and `incomplete` are derived from roles and ranks and cannot be written by hand: setting either directly answers 400. The only writer is adding an approved entry to the pool, which sets `ready` when every declared role carries a rank and `incomplete` otherwise.
+</Callout>
+
+One entry per player per tournament — a partial unique index, not a check in code. A player cannot withdraw after checking in (409); from that point only an organizer can remove an attendee. A withdrawn or rejected entry is terminal: an invite does not revive it.
+
+## Admission
+
+Admission is two requirements in a fixed order, and the order is observable because the registrant's progress steps are rendered by walking it.
+
+1. **Open profile.** The stage is a hard-coded `check_in`: no column for it exists until an organizer asks for one. The scope is `main` (the primary BattleTag) or `all` (smurfs included).
+2. **Subscription.** The stage comes from the form (`registration` or `check_in`); garbage and `null` default to `check_in`, because a typo in a setting must not start refusing everyone.
+
+Stages are ordered: `registration` implies `check_in` as well. The subscription *rule* itself lives on the workspace rather than on the tournament — an armed toggle over an empty rule disarms itself instead of refusing everyone.
+
+Requirement states are `satisfied`, `blocked`, `undetermined`, `not_applicable`. **Only `blocked` blocks**, meaning a confirmed failure; everything else, including a composed value nobody recognises, resolves to `undetermined` and fails open. Hence:
+
+- missing Discord or Twitch credentials produce `unknown` and **pass** — a provider outage must never read as a cancelled subscription;
+- under `mode=any` a reason is kept per failing provider;
+- at sign-up a refusal is **softened** when a challenge code could still satisfy a provider;
+- with scope `team`, a current coverage stamp on the team satisfies the requirement for the whole roster and no live provider resolve runs.
+
+The one rule that **fails closed** is the Discord-guild requirement for teams: a check that cannot run, and a workspace with the flag on but no guild bound, are both blocks rather than passes.
+
+After check-in — passed by the player or set by an organizer — every requirement is spent: blocked ones move from `blockers` to `overridden`, and the decision turns on entry completeness alone. Recomputing requirements past check-in is exactly how the "not admitted" badge used to stick forever on a player an organizer had deliberately let in.
+
+The decision is one of `admitted`, `pending_check_in`, `not_admitted`. A gateway refusal is a 400 carrying one error per blocker — every blocker, not just the first — with a machine code such as `open_profile_blocked` or `subscription_blocked`.
+
+## Roles and ranks
+
+A role is **playable** when it is active and a rank greater than zero was found for it. Zero is not "no rank" here: the pool loader drops ranks at or below zero, so a stored zero would produce a player the draft can pick and the balance run silently loses.
+
+Ranks are layered, and the first layer carrying a value wins:
+
+- tournament: **registration → workspace → Overwatch**;
+- mix: **author → workspace → Overwatch**.
+
+The absence of a row is what makes inheritance work, which is why writes delete a row instead of zeroing it — a stored `0` would break the fall-through.
+
+## Roster shape
+
+Slot codes are `tank`, `damage`, `support`, `flex`. The built-in shape is `{"tank": 1, "damage": 2, "support": 2}`.
+
+- Team size runs from 1 to 12 slots. A one-slot roster is allowed.
+- `draft_rounds` is `team_size - 1`: the captain already fills one slot. For a one-slot roster that is zero, and a live draft simply cannot be created for such a tournament.
+- Resolution: tournament override → workspace default → built-in 5v5. The client receives the already-resolved shape and does not recompute it, except as a preview of an unconfirmed editor total.
+- Locks: the workspace default cannot change while an inheriting tournament has a draft or formation in flight, and neither `team_formation` nor the roster shape can change while a draft session is active.
+
+`flex` is a slot, never a rated role: it carries no rank and no role is recorded into it. When every slot in the shape is `flex`, role counters, role filters and role validation are switched off entirely.
+
+## Captain-formed teams
+
+A team assembled by a captain during registration is its own object, distinct from the roster the balancer or the draft materializes. The captain founds the team and registers into it in one call — the same form and the same admission gate a solo entrant gets — because splitting it into "create team" then "register captain" would leave a window in which a captainless team exists.
+
+```http
+POST /api/v1/registration-teams/invites/accept HTTP/1.1
+Host: owt.craazzzyyfoxx.me
+Authorization: Bearer <session token>
+Content-Type: application/json
+
+{ "token": "<raw token from the link>" }
+```
+
+**Invites.** Two addressing modes on one object. With `target_registration_id` it is an in-app offer to a named free agent and carries no token at all; the recipient reads it from their own invites. Without it a shareable link is minted: the raw token is returned exactly once in the create response, only its `sha256` is stored, and comparison is constant-time. Lifetime comes from `ttl_days` (7 by default, 1 to 90 allowed). The cumulative ceiling is 60 invites per team counting revoked and declined ones; an organizer's reset moves the cut-off in time rather than deleting the history.
+
+An invite is not a placeholder entry — it must not inflate the public participant count. A pending invite **reserves** an offerable slot but does not block acceptance: accept looks at open slots, not at unoffered ones. The consume itself is a single guarded `UPDATE … RETURNING`, so two simultaneous redemptions of one link cannot both win; the loser gets 409. The accept rate limiter fails open — the token's entropy is the real defence.
+
+A player who already holds a solo entry is **attached** to the team with that existing row: the submitted registration body is then ignored and their recorded answers stand. The invite preview is the only anonymous surface here: it resolves a link token to the tournament, team, slot, substitute flag, expiry and whether it is still redeemable, without consuming it and without revealing the roster. A token matching nothing answers 404, while a dead or expired invite answers with its state rather than an error.
+
+**Occupancy.** `is_complete` counts starter slots only; substitutes live in a separate `max_substitutes` budget and hold no slot in the roster shape. Team status is `forming`, `complete`, `rejected` or `disbanded`, with an orthogonal organizer admission axis on top — `pending`, `accepted`, `waitlisted`. A captain can freeze a complete roster, after which edits answer `roster_locked` until an organizer unlocks it.
+
+**Eligibility** is evaluated on starters only: minimum and maximum rank and maximum spread (an unrated starter fails min and max but is excluded from the spread), identity uniqueness against the rest of the tournament, and Discord guild membership.
+
+**Export** into tournament teams skips waitlisted, incomplete, empty and subscription-uncovered teams, and every skipped team comes back with a code — `team_waitlisted`, `team_incomplete`, `team_empty`, `team_subscription_uncovered`. Nothing is dropped silently. The export is destructive rather than diffed, so it refuses to run when standings already exist for teams it would not replace.
+
+## See also
+
+- [Balancer, draft and mixes](/docs/dev/balancer) — what happens to the pool after registration.
+- [Tournaments, stages and brackets](/docs/dev/tournaments) — the phases and schedule the windows read.
+- [Workspaces and permissions](/docs/dev/workspaces) — where status catalogs and the subscription rule live.
+- [Endpoint reference](/api/docs) — the full route list.

@@ -1,0 +1,68 @@
+Every service shares one PostgreSQL database, and the domain boundaries are drawn with **Postgres schemas**: a schema belongs to one service, and only that service writes to it. This article explains the schema map, the four identity layers, how rows are scoped to a workspace, and the two infrastructure tables whose behavior is visible from outside: the event outbox and the realtime journal.
+
+## Schemas as domain boundaries
+
+| Schema | Domain | Owner |
+| --- | --- | --- |
+| `auth` | Login accounts, sessions, OAuth, API keys, RBAC | identity-service |
+| `players` | Player identity and linked social accounts | app-service |
+| `public` | Workspaces, membership, division grids, settings, outbox | app-service |
+| `tournament` | Tournament structure, bracket, encounters, pick/ban, reports | tournament-service |
+| `casual` | Casual and scrim matches outside the tournament tree | tournament-service |
+| `overwatch` | Game catalog — heroes, maps, game modes | app-service / parser-service |
+| `overwatch_rank` | Overwatch rank telemetry from OverFast | parser-service |
+| `matches` | Parsed match logs and derived statistics | parser-service |
+| `balancer` | Registration, balancing, live draft, member ranks | balancer-service |
+| `achievements` | Achievement rules, evaluations and manual overrides | parser-service / app-service |
+| `analytics` | Analytics signals and the ML model registry | analytics-service |
+| `log_processing` | Match-log upload and parse records | parser-service / discord-service |
+| `realtime` | The event journal used for WebSocket replay | gateway (Go) |
+| `subscriptions` | Subscription providers, requirements and verdicts | tournament-service / parser-service |
+| `quota` | Quota plans, operation costs and overrides | every service, via `shared.quota` |
+
+The `balancer` schema is wider than its name: it holds tournament applications, balancing results and member ranks alike. A model package name does not always match its schema either — the rank models write to `overwatch_rank`, the log-ingestion models to `log_processing`.
+
+The hubs almost everything converges on: `public.workspace` — the tenant; `public.workspace_member` — a player's membership in one workspace; `players.user` — the player; `auth.user` — the login account; `tournament.tournament` — the root of stages, teams, encounters and registrations; `overwatch.hero` — referenced by statistics, registration preferences and achievements.
+
+## Four identity layers
+
+There is no single "user" entity. There are four layers that sometimes converge on one person and sometimes live apart for years.
+
+| Layer | Table | Question it answers |
+| --- | --- | --- |
+| Login account | `auth.user` | Who can sign in, and what may this session do |
+| Player | `players.user` | Who is this person across tournaments, logs and statistics |
+| Workspace membership | `public.workspace_member` | Does this player exist **in this** community |
+| Ranks | `balancer.member_rank` and `registration_role.rank_value` | What SR does a member have in a role |
+
+Account and player are linked 1:0..1 through the unique nullable `players.user.auth_user_id`. An empty value means a **virtual** player: someone who arrived from a match log, a CSV import, or was added to a roster by an organizer, and who cannot sign in. The layers are separate because a player without an account is a normal state, while an account without a player is a hole — you cannot hang a workspace membership on it, which is why signup creates a bare player row immediately.
+
+`public.workspace_member` is unique on `workspace_id + player_id` and stores neither `auth_user_id` nor a role column. It is the tenant anchor: rosters, registrations, draft, ranks and achievements all point at a member rather than at a bare player, which is what makes workspaces isolated by construction and lets a virtual player sit in a roster and accumulate history. Permissions stay on the account: RBAC is evaluated from the roles of `auth.user`, so a member has no permissions until an account is linked.
+
+Rank is a fourth layer because "a player's SR" is not one number. In `balancer.member_rank` two levels are told apart by a single field, `author_user_id`: `NULL` is the workspace canon everyone sees, any other value is one author's personal book. The remaining layers live outside that table: the value given on a registration (`registration_role.rank_value`) and the Overwatch rank snapshot. The first layer holding a **number** wins, and the context picks the order: a mix reads `author → workspace canon → Overwatch`, a tournament reads `registration → workspace canon → Overwatch`. That is why "follow the canon" is the **absence** of a row rather than a copy of the value, and why clearing a rank deletes the record instead of writing zero.
+
+## Workspace scoping
+
+Almost every business row carries `workspace_id`, directly or transitively through `tournament` or `workspace_member`. Rows that are deliberately global — system roles, permission denials, division grids, registration statuses — allow `workspace_id = NULL`. For the API this means exactly what the [overview](/docs/dev/overview) states: a domain read that names no workspace is rejected rather than answered with another tenant's rows.
+
+## The event outbox
+
+`public.event_outbox` is a transactional outbox: the domain event is written in the same transaction as the business change, so "changed but never published" cannot happen. A single sweeper in the tournament service drains the table and publishes with retries; `event_id` is unique so a consumer can deduplicate, and `status`, `attempts` and `next_attempt_at` hold the retry state. Delivery is at-least-once: consumers must be idempotent, and while the sweeper is down every service's events queue up rather than get lost.
+
+## The realtime journal
+
+`realtime.workspace_event` is the journal the gateway replays from. A row carries `topic`, `event_type`, `payload`, a timestamp and a `schema_version` that lets the payload shape change without invalidating older entries; on reconnect a client names the last id it saw and the gateway returns everything after it on that topic. Not every signal is journalled: some topics are deliberately non-durable — workspace subscription verdicts, tournament stream status and personal notifications write no row and are never replayed, because a client that missed one refetches the list it was waiting for anyway. Subscription details are in [Realtime (WebSocket)](/docs/dev/realtime).
+
+Workspace and tournament ids in the journal tables (including the audit log and notifications) are stored as plain numbers with no foreign keys. That is not an oversight: an append-only journal must outlive the rows it describes and must not be draggable into a cascade delete.
+
+## Where the exact schema lives
+
+- [Database schema](/docs/dev/schema) — interactive table diagrams on the site, generated from the models.
+- [docs/database_erd.md](https://github.com/CraazzzyyFoxx/overwatch-tournaments/blob/master/docs/database_erd.md) — the same source in the repository: every column, relationship and unique index. The diagrams are generated from the ORM metadata, and CI fails when they drift from the code.
+- [docs/users-identity.md](https://github.com/CraazzzyyFoxx/overwatch-tournaments/blob/master/docs/users-identity.md) — the full identity semantics: virtual players, account linking, merges.
+
+## See also
+
+- [Workspaces and permissions](/docs/dev/workspaces) — tenants, members and RBAC from the API side.
+- [Authentication and API keys](/docs/dev/identity) — how an account becomes a request's authority.
+- [Developer overview](/docs/dev/overview) — how the components fit together.

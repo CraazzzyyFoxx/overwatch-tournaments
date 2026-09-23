@@ -27,7 +27,7 @@ The system as it is. These are updated in the same commit as the change they des
 | [`frontend-zones.md`](./frontend-zones.md) | Frontend route zones (`web` / `admin` / `tools`), the three import rules CI enforces, and the per-zone i18n message bundles |
 | [`glossary.md`](./glossary.md) | Domain vocabulary used across code, API and UI |
 | [`business-logic-inventory.md`](./business-logic-inventory.md) | Domain rules and invariants: lifecycle, registration, admission, roster, balancer/draft, brackets, pick-ban, logs, achievements, analytics |
-| [`../frontend/src/app/(site)/docs/_content/`](../frontend/src/app/%28site%29/docs/_content/) | Player and organizer guides, one MDX file per locale (`ru`, `en`), served at `/docs`. Titles and order live in `frontend/src/app/(site)/docs/nav.ts`; developer articles moved to `/docs/dev` |
+| [`../frontend/src/app/(site)/docs/_content/`](../frontend/src/app/%28site%29/docs/_content/) | Player, organizer and developer guides served at `/docs`, one MDX file per locale (`ru`, `en`). Titles and order live in `frontend/src/app/(site)/docs/nav.ts`. The `/docs/dev/schema` page renders `schema.generated.json`, written by `backend/scripts/export_erd.py` alongside `database_erd.md` |
 
 ### Per component
 

@@ -1,0 +1,121 @@
+Как устроен репозиторий, как поднять платформу локально, какие проверки должен пройти коммит и как изменение доезжает до продакшена. Подробные документы лежат в самом репозитории; здесь — карта и минимум команд, чтобы начать.
+
+## Что где лежит
+
+| Каталог | За что отвечает |
+| --- | --- |
+| `frontend/` | Next.js-приложение: публичный сайт, админка, инструменты |
+| `gateway/` | Go-шлюз — единственная точка входа HTTP и WebSocket |
+| `backend/shared/` | Общее ядро: ORM-модели, репозитории, RBAC, мультиарендность, messaging, наблюдаемость |
+| `backend/*-service/` | Доменные воркеры без HTTP: app, identity, tournament, parser, balancer, analytics, stream, discord |
+| `backend/migrations/` | Один проект Alembic на всю базу |
+| `backend/env/` | Шаблоны переменных окружения (`*.env.example`) для каждого сервиса |
+| `nginx/` | Внутренний HTTP-край перед шлюзом |
+| `monitoring/` | Prometheus, Grafana, Loki, Tempo, OpenTelemetry, алерты |
+| `ops/` | Деплой, бэкапы, очистка диска, генерация release notes |
+| `loadtests/` | Сценарии Locust |
+| `docs/` | Архитектура, модель данных, доменные правила, ранбуки, планы |
+
+Внутри бэкенда действует одно расслоение — `rpc → services → domain → repository → models`, и новый REST-маршрут это всегда запись в таблице маршрутов шлюза плюс RPC-метод в сервисе, который владеет данными, а не новый слушающий порт.
+
+## Локальный запуск
+
+Понадобятся Git, Docker Engine или Docker Desktop с Compose v2 и `make` (каждая цель — тонкая обёртка над `docker compose`). Для работы без контейнеров нужны Python 3.14 с [uv](https://docs.astral.sh/uv/), Bun и Go 1.25.
+
+Скопируйте шаблоны окружения, не трогая сами шаблоны, и создайте корневой `.env` для Compose — его содержимое для локального запуска приведено в [README](https://github.com/CraazzzyyFoxx/overwatch-tournaments/blob/master/README.md):
+
+```bash
+for file in backend/env/*.env.example; do cp "$file" "${file%.example}"; done
+cp frontend/.env.example frontend/.env.local
+```
+
+Значения RabbitMQ и PostgreSQL в корневом `.env` должны совпадать с `backend/env/common.env`, а `JWT_SECRET_KEY` в `backend/env/auth.env` нужно заменить на случайную строку не короче 32 символов — он общий у шлюза и воркеров.
+
+```bash
+make dev-up      # поднять основной стек
+make migrate     # alembic upgrade head внутри app-svc
+```
+
+Дальше сайт открывается на `http://localhost`, справочник API — на `http://localhost/api/docs`, шлюз напрямую — на `http://localhost:8080`.
+
+| Команда | Что делает |
+| --- | --- |
+| `make dev-up` | Поднять основной стек (без тяжёлых воркеров) |
+| `make dev-up-full` | То же плюс профиль `workers` (ML-джобы, Discord-бот) |
+| `make dev-rebuild` | Пересобрать и перезапустить основной стек |
+| `make dev-health` | Состояние и healthcheck контейнеров |
+| `make dev-logs` | Следить за логами |
+| `make dev-down` | Остановить стек |
+| `make migrate` | Применить миграции в `app-svc` |
+| `make test` | Прогнать бэкендовые тесты в `app-svc` |
+| `make help` | Полный список целей |
+
+Локальная база включается профилем `db` в корневом `.env`; без него Compose ждёт внешний PostgreSQL по настройкам из `backend/env/common.env`. Профиль `workers` добавляет долгоживущие воркеры, профиль `monitoring` — экспортеры и сборщики.
+
+Compose-файлов несколько, каждый со своей задачей: `docker-compose.yml` — dev с горячей перезагрузкой, `docker-compose.production.yml` — образы из GHCR и ограничения ресурсов, `docker-compose.monitoring.yml` — отдельный проект мониторинга, `docker-compose.gpu.yml` — override с NVIDIA для `analytics-worker`, `docker-compose.backup.yml` — бэкапы, `docker-compose.test.yml` — эфемерный PostgreSQL для тестов, запускаемых на хосте.
+
+Код сервисов примонтирован в dev-контейнеры, и FastStream перезагружает его сам, так что пересборка нужна редко. Фронтенд и шлюз удобнее гонять напрямую:
+
+```bash
+cd frontend && bun install --frozen-lockfile && bun run dev
+cd gateway && go run ./cmd/gateway
+```
+
+## Что проверяет CI
+
+Изменение проходит пять независимых workflow. Полезно прогнать их локально по затронутой области — они же вызываются как гейты при релизе.
+
+| Проверка | Что запускается |
+| --- | --- |
+| lint-backend | `uv run bash scripts/lint.sh` (ruff check + format), сверка сгенерированных артефактов: `scripts/export_openapi_schemas.sh --check`, `scripts/export_ow_ladder.py --check`, `scripts/export_erd.py --check`, и `scripts/check_rpc_docs.py` — каждый маршрутизируемый RPC-метод должен быть задокументирован |
+| test-backend | pytest по каждому пакету отдельно с покрытием; интеграционные тесты сами пропускаются, если база недоступна |
+| ci-frontend | `bun run typecheck`, `bun run lint`, `bun run lint:zones`, `bun run test:split`, `bun run test:vitest`, `bun run test:bun`; продакшен-сборка `bun run build` — только на пушах в `master`, не на пул-реквестах |
+| ci-gateway | `go mod tidy -diff`, `gofmt -l .`, `go vet ./...`, `go build ./...`, `go test -race ./...` |
+| ci-docs | `python3 scripts/check_doc_links.py` — относительные ссылки в документации должны разрешаться |
+
+Три файла в репозитории закоммичены, но выведены из кода, и CI падает при расхождении: манифест OpenAPI, из которого шлюз строит спецификации; `frontend/src/lib/divisions/ow-ladder.generated.json`; и диаграммы сущностей в `docs/database_erd.md`. После изменения ORM-модели их перегенерируют командами из таблицы выше. Хуки ставятся один раз — `pre-commit install`, они гоняют ruff и гигиену файлов по застейдженному.
+
+<Callout type="warning">
+Миграция, которая удаляет колонку или таблицу, не должна приезжать обычным `upgrade head`, пока живой код ещё читает удаляемое. Безопасный порядок описан в ранбуке [challonge_normalization_phase2_runbook.md](https://github.com/CraazzzyyFoxx/overwatch-tournaments/blob/master/docs/challonge_normalization_phase2_runbook.md).
+</Callout>
+
+## Коммиты
+
+Conventional Commits с доменным скоупом:
+
+```text
+type(scope): что код теперь делает, в повелительном наклонении и строчными
+```
+
+- `type` — `feat`, `fix`, `refactor`, `test`, `style`, `chore`, `docs`.
+- `scope` — домен, а не каталог: `tournament`, `draft`, `registration`, `roster`, `bracket`, `standings`, `pre-game`, `stream`, `rbac`, `admin`, `balancer`, `divisions`, `pick-ban`.
+- Тема описывает поведение, а не процесс: `fix(draft): rank a player on their own role, not on their best one`, а не «исправил баг ранжирования».
+
+Это не косметика: release notes собираются из тем коммитов, `!` после типа или трейлер `BREAKING CHANGE:` выносит коммит в отдельный раздел наверху.
+
+## Как уезжает релиз
+
+Рабочая ветка — `develop`, релизная — `master`. Релиз — это пуш тега `v*`:
+
+```bash
+git tag -a v1.2.0 -m "..." && git push origin v1.2.0
+```
+
+Дальше всё делает `deploy-production.yml`: прогоняет те же четыре гейта (lint-backend, test-backend, ci-frontend, ci-gateway), собирает десять образов на раннерах GitHub и кладёт их в GHCR, одним ssh-подключением к продакшен-хосту вытягивает тег, выполняет `alembic upgrade head` из **нового** образа, пока старые контейнеры ещё обслуживают трафик, пересоздаёт стек и только в самом конце публикует GitHub Release с заметками, собранными из Conventional-Commit тем через `ops/release/changelog.sh`. Порядок намеренный: запись о релизе означает «это сейчас работает в продакшене», а не «кто-то нажал publish».
+
+Ручной запуск (`workflow_dispatch`) деплоит тег без гейтов — это решение оператора и единственный путь наружу, пока CI красный; с `skip_build` он переиспользует уже собранные образы, и это же откат.
+
+## Где документация подробнее
+
+- [docs/README.md](https://github.com/CraazzzyyFoxx/overwatch-tournaments/blob/master/docs/README.md) — карта всей документации; документ, которого там нет, считайте несуществующим.
+- [CONTRIBUTING.md](https://github.com/CraazzzyyFoxx/overwatch-tournaments/blob/master/CONTRIBUTING.md) — правила приёма изменений целиком.
+- [docs/architecture.md](https://github.com/CraazzzyyFoxx/overwatch-tournaments/blob/master/docs/architecture.md) — компоненты, поток запроса, гарантии доставки, деплой.
+- [gateway/README.md](https://github.com/CraazzzyyFoxx/overwatch-tournaments/blob/master/gateway/README.md) — маршруты, аутентификация, кэш, realtime-хаб.
+- [backend/ARCHITECTURE.md](https://github.com/CraazzzyyFoxx/overwatch-tournaments/blob/master/backend/ARCHITECTURE.md) — расслоение бэкенда.
+- [docs/business-logic-inventory.md](https://github.com/CraazzzyyFoxx/overwatch-tournaments/blob/master/docs/business-logic-inventory.md) — доменные правила и инварианты.
+
+## См. также
+
+- [Обзор для разработчиков](/docs/dev/overview) — что платформа отдаёт наружу.
+- [Модель данных](/docs/dev/data-model) — схемы Postgres и их владельцы.
+- [HTTP API](/docs/dev/api) — контракт, который проверяют гейты.
