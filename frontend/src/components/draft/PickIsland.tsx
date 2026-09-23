@@ -8,6 +8,7 @@ import Link from "next/link";
 import DivisionIcon from "@/components/DivisionIcon";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useDraftPlayerCardQuery, type DraftMutations } from "@/hooks/useDraftData";
 import { usePickCountdown } from "@/hooks/usePickCountdown";
@@ -60,6 +61,12 @@ interface PickIslandProps {
 
 const ICON_BUTTON =
   "flex h-10 w-10 shrink-0 items-center justify-center rounded-[10px] outline-none hover:bg-[color:var(--aqt-overlay-3)] focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)]";
+const VIEW_TAB =
+  "min-h-11 gap-1.5 rounded-lg px-[11px] py-0 text-caption font-medium text-[color:var(--aqt-fg-muted)] ring-offset-0 focus-visible:ring-[color:var(--aqt-teal)] focus-visible:ring-offset-0 data-[state=active]:bg-[color:var(--aqt-card-2)] data-[state=active]:text-[color:var(--aqt-fg)] data-[state=active]:shadow-none sm:min-h-[30px]";
+const VIEW_PANEL =
+  "mt-0 ring-offset-0 focus-visible:ring-inset focus-visible:ring-[color:var(--aqt-teal)] focus-visible:ring-offset-0";
+
+type CardView = "info" | "stats";
 
 /**
  * The floating player card and, for a seat that can act on this player, the
@@ -72,6 +79,9 @@ export function PickIsland(props: Readonly<PickIslandProps>) {
   const t = useTranslations("draftRedesign");
   const [announcement, setAnnouncement] = useState("");
   const cardQuery = useDraftPlayerCardQuery(player?.user_id ?? null);
+  // Held here, not per player: the island outlives every card, so a captain
+  // comparing players keeps the view they chose.
+  const [view, setView] = useState<CardView>("info");
 
   const liveRegion = (
     <p className="sr-only" aria-live="polite">
@@ -216,7 +226,7 @@ export function PickIsland(props: Readonly<PickIslandProps>) {
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain border-t border-[color:var(--aqt-border)]">
-          {hasAccount && <CareerStats query={cardQuery} />}
+          {/* The pick surface stays above the switch: a role is chosen from either view. */}
           <RoleTiles
             player={player}
             selection={selection}
@@ -226,8 +236,37 @@ export function PickIsland(props: Readonly<PickIslandProps>) {
             cardPending={cardPending}
             divisionGrid={divisionGrid}
           />
-          {hasAccount && <CareerTables card={cardQuery.data} pending={cardPending} divisionGrid={divisionGrid} />}
-          <RegistrationSection player={player} />
+          <Tabs value={view} onValueChange={(value) => setView(value as CardView)}>
+            <div className="border-y border-[color:var(--aqt-border)] px-3.5 py-2">
+              <TabsList
+                aria-label={t("island.view.label")}
+                className="h-auto gap-0.5 rounded-[10px] bg-[color:var(--aqt-overlay-3)] p-[3px]"
+              >
+                <TabsTrigger value="info" className={VIEW_TAB}>
+                  {t("island.view.info")}
+                  <span className="font-normal tabular-nums text-[color:var(--aqt-fg-faint)]">
+                    {(player.custom_fields?.length ?? 0) + (player.notes?.trim() ? 1 : 0)}
+                  </span>
+                </TabsTrigger>
+                <TabsTrigger value="stats" className={VIEW_TAB}>
+                  {t("island.view.stats")}
+                </TabsTrigger>
+              </TabsList>
+            </div>
+            <TabsContent value="info" className={VIEW_PANEL}>
+              <RegistrationSection player={player} />
+            </TabsContent>
+            <TabsContent value="stats" className={VIEW_PANEL}>
+              {hasAccount ? (
+                <>
+                  <CareerStats query={cardQuery} />
+                  <CareerTables card={cardQuery.data} pending={cardPending} divisionGrid={divisionGrid} />
+                </>
+              ) : (
+                <p className="px-3.5 py-3 text-sm text-[color:var(--aqt-fg-muted)]">{t("island.noAccount")}</p>
+              )}
+            </TabsContent>
+          </Tabs>
         </div>
 
         {actingTeam != null && available && (

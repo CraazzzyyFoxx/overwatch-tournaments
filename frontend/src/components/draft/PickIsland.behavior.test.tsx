@@ -244,6 +244,17 @@ function buttonStartingWith(prefix: string): HTMLButtonElement | undefined {
   );
 }
 
+/** Radix selects a tab on mousedown, not on click. */
+async function showStats() {
+  const tab = Array.from(document.body.querySelectorAll<HTMLElement>("[role='tab']")).find((node) =>
+    node.textContent?.startsWith("island.view.stats")
+  );
+  await act(async () => {
+    tab!.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 }));
+  });
+  await settle();
+}
+
 function tile(role: string): HTMLElement | null {
   return document.body.querySelector<HTMLElement>(`[role='group'] [title^='roles.${role}']`);
 }
@@ -438,7 +449,7 @@ describe("role tiles", () => {
 });
 
 describe("registration answers", () => {
-  it("renders every public answer behind the collapsed section, a checkbox no as a word", async () => {
+  it("opens on the information view with every public answer, a checkbox no as a word", async () => {
     const { body } = await open({
       subject: player({
         notes: "Plays evenings",
@@ -448,9 +459,6 @@ describe("registration answers", () => {
         ]
       })
     });
-    expect(body.innerHTML).not.toContain("VK profile");
-
-    await click(buttonStartingWith("island.registration.heading")!);
 
     expect(body.innerHTML).toContain("VK profile");
     expect(body.innerHTML).toContain("https://vk.com/ana");
@@ -461,29 +469,34 @@ describe("registration answers", () => {
 });
 
 describe("career stats", () => {
-  it("fetches nothing and shows no stats for a player without an account", async () => {
+  it("fetches nothing and says why there are no stats for a player without an account", async () => {
     const { body } = await open({ subject: player({ user_id: null }) });
+    await showStats();
 
     expect(getDraftCard).not.toHaveBeenCalled();
+    expect(body.innerHTML).toContain("island.noAccount");
     expect(body.innerHTML).not.toContain("island.stats.tournaments");
     expect(body.innerHTML).not.toContain("island.firstTournament");
   });
 
   it("shows the winrate verdict, per-role maps and the recent tournaments", async () => {
     const { body } = await open({ subject: player({ user_id: 42 }) });
+    // The role tiles sit above the switch, so the per-role record shows on either view.
+    expect(tile("support")?.textContent).toContain("65%");
+    await showStats();
 
     expect(getDraftCard).toHaveBeenCalledWith(42);
     expect(body.textContent).toContain("60%");
     expect(body.textContent).toContain("30–20");
     // Newest 3100 against oldest 2900.
     expect(body.textContent).toContain("+200");
-    expect(tile("support")?.textContent).toContain("65%");
     expect(body.textContent).toContain("Spring Cup");
   });
 
   it("hides the winrate under ten maps", async () => {
     getDraftCard.mockResolvedValue(card({ maps: 6, maps_won: 5, maps_lost: 1 }));
     const { body } = await open({ subject: player({ user_id: 42 }) });
+    await showStats();
 
     expect(body.textContent).not.toContain("83%");
     expect(body.innerHTML).toContain("island.stats.lowSample");
@@ -492,6 +505,7 @@ describe("career stats", () => {
   it("says it is the player's first tournament when there is no history", async () => {
     getDraftCard.mockResolvedValue(card({ tournaments: 0, maps: 0, heroes: [], recent_tournaments: [], roles: [] }));
     const { body } = await open({ subject: player({ user_id: 42 }) });
+    await showStats();
 
     expect(body.innerHTML).toContain("island.firstTournament");
   });
@@ -499,6 +513,7 @@ describe("career stats", () => {
   it("offers a retry when the card read fails", async () => {
     getDraftCard.mockRejectedValue(new Error("boom"));
     const { body } = await open({ subject: player({ user_id: 42 }) });
+    await showStats();
 
     expect(body.innerHTML).toContain("profile.stats.error");
     expect(body.innerHTML).toContain("profile.stats.retry");

@@ -5127,6 +5127,7 @@
         "remove": "Remove from my list"
       },
       "firstTournament": "First tournament on the platform — no match history yet.",
+      "noAccount": "No account on the platform — no match history to show.",
       "stats": {
         "tournaments": "Tournaments",
         "tournamentsTitle": "Tournaments played on the platform",
@@ -5173,8 +5174,10 @@
         "rank": "Rank",
         "place": "Place"
       },
-      "registration": {
-        "heading": "Registration"
+      "view": {
+        "label": "Player card view",
+        "info": "Information",
+        "stats": "Statistics"
       },
       "hint": {
         "noPicksLeft": "Your team has no picks left.",

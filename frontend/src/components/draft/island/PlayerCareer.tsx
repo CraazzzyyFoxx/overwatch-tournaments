@@ -32,7 +32,7 @@ export function placeColor(place: number | null): string {
 
 const EYEBROW = "text-label font-medium uppercase tracking-label text-[color:var(--aqt-fg-faint)]";
 const STATS_GRID =
-  "grid grid-cols-[repeat(auto-fit,minmax(112px,1fr))] gap-px border-b border-[color:var(--aqt-border)] bg-[color:var(--aqt-border)]";
+  "grid grid-cols-[repeat(auto-fit,minmax(112px,1fr))] gap-px bg-[color:var(--aqt-border)]";
 const STAT_CELL = "flex min-w-0 flex-col gap-0.5 bg-[color:var(--aqt-card-2)] px-3.5 py-2.5";
 const STAT_VALUE = "whitespace-nowrap font-onest text-[19px] font-semibold leading-tight tabular-nums";
 
@@ -65,8 +65,8 @@ interface Stat {
 }
 
 /**
- * The career row under the card header. Owns the card query's loading and
- * error states; the tables below only render once there is history.
+ * The career row at the top of the Statistics view. Owns the card query's
+ * loading and error states; the tables below only render once there is history.
  */
 export function CareerStats({ query }: Readonly<{ query: UseQueryResult<UserDraftCard> }>) {
   const t = useTranslations("draftRedesign");
@@ -94,7 +94,7 @@ export function CareerStats({ query }: Readonly<{ query: UseQueryResult<UserDraf
 
   if (query.isError) {
     return (
-      <div className="flex items-center gap-3 border-b border-[color:var(--aqt-border)] px-3.5 py-3 text-sm text-[color:var(--aqt-fg-muted)]">
+      <div className="flex items-center gap-3 px-3.5 py-3 text-sm text-[color:var(--aqt-fg-muted)]">
         <p className="min-w-0 flex-1">{t("profile.stats.error")}</p>
         <Button variant="outline" size="sm" onClick={() => query.refetch()}>
           {t("profile.stats.retry")}
@@ -106,7 +106,7 @@ export function CareerStats({ query }: Readonly<{ query: UseQueryResult<UserDraf
   const card = query.data;
   if (card.tournaments === 0) {
     return (
-      <p className="border-b border-[color:var(--aqt-border)] px-3.5 py-3 text-sm text-[color:var(--aqt-fg-muted)]">
+      <p className="px-3.5 py-3 text-sm text-[color:var(--aqt-fg-muted)]">
         {t("island.firstTournament")}
       </p>
     );
