@@ -27265,7 +27265,8 @@
           "default": "access_token",
           "enum": [
             "access_token",
-            "api_key"
+            "api_key",
+            "discord"
           ],
           "title": "Credential Type",
           "type": "string"
@@ -45947,6 +45948,16 @@
           ],
           "title": "Description"
         },
+        "discord_broadcasts_enabled": {
+          "default": true,
+          "title": "Discord Broadcasts Enabled",
+          "type": "boolean"
+        },
+        "discord_dms_enabled": {
+          "default": true,
+          "title": "Discord Dms Enabled",
+          "type": "boolean"
+        },
         "division_grid_version": {
           "anyOf": [
             {
@@ -46355,6 +46366,30 @@
           ],
           "default": null,
           "title": "Description"
+        },
+        "discord_broadcasts_enabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Discord Broadcasts Enabled"
+        },
+        "discord_dms_enabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Discord Dms Enabled"
         },
         "division_grid_version_id": {
           "anyOf": [

@@ -911,9 +911,7 @@ class PickBanSessionService:
         confirmed = score.played
         map_config = await self._resolve_config(session, encounter, PickBanKind.MAP)
         if map_config is not None and self.has_pool(map_config):
-            target = min(
-                await self.settled_map_rounds(session, encounter.id), confirmed + 1, int(encounter.best_of)
-            )
+            target = min(await self.settled_map_rounds(session, encounter.id), confirmed + 1, int(encounter.best_of))
         else:
             target = min(confirmed + 1, int(encounter.best_of))
         if (await self.highest_round_of(session, hero) or 0) >= target:

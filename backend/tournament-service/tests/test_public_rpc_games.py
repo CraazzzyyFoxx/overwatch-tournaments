@@ -175,9 +175,7 @@ class CaptainSelectGameMapTests(IsolatedAsyncioTestCase):
             patch.object(public_rpc.captain_service, "_load_encounter", lambda s, i: _async(_encounter(i)))
         )
         self.enterContext(patch.object(public_rpc.captain_service, "resolve_captain_side", _side))
-        self.enterContext(
-            patch.object(public_rpc.encounter_game_service.game_repo, "get_for_update", _get_for_update)
-        )
+        self.enterContext(patch.object(public_rpc.encounter_game_service.game_repo, "get_for_update", _get_for_update))
         self.enterContext(patch.object(public_rpc.encounter_game_service, "select_map", select or _unused))
         self.enterContext(
             patch.object(public_rpc.encounter_game_service, "reports_by_game", lambda _s, games: _async({}))

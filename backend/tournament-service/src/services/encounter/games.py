@@ -124,9 +124,7 @@ class EncounterGameService:
         stale = [
             game
             for game in games
-            if game.position > len(settled)
-            and game.state != EncounterGameState.CONFIRMED
-            and not reports.get(game.id)
+            if game.position > len(settled) and game.state != EncounterGameState.CONFIRMED and not reports.get(game.id)
         ]
         if stale:
             await self.cancel_games(session, encounter, stale, actor_user_id=None, reason="pick_undone")

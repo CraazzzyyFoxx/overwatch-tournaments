@@ -245,9 +245,7 @@ class PickBanUndoService:
         if not positions:
             return
         games = [
-            game
-            for game in await self.sessions.games.list_games(session, encounter_id)
-            if game.position in positions
+            game for game in await self.sessions.games.list_games(session, encounter_id) if game.position in positions
         ]
         reports = await self.sessions.games.reports_by_game(session, games)
         if any(game.state == EncounterGameState.CONFIRMED or reports.get(game.id) for game in games):

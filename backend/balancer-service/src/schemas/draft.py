@@ -208,7 +208,6 @@ class DraftPickExtendRequest(BaseModel):
         return v
 
 
-
 class DraftPickOverrideRequest(BaseModel):
     expected_version: int
     player_id: int | None = None

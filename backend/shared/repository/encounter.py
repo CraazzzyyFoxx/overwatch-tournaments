@@ -111,9 +111,7 @@ class EncounterMapReportRepository(BaseRepository[models.EncounterMapReport]):
     ) -> Sequence[models.EncounterMapReport]:
         if not game_ids:
             return []
-        result = await session.execute(
-            self.select().where(models.EncounterMapReport.game_id.in_(tuple(game_ids)))
-        )
+        result = await session.execute(self.select().where(models.EncounterMapReport.game_id.in_(tuple(game_ids))))
         return result.scalars().all()
 
 

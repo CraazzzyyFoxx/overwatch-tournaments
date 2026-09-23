@@ -121,9 +121,9 @@ def _plan(conn) -> BackfillPlan:
     sides: dict[int, EncounterSides] = {}
     if encounter_ids:
         rows = conn.execute(
-            sa.text(
-                "SELECT id, home_team_id, away_team_id FROM tournament.encounter WHERE id IN :ids"
-            ).bindparams(sa.bindparam("ids", expanding=True)),
+            sa.text("SELECT id, home_team_id, away_team_id FROM tournament.encounter WHERE id IN :ids").bindparams(
+                sa.bindparam("ids", expanding=True)
+            ),
             {"ids": encounter_ids},
         )
         sides = {row.id: EncounterSides(home_team_id=row.home_team_id, away_team_id=row.away_team_id) for row in rows}
@@ -175,9 +175,7 @@ def upgrade() -> None:
     conn = op.get_bind()
 
     op.execute(
-        "CREATE TYPE tournament.encountergamestate AS ENUM ("
-        + ", ".join(f"'{value}'" for value in GAME_STATES)
-        + ")"
+        "CREATE TYPE tournament.encountergamestate AS ENUM (" + ", ".join(f"'{value}'" for value in GAME_STATES) + ")"
     )
     op.execute(
         "CREATE TYPE tournament.encountergameresultsource AS ENUM ("
@@ -207,9 +205,7 @@ def upgrade() -> None:
         sa.Column("accepted_away_score", sa.Integer(), nullable=True),
         sa.Column(
             "result_source",
-            postgresql.ENUM(
-                *RESULT_SOURCES, name="encountergameresultsource", schema="tournament", create_type=False
-            ),
+            postgresql.ENUM(*RESULT_SOURCES, name="encountergameresultsource", schema="tournament", create_type=False),
             nullable=True,
         ),
         sa.Column("result_version", sa.Integer(), server_default="0", nullable=False),
@@ -257,9 +253,7 @@ def upgrade() -> None:
         postgresql_where=sa.text("state != 'cancelled'"),
     )
 
-    op.add_column(
-        "encounter_result_audit", sa.Column("game_id", sa.BigInteger(), nullable=True), schema="tournament"
-    )
+    op.add_column("encounter_result_audit", sa.Column("game_id", sa.BigInteger(), nullable=True), schema="tournament")
     op.add_column(
         "encounter_result_audit", sa.Column("game_result_version", sa.Integer(), nullable=True), schema="tournament"
     )
@@ -289,9 +283,7 @@ def upgrade() -> None:
     log.info("encgame01: planned %d games from legacy per-map results", len(plan.games))
 
     op.add_column("encounter_map_report", sa.Column("game_id", sa.BigInteger(), nullable=True), schema="tournament")
-    op.add_column(
-        "encounter_map_report", sa.Column("side", sa.String(length=16), nullable=True), schema="tournament"
-    )
+    op.add_column("encounter_map_report", sa.Column("side", sa.String(length=16), nullable=True), schema="tournament")
     if plan.report_keys:
         conn.execute(
             sa.text("UPDATE tournament.encounter_map_report SET game_id = :game_id, side = :side WHERE id = :id"),
@@ -352,9 +344,7 @@ def upgrade() -> None:
             plan.deleted_match_ids,
         )
         conn.execute(
-            sa.text("DELETE FROM matches.match WHERE id IN :ids").bindparams(
-                sa.bindparam("ids", expanding=True)
-            ),
+            sa.text("DELETE FROM matches.match WHERE id IN :ids").bindparams(sa.bindparam("ids", expanding=True)),
             {"ids": plan.deleted_match_ids},
         )
 
@@ -383,7 +373,9 @@ def downgrade() -> None:
     Deleted ``captain_report`` matches are NOT restored, and pick/ban entries
     that were ``played`` stay ``picked``: both were dropped on purpose going up.
     """
-    op.add_column("encounter_map_report", sa.Column("encounter_id", sa.BigInteger(), nullable=True), schema="tournament")
+    op.add_column(
+        "encounter_map_report", sa.Column("encounter_id", sa.BigInteger(), nullable=True), schema="tournament"
+    )
     op.add_column("encounter_map_report", sa.Column("map_id", sa.BigInteger(), nullable=True), schema="tournament")
     op.add_column(
         "encounter_map_report",
@@ -406,8 +398,7 @@ def downgrade() -> None:
     # A report on a map-less (``planned``) game, or on an encounter whose side
     # is empty, has no legacy shape to go back to.
     op.execute(
-        "DELETE FROM tournament.encounter_map_report "
-        "WHERE encounter_id IS NULL OR map_id IS NULL OR team_id IS NULL"
+        "DELETE FROM tournament.encounter_map_report WHERE encounter_id IS NULL OR map_id IS NULL OR team_id IS NULL"
     )
     for name in ("encounter_id", "map_id", "map_index", "team_id"):
         op.alter_column("encounter_map_report", name, nullable=False, schema="tournament")
@@ -474,9 +465,7 @@ def downgrade() -> None:
     )
 
     op.drop_constraint("ck_encounter_map_report_side", "encounter_map_report", schema="tournament", type_="check")
-    op.drop_constraint(
-        "uq_encounter_map_report_game_side", "encounter_map_report", schema="tournament", type_="unique"
-    )
+    op.drop_constraint("uq_encounter_map_report_game_side", "encounter_map_report", schema="tournament", type_="unique")
     op.drop_constraint(
         "fk_tournament_encounter_map_report_game_id",
         "encounter_map_report",
@@ -506,9 +495,7 @@ def downgrade() -> None:
 
     op.drop_index("uq_encounter_game_encounter_position", table_name="encounter_game", schema="tournament")
     op.drop_index(op.f("ix_tournament_encounter_game_map_id"), table_name="encounter_game", schema="tournament")
-    op.drop_index(
-        op.f("ix_tournament_encounter_game_encounter_id"), table_name="encounter_game", schema="tournament"
-    )
+    op.drop_index(op.f("ix_tournament_encounter_game_encounter_id"), table_name="encounter_game", schema="tournament")
     op.drop_table("encounter_game", schema="tournament")
     # The three ``game_*`` labels stay on ``encounterresultauditaction``:
     # PostgreSQL cannot drop an enum label.

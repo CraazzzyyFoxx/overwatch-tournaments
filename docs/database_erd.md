@@ -12,7 +12,7 @@ schema name — `ranks/` writes to `overwatch_rank`, `ingestion/` to `log_proces
 > `--check` and fails on drift, so the diagrams cannot fall behind the models again.
 
 <!-- ERD:auto _alembic_head -->
-Alembic head: **`encgame01`** (76 revisions in `backend/migrations/versions/`).
+Alembic head: **`discdm01`** (79 revisions in `backend/migrations/versions/`).
 <!-- /ERD:auto -->
 
 **Reading the diagrams**
@@ -1225,6 +1225,8 @@ erDiagram
         timestamptz end_date "nullable"
         boolean auto_transitions_enabled
         boolean allow_late_registration
+        boolean discord_broadcasts_enabled
+        boolean discord_dms_enabled
         float win_points
         float draw_points
         float loss_points
@@ -2718,17 +2720,40 @@ erDiagram
         bigint workspace_id "nullable"
         bigint source_workspace_id "nullable"
         varchar(64) kind
+        varchar(128) dedupe_key "nullable"
         jsonb payload_json
         bigint actor_auth_user_id "nullable"
         timestamptz published_at
         timestamptz expires_at "nullable"
         timestamptz created_at
     }
+    PUBLIC_NOTIFICATION_DELIVERY {
+        bigint id PK
+        varchar(32) channel
+        varchar(64) target
+        varchar(128) dedupe_key
+        bigint notification_id "nullable"
+        bigint workspace_id "nullable"
+        varchar(64) kind
+        timestamptz created_at
+    }
+    PUBLIC_NOTIFICATION_PREFERENCE {
+        bigint auth_user_id PK,FK
+        jsonb discord_dm
+        timestamptz updated_at
+    }
     PUBLIC_NOTIFICATION_READ {
         bigint auth_user_id PK
         bigint notification_id PK
         timestamptz read_at
         timestamptz deleted_at "nullable"
+    }
+    PUBLIC_NOTIFICATION_WORKSPACE_CONFIG {
+        bigint workspace_id PK,FK
+        bigint discord_channel_id "nullable"
+        varchar(2) locale
+        jsonb broadcast_kinds
+        timestamptz updated_at
     }
     REALTIME_WORKSPACE_EVENT {
         bigint id PK
@@ -2741,7 +2766,14 @@ erDiagram
         jsonb payload
         timestamptz occurred_at
     }
+
+    AUTH_USER ||--o| PUBLIC_NOTIFICATION_PREFERENCE : "auth_user_id"
+    PUBLIC_WORKSPACE ||--o| PUBLIC_NOTIFICATION_WORKSPACE_CONFIG : "workspace_id"
 ```
+
+Composite unique keys:
+
+- `PUBLIC_NOTIFICATION_DELIVERY` unique on (`channel`, `target`, `dedupe_key`)
 <!-- /ERD:auto -->
 
 ## quota — `quota`

@@ -169,9 +169,7 @@ def test_expired_main_clock_enters_overtime_instead_of_autopicking(
     assert payload["clock_expires_at"] == pick.clock_expires_at.isoformat()
 
 
-def test_expiry_during_overtime_autopicks(
-    monkeypatch: pytest.MonkeyPatch, published: list[tuple[str, dict]]
-) -> None:
+def test_expiry_during_overtime_autopicks(monkeypatch: pytest.MonkeyPatch, published: list[tuple[str, dict]]) -> None:
     # The grace period is granted once per pick: the second expiry is the end.
     draft = _draft(overtime_seconds=30)
     pick = _pick(overtime_started_at=datetime.now(UTC) - timedelta(seconds=31))

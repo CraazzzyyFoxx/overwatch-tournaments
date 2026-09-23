@@ -753,9 +753,7 @@ class SyncPickBanSessionAfterTeamChangeTests(IsolatedAsyncioTestCase):
 
     async def test_an_existing_session_with_a_confirmed_game_is_left_alone(self) -> None:
         existing = SimpleNamespace(id=900)
-        session = _FakeSession(
-            existing=existing, games=[_game(1, state=EncounterGameState.CONFIRMED, home=2, away=1)]
-        )
+        session = _FakeSession(existing=existing, games=[_game(1, state=EncounterGameState.CONFIRMED, home=2, away=1)])
         # A map really was played against the old pairing: an admin untangles
         # that by hand rather than having the veto silently re-run (spec §6.5).
         await pick_ban_session_service.sync_pick_ban_session_after_team_change(
@@ -768,9 +766,7 @@ class SyncPickBanSessionAfterTeamChangeTests(IsolatedAsyncioTestCase):
         # A draw scores 0:0, so the old "does the series carry a score" guard
         # let a team change re-veto a map that had actually been played.
         existing = SimpleNamespace(id=900)
-        session = _FakeSession(
-            existing=existing, games=[_game(1, state=EncounterGameState.CONFIRMED, home=1, away=1)]
-        )
+        session = _FakeSession(existing=existing, games=[_game(1, state=EncounterGameState.CONFIRMED, home=1, away=1)])
 
         await pick_ban_session_service.sync_pick_ban_session_after_team_change(
             session, _encounter(best_of=3), PickBanKind.MAP
@@ -793,9 +789,7 @@ class SyncPickBanSessionAfterTeamChangeTests(IsolatedAsyncioTestCase):
         self.assertIn(PickBanSession.__tablename__, session.deleted_tables())
         # The reset retires the position the scrapped picks opened, or a stale
         # game would keep collecting claims under a pool that no longer names it.
-        self.assertEqual(
-            [EncounterGameState.CANCELLED], [game.state for game in session.games]
-        )
+        self.assertEqual([EncounterGameState.CANCELLED], [game.state for game in session.games])
 
 
 class ReadinessGateTests(IsolatedAsyncioTestCase):

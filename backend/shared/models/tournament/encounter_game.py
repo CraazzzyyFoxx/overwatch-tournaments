@@ -46,12 +46,8 @@ class EncounterGame(db.TimeStampIntegerMixin):
             postgresql_where=text("state != 'cancelled'"),
         ),
         CheckConstraint("position >= 1", name="ck_encounter_game_position"),
-        CheckConstraint(
-            "accepted_home_score IS NULL OR accepted_home_score >= 0", name="ck_encounter_game_home_score"
-        ),
-        CheckConstraint(
-            "accepted_away_score IS NULL OR accepted_away_score >= 0", name="ck_encounter_game_away_score"
-        ),
+        CheckConstraint("accepted_home_score IS NULL OR accepted_home_score >= 0", name="ck_encounter_game_home_score"),
+        CheckConstraint("accepted_away_score IS NULL OR accepted_away_score >= 0", name="ck_encounter_game_away_score"),
         # confirmed => the whole accepted shape is present. Cancelled rows keep
         # whatever they had, which is why this is one-directional.
         CheckConstraint(

@@ -241,9 +241,10 @@ class MaplessGameTests(IsolatedAsyncioTestCase):
             self.store, self.encounter.id, PickBanKind.MAP, viewer_side=MapPickSide.HOME.value
         )
         self.assertIsNone(state["session"], "freeplay: there is no veto to run")
-        self.assertEqual([(1, None, EncounterGameState.PLANNED.value)], [
-            (game["position"], game["map_id"], game["state"]) for game in state["games"]
-        ])
+        self.assertEqual(
+            [(1, None, EncounterGameState.PLANNED.value)],
+            [(game["position"], game["map_id"], game["state"]) for game in state["games"]],
+        )
 
         with self.assertRaises(HTTPException) as caught:
             await game_correction_service.correct(

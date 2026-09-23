@@ -145,7 +145,7 @@ def _group_encounter(
 
     # 2. Explicit positions: map_index is the position, verbatim.
     position_maps: dict[int, set[int]] = defaultdict(set)
-    for report, side in sided_reports:
+    for report, _side in sided_reports:
         if report.map_index > 0:
             position_maps[report.map_index].add(report.map_id)
     for match in matches:
@@ -253,9 +253,14 @@ def _plan_game(encounter_id: int, position: int, group: _Group, conflicts: list[
     home = group.reports.get("home")
     away = group.reports.get("away")
     agreed: tuple[int, int] | None = None
-    if home is not None and away is not None and (home.home_score, home.away_score) == (
-        away.home_score,
-        away.away_score,
+    if (
+        home is not None
+        and away is not None
+        and (home.home_score, home.away_score)
+        == (
+            away.home_score,
+            away.away_score,
+        )
     ):
         agreed = (home.home_score, home.away_score)
 

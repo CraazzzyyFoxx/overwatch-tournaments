@@ -272,9 +272,7 @@ class _Fixture:
     def broadcasts(self) -> list[EventOutbox]:
         return list(
             self.session.scalars(
-                sa.select(EventOutbox)
-                .where(EventOutbox.routing_key == BROADCAST_ROUTING_KEY)
-                .order_by(EventOutbox.id)
+                sa.select(EventOutbox).where(EventOutbox.routing_key == BROADCAST_ROUTING_KEY).order_by(EventOutbox.id)
             )
         )
 

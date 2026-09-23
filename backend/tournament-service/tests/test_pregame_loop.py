@@ -66,7 +66,6 @@ from src.services.encounter.pick_ban_session import (  # noqa: E402
 )
 from tests._pregame_store import _matches, _Result, _Store, staged_topics  # noqa: E402,F401
 
-
 # ── fixtures ─────────────────────────────────────────────────────────────────
 
 MAP_SLOTS = [[11, 12, 13], [21, 22, 23], [31, 32, 33]]
@@ -279,8 +278,10 @@ class PregameLoopTests(IsolatedAsyncioTestCase):
             {MapPoolEntryStatus.BANNED.value, MapPoolEntryStatus.PICKED.value},
             {entry["status"] for entry in state["pool"] if entry["round"] == 1},
         )
-        self.assertEqual({"home_wins": 1, "away_wins": 0, "played": 1}, {k: state["series"][k] for k in
-                         ("home_wins", "away_wins", "played")})
+        self.assertEqual(
+            {"home_wins": 1, "away_wins": 0, "played": 1},
+            {k: state["series"][k] for k in ("home_wins", "away_wins", "played")},
+        )
 
         await self.ban_out_the_map_round()
         round_two_heroes = await self.ban_out_the_hero_round()
@@ -310,9 +311,7 @@ class PregameLoopTests(IsolatedAsyncioTestCase):
         self.assertTrue(state["is_complete"])
         self.assertEqual({1, 2, 3}, {entry["round"] for entry in state["pool"]}, "no fourth map round was ever opened")
         self.assertEqual([1, 2, 3], [game["position"] for game in state["games"]])
-        self.assertEqual(
-            [EncounterGameState.CONFIRMED.value] * 3, [game["state"] for game in state["games"]]
-        )
+        self.assertEqual([EncounterGameState.CONFIRMED.value] * 3, [game["state"] for game in state["games"]])
         self.assertTrue(state["series"]["complete"])
         hero = await self.hero_state()
         self.assertTrue(hero["is_complete"])
@@ -338,10 +337,7 @@ class PregameLoopTests(IsolatedAsyncioTestCase):
         # Both claims are on the position so the room can say WHY it is waiting.
         self.assertEqual(
             [{MapPickSide.HOME.value, 2, 1}, {MapPickSide.AWAY.value, 0, 2}],
-            [
-                {report["side"], report["home_score"], report["away_score"]}
-                for report in state["games"][0]["reports"]
-            ],
+            [{report["side"], report["home_score"], report["away_score"]} for report in state["games"][0]["reports"]],
         )
 
     async def test_a_decided_series_stops_opening_rounds(self) -> None:
@@ -735,7 +731,7 @@ class FreeplayPositionOpensOnlyForAPlayableRoomTests(IsolatedAsyncioTestCase):
 
     def _store(self, *, encounter: Encounter, stage: Stage | None = None) -> _Store:
         store = _Store()
-        rows = [encounter, *( [stage] if stage is not None else [] )]
+        rows = [encounter, *([stage] if stage is not None else [])]
         store.seed(*rows)
         store.seed(
             EncounterReadiness(encounter_id=encounter.id, side=MapPickSide.HOME.value, ready_user_id=None),
