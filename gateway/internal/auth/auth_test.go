@@ -158,13 +158,14 @@ func TestUserFromRequest_Sources(t *testing.T) {
 
 func TestIsAPIKey(t *testing.T) {
 	cases := map[string]bool{
-		"aqt_sk_pub_secret":        true,
-		"aqt_sk_":                  true, // malformed, but identity-svc's problem to reject
+		"owt_sk_pub_secret":        true,
+		"owt_sk_":                  true, // malformed, but identity-svc's problem to reject
+		"aqt_sk_pub_secret":        true, // minted before the rebrand, still validated
 		"eyJhbGciOiJIUzI1NiJ9.a.b": false,
 		"":                         false,
-		"sk_aqt_pub_secret":        false,
-		"prefix_aqt_sk_pub_secret": false,
-		"AQT_SK_pub_secret":        false, // the prefix is case-sensitive, like the issuer
+		"sk_owt_pub_secret":        false,
+		"prefix_owt_sk_pub_secret": false,
+		"OWT_SK_pub_secret":        false, // the prefix is case-sensitive, like the issuer
 	}
 	for token, want := range cases {
 		if got := IsAPIKey(token); got != want {
@@ -179,7 +180,7 @@ func TestIsAPIKey(t *testing.T) {
 // pre-change behaviour.
 func TestUserFromRequest_APIKeyWithoutResolverIsAnonymous(t *testing.T) {
 	a := New(testSecret)
-	r := httptest.NewRequest(http.MethodGet, "/ws?token=aqt_sk_pub_secret", nil)
+	r := httptest.NewRequest(http.MethodGet, "/ws?token=owt_sk_pub_secret", nil)
 	if u := a.UserFromRequest(r); u != nil {
 		t.Fatalf("expected anonymous without an api-key resolver, got %+v", u)
 	}
@@ -195,12 +196,12 @@ func TestUserFromRequest_APIKeyResolved(t *testing.T) {
 		return &User{ID: 42}
 	})
 
-	r := httptest.NewRequest(http.MethodGet, "/ws?token=aqt_sk_pub_secret", nil)
+	r := httptest.NewRequest(http.MethodGet, "/ws?token=owt_sk_pub_secret", nil)
 	u := a.UserFromRequest(r)
 	if u == nil || u.ID != 42 {
 		t.Fatalf("expected the resolved principal, got %+v", u)
 	}
-	if seen != "aqt_sk_pub_secret" {
+	if seen != "owt_sk_pub_secret" {
 		t.Errorf("resolver got %q, want the raw key", seen)
 	}
 	// WithAPIKeys returns a copy: the original must stay JWT-only, or httplog
@@ -233,7 +234,7 @@ func TestUserFromRequest_JWTPathUnchangedWithAPIKeys(t *testing.T) {
 // rather than a zero-valued principal (user id 0 would pass nil checks).
 func TestUserFromRequest_APIKeyRejectedStaysAnonymous(t *testing.T) {
 	a := New(testSecret).WithAPIKeys(func(context.Context, string) *User { return nil })
-	r := httptest.NewRequest(http.MethodGet, "/ws?token=aqt_sk_pub_secret", nil)
+	r := httptest.NewRequest(http.MethodGet, "/ws?token=owt_sk_pub_secret", nil)
 	if u := a.UserFromRequest(r); u != nil {
 		t.Fatalf("a rejected key must be anonymous, got %+v", u)
 	}

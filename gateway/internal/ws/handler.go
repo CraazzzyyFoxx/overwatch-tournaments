@@ -165,7 +165,7 @@ func NewHandler(hub *Hub, a *auth.Authenticator, authz Authorizer, rep Replayer,
 // function so this package does not own the RPC wiring.
 type PrincipalResolver func(ctx context.Context, token string) (principal.Info, bool, error)
 
-// APIKeyAuth adapts resolve into an auth.APIKeyResolver, so an `aqt_sk_` API
+// APIKeyAuth adapts resolve into an auth.APIKeyResolver, so an `owt_sk_` API
 // key can authenticate a WebSocket connection that the local JWT parser could
 // never decode (a key carries no claims). Wire it into the authenticator handed
 // to NewHandler — and ONLY that one: resolve performs an identity RPC on a

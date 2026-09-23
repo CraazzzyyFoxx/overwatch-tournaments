@@ -367,7 +367,7 @@ so the shared `{payload, query, identity}` decoders do not apply.
 ## Two credentials, one branch
 
 `Authorization: Bearer` carries either a **session JWT** or a **workspace-scoped API key**
-(`aqt_sk_<public_id>_<secret>`). Exactly one place in the backend knows the difference:
+(`owt_sk_<public_id>_<secret>`; legacy `aqt_sk_` keys still validate). Exactly one place in the backend knows the difference:
 `rpc.identity.validate_token` → `services/token_validation.py::TokenValidationService.validate`,
 which asks `ApiKeyService.is_api_key` and forks. Both branches return the same
 `schemas.TokenPayload`, the gateway injects it into every RPC as `data["identity"]`, and
@@ -417,7 +417,7 @@ zero permissions — there is no implicit default.
 Key and session management stay JWT-only, and structurally so rather than by an explicit check:
 those handlers resolve the caller through `src/rpc/_common.py::with_active_user` →
 `TokenValidationService.resolve_active_user` → `_resolve_bearer`, which JWT-decodes the bearer
-(`services/token_validation.py:99-102`). An `aqt_sk_` string is not a JWT, so it 401s. That
+(`services/token_validation.py:99-102`). An `owt_sk_` string is not a JWT, so it 401s. That
 covers creating/updating/revoking keys, logout and logout-all, session list and revoke, and the
 `/api/auth/me` family (profile read/update, delete, password change) — a key can neither mint
 another key nor extend a session. Login and refresh never see a bearer at all: they take

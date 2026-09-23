@@ -54,7 +54,7 @@ func TestBuild_TopLevel(t *testing.T) {
 	// The caller's description is kept and the credential note appended: the note
 	// is the document's only explanation of the two bearer credentials.
 	desc, _ := info["description"].(string)
-	if !strings.HasPrefix(desc, "desc") || !strings.Contains(desc, "aqt_sk_") {
+	if !strings.HasPrefix(desc, "desc") || !strings.Contains(desc, "owt_sk_") {
 		t.Errorf("info.description = %q, want caller text + API-key credential note", desc)
 	}
 	comps := asMap(t, doc["components"], "components")

@@ -83,13 +83,13 @@ route accepts either one.
 
 | | Session JWT | API key |
 |---|---|---|
-| Format | HS256 JWT | `aqt_sk_<public_id>_<secret>` |
+| Format | HS256 JWT | `owt_sk_<public_id>_<secret>` (keys issued before the rename carry `aqt_sk_` and still work) |
 | Issued by | `POST /api/v1/auth/login` (refreshed via `/api/v1/auth/refresh`) | `POST /api/v1/auth/api-keys` — the plaintext key is returned once and never again |
 | Lifetime | short, tied to a session that can be revoked | until its `expires_at`, or until revoked |
 | Reach | the caller's full RBAC — global roles/permissions and every workspace | one workspace, and only the permissions the key was scoped to |
 
 ```bash
-curl -H "Authorization: Bearer aqt_sk_a1b2c3_..." https://<host>/api/v1/...
+curl -H "Authorization: Bearer owt_sk_a1b2c3_..." https://<host>/api/v1/...
 ```
 
 REST routes read the credential from the `Authorization` header only
