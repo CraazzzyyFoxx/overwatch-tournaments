@@ -133,3 +133,51 @@ class SendDmCommandTests(IsolatedAsyncioTestCase):
         msg.ack.assert_awaited_once()
         msg.reject.assert_not_awaited()
         msg.nack.assert_not_awaited()
+
+    async def test_a_card_is_sent_as_a_components_v2_layout(self) -> None:
+        """Notifications arrive as one card: text beside the logo, details, then
+        one row of actions the bot answers and one of links Discord opens."""
+        user = MagicMock(send=AsyncMock())
+        msg = _message()
+        card = {
+            "accent_color": 0x10B981,
+            "text": "### Check-in opened",
+            "details": "**Closes:** <t:0:F>",
+            "thumbnail_url": "https://cdn.example/logo.png",
+            "rows": [
+                [{"type": "action", "label": "Check in", "action": "check_in", "target": "3", "style": "success"}],
+                [{"type": "link", "label": "Open tournament", "url": "https://owt.example/tournaments/3"}],
+            ],
+        }
+
+        await _command_handler(_bot(user=user))(_body(embed=None, card=card), msg)
+
+        kwargs = user.send.await_args.kwargs
+        self.assertIsNone(kwargs["content"])
+        self.assertIsNone(kwargs["embed"])
+        view = kwargs["view"]
+        self.assertTrue(view.has_components_v2())
+        # Stopped, so discord.py keeps no per-message view: the cog answers by custom_id.
+        self.assertTrue(view.is_finished())
+        (container,) = view.to_components()
+        self.assertEqual(container["accent_color"], 0x10B981)
+        section, _divider, details, actions, links = container["components"]
+        self.assertEqual(section["components"][0]["content"], "### Check-in opened")
+        self.assertEqual(section["accessory"]["media"]["url"], "https://cdn.example/logo.png")
+        self.assertEqual(details["content"], "**Closes:** <t:0:F>")
+        (check_in,) = actions["components"]
+        self.assertEqual((check_in["label"], check_in["custom_id"]), ("Check in", "owt:check_in:3"))
+        (link,) = links["components"]
+        self.assertEqual((link["label"], link["url"]), ("Open tournament", "https://owt.example/tournaments/3"))
+        msg.ack.assert_awaited_once()
+
+    async def test_a_payload_discord_refuses_is_rejected_not_requeued(self) -> None:
+        """A 400 fails the same way on every retry; requeueing it loops forever."""
+        user = MagicMock(send=AsyncMock(side_effect=_http_error(discord.HTTPException, 400)))
+        msg = _message()
+
+        await _command_handler(_bot(user=user))(_body(), msg)
+
+        msg.reject.assert_awaited_once()
+        msg.ack.assert_not_awaited()
+        msg.nack.assert_not_awaited()

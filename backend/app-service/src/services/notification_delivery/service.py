@@ -16,9 +16,13 @@ raises, and the existing consumer semantics send that to the DLQ.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from typing import Any
 
+import sqlalchemy as sa
+
+from shared import models
 from shared.messaging.config import DISCORD_COMMANDS_QUEUE
 from shared.messaging.outbox import enqueue_outbox_event
 from shared.repository.notification import (
@@ -87,19 +91,23 @@ class NotificationDeliveryService:
         if not claimed:
             return "duplicate"
 
-        message = render_discord(
+        payload = row.payload_json or {}
+        workspace_name, image_url = await _branding(session, row.source_workspace_id, payload)
+        card = render_discord(
             row.kind,
-            row.payload_json or {},
+            payload,
             locale=_DM_LOCALE,
             site_url=config.settings.public_site_url,
+            workspace_name=workspace_name,
+            image_url=image_url,
+            personal=True,
         )
         await enqueue_outbox_event(
             session,
             DiscordCommandEvent(
                 action="send_dm",
                 discord_user_id=int(target),
-                content=message.content,
-                embed=message.embed,
+                card=card,
                 allow_mentions=False,
             ),
             exchange="",
@@ -132,19 +140,21 @@ class NotificationDeliveryService:
         if not claimed:
             return "duplicate"
 
-        message = render_discord(
+        workspace_name, image_url = await _branding(session, event.workspace_id, event.payload)
+        card = render_discord(
             event.kind,
             event.payload,
             locale=stored.locale,
             site_url=config.settings.public_site_url,
+            workspace_name=workspace_name,
+            image_url=image_url,
         )
         await enqueue_outbox_event(
             session,
             DiscordCommandEvent(
                 action="post_message",
                 channel_id=channel_id,
-                content=message.content,
-                embed=message.embed,
+                card=card,
                 allow_mentions=False,
             ),
             exchange="",
@@ -152,6 +162,31 @@ class NotificationDeliveryService:
         )
         await session.commit()
         return "sent"
+
+
+async def _branding(
+    session: Any, workspace_id: int | None, payload: Mapping[str, Any]
+) -> tuple[str | None, str | None]:
+    """The organizer's name, and the card's picture: tournament logo, else workspace icon.
+
+    Read at delivery rather than snapshotted into the payload, so the card shows
+    the organizer's current branding; a row deleted since just leaves it plain.
+    """
+    name = icon = logo = None
+    if workspace_id is not None:
+        row = (
+            await session.execute(
+                sa.select(models.Workspace.name, models.Workspace.icon_url).where(models.Workspace.id == workspace_id)
+            )
+        ).first()
+        if row is not None:
+            name, icon = row
+    tournament_id = payload.get("tournament_id")
+    if isinstance(tournament_id, int):
+        logo = (
+            await session.execute(sa.select(models.Tournament.logo_url).where(models.Tournament.id == tournament_id))
+        ).scalar_one_or_none()
+    return name, logo or icon
 
 
 def _expired(expires_at: datetime | None) -> bool:

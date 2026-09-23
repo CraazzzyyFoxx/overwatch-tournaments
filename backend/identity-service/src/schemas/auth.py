@@ -125,7 +125,8 @@ class TokenPayload(BaseModel):
     # global for back-compat with pre-workspace-scoped tokens.
     denies: list[dict[str, str | int | None]] = Field(default_factory=list)
     workspaces: list[WorkspaceMembership] = Field(default_factory=list)
-    credential_type: Literal["access_token", "api_key"] = "access_token"
+    # "discord": a request made by the bot on behalf of a linked Discord account.
+    credential_type: Literal["access_token", "api_key", "discord"] = "access_token"
     api_key: TokenApiKeyInfo | None = None
     exp: int | None = None
 

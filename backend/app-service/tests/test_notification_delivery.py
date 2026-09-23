@@ -29,6 +29,7 @@ from sqlalchemy.pool import StaticPool
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from shared import models  # noqa: E402
 from shared.models.identity.oauth import OAuthConnection  # noqa: E402
 from shared.models.platform.notification import (  # noqa: E402
     Notification,
@@ -54,6 +55,8 @@ TABLES = (
     NotificationWorkspaceConfig.__table__,
     EventOutbox.__table__,
     OAuthConnection.__table__,
+    models.Workspace.__table__,
+    models.Tournament.__table__,
 )
 
 SITE = "https://owt.example"
@@ -82,45 +85,68 @@ class RenderTests(IsolatedAsyncioTestCase):
             self.assertEqual(set(TEMPLATES[locale]), deliverable, locale)
 
     def test_user_written_text_cannot_style_the_message(self) -> None:
-        """Team names and rejection reasons are typed by people.
+        """Team, tournament and workspace names and rejection reasons are typed
+        by people, and a card is markdown end to end.
 
-        An unescaped ``*`` or ``_`` turns the rest of the description into
-        italics, and a leading ``>`` quotes it. The title renders no markdown at
-        all, so there the name must arrive verbatim -- an escape would show as a
-        literal backslash.
+        A masked link is the dangerous one: unescaped, it becomes a clickable
+        ``Claim prize`` inside the platform's own DM. ``#`` would make a
+        headline, ``<@id>`` a mention, ``*`` italicise the rest of the line.
         """
-        message = render_discord(
+        card = render_discord(
             "team.rejected",
             {
                 "team_id": 1,
-                "team_name": "*Overlords*",
+                "team_name": "[Claim prize](https://evil.example)",
                 "tournament_id": 3,
-                "tournament_name": "Cup",
+                "tournament_name": "# Cup <@1>",
                 "reason": "_no show_",
             },
             locale="ru",
             site_url=SITE,
+            workspace_name="*Org*",
         )
 
-        self.assertIn("*Overlords*", message.embed["title"])
-        self.assertNotIn("\\", message.embed["title"])
-        self.assertIn(r"\_no show\_", message.embed["description"])
+        self.assertIn(r"\[Claim prize\](https://evil.example)", card.text)
+        self.assertIn(r"\# Cup \<@1\>", card.text)
+        self.assertIn(r"-# \*Org\*", card.text)
+        self.assertIn(r"\_no show\_", card.details)
 
-    def test_a_long_title_is_cut_to_discords_limit(self) -> None:
-        # Discord answers 400 to a title over 256 characters, which would park
-        # the command in the DLQ instead of sending it.
-        message = render_discord(
-            "registration.opened",
-            {"tournament_id": 3, "tournament_name": "x" * 400},
+    def test_no_reason_is_too_long_for_one_message(self) -> None:
+        # Discord answers 400 past 4000 characters of card text, which would
+        # park the command in the DLQ instead of sending it.
+        card = render_discord(
+            "team.rejected",
+            {
+                "team_id": 1,
+                "team_name": "*" * 400,
+                "tournament_id": 3,
+                "tournament_name": "_" * 400,
+                "reason": "*" * 5000,
+            },
             locale="en",
             site_url=SITE,
+            workspace_name="#" * 400,
         )
 
-        self.assertEqual(256, len(message.embed["title"]))
+        self.assertLessEqual(len(card.text) + len(card.details or ""), 4000)
+        self.assertTrue(card.details.endswith("…"))
+
+    def test_the_card_wears_the_colour_of_its_news(self) -> None:
+        """Same palette as the inbox: an approval must not look like a rejection."""
+        payload = {"tournament_id": 3, "tournament_name": "Cup", "registration_id": 1}
+        approved = render_discord("registration.approved", payload, locale="ru", site_url=SITE)
+        rejected = render_discord("registration.rejected", payload, locale="ru", site_url=SITE)
+        answer = {"team_id": 1, "team_name": "T", "invite_id": 1, "responder_name": "R"}
+        accepted = render_discord("team_invite.answered", {**answer, "answer": "accepted"}, locale="ru", site_url=SITE)
+        declined = render_discord("team_invite.answered", {**answer, "answer": "declined"}, locale="ru", site_url=SITE)
+
+        self.assertEqual(approved.accent_color, accepted.accent_color)
+        self.assertEqual(rejected.accent_color, declined.accent_color)
+        self.assertNotEqual(approved.accent_color, rejected.accent_color)
 
     def test_times_are_rendered_in_the_readers_timezone(self) -> None:
         """``<t:UNIX:F> (<t:UNIX:R>)`` -- Discord localises it per reader."""
-        message = render_discord(
+        card = render_discord(
             "encounter.scheduled",
             {
                 "encounter_id": 5,
@@ -134,17 +160,23 @@ class RenderTests(IsolatedAsyncioTestCase):
             site_url=SITE,
         )
 
-        self.assertIn(f"<t:{DEADLINE_UNIX}:F> (<t:{DEADLINE_UNIX}:R>)", message.embed["description"])
+        self.assertIn(f"<t:{DEADLINE_UNIX}:F> (<t:{DEADLINE_UNIX}:R>)", card.details)
 
     def test_a_missing_optional_field_drops_its_line(self) -> None:
-        """``closes_at`` is absent from the snapshot when the phase has no end."""
+        """``closes_at`` is absent from the snapshot when the phase has no end,
+        and an organizer may reject a team without writing a reason."""
         payload = {"tournament_id": 3, "tournament_name": "Cup"}
+        team = {"team_id": 1, "team_name": "T", **payload}
 
         open_ended = render_discord("check_in.opened", payload, locale="ru", site_url=SITE)
-        with_deadline = render_discord("check_in.opened", {**payload, "closes_at": DEADLINE}, locale="ru", site_url=SITE)
+        with_deadline = render_discord(
+            "check_in.opened", {**payload, "closes_at": DEADLINE}, locale="ru", site_url=SITE
+        )
+        no_reason = render_discord("team.rejected", {**team, "reason": ""}, locale="ru", site_url=SITE)
 
-        self.assertNotIn("description", open_ended.embed)
-        self.assertIn(f"<t:{DEADLINE_UNIX}:F>", with_deadline.embed["description"])
+        self.assertIsNone(open_ended.details)
+        self.assertIn(f"<t:{DEADLINE_UNIX}:F>", with_deadline.details)
+        self.assertIsNone(no_reason.details)
 
     def test_links_land_where_the_inbox_lands(self) -> None:
         """The paths are duplicated from ``lib/notifications/href.ts`` by hand.
@@ -170,15 +202,62 @@ class RenderTests(IsolatedAsyncioTestCase):
         for kind, expected in cases.items():
             self.assertEqual(deep_link_path(kind, payload), expected, kind)
 
-    def test_the_embed_carries_the_absolute_link(self) -> None:
-        message = render_discord(
-            "registration.opened",
-            {"tournament_id": 3, "tournament_name": "Cup"},
-            locale="en",
-            site_url=f"{SITE}/",
+    def test_links_are_absolute_and_only_a_dm_offers_the_way_out(self) -> None:
+        """A channel post has no single reader whose DMs a mute button could switch off."""
+        payload = {"tournament_id": 3, "tournament_name": "Cup"}
+
+        post = render_discord("check_in.opened", payload, locale="en", site_url=f"{SITE}/")
+        dm = render_discord("check_in.opened", payload, locale="en", site_url=SITE, personal=True)
+
+        post_onward, dm_onward = post.rows[-1], dm.rows[-1]
+        self.assertEqual([button.url for button in post_onward], [f"{SITE}/tournaments/3"])
+        link, mute = dm_onward
+        self.assertEqual(link.url, f"{SITE}/tournaments/3")
+        # The group the kind belongs to, so the button says what it switches off.
+        self.assertEqual((mute.action, mute.target), ("notifications.mute", "tournament"))
+
+    def test_one_click_answers_name_the_object_they_act_on(self) -> None:
+        """The bot answers a button with ``owt:<action>:<target>``; a wrong target
+        is an invite accepted on the wrong team or a check-in to another event."""
+        invite = render_discord(
+            "team_invite.received",
+            {
+                "team_id": 1,
+                "team_name": "T",
+                "tournament_id": 3,
+                "tournament_name": "Cup",
+                "slot_code": "tank",
+                "is_substitute": False,
+                "invite_id": 42,
+            },
+            locale="ru",
+            site_url=SITE,
+        )
+        check_in = render_discord(
+            "check_in.opened", {"tournament_id": 3, "tournament_name": "Cup"}, locale="ru", site_url=SITE
+        )
+        opened = render_discord(
+            "registration.opened", {"tournament_id": 3, "tournament_name": "Cup"}, locale="ru", site_url=SITE
         )
 
-        self.assertEqual(message.embed["url"], f"{SITE}/tournaments/3")
+        self.assertEqual(
+            [(b.action, b.target) for b in invite.rows[0]], [("invite.accept", "42"), ("invite.decline", "42")]
+        )
+        self.assertEqual(
+            [(b.action, b.target) for b in check_in.rows[0]], [("check_in", "3"), ("registration.view", "3")]
+        )
+        # Registering needs the form: that card only links to it.
+        self.assertEqual([b.type for row in opened.rows for b in row], ["link"])
+
+    def test_only_an_absolute_image_becomes_the_thumbnail(self) -> None:
+        """Discord fetches the thumbnail itself; a site-relative path is a 400."""
+        payload = {"tournament_id": 3, "tournament_name": "Cup"}
+
+        remote = render_discord("check_in.opened", payload, locale="en", site_url=SITE, image_url="https://cdn/x.png")
+        relative = render_discord("check_in.opened", payload, locale="en", site_url=SITE, image_url="/x.png")
+
+        self.assertEqual(remote.thumbnail_url, "https://cdn/x.png")
+        self.assertIsNone(relative.thumbnail_url)
 
 
 class _AsyncSessionShim:
@@ -282,7 +361,9 @@ class DeliveryTests(IsolatedAsyncioTestCase):
 
     def commands(self) -> list[dict[str, Any]]:
         rows = self.session.scalars(sa.select(EventOutbox).order_by(EventOutbox.id)).all()
-        return [row.payload_json if isinstance(row.payload_json, dict) else json.loads(row.payload_json) for row in rows]
+        return [
+            row.payload_json if isinstance(row.payload_json, dict) else json.loads(row.payload_json) for row in rows
+        ]
 
     def ledger(self) -> list[NotificationDelivery]:
         return list(self.session.scalars(sa.select(NotificationDelivery).order_by(NotificationDelivery.id)).all())
@@ -305,10 +386,38 @@ class DeliveryTests(IsolatedAsyncioTestCase):
         self.assertEqual(command["action"], "send_dm")
         self.assertEqual(command["discord_user_id"], int(DISCORD_ID))
         self.assertFalse(command["allow_mentions"])
-        self.assertIn("Cup", command["embed"]["title"])
+        self.assertIn("Cup", command["card"]["text"])
         (entry,) = self.ledger()
-        self.assertEqual((entry.channel, entry.target, entry.dedupe_key), ("discord_dm", DISCORD_ID, f"notification:{row.id}"))
+        self.assertEqual(
+            (entry.channel, entry.target, entry.dedupe_key), ("discord_dm", DISCORD_ID, f"notification:{row.id}")
+        )
         self.assertEqual(entry.workspace_id, WORKSPACE)
+
+    async def test_the_card_carries_the_organizers_current_branding(self) -> None:
+        """Read at delivery, not from the snapshot: the workspace name above the
+        heading, the tournament logo beside it, the workspace icon when there is none."""
+        self.session.execute(
+            sa.insert(models.Workspace.__table__).values(
+                id=WORKSPACE, slug="anak", name="Anak Series", icon_url="https://cdn.example/ws.png"
+            )
+        )
+        self.session.execute(
+            sa.insert(models.Tournament.__table__).values(
+                id=3, workspace_id=WORKSPACE, name="Cup", slug="cup", logo_url="https://cdn.example/cup.png"
+            )
+        )
+        row = self.personal()
+        self.link_discord()
+        self.configure_workspace()
+
+        await self.service.deliver_personal(self.shim, NotificationCreatedEvent(notification_id=row.id))
+        self.session.execute(sa.update(models.Tournament.__table__).values(logo_url=None))
+        await self.service.deliver_broadcast(self.shim, self._broadcast())
+
+        dm, post = (command["card"] for command in self.commands())
+        self.assertTrue(dm["text"].startswith("-# Anak Series\n"))
+        self.assertEqual(dm["thumbnail_url"], "https://cdn.example/cup.png")
+        self.assertEqual(post["thumbnail_url"], "https://cdn.example/ws.png")
 
     async def test_a_switched_off_group_sends_nothing(self) -> None:
         """The opt-out has to bite before anything is written or queued."""
@@ -400,7 +509,7 @@ class DeliveryTests(IsolatedAsyncioTestCase):
         self.assertEqual(command["action"], "post_message")
         self.assertEqual(command["channel_id"], CHANNEL_ID)
         self.assertFalse(command["allow_mentions"])
-        self.assertEqual(command["embed"]["title"], "Registration for Cup is open")
+        self.assertIn("Registration for **Cup** is open.", command["card"]["text"])
         (entry,) = self.ledger()
         self.assertEqual(
             (entry.channel, entry.target, entry.dedupe_key),

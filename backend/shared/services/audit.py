@@ -69,6 +69,8 @@ def _actor_label(actor: AuthUser | None, label: str | None) -> str | None:
     already on the actor by the time it gets here (``shared.rpc.identity``).
     """
     credential = api_key_label(actor) if actor is not None else None
+    if credential is None and actor is not None and credential_type(actor) == "discord":
+        credential = "via Discord"
     if credential is None:
         return label
     if not label:
@@ -81,9 +83,12 @@ def _actor_label(actor: AuthUser | None, label: str | None) -> str | None:
 
 
 def _source_for(actor: AuthUser | None, source: AuditSource) -> AuditSource:
-    """API key is the request channel; callers still pass ``admin`` for operator writes."""
-    if actor is not None and credential_type(actor) == "api_key":
+    """The credential is the request channel; callers still pass ``admin`` for operator writes."""
+    channel = credential_type(actor) if actor is not None else None
+    if channel == "api_key":
         return "api_key"
+    if channel == "discord":
+        return "discord"
     return source
 
 
@@ -142,12 +147,13 @@ async def record_audit(
     row claims an action was authorized in a workspace where it was not.
 
     ``actor_label`` is stored as given for a session actor; when the actor came
-    in on an API key it gains a ``(api key: <public_id>)`` suffix, so the journal
-    records which of the account's credentials acted.
+    in on an API key it gains a ``(api key: <public_id>)`` suffix, and a
+    ``(via Discord)`` one when the bot acted for them from a button, so the
+    journal records which of the account's credentials acted.
 
-    ``source`` is rewritten to ``api_key`` when the actor authenticated with one.
-    Callers keep passing ``admin`` for operator writes; the credential already
-    rides the actor, so the 100+ sites do not have to know.
+    ``source`` is rewritten to ``api_key`` / ``discord`` when the actor came in
+    that way. Callers keep passing ``admin`` for operator writes; the credential
+    already rides the actor, so the 100+ sites do not have to know.
     """
     row = AuditLog(
         workspace_id=workspace_id,

@@ -198,14 +198,16 @@ COMPLETED/ARCHIVED. Получатели — игроки обеих коман�
 3. `load_provider_user_ids(..., oauth_provider="discord")` → первый (earliest-linked) id. Нет Discord — пропуск.
 4. `INSERT notification_delivery … ON CONFLICT DO NOTHING RETURNING id` (`channel='discord_dm'`, `target=<discord id>`,
    `dedupe_key=f"notification:{id}"`). Ничего не вставилось — редоставка, пропуск.
-5. `render_discord(kind, payload, locale="ru", site_url=…)`.
-6. `enqueue_outbox_event(DiscordCommandEvent(action="send_dm", discord_user_id=…, content, embed, allow_mentions=False),
+5. `render_discord(kind, payload, locale="ru", site_url=…, workspace_name=…, image_url=…, settings_link=True)` —
+   имя воркспейса и картинка (логотип турнира, иначе иконка воркспейса) читаются на доставке, не из снапшота.
+6. `enqueue_outbox_event(DiscordCommandEvent(action="send_dm", discord_user_id=…, card=…, allow_mentions=False),
    exchange="", routing_key=DISCORD_COMMANDS_QUEUE.name)` (`"discord_commands"`, `shared/messaging/config.py:17`) → `commit`.
 
 **Broadcast:**
 1. `notification_workspace_config` воркспейса; нет конфига, канал не задан или kind не в `broadcast_kinds` — пропуск.
 2. Ledger (`channel='discord_channel'`, `target=<channel id>`, `dedupe_key=f"{kind}:{event.dedupe_key}"`).
-3. `render_discord(kind, payload, locale=config.locale, …)` → outbox `post_message` с `allow_mentions=False` → `commit`.
+3. `render_discord(kind, payload, locale=config.locale, workspace_name=…, image_url=…)` (без кнопки настроек) → outbox
+   `post_message` с `card` и `allow_mentions=False` → `commit`.
 
 Ошибка в обработчике — существующая семантика: `observe_message_processing` пробрасывает, FastStream
 отправляет в DLQ без requeue. `ponytail:` ретраев нет, DLQ разбирается вручную.
@@ -219,13 +221,55 @@ COMPLETED/ARCHIVED. Получатели — игроки обеих коман�
 - новый action `send_dm` + поле `discord_user_id: int | None` (обязательно для `send_dm`, валидация в `model_post_init`);
 - новое поле `allow_mentions: bool = True` — дефолт сохраняет поведение существующего продюсера
   (`balancer-service/src/rpc/custom.py`), уведомления передают `False`.
+- новое поле `card: DiscordCard | None` — Components V2 карточка (`accent_color`, `text`, `details`,
+  `thumbnail_url`, `rows: list[list[DiscordLinkButton | DiscordActionButton]]`, дискриминатор `type`);
+  несовместимо с `content` / `embed` / `image_b64`, текст ≤ 4000 символов, ≤ 5 рядов по ≤ 5 кнопок — правила
+  Discord проверяются в модели, а не 400-кой на отправке. `DiscordActionButton(label, action, target, style)`:
+  `action` — `DiscordAction` (Literal со списком действий §4.6.1), `target` — id объекта.
+
+`src/interactions/cards.py`:
+- `card_view(card)` — `LayoutView` с одним `Container(accent_colour)`: `Section(TextDisplay(text),
+  accessory=Thumbnail)` (без картинки — просто `TextDisplay`), `Separator` + `TextDisplay(details)`, по
+  `ActionRow` на ряд. Action-кнопка получает `custom_id = owt:<action>:<target>`. View отправляется
+  остановленным: discord.py не хранит его в памяти, клики обрабатывает один слушатель по `custom_id`.
 
 `gateway.py`:
-- `send_dm`: `user = bot.get_user(id) or await bot.fetch_user(id)`; `await user.send(content=…, embed=…,
+- `send_dm`: `user = bot.get_user(id) or await bot.fetch_user(id)`; `await user.send(content=…, embed=…, view=…,
   allowed_mentions=AllowedMentions.none())`. `discord.Forbidden` (закрыта личка / нет общего сервера) и
   `discord.NotFound` — **ack** + статус `dm_closed` / `not_found`: повторять бессмысленно, DLQ засорять незачем.
 - `post_message`: `allowed_mentions=AllowedMentions.none()` при `allow_mentions=False`.
+- Любой другой `discord.HTTPException` в `send_dm` / `post_message` — **reject** в DLQ со статусом
+  `discord_error`: 429 и 5xx discord.py уже перепробовал сам, а 400 на payload при requeue повторяется вечно.
 - Rate limit — встроенный ratelimiter discord.py.
+
+#### 4.6.1 Действия из Discord
+
+Кнопки, которые бот обрабатывает сам, действуя от имени нажавшего. Только для привязавших Discord через OAuth.
+
+| Карточка | Кнопки (`action:target`) | RPC |
+|---|---|---|
+| `team_invite.received` (DM) | `invite.accept:{invite_id}`, `invite.decline:{invite_id}` | `rpc.tournament.regteam_accept` / `regteam_decline` |
+| `check_in.opened` (DM и канал) | `check_in:{tournament_id}`, `registration.view:{tournament_id}` | `rpc.tournament.reg_pub_check_in` / `reg_pub_get_me` |
+| `registration.approved` / `rejected` (DM) | `registration.view:{tournament_id}` | `rpc.tournament.reg_pub_get_me` |
+| любой DM | `notifications.mute:{group}` («Не присылать о …») | `rpc.app.notification_preferences_update` (`discord_dm[group]=false`) |
+
+Поток (`src/interactions/dispatcher.py::ActionDispatcher`, слушатель `src/cogs/interactions.py`):
+1. `defer()` — отложенное обновление сообщения, в пределах 3 секунд.
+2. `rpc.identity.discord_identity {discord_user_id}` → `TokenPayload` привязанного аккаунта с
+   `credential_type="discord"`; `not_found` — не привязан → ответ «привяжите Discord» со ссылкой на профиль,
+   **никаких вызовов платформы**; `forbidden` — аккаунт отключён. Кэша нет: отвязка действует со следующего клика.
+3. RPC действия с этим `identity` — тот же вызов, что сделал бы gateway для этого человека на сайте; права
+   проверяет сервис (адресный инвайт — только своему аккаунту, чек-ин — только своей заявки).
+4. Ephemeral-ответ на языке клиента нажавшего (`ru` → русский, иначе английский); отказы — по машинному коду
+   (`invite_expired`, `check_in_closed`, …), остальное — сообщением сервиса.
+5. В DM после успеха отработавшие кнопки снимаются (`Action.settles`) и добавляется строка статуса. Пост в канале
+   не редактируется никогда.
+
+Фиксированный список (`src/interactions/actions.py::ACTIONS`), а не мост «вызвать любой RPC»: кнопка несёт
+только «что» и «над чем», пользователь берётся из подписанного Discord'ом `interaction.user`. Совпадение
+`ACTIONS` и `DiscordAction` держит тест. Аудит: `record_audit` пишет такие строки с `source="discord"` и
+суффиксом `(via Discord)`. Slash-команды — следующий вход в `ActionDispatcher.perform`, без изменений в
+списке и в правиле идентичности.
 
 ### 4.7 Настройки пользователя
 
@@ -281,17 +325,26 @@ RPC: `rpc.app.workspaces.notification_config_get` / `…_update`, gate — `c.re
 `app-service/src/domain/notification_render.py` — чистая функция, без сессии:
 
 ```python
-def render_discord(kind: str, payload: Mapping[str, Any], *, locale: str, site_url: str) -> DiscordMessage
+def render_discord(kind, payload, *, locale, site_url, workspace_name=None, image_url=None, personal=False) -> DiscordCard
 ```
 
-- Шаблоны `TEMPLATES[locale][kind] = (title, body, path)` для каждого deliverable kind'а (все, кроме
-  `announcement.published`), `ru` и `en`.
+- Шаблоны `TEMPLATES[locale][kind] = (heading, sentence, detail lines)` для каждого deliverable kind'а (все,
+  кроме `announcement.published`), `ru` и `en`. Заголовок — ярлык kind'а из админки (`workspaceAdmin.kinds`).
+- Карточка: `-# <воркспейс>`, `### <заголовок>`, фраза с **жирными** названиями; под разделителем — детали
+  («Слот», «Причина», «Начало», «Закрытие»). Строка деталей без значения (нет `closes_at`, пустой `reason`)
+  выпадает.
+- Цвет полосы — палитра инбокса (`getKindConfig`): зелёный — одобрено/принято, красный — отклонено/исключён/
+  распущена, янтарный — оспорено/чек-ин, синий — приглашение/матч, teal — регистрация открыта.
 - Даты — `<t:{unix}:F> (<t:{unix}:R>)` (D10).
-- Пользовательский текст (названия команд/турниров, `responder_name`, `reason`) — экранирование Discord-markdown.
-  Пинги отключены на уровне бота (§4.6), экранирование — только ради вида.
-- Ссылка — `site_url` + путь, повторяющий `frontend/src/lib/notifications/href.ts:10`: участники —
-  `/tournaments/{id}/participants`, диспут и `encounter.scheduled` — `/tournaments/{id}/pregame/{encounter_id}`,
-  `registration.opened` / `check_in.opened` — `/tournaments/{id}`. `ponytail:` пути продублированы с фронтом вручную.
+- Весь интерполированный пользовательский текст (названия команд/турниров/воркспейса, `responder_name`,
+  `reason`) обрезается (200 / 1000 символов) и экранируется, включая `[ ] < # -`: в V2-карточке markdown везде,
+  а `[текст](url)` в названии команды иначе стал бы кликабельной ссылкой в официальном DM. Пинги отключены
+  на уровне бота (§4.6).
+- Кнопки — два ряда: сначала действия бота (§4.6.1), затем переход и выход. Переход — `site_url` + путь,
+  повторяющий `frontend/src/lib/notifications/href.ts:10`: участники — `/tournaments/{id}/participants`, диспут и
+  `encounter.scheduled` — `/tournaments/{id}/pregame/{encounter_id}`, `registration.opened` / `check_in.opened` —
+  `/tournaments/{id}`. `ponytail:` пути продублированы с фронтом вручную. В DM (`personal=True`) рядом —
+  `notifications.mute:{group}` с подписью по группе («Не присылать о турнирах / матчах / команде»).
 - `site_url` — новая настройка `PUBLIC_SITE_URL` в `app-service/src/core/config.py` (платформенная зона; фронт
   держит её в `NEXT_PUBLIC_PLATFORM_ZONE`, `frontend/src/lib/site/host.ts:5`). Ссылки на поддомен/кастомный домен
   воркспейса — вне v1.

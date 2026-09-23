@@ -12,6 +12,7 @@ from typing import Any
 from faststream.rabbit.annotations import RabbitMessage
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from shared.core.errors import BaseAPIException as HTTPException
 from src import schemas
 from src.schemas.rpc import rpc_error
 from src.services.service_tokens import service_tokens
@@ -35,6 +36,26 @@ def register(broker: Any, logger: Any) -> None:
             return payload.model_dump(mode="json")
 
         return await c.envelope_session(logger, "validate_token", run)
+
+    @broker.subscriber("rpc.identity.discord_identity")
+    async def _discord_identity(data: dict, msg: RabbitMessage) -> dict:
+        """RBAC TokenPayload for the account a Discord user id is linked to.
+
+        Internal, service-to-service only (no gateway route) -- discord-service
+        calls it to act as the user who clicked a button on a notification card.
+        """
+        raw = (data or {}).get("discord_user_id")
+
+        async def run(session: AsyncSession) -> dict:
+            # Snowflakes arrive as a JSON string or, from a careless client, a
+            # number; either way the stored provider_user_id is the digits.
+            discord_user_id = str(raw).strip() if raw is not None else ""
+            if not discord_user_id.isdigit():
+                raise HTTPException(status_code=422, detail="discord_user_id is required")
+            payload = await token_validation.discord_identity(session, discord_user_id)
+            return payload.model_dump(mode="json")
+
+        return await c.envelope_session(logger, "discord_identity", run)
 
     @broker.subscriber("rpc.identity.service_token")
     async def _service_token(data: dict, msg: RabbitMessage) -> dict:

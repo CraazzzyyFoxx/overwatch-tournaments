@@ -160,6 +160,18 @@ class PostMessageCommandTests(IsolatedAsyncioTestCase):
         self.assertEqual(kwargs["allowed_mentions"].to_dict(), discord.AllowedMentions.none().to_dict())
         msg.ack.assert_awaited_once()
 
+    async def test_a_payload_discord_refuses_is_rejected_not_requeued(self) -> None:
+        """Anything discord.py did not already retry fails the same way next time."""
+        channel = MagicMock(send=AsyncMock(side_effect=discord.HTTPException(MagicMock(status=400), "bad form")))
+        processor = MagicMock(get_text_channel=AsyncMock(return_value=channel))
+        msg = _message()
+
+        await _command_handler(processor)(_body(), msg)
+
+        msg.reject.assert_awaited_once()
+        msg.ack.assert_not_awaited()
+        msg.nack.assert_not_awaited()
+
     async def test_mix_posts_keep_default_mention_behaviour(self) -> None:
         """The balancer pings its players; it never sets allow_mentions."""
         channel = MagicMock(send=AsyncMock())

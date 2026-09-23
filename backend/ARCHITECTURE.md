@@ -423,6 +423,18 @@ covers creating/updating/revoking keys, logout and logout-all, session list and 
 another key nor extend a session. Login and refresh never see a bearer at all: they take
 credentials or a refresh token from the request body.
 
+A third payload never rides a bearer at all: **`credential_type="discord"`**, the bot acting for
+the account that linked the Discord user who pressed a button on a notification card.
+discord-service calls `rpc.identity.discord_identity` with the clicker's Discord id (which
+Discord signs; the button carries only the action and its target) and gets that account's
+ordinary `TokenPayload` back, or `not_found` when nothing is linked -- the OAuth link *is* the
+credential. The payload is the owner's full RBAC, unnarrowed, because the bot can only ever run
+the fixed, self-service action list in `discord-service/src/interactions/actions.py`, each
+through the same user RPC the site calls; widening that list is a reviewed change there, not a
+scope on the credential. The type exists for the journal alone: `record_audit` stores such rows
+with `source="discord"` and a `(via Discord)` actor suffix. Like `oauth_discord_guilds`, the
+subject has no gateway route and trusts the internal broker.
+
 ## Gateway contract
 
 The Go gateway is the only HTTP surface; it publishes to `rpc.<service>.<domain>.<method>` and
