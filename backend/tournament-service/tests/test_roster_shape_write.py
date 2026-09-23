@@ -50,7 +50,6 @@ _STORED_ROLE_SHAPE = {"tank": 1, "damage": 2, "support": 2}
 _INVALID_SLOTS = [
     ({"healer": 2}, "roster_slots_unknown_code"),
     ({"flex": 99}, "roster_slots_out_of_range"),
-    ({"flex": 1}, "roster_slots_out_of_range"),
     ({}, "roster_slots_empty"),
     ({"tank": -1}, "roster_slots_invalid_count"),
 ]
@@ -61,6 +60,11 @@ _INVALID_SLOTS = [
 
 def test_update_accepts_a_flex_only_shape() -> None:
     assert schemas.TournamentUpdate(roster_slots_json={"flex": 6}).roster_slots_json == {"flex": 6}
+
+
+def test_update_accepts_a_one_player_shape() -> None:
+    # A 1v1 tournament: the roster shape is the team format, not a draft setting.
+    assert schemas.TournamentUpdate(roster_slots_json={"flex": 1}).roster_slots_json == {"flex": 1}
 
 
 def test_update_normalizes_zero_counts_away() -> None:

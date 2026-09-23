@@ -5489,7 +5489,7 @@
   },
   "rosterShape": {
     "title": "Roster shape",
-    "description": "How many slots of each kind one team has. The draft picks into exactly these slots, and the balancer fills them.",
+    "description": "The team format: how many slots of each kind one team has. A single slot makes one-player teams.",
     "mode": "Shape",
     "modes": {
       "inherit": "Inherit from the workspace",
@@ -5504,13 +5504,13 @@
       "support": "Support",
       "flex": "Flex"
     },
-    "total": "{total, plural, one {# slot} other {# slots}} · {rounds, plural, one {# draft round} other {# draft rounds}}",
+    "total": "{total, plural, one {# slot} other {# slots}}",
     "errors": {
-      "too_few": "A team needs at least 2 slots — with one, the captain is the whole roster and there is nothing to draft.",
+      "too_few": "A team needs at least 1 slot.",
       "too_many": "A team can have at most 12 slots."
     },
-    "preview": "What a captain fills",
-    "previewEmpty": "Add at least one slot to see what a captain fills.",
+    "preview": "One team's slots",
+    "previewEmpty": "Add at least one slot to see what a team looks like.",
     "inherited": "Inherited from the {source}: {shape}.",
     "inheritedSources": {
       "workspace": "workspace default",

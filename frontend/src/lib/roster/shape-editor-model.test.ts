@@ -1,12 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import type { RosterShape } from "@/lib/roster/shape";
-
 import {
   MAX_ROSTER_TOTAL,
   MAX_SLOT_COUNT,
   MIN_ROSTER_TOTAL,
-  draftRoundsPreview,
   initialSelection,
   modeForOverride,
   normalizeSlots,
@@ -18,18 +15,6 @@ import {
 } from "@/lib/roster/shape-editor-model";
 
 const OW5V5 = { tank: 1, damage: 2, support: 2 } as const;
-
-function shape(partial: Partial<RosterShape> = {}): RosterShape {
-  return {
-    slots: { ...OW5V5 },
-    team_size: 5,
-    flex_slots: 0,
-    has_role_slots: true,
-    draft_rounds: 4,
-    source: "workspace",
-    ...partial
-  };
-}
 
 describe("modeForOverride", () => {
   it("maps no override to inherit", () => {
@@ -125,7 +110,6 @@ describe("payloadTotalError", () => {
   });
 
   it("rejects a total below the minimum instead of waiting for a 422", () => {
-    expect(payloadTotalError({ tank: 1 })).toBe("too_few");
     expect(payloadTotalError({})).toBe("too_few");
   });
 
@@ -142,18 +126,6 @@ describe("payloadTotalError", () => {
     // read the same verdict off the same function.
     const selection = { mode: "inherit", slots: {} } as const;
     expect(payloadTotalError(slotsPayload(selection))).toBeNull();
-  });
-});
-
-describe("draftRoundsPreview", () => {
-  it("reads the server value when the edited total still matches the resolved shape", () => {
-    // Not arithmetic: whatever the server says the rounds are, that is what shows.
-    expect(draftRoundsPreview(5, shape({ team_size: 5, draft_rounds: 4 }))).toBe(4);
-    expect(draftRoundsPreview(5, shape({ team_size: 5, draft_rounds: 99 }))).toBe(99);
-  });
-
-  it("previews an unsaved total the server has never resolved", () => {
-    expect(draftRoundsPreview(6, shape())).toBe(5);
   });
 });
 

@@ -59,8 +59,8 @@ describe("RosterShapeEditor", () => {
     expect(host.textContent).toContain(
       "Inherited from the workspace default: 1 Tank · 2 Damage · 2 Support"
     );
-    // Totals come off the server shape, rounds included.
-    expect(host.textContent).toContain("5 slots · 4 draft rounds");
+    // Totals come off the server shape.
+    expect(host.textContent).toContain("5 slots");
     expect(previewRows(host)).toEqual(["Tank", "Damage", "Damage", "Support", "Support"]);
     // Nothing to edit while inheriting.
     expect(host.querySelectorAll("input")).toHaveLength(0);
@@ -79,16 +79,23 @@ describe("RosterShapeEditor", () => {
     });
 
     expect(host.textContent).toContain("pins its own shape");
-    expect(host.textContent).toContain("6 slots · 5 draft rounds");
+    expect(host.textContent).toContain("6 slots");
     expect(previewRows(host)).toEqual(["Tank", "Flex", "Flex", "Flex", "Flex", "Flex"]);
     // One stepper per slot code.
     expect(host.querySelectorAll("input")).toHaveLength(4);
   });
 
-  it("says a total is out of range inline rather than letting the save find out", () => {
-    const host = mount({ value: { tank: 1 }, effective: shape({ slots: { tank: 1 }, team_size: 1 }) });
+  it("accepts a one-slot team as a plain 1v1 format", () => {
+    const host = mount({ value: { flex: 1 }, effective: shape({ slots: { flex: 1 }, team_size: 1 }) });
 
-    expect(host.querySelector("[role=alert]")?.textContent).toContain("at least 2 slots");
+    expect(host.querySelector("[role=alert]")).toBeNull();
+    expect(host.textContent).toContain("1 slot");
+  });
+
+  it("says a total is out of range inline rather than letting the save find out", () => {
+    const host = mount({ value: { tank: 6, flex: 7 }, effective: shape() });
+
+    expect(host.querySelector("[role=alert]")?.textContent).toContain("at most 12 slots");
   });
 
   it("disables every control and explains why while a draft session is in flight", () => {

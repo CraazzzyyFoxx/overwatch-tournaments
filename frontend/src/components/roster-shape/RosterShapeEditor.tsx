@@ -32,7 +32,6 @@ import {
 import {
   MAX_SLOT_COUNT,
   ROSTER_SHAPE_MODES,
-  draftRoundsPreview,
   initialSelection,
   payloadTotalError,
   previewSlotRows,
@@ -82,8 +81,8 @@ interface RosterShapeEditorProps {
   value: RosterSlotMap | null;
   /**
    * Server-resolved shape (`Tournament.roster_shape` / `CustomGame.roster_shape`).
-   * Every derived number -- team size, draft rounds, whether any slot asks for a
-   * role -- is read from here; `null` only when the read did not opt into it.
+   * Every derived number -- team size, whether any slot asks for a role -- is
+   * read from here; `null` only when the read did not opt into it.
    */
   effective: RosterShape | null;
   /**
@@ -147,11 +146,8 @@ export function RosterShapeEditor({
   const readOnly = locked || disabled;
   const isInherit = selection.mode === "inherit";
   // In inherit mode the resolved shape IS the outcome, so the totals line reads
-  // the server numbers; an override shows the live edit.
+  // the server number; an override shows the live edit.
   const shownTotal = isInherit && effective ? effective.team_size : slotsTotal(selection.slots);
-  const shownRounds = effective
-    ? draftRoundsPreview(shownTotal, effective)
-    : Math.max(shownTotal - 1, 0);
   const previewSlots = previewSlotRows(isInherit ? inherited : selection.slots);
 
   // Where the shape comes from, keyed off the mode being EDITED rather than the
@@ -288,14 +284,13 @@ export function RosterShapeEditor({
           </p>
         )}
 
-        {/* The answer to "what did I just configure" without starting a draft:
-            the slot list a captain will be handed, as one strip that now has the
-            whole card to wrap across. */}
+        {/* The answer to "what did I just configure": one team's slots, as one
+            strip that has the whole card to wrap across. */}
         <div className="rounded-xl border border-border/50 bg-muted/20 p-4">
           <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
             <span className={EYEBROW_CLASS}>{t("preview")}</span>
             <p className="text-sm font-semibold tabular-nums text-foreground">
-              {t("total", { total: shownTotal, rounds: shownRounds })}
+              {t("total", { total: shownTotal })}
             </p>
           </div>
           {previewSlots.length === 0 ? (
