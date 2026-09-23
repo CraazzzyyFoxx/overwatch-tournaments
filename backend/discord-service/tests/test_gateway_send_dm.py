@@ -135,8 +135,8 @@ class SendDmCommandTests(IsolatedAsyncioTestCase):
         msg.nack.assert_not_awaited()
 
     async def test_a_card_is_sent_as_a_components_v2_layout(self) -> None:
-        """Notifications arrive as one card: text beside the logo, details, then
-        one row of actions the bot answers and one of links Discord opens."""
+        """Notifications arrive as one card: text beside the logo, details and the
+        row of actions the bot answers, then under it one row of links Discord opens."""
         user = MagicMock(send=AsyncMock())
         msg = _message()
         card = {
@@ -144,10 +144,10 @@ class SendDmCommandTests(IsolatedAsyncioTestCase):
             "text": "### Check-in opened",
             "details": "**Closes:** <t:0:F>",
             "thumbnail_url": "https://cdn.example/logo.png",
-            "rows": [
-                [{"type": "action", "label": "Check in", "action": "check_in", "target": "3", "style": "success"}],
-                [{"type": "link", "label": "Open tournament", "url": "https://owt.example/tournaments/3"}],
+            "answers": [
+                {"type": "action", "label": "Check in", "action": "check_in", "target": "3", "style": "success"}
             ],
+            "rows": [[{"type": "link", "label": "Open tournament", "url": "https://owt.example/tournaments/3"}]],
         }
 
         await _command_handler(_bot(user=user))(_body(embed=None, card=card), msg)
@@ -159,10 +159,10 @@ class SendDmCommandTests(IsolatedAsyncioTestCase):
         self.assertTrue(view.has_components_v2())
         # Stopped, so discord.py keeps no per-message view: the cog answers by custom_id.
         self.assertTrue(view.is_finished())
-        # The buttons hang under the coloured box, not inside it.
-        container, actions, links = view.to_components()
+        # The answers sit in the coloured box, the links hang under it.
+        container, links = view.to_components()
         self.assertEqual(container["accent_color"], 0x10B981)
-        section, _divider, details = container["components"]
+        section, _divider, details, actions = container["components"]
         self.assertEqual(section["components"][0]["content"], "### Check-in opened")
         self.assertEqual(section["accessory"]["media"]["url"], "https://cdn.example/logo.png")
         self.assertEqual(details["content"], "**Closes:** <t:0:F>")

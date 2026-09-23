@@ -222,18 +222,19 @@ COMPLETED/ARCHIVED. Получатели — игроки обеих коман�
 - новое поле `allow_mentions: bool = True` — дефолт сохраняет поведение существующего продюсера
   (`balancer-service/src/rpc/custom.py`), уведомления передают `False`.
 - новое поле `card: DiscordCard | None` — Components V2 карточка (`accent_color`, `text`, `details`,
-  `thumbnail_url`, `rows: list[list[DiscordLinkButton | DiscordActionButton]]`, дискриминатор `type`);
+  `thumbnail_url`, `answers: list[DiscordButton]` — ряд ответов в один клик,
+  `rows: list[list[DiscordLinkButton | DiscordActionButton]]` — ссылки и 🔕, дискриминатор `type`);
   несовместимо с `content` / `embed` / `image_b64`, текст ≤ 4000 символов, ≤ 5 рядов по ≤ 5 кнопок — правила
   Discord проверяются в модели, а не 400-кой на отправке. `DiscordActionButton(label, action, target, style)`:
   `action` — `DiscordAction` (Literal со списком действий §4.6.1), `target` — id объекта.
 
 `src/interactions/cards.py`:
 - `card_view(card)` — `LayoutView`: `Container(accent_colour)` с `Section(TextDisplay(text), accessory=Thumbnail)`
-  (без картинки — просто `TextDisplay`), `Separator` + `TextDisplay(details)`; под контейнером, **вне** цветного
-  блока, — по `ActionRow` на ряд, как кнопки под классическим embed. Action-кнопка получает
-  `custom_id = owt:<action>:<target>`. View отправляется остановленным: discord.py не хранит его в памяти, клики
-  обрабатывает один слушатель по `custom_id`. `settle` снимает отработавшие кнопки из этих рядов, а строку
-  статуса дописывает внутрь контейнера.
+  (без картинки — просто `TextDisplay`), `Separator` + `TextDisplay(details)` и `ActionRow(answers)` внутри;
+  под контейнером, **вне** цветного блока, — по `ActionRow` на ряд `rows`, как кнопки под классическим embed.
+  Action-кнопка получает `custom_id = owt:<action>:<target>`. View отправляется остановленным: discord.py не
+  хранит его в памяти, клики обрабатывает один слушатель по `custom_id`. `settle` снимает отработавшие кнопки
+  из рядов внутри и под контейнером, а строку статуса дописывает внутрь контейнера.
 
 `gateway.py`:
 - `send_dm`: `user = bot.get_user(id) or await bot.fetch_user(id)`; `await user.send(content=…, embed=…, view=…,

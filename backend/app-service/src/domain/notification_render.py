@@ -400,6 +400,7 @@ def render_discord(
         details="\n".join(details) or None,
         # Discord only fetches absolute http(s) media; anything else is a 400.
         thumbnail_url=image_url if image_url and image_url.startswith(("https://", "http://")) else None,
-        # Answers first, then where to read more and how to stop hearing it.
-        rows=[row for row in (_action_row(kind, payload, _ACTION_LABELS[locale]), onward) if row],
+        # Answers in the card; where to read more and how to stop hearing it under it.
+        answers=_action_row(kind, payload, _ACTION_LABELS[locale]),
+        rows=[onward] if onward else [],
     )

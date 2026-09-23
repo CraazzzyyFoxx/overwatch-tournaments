@@ -1,8 +1,9 @@
 """Cards as Components V2 layouts: notification messages and button replies alike.
 
-One container per card: the text (with the thumbnail beside it), a divider and
-the details. The buttons sit *under* it, one action row per ``DiscordCard.rows``
-entry, outside the coloured box -- the way buttons hang under a classic embed.
+One container per card: the text (with the thumbnail beside it), a divider, the
+details and the ``DiscordCard.answers`` row. The other buttons sit *under* it,
+one action row per ``DiscordCard.rows`` entry, outside the coloured box -- the
+way buttons hang under a classic embed.
 Link buttons are opened by Discord itself; action buttons carry
 ``owt:<action>:<target>`` and are answered by ``InteractionsCog`` -- see ``actions``.
 """
@@ -54,6 +55,8 @@ def card_view(card: DiscordCard) -> discord.ui.LayoutView:
     ]
     if card.details:
         children += [discord.ui.Separator(), discord.ui.TextDisplay(card.details)]
+    if card.answers:
+        children.append(discord.ui.ActionRow(*(_button(button) for button in card.answers)))
     view = discord.ui.LayoutView(timeout=None)
     view.add_item(discord.ui.Container(*children, accent_colour=card.accent_color))
     for row in card.rows:
@@ -71,12 +74,13 @@ def settle(view: discord.ui.LayoutView, *, retire: frozenset[str], note: str) ->
     container = next((item for item in view.children if isinstance(item, discord.ui.Container)), None)
     if container is None:
         return None
-    for row in [item for item in view.children if isinstance(item, discord.ui.ActionRow)]:
-        for button in list(row.children):
-            parsed = parse_custom_id(getattr(button, "custom_id", None))
-            if parsed is not None and parsed[0] in retire:
-                row.remove_item(button)
-        if not row.children:
-            view.remove_item(row)
+    for parent in (container, view):
+        for row in [item for item in parent.children if isinstance(item, discord.ui.ActionRow)]:
+            for button in list(row.children):
+                parsed = parse_custom_id(getattr(button, "custom_id", None))
+                if parsed is not None and parsed[0] in retire:
+                    row.remove_item(button)
+            if not row.children:
+                parent.remove_item(row)
     container.add_item(discord.ui.TextDisplay(note))
     return _detached(view)

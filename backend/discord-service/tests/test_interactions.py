@@ -56,11 +56,11 @@ def _dispatcher() -> ActionDispatcher:
 def _invite_card() -> DiscordCard:
     return DiscordCard(
         text="### Team invite",
+        answers=[
+            {"type": "action", "label": "Accept", "action": "invite.accept", "target": "42", "style": "success"},
+            {"type": "action", "label": "Decline", "action": "invite.decline", "target": "42", "style": "danger"},
+        ],
         rows=[
-            [
-                {"type": "action", "label": "Accept", "action": "invite.accept", "target": "42", "style": "success"},
-                {"type": "action", "label": "Decline", "action": "invite.decline", "target": "42", "style": "danger"},
-            ],
             [
                 {"type": "link", "label": "View participants", "url": f"{SITE}/tournaments/3/participants"},
                 {"type": "action", "label": "🔕", "action": "notifications.menu", "target": "all"},
@@ -165,7 +165,9 @@ class CardAfterTheClickTests(IsolatedAsyncioTestCase):
         container, remaining = settled.to_components()
         labels = [button["label"] for button in remaining["components"]]
         self.assertEqual(labels, ["View participants", "🔕"])
-        self.assertEqual(container["components"][-1]["content"], "-# accepted")
+        # The spent row leaves the card entirely; only the heading and the note remain.
+        _heading, note = container["components"]
+        self.assertEqual(note["content"], "-# accepted")
 
     async def test_a_dm_card_loses_its_spent_buttons_and_a_channel_post_is_never_edited(self) -> None:
         replies = {IDENTITY_SUBJECT: rpc_ok(IDENTITY), "rpc.tournament.regteam_accept": rpc_ok({"id": 1})}

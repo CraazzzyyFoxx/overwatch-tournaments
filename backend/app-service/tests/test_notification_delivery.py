@@ -241,12 +241,13 @@ class RenderTests(IsolatedAsyncioTestCase):
         )
 
         self.assertEqual(
-            [(b.action, b.target) for b in invite.rows[0]], [("invite.accept", "42"), ("invite.decline", "42")]
+            [(b.action, b.target) for b in invite.answers], [("invite.accept", "42"), ("invite.decline", "42")]
         )
         self.assertEqual(
-            [(b.action, b.target) for b in check_in.rows[0]], [("check_in", "3"), ("registration.view", "3")]
+            [(b.action, b.target) for b in check_in.answers], [("check_in", "3"), ("registration.view", "3")]
         )
         # Registering needs the form: that card only links to it.
+        self.assertEqual(opened.answers, [])
         self.assertEqual([b.type for row in opened.rows for b in row], ["link"])
 
     def test_only_an_absolute_image_becomes_the_thumbnail(self) -> None:
