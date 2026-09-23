@@ -26,149 +26,108 @@ function LoadingRegion({ className, children }: Readonly<{ className: string; ch
   );
 }
 
-function DraftSkeletonToolbar() {
-  return (
-    <header className={`${styles.toolbar} ${styles.skeletonToolbar}`} data-draft-skeleton="toolbar">
-      <div className={styles.skeletonToolbarInner}>
-        <div className={styles.skeletonBackAction} data-draft-skeleton="back-action">
-          <SkeletonBlock className={styles.skeletonBackArrow} />
-          <SkeletonBlock className={styles.skeletonBackLabel} />
-        </div>
-        <div className={styles.skeletonToolbarName}>
-          <SkeletonBlock className={styles.skeletonMicrocopy} />
-          <SkeletonBlock className={styles.skeletonToolbarTitle} />
-        </div>
-        <div className={styles.skeletonPublicIndicator}>
-          <SkeletonBlock className={styles.skeletonSignal} />
-          <SkeletonBlock className={styles.skeletonPublicLabel} />
-        </div>
-      </div>
-      <span className={styles.rail} />
-    </header>
-  );
-}
+const TICKS = 12;
+const POOL_ROWS = 7;
+const TEAM_ROWS = 6;
 
-/** Mirrors the loaded `DraftPageHero`: one compact identification strip. */
-function DraftHeroSkeleton() {
+/** Mirrors the loaded room: header row + clock strip, then the pool and teams panels. */
+function RoomSkeleton() {
   return (
-    <section className={styles.skeletonHero} data-draft-skeleton="standalone-hero">
-      <SkeletonBlock className={styles.skeletonBackArrow} />
-      <SkeletonBlock className={styles.skeletonHeroTitle} />
-      <SkeletonBlock className={styles.skeletonStatusPill} />
-      <div className={styles.skeletonStatusSummary} data-draft-skeleton="status-summary">
-        <SkeletonBlock className={styles.skeletonConnectionMeta} />
-        <SkeletonBlock className={styles.skeletonConnectionState} />
-      </div>
-    </section>
-  );
-}
-
-function PickSlotSkeleton({ compact = false }: Readonly<{ compact?: boolean }>) {
-  return (
-    <div
-      className={`${styles.skeletonPickSlot} ${compact ? styles.skeletonPickSlotCompact : ""}`}
-      data-draft-skeleton="pick-slot"
-    >
-      <SkeletonBlock className={styles.skeletonSlotBadge} />
-      <div className={styles.skeletonSlotCopy}>
-        <SkeletonBlock className={styles.skeletonSlotName} />
-        <SkeletonBlock className={styles.skeletonSlotMeta} />
-      </div>
-      <SkeletonBlock className={styles.skeletonSlotRole} />
-    </div>
-  );
-}
-
-function RosterColumnSkeleton({ side }: Readonly<{ side: "left" | "right" }>) {
-  return (
-    <section
-      className={`${styles.skeletonWorkspaceColumn} ${styles.skeletonRosterColumn}`}
-      data-draft-skeleton={`roster-${side}`}
-    >
-      <div className={styles.skeletonColumnHeading}>
-        <div>
-          <SkeletonBlock className={styles.skeletonMicrocopy} />
-          <SkeletonBlock className={styles.skeletonColumnTitle} />
-        </div>
-        <SkeletonBlock className={styles.skeletonRosterPosition} />
-      </div>
-      <div className={styles.skeletonSlotStack}>
-        {Array.from({ length: 3 }, (_, index) => (
-          <PickSlotSkeleton compact key={index} />
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function BoardColumnSkeleton() {
-  return (
-    <section className={styles.skeletonWorkspaceColumn} data-draft-skeleton="board">
-      <div className={styles.skeletonBoardHeading}>
-        <div>
-          <SkeletonBlock className={styles.skeletonMicrocopy} />
-          <SkeletonBlock className={styles.skeletonBoardTitle} />
-        </div>
-        <SkeletonBlock className={styles.skeletonBoardCount} />
-      </div>
-      <div className={styles.skeletonFilterRail}>
-        <SkeletonBlock className={styles.skeletonSearch} />
-        <SkeletonBlock className={styles.skeletonFilter} />
-        <SkeletonBlock className={styles.skeletonFilter} />
-      </div>
-      <div className={styles.skeletonBoardRows}>
-        {Array.from({ length: 4 }, (_, index) => (
-          <PickSlotSkeleton key={index} />
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function DraftWorkspaceSkeleton() {
-  return (
-    <div className={styles.skeletonWorkspace}>
-      <DraftHeroSkeleton />
-      <section className={styles.skeletonCurrentPick} data-draft-skeleton="board-controls">
-        <div className={styles.skeletonCurrentPickCopy}>
-          <SkeletonBlock className={styles.skeletonEyebrow} />
-          <SkeletonBlock className={styles.skeletonCurrentPickTitle} />
-          <SkeletonBlock className={styles.skeletonCurrentPickHint} />
-          <div className={styles.skeletonCurrentPickActions}>
-            <SkeletonBlock />
-            <SkeletonBlock />
+    <>
+      <div className={styles.skeletonHeader} data-draft-skeleton="header">
+        <div className={styles.skeletonHeaderRow}>
+          <div className={styles.skeletonBackAction} data-draft-skeleton="back-action">
+            <SkeletonBlock className={styles.skeletonBackArrow} />
+            <SkeletonBlock className={styles.skeletonBackLabel} />
+          </div>
+          <span className={styles.skeletonDivider} />
+          <SkeletonBlock className={styles.skeletonTitle} />
+          <SkeletonBlock className={styles.skeletonStatusPill} data-draft-skeleton="status-pill" />
+          <div className={styles.skeletonHeaderMeta}>
+            <SkeletonBlock className={styles.skeletonFormat} />
+            <SkeletonBlock className={styles.skeletonViewers} />
+            <SkeletonBlock className={styles.skeletonSeat} />
           </div>
         </div>
-        <div className={styles.skeletonTimer} data-draft-skeleton="timer">
-          <SkeletonBlock className={styles.skeletonTimerRing} />
-          <SkeletonBlock className={styles.skeletonTimerValue} />
+        <div className={styles.skeletonStripBand}>
+          <div className={styles.skeletonStrip} data-draft-skeleton="clock-strip">
+            <SkeletonBlock className={styles.skeletonTimer} data-draft-skeleton="timer" />
+            <div className={styles.skeletonWho}>
+              <SkeletonBlock className={styles.skeletonEyebrow} />
+              <SkeletonBlock className={styles.skeletonWhoName} />
+            </div>
+            <div className={styles.skeletonProgress}>
+              <SkeletonBlock className={styles.skeletonProgressLine} />
+              <div className={styles.skeletonTrack} data-draft-skeleton="tick-track">
+                {Array.from({ length: TICKS }, (_, index) => (
+                  <SkeletonBlock className={styles.skeletonTick} key={index} />
+                ))}
+              </div>
+            </div>
+          </div>
         </div>
-      </section>
-
-      <div className={styles.skeletonWorkspaceGrid}>
-        <RosterColumnSkeleton side="left" />
-        <BoardColumnSkeleton />
-        <RosterColumnSkeleton side="right" />
       </div>
-    </div>
+
+      <div className={styles.skeletonBody}>
+        <section className={styles.skeletonPanel} data-draft-skeleton="pool">
+          <div className={styles.skeletonPanelHead}>
+            <SkeletonBlock className={styles.skeletonPanelTitle} />
+            <div className={styles.skeletonChips}>
+              <SkeletonBlock className={styles.skeletonChip} />
+              <SkeletonBlock className={styles.skeletonChip} />
+              <SkeletonBlock className={styles.skeletonChip} />
+            </div>
+          </div>
+          <div className={styles.skeletonRows}>
+            {Array.from({ length: POOL_ROWS }, (_, index) => (
+              <div className={styles.skeletonRow} data-draft-skeleton="pool-row" key={index}>
+                <SkeletonBlock className={styles.skeletonRowName} />
+                <SkeletonBlock className={styles.skeletonRowCell} />
+                <SkeletonBlock className={styles.skeletonRowCell} />
+                <SkeletonBlock className={styles.skeletonRowCell} />
+              </div>
+            ))}
+          </div>
+        </section>
+        <section className={styles.skeletonPanel} data-draft-skeleton="teams">
+          <div className={styles.skeletonPanelHead}>
+            <SkeletonBlock className={styles.skeletonPanelTitle} />
+            <div className={styles.skeletonChips}>
+              <SkeletonBlock className={styles.skeletonChip} />
+              <SkeletonBlock className={styles.skeletonChip} />
+            </div>
+          </div>
+          <div className={styles.skeletonRows}>
+            {Array.from({ length: TEAM_ROWS }, (_, index) => (
+              <div className={styles.skeletonRow} data-draft-skeleton="team-row" key={index}>
+                <SkeletonBlock className={styles.skeletonRowName} />
+                <SkeletonBlock className={styles.skeletonRowCell} />
+                <SkeletonBlock className={styles.skeletonRowCell} />
+                <SkeletonBlock className={styles.skeletonRowCell} />
+                <SkeletonBlock className={styles.skeletonRowCell} />
+              </div>
+            ))}
+          </div>
+        </section>
+      </div>
+    </>
   );
 }
 
+/** Route-level loading: the page frame is not mounted yet, so this brings the room surface. */
 export function DraftRoomSkeleton() {
   return (
     <LoadingRegion className={`${styles.room} ${styles.skeletonRoom} site-theme`}>
-      <DraftSkeletonToolbar />
-      <main className={`${styles.stage} ${styles.skeletonStage}`}>
-        <DraftWorkspaceSkeleton />
-      </main>
+      <RoomSkeleton />
     </LoadingRegion>
   );
 }
 
+/** Inside the loaded page while the board's first fetch runs. */
 export function DraftBoardSkeleton() {
   return (
     <LoadingRegion className={styles.skeletonBoardRegion}>
-      <DraftWorkspaceSkeleton />
+      <RoomSkeleton />
     </LoadingRegion>
   );
 }

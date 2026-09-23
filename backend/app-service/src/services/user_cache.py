@@ -23,6 +23,7 @@ from cashews import cache
 # Per-user read caches: every key is ``{prefix}:{user_id}:...`` (user id first).
 USER_CACHE_KEY_PREFIXES: tuple[str, ...] = (
     "user_profile",
+    "user_draft_card",
     "user_tournaments",
     "user_tournament_stats",
     "user_tournament_encounters",

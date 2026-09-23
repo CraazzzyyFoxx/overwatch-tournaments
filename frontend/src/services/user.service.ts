@@ -12,6 +12,7 @@ import {
   UserMapsSummary,
   UserOverviewRow,
   UserOverviewStats,
+  UserDraftCard,
   UserProfile,
   MinimizedUser,
   UserRoleType,
@@ -66,6 +67,12 @@ export default class userService {
   }
   static async getUserProfile(id: number): Promise<UserProfile> {
     return apiFetch(`/api/v1/users/${id}/profile`, {
+      next: { revalidate: USER_TTL_SECONDS, tags: [`user:${id}`] }
+    }).then((res) => res.json());
+  }
+  /** The draft room's player card: career totals, per-role and per-hero maps, last five events. */
+  static async getDraftCard(id: number): Promise<UserDraftCard> {
+    return apiFetch(`/api/v1/users/${id}/draft-card`, {
       next: { revalidate: USER_TTL_SECONDS, tags: [`user:${id}`] }
     }).then((res) => res.json());
   }

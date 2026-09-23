@@ -141,6 +141,43 @@ DOCS: dict[str, dict] = {
         "summary": "Preview or add a draft player role",
         "description": "Permission: workspace `team.create`. Previews or commits an emergency role addition to the draft snapshot with optimistic versioning and private audit reason.",
     },
+    "rpc.balancer.draft.team_fit": {
+        "summary": "Get team fit scores",
+        "description": (
+            "Permission: the team's own captain, or workspace `team.read`. Scores every available "
+            "player against every role this team can still seat, normalized 1..99 across the "
+            "response (50 when all candidates tie). `role` is null under a role-less (all-flex) "
+            "roster shape, where each player has exactly one entry. Empty once the team's roster is "
+            "full or the draft is completed/cancelled."
+        ),
+    },
+    "rpc.balancer.draft.queue_get": {
+        "summary": "Get captain pick queue",
+        "description": (
+            "Permission: the team's own captain, or workspace `team.create`. Returns the team's "
+            "private autopick priority in stored order, filtered to players still available, plus "
+            "`autopick_preview` -- exactly what autopick would take -- while this team is on the "
+            "clock. Never part of the public board."
+        ),
+    },
+    "rpc.balancer.draft.queue_set": {
+        "summary": "Set captain pick queue",
+        "description": (
+            "Permission: the team's own captain, or workspace `team.create`. Replaces the queue "
+            "with the given order (max 60, duplicates collapsed to their first placement); 422 when "
+            "an id is not an available non-captain player of this draft, 409 once the draft is "
+            "completed or cancelled. Publishes no realtime event -- a queue is private to its team."
+        ),
+    },
+    "rpc.balancer.draft.journal": {
+        "summary": "Get draft organizer journal",
+        "description": (
+            "Permission: workspace `team.create`. Returns the session's audit trail newest first -- "
+            "picks, autopicks, overrides, clock extensions and every lifecycle move -- with the "
+            "acting account's name resolved (null for the clock and other system actions). `limit` "
+            "defaults to 100 and is clamped to 500."
+        ),
+    },
     "rpc.balancer.draft.session_list": {
         "summary": "List tournament draft sessions",
         "description": "Permission: workspace `team.read`. Returns every draft session ever created for a tournament, newest first.",

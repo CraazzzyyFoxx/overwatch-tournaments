@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import os
 import sys
+import traceback
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest import IsolatedAsyncioTestCase
@@ -48,12 +49,54 @@ from shared.models.tournament import Tournament  # noqa: E402
 from shared.testing import create_test_async_engine  # noqa: E402
 from src import models  # noqa: E402
 from src.domain.draft.entities import PoolSeat  # noqa: E402
+from src.rpc import draft as draft_rpc  # noqa: E402
 from src.services.draft import board as draft_board  # noqa: E402
 from src.services.draft import clock as draft_clock  # noqa: E402
 from src.services.draft import export as draft_export  # noqa: E402
-from src.services.draft import lifecycle, loaders, selection  # noqa: E402
+from src.services.draft import journal, lifecycle, loaders, queue, selection  # noqa: E402
 from src.services.draft import realtime as draft_realtime  # noqa: E402
+from src.services.draft.feasibility import feasibility_service  # noqa: E402
 from src.services.draft.rosters import draft_rosters  # noqa: E402
+
+
+class _CapturingBroker:
+    """Hands back the registered handler so a gate can be exercised for real."""
+
+    def __init__(self) -> None:
+        self.handlers: dict = {}
+
+    def subscriber(self, subject: str):
+        def decorator(function):
+            self.handlers[subject] = function
+            return function
+
+        return decorator
+
+
+class _LoudLogger:
+    """The envelope swallows unexpected errors as ``internal``; a test must see them."""
+
+    def warning(self, *args, **kwargs) -> None:
+        return None
+
+    def exception(self, *args, **kwargs) -> None:
+        traceback.print_exc()
+
+
+def _identity(user_id: int, workspace_id: int, team_actions: list[str]) -> dict:
+    """A gateway identity payload holding exactly these workspace grants."""
+    return {
+        "user_id": user_id,
+        "is_active": True,
+        "workspaces": [
+            {
+                "workspace_id": workspace_id,
+                "rbac_roles": [],
+                "rbac_permissions": [{"resource": "team", "action": action} for action in team_actions],
+            }
+        ],
+    }
+
 
 # The 3-slot roster these tests draft for. It replaces the old
 # `rounds=2, team_size=3` pair: `role_targets_for_team_size(3)` resolved to
@@ -76,6 +119,15 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
         self.engine = create_test_async_engine()
         self.Session = async_sessionmaker(self.engine, expire_on_commit=False)
         self._suffix = f"draft-it-{os.getpid()}-{_uniq()}"
+        # A handler opened through ``c.envelope`` takes its session from the
+        # module-global factory, whose pooled connections are bound to whichever
+        # event loop touched them first -- and every test method here runs in its
+        # own loop. Point it at this test's NullPool factory instead, or the
+        # second handler test in a process fails on a cross-loop future rather
+        # than on what it is asserting.
+        self._rpc_session_factory = draft_rpc._SF
+        draft_rpc._SF = self.Session
+        self.addCleanup(setattr, draft_rpc, "_SF", self._rpc_session_factory)
         async with self.Session() as s:
             ws = Workspace(slug=f"ws-{self._suffix}", name=f"WS {self._suffix}")
             s.add(ws)
@@ -1007,3 +1059,266 @@ class DraftIntegrationTests(IsolatedAsyncioTestCase):
             await s.refresh(chosen)
             self.assertEqual(chosen.status, DraftPlayerStatus.AVAILABLE.value)
             self.assertIsNone(chosen.drafted_by_team_id)
+
+    # --- Draft Room: captain queue, team fit, organizer journal -------------
+
+    async def _live_draft(self, s):
+        draft = await self._new_session(s)
+        await lifecycle.lifecycle_service.start(s, draft)
+        await s.commit()
+        return draft
+
+    async def _pool_by_role(self, s, draft) -> dict[str, list]:
+        """Available non-captain seats grouped by lead role, weakest first.
+
+        The fixture's pool is 6 damage / 1 tank / 2 support at ranks 3000+50i,
+        and a 1-tank/2-damage shape with three tank captains needs exactly all
+        six damage players -- so DAMAGE is the only globally safe role here, and
+        every support/tank seat is a deliberately unsafe queue entry.
+        """
+        players = (
+            await s.scalars(
+                sa.select(lifecycle.DraftPlayer)
+                .where(
+                    lifecycle.DraftPlayer.session_id == draft.id,
+                    lifecycle.DraftPlayer.status == DraftPlayerStatus.AVAILABLE.value,
+                )
+                .options(*loaders.player_options())
+            )
+        ).all()
+        rosters = await draft_rosters.load(s, draft, players)
+        grouped: dict[str, list] = {}
+        for player in players:
+            roster = rosters.get(player.id)
+            if roster is None or roster.primary is None:
+                continue
+            grouped.setdefault(roster.primary.role.slot_code, []).append((roster.best_rank or 0, player.id))
+        return {role: [pid for _, pid in sorted(rows)] for role, rows in grouped.items()}
+
+    async def test_queue_skips_unsafe_entries_and_hands_autopick_its_first_safe_one(self) -> None:
+        async with self.Session() as s:
+            draft = await self._live_draft(s)
+            current = await s.get(DraftPick, draft.current_pick_id)
+            team = await s.get(lifecycle.DraftTeam, current.draft_team_id)
+            pool = await self._pool_by_role(s, draft)
+            # A support seat has no safe option at all (every damage slot would
+            # strand), and the WEAKEST damage is the one no fit strategy picks --
+            # so taking it proves the queue decided, not the strategy.
+            unsafe_first = pool["support"][0]
+            weakest_damage = pool["damage"][0]
+
+            queued = await queue.queue_service.write(
+                s, draft, team, [unsafe_first, weakest_damage]
+            )
+            await s.commit()
+
+            self.assertEqual(queued.player_ids, [unsafe_first, weakest_damage])
+            preview = queued.autopick_preview
+            self.assertIsNotNone(preview)
+            self.assertEqual(preview.player_id, weakest_damage)
+            self.assertEqual(preview.role, "damage")
+            self.assertEqual(preview.source, "queue")
+
+            result = await selection.selection_service.autopick(
+                s, draft, current, expected_version=current.version
+            )
+            await s.commit()
+            # Preview and autopick are one code path: the board must land on
+            # exactly the player the captain was shown.
+            self.assertEqual(result.pick.picked_player_id, preview.player_id)
+            self.assertEqual(result.pick.target_role, preview.role)
+
+    async def test_an_empty_queue_leaves_autopick_on_its_fit_strategy(self) -> None:
+        async with self.Session() as s:
+            draft = await self._live_draft(s)
+            current = await s.get(DraftPick, draft.current_pick_id)
+            team = await s.get(lifecycle.DraftTeam, current.draft_team_id)
+            pool = await self._pool_by_role(s, draft)
+
+            preview = (await queue.queue_service.read(s, draft, team)).autopick_preview
+            self.assertIsNotNone(preview)
+            self.assertEqual(preview.source, "fit")
+            # BEST_FIT over an untouched queue takes the strongest damage seat.
+            self.assertEqual(preview.player_id, pool["damage"][-1])
+
+            result = await selection.selection_service.autopick(
+                s, draft, current, expected_version=current.version
+            )
+            await s.commit()
+            self.assertEqual(result.pick.picked_player_id, preview.player_id)
+
+    async def test_a_queue_preview_is_only_offered_to_the_team_on_the_clock(self) -> None:
+        async with self.Session() as s:
+            draft = await self._live_draft(s)
+            current = await s.get(DraftPick, draft.current_pick_id)
+            other = (
+                await s.scalars(
+                    sa.select(lifecycle.DraftTeam).where(
+                        lifecycle.DraftTeam.session_id == draft.id,
+                        lifecycle.DraftTeam.id != current.draft_team_id,
+                    )
+                )
+            ).all()[0]
+
+            self.assertIsNone((await queue.queue_service.read(s, draft, other)).autopick_preview)
+
+    async def test_queue_refuses_a_captain_a_stranger_and_keeps_first_placement(self) -> None:
+        async with self.Session() as s:
+            draft = await self._live_draft(s)
+            current = await s.get(DraftPick, draft.current_pick_id)
+            team = await s.get(lifecycle.DraftTeam, current.draft_team_id)
+            pool = await self._pool_by_role(s, draft)
+            captain_id = (
+                await s.scalars(
+                    sa.select(lifecycle.DraftPlayer.id).where(
+                        lifecycle.DraftPlayer.session_id == draft.id,
+                        lifecycle.DraftPlayer.is_captain.is_(True),
+                    )
+                )
+            ).all()[0]
+
+            for rejected in (captain_id, -1):
+                with self.assertRaises(ApiHTTPException) as ctx:
+                    await queue.queue_service.write(s, draft, team, [rejected])
+                self.assertEqual(ctx.exception.status_code, 422)
+
+            first, second = pool["damage"][0], pool["damage"][1]
+            stored = await queue.queue_service.write(s, draft, team, [first, second, first])
+            self.assertEqual(stored.player_ids, [first, second])
+
+    async def test_a_closed_draft_keeps_its_queues_read_only(self) -> None:
+        async with self.Session() as s:
+            draft = await self._new_session(s)
+            team = (
+                await s.scalars(sa.select(lifecycle.DraftTeam).where(lifecycle.DraftTeam.session_id == draft.id))
+            ).all()[0]
+            await lifecycle.lifecycle_service.cancel(s, draft)
+            await s.commit()
+
+            with self.assertRaises(ApiHTTPException) as ctx:
+                await queue.queue_service.write(s, draft, team, [])
+            self.assertEqual(ctx.exception.status_code, 409)
+
+    async def test_team_fit_scores_only_seatable_roles_on_a_1_to_99_scale(self) -> None:
+        async with self.Session() as s:
+            draft = await self._live_draft(s)
+            current = await s.get(DraftPick, draft.current_pick_id)
+            pool = await self._pool_by_role(s, draft)
+
+            scores = await feasibility_service.team_fit_scores(s, draft, team_id=current.draft_team_id)
+
+            # The captain already fills this shape's single tank slot and there
+            # are no flex slots, so damage is the only role left to seat.
+            self.assertEqual({score.role.slot_code for score in scores}, {"damage"})
+            self.assertEqual({score.player_id for score in scores}, set(pool["damage"]))
+            self.assertTrue(all(1 <= score.score <= 99 for score in scores))
+            # Min-max normalization: the spread always reaches both ends.
+            self.assertEqual(min(score.score for score in scores), 1)
+            self.assertEqual(max(score.score for score in scores), 99)
+
+    async def test_team_fit_is_empty_once_the_draft_is_over(self) -> None:
+        async with self.Session() as s:
+            draft = await self._live_draft(s)
+            current = await s.get(DraftPick, draft.current_pick_id)
+            team_id = current.draft_team_id
+            await lifecycle.lifecycle_service.cancel(s, draft)
+            await s.commit()
+
+            self.assertEqual(await feasibility_service.team_fit_scores(s, draft, team_id=team_id), [])
+
+    async def test_journal_reads_newest_first_and_names_only_human_actors(self) -> None:
+        async with self.Session() as s:
+            draft = await self._live_draft(s)
+            actor_auth_user_id = self.captain_auth_user_ids[0]
+            await journal.journal_service.record_lifecycle(
+                s, draft, action="started", actor_auth_user_id=actor_auth_user_id
+            )
+            await s.commit()
+
+            current = await s.get(DraftPick, draft.current_pick_id)
+            await selection.selection_service.autopick(s, draft, current, expected_version=current.version)
+            await s.commit()
+
+            entries = (await journal.journal_service.list_entries(s, draft, limit=100)).entries
+            actions = [entry.action for entry in entries]
+            self.assertEqual(actions[0], "pick_autopicked")
+            self.assertIn("started", actions)
+            self.assertLess(actions.index("pick_autopicked"), actions.index("started"))
+
+            autopicked = entries[0]
+            # The clock has no account behind it, so the journal names nobody.
+            self.assertIsNone(autopicked.actor_auth_user_id)
+            self.assertIsNone(autopicked.actor_name)
+            self.assertEqual(autopicked.reason, "expiry")
+            self.assertEqual(autopicked.pick_no, current.overall_no)
+            self.assertEqual(autopicked.team_id, current.draft_team_id)
+            self.assertEqual(autopicked.player_id, current.picked_player_id)
+
+            started = next(entry for entry in entries if entry.action == "started")
+            self.assertEqual(started.actor_auth_user_id, actor_auth_user_id)
+            self.assertEqual(started.actor_name, f"auth-cap-{self._suffix}-0")
+
+    async def test_journal_is_readable_only_with_the_organizer_grant(self) -> None:
+        broker = _CapturingBroker()
+        draft_rpc.register(broker, _LoudLogger())
+        handler = broker.handlers["rpc.balancer.draft.journal"]
+
+        async with self.Session() as s:
+            draft = await self._live_draft(s)
+            session_id = draft.id
+
+        forbidden = await handler({"id": session_id, "identity": _identity(1, self.workspace_id, ["read"])}, None)
+        self.assertFalse(forbidden["ok"])
+        self.assertEqual(forbidden["error"]["code"], "forbidden")
+
+        allowed = await handler({"id": session_id, "identity": _identity(1, self.workspace_id, ["create"])}, None)
+        self.assertTrue(allowed["ok"])
+        self.assertEqual(allowed["data"]["session_id"], session_id)
+
+    async def test_team_scoped_reads_admit_the_teams_own_captain_and_nobody_stray(self) -> None:
+        broker = _CapturingBroker()
+        draft_rpc.register(broker, _LoudLogger())
+
+        async with self.Session() as s:
+            draft = await self._live_draft(s)
+            current = await s.get(DraftPick, draft.current_pick_id)
+            session_id, team_id = draft.id, current.draft_team_id
+            captain_auth_user_id = (await s.get(lifecycle.DraftTeam, team_id)).captain_auth_user_id
+
+        stranger = _identity(captain_auth_user_id + 9999, self.workspace_id, [])
+        captain = _identity(captain_auth_user_id, self.workspace_id, [])
+        organizer = _identity(captain_auth_user_id + 9999, self.workspace_id, ["read", "create"])
+
+        for subject in ("rpc.balancer.draft.team_fit", "rpc.balancer.draft.queue_get"):
+            handler = broker.handlers[subject]
+            base = {"id": session_id, "team_id": team_id}
+
+            denied = await handler({**base, "identity": stranger}, None)
+            self.assertFalse(denied["ok"], subject)
+            self.assertEqual(denied["error"]["code"], "forbidden", subject)
+
+            # The seat itself is the grant: a captain holds no workspace RBAC.
+            self.assertTrue((await handler({**base, "identity": captain}, None))["ok"], subject)
+            self.assertTrue((await handler({**base, "identity": organizer}, None))["ok"], subject)
+
+            missing = await handler({"id": session_id, "team_id": -1, "identity": organizer}, None)
+            self.assertEqual(missing["error"]["code"], "not_found", subject)
+
+    async def test_the_queue_write_gate_is_stricter_than_the_fit_read(self) -> None:
+        # A workspace member who may only READ teams can see the fit column but
+        # must not rewrite somebody else's autopick priority.
+        broker = _CapturingBroker()
+        draft_rpc.register(broker, _LoudLogger())
+
+        async with self.Session() as s:
+            draft = await self._live_draft(s)
+            current = await s.get(DraftPick, draft.current_pick_id)
+            session_id, team_id = draft.id, current.draft_team_id
+            captain_auth_user_id = (await s.get(lifecycle.DraftTeam, team_id)).captain_auth_user_id
+
+        reader = {"id": session_id, "team_id": team_id, "identity": _identity(captain_auth_user_id + 9999, self.workspace_id, ["read"])}
+
+        self.assertTrue((await broker.handlers["rpc.balancer.draft.team_fit"](reader, None))["ok"])
+
+        denied = await broker.handlers["rpc.balancer.draft.queue_set"]({**reader, "payload": {"player_ids": []}}, None)
+        self.assertEqual(denied["error"]["code"], "forbidden")

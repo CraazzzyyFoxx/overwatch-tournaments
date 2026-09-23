@@ -23,6 +23,7 @@ from shared.domain.roster import PlayerRoster
 from shared.models.balancer.draft import DraftPick, DraftPlayer, DraftTeam
 
 __all__ = (
+    "AutopickChoice",
     "DEFAULT_ROLE_IMPACT",
     "DraftAssignment",
     "DraftFeasibilityReport",
@@ -40,6 +41,7 @@ __all__ = (
     "RoleEditResult",
     "SlotDecision",
     "SlotDeficit",
+    "TeamFitScore",
 )
 
 
@@ -154,6 +156,22 @@ class DraftResult:
 
 
 @dataclass(frozen=True)
+class AutopickChoice:
+    """What autopick would take right now, and why.
+
+    Returned by ``DraftSelectionService.autopick_choice`` and applied by
+    ``autopick``; the captain's queue endpoint renders the SAME value as its
+    preview, so "what the clock will do to me" is never a second guess at it.
+    ``source`` is ``queue`` when the captain's own priority list decided it,
+    ``fit`` when the session's autopick strategy did.
+    """
+
+    player_id: int
+    role: HeroClass
+    source: str
+
+
+@dataclass(frozen=True)
 class SlotDecision:
     """What a pick resolves to against the roster shape.
 
@@ -211,6 +229,19 @@ class FitPlayer:
 
     def rank_for(self, role: HeroClass) -> int:
         return self.rank_by_role.get(role, self.rank_value)
+
+
+@dataclass(frozen=True)
+class TeamFitScore:
+    """One (player, seatable role) pair, scored 1..99 for a captain to read.
+
+    ``role`` is ``None`` under a role-less (all-flex) shape, where a player has
+    exactly one entry because no seat carries a role.
+    """
+
+    player_id: int
+    role: HeroClass | None
+    score: int
 
 
 @dataclass(frozen=True)

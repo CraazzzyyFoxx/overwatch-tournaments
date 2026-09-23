@@ -942,6 +942,137 @@ class UserEncounterQueries:
             heroes_map.setdefault((row.tournament_id, row.user_id), []).append(row.hero)
         return heroes_map
 
+    async def get_user_hero_records(
+        self,
+        session: AsyncSession,
+        user_id: int,
+        workspace_id: int | None = None,
+        *,
+        limit: int = 5,
+        min_seconds: float = 60,
+    ) -> typing.Sequence[tuple[models.Hero, int, int]]:
+        """The user's top heroes as ``(hero, maps played, maps won)``, most played first.
+
+        "Played" follows the same convention as every other hero read here
+        (``HeroTimePlayed`` above ``min_seconds``, round 0): a hero swapped in for
+        thirty seconds is not a map played. Win/loss comes from the map score
+        against the side the user played on — the rule
+        ``HeroQueries.get_user_hero_stats_by_maps`` applies for the per-map hero
+        popover; draws count as maps played, never as wins. ONE query, ranked and
+        cut to ``limit`` in the database.
+        """
+        hero_match_q = (
+            sa.select(
+                models.MatchStatistics.hero_id.label("hero_id"),
+                models.MatchStatistics.team_id.label("team_id"),
+                models.Match.id.label("match_id"),
+            )
+            .select_from(models.MatchStatistics)
+            .join(models.Match, models.Match.id == models.MatchStatistics.match_id)
+            .join(models.Encounter, models.Encounter.id == models.Match.encounter_id)
+            .where(
+                sa.and_(
+                    models.MatchStatistics.user_id == user_id,
+                    models.MatchStatistics.name == enums.LogStatsName.HeroTimePlayed,
+                    models.MatchStatistics.hero_id.isnot(None),
+                    models.MatchStatistics.value > min_seconds,
+                    models.MatchStatistics.round == 0,
+                )
+            )
+        )
+        if workspace_id is not None:
+            hero_match_q = hero_match_q.join(
+                models.Tournament, models.Tournament.id == models.Encounter.tournament_id
+            ).where(models.Tournament.workspace_id == workspace_id)
+
+        hero_match = hero_match_q.group_by(
+            models.MatchStatistics.hero_id,
+            models.MatchStatistics.team_id,
+            models.Match.id,
+        ).cte("draft_card_hero_match")
+
+        team_score = sa.case(
+            (models.Match.home_team_id == hero_match.c.team_id, models.Match.home_score),
+            else_=models.Match.away_score,
+        )
+        opponent_score = sa.case(
+            (models.Match.home_team_id == hero_match.c.team_id, models.Match.away_score),
+            else_=models.Match.home_score,
+        )
+        maps = sa.func.count(hero_match.c.match_id)
+        maps_won = sa.func.sum(sa.case((team_score > opponent_score, 1), else_=0))
+
+        query = (
+            sa.select(models.Hero, maps.label("maps"), maps_won.label("maps_won"))
+            .select_from(hero_match)
+            .join(models.Match, models.Match.id == hero_match.c.match_id)
+            .join(models.Hero, models.Hero.id == hero_match.c.hero_id)
+            .group_by(models.Hero.id)
+            # hero id tiebreak keeps the top-N deterministic on equal map counts.
+            .order_by(maps.desc(), models.Hero.id.asc())
+            .limit(limit)
+        )
+        result = await session.execute(query)
+        return [(row[0], int(row.maps), int(row.maps_won or 0)) for row in result]
+
+    async def count_user_mvp_maps(
+        self,
+        session: AsyncSession,
+        user_id: int,
+        workspace_id: int | None = None,
+    ) -> int:
+        """Maps the user topped the lobby's MVP placement on.
+
+        Same placement the dossier's "Avg MVP" averages (see
+        ``get_roster_avg_mvp_bulk``): ``COALESCE(ImpactRank, Performance)`` per
+        match, 1 = best. This counts the maps where that placement is 1.
+        """
+        per_match = (
+            sa.select(
+                models.MatchStatistics.match_id.label("match_id"),
+                sa.func.max(
+                    sa.case(
+                        (
+                            models.MatchStatistics.name == enums.LogStatsName.ImpactRank,
+                            models.MatchStatistics.value,
+                        )
+                    )
+                ).label("impact_rank"),
+                sa.func.max(
+                    sa.case(
+                        (
+                            models.MatchStatistics.name == enums.LogStatsName.Performance,
+                            models.MatchStatistics.value,
+                        )
+                    )
+                ).label("performance"),
+            )
+            .select_from(models.MatchStatistics)
+            .join(models.Match, models.Match.id == models.MatchStatistics.match_id)
+            .join(models.Encounter, models.Encounter.id == models.Match.encounter_id)
+            .where(
+                sa.and_(
+                    models.MatchStatistics.user_id == user_id,
+                    models.MatchStatistics.name.in_([enums.LogStatsName.ImpactRank, enums.LogStatsName.Performance]),
+                    models.MatchStatistics.hero_id.is_(None),
+                    models.MatchStatistics.round == 0,
+                )
+            )
+        )
+        if workspace_id is not None:
+            per_match = per_match.join(
+                models.Tournament, models.Tournament.id == models.Encounter.tournament_id
+            ).where(models.Tournament.workspace_id == workspace_id)
+
+        per_match = per_match.group_by(models.MatchStatistics.match_id).cte("draft_card_mvp_per_match")
+        query = (
+            sa.select(sa.func.count())
+            .select_from(per_match)
+            .where(sa.func.coalesce(per_match.c.impact_rank, per_match.c.performance) == 1)
+        )
+        result = await session.execute(query)
+        return int(result.scalar_one() or 0)
+
     async def get_player_by_user_and_tournament(
         self, session: AsyncSession, user_id: int, tournament_id: int
     ) -> models.Player | None:

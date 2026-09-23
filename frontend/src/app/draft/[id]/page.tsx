@@ -32,18 +32,20 @@ export default function PublicDraftRoomPage() {
 
   const initialLoadError = tournamentQuery.isError && !tournament;
 
+  // The room lays out its own full-bleed header and 1720px body; only the
+  // error state needs the page's padding.
   return (
     <div className={`${styles.room} site-theme`}>
-      <main
-        className={`${styles.stage} mx-auto w-full max-w-[1600px] px-4 py-5 sm:px-6 sm:py-7 xl:px-10`}
-      >
+      <main className={styles.stage}>
         {initialLoadError || !tournament ? (
-          <DraftRoomState
-            icon={<ShieldAlert className="h-6 w-6 text-[color:var(--aqt-amber)]" />}
-            title={t("loadErrorTitle")}
-            hint={t("loadErrorHint")}
-            action={<Button onClick={() => tournamentQuery.refetch()}>{t("retry")}</Button>}
-          />
+          <div className="mx-auto w-full max-w-[1720px] px-4 py-5 sm:px-6">
+            <DraftRoomState
+              icon={<ShieldAlert className="h-6 w-6 text-[color:var(--aqt-amber)]" />}
+              title={t("loadErrorTitle")}
+              hint={t("loadErrorHint")}
+              action={<Button onClick={() => tournamentQuery.refetch()}>{t("retry")}</Button>}
+            />
+          </div>
         ) : (
           <DraftBoard tournament={tournament} />
         )}

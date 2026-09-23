@@ -12,12 +12,13 @@ that needs a database session.
 
 from __future__ import annotations
 
-from collections.abc import Collection
+from collections.abc import Collection, Mapping
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.core.enums import (
+    HERO_TYPE_CLASSES,
     DraftAutopickStrategy,
     DraftFormat,
     DraftPickStatus,
@@ -26,16 +27,17 @@ from shared.core.enums import (
     HeroClass,
 )
 from shared.domain.roster_shape import RosterShape
-from shared.models.balancer.draft import DraftPick, DraftPlayer, DraftSession
+from shared.models.balancer.draft import DraftPick, DraftPlayer, DraftSession, DraftTeam
 from shared.repository.draft import DraftPickRepository, DraftPlayerRepository, DraftTeamRepository
 from shared.repository.workspace import get_or_create_workspace_member
 from src.domain.draft import ranks as domain_ranks
 from src.domain.draft import rules
-from src.domain.draft.entities import DraftAssignment, DraftResult
-from src.domain.draft.fit import FitConfig, FitPlayer, best_fit
+from src.domain.draft.entities import AutopickChoice, DraftAssignment, DraftResult, DraftSnapshot
+from src.domain.draft.fit import FitConfig, best_fit, fit_players
 from src.services.draft import loaders
 from src.services.draft._errors import err as _err
 from src.services.draft.feasibility import DraftFeasibilityService, feasibility_service
+from src.services.draft.journal import journal_service
 from src.services.draft.rosters import DraftRosterService, draft_rosters
 
 __all__ = ("DraftSelectionService", "selection_service")
@@ -164,6 +166,10 @@ class DraftSelectionService:
         if next_pick is None:
             draft_session.status = DraftStatus.COMPLETED.value
             draft_session.current_pick_id = None
+            # No actor: the last pick completed the draft, nobody decided to.
+            await journal_service.record_lifecycle(
+                session, draft_session, action="completed", actor_auth_user_id=None
+            )
             await session.flush()
             return None
 
@@ -314,7 +320,110 @@ class DraftSelectionService:
         # role-less roster records no role: recorded_role is None there.
         pick.target_role = decision.recorded_role
         pick.target_rank_value = domain_ranks.slot_rank(roster, decision.role, shape)
+        await journal_service.record(
+            session,
+            draft_session.id,
+            action="pick_made",
+            entity_type="draft_pick",
+            entity_id=pick.id,
+            actor_auth_user_id=actor_auth_user_id,
+            after={
+                "pick_id": pick.id,
+                "overall_no": pick.overall_no,
+                "team_id": pick.draft_team_id,
+                "player_id": player.id,
+                "role": pick.target_role,
+            },
+        )
         return await self._apply_won(session, draft_session, pick, player)
+
+    def _queued_choice(
+        self,
+        team: DraftTeam | None,
+        snapshot: DraftSnapshot,
+        safe_by_player: Mapping[int, set[HeroClass]],
+        available_ids: Collection[int],
+    ) -> AutopickChoice | None:
+        """The captain's own list, consulted before the fit strategy.
+
+        The first queued player who is still available AND has at least one
+        globally safe option wins -- a queued player whose every option would
+        strand a role slot is skipped, never forced, because autopick may not
+        break the draft on a captain's behalf. Their role is the safe option they
+        are ranked highest on; ties go to their primary role, then canonical slot
+        order, so the same queue always yields the same pick.
+        """
+        for player_id in (team.pick_queue if team is not None else None) or []:
+            if player_id not in available_ids:
+                continue
+            safe_roles = safe_by_player.get(player_id)
+            if not safe_roles:
+                continue
+            roster = snapshot.roster(player_id)
+            lead = roster.primary.role if (roster is not None and roster.primary is not None) else None
+            role = min(
+                safe_roles,
+                key=lambda candidate: (
+                    -((roster.rank_on(candidate) if roster is not None else None) or 0),
+                    candidate is not lead,
+                    HERO_TYPE_CLASSES.index(candidate),
+                ),
+            )
+            return AutopickChoice(player_id=player_id, role=role, source="queue")
+        return None
+
+    async def autopick_choice(
+        self,
+        session: AsyncSession,
+        draft_session: DraftSession,
+        pick: DraftPick,
+        *,
+        snapshot: DraftSnapshot | None = None,
+    ) -> AutopickChoice | None:
+        """WHO autopick takes and WHY -- without taking them.
+
+        The single code path behind both the clock's autopick and the captain's
+        queue preview: a preview that ran its own ranking would eventually show a
+        different player than the clock takes, which is the one thing a priority
+        list may not do. ``None`` means no globally safe option exists at all
+        (the caller pauses on a role shortage).
+        """
+        if snapshot is None:
+            snapshot = await self.feasibility.load_snapshot(session, draft_session)
+        shape = await self.feasibility.resolve_shape(session, draft_session)
+        available = [p for p in snapshot.players if p.status == DraftPlayerStatus.AVAILABLE.value]
+        counts = rules.team_slot_counts(snapshot.players, snapshot.picks, pick.draft_team_id, shape, snapshot.rosters)
+        capacity = rules.role_openings(shape, counts)
+        options = await self.feasibility.evaluate_session_pick_options(
+            session,
+            draft_session,
+            team_id=pick.draft_team_id,
+            state=await self.feasibility.state_from_snapshot(session, draft_session, snapshot),
+        )
+        safe_by_player: dict[int, set[HeroClass]] = {}
+        for option in options:
+            if option.is_safe:
+                safe_by_player.setdefault(option.player_id, set()).add(option.role)
+
+        available_ids = {p.id for p in available}
+        team = next((t for t in snapshot.teams if t.id == pick.draft_team_id), None)
+        queued = self._queued_choice(team, snapshot, safe_by_player, available_ids)
+        if queued is not None:
+            return queued
+
+        # Fit is built from the engine's rosters: a player is scored at the rank
+        # of the role they would actually fill, and a player the balancer ranks
+        # on no role is not a candidate at all (rather than a rank-0 last resort).
+        choice = best_fit(
+            fit_players(available, snapshot.rosters),
+            capacity,
+            DraftAutopickStrategy(draft_session.autopick_strategy),
+            FitConfig(),
+            allowed_options={(player_id, role) for player_id, roles in safe_by_player.items() for role in roles},
+        )
+        if choice is None:
+            return None
+        return AutopickChoice(player_id=choice.player_id, role=choice.role, source="fit")
 
     async def autopick(
         self,
@@ -324,48 +433,15 @@ class DraftSelectionService:
         *,
         expected_version: int,
         actor_user_id: int | None = None,
+        actor_auth_user_id: int | None = None,
+        reason: str = "expiry",
     ) -> DraftResult:
         rules.validate_current_pick(draft_session, pick)
         snapshot = await self.feasibility.load_snapshot(session, draft_session)
         shape = await self.feasibility.resolve_shape(session, draft_session)
-        available = [p for p in snapshot.players if p.status == DraftPlayerStatus.AVAILABLE.value]
-        counts = rules.team_slot_counts(snapshot.players, snapshot.picks, pick.draft_team_id, shape, snapshot.rosters)
-        capacity = rules.role_openings(shape, counts)
+        choice = await self.autopick_choice(session, draft_session, pick, snapshot=snapshot)
 
-        # Fit is built from the engine's rosters: a player is scored at the rank
-        # of the role they would actually fill, and a player the balancer ranks
-        # on no role is not a candidate at all (rather than a rank-0 last resort).
-        fit_players = [
-            FitPlayer(
-                player_id=p.id,
-                rank_value=roster.best_rank or 0,
-                playable_roles=roster.playable_roles,
-                preference_order=((lead.role,) if (lead := roster.primary) is not None else ()),
-                is_flex=roster.is_full_flex,
-                user_id=p.user_id,
-                rank_by_role={HeroClass.from_slot_code(code): rank for code, rank in roster.role_ranks.items()},
-            )
-            for p in available
-            if (roster := snapshot.roster(p.id)) is not None and roster.is_draftable
-        ]
-        options = await self.feasibility.evaluate_session_pick_options(
-            session,
-            draft_session,
-            team_id=pick.draft_team_id,
-            state=await self.feasibility.state_from_snapshot(session, draft_session, snapshot),
-        )
-        safe_options = {(option.player_id, option.role) for option in options if option.is_safe}
-        choice = best_fit(
-            fit_players,
-            capacity,
-            DraftAutopickStrategy(draft_session.autopick_strategy),
-            FitConfig(),
-            allowed_options=safe_options,
-        )
-        chosen_id = choice.player_id if choice is not None else None
-        chosen_role = choice.role if choice is not None else None
-
-        if chosen_id is None:
+        if choice is None:
             result = rules.mark_role_shortage_paused(draft_session, pick)
             await session.flush()
             return result
@@ -374,7 +450,7 @@ class DraftSelectionService:
             session,
             pick.id,
             status=DraftPickStatus.AUTOPICKED,
-            player_id=chosen_id,
+            player_id=choice.player_id,
             picked_by_member_id=None,
             is_autopick=True,
             is_admin_override=False,
@@ -382,12 +458,27 @@ class DraftSelectionService:
         )
         if not won:
             raise _err("pick_already_resolved", "Pick was already resolved")
-        player = next(p for p in available if p.id == chosen_id)
+        player = next(p for p in snapshot.players if p.id == choice.player_id)
         roster = snapshot.roster(player.id)
-        lead = roster.primary if roster is not None else None
-        resolved_role = chosen_role or (lead.role if lead is not None else HeroClass.damage)
-        pick.target_role = resolved_role.slot_code if shape.has_role_slots else None
-        pick.target_rank_value = domain_ranks.slot_rank(roster, resolved_role, shape)
+        pick.target_role = choice.role.slot_code if shape.has_role_slots else None
+        pick.target_rank_value = domain_ranks.slot_rank(roster, choice.role, shape)
+        await journal_service.record(
+            session,
+            draft_session.id,
+            action="pick_autopicked",
+            entity_type="draft_pick",
+            entity_id=pick.id,
+            actor_auth_user_id=actor_auth_user_id,
+            reason=reason,
+            after={
+                "pick_id": pick.id,
+                "overall_no": pick.overall_no,
+                "team_id": pick.draft_team_id,
+                "player_id": player.id,
+                "role": pick.target_role,
+                "source": choice.source,
+            },
+        )
         return await self._apply_won(session, draft_session, pick, player)
 
     async def override(

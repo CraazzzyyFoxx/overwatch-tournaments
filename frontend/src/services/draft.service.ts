@@ -2,6 +2,7 @@ import { apiFetch } from "@/lib/api/fetch";
 import type {
   DraftBoard,
   DraftFeasibility,
+  DraftJournalResponse,
   DraftPickExtendRequest,
   DraftPickOptionsResponse,
   DraftRole,
@@ -11,7 +12,8 @@ import type {
   DraftSeedResponse,
   DraftSession,
   DraftSessionCreateRequest,
-  DraftSuggestionsResponse
+  DraftTeamFitResponse,
+  DraftTeamQueueResponse
 } from "@/types/draft.types";
 import type { RanksExportResponse } from "@/types/balancer-admin.types";
 
@@ -49,8 +51,36 @@ export default class draftService {
     return res.json();
   }
 
-  static async getSuggestions(sessionId: number): Promise<DraftSuggestionsResponse> {
-    const res = await apiFetch(`/api/v1/balancer/draft/sessions/${sessionId}/suggestions`);
+  /** The server's 1..99 fit of every seatable player for one team. */
+  static async getTeamFit(sessionId: number, teamId: number): Promise<DraftTeamFitResponse> {
+    const res = await apiFetch(`/api/v1/balancer/draft/sessions/${sessionId}/teams/${teamId}/fit`);
+    return res.json();
+  }
+
+  /** A captain's private pick queue ("My list") plus the autopick preview while on the clock. */
+  static async getTeamQueue(sessionId: number, teamId: number): Promise<DraftTeamQueueResponse> {
+    const res = await apiFetch(`/api/v1/balancer/draft/sessions/${sessionId}/teams/${teamId}/queue`);
+    return res.json();
+  }
+
+  /** Replace the whole queue; order is the autopick priority. */
+  static async setTeamQueue(
+    sessionId: number,
+    teamId: number,
+    playerIds: number[]
+  ): Promise<DraftTeamQueueResponse> {
+    const res = await apiFetch(`/api/v1/balancer/draft/sessions/${sessionId}/teams/${teamId}/queue`, {
+      method: "PUT",
+      body: { player_ids: playerIds }
+    });
+    return res.json();
+  }
+
+  /** Organizer journal, newest first. */
+  static async getJournal(sessionId: number, limit = 100): Promise<DraftJournalResponse> {
+    const res = await apiFetch(`/api/v1/balancer/draft/sessions/${sessionId}/journal`, {
+      query: { limit }
+    });
     return res.json();
   }
 

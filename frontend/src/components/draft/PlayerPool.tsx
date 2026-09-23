@@ -1,10 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Ban, Check, Crown, Heart, Search, ShieldCheck } from "lucide-react";
+import { useMemo, useState, type CSSProperties } from "react";
+import { Check, Search } from "lucide-react";
 import { useTranslations } from "next-intl";
 
-import DivisionIcon from "@/components/DivisionIcon";
 import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { Avatar, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -18,99 +17,95 @@ import {
 } from "@/components/ui/command";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from "@/components/ui/select";
-import { getDivisionLabel, resolveDivisionFromRank } from "@/lib/divisions/grid";
+  draftSummary,
+  poolRoleColumns,
+  roleMarket,
+  type PlayerFit,
+  type QueueControls,
+  type RoomSelection,
+  type TeamView
+} from "@/lib/draft/room-model";
+import {
+  allPlayerHeroes,
+  DRAFT_POOL_TABS,
+  type DraftPoolRoleFilter,
+  type DraftPoolTab,
+  type DraftPoolView,
+  type DraftViewParams
+} from "@/lib/draft/workspace-model";
 import { getRoleIconName, ROLE_ACCENT } from "@/lib/roster/roles";
 import { cn } from "@/lib/utils";
-import type {
-  DraftPickOptionsResponse,
-  DraftPlayer,
-  DraftRole,
-  DraftTeam
-} from "@/types/draft.types";
+import type { DraftBoard, DraftPickOptionsResponse, DraftRole } from "@/types/draft.types";
 import type { DivisionGrid } from "@/types/workspace.types";
-import { formatSubRoleLabel, getHeroIconUrl } from "@/utils/player";
+import { getHeroIconUrl } from "@/utils/player";
 
-import type { DraftPoolRoleFilter, DraftPoolSort, DraftPoolTab } from "@/lib/draft/workspace-model";
-import { allPlayerHeroes, DRAFT_POOL_TABS, optionForSelection, playerRoles } from "@/lib/draft/workspace-model";
-
-const POOL_ROLES: DraftRole[] = ["tank", "damage", "support"];
-const SEGMENT_CLASS =
-  "inline-flex min-h-8 items-center justify-center gap-1 rounded-md px-2.5 text-xs font-medium text-[color:var(--aqt-fg-muted)] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)]";
-const SEGMENT_ACTIVE = "bg-[color:var(--aqt-card)] text-[color:var(--aqt-fg)]";
-const EMPTY_SHORTLIST: ReadonlySet<number> = new Set();
-const NO_TEAMS: DraftTeam[] = [];
-
-export interface PoolSelection {
-  playerId: number;
-  role: DraftRole;
-}
+import { POOL_GRID, PoolRow, teal, tint } from "./pool/PoolRow";
 
 interface PlayerPoolProps {
-  /** Already filtered + sorted by the caller's view model. */
-  players: DraftPlayer[];
-  /** How many players the OPEN tab holds before this component's hero filter. */
-  totalPlayers: number;
-  roleCounts: Record<DraftRole, number>;
-  /** Tab sizes for the Available/Shortlist/Drafted chips. */
-  poolCounts: Record<DraftPoolTab, number>;
-  pool: DraftPoolTab;
-  selection?: PoolSelection | null;
-  shortlist?: ReadonlySet<number>;
-  role: DraftPoolRoleFilter;
-  sort: DraftPoolSort;
-  query: string;
-  options?: DraftPickOptionsResponse | null;
-  safetyRequired?: boolean;
-  /** Names the drafted tab's team badge. */
-  teams?: DraftTeam[];
-  /** Omit for spectators: the role buttons then render as plain read-only chips. */
-  onSelect?: (player: DraftPlayer, role: DraftRole) => void;
-  onOpenProfile: (player: DraftPlayer) => void;
-  onToggleShortlist?: (playerId: number) => void;
-  onFiltersChange: (
-    patch: Partial<{ role: DraftPoolRoleFilter; sort: DraftPoolSort; query: string; pool: DraftPoolTab }>
-  ) => void;
-  onResetFilters: () => void;
+  board: DraftBoard;
+  pool: DraftPoolView;
+  viewParams: DraftViewParams;
+  onViewParamsChange: (patch: Partial<DraftViewParams>) => void;
+  teamViews: ReadonlyMap<number, TeamView>;
+  /** Team the viewer selects for; null → read-only rows and the "Спрос" (demand) column. */
+  actingTeam: TeamView | null;
+  selection: RoomSelection | null;
+  profileId: number | null;
+  onSelect: (playerId: number, role: DraftRole) => void;
+  onOpenProfile: (playerId: number) => void;
+  queue: QueueControls | null;
+  /** fitByPlayer for the acting team; null while unavailable. */
+  fit: ReadonlyMap<number, PlayerFit> | null;
+  /** Server safety for the current pick; only meaningful when `safetyRequired`. */
+  options: DraftPickOptionsResponse | null;
+  safetyRequired: boolean;
   divisionGrid: DivisionGrid;
-  /** Unique per mounted instance: the mobile and desktop trees both render a pool. */
-  headingId?: string;
+  headingId: string;
+  /** px of bottom padding for the list so the floating layer never hides the last rows. */
+  bottomInset: number;
 }
 
+const FOCUS_RING = "outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)]";
+
 export function PlayerPool({
-  players,
-  totalPlayers,
-  roleCounts,
-  poolCounts,
+  board,
   pool,
-  selection = null,
-  shortlist = EMPTY_SHORTLIST,
-  role,
-  sort,
-  query,
-  options = null,
-  safetyRequired = false,
-  teams = NO_TEAMS,
+  viewParams,
+  onViewParamsChange,
+  teamViews,
+  actingTeam,
+  selection,
+  profileId,
   onSelect,
   onOpenProfile,
-  onToggleShortlist,
-  onFiltersChange,
-  onResetFilters,
+  queue,
+  fit,
+  options,
+  safetyRequired,
   divisionGrid,
-  headingId = "player-pool-heading"
+  headingId,
+  bottomInset
 }: Readonly<PlayerPoolProps>) {
   const t = useTranslations("draftRedesign");
-  const [heroFilter, setHeroFilter] = useState<Set<string>>(() => new Set());
-  const teamNames = useMemo(() => new Map(teams.map((team) => [team.id, team.name])), [teams]);
+  const [heroFilter, setHeroFilter] = useState<ReadonlySet<string>>(() => new Set());
+  const { session } = board;
+  const tab = viewParams.pool;
+  const queueEditable = queue != null && session.status !== "completed" && session.status !== "cancelled";
+
+  const columns = useMemo(
+    () => poolRoleColumns(session.roster_shape, board.players),
+    [session.roster_shape, board.players]
+  );
+  const market = useMemo(() => roleMarket(board, teamViews), [board, teamViews]);
+  const summary = useMemo(
+    () => (session.status === "completed" ? draftSummary(board, teamViews) : null),
+    [session.status, board, teamViews]
+  );
   const heroOptions = useMemo(() => {
     const seen = new Map<string, string | null>();
-    for (const player of players) {
+    for (const player of pool.filtered) {
       for (const hero of allPlayerHeroes(player)) {
         if (!seen.has(hero.slug)) seen.set(hero.slug, hero.imagePath);
       }
@@ -118,396 +113,386 @@ export function PlayerPool({
     return [...seen]
       .map(([slug, imagePath]) => ({ slug, imagePath }))
       .sort((left, right) => left.slug.localeCompare(right.slug));
-  }, [players]);
-  const visiblePlayers = useMemo(() => {
-    if (heroFilter.size === 0) return players;
-    return players.filter((player) =>
-      allPlayerHeroes(player).some((hero) => heroFilter.has(hero.slug))
-    );
-  }, [players, heroFilter]);
-  const toggleHero = (slug: string) => {
+  }, [pool.filtered]);
+  const rows = useMemo(
+    () =>
+      heroFilter.size === 0
+        ? pool.filtered
+        : pool.filtered.filter((player) => allPlayerHeroes(player).some((hero) => heroFilter.has(hero.slug))),
+    [pool.filtered, heroFilter]
+  );
+
+  const tabCounts: Record<DraftPoolTab, number> = {
+    available: pool.available.length,
+    shortlist: pool.shortlist.length,
+    all: pool.all.length
+  };
+  const chips: { key: DraftPoolRoleFilter; label: string; count: number; role: DraftRole | null }[] = [
+    ...(actingTeam
+      ? [
+          {
+            key: "need" as const,
+            label: t("pool.chip.need", { team: actingTeam.team.name }),
+            count: pool.needCount ?? 0,
+            role: null
+          }
+        ]
+      : []),
+    { key: "all", label: t("pool.chip.all"), count: pool.available.length, role: null },
+    ...columns.map((role) => ({ key: role, label: t(`roles.${role}`), count: pool.roleCounts[role], role }))
+  ];
+  const filtersOn = viewParams.role !== "all" || viewParams.query !== "" || heroFilter.size > 0;
+  const resetFilters = () => {
+    setHeroFilter(new Set());
+    onViewParamsChange({ role: "all", query: "" });
+  };
+  const toggleHero = (slug: string) =>
     setHeroFilter((current) => {
       const next = new Set(current);
       if (next.has(slug)) next.delete(slug);
       else next.add(slug);
       return next;
     });
-  };
-
-  const emptyTabMessage =
-    pool === "shortlist" ? t("shortlistEmpty") : pool === "drafted" ? t("draftedEmpty") : t("poolExhausted");
 
   return (
-    <section aria-labelledby={headingId}>
-      <div className="flex flex-wrap items-end justify-between gap-3 border-b border-[color:var(--aqt-border)] pb-3">
-        <h2 id={headingId} className="font-onest text-lg font-semibold">{t("availablePool")}</h2>
-        <span className="text-xs text-[color:var(--aqt-fg-muted)]">{visiblePlayers.length}/{totalPlayers}</span>
-      </div>
+    <Tabs
+      value={tab}
+      onValueChange={(value) => onViewParamsChange({ pool: value as DraftPoolTab })}
+      asChild
+    >
+      <section
+        aria-labelledby={headingId}
+        className="flex min-w-0 flex-col overflow-clip rounded-xl border border-[color:var(--aqt-border)] bg-[color:var(--aqt-card)] shadow-[0_1px_2px_rgb(0_0_0/0.25)] xl:h-full"
+      >
+        <div className="flex flex-col gap-3 border-b border-[color:var(--aqt-border)] px-4 pb-3 pt-3.5">
+          <div className="flex flex-wrap items-center gap-3.5">
+            <h2 id={headingId} className="font-onest text-base font-semibold leading-snug">
+              {t("pool.title")}
+            </h2>
+            <TabsList
+              aria-label={t("pool.tabsLabel")}
+              className="h-auto gap-0.5 rounded-[10px] bg-[color:var(--aqt-card-2)] p-[3px]"
+            >
+              {DRAFT_POOL_TABS.filter((entry) => entry !== "shortlist" || queue != null).map((entry) => (
+                <TabsTrigger
+                  key={entry}
+                  value={entry}
+                  className="min-h-11 gap-1.5 rounded-lg px-[11px] py-0 text-caption font-medium text-[color:var(--aqt-fg-muted)] ring-offset-0 focus-visible:ring-[color:var(--aqt-teal)] focus-visible:ring-offset-0 data-[state=active]:bg-[color:var(--aqt-card)] data-[state=active]:text-[color:var(--aqt-fg)] data-[state=active]:shadow-none sm:min-h-[30px]"
+                >
+                  {t(`pool.tab.${entry}`)}
+                  <span className="font-normal tabular-nums text-[color:var(--aqt-fg-faint)]">{tabCounts[entry]}</span>
+                </TabsTrigger>
+              ))}
+            </TabsList>
+            <label className="relative ml-auto flex min-w-[180px] flex-[0_1_280px] items-center">
+              <span className="sr-only">{t("pool.search")}</span>
+              <Search
+                className="pointer-events-none absolute left-3 h-4 w-4 text-[color:var(--aqt-fg-faint)]"
+                aria-hidden="true"
+              />
+              <Input
+                value={viewParams.query}
+                onChange={(event) => onViewParamsChange({ query: event.target.value })}
+                placeholder={t("pool.search")}
+                className="h-11 rounded-lg border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-bg-2)] pl-9 sm:h-[34px]"
+              />
+            </label>
+          </div>
 
-      <div className="mt-4 grid gap-2 sm:grid-cols-[1fr_auto]">
-        <label className="relative">
-          <span className="sr-only">{t("searchPlayers")}</span>
-          <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-[color:var(--aqt-fg-faint)]" />
-          <Input
-            className="pl-9"
-            value={query}
-            onChange={(event) => onFiltersChange({ query: event.target.value })}
-            placeholder={t("searchPlayers")}
-          />
-        </label>
-        <Select value={sort} onValueChange={(value) => onFiltersChange({ sort: value as DraftPoolSort })}>
-          <SelectTrigger className="w-full sm:w-32" aria-label={t("sortPool")}><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="rank">{t("sortRank")}</SelectItem>
-            <SelectItem value="name">{t("sortName")}</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div className="mt-2 flex flex-wrap items-center gap-2">
-        <div className="inline-flex min-w-0 flex-wrap gap-0.5 rounded-lg bg-[color:var(--aqt-card-2)] p-0.5" role="group" aria-label={t("filterRole")}>
-          <button
-            type="button"
-            aria-pressed={role === "all"}
-            onClick={() => onFiltersChange({ role: "all" })}
-            className={cn(SEGMENT_CLASS, role === "all" && SEGMENT_ACTIVE)}
-          >
-            {t("allRoles")}
-          </button>
-          {POOL_ROLES.map((entry) => (
-            <button
-              key={entry}
-              type="button"
-              aria-pressed={role === entry}
-              onClick={() => onFiltersChange({ role: entry })}
-              className={cn(SEGMENT_CLASS, role === entry && SEGMENT_ACTIVE)}
-            >
-              <PlayerRoleIcon role={getRoleIconName(entry)} size={16} color={ROLE_ACCENT[entry]} decorative />
-              <span className="sr-only">{t(`roles.${entry}`)}</span>
-              <span className="tabular-nums">{roleCounts[entry]}</span>
-            </button>
-          ))}
-        </div>
-        {/* Which LIST the rows come from, beside which role narrows it: the
-            shortlist and the drafted are the same players, read two other ways. */}
-        <div className="inline-flex min-w-0 flex-wrap gap-0.5 rounded-lg bg-[color:var(--aqt-card-2)] p-0.5" role="group" aria-label={t("filterPool")}>
-          {DRAFT_POOL_TABS.map((tab) => (
-            <button
-              key={tab}
-              type="button"
-              aria-pressed={pool === tab}
-              onClick={() => onFiltersChange({ pool: tab })}
-              className={cn(SEGMENT_CLASS, pool === tab && SEGMENT_ACTIVE)}
-            >
-              {t(`poolTab.${tab}`, { count: poolCounts[tab] })}
-            </button>
-          ))}
-        </div>
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="ml-auto min-h-8 gap-1.5"
-              aria-label={t("heroFilterCount", { count: heroFilter.size })}
-            >
-              {t("heroFilter")} ({heroFilter.size})
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent align="end" className="w-72 p-0">
-            <Command>
-              <CommandInput placeholder={t("heroFilter")} />
-              <CommandList>
-                <CommandEmpty>{t("noFilterResults")}</CommandEmpty>
-                <CommandGroup>
-                  {heroOptions.map((hero) => {
-                    const checked = heroFilter.has(hero.slug);
-                    return (
-                      <CommandItem key={hero.slug} value={hero.slug} onSelect={() => toggleHero(hero.slug)}>
-                        <Avatar className="h-5 w-5" title={hero.slug}>
-                          <AvatarImage src={getHeroIconUrl(hero.slug, hero.imagePath)} alt={hero.slug} />
-                        </Avatar>
-                        <span className="truncate capitalize">{hero.slug.replace(/-/g, " ")}</span>
-                        <Check className={cn("ml-auto h-4 w-4", checked ? "opacity-100" : "opacity-0")} />
-                      </CommandItem>
-                    );
-                  })}
-                </CommandGroup>
-              </CommandList>
-              {heroFilter.size > 0 && (
-                <div className="border-t border-[color:var(--aqt-border)] p-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <div role="group" aria-label={t("pool.roleFilter")} className="flex flex-wrap items-center gap-2">
+              {chips.map((chip) => {
+                const on = viewParams.role === chip.key;
+                return (
+                  <button
+                    key={chip.key}
+                    type="button"
+                    aria-pressed={on}
+                    aria-label={t("pool.chip.aria", { label: chip.label, count: chip.count })}
+                    onClick={() => onViewParamsChange({ role: chip.key })}
+                    style={
+                      {
+                        "--chip-bg": on ? (chip.role ? tint(chip.role, 12) : teal(12)) : "transparent",
+                        borderColor: on ? (chip.role ? ROLE_ACCENT[chip.role] : "var(--aqt-teal)") : "var(--aqt-border-2)"
+                      } as CSSProperties
+                    }
+                    className={cn(
+                      "flex min-h-11 max-w-full items-center gap-1.5 rounded-full border bg-[color:var(--chip-bg)] px-[11px] text-caption font-medium hover:bg-[color:var(--aqt-overlay-3)] sm:min-h-8",
+                      FOCUS_RING,
+                      on ? "text-[color:var(--aqt-fg)]" : "text-[color:var(--aqt-fg-muted)]"
+                    )}
+                  >
+                    {chip.role && (
+                      <PlayerRoleIcon
+                        role={getRoleIconName(chip.role)}
+                        size={17}
+                        color={ROLE_ACCENT[chip.role]}
+                        decorative
+                      />
+                    )}
+                    <span className="truncate">{chip.label}</span>
+                    <span className="font-normal tabular-nums text-[color:var(--aqt-fg-faint)]">{chip.count}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="ml-auto flex items-center gap-1">
+              <span
+                id={`${headingId}-sort`}
+                className="mr-1 text-label font-medium uppercase tracking-label text-[color:var(--aqt-fg-faint)]"
+              >
+                {t("pool.sortLabel")}
+              </span>
+              <div role="group" aria-labelledby={`${headingId}-sort`} className="flex items-center gap-1">
+                {(["rank", "name"] as const).map((sort) => {
+                  const on = viewParams.sort === sort;
+                  return (
+                    <button
+                      key={sort}
+                      type="button"
+                      aria-pressed={on}
+                      onClick={() => onViewParamsChange({ sort })}
+                      className={cn(
+                        "flex min-h-11 items-center rounded-[7px] px-2.5 text-caption font-medium sm:min-h-7",
+                        FOCUS_RING,
+                        on
+                          ? "bg-[color:var(--aqt-overlay-3)] text-[color:var(--aqt-fg)]"
+                          : "text-[color:var(--aqt-fg-muted)]"
+                      )}
+                    >
+                      {t(`pool.sort.${sort}`)}
+                    </button>
+                  );
+                })}
+              </div>
+              <Popover>
+                <PopoverTrigger asChild>
                   <Button
                     type="button"
                     variant="ghost"
                     size="sm"
-                    className="min-h-9 w-full"
-                    onClick={() => setHeroFilter(new Set())}
+                    className={cn(
+                      "min-h-11 rounded-[7px] px-2.5 text-caption font-medium sm:min-h-7",
+                      heroFilter.size > 0
+                        ? "bg-[color:var(--aqt-overlay-3)] text-[color:var(--aqt-fg)]"
+                        : "text-[color:var(--aqt-fg-muted)]"
+                    )}
+                    aria-label={t("heroFilterCount", { count: heroFilter.size })}
                   >
-                    {t("heroFilterClear")}
+                    {t("heroFilter")}
+                    {heroFilter.size > 0 && <span className="tabular-nums">{heroFilter.size}</span>}
                   </Button>
-                </div>
-              )}
-            </Command>
-          </PopoverContent>
-        </Popover>
-      </div>
+                </PopoverTrigger>
+                <PopoverContent align="end" className="w-72 p-0">
+                  <Command>
+                    <CommandInput placeholder={t("heroFilter")} />
+                    <CommandList>
+                      <CommandEmpty>{t("pool.heroEmpty")}</CommandEmpty>
+                      <CommandGroup>
+                        {heroOptions.map((hero) => (
+                          <CommandItem key={hero.slug} value={hero.slug} onSelect={() => toggleHero(hero.slug)}>
+                            <Avatar className="h-5 w-5" title={hero.slug}>
+                              <AvatarImage src={getHeroIconUrl(hero.slug, hero.imagePath)} alt={hero.slug} />
+                            </Avatar>
+                            <span className="truncate capitalize">{hero.slug.replace(/-/g, " ")}</span>
+                            <Check
+                              className={cn("ml-auto h-4 w-4", heroFilter.has(hero.slug) ? "opacity-100" : "opacity-0")}
+                            />
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                    {heroFilter.size > 0 && (
+                      <div className="border-t border-[color:var(--aqt-border)] p-1">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="min-h-9 w-full"
+                          onClick={() => setHeroFilter(new Set())}
+                        >
+                          {t("heroFilterClear")}
+                        </Button>
+                      </div>
+                    )}
+                  </Command>
+                </PopoverContent>
+              </Popover>
+            </div>
+          </div>
 
-      {totalPlayers === 0 ? (
-        // An exhausted tab is not a filter miss: offering "reset filters"
-        // here promises players that no longer exist.
-        <p className="py-12 text-center text-sm text-[color:var(--aqt-fg-muted)]">{emptyTabMessage}</p>
-      ) : visiblePlayers.length === 0 ? (
-        <div className="py-12 text-center">
-          <Search className="mx-auto h-7 w-7 text-[color:var(--aqt-fg-faint)]" />
-          <p className="mt-3 font-medium">{t("noFilterResults")}</p>
-          <p className="mt-1 text-sm text-[color:var(--aqt-fg-muted)]">{t("noFilterResultsHint")}</p>
-          <Button
-            variant="link"
-            className="mt-2 min-h-11"
-            onClick={() => {
-              setHeroFilter(new Set());
-              onResetFilters();
-            }}
-          >
-            {t("resetFilters")}
-          </Button>
-        </div>
-      ) : (
-        <ul className="mt-3 divide-y divide-[color:var(--aqt-border)]">
-          {visiblePlayers.map((player) => (
-            <PoolRow
-              key={player.id}
-              player={player}
-              pool={pool}
-              selection={selection}
-              shortlisted={shortlist.has(player.id)}
-              options={options}
-              safetyRequired={safetyRequired}
-              teamName={player.drafted_by_team_id == null ? null : teamNames.get(player.drafted_by_team_id) ?? null}
-              onSelect={onSelect}
-              onOpenProfile={onOpenProfile}
-              onToggleShortlist={onToggleShortlist}
-              divisionGrid={divisionGrid}
-            />
-          ))}
-        </ul>
-      )}
-    </section>
-  );
-}
-
-/**
- * One dense pool row: the picking controls ARE the row. Every role the server
- * would accept is its own button carrying that role's own rank, so choosing a
- * player and the role to spend them on is a single click instead of a card
- * selection followed by a role picker in a side panel.
- */
-function PoolRow({
-  player,
-  pool,
-  selection,
-  shortlisted,
-  options,
-  safetyRequired,
-  teamName,
-  onSelect,
-  onOpenProfile,
-  onToggleShortlist,
-  divisionGrid
-}: Readonly<{
-  player: DraftPlayer;
-  pool: DraftPoolTab;
-  selection: PoolSelection | null;
-  shortlisted: boolean;
-  options: DraftPickOptionsResponse | null;
-  safetyRequired: boolean;
-  teamName: string | null;
-  onSelect?: (player: DraftPlayer, role: DraftRole) => void;
-  onOpenProfile: (player: DraftPlayer) => void;
-  onToggleShortlist?: (playerId: number) => void;
-  divisionGrid: DivisionGrid;
-}>) {
-  const t = useTranslations("draftRedesign");
-  const name = player.battle_tag ?? `#${player.id}`;
-  const roles = playerRoles(player);
-  const isSelectedPlayer = selection?.playerId === player.id;
-  const division = resolveDivisionFromRank(divisionGrid, player.effective_rank);
-  const divisionTitle = [
-    division == null ? null : getDivisionLabel(divisionGrid, division),
-    player.effective_rank ? `${player.effective_rank} SR` : null
-  ].filter(Boolean).join(" · ");
-  // Every role unsafe: the row itself is unpickable this turn, which the role
-  // buttons each repeat with their own reason.
-  const blocked =
-    safetyRequired &&
-    roles.length > 0 &&
-    roles.every((role) => !(optionForSelection(options, player.id, role)?.is_safe ?? false));
-
-  return (
-    <li
-      className={cn(
-        "grid min-h-12 grid-cols-[28px_minmax(0,1fr)_auto] items-center gap-x-2 gap-y-1 border-l-2 border-transparent py-1.5 pl-2",
-        isSelectedPlayer && "border-l-[color:var(--aqt-teal)] bg-[color:var(--aqt-teal)]/10"
-      )}
-    >
-      <span className="inline-flex h-7 w-7 items-center justify-center" title={divisionTitle}>
-        {division != null ? (
-          <DivisionIcon division={division} tournamentGrid={divisionGrid} width={28} height={28} className="h-7 w-7 object-contain" />
-        ) : (
-          <span className="text-[color:var(--aqt-fg-faint)]">—</span>
-        )}
-      </span>
-
-      <span className="col-span-2 flex min-w-0 flex-wrap items-center gap-x-1.5 sm:col-span-1">
-        {/* The name is the profile trigger, not the pick target: picking is
-            what the role buttons on the right are for. */}
-        <button
-          type="button"
-          onClick={() => onOpenProfile(player)}
-          aria-label={t("openProfile", { player: name })}
-          className={cn(
-            "min-w-0 truncate rounded font-medium outline-none hover:text-[color:var(--aqt-teal)] hover:underline focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)]",
-            blocked && "text-[color:var(--aqt-fg-dim)]"
+          {market.length > 0 && (
+            <ul
+              aria-label={t("pool.market.label")}
+              className="grid gap-x-[18px] gap-y-3"
+              style={{ gridTemplateColumns: `repeat(auto-fit, minmax(min(100%, 160px), 1fr))` }}
+            >
+              {market.map((entry) => {
+                const supply = entry.primary + entry.secondary;
+                const denominator = Math.max(entry.openSlots, supply, 1);
+                const barColor = entry.deficit ? "var(--aqt-rose)" : ROLE_ACCENT[entry.role];
+                const roleLabel = t(`roles.${entry.role}`);
+                const title = `${t("pool.market.title", {
+                  role: roleLabel,
+                  open: entry.openSlots,
+                  primary: entry.primary,
+                  secondary: entry.secondary
+                })}${entry.deficit ? ` ${t("pool.market.deficit")}` : ""}`;
+                return (
+                  <li key={entry.role} title={title}>
+                    <span className="sr-only">{title}</span>
+                    <div className="flex items-center gap-[7px] text-body text-[color:var(--aqt-fg-muted)]" aria-hidden="true">
+                      <PlayerRoleIcon role={getRoleIconName(entry.role)} size={17} color={ROLE_ACCENT[entry.role]} decorative />
+                      <span className="min-w-0 truncate">
+                        {t("pool.market.slots", { role: roleLabel, count: entry.openSlots })}
+                      </span>
+                      <span
+                        className={cn(
+                          "ml-auto shrink-0 whitespace-nowrap font-semibold tabular-nums",
+                          entry.deficit
+                            ? "text-[color:var(--aqt-rose)]"
+                            : entry.tight
+                              ? "text-[color:var(--aqt-amber)]"
+                              : "text-[color:var(--aqt-fg)]"
+                        )}
+                      >
+                        {entry.secondary > 0
+                          ? t("pool.market.supplyWithSecondary", {
+                              primary: entry.primary,
+                              secondary: entry.secondary,
+                              total: supply
+                            })
+                          : t("pool.market.supply", { primary: entry.primary, total: supply })}
+                      </span>
+                    </div>
+                    <div
+                      className="mt-[7px] flex h-[5px] overflow-hidden rounded-full bg-[color:var(--aqt-overlay-3)]"
+                      aria-hidden="true"
+                    >
+                      <span style={{ width: `${(entry.primary / denominator) * 100}%`, background: barColor }} />
+                      <span
+                        style={{
+                          width: `${(entry.secondary / denominator) * 100}%`,
+                          background: `color-mix(in srgb, ${barColor} 45%, transparent)`
+                        }}
+                      />
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
           )}
-        >
-          {name}
-        </button>
-        {player.is_captain && (
-          <Crown className="h-3.5 w-3.5 shrink-0 text-[color:var(--aqt-warm)]" role="img" aria-label={t("captain")} />
-        )}
-        {player.sub_role && (
-          <span className="truncate text-label uppercase tracking-wide text-[color:var(--aqt-fg-muted)]">
-            {formatSubRoleLabel(player.sub_role)}
-          </span>
-        )}
-        {player.is_flex && (
-          <span className="rounded border border-[color:var(--aqt-border-2)] px-1 text-label uppercase tracking-wide text-[color:var(--aqt-fg-muted)]">
-            {t("flex")}
-          </span>
-        )}
-        {roles.length === 0 && (
-          <span className="rounded border border-[color:var(--aqt-border-2)] px-1 text-label uppercase tracking-wide text-[color:var(--aqt-fg-muted)]">
-            {t("noRole")}
-          </span>
-        )}
-        {blocked ? (
-          <Ban className="h-4 w-4 shrink-0 text-[color:var(--aqt-live)]" role="img" aria-label={t("unsafePlayerReason")} />
-        ) : safetyRequired ? (
-          <ShieldCheck className="h-4 w-4 shrink-0 text-[color:var(--aqt-support)]" role="img" aria-label={t("safeOption")} />
-        ) : null}
-      </span>
+        </div>
 
-      {/* Phone widths: the role buttons take their own line under the name
-          instead of squeezing it to one letter. */}
-      <span className="col-span-2 col-start-2 flex min-w-0 flex-wrap items-center gap-1 sm:col-span-1 sm:col-start-auto sm:shrink-0 sm:flex-nowrap sm:justify-end">
-        {pool === "drafted" ? (
-          <span className="max-w-[12rem] truncate rounded-md border border-[color:var(--aqt-border-2)] px-2 py-1 text-xs text-[color:var(--aqt-fg-muted)]">
-            {teamName ?? t("unknownTeam")}
-          </span>
-        ) : (
-          roles.map((role) => (
-            <RoleOption
-              key={role}
-              player={player}
-              role={role}
-              selected={isSelectedPlayer && selection?.role === role}
-              options={options}
-              safetyRequired={safetyRequired}
-              onSelect={onSelect}
-              divisionGrid={divisionGrid}
-            />
-          ))
+        {summary && (
+          <div className="border-b border-[color:var(--aqt-border)] bg-[color:var(--aqt-overlay-1)] px-5 py-[18px]">
+            <h3 className="font-onest text-lg font-semibold leading-snug">{t("pool.summary.title")}</h3>
+            <dl className="mt-3.5 grid grid-cols-2 gap-4 sm:grid-cols-4">
+              {[
+                {
+                  key: "spread" as const,
+                  value: summary.spread == null ? "—" : String(Math.round(summary.spread)),
+                  sub: t("pool.summary.spreadSub")
+                },
+                { key: "offRole" as const, value: String(summary.offRole), sub: t("pool.summary.offRoleSub") },
+                {
+                  key: "autopicks" as const,
+                  value: String(summary.autopicks),
+                  sub: t("pool.summary.autopicksSub", { total: summary.picks })
+                },
+                { key: "overrides" as const, value: String(summary.overrides), sub: t("pool.summary.overridesSub") }
+              ].map((tile) => (
+                <div key={tile.key} className="flex flex-col">
+                  <dt className="text-label font-medium uppercase tracking-label text-[color:var(--aqt-fg-faint)]">
+                    {t(`pool.summary.${tile.key}`)}
+                  </dt>
+                  <dd className="mt-1 font-onest text-[30px] font-bold leading-[1.1] tabular-nums">{tile.value}</dd>
+                  <dd className="mt-0.5 text-caption text-[color:var(--aqt-fg-muted)]">{tile.sub}</dd>
+                </div>
+              ))}
+            </dl>
+          </div>
         )}
-        {onToggleShortlist ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-9 w-9"
-            onClick={() => onToggleShortlist(player.id)}
-            aria-pressed={shortlisted}
-            aria-label={shortlisted ? t("removeShortlist") : t("addShortlist")}
+
+        <TabsContent
+          value={tab}
+          className="mt-0 min-h-0 flex-1 ring-offset-0 focus-visible:ring-inset focus-visible:ring-[color:var(--aqt-teal)] focus-visible:ring-offset-0 xl:overflow-y-auto"
+          style={{ "--pool-roles": `${Math.max(columns.length, 1)}fr`, paddingBottom: bottomInset } as CSSProperties}
+        >
+          <div
+            aria-hidden="true"
+            className={cn(
+              POOL_GRID,
+              "sticky top-0 z-10 hidden border-b border-[color:var(--aqt-border)] bg-[color:var(--aqt-card)] px-4 py-2 text-label font-medium uppercase tracking-label text-[color:var(--aqt-fg-faint)] sm:grid"
+            )}
           >
-            <Heart className={cn("h-4 w-4", shortlisted && "fill-current text-[color:var(--aqt-teal)]")} />
-          </Button>
-        ) : null}
-      </span>
-    </li>
+            <span>{t("pool.col.player")}</span>
+            <span
+              className="grid gap-1.5"
+              style={{ gridTemplateColumns: `repeat(${Math.max(columns.length, 1)}, minmax(0, 1fr))` }}
+            >
+              {columns.map((role) => (
+                <span key={role} className="flex min-w-0 items-center gap-1.5" style={{ color: ROLE_ACCENT[role] }}>
+                  <PlayerRoleIcon role={getRoleIconName(role)} size={16} color={ROLE_ACCENT[role]} decorative />
+                  <span className="truncate">{t(`roles.${role}`)}</span>
+                </span>
+              ))}
+            </span>
+            <span className="text-right">{actingTeam ? t("pool.col.fit") : t("pool.col.demand")}</span>
+            <span />
+          </div>
+
+          {rows.length > 0 ? (
+            <div role="list" aria-label={t("pool.title")}>
+              {rows.map((player) => (
+                <PoolRow
+                  key={player.id}
+                  player={player}
+                  columns={columns}
+                  tab={tab}
+                  roleFilter={viewParams.role}
+                  teamViews={teamViews}
+                  actingTeam={actingTeam}
+                  selectedRole={selection?.playerId === player.id ? selection.role : null}
+                  isProfile={profileId === player.id}
+                  fit={fit?.get(player.id)}
+                  queue={queue}
+                  queueEditable={queueEditable}
+                  options={options}
+                  safetyRequired={safetyRequired}
+                  divisionGrid={divisionGrid}
+                  idPrefix={headingId}
+                  onSelect={onSelect}
+                  onOpenProfile={onOpenProfile}
+                />
+              ))}
+            </div>
+          ) : (
+            <PoolEmpty
+              kind={
+                // A filter miss offers a reset; an exhausted list must not promise players that do not exist.
+                filtersOn && tabCounts[tab] > 0 ? "filtered" : tab === "shortlist" ? "shortlist" : "none"
+              }
+              onReset={resetFilters}
+            />
+          )}
+        </TabsContent>
+      </section>
+    </Tabs>
   );
 }
 
-function RoleOption({
-  player,
-  role,
-  selected,
-  options,
-  safetyRequired,
-  onSelect,
-  divisionGrid
-}: Readonly<{
-  player: DraftPlayer;
-  role: DraftRole;
-  selected: boolean;
-  options: DraftPickOptionsResponse | null;
-  safetyRequired: boolean;
-  onSelect?: (player: DraftPlayer, role: DraftRole) => void;
-  divisionGrid: DivisionGrid;
-}>) {
+function PoolEmpty({ kind, onReset }: Readonly<{ kind: "filtered" | "shortlist" | "none"; onReset: () => void }>) {
   const t = useTranslations("draftRedesign");
-  const option = optionForSelection(options, player.id, role);
-  const unsafe = safetyRequired && !(option?.is_safe ?? false);
-  const reason = !unsafe
-    ? undefined
-    : option?.reason_code === "slot_filled" || option?.reason_code === "role_shortage"
-      ? t(`optionReason.${option.reason_code}`)
-      : t("unsafeOption");
-  // The role's OWN rank, not `effective_rank`: spending a support main on tank
-  // is a different number, and that number is the whole decision.
-  const rank = player.role_ranks[role] ?? null;
-  const division = resolveDivisionFromRank(divisionGrid, rank);
-  const content = (
-    <>
-      <PlayerRoleIcon role={getRoleIconName(role)} size={16} color={ROLE_ACCENT[role]} decorative />
-      <span className="tabular-nums">{rank ?? "—"}</span>
-      {division != null && (
-        <DivisionIcon division={division} tournamentGrid={divisionGrid} width={18} height={18} className="h-[18px] w-[18px] object-contain" />
-      )}
-    </>
-  );
-  const shell =
-    "inline-flex min-h-9 items-center gap-1 rounded-md border px-1.5 text-xs tabular-nums transition-colors";
-
-  if (!onSelect) {
-    // Spectator: the same information, with nothing to press.
-    return (
-      <span
-        className={cn(shell, "border-[color:var(--aqt-border-2)] text-[color:var(--aqt-fg-muted)]")}
-        title={t(`roles.${role}`)}
-      >
-        {content}
-      </span>
-    );
-  }
-
   return (
-    <button
-      type="button"
-      aria-label={t("pickAs", { player: player.battle_tag ?? `#${player.id}`, role: t(`roles.${role}`) })}
-      aria-pressed={selected}
-      aria-disabled={unsafe}
-      title={reason}
-      onClick={() => onSelect(player, role)}
-      className={cn(
-        shell,
-        "outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--aqt-teal)]",
-        selected
-          ? "border-[color:var(--aqt-teal)] bg-[color:var(--aqt-teal)]/15 text-[color:var(--aqt-fg)]"
-          : "border-[color:var(--aqt-border-2)] text-[color:var(--aqt-fg-muted)] hover:border-[color:var(--aqt-teal)]/60",
-        unsafe && "border-dashed opacity-60"
+    <div className="px-5 py-14 text-center">
+      <p className="text-base font-semibold">{t(`pool.empty.${kind}Title`)}</p>
+      <p className="mt-1.5 text-body text-[color:var(--aqt-fg-muted)]">{t(`pool.empty.${kind}Text`)}</p>
+      {kind === "filtered" && (
+        <Button type="button" variant="outline" className="mt-4 min-h-10" onClick={onReset}>
+          {t("resetFilters")}
+        </Button>
       )}
-    >
-      {content}
-    </button>
+    </div>
   );
 }

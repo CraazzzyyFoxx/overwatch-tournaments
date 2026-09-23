@@ -94,6 +94,8 @@ export interface DraftPlayer {
   /** Per-role provenance of `role_ranks`, keyed the same way. */
   role_sources: Record<string, DraftRankSource>;
   role_top_heroes: Record<string, Array<string | { slug: string; image_path: string | null }>>;
+  /** Sub-role per playable role (hitscan, main heal…), keyed like `role_ranks`; absent when none. */
+  role_sub_roles: Record<string, string>;
   notes: string | null;
   custom_fields: DraftPlayerCustomField[];
   version: number;
@@ -134,19 +136,6 @@ export interface DraftBoard {
   last_event_id: number | null;
 }
 
-interface DraftSuggestion {
-  player_id: number;
-  role: DraftRole;
-  fit_score: number;
-  breakdown: Record<string, number>;
-}
-
-export interface DraftSuggestionsResponse {
-  pick_id: number;
-  draft_team_id: number;
-  suggestions: DraftSuggestion[];
-}
-
 // The server declares `slot_code` as a plain string, but the value set is closed:
 // `shared.domain.roster_shape` rejects anything outside `ROSTER_SLOT_CODES`. The
 // narrower type is what lets these codes index role-keyed lookups and message
@@ -180,7 +169,6 @@ export interface DraftPickOption {
   reason_code: string | null;
   unmatched_slots: DraftSlot[];
   blocking_player_ids: number[];
-  suggestion_score: number | null;
 }
 
 export interface DraftPickOptionsResponse {
@@ -188,6 +176,70 @@ export interface DraftPickOptionsResponse {
   pick_version: number;
   draft_team_id: number;
   options: DraftPickOption[];
+}
+
+/** The server's fit of every seatable (player, role) for one team, normalized 1..99. */
+export interface DraftTeamFitScore {
+  player_id: number;
+  /** `null` under an all-flex shape: nobody is seated on a role. */
+  role: DraftRole | null;
+  score: number;
+}
+
+export interface DraftTeamFitResponse {
+  session_id: number;
+  team_id: number;
+  scores: DraftTeamFitScore[];
+}
+
+/** What the autopick would take for the team on the clock right now. */
+export interface DraftAutopickPreview {
+  player_id: number;
+  role: DraftRole | null;
+  /** `queue`: the first safe player of the captain's list; `fit`: the strategy's best fit. */
+  source: "queue" | "fit";
+}
+
+/** A captain's private pick queue ("My list"): the autopick's priority order. */
+export interface DraftTeamQueueResponse {
+  team_id: number;
+  /** Stored order, narrowed to players still available. */
+  player_ids: number[];
+  /** Non-null only while this team is on the clock. */
+  autopick_preview: DraftAutopickPreview | null;
+}
+
+export type DraftJournalAction =
+  | "pick_made"
+  | "pick_autopicked"
+  | "pick_overridden"
+  | "pick_extended"
+  | "paused"
+  | "resumed"
+  | "rollback"
+  | "started"
+  | "completed"
+  | "cancelled"
+  | "player_role_added";
+
+export interface DraftJournalEntry {
+  id: number;
+  created_at: string;
+  /** Open-ended on the wire; render unknown actions generically. */
+  action: DraftJournalAction | (string & {});
+  actor_auth_user_id: number | null;
+  actor_name: string | null;
+  reason: string | null;
+  pick_no: number | null;
+  team_id: number | null;
+  player_id: number | null;
+  role: DraftRole | null;
+  seconds: number | null;
+}
+
+export interface DraftJournalResponse {
+  session_id: number;
+  entries: DraftJournalEntry[];
 }
 
 export interface DraftPresenceState {

@@ -15,6 +15,7 @@ from sqlalchemy import (
     UniqueConstraint,
     text,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from shared.core import db
@@ -132,6 +133,10 @@ class DraftTeam(db.TimeStampIntegerMixin):
     exported_team_id: Mapped[int | None] = mapped_column(
         ForeignKey("tournament.team.id", ondelete="SET NULL"), nullable=True, index=True
     )
+    #: The captain's private autopick priority ("My list"): draft_player ids, in
+    #: the captain's own order. Deliberately NOT on ``DraftTeamRead`` -- the board
+    #: is public and this is the one piece of a team that is not.
+    pick_queue: Mapped[list[int]] = mapped_column(JSONB, nullable=False, server_default="[]", default=list)
 
     session: Mapped[DraftSession] = relationship(back_populates="teams")
     captain_member: Mapped[WorkspaceMember | None] = relationship()

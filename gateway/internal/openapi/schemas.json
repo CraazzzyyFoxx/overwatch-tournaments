@@ -2368,6 +2368,14 @@
       "description": "Updates a player's Discord identity by identity id; requires the global user.update permission.",
       "summary": "Update Discord identity"
     },
+    "rpc.app.users.draft_card": {
+      "description": "Permission: public; no authentication required. Returns the draft room's player card for a user: career record, per-role and per-hero map records, MVP maps and the last five tournaments, scoped to the workspace.",
+      "response": {
+        "array": false,
+        "ref": "app.UserDraftCard"
+      },
+      "summary": "User draft card"
+    },
     "rpc.app.users.encounters": {
       "description": "Permission: public; no authentication required. Returns a player's paginated encounters filterable by result, stage, MVP, log availability, and opponent.",
       "query_params": [
@@ -4096,6 +4104,24 @@
       },
       "summary": "Get draft feasibility"
     },
+    "rpc.balancer.draft.journal": {
+      "description": "Permission: workspace `team.create`. Returns the session's audit trail newest first -- picks, autopicks, overrides, clock extensions and every lifecycle move -- with the acting account's name resolved (null for the clock and other system actions). `limit` defaults to 100 and is clamped to 500.",
+      "query_params": [
+        {
+          "name": "limit",
+          "required": false,
+          "schema": {
+            "description": "Page size, clamped to 1..500, default 100.",
+            "type": "integer"
+          }
+        }
+      ],
+      "response": {
+        "array": false,
+        "ref": "balancer.DraftJournalResponse"
+      },
+      "summary": "Get draft organizer journal"
+    },
     "rpc.balancer.draft.pause": {
       "description": "Permission: workspace `team.create`. Pauses an in-progress draft and publishes a draft-paused realtime event.",
       "response": {
@@ -4171,6 +4197,26 @@
         "ref": "balancer.DraftRoleEditResponse"
       },
       "summary": "Preview or add a draft player role"
+    },
+    "rpc.balancer.draft.queue_get": {
+      "description": "Permission: the team's own captain, or workspace `team.create`. Returns the team's private autopick priority in stored order, filtered to players still available, plus `autopick_preview` -- exactly what autopick would take -- while this team is on the clock. Never part of the public board.",
+      "response": {
+        "array": false,
+        "ref": "balancer.DraftTeamQueueResponse"
+      },
+      "summary": "Get captain pick queue"
+    },
+    "rpc.balancer.draft.queue_set": {
+      "description": "Permission: the team's own captain, or workspace `team.create`. Replaces the queue with the given order (max 60, duplicates collapsed to their first placement); 422 when an id is not an available non-captain player of this draft, 409 once the draft is completed or cancelled. Publishes no realtime event -- a queue is private to its team.",
+      "request": {
+        "array": false,
+        "ref": "balancer.DraftTeamQueueRequest"
+      },
+      "response": {
+        "array": false,
+        "ref": "balancer.DraftTeamQueueResponse"
+      },
+      "summary": "Set captain pick queue"
     },
     "rpc.balancer.draft.resume": {
       "description": "Permission: workspace `team.create`. Resumes a paused draft and publishes a draft-resumed realtime event.",
@@ -4267,6 +4313,14 @@
         "ref": "balancer.DraftSuggestionsResponse"
       },
       "summary": "Get pick suggestions"
+    },
+    "rpc.balancer.draft.team_fit": {
+      "description": "Permission: the team's own captain, or workspace `team.read`. Scores every available player against every role this team can still seat, normalized 1..99 across the response (50 when all candidates tie). `role` is null under a role-less (all-flex) roster shape, where each player has exactly one entry. Empty once the team's roster is full or the draft is completed/cancelled.",
+      "response": {
+        "array": false,
+        "ref": "balancer.DraftTeamFitResponse"
+      },
+      "summary": "Get team fit scores"
     },
     "rpc.balancer.draft.tournament_board": {
       "description": "Permission: public; no authentication required. Returns the live draft board snapshot for a tournament's active session, or null when no session is active.",
@@ -17288,6 +17342,237 @@
       "title": "UserCreate",
       "type": "object"
     },
+    "app.UserDraftCard": {
+      "description": "Career summary rendered on the draft room's player island.\n\nLeagues are excluded throughout (no placement, no bracket) so every number\non the card counts the same set of events. A player with no history is a\nvalid card of zeros and empty lists, never a 404.",
+      "properties": {
+        "avg_placement": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Avg Placement"
+        },
+        "best_placement": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Best Placement"
+        },
+        "heroes": {
+          "items": {
+            "$ref": "#/components/schemas/app.UserDraftCardHero"
+          },
+          "title": "Heroes",
+          "type": "array"
+        },
+        "maps": {
+          "title": "Maps",
+          "type": "integer"
+        },
+        "maps_lost": {
+          "title": "Maps Lost",
+          "type": "integer"
+        },
+        "maps_won": {
+          "title": "Maps Won",
+          "type": "integer"
+        },
+        "mvp_maps": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Mvp Maps"
+        },
+        "recent_tournaments": {
+          "items": {
+            "$ref": "#/components/schemas/app.UserDraftCardTournament"
+          },
+          "title": "Recent Tournaments",
+          "type": "array"
+        },
+        "roles": {
+          "items": {
+            "$ref": "#/components/schemas/app.UserDraftCardRole"
+          },
+          "title": "Roles",
+          "type": "array"
+        },
+        "tournaments": {
+          "title": "Tournaments",
+          "type": "integer"
+        },
+        "tournaments_won": {
+          "title": "Tournaments Won",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "tournaments",
+        "tournaments_won",
+        "maps",
+        "maps_won",
+        "maps_lost"
+      ],
+      "title": "UserDraftCard",
+      "type": "object"
+    },
+    "app.UserDraftCardHero": {
+      "description": "One of the player's signature heroes on the draft-room player card.",
+      "properties": {
+        "hero": {
+          "$ref": "#/components/schemas/app.HeroRead"
+        },
+        "maps": {
+          "title": "Maps",
+          "type": "integer"
+        },
+        "maps_won": {
+          "title": "Maps Won",
+          "type": "integer"
+        },
+        "role": {
+          "enum": [
+            "tank",
+            "damage",
+            "support"
+          ],
+          "title": "Role",
+          "type": "string"
+        }
+      },
+      "required": [
+        "hero",
+        "role",
+        "maps",
+        "maps_won"
+      ],
+      "title": "UserDraftCardHero",
+      "type": "object"
+    },
+    "app.UserDraftCardRole": {
+      "description": "One role's map record on the draft-room player card.",
+      "properties": {
+        "maps": {
+          "title": "Maps",
+          "type": "integer"
+        },
+        "maps_won": {
+          "title": "Maps Won",
+          "type": "integer"
+        },
+        "role": {
+          "enum": [
+            "tank",
+            "damage",
+            "support"
+          ],
+          "title": "Role",
+          "type": "string"
+        }
+      },
+      "required": [
+        "role",
+        "maps",
+        "maps_won"
+      ],
+      "title": "UserDraftCardRole",
+      "type": "object"
+    },
+    "app.UserDraftCardTournament": {
+      "description": "One recent tournament row on the draft-room player card.",
+      "properties": {
+        "date": {
+          "anyOf": [
+            {
+              "format": "date",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Date"
+        },
+        "id": {
+          "title": "Id",
+          "type": "integer"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "placement": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Placement"
+        },
+        "rank": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rank"
+        },
+        "role": {
+          "anyOf": [
+            {
+              "enum": [
+                "tank",
+                "damage",
+                "support"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Role"
+        },
+        "teams_count": {
+          "title": "Teams Count",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "teams_count"
+      ],
+      "title": "UserDraftCardTournament",
+      "type": "object"
+    },
     "app.UserEncounterStageItemSummary": {
       "description": "Stage-item link inside `EncounterReadWithUserStats.stage_item`.",
       "properties": {
@@ -22143,6 +22428,46 @@
       "title": "CustomGameVariantIndexPatch",
       "type": "object"
     },
+    "balancer.DraftAutopickPreview": {
+      "description": "Exactly what ``DraftSelectionService.autopick`` would take right now.\n\nComputed by the same call autopick makes, so a captain watching the clock\nrun out is never shown a different player than the one it takes.",
+      "properties": {
+        "player_id": {
+          "title": "Player Id",
+          "type": "integer"
+        },
+        "role": {
+          "anyOf": [
+            {
+              "enum": [
+                "tank",
+                "damage",
+                "support"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Role"
+        },
+        "source": {
+          "enum": [
+            "queue",
+            "fit"
+          ],
+          "title": "Source",
+          "type": "string"
+        }
+      },
+      "required": [
+        "player_id",
+        "source"
+      ],
+      "title": "DraftAutopickPreview",
+      "type": "object"
+    },
     "balancer.DraftAutopickStrategy": {
       "enum": [
         "best_fit",
@@ -22297,6 +22622,144 @@
       "title": "DraftFormat",
       "type": "string"
     },
+    "balancer.DraftJournalEntry": {
+      "properties": {
+        "action": {
+          "title": "Action",
+          "type": "string"
+        },
+        "actor_auth_user_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Actor Auth User Id"
+        },
+        "actor_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Actor Name"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "integer"
+        },
+        "pick_no": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pick No"
+        },
+        "player_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Player Id"
+        },
+        "reason": {
+          "title": "Reason",
+          "type": "string"
+        },
+        "role": {
+          "anyOf": [
+            {
+              "enum": [
+                "tank",
+                "damage",
+                "support"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Role"
+        },
+        "seconds": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Seconds"
+        },
+        "team_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Team Id"
+        }
+      },
+      "required": [
+        "id",
+        "created_at",
+        "action",
+        "reason"
+      ],
+      "title": "DraftJournalEntry",
+      "type": "object"
+    },
+    "balancer.DraftJournalResponse": {
+      "properties": {
+        "entries": {
+          "items": {
+            "$ref": "#/components/schemas/balancer.DraftJournalEntry"
+          },
+          "title": "Entries",
+          "type": "array"
+        },
+        "session_id": {
+          "title": "Session Id",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "session_id"
+      ],
+      "title": "DraftJournalResponse",
+      "type": "object"
+    },
     "balancer.DraftPickAutopickRequest": {
       "properties": {
         "expected_version": {
@@ -22375,18 +22838,6 @@
           ],
           "title": "Role",
           "type": "string"
-        },
-        "suggestion_score": {
-          "anyOf": [
-            {
-              "type": "number"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Suggestion Score"
         },
         "unmatched_slots": {
           "items": {
@@ -22814,6 +23265,13 @@
             "type": "string"
           },
           "title": "Role Sources",
+          "type": "object"
+        },
+        "role_sub_roles": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Role Sub Roles",
           "type": "object"
         },
         "role_top_heroes": {
@@ -23535,6 +23993,113 @@
         "suggestions"
       ],
       "title": "DraftSuggestionsResponse",
+      "type": "object"
+    },
+    "balancer.DraftTeamFitResponse": {
+      "properties": {
+        "scores": {
+          "items": {
+            "$ref": "#/components/schemas/balancer.DraftTeamFitScore"
+          },
+          "title": "Scores",
+          "type": "array"
+        },
+        "session_id": {
+          "title": "Session Id",
+          "type": "integer"
+        },
+        "team_id": {
+          "title": "Team Id",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "session_id",
+        "team_id"
+      ],
+      "title": "DraftTeamFitResponse",
+      "type": "object"
+    },
+    "balancer.DraftTeamFitScore": {
+      "description": "How well one player fits one role this team can still seat.",
+      "properties": {
+        "player_id": {
+          "title": "Player Id",
+          "type": "integer"
+        },
+        "role": {
+          "anyOf": [
+            {
+              "enum": [
+                "tank",
+                "damage",
+                "support"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Role"
+        },
+        "score": {
+          "title": "Score",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "player_id",
+        "score"
+      ],
+      "title": "DraftTeamFitScore",
+      "type": "object"
+    },
+    "balancer.DraftTeamQueueRequest": {
+      "description": "The captain's autopick priority (\"My list\"), in their own order.",
+      "properties": {
+        "player_ids": {
+          "items": {
+            "type": "integer"
+          },
+          "maxItems": 60,
+          "title": "Player Ids",
+          "type": "array"
+        }
+      },
+      "title": "DraftTeamQueueRequest",
+      "type": "object"
+    },
+    "balancer.DraftTeamQueueResponse": {
+      "properties": {
+        "autopick_preview": {
+          "anyOf": [
+            {
+              "$ref": "#/components/schemas/balancer.DraftAutopickPreview"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "player_ids": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "Player Ids",
+          "type": "array"
+        },
+        "team_id": {
+          "title": "Team Id",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "team_id"
+      ],
+      "title": "DraftTeamQueueResponse",
       "type": "object"
     },
     "balancer.DraftTeamRead": {

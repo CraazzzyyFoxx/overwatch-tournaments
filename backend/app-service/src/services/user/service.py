@@ -1,11 +1,13 @@
 import asyncio
 import typing
+from collections import Counter
 from statistics import mean
 
 from cashews import cache
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from shared.division_grid import DivisionGrid, load_runtime_grid
+from shared.domain.roster_shape import RegistrationRoleCode
 from shared.services.division_grid.access import build_workspace_division_grid_normalizer
 from shared.services.division_grid.normalization import (
     DivisionGridNormalizationError,
@@ -53,6 +55,11 @@ overview_hero_metrics_order = [
     enums.LogStatsName.HeroDamageDealt,
     enums.LogStatsName.HealingDealt,
 ]
+
+
+# The draft card speaks slot codes (``tank``/``damage``/``support``); a roster
+# row typed ``flex`` is not one of them and never reaches the card.
+_DRAFT_CARD_ROLE_CODES: frozenset[str] = frozenset(typing.get_args(RegistrationRoleCode))
 
 
 # Computed once at import — COMPARE_METRIC_DEFINITIONS is module-level
@@ -1036,7 +1043,7 @@ class UserService:
         ``grid`` resolves divisions from the raw player rank, and ``workspace_id`` scopes
         the roles to a single workspace when given.
         """
-        roles = await self.profile.get_roles(session, user_id, workspace_id=workspace_id, grid=grid)
+        roles = await self.profile.get_roles(session, user_id, workspace_id=workspace_id)
         payload: list[schemas.UserRole] = []
         for role, maps_won, maps_lost, division in roles:
             latest_role = max(division, key=lambda item: item["tournament"])
@@ -1166,6 +1173,118 @@ class UserService:
             roles=roles,
             hero_statistics=hero_statistics.results,
             tournaments=sorted(tournaments, key=lambda x: x.id, reverse=True),
+        )
+
+    @cache(
+        ttl=config.settings.users_cache_ttl,
+        key="backend:user_draft_card:{id}:{workspace_id}",
+    )
+    async def get_draft_card(
+        self, session: AsyncSession, id: int, workspace_id: int | None = None
+    ) -> schemas.UserDraftCard:
+        """The draft room's player card: career record, roles, signature heroes
+        and the last five tournaments.
+
+        Assembled from the reads that already back the profile and Tournaments
+        tabs — six queries total, none of them per-tournament. Leagues are left
+        out everywhere (they have no placement and no bracket), so every number
+        on the card counts the same set of events. A player with no history is a
+        card of zeros, never a 404.
+        """
+        user = await self.get(session, id, [])
+        matches = await self.profile.get_overall_statistics(session, user.id, workspace_id=workspace_id)
+        maps_won, maps_lost = (matches[0] or 0, matches[1] or 0) if matches else (0, 0)
+
+        # ``Player.role`` is nullable and can be ``flex``; the card only speaks the
+        # three draft slot codes, so anything else is dropped rather than guessed at.
+        role_rows = [
+            (role.slot_code, role_won, role_lost, entries)
+            for role, role_won, role_lost, entries in await self.profile.get_roles(
+                session, user.id, workspace_id=workspace_id
+            )
+            if role is not None and role.slot_code in _DRAFT_CARD_ROLE_CODES
+        ]
+        roles = [
+            schemas.UserDraftCardRole(role=code, maps=role_won + role_lost, maps_won=role_won)
+            for code, role_won, role_lost, _entries in role_rows
+        ]
+        roles.sort(key=lambda entry: entry.maps, reverse=True)
+
+        # Which role (and at which rank) the player held per tournament: the role
+        # rows already carry one entry per played encounter side, so the most
+        # frequent role in a tournament is the one they actually played there.
+        weights: Counter[tuple[int, str]] = Counter()
+        ranks: dict[tuple[int, str], int | None] = {}
+        for code, _won, _lost, entries in role_rows:
+            for entry in entries:
+                key = (entry["tournament"], code)
+                weights[key] += 1
+                ranks.setdefault(key, entry["rank"])
+        played_as: dict[int, tuple[str, int | None]] = {}
+        for (tournament_id, code), _count in weights.most_common():
+            played_as.setdefault(tournament_id, (code, ranks[(tournament_id, code)]))
+
+        teams, _ = await self.profile.get_teams(
+            session,
+            user.id,
+            params=pagination.PaginationSortParams(page=1, per_page=-1, entities=["tournament", "placement"]),
+            workspace_id=workspace_id,
+        )
+
+        placements: list[int] = []
+        tournaments_count = 0
+        tournaments_won = 0
+        recent: dict[int, schemas.UserDraftCardTournament] = {}
+        for team in sorted(teams, key=lambda item: item.tournament_id, reverse=True):
+            tournament = team.tournament
+            if tournament.is_league:
+                continue
+            tournaments_count += 1
+            placement = _mappers.resolve_team_placement(team)
+            if placement is not None:
+                placements.append(placement)
+                if placement == 1:
+                    tournaments_won += 1
+            if len(recent) >= 5 or tournament.id in recent:
+                continue
+            role_code, rank = played_as.get(tournament.id, (None, None))
+            recent[tournament.id] = schemas.UserDraftCardTournament(
+                id=tournament.id,
+                name=tournament.name,
+                date=tournament.start_date.date() if tournament.start_date else None,
+                role=role_code,
+                rank=rank,
+                placement=placement,
+                teams_count=0,
+            )
+
+        teams_counts = await self.encounters.count_teams_by_tournament_bulk(session, list(recent))
+        for tournament_id, card in recent.items():
+            card.teams_count = teams_counts.get(tournament_id, 0)
+
+        hero_rows = await self.encounters.get_user_hero_records(session, user.id, workspace_id=workspace_id, limit=5)
+        mvp_maps = await self.encounters.count_user_mvp_maps(session, user.id, workspace_id=workspace_id)
+
+        return schemas.UserDraftCard(
+            tournaments=tournaments_count,
+            tournaments_won=tournaments_won,
+            maps=maps_won + maps_lost,
+            maps_won=maps_won,
+            maps_lost=maps_lost,
+            mvp_maps=mvp_maps,
+            best_placement=min(placements) if placements else None,
+            avg_placement=round(mean(placements), 2) if placements else None,
+            roles=roles,
+            heroes=[
+                schemas.UserDraftCardHero(
+                    hero=hero_service.to_read(hero),
+                    role=hero.type.slot_code,
+                    maps=hero_maps,
+                    maps_won=hero_maps_won,
+                )
+                for hero, hero_maps, hero_maps_won in hero_rows
+            ],
+            recent_tournaments=list(recent.values()),
         )
 
     @cache(

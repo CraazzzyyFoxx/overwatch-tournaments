@@ -98,6 +98,10 @@ DOCS: dict[str, dict] = {
         "summary": "User profile",
         "description": "Permission: public; no authentication required. Returns a player's full profile resolved against the workspace context and division grid.",
     },
+    "rpc.app.users.draft_card": {
+        "summary": "User draft card",
+        "description": "Permission: public; no authentication required. Returns the draft room's player card for a user: career record, per-role and per-hero map records, MVP maps and the last five tournaments, scoped to the workspace.",
+    },
     "rpc.app.users.search": {
         "summary": "Search users",
         "description": "Permission: public; no authentication required. Returns players matching a free-text query across the requested identity fields.",

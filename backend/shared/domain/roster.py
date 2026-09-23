@@ -227,6 +227,16 @@ class PlayerRoster:
             if entry.top_heroes
         }
 
+    @property
+    def role_sub_roles(self) -> dict[str, str]:
+        """``{slot_code: subrole}`` over playable roles that declare one.
+
+        Per-role twin of :attr:`sub_role`, which only ever answers for the lead
+        role: a damage main who flexes support is a hitscan AND a flex support,
+        and the draft board renders both.
+        """
+        return {entry.role.slot_code: entry.subrole for entry in self.playable if entry.subrole}
+
     # -- verdicts ------------------------------------------------------------
 
     @property

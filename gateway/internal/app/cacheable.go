@@ -33,6 +33,7 @@ var PublicCacheableReads = map[string]respcache.Rule{
 	// reaches the handler, so viewer-agnostic bodies are not guaranteed.
 	"/api/v1/users/{name}":               {Extract: respcache.TTLOnly()},
 	"/api/v1/users/{id}/profile":         {Extract: respcache.TTLOnly()},
+	"/api/v1/users/{id}/draft-card":      {Extract: respcache.TTLOnly()},
 	"/api/v1/users/{id}/tournaments":     {Extract: respcache.TTLOnly()},
 	"/api/v1/users/{id}/maps":            {Extract: respcache.TTLOnly()},
 	"/api/v1/users/{id}/maps/summary":    {Extract: respcache.TTLOnly()},

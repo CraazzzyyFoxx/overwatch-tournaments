@@ -47,6 +47,7 @@ function player(id: number): DraftPlayer {
     role_ranks: {},
     role_sources: {},
     role_top_heroes: {},
+    role_sub_roles: {},
     notes: null,
     custom_fields: [],
     version: 0,
@@ -358,8 +359,7 @@ describe("draft safety state", () => {
           is_safe: true,
           reason_code: null,
           unmatched_slots: [],
-          blocking_player_ids: [],
-          suggestion_score: null
+          blocking_player_ids: []
         }
       ]
     };

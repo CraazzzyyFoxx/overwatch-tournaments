@@ -9,12 +9,68 @@ autopick and ``/suggestions`` stay synchronous and deterministic.
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 
 from shared.core.enums import DraftAutopickStrategy, HeroClass
+from shared.domain.roster import PlayerRoster
+from shared.models.balancer.draft import DraftPlayer
 from src.domain.draft.entities import FitConfig, FitPlayer, FitResult
 
-__all__ = ("best_fit", "player_fit", "rank_suggestions", "role_discomfort")
+__all__ = (
+    "best_fit",
+    "candidates",
+    "fit_players",
+    "normalized_scores",
+    "player_fit",
+    "rank_suggestions",
+    "role_discomfort",
+    "sort_key",
+)
+
+
+def fit_players(players: Iterable[DraftPlayer], rosters: Mapping[int, PlayerRoster]) -> list[FitPlayer]:
+    """THE candidate list behind autopick, /suggestions and /fit.
+
+    Built from the engine's rosters, so a player is scored at the rank of the
+    role they would actually fill, and a player the balancer ranks on no role is
+    not a candidate at all (rather than a rank-0 last resort). One builder, so a
+    suggestion, the fit score a captain reads and the autopick that follows
+    cannot disagree about who is even in the running.
+    """
+    built: list[FitPlayer] = []
+    for player in players:
+        roster = rosters.get(player.id)
+        if roster is None or not roster.is_draftable:
+            continue
+        lead = roster.primary
+        built.append(
+            FitPlayer(
+                player_id=player.id,
+                rank_value=roster.best_rank or 0,
+                playable_roles=roster.playable_roles,
+                preference_order=((lead.role,) if lead is not None else ()),
+                is_flex=roster.is_full_flex,
+                user_id=player.user_id,
+                rank_by_role={HeroClass.from_slot_code(code): rank for code, rank in roster.role_ranks.items()},
+            )
+        )
+    return built
+
+
+def normalized_scores(results: Sequence[FitResult]) -> list[int]:
+    """Raw fit -> int 1..99, min-max over exactly these results.
+
+    Raw fit is an unbounded heuristic total (rank x impact minus discomfort), so
+    the only meaning it carries for a captain is the ordering within one answer.
+    An all-equal spread has no ordering to show, so every entry is the midpoint.
+    """
+    if not results:
+        return []
+    scores = [result.fit_score for result in results]
+    low, high = min(scores), max(scores)
+    if high - low < 1e-9:
+        return [50] * len(results)
+    return [1 + round((score - low) / (high - low) * 98) for score in scores]
 
 
 def role_discomfort(player: FitPlayer, role: HeroClass) -> int:
@@ -70,7 +126,7 @@ def player_fit(
     )
 
 
-def _candidates(
+def candidates(
     available: Sequence[FitPlayer],
     role_capacity: Mapping[HeroClass, int],
     cfg: FitConfig,
@@ -97,9 +153,13 @@ def _candidates(
     return results
 
 
-def _sort_key(result: FitResult, available_by_id: Mapping[int, FitPlayer]) -> tuple:
-    # Higher fit, then higher rank (for the result's role), then lower player_id,
-    # then role value asc — fully deterministic so autopick is reproducible.
+def sort_key(result: FitResult, available_by_id: Mapping[int, FitPlayer]) -> tuple:
+    """Deterministic "best first" ordering for a fit result.
+
+    Higher fit, then higher rank (for the result's role), then lower player_id,
+    then role slot code asc — so autopick, /suggestions and /fit all agree on
+    which of two equally-scored options comes first.
+    """
     rank = available_by_id[result.player_id].rank_for(result.role)
     return (-result.fit_score, -rank, result.player_id, result.role.slot_code)
 
@@ -112,11 +172,11 @@ def best_fit(
     *,
     allowed_options: set[tuple[int, HeroClass]] | None = None,
 ) -> FitResult | None:
-    results = _candidates(available, role_capacity, cfg, strategy, allowed_options)
+    results = candidates(available, role_capacity, cfg, strategy, allowed_options)
     if not results:
         return None
     by_id = {p.player_id: p for p in available}
-    return min(results, key=lambda r: _sort_key(r, by_id))
+    return min(results, key=lambda r: sort_key(r, by_id))
 
 
 def rank_suggestions(
@@ -128,11 +188,11 @@ def rank_suggestions(
     limit: int = 5,
     allowed_options: set[tuple[int, HeroClass]] | None = None,
 ) -> list[FitResult]:
-    results = _candidates(available, role_capacity, cfg, strategy, allowed_options)
+    results = candidates(available, role_capacity, cfg, strategy, allowed_options)
     by_id = {p.player_id: p for p in available}
     # Best role per player, then top-N players by fit.
     best_per_player: dict[int, FitResult] = {}
-    for r in sorted(results, key=lambda r: _sort_key(r, by_id)):
+    for r in sorted(results, key=lambda r: sort_key(r, by_id)):
         best_per_player.setdefault(r.player_id, r)
-    ordered = sorted(best_per_player.values(), key=lambda r: _sort_key(r, by_id))
+    ordered = sorted(best_per_player.values(), key=lambda r: sort_key(r, by_id))
     return ordered[:limit]

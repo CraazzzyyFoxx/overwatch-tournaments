@@ -60,6 +60,22 @@ OPERATIONS: dict[str, Op] = {
         request=schemas.DraftRoleEditRequest,
         response=schemas.DraftRoleEditResponse,
     ),
+    "rpc.balancer.draft.team_fit": Op(response=schemas.DraftTeamFitResponse),
+    "rpc.balancer.draft.queue_get": Op(response=schemas.DraftTeamQueueResponse),
+    "rpc.balancer.draft.queue_set": Op(
+        request=schemas.DraftTeamQueueRequest,
+        response=schemas.DraftTeamQueueResponse,
+    ),
+    "rpc.balancer.draft.journal": Op(
+        response=schemas.DraftJournalResponse,
+        query_params=(
+            QueryParam(
+                "limit",
+                "integer",
+                description="Page size, clamped to 1..500, default 100.",
+            ),
+        ),
+    ),
     # ── draft: room chat (shared chat service; same shapes in tournament) ──
     # chat_delete / chat_mute_clear answer a bare {"deleted": true}, so they are
     # documented in DOCS only — this module maps whole models.

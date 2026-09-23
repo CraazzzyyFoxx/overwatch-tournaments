@@ -197,6 +197,32 @@ export interface UserTournament {
   encounters?: EncounterWithUserStats[];
 }
 
+/** A player's career in one read, shaped for the draft room's player card. */
+export interface UserDraftCard {
+  tournaments: number;
+  tournaments_won: number;
+  maps: number;
+  maps_won: number;
+  maps_lost: number;
+  /** `null` when the data cannot tell who was MVP of a map. */
+  mvp_maps: number | null;
+  best_placement: number | null;
+  avg_placement: number | null;
+  roles: { role: "tank" | "damage" | "support"; maps: number; maps_won: number }[];
+  /** Top five by maps played. */
+  heroes: { hero: Hero; role: "tank" | "damage" | "support"; maps: number; maps_won: number }[];
+  /** Newest first, at most five. */
+  recent_tournaments: {
+    id: number;
+    name: string;
+    date: string | null;
+    role: "tank" | "damage" | "support" | null;
+    rank: number | null;
+    placement: number | null;
+    teams_count: number | null;
+  }[];
+}
+
 export interface UserProfile {
   tournaments_count: number;
   tournaments_won: number;

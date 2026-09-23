@@ -401,7 +401,7 @@ def test_profile_overall_statistics_uses_union_all_sides() -> None:
 
 def test_profile_roles_uses_union_all_sides() -> None:
     session = _CaptureSession()
-    asyncio.run(profile_queries.get_roles(session, user_id=7, grid=DEFAULT_GRID))
+    asyncio.run(profile_queries.get_roles(session, user_id=7))
     _assert_indexable_encounter_join(_postgres_sql(session.statements[0]))
 
 
