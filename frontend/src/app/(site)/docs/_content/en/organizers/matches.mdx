@@ -1,0 +1,132 @@
+An encounter is a pair of teams inside a stage: one series of several maps. This page covers running encounters as an organizer — setting up the pre-game phase, building the report form, settling a dispute and correcting a result that is already confirmed.
+
+## The encounters list
+
+In the admin, open **Tournaments**, pick the tournament and go to the **Matches** tab. It holds five views: **Encounters**, **Standings**, **Reports**, **Parsed maps** and **Logs**.
+
+**Encounters** is the list itself. Narrow it with the **Stage**, **Group**, **Status** (**Open**, **Pending**, **Completed**) and **Logs** (**Logs available** / **No logs**) filters. **Create encounter** adds one by hand; **Sync from Challonge** pulls them from a linked Challonge bracket.
+
+Click a row and a panel opens on the right with the teams, score, status, series length, both captain reports and the parsed maps. **Edit encounter**, **Upload log** and **Resolve result** are there too.
+
+<Callout type="warning">
+**Delete encounter** removes the encounter together with every match, statistic and log recorded under it. This cannot be undone.
+</Callout>
+
+## Pre-game phase: map veto and hero bans
+
+Pre-game rules live in **Settings → Pre-game phase**. The scope tree is on the left, the four-step editor on the right.
+
+### Where the rules apply
+
+A rule set can cover the **Whole tournament**, one stage, or one round of a stage. A narrower scope inherits from the wider one until you override it: **Inherits from … unless overridden here**. **Reset to inherited** removes the override again.
+
+There are two kinds of rules: **Map veto** and **Hero bans**. With an empty pool the set is saved as a template — narrower scopes open prefilled from it, but no room opens on it.
+
+### What captains choose from
+
+The **Pool shape** field:
+
+- **One shared pool** — one list of candidates and one run of steps for the whole series.
+- **One group per match** — a separate group of candidates for each map of the series, each banned down to one survivor on its own. A group needs at least two candidates.
+
+Below it you build the pool itself (**Map pool** or **Hero pool**). The order of candidates in the list is the order the room lists them in. In group mode each match can also carry a **Reserve**: a candidate that stands in if the others are used up.
+
+### The order of steps
+
+The **Step order** field:
+
+- **From the bracket** — generated per match from its series length: two opening bans, then alternating picks, then a decider when the length is odd. If the pool holds more maps than the series needs, the decider is chosen at random among whatever is left.
+- **Custom** — your exact list of steps, used as written regardless of series length.
+
+The step actions are **Ban**, **Pick**, **Protect** and **Decider**. Only one decider is allowed, and it must be last.
+
+### Rules of the room
+
+- **Round 1 opener** — **The higher seed opens**.
+- **Later rounds open with** — **The same side every round**, **Alternating sides**, **The previous winner**, **The previous loser** or **The previous loser's choice** (the room then pauses until the losing side answers).
+- **Repeats across rounds** — **Allowed**, **Blocked for both sides** or **Blocked for the same side only**. Only bans carry over; protects are round-local.
+- **Turn timer** — the countdown captains see on their turn. Leave it empty for no time limit.
+- **Allow a protect step** — lets a side shield one candidate from the opponent's ban. It only runs where the order has a **Protect** step.
+- **One hero per role per side each round** — stops a side picking two heroes of the same role.
+
+A room only opens once both sides are ready and the stage is active. Hero bans for map N also need map N settled: round 2 cannot ban before map 1 has been played.
+
+<Callout type="warning">
+**Delete rules** removes the whole set. Matches in that scope fall back to the next wider rule set, or lose their room if there is none.
+</Callout>
+
+## The report form
+
+**Settings → Match report form** decides what captains submit with a result.
+
+The series score is always required and cannot be turned off. The other standard fields are switched on and made mandatory with the **Enabled** and **Required** checkboxes:
+
+| Field | What it is |
+| --- | --- |
+| **Match quality** | A 1-10 rating of how close the series was. |
+| **Map replay codes** | When required, a code must be given for every map played. |
+| **Comment** | A free-text note from the captain, up to 1000 characters. |
+
+Under **Custom text fields** you can add up to 20 questions of your own, each with a **Label**, a **Key** and a **Placeholder**. Their answers show up on the report card in the admin.
+
+## How captains report
+
+Each captain files their own report independently — there is no submit-and-confirm handshake. The encounter result is derived from the reports:
+
+| What arrived | Result |
+| --- | --- |
+| Fewer than two reports | **Pending confirmation** |
+| Two reports, scores match | **Confirmed** — the result is recorded and the team advances |
+| Two reports, scores differ | **Disputed** — an organizer decides |
+
+A captain may resubmit until the result is confirmed. Afterwards only an admin can change it, and the captain is told so: **This match result has been confirmed and can only be changed by an admin.**
+
+For the player's side of this, see [Matches: pick-ban and results](/docs/players/matches).
+
+## Disputes
+
+When the reports disagree, both captains are notified, not just the one who reported second: from inside the disagreement there is no telling which side is wrong. As organizer you see the dispute count as a badge on the **Reports** sub-tab.
+
+**Reports** shows both versions of the score side by side. The filters are **Result** (**None**, **Pending confirmation**, **Confirmed**, **Disputed**), **Reports filed** (**No reports**, **Awaiting second**, **Both reported**) and the **Reports disagree** toggle. The **Series check** column flags a score that is impossible at this series length.
+
+**Resolve result** opens the adjudication:
+
+1. Choose which score is right: **Adopt … report** for one team's version, or **Enter the score manually**.
+2. Optionally set a **Closeness override** — a whole number from 1 to 10. Left blank, the encounter takes the average of the filed reports.
+3. Press **Confirm result**.
+
+A draw cannot be recorded on an elimination stage; the button stays disabled. **Change history** in the same dialog lists every change to the result: the action, who made it and the score afterwards.
+
+## Correcting a confirmed result
+
+A confirmed result can be changed in two ways.
+
+**Reopen the whole encounter.** In the **Result confirmed** dialog, press **Reopen**.
+
+<Callout type="warning">
+The encounter leaves the confirmed state and stops counting toward the standings until it is confirmed again. Any bracket progression it drove is reset, so those later matches have to be played again.
+</Callout>
+
+**Correct a single map.** In the encounter's pre-game room, the **Correct a result** block changes one map's score. A **Reason** is mandatory here — without it the **Save result** button stays disabled. The reason goes into the change history along with the new score.
+
+Flipping which side won a map scraps and re-opens the round that outcome had opened. If a later match has already started on the old result, the platform refuses: **A later match has already started on this result. Roll that one back first.**
+
+## A preview bracket does not accept reports
+
+Until the stage is activated, its encounters exist only as a preview. Captains can neither run the veto nor file a report: their room shows **Bracket preview** and a note that it opens once you activate the stage. For how to activate one, see [Stages and brackets](/docs/organizers/brackets).
+
+## Troubleshooting
+
+| Problem | What to do |
+| --- | --- |
+| Captains say the veto room is closed | Check that the stage is activated, that both teams are ready, and that the pool for that scope is not empty. |
+| The room will not open for the second map | Hero bans for map N wait until map N has been chosen and played. |
+| A reported score is impossible at this format | The **Series check** column shows **Score outside best-of** — settle the encounter by hand through **Resolve result**. |
+| A result needs changing but the next match is already under way | Reopen the next match's result first, then correct this one. |
+
+## See also
+
+- [Stages and brackets](/docs/organizers/brackets)
+- [Match logs](/docs/organizers/logs)
+- [Matches: pick-ban and results](/docs/players/matches)
+- [Phases and schedule](/docs/organizers/schedule)

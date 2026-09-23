@@ -1,0 +1,83 @@
+Two admin sections decide what the platform fills its statistics with: the catalogues of heroes, maps and gamemodes, and the background collection of ranks, subscriptions and streams. This page covers what is in each and what you do there.
+
+## Game content
+
+**Admin → Game content** holds the heroes, maps and gamemodes that log parsing and analytics rely on. These catalogues are shared by the whole platform, so the section is open to platform administrators only. It has four pages: **Heroes**, **Maps**, **Gamemodes** and **Unresolved names**.
+
+### Heroes
+
+The hero list: icon, name and role. **Create hero**, **Edit hero** and **Delete hero**. A hero carries a name, an icon link, a role, and the colour it is highlighted with in statistics.
+
+### Maps
+
+The map list: image, name, gamemode and **Mode Pool** — **Competitive** or **Casual**. **Create map**, **Edit map** and **Delete map**. Every map picks a gamemode.
+
+### Gamemodes
+
+The gamemode list, with **Create gamemode**, **Edit gamemode** and **Delete gamemode**.
+
+<Callout type="warning">
+Deleting a hero, map or gamemode cannot be undone. A gamemode will not delete while any map still uses it — reassign those maps first.
+</Callout>
+
+### Unresolved names
+
+This is where names from match logs land when they match no hero, map or gamemode: a different client language, a typo, a new name after a game update. Until a name is resolved, the statistics line behind it is not counted.
+
+The table shows **Type** (**Hero**, **Map** or **Gamemode**), **Raw name** exactly as it appeared in the log, **Times seen**, **Last seen**, and **Last log** — a link to the log it last appeared in. The filters above are **Type** and **Include resolved**.
+
+To resolve a row:
+
+1. In the **Attach to** column pick the hero, map or gamemode the name means.
+2. Press **Attach**. The name becomes an alias of that entry, and later logs carrying it resolve on their own.
+3. If the name means nothing useful, press **Dismiss** and the row leaves the queue.
+
+Where the logs come from is covered in [Match logs](/docs/organizers/logs).
+
+## Collectors
+
+**Admin → Collectors** shows whether background collection is working. Three pages: **Rank**, **Subscriptions** and **Streams**. Each has a **Status** tab; the **Settings** tab with the collection parameters is open to platform administrators only, as are the pause controls.
+
+Collector health is one word: **Healthy**, **Degraded**, **Failing** or **Paused**.
+
+### Rank
+
+Collects ranks from Overwatch profiles through linked BattleTags. These are the ranks used when a player has none on their entry and none in the workspace book — see [Ranks and divisions](/docs/organizers/divisions).
+
+The page shows **Coverage (snapshots)**, **Fetches (24h)**, **Upstream (OverFast)**, **Battle tags** and **Auto-disabled tags** — tags whose collection switched itself off after repeated failures. **Re-enable all tags** turns them back on; afterwards it is worth confirming the player's profile really is public.
+
+Below that is **Task history**: time, battle tag, status, what triggered the run, the number of snapshots and the error text.
+
+To recheck one player, open their card in **Admin → People**. It shows their current ranks per role, a table of battle tags with status, last check, last success and consecutive failures, plus **Collect all**, **Collect selected** and a per-row **Collect**. If a player has no battle tag at all there is nothing to collect — ask them to connect a Battle.net account.
+
+### Subscriptions
+
+Checks the subscriptions of entrants in tournaments that enforce the subscription requirement.
+
+The page shows **Entitlements**, **Players tracked**, **Coverage (checked)** and **Checks (24h)**. **Check all now** runs a check across every tournament that enforces the requirement.
+
+Below that is **Check history** with **Time**, **Player**, **Provider**, **State**, **Tier**, **Trigger** and **Reason** columns. **Reason** is the same message the player sees; what each one means and how to fix it is in [Subscriptions and admission](/docs/organizers/subscriptions).
+
+The providers themselves and the subscription rule are configured elsewhere, in **Admin → Settings → Subscriptions**.
+
+### Streams
+
+Tracks who is live on Twitch right now, so streams can appear on tournament pages. The poll is platform-wide, so the page is not open to every organizer and carries no workspace split.
+
+It shows **Last tick**, **Tournaments**, **Channels polled**, **Live now** and **Rate limit left**. There is no check history here: the page keeps no per-channel log.
+
+## Troubleshooting
+
+| Problem | Fix |
+| --- | --- |
+| Hero or map numbers in statistics do not add up | Check **Unresolved names** — some log lines most likely did not resolve. |
+| A player's rank never arrives | Open their card in **Admin → People** and look at the battle tag status; if collection is switched off, re-enable the tags in **Collectors → Rank**. |
+| The subscription check blocks nobody | The provider is most likely half-configured — see [Subscriptions and admission](/docs/organizers/subscriptions). |
+| Streams do not show on a tournament page | Look at **Collectors → Streams**: if the poll is paused or failing, the tournament is not the problem. |
+
+## See also
+
+- [Match logs](/docs/organizers/logs)
+- [Subscriptions and admission](/docs/organizers/subscriptions)
+- [Ranks and divisions](/docs/organizers/divisions)
+- [People and access](/docs/organizers/people)

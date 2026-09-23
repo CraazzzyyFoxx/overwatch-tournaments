@@ -1,0 +1,114 @@
+Six ready-made scenarios, from a plain 5v5 run through the balancer to a weekly mix. Each one is a short checklist with links to the detailed articles; screen and button names are quoted exactly as they appear in the admin.
+
+<Callout>
+The admin panel is English-only, so section, tab and button names below are given in English: **Settings → Schedule**, **Generate bracket** and so on. The public site is translated.
+</Callout>
+
+## A plain 5v5 tournament on the balancer
+
+The most common format: players sign up individually and the balancer builds the teams.
+
+1. **Admin → Tournaments → New tournament**. On the **Basics** step enter a name and the dates. From there you can press **Save as draft** — the tournament is created hidden and nobody sees it yet.
+2. **Settings → General**: **Team formation** → **Auto-balance (Balancer)**. Pick a **Division grid version** here too if this tournament needs its own.
+3. **Settings → Roster shape**: leave **Inherit from the workspace** or choose **Overwatch 5v5 · 1/2/2**.
+4. **Settings → Schedule**: set the windows for the **Registration**, **Check-in** and **Live** phases and turn on **Automatic phase transitions**. See [Phases and schedule](/docs/organizers/schedule).
+5. **Settings → Registration**: decide whether you want **Auto-approve**, and build the questionnaire through **Open the form builder**. See [Registration and entries](/docs/organizers/registration).
+6. **Settings → Admission**: switch on the entry requirements you need — see [Subscriptions and admission](/docs/organizers/subscriptions).
+7. **Settings → Preview allowlist**: untick **Hidden (preview) — not visible to the public** so the tournament appears on the public site.
+8. Once entries are in and check-in is done, open **Teams → Roster → Open balancer**. In the balancer: **Browse available** brings approved registrations into the pool, **Run balance** builds the teams, **Save** keeps the variant and **Export to tournament** writes it into the tournament. See [Balancer and teams](/docs/organizers/team-formation).
+9. **Bracket → Add stage**: create the stage, fill it with teams in the **Items** section, press **Generate bracket**, check the result and choose **Activate stage**. See [Stages and brackets](/docs/organizers/brackets).
+10. Run the matches from the **Matches** tab — see [Running matches](/docs/organizers/matches).
+11. Upload logs through **Matches → Logs → Upload logs** to get statistics and achievements. See [Match logs](/docs/organizers/logs).
+12. Move the tournament to **Completed** when everything has been played.
+
+## A captain draft tournament
+
+The same tournament, except captains build the teams live instead of the balancer.
+
+1. Steps 1–7 of the previous scenario, but in **Settings → General** choose **Team formation** → **Live draft**.
+2. **Settings → Schedule**: add a window for the **Draft** phase — it only appears in the schedule for draft tournaments.
+3. **Settings → Roster shape** decides how many rounds the draft has: one fewer than the players per team. The shape cannot be changed once a draft session exists.
+4. When the pool is ready, open **Teams → Draft** and walk the wizard: **Parameters**, **Pool**, **Captains**, **Order**, **Review**, **Ready**.
+5. On the **Ready** step press **Start draft**. The **Draft control room** takes over from there: **Pause**, **Resume**, **Cancel draft**.
+6. When the draft is finished, press **Export to teams** and the rosters land in the tournament. See [Captain draft](/docs/organizers/draft).
+7. The rest is the usual run: **Bracket**, **Matches**, logs, **Completed**.
+
+<Callout type="warning">
+While a draft session is alive you cannot change the roster shape or the team formation method. Complete or cancel the session first.
+</Callout>
+
+## A tournament of pre-made captain teams
+
+Captains assemble their rosters in advance; the platform only checks and admits them.
+
+1. **Admin → Tournaments → New tournament**, as in the first scenario.
+2. **Settings → General**: **Team formation** → **Team registration**.
+3. **Settings → Roster shape**: set the shape and, if you want a bench, **Substitutes per team**. That field exists only on team-registration tournaments.
+4. **Settings → Admission**, the **Registered teams** group: **Minimum starter rank**, **Maximum starter rank**, **Maximum rank spread**, **Unique Discord identity**, **Require Discord server membership**. The rank rules apply to starters only; substitutes are ignored.
+5. If the tournament is paid, choose **Who pays** in the same area: **Each player** or **The team (captain pays)**.
+6. Open registration. Captains build their rosters and send invites themselves — what a player sees is described in [Captain teams and invites](/docs/players/captain-teams).
+7. Watch the rosters on the **Registration → Teams** tab: it shows which slots are still open and which checks a team fails.
+8. When the rosters are ready, select them and press **Add selected teams**. Incomplete, empty and waitlisted teams are skipped, and the screen names the reason for each.
+9. Then carry on with **Bracket**, **Matches**, logs and **Completed**.
+
+<Callout>
+In this format neither the balancer nor the draft runs. A player who registered but joined no team never becomes a participant: the screen warns you to invite them to a team or withdraw them first.
+</Callout>
+
+## Swiss groups followed by double-elimination playoffs
+
+A Swiss group phase, then a knockout bracket.
+
+1. Build the teams by any of the methods above.
+2. **Bracket → Add stage**: create the first stage with the **Swiss** format. In **General** leave **Phase** at 1 and set **Swiss max rounds** — how many rounds get played.
+3. In that stage's **Items** section create a group and fill it with teams. The **Seed by SR** menu item spreads teams across groups with a snake SR draft.
+4. **Tiebreakers**: choose a **Standings preset** and, if you want, set **Swiss bye points** — what a team scores for a round it sits out.
+5. **Add stage** again: format **Double Elimination**, **Phase** 2 — the next wave.
+6. In the playoff stage, **Seeding** section: set **Teams advancing to playoff (per group)**, then link the stages with **Wire seeds from** or the **Auto-wire from groups** menu item. **Group seeding** decides whether every advancing team starts in the upper bracket or half of them drop straight into the lower one.
+7. In the playoff stage, **General** section: **Grand final** — **No reset** or **With reset**. With a reset, the extra match is created only if the lower-bracket team wins the grand final.
+8. Generate and activate the Swiss stage: **Generate bracket**, then **Activate stage**.
+9. Play the first round; the next one appears on its own as soon as every encounter of the round is closed, and so on up to **Swiss max rounds**. You do not add rounds by hand.
+10. When the Swiss phase is over, activate the playoff: **Activate & generate** builds the bracket and switches the stage on in one action.
+11. Seeding, points and tiebreakers in detail: [Stages and brackets](/docs/organizers/brackets).
+
+<Callout>
+Swiss avoids repeating a pairing that has already been played and does not hand the same team a second bye. If the field has played itself into a corner and no pairing is left, generation stops with an error.
+</Callout>
+
+## A subscribers-only tournament
+
+Anyone may apply, but only subscribers of the community get through.
+
+1. The rule comes first: **Admin → Settings → Subscriptions**, the **Subscription requirement** section. There is one rule for the whole workspace: pick the providers and the mode — **All of the below** or **Any one of the below**. With no providers selected, nothing is enforced.
+2. In the tournament: **Settings → Admission** → **Require an active subscription**. The note under the toggle spells out which workspace rule will be applied.
+3. In the same area choose **Check at**: **Check-in only** or **Sign-up and check-in**. The first leaves sign-up open to everybody and refuses only at check-in; the second refuses the application itself as well.
+4. If whole teams register, pick **Who pays**: **Each player** or **The team (captain pays)**.
+5. From there the tournament runs normally: schedule, registration, check-in, team formation, bracket.
+6. The **Registration → Entries** tab has a **Subscription** filter that shows who failed the check. What the player sees is described in [Entry requirements](/docs/players/admission).
+
+<Callout type="warning">
+When a verdict cannot be determined — the provider is unreachable, the account is not linked, the provider is not configured — the check is read in the player's favour and does not block. A subscribers-only tournament does not become closed by itself: the workspace rule has to be configured and the providers connected. See [Subscriptions and admission](/docs/organizers/subscriptions).
+</Callout>
+
+## A weekly mix
+
+A mix is a one-off custom game drawn from the community roster: no bracket, no standings, nothing written into tournament statistics.
+
+1. You need the **Host** role in the workspace, or wider rights: without it the mixes section is out of reach. See [Roles and permissions](/docs/organizers/roles).
+2. Open **Mixes** in the site menu and press **Create mix**. Start with an empty lineup or copy a previous mix — the lineup and settings carry over, match history does not.
+3. **Add players** — bring players in from the workspace pool. You can fix anyone's roles and rank, and mark them as must-play or bench them.
+4. **Balance teams** builds the two sides. If more players are in than seats available, someone sits out; the rotation favours whoever has waited longest.
+5. **Roll** picks the map. You can narrow the roll to a single mode.
+6. After the game press the winning team's button or **Draw**. The match goes straight into the mix history and you can play the next one.
+7. For next week's mix, create a new one and copy the previous lineup. See [Mixes for hosts](/docs/organizers/mixes).
+
+<Callout>
+Mixes live apart from tournaments: their results do not enter standings and do not change a player's tournament statistics.
+</Callout>
+
+## See also
+
+- [Your first tournament](/docs/organizers/first-tournament)
+- [Stages and brackets](/docs/organizers/brackets)
+- [Balancer and teams](/docs/organizers/team-formation)
+- [FAQ and troubleshooting](/docs/organizers/faq)

@@ -1,0 +1,65 @@
+A role decides what a person can do inside your workspace. This article explains how the roles differ, who hands out what, and which rules sit on top of roles.
+
+## Workspace roles
+
+| Role | What it can do |
+| --- | --- |
+| **Owner** | Everything in the workspace. Only an owner manages roles and permissions, removes members and deletes the workspace. |
+| **Admin** | The organizer's daily work: tournaments, registrations, teams, encounters, workspace settings, the audit log, integration keys. Does not manage roles and permissions, does not remove members, does not delete the workspace. |
+| **Host** | Runs mixes: creates, edits and finishes them. Plus read access to the workspace — rosters, standings, registrations. |
+| **Member** | Read access to the workspace: tournaments, teams, encounters, registrations, achievements, logs. Changes nothing. |
+| **Player** | Grants nothing extra. This is a tournament participant, not community staff. |
+
+The roles stack: an admin has everything a member has, plus management. On top of the workspace role you can grant extra roles you assembled yourself — they add capabilities, they never take any away.
+
+## A host does not get the admin panel
+
+A host is the person who runs mixes, not an administrator. The admin panel does not open for them: the right to run mixes is deliberately kept outside panel access. A host works in the mix room on the public side of the site. What happens there is described in [Mixes](/docs/organizers/mixes).
+
+## Rules worth knowing
+
+- **A restriction beats any grant.** A single account can be barred from one specific action; that restriction wins over every role, the platform team's included — but only for that action, and only in the scope where it was set.
+- **The last owner cannot be removed.** Before taking the owner role off yourself or anyone else, make someone else an owner.
+- **A new member gets the Member role automatically** — but only if that account held no role at all in this workspace. It happens when a player enters the workspace for the first time, for example by registering for a tournament. An existing role is never downgraded.
+- **Removing a member does not erase history.** The person loses access and every role granted here, but their tournament results stay, and you can add them back at any time.
+
+<Callout type="warning">
+**Remove from workspace** immediately takes away the person's access and every role granted here. The confirmation cannot be undone — the roles have to be granted again.
+</Callout>
+
+## Where roles are assigned
+
+Member roles live on the **Members** page (the WORKSPACE group in the admin menu).
+
+1. Open **Members**. The table shows who belongs to the workspace and which roles they hold.
+2. Pick a role from the list in the **Role** column. The change applies immediately.
+3. The **+ custom** button next to it adds or removes extra roles, if you created any.
+4. **Add member** brings in an account that is not here yet and gives it a role right away.
+5. **Fill missing roles** grants **Member** to everyone who somehow has no role.
+
+You do not need to add ordinary tournament participants by hand: they appear on their own when they register.
+
+## Extra roles and restrictions
+
+The **Access** section (the PLATFORM group in the menu) is where everything else is configured.
+
+- **Access → Roles** — your own roles with your own set of capabilities. A role has a name, a description and a checklist of what it may do. You can then grant it to a member on the **Members** page.
+- **Access → Accounts** — one account's card. The **Restricted actions** block ticks the actions this account is barred from, and the **Scope** list decides where the restriction applies: everywhere (**Global**) or in one workspace. You can bar changing one's own avatar, managing one's own linked accounts, signing up for tournaments, and creating one's own workspace.
+
+Some **Access** tabs are reserved for the platform team. A workspace admin normally sees **Roles** and **API keys**.
+
+## Troubleshooting
+
+| Problem | What to do |
+| --- | --- |
+| Someone cannot see a section in the admin menu | The menu only shows what is reachable. Check their role on **Members**: a host and a member do not open the panel at all. |
+| The role is granted but the action is still refused | Look at **Restricted actions** on that account's card under **Access → Accounts**: a restriction overrides any role. |
+| The owner role will not come off | The last owner cannot be removed. Make someone else an owner first. |
+| A member's role column is empty | Press **Fill missing roles** — everyone without a role is given **Member**. |
+
+## See also
+
+- [People and access](/docs/organizers/people)
+- [Workspace settings](/docs/organizers/workspace)
+- [Getting started](/docs/organizers/getting-started)
+- [Mixes](/docs/organizers/mixes)

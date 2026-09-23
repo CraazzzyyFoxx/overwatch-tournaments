@@ -1,0 +1,73 @@
+Check-in is how you confirm you are actually going to play. Organizers build rosters from the people who checked in, so a missed check-in usually means you are not in the tournament.
+
+## When check-in is open
+
+Check-in is a phase of its own, and an optional one: an organizer may skip it entirely.
+
+You can only check in while the tournament sits in the check-in phase and the current time falls inside the check-in window. If the organizer set no closing time, check-in stays open for the whole phase. The phase schedule is shown on the tournament page.
+
+When check-in opens, the site sends a "Check-in opened" notification with the closing time. If your Discord is linked and direct messages are not muted, the same notification arrives in Discord — with a button on it. See [Notifications and the Discord bot](/docs/players/notifications).
+
+## Who can check in
+
+Your registration has to be approved. While it is still under review the "Your Registration" card says "The application is currently under review by the tournament organizers" and there is no check-in button. Once approved but before the window opens it reads "Registration approved. Check-in will start later."
+
+If the tournament has entry requirements — a public Overwatch profile or a subscription — an unmet one stops check-in. What is checked and how to clear it is in [Entry requirements](/docs/players/admission).
+
+## Checking in on the site
+
+1. Open the **Participants** tab on the tournament page.
+2. Find the "Your Registration" card and press **Check-in**.
+3. Confirm in the "Confirm check-in?" dialog: "This will mark you as checked in for the tournament. Confirm only if you are ready to participate."
+4. The card answers "You have confirmed your participation!" and the **Check-in** step turns done.
+
+While the window is open, that dialog opens by itself once when you land on the page, so you do not have to hunt for the button.
+
+If the tournament requires a subscription, the dialog also carries the rule and one row per provider. That is where the **Code from the subscriber-only post** field appears, for providers that accept a code.
+
+## Checking in from Discord
+
+The "Check-in opened" direct message carries a **Check in** button. Press it and the bot answers "You're checked in. Good luck!". Beside it sits **My registration**, which shows your entry as a card without opening the site.
+
+The buttons only work if that Discord account is linked to your site account. Otherwise the bot answers: "This Discord account isn't linked to an OWT account. Link it in your profile and the buttons will work."
+
+## If you miss the window
+
+<Callout type="warning">
+Once the window closes you cannot check yourself in: the button disappears, the card reads "Check-in has closed", and the **Check-in** step is marked as failed.
+</Callout>
+
+That is not always the end of it: an organizer can check you in by hand at any time — before the window opens, after it closes, and even once play has started. If you were late but are ready to play, talk to the organizer.
+
+## Can check-in be undone
+
+Not by you. After checking in:
+
+- the **Withdraw** button is gone — you can no longer pull out by yourself;
+- your entry is frozen: "You have already checked in — your entry is frozen", so answers can no longer be edited;
+- entry requirements count as cleared for good.
+
+Only an organizer can un-check you. If your plans change, tell them before the rosters are built.
+
+## Team check-in
+
+On tournaments played by ready-made rosters the whole team checks in at once: the captain or a manager presses **Check in roster** in the team panel. The dialog shows "3 of 5 checked in" and individual players can be left out with **Skip**.
+
+Every member has to be approved first, or the team gets "Every member must be approved before team check-in." The team panel is covered in [Captain teams and invites](/docs/players/captain-teams).
+
+## Troubleshooting
+
+| What you see | What to do |
+| --- | --- |
+| "Check-in failed" | The check-in did not go through. Reload and try again; if it keeps failing, look at the requirement lines on your card. |
+| No **Check-in** button although the window is open | Your entry is not approved yet, or you already checked in. |
+| "Check-in is closed right now." in Discord | The window has already closed — from here it is up to the organizer. |
+| A requirement line is red | Clear the requirement first: see [Entry requirements](/docs/players/admission). |
+| "This button no longer works — open the tournament on the site." | The Discord message is stale. Check in from the **Participants** tab. |
+
+## See also
+
+- [Entry requirements](/docs/players/admission)
+- [Registration](/docs/players/registration)
+- [Notifications and the Discord bot](/docs/players/notifications)
+- [How a tournament works](/docs/players/tournaments)

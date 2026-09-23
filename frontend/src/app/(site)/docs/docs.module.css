@@ -510,6 +510,19 @@
   padding-left: 1.25rem;
 }
 
+/* Preflight strips markers; numbered steps must show their numbers. */
+.prose ul {
+  list-style: disc;
+}
+
+.prose ol {
+  list-style: decimal;
+}
+
+.prose li::marker {
+  color: var(--aqt-fg-faint);
+}
+
 .prose a {
   color: var(--aqt-teal);
   text-underline-position: from-font;
@@ -530,6 +543,87 @@
   background: var(--aqt-card);
   font-size: var(--text-body);
   line-height: 1.625;
+  color: var(--aqt-fg-muted);
+}
+
+.calloutWarning {
+  border-left-color: var(--aqt-amber);
+}
+
+.callout > p:first-child {
+  margin-top: 0;
+}
+
+/* MDX articles: the page renders the h1, the first paragraph is the lead. */
+.prose h1 + p {
+  margin-top: 0.75rem;
+  text-wrap: pretty;
+}
+
+.prose h3 {
+  margin: 1.75rem 0 0;
+  font-size: var(--text-body);
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--aqt-fg);
+}
+
+.prose li > p:first-child {
+  margin-top: 0;
+}
+
+.prose code {
+  font-family: var(--aqt-data);
+  font-size: 0.9em;
+}
+
+.prose hr {
+  margin: 2rem 0 0;
+  border: 0;
+  border-top: 1px solid var(--aqt-border);
+}
+
+.tableWrap {
+  overflow-x: auto;
+}
+
+.cards {
+  display: grid;
+  gap: 0.75rem;
+  margin: 1.5rem 0 0;
+  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+}
+
+.card {
+  display: block;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--aqt-border);
+  border-radius: var(--aqt-radius-sm);
+  background: var(--aqt-card);
+  text-decoration: none;
+  transition: border-color 150ms ease;
+}
+
+.card:hover {
+  border-color: var(--aqt-teal);
+}
+
+.card:focus-visible {
+  outline: 2px solid var(--aqt-teal);
+  outline-offset: 2px;
+}
+
+.cardTitle {
+  display: block;
+  font-weight: 600;
+  color: var(--aqt-fg);
+}
+
+.cardDesc {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: var(--text-caption);
+  line-height: 1.5;
   color: var(--aqt-fg-muted);
 }
 

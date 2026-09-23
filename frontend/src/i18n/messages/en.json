@@ -6077,5 +6077,33 @@
         "hero_wrong_class": "This hero does not belong to the chosen role."
       }
     }
+  },
+  "docs": {
+    "title": "Documentation",
+    "lead": "Guides for players and organizers: how tournaments work, how to take part and how to run them.",
+    "sections": {
+      "players": {
+        "title": "For players",
+        "description": "Sign in, register, check in, play your matches and follow your stats."
+      },
+      "organizers": {
+        "title": "For organizers",
+        "description": "Set up a workspace, run tournaments and mixes, handle results."
+      },
+      "dev": {
+        "title": "For developers",
+        "description": "Platform architecture, HTTP API and database schema. Available in Russian only."
+      }
+    },
+    "search": {
+      "label": "Search the docs",
+      "placeholder": "Topic or term…",
+      "empty": "Nothing found for “{query}”."
+    },
+    "nav": {
+      "audience": "Who it's for",
+      "label": "Documentation pages",
+      "select": "Documentation page"
+    }
   }
 }

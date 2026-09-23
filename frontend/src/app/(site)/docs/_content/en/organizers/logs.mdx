@@ -1,0 +1,91 @@
+A match log is the file Overwatch writes after a game. Everything the platform knows about a map comes out of it: who played whom, on which hero, for how long, with what numbers. This page covers uploading logs and what to do when one does not parse.
+
+## What logs produce
+
+A parsed log becomes one match per map, and it gives you:
+
+- player statistics for every map played and for the series as a whole;
+- MVP placements for the match;
+- the input for achievements that count statistics and a team's path through the bracket;
+- the material tournament analytics runs on.
+
+Until a series has parsed logs, its encounter page says the player statistics are unavailable instead of showing a table.
+
+## Uploading in the admin
+
+In the admin, open **Tournaments**, pick the tournament, go to the **Matches** tab and then to **Logs**. That is the processing console: **Log processing**.
+
+1. Press **Upload logs**.
+2. Under **Files**, pick one or more files. `.log`, `.txt` and `.csv` are accepted.
+3. Under **Attached encounter**, name the encounter the files belong to, or leave **No encounter**.
+4. Press **Upload**.
+
+Two files with the same name in one upload are refused — the dialog shows **Duplicate file names**. Rename them or upload them one at a time.
+
+You can also upload from an encounter: on **Encounters**, open a row and press **Upload log** — the encounter is filled in for you.
+
+### Processing statuses
+
+| Status | What it means |
+| --- | --- |
+| **Queued** | The file is accepted and waiting. |
+| **Processing** | The file is being parsed. |
+| **Processed** | The file is parsed and its statistics are recorded. |
+| **Failed** | Parsing failed. |
+
+The same words are the filter chips, and search covers the file name, the error text, the uploader and the encounter. A failed row expands to show its error, and the button beside it (**Retry log**) queues the file again; on a row that never finished it reads **Requeue log**. When several files failed, a bar appears with **Show failed** and **Retry … loaded**.
+
+## Uploading through the Discord bot
+
+If the tournament has a Discord channel set up for logs, captains can simply post the files there and the bot picks them up. For connecting the channel, see [Content and data collection](/docs/organizers/content).
+
+- The bot takes attachments ending in `.txt`, `.log` and `.json`. It ignores everything else.
+- Attachments added by editing a message that was already sent are picked up too.
+- A file already processed for this tournament is skipped, so re-posting the same log is harmless.
+
+The bot reacts to the message and replies with one line per file:
+
+| Reaction | What it means |
+| --- | --- |
+| ✅ | The file was uploaded and processed, or uploaded and queued. |
+| ⚠️ | The file was uploaded, but processing failed or its outcome is not confirmed yet. |
+| ❌ | The file could not be uploaded or queued at all. |
+
+If the bot neither replies nor reacts, check that it is allowed to post messages and add reactions in that channel.
+
+## Parsed maps
+
+**Matches → Parsed maps** shows one row per map played: the map, the score, the log it came from and its provenance. The filters are **Map**, **Ingestion status** (**Pending**, **Processing**, **Done**, **Failed**) and the **Provenance unresolved** toggle, which keeps the maps with no upload record behind them. Clicking a row opens the map's detail.
+
+The same list in short form sits in the encounter panel, under **Parsed maps**.
+
+## Unresolved names
+
+Sometimes a log carries a map, hero or gamemode name the platform does not know — a differently localized client, for instance. Those names collect in the **Game content → Unresolved names** queue, which platform administrators own.
+
+The table shows **Type** (**Hero**, **Map**, **Gamemode**), **Raw name** exactly as the log spelled it, **Times seen**, **Last seen**, and a **Last log** link into that tournament's processing console.
+
+To clear one:
+
+1. In the **Attach to** column, pick the hero, map or gamemode the name means.
+2. Press **Attach** — the name becomes an alias of that entry, and later logs using it parse on their own.
+3. If the name is not worth resolving, press **Dismiss** and the row leaves the queue.
+
+The number of open rows shows as a badge on the **Unresolved names** tab.
+
+## Troubleshooting
+
+| Problem | What to do |
+| --- | --- |
+| A log is stuck on **Queued** or **Processing** | Stalled files are requeued automatically; to skip the wait, press **Requeue log**. |
+| A log is **Failed** | Expand the error text on the row and press **Retry log**. |
+| An encounter has no logs | On **Encounters**, apply the **No logs** filter and upload what is missing. |
+| A map or hero is missing from the statistics | Check the **Unresolved names** queue — the name may not have been recognised. |
+| The same map appears twice | Identical files are skipped; if maps still doubled up, check **Parsed maps** and the provenance of each row. |
+
+## See also
+
+- [Running matches](/docs/organizers/matches)
+- [Content and data collection](/docs/organizers/content)
+- [Analytics](/docs/organizers/analytics)
+- [Achievements](/docs/organizers/achievements)

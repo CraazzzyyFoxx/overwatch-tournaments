@@ -1,0 +1,100 @@
+Tournament analytics shows who played above or below expectations, which teams surprised the bracket, and who should change division. This page explains what the numbers mean and when to recompute them.
+
+Open it from the site menu: **Analytics**. At the top, pick a **Tournament** and an **Algorithm** — these are two different ways of scoring the same event, so the picture can differ slightly between them.
+
+## What the page shows
+
+The header carries the tournament's team, player, group and stage counts. Under it sits **The bracket so far**: a one-line verdict naming the team that beat its forecast by the most and the one that fell short.
+
+Next comes a rail of bracket-wide figures:
+
+| Figure | What it counts |
+| --- | --- |
+| **Climbing** | Players the model thinks belong a division higher |
+| **Dropping** | Players performing below their division |
+| **Watch flags** | Cases raised automatically that need a human look |
+| **Avg confidence** | How much data sits behind the calls across the bracket |
+| **Upsets** | Teams that finished four or more places off the forecast |
+| **New faces** | Players in their first tournament or on a new role |
+
+Below that is the **Standings**. You can read it three ways: **Standings** by finishing place, **Biggest movers** with the largest gaps between forecast and result first, and **Watch list** showing only flagged players. The **List** and **Table** toggles change how densely it is shown.
+
+Clicking a team opens its card: forecast against result, its group record and its roster. Clicking a player opens theirs.
+
+## Predicted vs actual
+
+For every team the model names an expected place, and after the games the actual one. The **Predicted vs actual** block puts both side by side, so it is immediately clear who outperformed the forecast and who fell short.
+
+Inside a team card you also see **Predicted standings distribution** — the team's chance of finishing in the top 1, top 3 and top 8. That block is for organizers only.
+
+None of this is final: the read is live and sharpens as the bracket plays out.
+
+## A player's numbers
+
+A player card carries three main figures:
+
+- **Impact** — how much better or worse the player did than expected for the match-up, scored 0 to 100 within their role.
+- **Confidence** — how much data sits behind that call. On a small sample it is low, and that is normal.
+- **Predicted move** — **Climb**, **Drop** or **Hold**: whether the model thinks the player belongs in a higher or lower division.
+
+The **Why the model says this** block expands into the detail: which of their numbers pushed the score up, and which pulled it down.
+
+## Division adjustment
+
+The division adjustment is the suggested change to a player's division for the next tournament: plus moves them up, minus moves them down.
+
+If you disagree with the computed value, you can override it. On the player card open **Edit manual shift**, type a number into the **Manual** field and press **Save changes**. The final adjustment is the computed value plus yours — the tooltip shows both parts. Your manual value stays put and is not overwritten by a recompute.
+
+## Match quality and anomalies
+
+The **Match quality and anomalies** block scores every series on three scales from 0 to 100:
+
+| Scale | What it means |
+| --- | --- |
+| **close** | How back-and-forth the match was: 100 is a nail-biter, 0 a blowout |
+| **expected** | How well the result matched the pre-match forecast |
+| **even** | How evenly matched the two teams were |
+
+Alongside players it raises flags — automatic heads-ups when results look unusual: possible smurf, possible throw, possible griefing, possible sandbag. The **What flags mean** button explains each one.
+
+<Callout>
+A flag is a reason to look, not proof. The decision is always a human's.
+</Callout>
+
+Once you have reviewed a flag you can close it: **Confirm — true positive** or **Dismiss — false positive**. The verdict is stored, so next time it is clear the case has already been looked at.
+
+## Recomputing
+
+The **Organizer tools** panel above the standings is collapsed by default and only visible to people allowed to change analytics. **Run analytics** recomputes the tournament: ratings, place forecasts, player impact and match quality.
+
+While a run is in progress its state and stages are shown under the button, and the button itself is unavailable.
+
+<Callout>
+Only one run at a time can be in progress per workspace. Wait for the current one to finish before starting another.
+</Callout>
+
+Recompute when:
+
+- every log from the tournament has been processed — before that, some maps are missing from the calculation;
+- you have corrected an encounter result or a roster;
+- you are about to announce new divisions to players.
+
+Training the models is a separate action, available only to platform administrators. Organizers do not need it: **Run analytics** computes from models that are already trained.
+
+## Troubleshooting
+
+| Problem | What to do |
+| --- | --- |
+| "Analytics unavailable" | Check that both a tournament and an algorithm are selected, then retry |
+| "No teams" | The selected tournament has no registered teams yet |
+| **Run analytics** is unavailable | A run is already in progress in this workspace — wait for it to finish |
+| Match quality is empty | Press **Run analytics**: the block is filled from the results of a run |
+| Everyone's confidence is low | Few maps have been played; the calls sharpen as the tournament goes on |
+| No **Organizer tools** panel | Your role cannot change analytics — see [Roles and permissions](/docs/organizers/roles) |
+
+## See also
+
+- [Divisions](/docs/organizers/divisions) — where the final division adjustment lands
+- [Match logs](/docs/organizers/logs) — the data analytics is built on
+- [Achievements](/docs/organizers/achievements) — the conditions that read divisions
+- [Roles and permissions](/docs/organizers/roles) — who gets the organizer tools

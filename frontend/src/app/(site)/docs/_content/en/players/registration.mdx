@@ -1,0 +1,109 @@
+A tournament entry is a form you fill in once. This page covers when you can submit it, what it asks, what happens afterwards, and how to edit or withdraw it.
+
+## When registration is open
+
+Sign-ups are governed by the tournament's registration window in the schedule, not by the phase the tournament currently sits in — the window can run past the start of play.
+
+- Before the window opens there is no registration button on the tournament page. After it closes, the button reads **Registration closed**.
+- If the organizer allows late sign-ups, the form stays open past the announced closing time and warns you: "Registration is closed — your sign-up will be marked as a late one. It changes nothing else about it." Your entry then carries a **Late sign-up** tag.
+- A completed or archived tournament never accepts entries, late registration or not.
+
+## How to register
+
+1. Open the tournament page.
+2. Press **Register**. If you are signed out, the button reads **Login to register**.
+3. Work through the three steps of the form: **Accounts**, **Roles**, **Details**.
+4. Submit. The button is replaced by your status, which links to the **Participants** tab where your "Your Registration" card lives.
+
+<Callout type="warning">
+You get one registration per tournament, and that same entry becomes your seat on a team. If you signed up as an individual player you can no longer found your own team — but a captain can invite you, and accepting moves your existing registration onto their roster. See [Captain teams and invites](/docs/players/captain-teams).
+</Callout>
+
+## The Accounts step
+
+Which fields appear is the organizer's choice.
+
+- **BattleTag** — your main game account. It is what identifies the entry.
+- **Smurf Accounts** — additional BattleTags.
+- **Discord**, **Twitch**, **Boosty**, **VK**, **YouTube** — contacts and channels.
+- The organizer can require a field to be verified. Then the value is picked from the accounts linked to your profile: "Choose one of your OAuth-verified accounts." With nothing linked, the form asks you to fix that — **Link accounts in profile settings**. Linking is covered in [Account and sign-in](/docs/players/account).
+
+## The Roles step
+
+Roles are chosen in a table: one row per role (**Tank**, **Damage**, **Support**) and a **Priority** column with **Main**, **Fallback** and **Skip**. Each role can also carry a **Specialization** and **Top Heroes**, up to the number the organizer allows.
+
+How the tournament asks about priority depends on its setting:
+
+| What you see | What it means |
+| --- | --- |
+| The full priority table | Pick one **Main** role and any **Fallback** roles. There is a **Flex** switch — "Play any role". |
+| "Choose one priority role, or Flex" | Every role counts on this tournament: you pick the one you want prioritised, or **Flex**. You will still be put on the others when a team is short. |
+| No priority control at all | Everyone plays any role here. Only specialization and top heroes remain. |
+
+The organizer can make a fallback role mandatory ("This tournament requires at least one fallback role") and top heroes too. Flex can also be switched off entirely — then you get "Flex registration is not available for this tournament."
+
+Fallback roles are not decoration: they are what you get put on when a team is short of that role.
+
+**Rank.** The form may ask for your rank per role as an SR number, with the division shown beside it. If you leave it blank, your rank is taken from your profile in the community, and failing that from Overwatch.
+
+## The Details step
+
+- **Stream POV** — "I will stream my POV".
+- **On call** — "You can call me in if somebody drops or I cannot make the start". This is only an availability note: you play as usual and lose nothing in the queue.
+- **Notes** — anything the players and captains should know.
+- The organizer can add their own questions. Under the ones whose answers are not published you will see: "Only the organizers see this answer. It is never shown on the public roster."
+
+## What happens after you submit
+
+The "Your Registration" card on the **Participants** tab shows your status, your queue position, and the steps: **Application submitted** → **Review** → **Approved** → **Balancing** → **Check-in**. If the tournament has entry requirements, they appear as steps in between — see [Entry requirements](/docs/players/admission).
+
+| Status | What it means |
+| --- | --- |
+| **Pending review** | Submitted, not yet looked at by the organizers. |
+| **Approved** | You are in the tournament's player pool. |
+| **Rejected** | The organizer turned the entry down. |
+| **Withdrawn** | The entry was pulled — by you or by an organizer. |
+| **Banned** | The organizer blocked you from this tournament. |
+
+Each community configures its own status names and can add more, but the built-in ones mean exactly this. An organizer can also turn on auto-approval, in which case entries are approved the moment they arrive, with no manual review.
+
+**Readiness is not a status.** Separately from it, your entry counts as complete only once it has roles and a rank. Until the rank is there the card says "Waiting for balancing — organizers will assign your rank." That is a data-completeness flag, not an entry requirement: checking in neither clears it nor replaces it.
+
+**Queue position.** Next to the card heading sit two numbers, for example "5 / 120": where your entry falls in submission order, and how many entries there are. A second chip shows your place inside your primary role, for example "Damage 2 / 43". The role number usually matters more — a field fills role by role.
+
+## Editing your registration
+
+Use **Edit** on the card. Only the questions the organizer left open can be changed; the rest are marked **Frozen after submitting**.
+
+When the button does not work, the card names the reason:
+
+| Message | What to do |
+| --- | --- |
+| "A registration with this status can no longer be edited." | The entry is withdrawn, rejected or banned — there is nothing to change. |
+| "You have already checked in — your entry is frozen." | Check-in freezes the entry. |
+| "Registration is closed." | The registration window has ended. |
+
+If the organizer opened no question at all, the button is simply absent. Two fields freeze on their own: the BattleTag once an organizer has reviewed the entry, and the roles once you are in the balancing pool or on a team roster.
+
+## Withdrawing
+
+<Callout type="warning">
+The **Withdraw** button is on the card. The confirmation says it plainly: "Your application will be marked as withdrawn, and you will not be able to register for this tournament again." Withdrawal is final — not even a team invite can revive a withdrawn entry.
+</Callout>
+
+You can only withdraw while the entry is **Pending review** or **Approved** and you have not checked in. After check-in the button is gone: rosters are being built from the confirmed attendee list.
+
+## Troubleshooting
+
+- **There is no registration button at all.** Either the window is closed, or the tournament has no form yet — "This tournament has no registration form yet."
+- **"The form has changed. Reload the page and check your answers."** The organizer edited the form while you were filling it in. Reload and submit again.
+- **"Link a verified … account via OAuth to register."** The field needs a verified account — link it in profile settings and come back to the form.
+- **"You are already registered for this tournament."** Your entry exists; find it on the **Participants** tab.
+- **The button says "Register a team" instead.** The tournament is played by ready-made rosters: see [Captain teams and invites](/docs/players/captain-teams).
+
+## See also
+
+- [Entry requirements](/docs/players/admission)
+- [Check-in](/docs/players/check-in)
+- [Captain teams and invites](/docs/players/captain-teams)
+- [How a tournament works](/docs/players/tournaments)

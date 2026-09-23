@@ -1,0 +1,83 @@
+A division is a band of the Overwatch ladder a player falls into. This page covers where the workspace gets player ranks from, and how to build your own division grid instead of the standard Overwatch ladder.
+
+## Where ranks come from
+
+A rank has three sources, and they are never merged:
+
+- **The workspace rank** — the community's shared book. Everyone sees it, and it is the one tournaments use.
+- **Your own book** — the ranks you correct in your own mix lobby. They apply only to your mixes and nobody else sees them. Correcting a rank in a mix never changes the workspace rank.
+- **The Overwatch profile rank** — collected automatically from the player's BattleTag.
+
+Which one wins:
+
+- In a tournament: the rank from the entry, then the workspace rank, then the Overwatch rank.
+- In a mix: the rank from your own book, then the workspace rank, then the Overwatch rank.
+
+An empty value on a layer means "look at the next one", so clearing your correction hands the player back the shared rank rather than a zero.
+
+A role counts as playable only if a rank was found for it; without one the role is not considered.
+
+To fill ranks into a tournament's entries in bulk, use the **Rank autofill** tab — see [Registration and entries](/docs/organizers/registration). Overwatch ranks are collected in the background; how to watch that and trigger it by hand is in [Content and data collection](/docs/organizers/content).
+
+## The division grid
+
+Open **Admin → Settings → Divisions**.
+
+The top of the page shows which version is currently **In force**. Until a version is activated, players are sorted by their Overwatch rank one to one.
+
+The page has three parts:
+
+- **Version history** — every version of the grid, with **Open editor** and **View**.
+- **Who reads which version** — the older versions tournaments still read, and whether their divisions translate into the one in force.
+- **Divisions in force** — the active divisions in a table with **#**, **Division**, **OW band** and **Ranks** columns.
+
+## Build your own grid
+
+1. Press **Load standard OW ladder** to start from the standard ladder, or **New draft from v…** to start from the latest version. The draft editor opens.
+2. On the **Divisions** tab set the boundaries and names. Neighbouring divisions can be folded together (**Merge into the division above**, **Merge into the division below**) and the widest one split (**Split the widest**). Each division can get its own crest through **Set crest…**.
+3. The **Changes** tab shows how the draft differs from the version it came from. **Mappings** shows how divisions of older versions translate into this one. **Impact** holds the **Ready to publish?** checklist.
+4. Press **Save draft**, then **Publish v…**, then **Activate v…**.
+
+A draft can be published once every check passes: each Overwatch rank belongs to exactly one division, all names are set and unique, the draft is saved, and no mapping decisions are left. Giving every division its own crest is advice, not a condition.
+
+<Callout>
+Publishing and activating are two separate steps. A published version becomes immutable, but it only becomes the workspace grid after **Activate**.
+</Callout>
+
+## Versions and edits
+
+- An edit that only changes the name or crest of an existing division is applied to the version in force.
+- An edit that moves division boundaries, adds a division or removes one creates a new version. Earlier versions stay untouched: every tournament keeps reading the version it was played on.
+- Mappings are prepared along with the new version: for every version tournaments still read, each of its divisions gets a target in the new one. A version can only be activated with a complete set of mappings — open decisions wait on the **Mappings** tab, and **Who reads which version** names the version whose translation is missing.
+- A division is never deleted outright: it is folded into a neighbour, and the players in it move there.
+
+<Callout type="warning">
+Activating changes the division of every player in the workspace at once. Tournaments keep the version they were played on, and the previous version stays in the history.
+</Callout>
+
+## Bring a grid in from elsewhere
+
+- **Export JSON** saves the selected grid to a file and **Import JSON** loads such a file back. Import the file exactly as it was exported.
+- **Import from workspace…** copies a grid from another workspace. Three steps: **Source**, **Grid & version**, **Create draft**. The second step offers **Copy the division crests** and **Copy the Overwatch rank mapping**. It finishes by opening the new draft on the **Mappings** tab.
+
+A grid the workspace does not own cannot be edited here. To change it, create a draft in your workspace's own grid and activate that instead.
+
+## Pin a version to one tournament
+
+By default a tournament reads the version in force. To pin a specific one, open that tournament at **Admin → Tournaments → Settings → General** and pick it in **Division grid version**. **Workspace default** hands the tournament back to the shared setting.
+
+## Troubleshooting
+
+| Problem | Fix |
+| --- | --- |
+| **Publish** is disabled | Read the **Ready to publish?** list on the **Impact** tab; it names what is missing. |
+| **Activate** is disabled | Mappings are incomplete. Open the **Mappings** tab and close the remaining decisions. |
+| A version cannot be edited | Published versions are immutable, because tournaments are pinned to them. Press **Create draft from this version**. |
+| Players sit on the standard ladder although a grid exists | The version is published but not activated. Press **Activate v…**. |
+
+## See also
+
+- [Registration and entries](/docs/organizers/registration)
+- [Content and data collection](/docs/organizers/content)
+- [Balancer and teams](/docs/organizers/team-formation)
+- [Mixes](/docs/organizers/mixes)

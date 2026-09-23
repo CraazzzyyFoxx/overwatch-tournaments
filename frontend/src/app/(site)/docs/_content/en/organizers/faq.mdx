@@ -1,0 +1,104 @@
+Short answers to the things that most often break or look wrong. Each answer says what happened and where to go next.
+
+<Callout>
+Admin section and button names are given in English, exactly as they appear on screen. The public site is translated.
+</Callout>
+
+## Phases, schedule and visibility
+
+### The phase did not change at its scheduled time
+
+Almost always the same cause: someone changed the status by hand, and any manual status change switches **Automatic phase transitions** off. The other cause is simply no schedule entry for that phase. Check both in **Settings → Schedule**; see [Phases and schedule](/docs/organizers/schedule).
+
+### Registration closed earlier than I expected
+
+Registration is open exactly while the **Registration** phase window runs: with no schedule entry it is closed, and **Ends at (optional)** closes it early. To take late entries without erasing the announced date, turn on **Allow late registration** in **Settings → Schedule** — see [Registration and entries](/docs/organizers/registration).
+
+### Players cannot see the tournament on the site
+
+A hidden tournament is not shown on the public site at all — the page simply is not found. Untick **Hidden (preview) — not visible to the public** in **Settings → Preview allowlist**; a tournament created through the wizard with **Save as draft** stays hidden until it is published. See [Phases and schedule](/docs/organizers/schedule).
+
+## Entries and admission
+
+### A player is blocked by the entry requirements
+
+Open **Registration → Entries** and read the reason on the entry: it names the exact requirement, for example a private Overwatch profile or no active subscription. Some reasons are the player's own to clear, and they are told so; see [Entry requirements](/docs/players/admission).
+
+### The subscription toggle is on but nobody is refused
+
+The rule itself lives on the workspace, not on the tournament: if no providers are selected in **Admin → Settings → Subscriptions**, the **Require an active subscription** toggle enforces nothing — the note under it says so. The other case is a provider that is unconfigured or unreachable, in which case the check is read in the player's favour. See [Subscriptions and admission](/docs/organizers/subscriptions).
+
+### The tournament has no Registration → Teams tab
+
+That tab exists only where whole teams register: **Settings → General** → **Team formation** → **Team registration**. On balancer and draft tournaments there is nothing to register as a team — see [Playbooks](/docs/organizers/playbooks).
+
+## Teams and rosters
+
+### I cannot change the roster shape
+
+Once a draft session has been created for the tournament, the roster shape is locked and the screen tells you to complete or cancel the session first. The same lock covers the team formation method — see [Captain draft](/docs/organizers/draft).
+
+### The balancer will not run
+
+Check the two checklist steps beside the pool: **Add players to pool** and **Resolve issues**. The run is refused while the pool is empty or still holds players with no rank and no playable role — see [Balancer and teams](/docs/organizers/team-formation).
+
+### The export skipped some teams
+
+That is intended: skipped teams are listed with a reason — roster incomplete, roster has no players, team is waitlisted, or the team's subscription is unpaid. Fix the reason and press **Add selected teams** again — see [Registration and entries](/docs/organizers/registration).
+
+## Bracket and results
+
+### Swiss cannot pair the teams
+
+The field has played itself out: every allowed pairing has already happened and there is no way left to pair without a repeat or an idle team. Lower **Swiss max rounds** or add teams — see [Stages and brackets](/docs/organizers/brackets).
+
+### A playoff match ended in a draw
+
+An elimination bracket has no draws: the platform refuses a level score and says a winner is needed. Play the decider or correct the score — see [Running matches](/docs/organizers/matches).
+
+### A wrong result was confirmed
+
+Only an organizer can change a confirmed result: **Matches → Reports**, open the encounter and press **Review result**. Changing the winner resets everything downstream that depended on that match, so those matches have to be played again; see [Running matches](/docs/organizers/matches).
+
+### I cannot change a stage's format
+
+After creation the stage format can only be changed by platform administrators, and the screen says so. It is usually easier to delete the stage and create it again while it has no played matches — see [Stages and brackets](/docs/organizers/brackets).
+
+### A stage will not go back to Draft
+
+**Revert to draft** works only while none of the stage's matches has started: any played or in-progress match blocks it. See [Stages and brackets](/docs/organizers/brackets).
+
+### The standings are behind the matches that were played
+
+Standings count closed rounds only: while a round still has an unplayed encounter, it does not enter the table. If the numbers still disagree, press **Recalculate** on **Matches → Standings** — manual row edits are overwritten by it. See [Stages and brackets](/docs/organizers/brackets).
+
+## Logs and name recognition
+
+### A log was not processed, or was skipped as a duplicate
+
+Every file's state is on **Matches → Logs**: **Queued**, **Processing**, **Processed**, **Failed**, with **Retry log** for the failures. A file whose contents are identical to one already uploaded to this tournament is skipped as a duplicate — see [Match logs](/docs/organizers/logs).
+
+### Hero or map names came back unresolved
+
+Those names land in a separate queue of unresolved names, and platform administrators work through it. Tell them exactly which name and which tournament — see [Content and data collection](/docs/organizers/content).
+
+## Access, roles and domain
+
+### I cannot remove the workspace owner
+
+The last owner cannot be removed: make someone else an owner in **Admin → Members** first, then take the role off the previous one. See [Roles and permissions](/docs/organizers/roles).
+
+### A host cannot open the admin panel
+
+The **Host** role lets someone run mixes but deliberately does not open the admin panel. If they need the admin, give them a suitable role in **Admin → Members**; see [Roles and permissions](/docs/organizers/roles).
+
+### The custom domain will not verify
+
+Verification looks for a DNS TXT record carrying the value shown on screen, and DNS changes take time to spread. Check that the records match **Admin → Settings → Domain** exactly and press **Verify now**; the screen also re-checks the domain on its own while it is pending. See [Workspace settings](/docs/organizers/workspace).
+
+## See also
+
+- [Playbooks](/docs/organizers/playbooks)
+- [Phases and schedule](/docs/organizers/schedule)
+- [Stages and brackets](/docs/organizers/brackets)
+- [Player FAQ](/docs/players/faq)

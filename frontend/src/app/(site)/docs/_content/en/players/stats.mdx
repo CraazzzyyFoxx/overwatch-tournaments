@@ -1,0 +1,91 @@
+Everything the site knows about your play lives on your profile: tournaments, matches, heroes, maps and achievements. This page covers what each section holds, where ranks and divisions come from, what MVP and impact actually mean, and which other statistics pages exist.
+
+## Your profile
+
+The header carries your name, avatar, divisions per role, recent form and the headline numbers: **Tournaments**, **Winrate**, **Maps**, **Avg Place**. Next to them sit **Copy link**, **Share**, **Player card** (downloadable or copyable as an image) and **Compare**.
+
+Below that come the tabs:
+
+| Tab | What is inside |
+| --- | --- |
+| **Overview** | Career totals, placement spread, most played heroes, best teammates, recent encounters, an achievements preview and a breakdown of your last tournament |
+| **Tournaments** | Your history event by event: the run through the bracket, map results and the team you played with |
+| **Matches** | A match table with the **Wins**, **Losses**, **Draws**, **Group**, **Playoffs**, **Finals**, **MVP 1st** and **Has logs** filters, plus your most fought opponents |
+| **Heroes** | Per hero: win rate, KDA, damage and the rest, compared against the global average, with maps and best games |
+| **Maps** | Win rate by map and by game mode |
+| **Achievements** | Badges earned and still locked — see [Achievements](/docs/players/achievements) |
+
+If a player has never played a tournament, the tabs are replaced by a placeholder: there is nothing to count yet.
+
+## Ranks and divisions
+
+A rank is an SR value for one role. A **division** is a band of ranks on your community's grid — every community draws its own bands, so "Div 3" on one site and on another are not the same thing. The bands are occasionally redrawn; old ranks are carried over to the new layout so tournaments from different seasons stay comparable, and an individual tournament can stay pinned to the previous layout.
+
+The rank you enter a tournament with is looked up in order, and the first source that holds a number wins:
+
+1. The rank you typed into your application for that tournament.
+2. The rank your community keeps for you.
+3. The rank from your Overwatch profile, if your BattleTag is linked.
+
+An empty field in the application does not mean "unranked" — it simply falls through to the next source.
+
+**Rank history** is a chart built from snapshots of your Overwatch profile. Open it from a tournament's **Participants** list: expand a player's row (**Additional Details**). You can group the chart **By role** or **By battle.net** and change the granularity — **Daily**, **Hourly** or **All points**. With no linked BattleTag there is no history: **Rank history is unavailable because this BattleTag is not linked to a registered site account.**
+
+## MVP and impact
+
+Both scores are computed from match logs. Until the organizer has uploaded the logs and they have been processed, a match carries neither — you can spot those matches by the empty **Logs** column.
+
+- **MVP rating** shows how much a player stood out in that match. It appears as the **MVP** column in match and tournament tables, and on your profile as **MVP score** in the last-tournament breakdown.
+- **Impact** answers a different question: did the player play better or worse than expected. The comparison is not against everybody, but against players of the same role and the same division, and the result is placed on a 0 to 100 scale.
+
+A match where a player clearly went past their usual level is tagged **Above expectations**.
+
+## Comparing players and heroes
+
+**Compare** (menu **Players → Compare**) puts two players side by side. Pick a **Selected user**, then name an opponent under **Compare against** — or leave it empty and you are compared against the all-players average. The **Compare scope** switch chooses between **Overall performance** and **Hero / map performance**, and the role and division filters narrow the baseline to a comparable cohort. The built-in **How it works** guide walks through the steps.
+
+**Heroes Leaderboard** (menu **Players → Heroes Leaderboard**) looks at it from the other side: pick a hero and get a table of everyone who has played them. Any column sorts the whole table, and the **Tournament scope** filter limits the sample to a single event.
+
+## Matches and encounters
+
+Two entries in the **Matches** menu collect games from across the platform:
+
+- **Encounters** — series between teams. There are ready-made views for **Finals only**, **Close Bo5s**, **Upsets** and **With logs**, filters by tournament and series format, and sorting by date or closeness.
+- **Matches** — individual maps that were played. A match page has the **Tables**, **Comparison** and **Timeline** tabs, the last of which replays the kill feed when logs have been parsed.
+
+## Platform statistics
+
+The **Statistics** page is the all-time summary: **Trends over time** (**Tournament activity** and **Average division by role**), **Leaderboards** (**Most championships**, **Top win rate**, **Most maps won**) and **Overall statistics** (**Tournaments Held**, **Teams Balanced**, **Players Participated**).
+
+## Tournament analytics
+
+The **Tournaments → Analytics** menu entry answers three questions: who surprised everyone, who is climbing or dropping, and how much those calls can be trusted. Pick a tournament and the page shows:
+
+- **Predicted vs Actual** — where a team was expected to land and where it actually did. Teams that missed the forecast by four places or more show up under **Upsets**.
+- A **Predicted move** for every player: **Climb**, **Drop** or **Hold** — in other words, whether they belong in a higher or a lower division next time.
+- **Impact** and **Confidence** — the second one reflects how much played material sits behind the call. Few maps means low confidence.
+- **Flags** — automatic hints raised when results look unusual.
+
+<Callout>
+Nothing on this page is a verdict. The interface says so itself: **Flags are review hints, not verdicts.** The division call is still the organizer's. The **New here? Read the analytics in 30s** card explains every number, and any dotted term opens its plain-language definition.
+</Callout>
+
+Analytics is run by the organizer, so a tournament that just finished may not have it yet.
+
+## OWAL
+
+If your community runs OWAL, the site has a dedicated **OWAL** page with a season picker and two tabs:
+
+- **Standings** — players with their role, division, days played, **Average Placement** and the **TOTAL (best 3 days)** sum. The **Only 3+ days** filter drops everyone who only dropped in for a day or two.
+- **Stacks** — pairs of players (**Player One** and **Player Two**), how many days they played together and with what average placement.
+
+## What other people see
+
+Your public profile — name, avatar, tournament history and stats — is visible to anyone who can view your community. The one thing you configure separately is your stream: while the **Show my live stream on tournament pages** switch is off, your broadcast will not appear on tournament pages even if your application ticks the stream option. Your Twitch account still stays on your public profile. See [Account and sign-in](/docs/players/account).
+
+## See also
+
+- [Achievements](/docs/players/achievements)
+- [How a tournament works](/docs/players/tournaments)
+- [Matches: pick-ban and results](/docs/players/matches)
+- [Glossary](/docs/players/glossary)

@@ -1,0 +1,109 @@
+There are three ways to build the teams of a tournament: the balancer, a live draft, or accepting teams captains put together themselves. This article covers choosing the method, setting the roster shape, running the balancer and turning the result into finished tournament teams.
+
+## Choosing the method
+
+The method lives in the tournament settings: **Admin → Tournaments → Settings → General**, field **Team formation**.
+
+| Value | What it means |
+| --- | --- |
+| **Auto-balance (Balancer)** | You collect a pool of admitted players and the balancer splits it into even teams. |
+| **Live draft** | Captains pick players live in a draft room. |
+| **Team registration** | Captains build their own rosters at registration and you review them. |
+
+The choice changes the tournament screens: the **Teams → Draft** tab and the draft phase in the schedule exist only for a live draft, and the **Bench** group with its **Substitutes per team** field in **Settings → Roster shape** only for captain-built teams. Draft setup is covered in [Captain draft](/docs/organizers/draft); what a player sees is in [Draft](/docs/players/draft) and [Captain teams](/docs/players/captain-teams).
+
+## Roster shape
+
+The roster shape is how many slots of each kind one team has. It is set in **Settings → Roster shape** and applies equally to the balancer, the draft and the roster checks on captain-built teams.
+
+- **Inherit from the workspace** — follow the workspace shape.
+- **Overwatch 5v5 · 1/2/2** — 1 tank, 2 damage, 2 support.
+- **6 flex slots** — six slots with no fixed role.
+- **Custom shape** — your own counts in **Slots per team** for **Tank**, **Damage**, **Support** and **Flex**.
+
+A team can have between 1 and 12 slots. A flex slot is not tied to a role: any player fits it. If the tournament pins no shape of its own, the workspace shape is used, and if there is none, the built-in Overwatch 5v5 one.
+
+A draft needs at least two slots: the captain already occupies one seat, so a draft has one round fewer than the roster size.
+
+<Callout>
+Once a draft session exists for the tournament, the roster shape is locked and the editor says so: **A draft session has already been created, so the roster shape is locked. Complete or cancel it to change the shape.** The same rule applies to changing the team formation method.
+</Callout>
+
+## Running the balancer
+
+1. Open the tournament, go to **Teams → Roster** and press **Open balancer**.
+2. Build the pool in the **Balancing Pool** sidebar; **Browse available** brings approved entries into it. Only players in the pool are considered at all.
+3. Clear the problem cards. The **Resolve issues** step and its **Review conflicts** button list players with no rank or no role, and you can fix them right there. The **Skip N invalid** switch leaves them out instead.
+4. Pick a preset — **Standard**, **Preference Focused**, **Combined**, **High Quality** or **Custom**. **Settings** opens the **Balancer settings** panel; values are saved for this tournament, **Reset** restores the preset and **Save settings** keeps your edits.
+5. Press **Run balance**.
+
+## What the balancer weighs
+
+In plain words, with no numbers:
+
+- **Even team strength.** The main goal is the smallest possible difference in average team strength.
+- **The tank line separately.** A tank gap counts for more than the others: one team with a much stronger tank ruins the match.
+- **Preferred roles.** Players are seated on the role they declared where possible. A player marked as flex takes any role without penalty, and a role someone does not play at all is never used.
+- **Similar specialisations.** Where players list a narrow specialisation, the balancer avoids stacking identical ones on the same team.
+- **Captains.** With **Use captains** on, the strongest players are marked as captains and teams are built around them.
+
+Hard rules apply on top. A player with no playable ranked role is left out of the split. Every role in the roster shape needs at least one player who can play it, or the run does not happen. The number of teams is however many full teams the pool makes; whoever does not fit is left out and listed as benched. It is therefore worth trimming the pool to a multiple of the roster size before running.
+
+## Reviewing and editing the result
+
+One run returns several options. They appear as cards above the rosters, and **Show all** opens the **All balances** dialog with every one of them. Each card shows how evenly the ranks split, how many players sit off their preferred role and how many are benched, so you can compare and pick by hand.
+
+The split is editable: drag a player between teams and slots with the mouse or the keyboard. You cannot place someone on a role they do not play. If several organizers have the tournament open, you see each other's drags live.
+
+The buttons under the split:
+
+- **Regenerate** — run the balance again.
+- **Save** — store the current option as the tournament's balance.
+- **Export to tournament** — turn it into the tournament's teams.
+- **Re-export ranks** — refresh the ranks of already exported players without touching rosters or the bracket.
+- **Advanced** — copy the rosters as text (**Copy names**) or save them as a picture (**Save as image**) for publishing.
+
+<Callout type="warning">
+**Export to tournament** writes the split into the tournament's teams and replaces their current players. If the bracket is already built and matches are running, a repeat export rewrites the rosters — make sure that is what you want.
+</Callout>
+
+## The teams editor
+
+Finished teams live in **Teams → Roster**. **Manage teams** opens the team list, **Open team** one team's page.
+
+On a team page:
+
+- **Captain** — chosen from that team's own players.
+- **Roster** — a table with **Player**, **Role**, **Rank**, **Sub-role**, **Flags** and **Actions**. Role, rank, sub-role and flags save as you change them.
+- A substitute is added with the **Replace … with a substitute** action on a player: the sub sits under the slot they cover. Above the table you can see how many starters and how many substitutes the team has.
+
+<Callout type="warning">
+Deleting a team on its page removes the roster from the tournament along with every player and their match statistics. This cannot be undone.
+</Callout>
+
+## Teams built by captains
+
+With **Team registration**, the captains' entries sit in **Registration → Teams**. The state filters are **Forming**, **Roster complete**, **In tournament** and **Rejected and disbanded**.
+
+1. Check the teams: each row shows the captain, a roster summary of the form "Starters: … of … · substitutes: … of …" and how many admission problems the team has.
+2. Select the teams you want and press **Add selected teams**.
+3. Teams in **Roster complete** move to **In tournament**. The rest are skipped with a reason: roster incomplete, roster has no players, team is waitlisted, team subscription unpaid.
+
+Once added the roster is frozen: further changes go through you, in the teams editor above. **Export again** repeats the export for a team that is already in. Players who are on no team are not carried over by the export — invite them to a team or withdraw their entries first.
+
+## Troubleshooting
+
+| Problem | What to do |
+| --- | --- |
+| No **Open balancer** button | You need the right to create teams in this workspace; see [Roles and permissions](/docs/organizers/roles). |
+| The run refuses to start over a role | Some role in the roster shape has no capable player. Add players to the pool or fix their roles on the player card. |
+| Some players ended up outside the teams | The pool does not divide evenly into full teams. Drop the extras or add players until a full team fits. |
+| The roster shape will not change | A draft session already exists for the tournament. Complete or cancel it. |
+| **Export to tournament** is disabled | This split is already exported. Edit the rosters or run a new balance. |
+
+## See also
+
+- [Captain draft](/docs/organizers/draft)
+- [Registration and entries](/docs/organizers/registration)
+- [Ranks and divisions](/docs/organizers/divisions)
+- [Stages and brackets](/docs/organizers/brackets)

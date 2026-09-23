@@ -1,0 +1,96 @@
+Announcements are notices you write yourself: they land in players' notification feed, and platform-wide ones appear as a banner to every visitor. This page covers publishing them, retiring system notifications that were already sent, and where Discord is configured.
+
+## Announcements
+
+The screen is **Admin → Announcements**. At the top are the audience tabs: **This workspace** and, if you have platform-wide access, **Platform-wide**. The tab picks both the feed you read and the audience a new announcement goes to.
+
+To publish:
+
+1. Press **New announcement**.
+2. Fill in the **Title**; **Body (optional)** and **Link (optional)** are up to you.
+3. A workspace announcement needs only one language: readers without it see the **Fallback language** you choose. A platform-wide announcement needs a title in both Russian and English — everyone sees it, whichever language they read the site in.
+4. Under **Publish at**, leave **Right away** or set a date and a **Publish time**.
+5. Under **Stop showing at**, leave **Never** or set a date and a **Stop showing time**.
+6. Press **Publish**.
+
+The table describes each announcement with the columns **Announcement**, **Audience**, **Published**, **Expires** and **State**:
+
+| State | What it means |
+| --- | --- |
+| **Scheduled** | The publish time has not arrived yet |
+| **Live** | Readers can see it right now |
+| **Unpublished** | It is no longer shown |
+
+An announcement is written once and cannot be edited. To change the wording, unpublish it and publish a new one.
+
+<Callout type="warning">
+**Unpublish** cannot be undone: the announcement stops being shown from that moment, and it cannot be put back on air from this screen. The record and everyone's read marks stay, so who saw it remains answerable.
+</Callout>
+
+## Where players see them
+
+A workspace announcement reaches members of that workspace as a **New announcement** notification — in the bell on the site.
+
+A platform-wide announcement is shown as a banner floating over the page: on every page and to every visitor, including those who are not signed in. The banner closes with **Dismiss announcement**, and for that reader the dismissal is permanent. Only the newest announcement is shown at a time.
+
+## Sent notifications
+
+The **Admin → Notifications** screen lists the system notifications this workspace produced: team invites, registration decisions, disputed reports, scheduled matches. These are not announcements — nobody writes them, the platform does.
+
+The tabs filter the list by kind; the columns are **Kind**, **Recipient**, **Sent** and **State** (**In inboxes** or **Retired**). **Retire** takes one notification down, **Retire every one of this kind** takes down all of the selected kind at once.
+
+<Callout type="warning">
+A retired notification disappears from every recipient's inbox and stops counting toward their unread badge. It cannot be brought back from this screen. The records and the read marks stay.
+</Callout>
+
+## Discord in a tournament's settings
+
+The **Admin → Tournaments → tournament → Settings → Discord** screen decides what this tournament posts on Discord:
+
+- **Post announcements to Discord** — registration and check-in opening and match times go to the workspace's notification channel. On by default.
+- **Message players on Discord** — invites, registration decisions, check-in and match times for this tournament reach players as Discord direct messages. Switched off, those notifications only appear on the site. On by default.
+
+The same screen holds **Discord match logs** — the channel the bot reads match logs from. See [Match logs](/docs/organizers/logs).
+
+## Workspace notification settings
+
+The **Admin → Settings → Notifications** screen decides where and what the bot announces on behalf of the whole workspace. It needs a linked Discord server first: until there is one, the screen offers an **Open Discord settings** button instead.
+
+- **Announcement channel** — the channel the bot posts in. With no channel it posts nothing; personal notifications and the in-app inbox are unaffected. Hidden tournaments never reach the channel, whatever is ticked below.
+- **What gets posted** — which events to announce: **Registration opened**, **Check-in opened**, **Match scheduled**. The last one is one post per match, so scheduling a whole round is a whole round of posts; that is why it is off by default.
+- **Language** — the language of the channel posts. Times render in each reader's own timezone, whichever language is chosen.
+
+There is one channel for the whole workspace. A tournament has no channel of its own — it only turns its own announcements on or off.
+
+## What players receive, and where
+
+| Event | Where it lands |
+| --- | --- |
+| Team invite, invite answered | Personally: the bell and, if enabled, a Discord direct message |
+| Registration approved or rejected | Personally: the bell and, if enabled, a Discord direct message |
+| Team rejected, disbanded, removed from team | Personally: the bell and, if enabled, a Discord direct message |
+| Match report disputed | Personally: the bell and, if enabled, a Discord direct message |
+| Registration opened, check-in opened, match scheduled | Personally to participants and, if ticked, in the workspace channel |
+| Workspace announcement | The bell of every workspace member |
+| Platform-wide announcement | A banner on every page for every visitor |
+
+Discord direct messages only work if the player has linked Discord to their account, and every player can switch them off for themselves — see [Notifications](/docs/players/notifications).
+
+## Troubleshooting
+
+| Problem | What to do |
+| --- | --- |
+| Nothing arrives in the channel | Check three things: an **Announcement channel** is picked, the kind is ticked under **What gets posted**, and **Post announcements to Discord** is on for the tournament |
+| A hidden tournament is never announced | That is intended: hidden tournaments never reach the channel |
+| Players get no direct messages | Check **Message players on Discord** in the tournament settings; the player needs a linked Discord and may have switched messages off |
+| Published, but nobody sees it | Look at the **State**: **Scheduled** means the time has not arrived, **Unpublished** means it was taken down |
+| No banner although it is published | The banner only carries platform-wide announcements; a workspace one goes to the bell |
+| No **New announcement** button | You can read this workspace's announcements but not publish them — see [Roles and permissions](/docs/organizers/roles) |
+| Channel settings will not save | If the Discord server was unlinked there is no channel to pick: link a server again |
+
+## See also
+
+- [Notifications](/docs/players/notifications) — what a player sees and can switch off
+- [Workspace](/docs/organizers/workspace) — linking the Discord server and general settings
+- [Match logs](/docs/organizers/logs) — the channel logs are read from
+- [Roles and permissions](/docs/organizers/roles) — who can publish and retire

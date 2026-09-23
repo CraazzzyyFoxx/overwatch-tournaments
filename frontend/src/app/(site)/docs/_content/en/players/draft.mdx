@@ -1,0 +1,81 @@
+A draft is an open team-building session: captains take turns picking players out of one shared pool, and everyone else watches it happen live. This page explains how the draft room works and what happens when you get picked.
+
+## When a tournament has a draft
+
+A draft only runs where the organizer chose that way of forming teams. In other tournaments the balancer builds the rosters instead, and there is no draft room at all.
+
+The **Draft** button appears on the tournament page once the tournament reaches check-in — before that the room does not exist yet. The link opens the public draft board, which anyone can watch without signing in.
+
+## Who does what
+
+- **Captains** pick players. The selection panel and the **Confirm pick** button are shown only to them.
+- **The organizer** starts the draft, pauses and resumes it, and can roll the last pick back.
+- **Everyone else** watches. The board updates live, but picking controls are hidden: "This public board updates live. Selection controls are shown only to registered captains."
+
+## What is on screen
+
+| Panel | What it shows |
+| --- | --- |
+| **Draft order** | Every pick by round: the ones already made, the one running now, the ones still ahead |
+| **On the clock** | The team picking right now, and the timer |
+| **Team rosters** | What each team has taken, its open slots and its average rating |
+| **Player pool** | Who is still available: the **Available**, **Shortlist** and **Drafted** tabs |
+| **Room chat** | The shared chat; captains and organizers write, everyone else reads |
+
+## Pick order
+
+The captain order and its format are set by the organizer before the draft starts. There are three formats:
+
+- **Snake** — the direction reverses after every round. Whoever picked last in one round picks first in the next.
+- **Linear** — the same captain order is used every round.
+- **Custom** — the organizer sets a separate rule per round: in order, in reverse, weakest or strongest captain first, lowest or highest team average first.
+
+Rules based on a team's average rating work off the live rosters, so that round's order is only known when the round itself begins, not in advance.
+
+## Timer, overtime and autopick
+
+Every pick has a **Pick time** — the countdown a captain sees on their turn. If the organizer enabled **Overtime**, the captain gets a few extra seconds after the main time runs out, and only then does the turn close automatically.
+
+When the clock is gone, the platform makes the pick instead of the captain. Such a pick is marked with the **Auto** badge and shows as **Autopick** in the draft order.
+
+An autopick never breaks the draft: it only takes a player and a role that still leave every remaining team able to fill its positions. The same rule applies to manual picks — options in the pool are marked **Safe pick** or **Unavailable for this pick**, and unavailable ones say why, for example "Choosing this option would leave another required role impossible to fill."
+
+## Why a draft pauses
+
+The **Paused** state means picking is temporarily closed. That happens for three reasons:
+
+1. **The organizer paused it by hand** — for example, to wait for a captain.
+2. **A role shortage.** If no option is left that still lets every team build a legal roster, the draft stops itself instead of making a pick that would strand somebody. The organizer edits the roles of players in the pool and resumes the draft by hand.
+3. **The round order was recalculated.** In formats where the queue depends on team averages, the order is recomputed when the round opens, the draft pauses, and the organizer confirms the new order.
+
+In every case captains see "Waiting for the organizer to resume" and cannot pick until the draft is resumed.
+
+## What a picked player sees
+
+As an ordinary participant you never have a turn — you get picked. The moment that happens:
+
+- you disappear from the **Available** tab and show up under **Drafted**;
+- your card gets a **Drafted by** mark with the team name;
+- you appear in **Team rosters** on your role.
+
+When the draft finishes, the board shows the final rosters and every recorded pick. Those teams become ordinary tournament teams: they appear in the **Teams** section of the tournament page, and that is the team you play your matches for.
+
+<Callout>
+The roles you declared in your registration feed straight into the draft: a captain sees them on your card, and they decide which position you can be taken on. If they are not accurate, fix your registration before it closes — see [Registration](/docs/players/registration).
+</Callout>
+
+## Troubleshooting
+
+| Problem | What to do |
+| --- | --- |
+| No **Draft** button on the tournament page | Either this tournament uses the balancer, or it has not reached check-in yet |
+| You see "Draft is not configured yet" | The organizer has not created and validated the draft; come back later |
+| You are a captain but there is no selection panel | Make sure you are signed in with the account registered as captain, and that it is your team's turn |
+| The draft has been paused for a long time | Only the organizer can resume it — ask them in the room chat or in your community |
+
+## See also
+
+- [Registration](/docs/players/registration)
+- [Check-in](/docs/players/check-in)
+- [Matches: pick-ban and results](/docs/players/matches)
+- [Captain teams and invites](/docs/players/captain-teams)
