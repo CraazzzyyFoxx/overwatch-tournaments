@@ -329,7 +329,9 @@ const SharePlayerCard = ({ card }: SharePlayerCardProps) => {
   const t = useTranslations();
   const [open, setOpen] = useState(false);
   const [copyState, setCopyState] = useState<CopyState>("idle");
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  // Callback ref in state: Radix portals mount the dialog content one commit
+  // after `open` flips, so a plain ref is still null when an `[open]` effect runs.
+  const [canvas, setCanvas] = useState<HTMLCanvasElement | null>(null);
   const flashTimer = useRef<number | null>(null);
 
   const flash = useCallback((s: CopyState) => {
@@ -345,11 +347,9 @@ const SharePlayerCard = ({ card }: SharePlayerCardProps) => {
   }, []);
 
   useEffect(() => {
-    if (!open) return;
+    if (!canvas) return;
     let cancelled = false;
     const render = async () => {
-      const canvas = canvasRef.current;
-      if (!canvas) return;
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
       try {
@@ -383,7 +383,7 @@ const SharePlayerCard = ({ card }: SharePlayerCardProps) => {
     return () => {
       cancelled = true;
     };
-  }, [open, card]);
+  }, [canvas, card, t]);
 
   const download = useCallback((blob: Blob) => {
     const url = URL.createObjectURL(blob);
@@ -397,7 +397,6 @@ const SharePlayerCard = ({ card }: SharePlayerCardProps) => {
   }, [card.name]);
 
   const handleCopyImage = useCallback(() => {
-    const canvas = canvasRef.current;
     if (!canvas) return;
     canvas.toBlob(async (blob) => {
       if (!blob) return;
@@ -417,10 +416,9 @@ const SharePlayerCard = ({ card }: SharePlayerCardProps) => {
         }
       }
     }, "image/png");
-  }, [download, flash]);
+  }, [canvas, download, flash]);
 
   const handleDownload = useCallback(() => {
-    const canvas = canvasRef.current;
     if (!canvas) return;
     canvas.toBlob((blob) => {
       if (blob) {
@@ -428,7 +426,7 @@ const SharePlayerCard = ({ card }: SharePlayerCardProps) => {
         flash("download");
       }
     }, "image/png");
-  }, [download, flash]);
+  }, [canvas, download, flash]);
 
   const handleCopyLink = useCallback(async () => {
     try {
@@ -456,7 +454,7 @@ const SharePlayerCard = ({ card }: SharePlayerCardProps) => {
         </DialogHeader>
 
         <canvas
-          ref={canvasRef}
+          ref={setCanvas}
           width={CARD_W}
           height={CARD_H}
           className="h-auto w-full rounded-lg border border-[color:var(--aqt-border)]"
