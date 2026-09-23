@@ -1,9 +1,10 @@
 """Cards as Components V2 layouts: notification messages and button replies alike.
 
 One container per card: the text (with the thumbnail beside it), a divider and
-the details, then one action row per ``DiscordCard.rows`` entry. Link buttons
-are opened by Discord itself; action buttons carry ``owt:<action>:<target>``
-and are answered by ``InteractionsCog`` -- see ``actions``.
+the details. The buttons sit *under* it, one action row per ``DiscordCard.rows``
+entry, outside the coloured box -- the way buttons hang under a classic embed.
+Link buttons are opened by Discord itself; action buttons carry
+``owt:<action>:<target>`` and are answered by ``InteractionsCog`` -- see ``actions``.
 """
 
 from __future__ import annotations
@@ -53,14 +54,15 @@ def card_view(card: DiscordCard) -> discord.ui.LayoutView:
     ]
     if card.details:
         children += [discord.ui.Separator(), discord.ui.TextDisplay(card.details)]
-    children += [discord.ui.ActionRow(*(_button(button) for button in row)) for row in card.rows]
     view = discord.ui.LayoutView(timeout=None)
     view.add_item(discord.ui.Container(*children, accent_colour=card.accent_color))
+    for row in card.rows:
+        view.add_item(discord.ui.ActionRow(*(_button(button) for button in row)))
     return _detached(view)
 
 
 def settle(view: discord.ui.LayoutView, *, retire: frozenset[str], note: str) -> discord.ui.LayoutView | None:
-    """The card after one of its buttons did its job: those buttons gone, a note in their place.
+    """The card after one of its buttons did its job: those buttons gone, a note in the card.
 
     ``view`` is the clicked message's layout (``LayoutView.from_message``).
     ``None`` when it is not one of our cards -- a message the bot did not lay
@@ -69,12 +71,12 @@ def settle(view: discord.ui.LayoutView, *, retire: frozenset[str], note: str) ->
     container = next((item for item in view.children if isinstance(item, discord.ui.Container)), None)
     if container is None:
         return None
-    for row in [item for item in container.children if isinstance(item, discord.ui.ActionRow)]:
+    for row in [item for item in view.children if isinstance(item, discord.ui.ActionRow)]:
         for button in list(row.children):
             parsed = parse_custom_id(getattr(button, "custom_id", None))
             if parsed is not None and parsed[0] in retire:
                 row.remove_item(button)
         if not row.children:
-            container.remove_item(row)
+            view.remove_item(row)
     container.add_item(discord.ui.TextDisplay(note))
     return _detached(view)

@@ -159,9 +159,10 @@ class SendDmCommandTests(IsolatedAsyncioTestCase):
         self.assertTrue(view.has_components_v2())
         # Stopped, so discord.py keeps no per-message view: the cog answers by custom_id.
         self.assertTrue(view.is_finished())
-        (container,) = view.to_components()
+        # The buttons hang under the coloured box, not inside it.
+        container, actions, links = view.to_components()
         self.assertEqual(container["accent_color"], 0x10B981)
-        section, _divider, details, actions, links = container["components"]
+        section, _divider, details = container["components"]
         self.assertEqual(section["components"][0]["content"], "### Check-in opened")
         self.assertEqual(section["accessory"]["media"]["url"], "https://cdn.example/logo.png")
         self.assertEqual(details["content"], "**Closes:** <t:0:F>")

@@ -70,10 +70,10 @@ DiscordButton = Annotated[DiscordLinkButton | DiscordActionButton, Field(discrim
 class DiscordCard(BaseModel):
     """One Components V2 message: an accent-coloured container the bot lays out as
 
-    ``text`` (with ``thumbnail_url`` beside it), a divider and ``details``, then
-    one action row per entry of ``rows``. Both texts are Discord markdown,
-    already escaped by the publisher. The layout lives in discord-service; this
-    is only what fills it.
+    ``text`` (with ``thumbnail_url`` beside it), a divider and ``details``, with
+    one action row per entry of ``rows`` under the container rather than in it.
+    Both texts are Discord markdown, already escaped by the publisher. The
+    layout lives in discord-service; this is only what fills it.
     """
 
     accent_color: int | None = Field(default=None, ge=0, le=0xFFFFFF)

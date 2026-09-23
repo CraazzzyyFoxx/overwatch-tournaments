@@ -228,10 +228,12 @@ COMPLETED/ARCHIVED. Получатели — игроки обеих коман�
   `action` — `DiscordAction` (Literal со списком действий §4.6.1), `target` — id объекта.
 
 `src/interactions/cards.py`:
-- `card_view(card)` — `LayoutView` с одним `Container(accent_colour)`: `Section(TextDisplay(text),
-  accessory=Thumbnail)` (без картинки — просто `TextDisplay`), `Separator` + `TextDisplay(details)`, по
-  `ActionRow` на ряд. Action-кнопка получает `custom_id = owt:<action>:<target>`. View отправляется
-  остановленным: discord.py не хранит его в памяти, клики обрабатывает один слушатель по `custom_id`.
+- `card_view(card)` — `LayoutView`: `Container(accent_colour)` с `Section(TextDisplay(text), accessory=Thumbnail)`
+  (без картинки — просто `TextDisplay`), `Separator` + `TextDisplay(details)`; под контейнером, **вне** цветного
+  блока, — по `ActionRow` на ряд, как кнопки под классическим embed. Action-кнопка получает
+  `custom_id = owt:<action>:<target>`. View отправляется остановленным: discord.py не хранит его в памяти, клики
+  обрабатывает один слушатель по `custom_id`. `settle` снимает отработавшие кнопки из этих рядов, а строку
+  статуса дописывает внутрь контейнера.
 
 `gateway.py`:
 - `send_dm`: `user = bot.get_user(id) or await bot.fetch_user(id)`; `await user.send(content=…, embed=…, view=…,

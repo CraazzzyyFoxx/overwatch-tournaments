@@ -82,9 +82,8 @@ def _interaction(*, guild_id: int | None = None, locale: str = "ru", ephemeral: 
 
 
 def _reply_text(view: discord.ui.LayoutView) -> str:
-    (container,) = view.to_components()
-    first = container["components"][0]
-    return first["content"]
+    container, *_rows = view.to_components()
+    return container["components"][0]["content"]
 
 
 class ActingAsTheClickerTests(IsolatedAsyncioTestCase):
@@ -163,11 +162,10 @@ class CardAfterTheClickTests(IsolatedAsyncioTestCase):
     async def test_settling_removes_only_the_spent_buttons(self) -> None:
         settled = settle(card_view(_invite_card()), retire=ACTIONS["invite.accept"].settles, note="-# accepted")
 
-        (container,) = settled.to_components()
-        *_, remaining, note = container["components"]
+        container, remaining = settled.to_components()
         labels = [button["label"] for button in remaining["components"]]
         self.assertEqual(labels, ["View participants", "🔕"])
-        self.assertEqual(note["content"], "-# accepted")
+        self.assertEqual(container["components"][-1]["content"], "-# accepted")
 
     async def test_a_dm_card_loses_its_spent_buttons_and_a_channel_post_is_never_edited(self) -> None:
         replies = {IDENTITY_SUBJECT: rpc_ok(IDENTITY), "rpc.tournament.regteam_accept": rpc_ok({"id": 1})}
@@ -183,7 +181,7 @@ class CardAfterTheClickTests(IsolatedAsyncioTestCase):
         for interaction in (dm, post):
             interaction.response.defer.assert_awaited_once()
             self.assertTrue(interaction.followup.send.await_args.kwargs["ephemeral"])
-        (container,) = dm.edit_original_response.await_args.kwargs["view"].to_components()
+        container, *_rows = dm.edit_original_response.await_args.kwargs["view"].to_components()
         self.assertIn("Вы приняли приглашение", container["components"][-1]["content"])
         post.edit_original_response.assert_not_awaited()
 
@@ -218,8 +216,8 @@ class MuteEverythingTests(IsolatedAsyncioTestCase):
         self.assertEqual(rpc.calls, [])
         sent = dm.followup.send.await_args.kwargs
         self.assertTrue(sent["ephemeral"])
-        (container,) = sent["view"].to_components()
-        custom_ids = [b.get("custom_id") for b in container["components"][-1]["components"]]
+        _container, row = sent["view"].to_components()
+        custom_ids = [b.get("custom_id") for b in row["components"]]
         self.assertIn("owt:notifications.mute:all", custom_ids)
 
     async def test_muting_switches_every_group_off_and_answers_in_place(self) -> None:
