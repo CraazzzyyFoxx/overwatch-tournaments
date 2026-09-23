@@ -5111,10 +5111,9 @@
       "status": {
         "available": "Available",
         "picked": "Drafted · {team}",
-        "pickedRole": "Drafted · {team} · {role}",
         "captain": "Captain · {team}"
       },
-      "rolePriority": "Role priority: {roles}",
+      "rolePriority": "Role priority:",
       "rolePriorityItem": "{n}. {role}",
       "rolePriorityItemSub": "{n}. {role} ({subRole})",
       "targets": {

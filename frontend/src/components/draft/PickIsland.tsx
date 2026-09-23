@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl";
 import Link from "next/link";
 
 import DivisionIcon from "@/components/DivisionIcon";
+import PlayerRoleIcon from "@/components/PlayerRoleIcon";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -24,6 +25,7 @@ import {
 } from "@/lib/draft/room-model";
 import { playerRoles, rosterRoleForPlayer } from "@/lib/draft/workspace-model";
 import { notify } from "@/lib/notify";
+import { getRoleIconName, ROLE_ACCENT } from "@/lib/roster/roles";
 import { cn } from "@/lib/utils";
 import type { DraftAutopickPreview, DraftBoard, DraftPlayer, DraftRole } from "@/types/draft.types";
 import type { RealtimeConnectionState } from "@/types/realtime.types";
@@ -106,18 +108,32 @@ export function PickIsland(props: Readonly<PickIslandProps>) {
       ? t("profile.removed")
       : player.is_captain
         ? t("island.status.captain", { team: draftedTeam.name })
-        : draftedRole
-          ? t("island.status.pickedRole", { team: draftedTeam.name, role: t(`roles.${draftedRole}`) })
-          : t("island.status.picked", { team: draftedTeam.name });
+        : t("island.status.picked", { team: draftedTeam.name });
 
-  const priorityLine = playerRoles(player)
-    .map((role, index) => {
-      const subRole = formatSubRoleLabel(player.role_sub_roles?.[role]);
-      return subRole
+  // The header marks roles with their icons; the words stay in the hover title
+  // and in each icon's accessible name.
+  const priority = playerRoles(player).map((role) => ({
+    role,
+    subRole: formatSubRoleLabel(player.role_sub_roles?.[role])
+  }));
+  const priorityLine = priority
+    .map(({ role, subRole }, index) =>
+      subRole
         ? t("island.rolePriorityItemSub", { n: index + 1, role: t(`roles.${role}`), subRole })
-        : t("island.rolePriorityItem", { n: index + 1, role: t(`roles.${role}`) });
-    })
+        : t("island.rolePriorityItem", { n: index + 1, role: t(`roles.${role}`) })
+    )
     .join(" · ");
+  const tiles = (
+    <RoleTiles
+      player={player}
+      selection={selection}
+      onSelectRole={onSelectRole}
+      actingTeam={actingTeam}
+      card={cardQuery.data ?? null}
+      cardPending={cardPending}
+      divisionGrid={divisionGrid}
+    />
+  );
 
   const myTeamName = board.teams.find((team) => team.id === gating.myTeamId)?.name ?? t("myTeam");
   const clockTeamName =
@@ -147,10 +163,16 @@ export function PickIsland(props: Readonly<PickIslandProps>) {
           )}
           <div className="min-w-0 flex-1">
             <p
-              className="text-xs font-semibold uppercase tracking-[0.08em]"
+              className="flex min-w-0 items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.08em]"
               style={{ color: available ? "var(--aqt-teal)" : "var(--aqt-fg-muted)" }}
             >
-              {statusText}
+              <span className="truncate">{statusText}</span>
+              {draftedRole && (
+                <>
+                  <span aria-hidden>·</span>
+                  <PlayerRoleIcon role={getRoleIconName(draftedRole)} size={14} color={ROLE_ACCENT[draftedRole]} />
+                </>
+              )}
             </p>
             <div className="mt-0.5 flex min-w-0 items-center gap-2">
               <h2 className="min-w-0 truncate font-onest text-xl font-semibold leading-tight tracking-[-0.01em]">
@@ -183,9 +205,24 @@ export function PickIsland(props: Readonly<PickIslandProps>) {
                 </span>
               )}
             </div>
-            {priorityLine && (
-              <p className="mt-0.5 truncate text-sm text-[color:var(--aqt-fg-muted)]" title={priorityLine}>
-                {t("island.rolePriority", { roles: priorityLine })}
+            {priority.length > 0 && (
+              <p
+                className="mt-0.5 flex min-w-0 items-center gap-1.5 text-sm text-[color:var(--aqt-fg-muted)]"
+                title={priorityLine}
+              >
+                <span className="shrink-0">{t("island.rolePriority")}</span>
+                {priority.map(({ role, subRole }, index) => (
+                  <span key={role} className="flex min-w-0 items-center gap-1">
+                    {index > 0 && (
+                      <span aria-hidden className="me-0.5 text-[color:var(--aqt-fg-faint)]">
+                        ·
+                      </span>
+                    )}
+                    <span className="tabular-nums">{index + 1}.</span>
+                    <PlayerRoleIcon role={getRoleIconName(role)} size={16} color={ROLE_ACCENT[role]} />
+                    {subRole && <span className="truncate">{subRole}</span>}
+                  </span>
+                ))}
               </p>
             )}
           </div>
@@ -225,49 +262,51 @@ export function PickIsland(props: Readonly<PickIslandProps>) {
           </button>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain border-t border-[color:var(--aqt-border)]">
-          {/* The pick surface stays above the switch: a role is chosen from either view. */}
-          <RoleTiles
-            player={player}
-            selection={selection}
-            onSelectRole={onSelectRole}
-            actingTeam={actingTeam}
-            card={cardQuery.data ?? null}
-            cardPending={cardPending}
-            divisionGrid={divisionGrid}
-          />
-          <Tabs value={view} onValueChange={(value) => setView(value as CardView)}>
-            <div className="border-y border-[color:var(--aqt-border)] px-3.5 py-2">
-              <TabsList
-                aria-label={t("island.view.label")}
-                className="h-auto gap-0.5 rounded-[10px] bg-[color:var(--aqt-overlay-3)] p-[3px]"
-              >
-                <TabsTrigger value="info" className={VIEW_TAB}>
-                  {t("island.view.info")}
-                  <span className="font-normal tabular-nums text-[color:var(--aqt-fg-faint)]">
-                    {(player.custom_fields?.length ?? 0) + (player.notes?.trim() ? 1 : 0)}
-                  </span>
-                </TabsTrigger>
-                <TabsTrigger value="stats" className={VIEW_TAB}>
-                  {t("island.view.stats")}
-                </TabsTrigger>
-              </TabsList>
-            </div>
+        <Tabs
+          value={view}
+          onValueChange={(value) => setView(value as CardView)}
+          className="flex min-h-0 flex-1 flex-col"
+        >
+          <div className="px-3.5 pb-2.5">
+            <TabsList
+              aria-label={t("island.view.label")}
+              className="h-auto gap-0.5 rounded-[10px] bg-[color:var(--aqt-overlay-3)] p-[3px]"
+            >
+              <TabsTrigger value="info" className={VIEW_TAB}>
+                {t("island.view.info")}
+                <span className="font-normal tabular-nums text-[color:var(--aqt-fg-faint)]">
+                  {(player.custom_fields?.length ?? 0) + (player.notes?.trim() ? 1 : 0)}
+                </span>
+              </TabsTrigger>
+              <TabsTrigger value="stats" className={VIEW_TAB}>
+                {t("island.view.stats")}
+              </TabsTrigger>
+            </TabsList>
+          </div>
+          {/* Pinned above the scroll: the switch never scrolls away. Both views
+              open on the role tiles, the pick surface. */}
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain border-t border-[color:var(--aqt-border)]">
             <TabsContent value="info" className={VIEW_PANEL}>
-              <RegistrationSection player={player} />
+              {tiles}
+              <div className="border-t border-[color:var(--aqt-border)]">
+                <RegistrationSection player={player} />
+              </div>
             </TabsContent>
             <TabsContent value="stats" className={VIEW_PANEL}>
-              {hasAccount ? (
-                <>
-                  <CareerStats query={cardQuery} />
-                  <CareerTables card={cardQuery.data} pending={cardPending} divisionGrid={divisionGrid} />
-                </>
-              ) : (
-                <p className="px-3.5 py-3 text-sm text-[color:var(--aqt-fg-muted)]">{t("island.noAccount")}</p>
-              )}
+              {tiles}
+              <div className="border-t border-[color:var(--aqt-border)]">
+                {hasAccount ? (
+                  <>
+                    <CareerStats query={cardQuery} />
+                    <CareerTables card={cardQuery.data} pending={cardPending} divisionGrid={divisionGrid} />
+                  </>
+                ) : (
+                  <p className="px-3.5 py-3 text-sm text-[color:var(--aqt-fg-muted)]">{t("island.noAccount")}</p>
+                )}
+              </div>
             </TabsContent>
-          </Tabs>
-        </div>
+          </div>
+        </Tabs>
 
         {actingTeam != null && available && (
           <IslandFooter

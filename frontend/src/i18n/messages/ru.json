@@ -5111,10 +5111,9 @@
       "status": {
         "available": "Доступен",
         "picked": "Выбран · {team}",
-        "pickedRole": "Выбран · {team} · {role}",
         "captain": "Капитан · {team}"
       },
-      "rolePriority": "Приоритет ролей: {roles}",
+      "rolePriority": "Приоритет ролей:",
       "rolePriorityItem": "{n}. {role}",
       "rolePriorityItemSub": "{n}. {role} ({subRole})",
       "targets": {
