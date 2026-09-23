@@ -227,6 +227,10 @@ const NotificationList = ({
   // The delete message wins a tie: it is the newer verb whenever both have run,
   // and two live regions announcing at once is worse than one stale line.
   const statusMessage = deleteStatusText || readStatus;
+  // Success and progress are visible in the list itself (dots, badge and rows
+  // update), so only failures — which carry a retry — earn a visible line; the
+  // rest stays a screen-reader announcement.
+  const statusIsError = deleteStatusText ? deleteStatus === "error" : markReadStatus === "error";
 
   return (
     <div className="flex min-h-0 max-h-[min(70dvh,var(--radix-popover-content-available-height))] flex-col">
@@ -477,7 +481,7 @@ const NotificationList = ({
         <p
           role="status"
           aria-atomic="true"
-          className={cn("text-sm", statusMessage ? "border-t px-3 py-2" : "sr-only")}
+          className={cn("text-sm", statusIsError ? "border-t px-3 py-2" : "sr-only")}
         >
           {statusMessage}
         </p>
