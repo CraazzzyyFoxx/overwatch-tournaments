@@ -1262,7 +1262,7 @@ class UserService:
         for tournament_id, card in recent.items():
             card.teams_count = teams_counts.get(tournament_id, 0)
 
-        hero_rows = await self.encounters.get_user_hero_records(session, user.id, workspace_id=workspace_id, limit=5)
+        hero_rows = await self.encounters.get_user_hero_records(session, user.id, workspace_id=workspace_id)
         mvp_maps = await self.encounters.count_user_mvp_maps(session, user.id, workspace_id=workspace_id)
 
         return schemas.UserDraftCard(

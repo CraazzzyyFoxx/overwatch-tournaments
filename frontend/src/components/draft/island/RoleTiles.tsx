@@ -16,7 +16,7 @@ import type { UserDraftCard } from "@/types/user.types";
 import type { DivisionGrid } from "@/types/workspace.types";
 import { formatSubRoleLabel, getHeroIconUrl } from "@/utils/player";
 
-import { MIN_WINRATE_MAPS, winrateColor } from "./PlayerCareer";
+import { Bar, MIN_WINRATE_MAPS, winrateColor } from "./PlayerCareer";
 
 const PRIORITY_KEYS = ["primary", "second", "third"] as const;
 
@@ -29,18 +29,21 @@ interface RoleTilesProps {
   onSelectRole: (role: DraftRole) => void;
   /** Tiles are buttons only when the seat selects for this team and the player is still available. */
   actingTeam: TeamView | null;
-  /** The card's per-role maps; `null` while there is no card (no account, loading, error). */
-  cardRoles: UserDraftCard["roles"] | null;
+  /** The player's career card; `null` without one (no account, error, or still loading). */
+  card: UserDraftCard | null;
+  /** The card is on its way: its lines hold their place instead of popping in. */
+  cardPending: boolean;
   divisionGrid: DivisionGrid;
 }
 
-/** One tile per role the player plays: rank, crest, sub-role, maps/WR on the role, top heroes. */
+/** One tile per role the player plays: rank, crest, sub-role, maps/WR on the role, top heroes with their WR. */
 export function RoleTiles({
   player,
   selection,
   onSelectRole,
   actingTeam,
-  cardRoles,
+  card,
+  cardPending,
   divisionGrid
 }: Readonly<RoleTilesProps>) {
   const t = useTranslations("draftRedesign");
@@ -49,6 +52,9 @@ export function RoleTiles({
   // The team a tile selects for; tiles are read-only chips without one.
   const team = player.status === "available" ? actingTeam : null;
   const interactive = team != null;
+  // Stats lines render whenever a card exists or is coming, so arriving data fills them in place.
+  const withStats = card != null || cardPending;
+  const heroRecords = new Map(card?.heroes.map((entry) => [entry.hero.slug, entry]) ?? []);
 
   if (roles.length === 0) {
     return (
@@ -77,7 +83,7 @@ export function RoleTiles({
         const usable = team != null && canSeat(team, role);
         const on = selection?.playerId === player.id && selection.role === role;
         const priority = PRIORITY_KEYS[index];
-        const roleStats = cardRoles?.find((entry) => entry.role === role) ?? null;
+        const roleStats = card?.roles.find((entry) => entry.role === role) ?? null;
         const share = roleStats && roleStats.maps > 0 ? roleStats.maps_won / roleStats.maps : 0;
         const lowMaps = (roleStats?.maps ?? 0) < MIN_WINRATE_MAPS;
 
@@ -128,19 +134,21 @@ export function RoleTiles({
                 )}
               </span>
             </span>
-            {(subRole || cardRoles) && (
+            {(subRole || withStats) && (
               <span className="flex min-w-0 items-center gap-1.5">
                 {subRole && (
                   <span className="min-w-0 truncate text-[13px] font-medium" title={subRole}>
                     {subRole}
                   </span>
                 )}
-                {cardRoles && (
+                {withStats && (
                   <span
                     className="ml-auto shrink-0 whitespace-nowrap text-xs tabular-nums text-[color:var(--aqt-fg-muted)]"
                     title={roleStats && roleStats.maps > 0 && lowMaps ? t("island.tile.wrHidden") : t("island.tile.wrTitle")}
                   >
-                    {roleStats && roleStats.maps > 0 ? (
+                    {cardPending ? (
+                      <Bar className="w-20" />
+                    ) : roleStats && roleStats.maps > 0 ? (
                       <>
                         {t("island.tile.maps", { n: roleStats.maps })}
                         {" · "}
@@ -156,19 +164,41 @@ export function RoleTiles({
               </span>
             )}
             {heroes.length > 0 && (
-              <span className="flex items-center gap-1">
-                {heroes.map((hero) => (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    key={hero.slug}
-                    src={getHeroIconUrl(hero.slug, hero.imagePath)}
-                    alt={hero.slug}
-                    title={hero.slug}
-                    width={32}
-                    height={32}
-                    className="h-8 w-8 rounded-full object-cover"
-                  />
-                ))}
+              <span className="flex items-start gap-1">
+                {heroes.map((hero) => {
+                  const record = heroRecords.get(hero.slug);
+                  const name = record?.hero.name ?? hero.slug;
+                  const heroShare = record && record.maps > 0 ? record.maps_won / record.maps : 0;
+                  const heroLow = record == null || record.maps < MIN_WINRATE_MAPS;
+                  const heroTitle =
+                    card == null
+                      ? name
+                      : record == null
+                        ? `${name} · ${t("island.tile.noMaps")}`
+                        : `${name} · ${t("island.tile.maps", { n: record.maps })} · ${
+                            heroLow ? t("island.stats.winrateHidden") : `${Math.round(heroShare * 100)}%`
+                          }`;
+                  return (
+                    <span key={hero.slug} className="flex w-8 flex-col items-center gap-0.5" title={heroTitle}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={getHeroIconUrl(hero.slug, hero.imagePath)}
+                        alt={name}
+                        width={32}
+                        height={32}
+                        className="h-8 w-8 rounded-full object-cover"
+                      />
+                      {withStats && (
+                        <span
+                          className="text-xs font-semibold leading-none tabular-nums"
+                          style={{ color: record ? winrateColor(heroShare, record.maps) : "var(--aqt-fg-muted)" }}
+                        >
+                          {cardPending ? <Bar className="w-6" /> : heroLow ? "—" : `${Math.round(heroShare * 100)}%`}
+                        </span>
+                      )}
+                    </span>
+                  );
+                })}
               </span>
             )}
             {on && (

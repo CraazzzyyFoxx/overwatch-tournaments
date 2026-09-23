@@ -99,7 +99,7 @@ class UserDraftCardTests(IsolatedAsyncioTestCase):
         self.assertEqual([], card.heroes)
         self.assertEqual([], card.recent_tournaments)
 
-    async def test_heroes_are_the_top_five_by_maps_with_slot_code_roles(self) -> None:
+    async def test_heroes_are_the_ranking_verbatim_with_slot_code_roles(self) -> None:
         """`heroes` is the query's ranking verbatim (most maps first) and the hero's
         class is emitted as a draft slot code, not the `HeroClass` value."""
         records = AsyncMock(
@@ -116,7 +116,6 @@ class UserDraftCardTests(IsolatedAsyncioTestCase):
         self.assertEqual([76, 40, 12], [entry.maps for entry in card.heroes])
         self.assertEqual([46, 20, 5], [entry.maps_won for entry in card.heroes])
         self.assertEqual(["damage", "support", "tank"], [entry.role for entry in card.heroes])
-        self.assertEqual(5, records.await_args.kwargs["limit"], "the card promises at most five heroes")
         self.assertEqual(127, card.maps)
         self.assertEqual(6, card.mvp_maps)
 

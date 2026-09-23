@@ -134,6 +134,7 @@ function renderPool({
       profileId={null}
       onSelect={() => {}}
       onOpenProfile={() => {}}
+      onPrefetchCard={() => {}}
       queue={queue}
       fit={null}
       options={options}

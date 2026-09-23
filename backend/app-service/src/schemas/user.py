@@ -431,7 +431,8 @@ class UserDraftCard(BaseModel):
     best_placement: int | None = None
     avg_placement: float | None = None
     roles: list[UserDraftCardRole] = Field(default_factory=list)
-    #: Top 5 heroes by maps played, most-played first.
+    #: Every hero played, most-played first: the table shows the top five, the
+    #: role tiles look up the heroes the player declared.
     heroes: list[UserDraftCardHero] = Field(default_factory=list)
     #: Newest first, at most 5.
     recent_tournaments: list[UserDraftCardTournament] = Field(default_factory=list)

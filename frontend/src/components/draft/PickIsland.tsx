@@ -86,6 +86,7 @@ export function PickIsland(props: Readonly<PickIslandProps>) {
   const headerDivision = resolveDivisionFromRank(divisionGrid, player.effective_rank);
   const myTurn = isMyTurnFor(gating, actingTeam);
   const hasAccount = player.user_id != null;
+  const cardPending = hasAccount && cardQuery.isPending;
 
   const draftedTeam = board.teams.find((team) => team.id === player.drafted_by_team_id) ?? null;
   const draftedRole = draftedTeam && !player.is_captain ? rosterRoleForPlayer(player, board.picks) : null;
@@ -221,10 +222,11 @@ export function PickIsland(props: Readonly<PickIslandProps>) {
             selection={selection}
             onSelectRole={onSelectRole}
             actingTeam={actingTeam}
-            cardRoles={cardQuery.data?.roles ?? null}
+            card={cardQuery.data ?? null}
+            cardPending={cardPending}
             divisionGrid={divisionGrid}
           />
-          {hasAccount && <CareerTables card={cardQuery.data} divisionGrid={divisionGrid} />}
+          {hasAccount && <CareerTables card={cardQuery.data} pending={cardPending} divisionGrid={divisionGrid} />}
           <RegistrationSection player={player} />
         </div>
 

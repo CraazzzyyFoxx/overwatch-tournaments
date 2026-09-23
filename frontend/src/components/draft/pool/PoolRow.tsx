@@ -67,6 +67,8 @@ interface PoolRowProps {
   idPrefix: string;
   onSelect: (playerId: number, role: DraftRole) => void;
   onOpenProfile: (playerId: number) => void;
+  /** Warms the player's card before a click opens it; `null` cancels. */
+  onPrefetchCard: (userId: number | null) => void;
 }
 
 export function PoolRow({
@@ -86,7 +88,8 @@ export function PoolRow({
   divisionGrid,
   idPrefix,
   onSelect,
-  onOpenProfile
+  onOpenProfile,
+  onPrefetchCard
 }: Readonly<PoolRowProps>) {
   const t = useTranslations("draftRedesign");
   const name = player.battle_tag ?? `#${player.id}`;
@@ -120,6 +123,9 @@ export function PoolRow({
     <div
       role="listitem"
       onClick={onRow}
+      onPointerEnter={() => onPrefetchCard(player.user_id)}
+      onPointerLeave={() => onPrefetchCard(null)}
+      onFocus={() => onPrefetchCard(player.user_id)}
       title={clickRole != null ? t("pool.row.select") : t("pool.row.open")}
       style={
         {

@@ -209,7 +209,7 @@ export interface UserDraftCard {
   best_placement: number | null;
   avg_placement: number | null;
   roles: { role: "tank" | "damage" | "support"; maps: number; maps_won: number }[];
-  /** Top five by maps played. */
+  /** Every hero played, most maps first. */
   heroes: { hero: Hero; role: "tank" | "damage" | "support"; maps: number; maps_won: number }[];
   /** Newest first, at most five. */
   recent_tournaments: {

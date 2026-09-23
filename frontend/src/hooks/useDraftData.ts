@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { queryOptions, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { useRealtimeTopic } from "@/hooks/useRealtimeTopic";
 import { tournamentQueryKeys } from "@/lib/tournament/query-keys";
@@ -139,14 +139,36 @@ export function useDraftJournalQuery(sessionId: number | null, enabled: boolean)
   });
 }
 
-/** Career stats for the player card; keyed by the domain user id, cached across sessions. */
-export function useDraftPlayerCardQuery(userId: number | null) {
-  return useQuery({
-    queryKey: tournamentQueryKeys.draftPlayerCard(userId ?? 0),
-    queryFn: () => userService.getDraftCard(userId!),
-    enabled: userId != null,
+const draftPlayerCard = (userId: number) =>
+  queryOptions({
+    queryKey: tournamentQueryKeys.draftPlayerCard(userId),
+    queryFn: () => userService.getDraftCard(userId),
     staleTime: 5 * 60_000
   });
+
+/** Career stats for the player card; keyed by the domain user id, cached across sessions. */
+export function useDraftPlayerCardQuery(userId: number | null) {
+  return useQuery({ ...draftPlayerCard(userId ?? 0), enabled: userId != null });
+}
+
+/**
+ * Warms the card of the row the pointer rests on: the card is bottom-anchored,
+ * so data that lands after it opens grows it upwards and the header jumps. The
+ * delay keeps a pointer sweeping across the list from fetching every row it
+ * crosses. `null` cancels the pending warm-up.
+ */
+export function useDraftPlayerCardPrefetch() {
+  const client = useQueryClient();
+  const timer = useRef<number | undefined>(undefined);
+  useEffect(() => () => window.clearTimeout(timer.current), []);
+  return useCallback(
+    (userId: number | null) => {
+      window.clearTimeout(timer.current);
+      if (userId == null) return;
+      timer.current = window.setTimeout(() => void client.prefetchQuery(draftPlayerCard(userId)), 120);
+    },
+    [client]
+  );
 }
 
 export function useDraftRealtime(

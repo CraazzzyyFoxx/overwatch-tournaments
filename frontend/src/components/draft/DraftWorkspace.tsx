@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
+  useDraftPlayerCardPrefetch,
   useDraftTeamFitQuery,
   useDraftTeamQueue,
   type DraftMutations
@@ -154,19 +155,26 @@ export function DraftWorkspace({
     () => (fitScores ? fitByPlayer(fitScores, viewParams.role) : null),
     [fitScores, viewParams.role]
   );
+  const prefetchCard = useDraftPlayerCardPrefetch();
 
   // "My list" is a captain's; a shared link carrying `pool=shortlist` shows
   // everyone else the available players instead of an empty, tab-less list.
-  // A finished draft has nobody available, so its default tab is everyone.
+  // A finished draft has nobody available and no list, so it shows everyone.
   const finished = board.session.status === "completed";
   const poolParams = useMemo<DraftViewParams>(() => {
-    if (!gating.isCaptain && viewParams.pool === "shortlist") return { ...viewParams, pool: finished ? "all" : "available" };
-    if (finished && viewParams.pool === "available") return { ...viewParams, pool: "all" };
+    if (finished && viewParams.pool !== "all") return { ...viewParams, pool: "all" };
+    if (!gating.isCaptain && viewParams.pool === "shortlist") return { ...viewParams, pool: "available" };
     return viewParams;
   }, [finished, gating.isCaptain, viewParams]);
+  // Once the draft is over the pool is the field that was drafted: a captain
+  // was seated on their team, never picked, and already heads it in Teams.
+  const poolPlayers = useMemo(
+    () => (finished ? board.players.filter((player) => !player.is_captain) : board.players),
+    [finished, board.players]
+  );
   const pool = useMemo(
-    () => draftPoolView(board.players, poolParams, queueIds, actingTeam ? needRoles(actingTeam) : null),
-    [board.players, poolParams, queueIds, actingTeam]
+    () => draftPoolView(poolPlayers, poolParams, queueIds, actingTeam ? needRoles(actingTeam) : null),
+    [poolPlayers, poolParams, queueIds, actingTeam]
   );
 
   // A captain may line a pick up BEFORE their turn; the board can take that
@@ -285,6 +293,7 @@ export function DraftWorkspace({
       profileId={profileId}
       onSelect={onSelect}
       onOpenProfile={setProfileId}
+      onPrefetchCard={prefetchCard}
       queue={queue}
       fit={fit}
       options={options}

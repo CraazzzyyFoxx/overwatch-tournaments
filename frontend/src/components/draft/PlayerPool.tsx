@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type CSSProperties } from "react";
+import { useMemo, useRef, useState, type CSSProperties } from "react";
 import { Check, Search } from "lucide-react";
 import { useTranslations } from "next-intl";
 
@@ -55,6 +55,8 @@ interface PlayerPoolProps {
   profileId: number | null;
   onSelect: (playerId: number, role: DraftRole) => void;
   onOpenProfile: (playerId: number) => void;
+  /** Warms a player's card before a click opens it; `null` cancels. */
+  onPrefetchCard: (userId: number | null) => void;
   queue: QueueControls | null;
   /** fitByPlayer for the acting team; null while unavailable. */
   fit: ReadonlyMap<number, PlayerFit> | null;
@@ -80,6 +82,7 @@ export function PlayerPool({
   profileId,
   onSelect,
   onOpenProfile,
+  onPrefetchCard,
   queue,
   fit,
   options,
@@ -90,9 +93,14 @@ export function PlayerPool({
 }: Readonly<PlayerPoolProps>) {
   const t = useTranslations("draftRedesign");
   const [heroFilter, setHeroFilter] = useState<ReadonlySet<string>>(() => new Set());
+  // Uncontrolled: the URL is written asynchronously, so an input bound to it
+  // snaps back to the last committed query on every keystroke and eats both the
+  // characters typed in between and every space (the URL keeps it trimmed).
+  const searchRef = useRef<HTMLInputElement>(null);
   const { session } = board;
   const tab = viewParams.pool;
-  const queueEditable = queue != null && session.status !== "completed" && session.status !== "cancelled";
+  const finished = session.status === "completed";
+  const queueEditable = queue != null && !finished && session.status !== "cancelled";
 
   const columns = useMemo(
     () => poolRoleColumns(session.roster_shape, board.players),
@@ -100,8 +108,8 @@ export function PlayerPool({
   );
   const market = useMemo(() => roleMarket(board, teamViews), [board, teamViews]);
   const summary = useMemo(
-    () => (session.status === "completed" ? draftSummary(board, teamViews) : null),
-    [session.status, board, teamViews]
+    () => (finished ? draftSummary(board, teamViews) : null),
+    [finished, board, teamViews]
   );
   const heroOptions = useMemo(() => {
     const seen = new Map<string, string | null>();
@@ -127,7 +135,8 @@ export function PlayerPool({
     shortlist: pool.shortlist.length,
     all: pool.all.length
   };
-  const chips: { key: DraftPoolRoleFilter; label: string; count: number; role: DraftRole | null }[] = [
+  // Counts answer "who is left per role"; once the draft is over nobody is, and the chips are plain filters.
+  const chips: { key: DraftPoolRoleFilter; label: string; count: number | null; role: DraftRole | null }[] = [
     ...(actingTeam
       ? [
           {
@@ -138,12 +147,18 @@ export function PlayerPool({
           }
         ]
       : []),
-    { key: "all", label: t("pool.chip.all"), count: pool.available.length, role: null },
-    ...columns.map((role) => ({ key: role, label: t(`roles.${role}`), count: pool.roleCounts[role], role }))
+    { key: "all", label: t("pool.chip.all"), count: finished ? null : pool.available.length, role: null },
+    ...columns.map((role) => ({
+      key: role,
+      label: t(`roles.${role}`),
+      count: finished ? null : pool.roleCounts[role],
+      role
+    }))
   ];
   const filtersOn = viewParams.role !== "all" || viewParams.query !== "" || heroFilter.size > 0;
   const resetFilters = () => {
     setHeroFilter(new Set());
+    if (searchRef.current) searchRef.current.value = "";
     onViewParamsChange({ role: "all", query: "" });
   };
   const toggleHero = (slug: string) =>
@@ -173,7 +188,10 @@ export function PlayerPool({
               aria-label={t("pool.tabsLabel")}
               className="h-auto gap-0.5 rounded-[10px] bg-[color:var(--aqt-card-2)] p-[3px]"
             >
-              {DRAFT_POOL_TABS.filter((entry) => entry !== "shortlist" || queue != null).map((entry) => (
+              {DRAFT_POOL_TABS.filter((entry) =>
+                // A finished draft has nobody available and nothing left to queue: only everyone remains.
+                finished ? entry === "all" : entry !== "shortlist" || queue != null
+              ).map((entry) => (
                 <TabsTrigger
                   key={entry}
                   value={entry}
@@ -191,7 +209,8 @@ export function PlayerPool({
                 aria-hidden="true"
               />
               <Input
-                value={viewParams.query}
+                ref={searchRef}
+                defaultValue={viewParams.query}
                 onChange={(event) => onViewParamsChange({ query: event.target.value })}
                 placeholder={t("pool.search")}
                 className="h-11 rounded-lg border-[color:var(--aqt-border-2)] bg-[color:var(--aqt-bg-2)] pl-9 sm:h-[34px]"
@@ -208,7 +227,9 @@ export function PlayerPool({
                     key={chip.key}
                     type="button"
                     aria-pressed={on}
-                    aria-label={t("pool.chip.aria", { label: chip.label, count: chip.count })}
+                    aria-label={
+                      chip.count == null ? undefined : t("pool.chip.aria", { label: chip.label, count: chip.count })
+                    }
                     onClick={() => onViewParamsChange({ role: chip.key })}
                     style={
                       {
@@ -231,7 +252,9 @@ export function PlayerPool({
                       />
                     )}
                     <span className="truncate">{chip.label}</span>
-                    <span className="font-normal tabular-nums text-[color:var(--aqt-fg-faint)]">{chip.count}</span>
+                    {chip.count != null && (
+                      <span className="font-normal tabular-nums text-[color:var(--aqt-fg-faint)]">{chip.count}</span>
+                    )}
                   </button>
                 );
               })}
@@ -321,7 +344,7 @@ export function PlayerPool({
             </div>
           </div>
 
-          {market.length > 0 && (
+          {market.length > 0 && !finished && (
             <ul
               aria-label={t("pool.market.label")}
               className="grid gap-x-[18px] gap-y-3"
@@ -464,6 +487,7 @@ export function PlayerPool({
                   idPrefix={headingId}
                   onSelect={onSelect}
                   onOpenProfile={onOpenProfile}
+                  onPrefetchCard={onPrefetchCard}
                 />
               ))}
             </div>

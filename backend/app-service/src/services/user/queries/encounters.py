@@ -948,18 +948,18 @@ class UserEncounterQueries:
         user_id: int,
         workspace_id: int | None = None,
         *,
-        limit: int = 5,
         min_seconds: float = 60,
     ) -> typing.Sequence[tuple[models.Hero, int, int]]:
-        """The user's top heroes as ``(hero, maps played, maps won)``, most played first.
+        """Every hero the user played as ``(hero, maps played, maps won)``, most played first.
 
         "Played" follows the same convention as every other hero read here
         (``HeroTimePlayed`` above ``min_seconds``, round 0): a hero swapped in for
         thirty seconds is not a map played. Win/loss comes from the map score
         against the side the user played on — the rule
         ``HeroQueries.get_user_hero_stats_by_maps`` applies for the per-map hero
-        popover; draws count as maps played, never as wins. ONE query, ranked and
-        cut to ``limit`` in the database.
+        popover; draws count as maps played, never as wins. ONE query, ranked in
+        the database. Uncapped because the card's role tiles look up the heroes a
+        player DECLARED, which need not be among their most played.
         """
         hero_match_q = (
             sa.select(
@@ -1008,9 +1008,8 @@ class UserEncounterQueries:
             .join(models.Match, models.Match.id == hero_match.c.match_id)
             .join(models.Hero, models.Hero.id == hero_match.c.hero_id)
             .group_by(models.Hero.id)
-            # hero id tiebreak keeps the top-N deterministic on equal map counts.
+            # hero id tiebreak keeps the order deterministic on equal map counts.
             .order_by(maps.desc(), models.Hero.id.asc())
-            .limit(limit)
         )
         result = await session.execute(query)
         return [(row[0], int(row.maps), int(row.maps_won or 0)) for row in result]
