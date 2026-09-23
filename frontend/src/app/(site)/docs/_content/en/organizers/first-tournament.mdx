@@ -1,0 +1,124 @@
+This article walks a tournament all the way through: from the creation wizard to the last match. Admin screens are named exactly as they appear on screen.
+
+## Before you start
+
+Creating a tournament requires the matching permission in the workspace — see [Roles and permissions](/docs/organizers/roles). It also helps to set up the division grid and the workspace status catalog first: see [Workspace settings](/docs/organizers/workspace).
+
+## Step 1. The creation wizard
+
+Open **Admin → Tournaments** and press **Create tournament**. The **New tournament** wizard opens with five steps. Only the first one is required — you can skip the rest and configure them later.
+
+The wizard's side column carries a link, **Import from Challonge instead**, which switches the source to a Challonge bracket import. **Enter the details manually instead** switches back. If you started a tournament earlier and never finished it, the wizard offers **Resume draft?** — continue that draft or start fresh.
+
+### Basics
+
+The foundation of the tournament:
+
+- **Name** — required.
+- **Public URL slug** — the address of the public page. Leave it blank and it is generated from the name.
+- **Description**.
+- **Team formation** — how teams are built: **Auto-balance (Balancer)**, **Live draft** or **Team registration**.
+- **Division grid version** — which grid version seeds players; **Workspace default** follows the workspace setting.
+- **Treat as league season**.
+- **Date range** — start and end date. Required.
+
+A Challonge import asks for **Challonge URL or slug** instead of a name, and the Challonge bracket must have group stages enabled — all stages are then created automatically.
+
+### Schedule
+
+Planned times for the **Registration**, **Check-in**, **Draft** and **Live** phases: **Starts at** and **Ends at (optional)**. The **Draft** phase only appears when teams are formed by **Live draft**. The **Automatic phase transitions** switch makes phases advance on their own along this schedule. How that works is covered in [Phases and schedule](/docs/organizers/schedule).
+
+### Rules
+
+**Team formation**, **Division grid version**, and the points a result is worth under **Scoring points**: **Win**, **Draw**, **Loss**.
+
+### Registration
+
+This step is only offered to organizers who can create teams. Three switches:
+
+- **Auto-approve registrations** — entries are approved instantly, with no manual review.
+- **Require open profile** — players must keep their Overwatch profile public.
+- **Require an active subscription** — which providers and tiers count is configured once for the whole workspace.
+
+The **Open form builder** button opens the questionnaire builder; it becomes available as soon as the tournament draft is saved.
+
+### Review and create
+
+A summary of every choice, plus the **Create tournament** button.
+
+Every step except the last also offers **Save as draft**: the tournament is saved hidden and can be published later. **Continue** moves to the next step.
+
+## Step 2. Tournament settings
+
+A created tournament opens in its own admin section with the tabs **Overview**, **Registration**, **Teams**, **Bracket**, **Matches** and **Settings**. On the **Settings** tab the sections are grouped like this:
+
+| Section | What it decides |
+|---|---|
+| **General** | The tournament's name and description, its public address, how teams form and which division grid seeds them. |
+| **Rules** | The document published on the tournament's public Rules tab. |
+| **Scoring** | What each match outcome is worth in the standings, and how this tournament is counted. |
+| **Schedule** | Tournament dates, the registration and check-in windows, and automatic phase transitions. |
+| **Roster shape** | How many players of each role a team fields, and how deep its bench may go. |
+| **Registration** | Whether entries are accepted automatically, and how much of the field the public page shows. |
+| **Admission** | Every rule that can refuse an entry: profile, subscription, and the team checks run before a team enters the tournament. |
+| **Pre-game phase** | Map veto and hero pick/ban per scope; nested scopes inherit until overridden. |
+| **Match report form** | What captains are asked to submit when they report a match. |
+| **Links** | Discord, broadcasts, VODs, bracket and rules shown on the tournament page. |
+| **Challonge** | The Challonge bracket this tournament imports from and exports to. |
+| **Discord** | What this tournament posts and sends on Discord, and the channel it reads match logs from. |
+| **Preview allowlist** | Whether the public site shows this tournament, and who may see it while it does not. |
+| **Delete tournament** | Removing this tournament and everything recorded against it. |
+
+The details live in their own articles: [Registration and entries](/docs/organizers/registration), [Subscriptions and admission](/docs/organizers/subscriptions), [Ranks and divisions](/docs/organizers/divisions), [Stages and brackets](/docs/organizers/brackets), [Running matches](/docs/organizers/matches).
+
+<Callout type="warning">
+**Delete tournament** removes the tournament together with its stages, teams, encounters and standings rows. There is no undo, which is why the confirmation makes you type the tournament's name.
+</Callout>
+
+## Step 3. The readiness checklist
+
+The **Overview** tab shows where the tournament stands and what it is still missing:
+
+- At the top, **Next action**: the single most useful thing to do next, with a link to the right screen.
+- A phase strip: done, current and upcoming phases. If the tournament was moved to a phase outside its own chain, an **Off track** marker appears beside the strip.
+- The checklist itself, grouped into **Setup**, **Registration**, **Team formation**, **Bracket**, **Live** and **Finish**.
+- The tiles **Stages**, **Challonge**, **Discord** and **Log coverage** — a short summary of stages, integrations and how many matches have logs.
+
+Every checklist row carries a state: **Done**, **To do**, **Attention**, **Skipped**, or **No access** if you lack the permission for that area.
+
+| Group | Rows |
+|---|---|
+| **Setup** | **Phase schedule**, **Division grid**, **Registration form**, **Registration open** |
+| **Registration** | **Approved registrations**, **Ranks covered**, **Check-in** |
+| **Team formation** | **Player pool ready**, **Balance saved**, **Balance exported** — or **Draft completed** when teams are drafted |
+| **Bracket** | **Stages configured**, **Stage slots filled**, **Bracket generated**, **Tournament live** |
+| **Live** | **Logs cover matches** |
+| **Finish** | **Completed**, **Archived** |
+
+The registration-form rows are omitted when the bracket comes from Challonge: such a tournament does not run its own questionnaire. **Check-in** is marked **Skipped** when no check-in phase is scheduled. **Approved registrations** is informational and never asks for a minimum.
+
+## Step 4. Publishing
+
+While a tournament is hidden the public site does not show it at all. That is controlled by the **Hidden (preview) — not visible to the public** checkbox in **Settings → Preview allowlist**.
+
+While the box is ticked you can add workspace members to the preview allowlist below it, so they can open the tournament page before it goes public. Adding and removing take effect immediately and need no separate save. Untick the box when the tournament is ready.
+
+## Step 5. Running it to the end
+
+The tournament's status is changed with the selector in the tournament section's header. The public page follows the status, and a manual status change switches automatic phase transitions off.
+
+From there the usual order is:
+
+1. Registration opens and entries collect on the **Registration** tab — see [Registration and entries](/docs/organizers/registration).
+2. Teams are formed by the balancer, by a draft, or from captain-registered teams — see [Balancer and teams](/docs/organizers/team-formation) and [Captain draft](/docs/organizers/draft).
+3. Stages and the bracket are configured — see [Stages and brackets](/docs/organizers/brackets).
+4. The tournament reaches **Live** and the first group stage starts on its own.
+5. Matches are played, reports and logs come in — see [Running matches](/docs/organizers/matches) and [Logs and impact](/docs/organizers/logs).
+6. The tournament is set to **Completed**, and later to **Archived** if you want.
+
+## See also
+
+- [Phases and schedule](/docs/organizers/schedule)
+- [Registration and entries](/docs/organizers/registration)
+- [Workspace settings](/docs/organizers/workspace)
+- [Stages and brackets](/docs/organizers/brackets)

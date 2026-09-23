@@ -24,6 +24,7 @@ for candidate in (str(REPO_BACKEND_ROOT), str(BALANCER_SERVICE_ROOT)):
         sys.path.insert(0, candidate)
 
 
+from shared.core.errors import ApiHTTPException  # noqa: E402
 from shared.domain.roster_shape import parse_roster_slots  # noqa: E402
 from src.services.draft import lifecycle  # noqa: E402
 
@@ -66,6 +67,15 @@ def test_rounds_come_from_the_shape(slots: dict[str, int], expected_rounds: int)
     draft = _create(shape=parse_roster_slots(slots))
 
     assert draft.rounds == expected_rounds
+
+
+def test_a_one_slot_roster_cannot_be_drafted() -> None:
+    # A 1v1 tournament is a legal format; it just has no picks to make.
+    with pytest.raises(ApiHTTPException) as exc_info:
+        _create(shape=parse_roster_slots({"flex": 1}))
+
+    assert exc_info.value.status_code == 422
+    assert exc_info.value.detail[0]["code"] == "invalid_roster_shape"
 
 
 def test_the_shape_is_required_and_the_scalars_are_gone() -> None:

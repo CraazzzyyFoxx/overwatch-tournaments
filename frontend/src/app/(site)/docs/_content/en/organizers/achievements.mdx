@@ -1,0 +1,152 @@
+Achievements are badges players earn automatically when they meet the conditions you set. This page covers building a rule, testing it without awarding anything, recomputing who has earned it, and granting or revoking a badge by hand.
+
+The catalogue lives at **Admin → Achievements**.
+
+## The catalogue
+
+The table lists every achievement in the workspace:
+
+| Column | What it means |
+| --- | --- |
+| **Status** | Enabled (**On**) or disabled (**Off**) |
+| **Slug** | The short name an achievement is recognised by when copied between workspaces |
+| **Name** | The name players see |
+| **Category** | Catalogue section: Overall, Hero, Division, Team, Standing, Match |
+| **Scope** | What the rule looks at: a player's whole history, one tournament, or one match |
+| **Grain** | How finely the award is stored: once per player, per player and tournament, or per player and match |
+| **Ver** | Rule version. It goes up every time you change the conditions |
+| **Conditions** | How many individual checks the rule contains |
+
+Clicking a row opens the achievement's own page. The row menu holds **View details**, **Edit achievement**, **Test (dry run)**, **Evaluate this achievement**, **Disable** or **Enable**, and **Delete achievement**.
+
+The buttons above the table:
+
+- **Create achievement** — a new achievement from scratch.
+- **Seed defaults** — create the standard set.
+- **Browse library** — copy achievements from another workspace: pick a **Source workspace**, tick the ones you want, then **Import selected**.
+- **Evaluate achievements** — recompute.
+- **Add manual override** — grant or revoke by hand.
+- **Hard reset** — wipe and rebuild the catalogue.
+
+## Creating an achievement
+
+1. Press **Create achievement**.
+2. Fill in **Slug**, **Name**, **Description (RU)** and **Description (EN)** — players read the descriptions in the catalogue.
+3. Choose **Category**, **Scope** and **Grain**.
+4. Optionally add a badge with **Upload image**. The file has to be under 5 MB.
+
+Conditions are not set here — you edit them on the achievement's own page.
+
+## The condition editor
+
+Open the achievement and press **Edit Tree** on the **Condition Tree** card. The palette on the left holds every node: drag one onto the canvas, or just click it to append it to the top-level group. Save with **Save condition tree**.
+
+The **Logic** group joins conditions together:
+
+- **AND** — every nested condition holds.
+- **OR** — at least one holds.
+- **NOT** — the condition does not hold. This always selects whole players, even when the nested condition looks at a single tournament.
+
+Everything else is an actual check. The **Match** group looks at one match:
+
+| Node | What it checks |
+| --- | --- |
+| **Stat threshold** | A statistic above or below a threshold you set |
+| **Match criteria** | Properties of the match itself |
+| **Match win** | Winning the match |
+| **Hero stat** | A statistic on one specific hero |
+| **MVP check** | That the player was the match MVP |
+
+The **Tournament** group looks at one tournament:
+
+| Node | What it checks |
+| --- | --- |
+| **Position** | The team's place in the standings |
+| **Record** | The win–loss record in the standings |
+| **Division change** | A change of division |
+| **Division level** | The division the player competed in |
+| **Is captain** | That the player was a captain |
+| **Is newcomer** | That this is the player's first tournament |
+| **Tournament type** | The type of tournament |
+| **Hero K/D best** | The best kill-to-death ratio on a hero |
+| **Team players** | The team's line-up in a match |
+| **Captain property** | Captain traits, including report activity |
+| **Encounter score** | The score of a series |
+| **Encounter revenge** | Beating an opponent who beat you before |
+| **Bracket path** | The route through the bracket: upper or lower, wins in the lower bracket, the round they lost in |
+| **Format** | The tournament format |
+
+The **Global** group looks at a player's whole history:
+
+| Node | What it checks |
+| --- | --- |
+| **Global stat sum** | A statistic totalled over all time |
+| **Tournament count** | How many tournaments the player has played |
+| **Global winrate** | Win rate over all time |
+| **Distinct count** | How many distinct values, such as different heroes |
+| **Consecutive** | Something that happened several times in a row |
+| **Stable streak** | A steady run of results |
+
+## Testing without awarding
+
+**Test (dry run)** in the row menu (or **Test conditions** on the achievement page) reports how many players qualify right now and lists the first twenty. Nothing is awarded — it is the safe way to check a rule before you recompute.
+
+## When awards are recomputed
+
+A recompute starts on its own:
+
+- once a tournament's match logs have been processed, so new achievements reach players without you doing anything;
+- right after you save new conditions or enable a disabled achievement.
+
+To recompute by hand, press **Evaluate achievements**. In the dialog you can narrow it to one tournament under **Tournament (optional)** and to specific achievements; leave everything untouched to recompute every achievement across every tournament. On an achievement's own page, **Run evaluation** does the same for that one rule.
+
+A summary panel then appears at the top: **Rules run** is how many rules completed, **Results added** how many badges were awarded, **Results removed** how many were taken back. If some rules could not run, the status reads **partial** and the panel groups those rules by reason — one reason usually explains dozens of rows at once.
+
+<Callout>
+If the workspace is not verified yet, a manual recompute does not start immediately: the panel shows **Evaluation is queued**, and the run begins once platform administrators have verified the workspace.
+</Callout>
+
+## Disabled and empty achievements
+
+If an achievement is disabled (**Disable**) or its condition tree is empty, the next recompute removes every badge it had awarded. That is intended — it is the quick way to pull a badge out of profiles. Enable the achievement and recompute again to bring the awards back.
+
+## Granting and revoking by hand
+
+1. Press **Add manual override** (on an achievement page it is **Manual Override**).
+2. Pick the player under **User** and the badge under **Achievement**.
+3. Set **Action** to **Grant** to award it or **Revoke** to take it away.
+4. Narrow it to one tournament under **Tournament (optional)** if you need to.
+5. Fill in **Reason** — it is required.
+
+Manual entries survive every recompute: a grant adds the badge on top of what the rules found, a revoke removes it even when the conditions are met. They are all listed in the **Manual overrides** table; delete the row to put that player back under the normal rules.
+
+## Divisions
+
+Conditions about divisions read the workspace's division grid. If the grid versions are not fully mapped to one another, those rules are skipped during a recompute: they are listed in the summary panel with the reason, and badges already awarded are left alone. Complete the mapping — see [Divisions](/docs/organizers/divisions) — and run the recompute again.
+
+## Destructive actions
+
+<Callout type="warning">
+**Delete achievement** removes the achievement from the workspace along with every award and every manual override that refers to it. This cannot be undone.
+</Callout>
+
+<Callout type="warning">
+**Hard reset** replaces the whole catalogue with the default set, clears every current award and immediately runs a full recompute. Your own achievements that are not part of the default set are lost.
+</Callout>
+
+## Troubleshooting
+
+| Problem | What to do |
+| --- | --- |
+| Nobody earned the achievement | Run **Test (dry run)** first: if nobody qualifies, the conditions are too tight |
+| No badges after the matches | Check that the tournament's logs have been processed — see [Match logs](/docs/organizers/logs) |
+| The run finished as **partial** | Read the reason in the panel: most often it is an incomplete division grid mapping |
+| A player has a badge they should not | Revoke it with **Add manual override** and the **Revoke** action |
+| Badges disappeared after an edit | Check that the achievement is enabled and its condition tree is not empty |
+
+## See also
+
+- [Match logs](/docs/organizers/logs) — where achievement data comes from
+- [Divisions](/docs/organizers/divisions) — the division grid and its versions
+- [Achievements](/docs/players/achievements) — what the player sees
+- [Analytics](/docs/organizers/analytics) — the ratings divisions lean on

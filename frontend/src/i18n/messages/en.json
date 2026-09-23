@@ -5489,7 +5489,7 @@
   },
   "rosterShape": {
     "title": "Roster shape",
-    "description": "How many slots of each kind one team has. The draft picks into exactly these slots, and the balancer fills them.",
+    "description": "The team format: how many slots of each kind one team has. A single slot makes one-player teams.",
     "mode": "Shape",
     "modes": {
       "inherit": "Inherit from the workspace",
@@ -5504,13 +5504,13 @@
       "support": "Support",
       "flex": "Flex"
     },
-    "total": "{total, plural, one {# slot} other {# slots}} · {rounds, plural, one {# draft round} other {# draft rounds}}",
+    "total": "{total, plural, one {# slot} other {# slots}}",
     "errors": {
-      "too_few": "A team needs at least 2 slots — with one, the captain is the whole roster and there is nothing to draft.",
+      "too_few": "A team needs at least 1 slot.",
       "too_many": "A team can have at most 12 slots."
     },
-    "preview": "What a captain fills",
-    "previewEmpty": "Add at least one slot to see what a captain fills.",
+    "preview": "One team's slots",
+    "previewEmpty": "Add at least one slot to see what a team looks like.",
     "inherited": "Inherited from the {source}: {shape}.",
     "inheritedSources": {
       "workspace": "workspace default",
@@ -6076,6 +6076,34 @@
         "too_many_heroes": "Too many heroes selected for one role.",
         "hero_wrong_class": "This hero does not belong to the chosen role."
       }
+    }
+  },
+  "docs": {
+    "title": "Documentation",
+    "lead": "Guides for players and organizers: how tournaments work, how to take part and how to run them.",
+    "sections": {
+      "players": {
+        "title": "For players",
+        "description": "Sign in, register, check in, play your matches and follow your stats."
+      },
+      "organizers": {
+        "title": "For organizers",
+        "description": "Set up a workspace, run tournaments and mixes, handle results."
+      },
+      "dev": {
+        "title": "For developers",
+        "description": "Platform architecture, HTTP API and database schema. Available in Russian only."
+      }
+    },
+    "search": {
+      "label": "Search the docs",
+      "placeholder": "Topic or term…",
+      "empty": "Nothing found for “{query}”."
+    },
+    "nav": {
+      "audience": "Who it's for",
+      "label": "Documentation pages",
+      "select": "Documentation page"
     }
   }
 }

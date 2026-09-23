@@ -1,0 +1,98 @@
+One account works across the whole platform: you sign in with it on any community's site, you link your game accounts to it, and it holds your privacy and notification settings. This page explains how all of that looks from a player's side.
+
+## Communities and one account
+
+Every community runs its own workspace: its own site, its own tournaments, its own ranks and achievements. Participation is counted per community — playing a tournament in one does not put you in another one's lists.
+
+The account, though, is one. You sign in with the same Discord or Battle.net and you are the same person on any site on the platform. If you belong to several communities, a **Workspaces** switcher appears in the header, with a link to open the one you want.
+
+<Callout>
+A community may run the site on its own address. The account there is the same one, but you sign in on that site separately — as you would on any other site.
+</Callout>
+
+## Signing in
+
+There are no passwords here: you sign in through an outside service. Press **Login** and pick one of the offered ones: **Continue with Discord**, **Continue with Battle.net**, **Continue with Twitch**.
+
+Which services a given site offers is decided by the community when it sets the site up: only the available ones are listed, and if none are enabled you get the message **OAuth login is currently unavailable**.
+
+One external account belongs to one account here. If a Discord or Battle.net account is already linked to another account on this site, signing in with it takes you into that one.
+
+## If you played before you ever signed in
+
+A player profile can exist before your first sign-in: it appears from parsed match logs, from a roster an organizer filled in, or from an import. All the history — matches, statistics, registrations, achievements — already sits on that profile; it simply has no owner yet.
+
+On your first sign-in the platform tries to find such a profile and hand it to you:
+
+1. First by the service you signed in with, if it was already verified on that profile.
+2. Then by a matching BattleTag or Discord name — but only if the profile has no owner yet.
+3. If nothing matches, a new, empty player profile is created.
+
+You can also have an existing profile linked later, but only with proof: your account must have Discord or Battle.net linked, and that handle must match the one recorded on the player profile. A matching email is not enough — it is not proof that the profile is yours.
+
+If the profile already belongs to another account, it will not move to you automatically: an administrator of the community handles those cases. So if you sign in and your history is missing, write to the organizers — they have the tools to attach a profile to an account or to merge two profiles.
+
+## Account settings
+
+The account menu in the header, item **Account settings**. It has six tabs.
+
+| Tab | What it holds |
+| --- | --- |
+| **Profile** | Your avatar and your linked accounts. |
+| **Privacy** | What the site shows about you on tournament pages. |
+| **Security** | The devices you are signed in on, and account deletion. |
+| **Notifications** | Where the things that happen to you are delivered. |
+| **Favorites** | The players you added to your favorites. |
+| **Mixes** | How your own mixes are balanced. |
+
+**Profile.** Change the avatar by clicking it or dropping an image on it. Below is the **Linked accounts** block: Battle.net, Discord, Twitch and the other services shown on your public profile.
+
+**Privacy.** One switch lives here — **Show my live stream on tournament pages**. While you are live on Twitch, your broadcast is surfaced on the pages of tournaments you take part in. The switch is global and beats everything else: while it is off, ticking the stream box in a tournament registration puts nothing on the site.
+
+**Security.** The **Active sessions** list shows the devices you are signed in on with their last activity; **Sign out** ends the session on a specific device. Below it are the ended sessions and account deletion.
+
+**Notifications.** The switches for what the bot repeats to you in Discord. See [Notifications and the Discord bot](/docs/players/notifications).
+
+**Favorites.** The players you starred on their profile or in search. The list is for quick access and only you see it.
+
+**Mixes.** Settings for how the mixes you host yourself are balanced. They are set once here and apply to every mix you run. See [Mixes](/docs/players/mixes).
+
+## Linked accounts: what you can and cannot do
+
+- An account can **only** be added by signing in to that service — which is also what verifies it. You cannot type someone's BattleTag in by hand.
+- Only a verified account can be made primary (**Make primary**).
+- **Hide from your public profile** takes the account off your page without breaking the link.
+- **Disconnect** removes the verification: the account stays on your profile, unverified, until you connect it again.
+- Only an administrator can erase a linked account from your profile entirely.
+- If a community administrator restricted these actions, you see the note **Managing your accounts has been disabled by an administrator**.
+
+## Language
+
+The **RU | EN** switcher sits in the site header, and also in the account menu on the **Language** row. Your choice is remembered for you and applies across the site.
+
+## Deleting your account
+
+Deletion lives on the **Security** tab: **Delete account**, then **Delete permanently**.
+
+<Callout type="warning">
+Your account, sessions, links to outside services and integration keys are deleted permanently, and you are signed out right away. This cannot be undone.
+</Callout>
+
+Your tournament history stays: matches, statistics, registrations and team results are kept on your player profile, which simply becomes unclaimed again. The outside accounts you had linked are freed and can be linked to another account.
+
+## Troubleshooting
+
+| Problem | What to do |
+| --- | --- |
+| The service you want is missing on the sign-in screen | The community did not enable it on this site. Use one of the offered ones. |
+| This account is already linked to another account | Sign in with it to reach that account, delete that account in its settings, then link the service again. |
+| Your past tournament statistics are missing from your profile | Link Battle.net with the exact BattleTag you played under. If the profile already belongs to another account, write to the organizers. |
+| A registration refuses you because it wants a verified account | The organizer requires an account verified by signing in. Link it on the **Profile** tab and go back to the form. |
+| Your stream does not appear on a tournament page | Check the switch on the **Privacy** tab: while it is off, your stream is shown nowhere. |
+
+## See also
+
+- [Quick start](/docs/players/quickstart)
+- [Notifications and the Discord bot](/docs/players/notifications)
+- [Entry requirements](/docs/players/admission)
+- [Profile, stats and ranks](/docs/players/stats)

@@ -1,0 +1,116 @@
+Admission is the set of checks a tournament runs before it lets a player into a roster: a public Overwatch profile and an active subscription. This page covers setting the subscription rule once for the whole workspace, turning it on for a tournament, and what to do when a check does not pass.
+
+## One rule for the whole workspace
+
+The subscription rule lives on the workspace, not on the tournament. Each tournament only decides whether to enforce it.
+
+Open **Admin → Settings → Subscriptions**, the **Subscription requirement** card.
+
+1. Pick a **Match** mode: **All of the below** or **Any one of the below**.
+2. Press **Add provider** and give each row a provider and a minimum tier.
+3. Press **Save**.
+
+If the rule lists no providers, the gate is inactive even while the tournament toggle is on.
+
+<Callout type="warning">
+The rule takes effect immediately in every tournament whose **Require an active subscription** toggle is on, including ones already in progress. Tightening it retroactively refuses patrons who have already been admitted. Clearing it makes those tournaments admit everybody without reporting a reason, with the toggle still on.
+</Callout>
+
+## Providers and how to set each one up
+
+The **Subscription providers** card on the same page. Every provider asks **How a subscription is proven**:
+
+- **Discord role** — Boosty's own bot assigns a role per level, and we read the patron's roles in your server. The player needs a linked Discord account.
+- **Twitch subscription** — read directly from Twitch.
+- **Challenge code** — you publish a secret in a subscriber-only post and the player pastes it.
+- **Either** — whichever the player can produce. The most permissive option.
+
+### Discord role
+
+1. Set the workspace Discord server in **Admin → Settings → Discord**. It is set once per workspace, and our bot must also be a member of it.
+2. In the **Role → tier** block press **Add role** and create one row per subscription level: the role, the tier number and its name.
+3. Press **Save**.
+
+Two rows cannot point at the same Discord role — that save is rejected, because the verdict would depend on row order.
+
+### Twitch subscription
+
+Fill in **Broadcaster ID** and **Broadcaster login**. This only works for Affiliate and Partner channels; other channels have no Twitch subscriptions at all.
+
+### Challenge code
+
+1. Publish a secret in a post only subscribers can see.
+2. In the **Challenge codes** block press **Add code** and give the code and the tier number it proves.
+3. Press **Save**.
+
+<Callout type="warning">
+Saving replaces every previously stored code with the ones in the form. A stored code cannot be shown again.
+</Callout>
+
+Rotate codes per tournament: a code is shareable, so it proves access to a level, not identity.
+
+## Turn the check on for a tournament
+
+Open the tournament and go to **Admin → Tournaments → Settings → Admission**, the **Subscription** block.
+
+- **Require an active subscription** — apply the workspace rule to this tournament. The line next to it states what the workspace requires and links to **Configure the workspace rule**.
+- **Check at** — **Check-in only** or **Sign-up and check-in**.
+- **Who pays** — **Each player** or **The team (captain pays)**. This row appears only for tournaments where teams enter as teams.
+
+Where the requirement is checked is up to you:
+
+- **Check-in only**: sign-up stays open to everybody and only check-in refuses. A roster is built there, so that is where the answer matters.
+- **Sign-up and check-in**: the application itself is refused too. That keeps the list subscriber-only, but it turns a requirement players could still satisfy later into a deadline. At sign-up a provider proven by a challenge code never refuses, because the code field is only offered at check-in.
+
+**The team (captain pays)** means the captain covers the whole roster with one code or one subscription, and individual players are not checked.
+
+## Profile visibility
+
+In the same section, the **Admission** block:
+
+- **Require open Overwatch profile** — players whose Overwatch profile is private are not admitted.
+- **Scope** — **Main account only** or **All accounts (incl. smurfs)**.
+
+This requirement has no stage choice: it is always checked at check-in. It does not touch unranked players, who are excluded separately.
+
+## After check-in
+
+Once a player has checked in, unmet requirements stop blocking them: the gate is already behind. Their entry is then marked **requirement unmet, admission already granted** instead of **Not Admitted**. That includes requirements that stopped being met because you changed the rule.
+
+## When a check cannot be made, the player is let through
+
+If a provider cannot produce an answer, the requirement does not block. That happens when:
+
+- the provider is not configured in the workspace: no Discord server, no **Role → tier** rows, **Challenge code** with no code saved, a Twitch channel that cannot have subscribers;
+- the player has not linked the account the provider needs;
+- the provider is temporarily unavailable.
+
+The flip side: a half-configured provider does not complain, it silently stops enforcing anything. If you turned the check on and everybody is still getting in, check the provider configuration first.
+
+## What can be broken on your side
+
+Players see these messages next to their entry. On the left is what they see, on the right what you do about it.
+
+| Message | Fix |
+| --- | --- |
+| **Discord server is not configured** | Set the workspace Discord server in **Admin → Settings → Discord**. |
+| **Subscription tiers are not mapped to Discord roles** | Fill in the **Role → tier** block on the **Subscription providers** card. |
+| **Role mapping is out of date** | The role was deleted or replaced on the server — pick it again in the **Role → tier** block. |
+| **Twitch channel is not configured** | Fill in **Broadcaster ID** and **Broadcaster login**. |
+| **Twitch channel cannot have subscribers** | Only Affiliate and Partner channels have subscriptions. Point at an eligible channel or pick another verification method. |
+| **Profile checks are switched off** | Rank collection for that BattleTag was switched off after repeated failures. Turn it back on in **Admin → Collectors → Rank** with **Re-enable all tags**. |
+
+These messages are not tournament settings and cannot be fixed from workspace admin: **Discord bot is not deployed**, **Twitch app credentials are missing**, **Discord server is unreachable**, **Provider is unavailable**, **Subscription data is still loading**. While they last the check blocks nobody; tell the platform administrator.
+
+The remaining messages — **Link your Discord account**, **Link your Twitch account**, **Join the Discord server**, **No subscriber role on the Discord server**, **No active subscription**, **No subscription code entered**, **Link the account again — the saved permissions are not enough**, **Make your Overwatch career profile public** — are the player's to clear; what they see is described in [Admission](/docs/players/admission).
+
+## Confirming the checks are running
+
+**Admin → Collectors → Subscriptions** shows how many players are tracked, when the last check ran, and a check history with **Provider**, **State**, **Tier** and **Reason** columns. **Check all now** runs a check across every tournament that enforces the requirement. See [Content and data collection](/docs/organizers/content).
+
+## See also
+
+- [Registration and entries](/docs/organizers/registration)
+- [Ranks and divisions](/docs/organizers/divisions)
+- [Content and data collection](/docs/organizers/content)
+- [Admission](/docs/players/admission)

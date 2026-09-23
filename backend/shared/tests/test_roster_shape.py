@@ -52,7 +52,7 @@ def test_slot_codes_and_defaults_have_the_expected_membership() -> None:
 
 
 def test_team_size_bounds_are_pinned() -> None:
-    assert MIN_TEAM_SIZE == 2
+    assert MIN_TEAM_SIZE == 1
     assert MAX_TEAM_SIZE == 12
 
 
@@ -118,17 +118,13 @@ def test_accepts_the_largest_allowed_roster() -> None:
     assert shape.draft_rounds == MAX_TEAM_SIZE - 1
 
 
-def test_accepts_the_smallest_allowed_roster() -> None:
-    assert parse_roster_slots({"tank": 1, "flex": 1}).draft_rounds == 1
+def test_accepts_a_single_slot_roster_as_a_one_player_team_format() -> None:
+    # A 1v1 tournament is a team format like any other; that it has nothing to
+    # draft is the draft's concern, not the shape's.
+    shape = parse_roster_slots({"flex": 1})
 
-
-def test_rejects_single_slot_roster_because_there_is_nothing_to_draft() -> None:
-    # The captain fills the only slot, so a one-slot roster has zero picks and no
-    # balancing to do; it is not a valid shape rather than a shape drafting once.
-    with pytest.raises(RosterShapeError) as exc_info:
-        parse_roster_slots({"flex": 1})
-
-    assert exc_info.value.code == "roster_slots_out_of_range"
+    assert shape.team_size == MIN_TEAM_SIZE
+    assert shape.draft_rounds == 0
 
 
 def test_slots_returns_a_detached_mutable_copy() -> None:
@@ -164,7 +160,6 @@ def test_role_slots_returns_a_detached_mutable_copy() -> None:
         ({"flex": MAX_TEAM_SIZE + 1}, "roster_slots_out_of_range"),
         # Over the limit by sum rather than by any single slot.
         ({"tank": 1, "damage": MAX_TEAM_SIZE}, "roster_slots_out_of_range"),
-        ({"flex": MIN_TEAM_SIZE - 1}, "roster_slots_out_of_range"),
     ],
 )
 def test_rejects_invalid_maps_with_machine_readable_codes(raw: object, code: str) -> None:
@@ -186,7 +181,6 @@ def test_rejects_invalid_maps_with_machine_readable_codes(raw: object, code: str
         ((("tank", 1), ("tank", 1)), "roster_slots_not_canonical"),
         ([("tank", 1), ("flex", 1)], "roster_slots_not_canonical"),
         ((("flex", MAX_TEAM_SIZE + 1),), "roster_slots_out_of_range"),
-        ((("flex", MIN_TEAM_SIZE - 1),), "roster_slots_out_of_range"),
     ],
 )
 def test_direct_construction_enforces_the_same_invariants(entries: object, code: str) -> None:

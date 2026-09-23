@@ -1,0 +1,126 @@
+Every community setting lives in the admin panel's **Settings** section. The list on the left is split into groups: Workspace, Competitive and Entitlements. This article walks each page and explains what it decides.
+
+One rule applies almost everywhere: changes do not save themselves. An **Unsaved changes** bar appears at the bottom with **Save changes** and **Discard**, and leaving the page asks "Discard unsaved changes?".
+
+## General
+
+The workspace's name, description, timezone and icon.
+
+- **Name** and **Description** — what the community is called and what it says about itself.
+- **Timezone** — the workspace's zone. Tournament schedules are entered and shown in it, so changing it mid-season is a bad idea.
+- **Icon** — the community picture: PNG, JPEG, WebP or GIF up to 2 MB. It is saved as soon as you pick the file; there is no separate button for it.
+- **Owner** — the account accountable for this workspace.
+
+Until the platform team reviews the workspace, a note at the top says it is not listed in the public communities directory on the home page yet. Nothing else is affected: you can run tournaments and share the link.
+
+The journal button on this page shows who changed the workspace settings, and when.
+
+## Branding
+
+The palette the public site paints your workspace in.
+
+- The **Site branding** switch turns your own palette on or off.
+- **Seed colours** — four base colors: **Primary accent**, **Secondary accent**, **Background** and **Surface**.
+- **Core palette · optional overrides** — six optional refinements (**Accent**, **Foreground (text)**, **Muted surface**, **Border**, **Focus ring**, **Destructive**). An empty field is derived from the seed colors.
+- The **Preview** block shows the result before you save.
+
+## Visibility
+
+Who can find the workspace, and who counts as a newcomer in it.
+
+- **Hidden** removes the workspace from the home page and from other people's workspace switcher. Its own members still see it, and direct links — the address page, the subdomain, a custom domain — keep working.
+- **Newcomer scope** decides whose history counts when a roster is built. **Platform-wide** counts a player's experience in any workspace; **This workspace only** ignores it, so a veteran of another community shows up as a newcomer the first time they join yours.
+
+## Domain
+
+The address your site opens at, and the text search engines show.
+
+**Subdomain** is your name on the platform. The rules are short:
+
+- 1 to 63 characters;
+- lowercase Latin letters, digits and hyphens only;
+- a hyphen cannot be the first or last character;
+- the names **www**, **api**, **auth**, **admin**, **app**, **assets**, **static**, **cdn**, **mail** and **ws** are reserved by the platform.
+
+The resulting address is shown right under the field. Leaving it blank means the workspace opens only at the ordinary platform link.
+
+**SEO title** and **SEO description** are the title and summary shown in the browser tab and in search results.
+
+**Custom domain** is your community's own domain. It goes through three steps: **Add domain**, **Add DNS records**, **Verified**.
+
+1. Type the domain and press **Save domain**.
+2. At your DNS provider, add the two records shown on screen: a TXT record that proves you own the domain, and a CNAME record that points the domain at the platform. The TXT value has a copy button next to it.
+3. The records take a few minutes to spread. The platform re-checks them on its own, and **Verify now** runs a check immediately.
+
+Until verification passes, the workspace does not serve on that domain — the ordinary platform address keeps working.
+
+<Callout type="warning">
+**Remove domain** switches the domain off at once: visitors land on the platform address instead. You can add it back, but the records have to be verified again.
+</Callout>
+
+## Discord
+
+The single Discord server the community runs in: where the bot assigns subscriber roles, and where match-log channels live.
+
+1. **Your servers** lists the servers you administer — ones you own, or ones where you can manage the server. If the list is empty, link or reconnect Discord in your account settings and come back.
+2. Press **Link this server** on the right one. The linked server then shows up under **Linked server**.
+3. Press **Add bot to server** and add the bot. Without it, match logs are not read and mix announcements are not posted — the page warns you about that.
+4. Once a server is linked, a picker appears for the channel where mixes are announced.
+
+The platform only reads Discord roles — for example, to see whether someone holds a subscriber role. It never hands out or takes away roles on your server.
+
+<Callout type="warning">
+**Unlink server** disconnects the server immediately: subscriber roles and match-log channels have nowhere to go. You can link a server again later.
+</Callout>
+
+## Notifications
+
+Where the bot announces things, and which things. The page only works once a Discord server is linked.
+
+- **Announcement channel** — the channel for announcements. With no channel the bot posts nothing; personal notifications and the in-app inbox are unaffected.
+- **What gets posted** — a checkbox per event: **Registration opened**, **Check-in opened**, **Match scheduled**. A scheduled match is one post per match, so a whole round scheduled at once is a whole round of posts; it is off by default.
+- **Language** — the language of channel posts: **Russian** or **English**. Times render in each reader's own timezone whatever the language.
+
+Hidden tournaments never reach the channel, whatever is ticked.
+
+## Divisions
+
+The rank bands players are sorted into, and the version tournaments read. See [Divisions](/docs/organizers/divisions).
+
+## Player statuses
+
+The status catalog every tournament in the workspace shares. A status has a scope: **Registration** for registration statuses, **Balancer** for the ones the balancer takes into account.
+
+- System statuses can be renamed, re-described and given a different icon, and reset back to the original later.
+- Your own statuses are created and deleted outright. A balancer status has two switches: **Excludes from balancer pool** — a registration holding it is treated as removed from the pool — and **Blocks Ready** — such a registration never counts as ready, even once every role has a rank.
+
+The "ready" and "incomplete" states are set automatically: they are derived from the registration's roles and ranks and cannot be assigned by hand.
+
+## Sub-roles
+
+Sub-roles inside the main roles — Tank, Damage, Support. The catalog is workspace-wide: registration forms, rosters and reports all read it.
+
+A sub-role's name is edited straight in the list, and the switch next to it deactivates it. A deactivated sub-role disappears from every picker but stays on the players already assigned to it. Which of them a specific tournament offers is chosen in that tournament's registration form.
+
+## Registration forms
+
+Saved questionnaires any tournament in the workspace can start from. See [Registration](/docs/organizers/registration).
+
+## Subscriptions
+
+Subscription providers that grant privileges here. See [Subscriptions](/docs/organizers/subscriptions).
+
+## Rate limits
+
+How much the workspace may spend on automated requests — this matters only if you use integration keys.
+
+Budgets are split across three tabs: **Workspace** — shared by everyone, **API key** — what one key may take, **Session** — what one signed-in member may take. Inside each tab you set **Requests per minute**, **Heavy units per day**, **Concurrent heavy jobs**, **Max upload size** and **Max items per request**.
+
+An empty field means "inherit": the value comes from the workspace first, then from the plan. A zero is not inheritance — it blocks the operation outright. A workspace admin can only lower these; raising a limit above what the plan grants is up to the platform team. The top of the page shows how much has been spent against each budget.
+
+## See also
+
+- [Getting started](/docs/organizers/getting-started)
+- [Roles and permissions](/docs/organizers/roles)
+- [Divisions](/docs/organizers/divisions)
+- [Subscriptions](/docs/organizers/subscriptions)

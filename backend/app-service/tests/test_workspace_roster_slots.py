@@ -28,7 +28,6 @@ _STORED = {"tank": 1, "damage": 2, "support": 2}
 _INVALID_SLOTS = [
     ({"healer": 2}, "roster_slots_unknown_code"),
     ({"flex": 99}, "roster_slots_out_of_range"),
-    ({"flex": 1}, "roster_slots_out_of_range"),
     ({}, "roster_slots_empty"),
     ({"tank": -1}, "roster_slots_invalid_count"),
 ]

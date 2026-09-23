@@ -1,0 +1,101 @@
+Some tournaments do not let everybody in: the organizer can require a public Overwatch profile and an active subscription to the community. This page covers what is checked, when, and what to do when the site says you do not pass.
+
+## The two requirements
+
+| Requirement | What is checked | When |
+| --- | --- | --- |
+| **Profile visibility** | Your Overwatch career profile is public and your rank is readable | Always at check-in |
+| **Subscription** | You hold an active subscription to the community | At sign-up or at check-in — the organizer chooses |
+
+Each is switched on separately. With neither one on, there is nothing to clear: your registration is enough.
+
+When a requirement is on, it appears as a line on your "Your Registration" card (the **Participants** tab of the tournament page), and the participants list gains an **Admission** column reading **Admitted**, **Not Admitted** or **Admitted (Check-in pending)**. Lines that are yours to clear are marked "This one is yours to clear" — the rest are not for you to fix.
+
+## When each check bites
+
+- A requirement checked at check-in does not stand in the way of signing up. You register now and sort it out later.
+- The organizer can move the subscription check to sign-up. Then you cannot submit without one: "You cannot sign up yet: an active subscription is required (…). Subscribe with the account linked to your profile, then reload this form."
+- If your provider can be satisfied with a secret code, a refusal at sign-up is softened: you get through, and the code is asked for at check-in.
+- **After check-in the requirements are spent.** Even if the subscription lapses later, admission has already been granted — such a line is annotated "requirement unmet, admission already granted".
+- If a check could not run — the profile has not been polled yet, the provider is down — that is not a refusal. The requirement stays undetermined and lets you through.
+
+## Public Overwatch profile
+
+The site reads your rank from your Overwatch career profile. A private profile means no rank, and the requirement is not met.
+
+The organizer chooses the scope: your main BattleTag only, or every account on the entry including smurfs. Under the wider scope one private smurf blocks admission too.
+
+## Subscription
+
+The subscription rule belongs to the community as a whole rather than to a single tournament: which providers count, and at which minimum tier. You see it spelled out at check-in as "An active subscription is required: …" or "Active subscriptions are required: …".
+
+There can be several providers, combined one of two ways:
+
+- **All of the below** — you need every one of them.
+- **Any one of the below** — one is enough. The others still list their reasons, which is normal as long as one counts.
+
+How a subscription is proven depends on the provider:
+
+- **Discord role** — Boosty's own bot assigns a subscriber role on the community server, and the site reads your roles. Needs a linked Discord account.
+- **Twitch subscription** — read straight from Twitch. Needs a linked Twitch account.
+- **Challenge code** — the organizer publishes a secret in a subscriber-only post; you paste it into **Code from the subscriber-only post** and press **Redeem**. The field exists only in the check-in dialog, and only for providers that accept a code; on success the row turns green right away — "Code accepted".
+
+**Team subscription.** On tournaments played by ready-made rosters, the organizer can scope the subscription to the team. The captain or a manager then attaches their own subscription with **Cover subscription**, and one subscription covers the whole roster.
+
+## What the site says and what to do
+
+Yours to clear:
+
+| Message | What to do |
+| --- | --- |
+| Add your BattleTag | The entry has no BattleTag, so there is nothing to check. Add one. |
+| Make your Overwatch career profile public | Switch the career profile to public in your Battle.net settings and wait for the next check. |
+| Overwatch profile not found — check the BattleTag | Check the spelling, including the digits after the hash. |
+| Link your Discord account | Link Discord in your profile settings. |
+| Link your Twitch account | Link Twitch in your profile settings. |
+| Link the account again — the saved permissions are not enough | Unlink the account and link it again, granting the permissions it asks for. |
+| No active subscription | Subscribe using the account that is linked to your profile. |
+| Join the Discord server | Join the community server with the Discord account linked to your profile. |
+| No subscriber role on the Discord server | The subscription exists but the role was not granted. Check that it is on the same account; if the role never appears, contact the organizer. |
+| No subscription code entered | Paste the code from the subscriber-only post into the field at check-in. |
+
+Not your side — contact the organizer:
+
+| Message | What is going on |
+| --- | --- |
+| Profile checks are switched off | Rank collection is disabled for your BattleTag. |
+| Discord server is not configured | The community has no server bound to check roles against. |
+| Subscription tiers are not mapped to Discord roles | The role setup is unfinished. |
+| Role mapping is out of date | Roles on the server were renamed or deleted. |
+| Twitch channel is not configured | The community has not named a channel. |
+| Twitch app credentials are missing | The Twitch integration is not set up. |
+| Twitch channel cannot have subscribers | The channel has no status that allows subscriptions. |
+
+Temporary — wait and reload:
+
+| Message | What is going on |
+| --- | --- |
+| Profile has not been checked yet | Your BattleTag has not been polled. |
+| Profile check in progress | The check is running right now. |
+| Profile check failed | The check broke and will be retried. |
+| Provider is unavailable | The subscription service is not answering. |
+| Discord server is unreachable | Roles on the server could not be read. |
+| Discord bot is not deployed | The bot is not running at the moment. |
+| Subscription data is still loading | Give it a few minutes. |
+| Reason unknown | The check did not explain itself — contact the organizer if it persists. |
+
+While a check is undetermined it does not block you. A line only turns red on a confirmed refusal.
+
+## Troubleshooting
+
+- **One line is green but you are still not admitted.** Check the other lines: any unmet requirement blocks, not just the first.
+- **You subscribed and the site does not see it.** The subscription must sit on the same account that is linked to your site profile. Check the links in your profile settings.
+- **You made the profile public and it still reads private.** Ranks are not refreshed instantly; wait for the next check.
+- **Everything is red for you but fine for your team.** On a tournament with a team-scoped subscription the captain clears it for the roster — ask them to press **Cover subscription**.
+
+## See also
+
+- [Check-in](/docs/players/check-in)
+- [Registration](/docs/players/registration)
+- [Account and sign-in](/docs/players/account)
+- [Captain teams and invites](/docs/players/captain-teams)

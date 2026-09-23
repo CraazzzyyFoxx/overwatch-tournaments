@@ -1,0 +1,155 @@
+Registration is two things: the questionnaire a player fills in, and the list of entries an organizer works through afterwards. This page covers building the form, handling entries, filling in ranks, and admitting captain-registered teams.
+
+Everything lives on the tournament's **Registration** tab, which has the sections **Entries**, **Teams**, **Form**, **Sheets feed** and **Rank autofill**. **Teams** only appears on tournaments whose teams are formed by team registration.
+
+## The form builder
+
+Open it at **Registration → Form** (or from **Settings → Registration** via **Open the form builder**).
+
+The questionnaire is made of **Sections**, and each section holds questions. Sections are on the rail, the selected section's questions on the right. Two tabs sit on top: **Build** and **Preview**. The preview is read-only and shows every question, including the organizers-only ones. A section with no questions is skipped in the form.
+
+**Add question** offers three groups:
+
+- **Built-in questions** — BattleTag, Smurf accounts, Roles, Stream POV, On call, Notes, Notes for organizers. A built-in question has the same wording and validation everywhere; only its parameters are configurable.
+- **Social accounts** — Discord, Twitch, Boosty, VK, YouTube.
+- **Your own question** — anything else you need to ask.
+
+### Answer types
+
+A custom question can be **Text**, **Long text**, **Number**, **Select one**, **Select several**, **Checkbox**, **Link**, **Date** or **Rank per role**.
+
+Every question has a label, a placeholder, help text and a **Required** flag. On top of that:
+
+- **Who reads the answer** — **Everyone** or **Organizers only**. The question is asked either way; this decides who reads the answer afterwards. A public answer also shows up on the live draft board.
+- **Show only when** — a display condition. It can only reference a question asked **earlier** than this one. If the question it depends on moves below, the condition is cleared and the builder tells you.
+- **Allow changes after submitting** — the player can change this one answer in their entry. BattleTag locks once the entry is reviewed, and roles lock once the player reaches the balancer pool or a team roster.
+- **Require a verified account** — for identity questions: the player picks one of their verified accounts instead of typing a handle.
+
+### Roles and flex
+
+The built-in **Roles** question has a **Mode**:
+
+- **Player chooses** — the registrant picks their roles and may take the Flex preset.
+- **All roles, one priority** — every role is mandatory and the registrant names one priority role, or Flex. Rating uses their highest rank across all roles, and the sub-role list stops applying.
+- **Everyone is flex** — the choice is removed and everyone is rated as flex across all roles.
+
+Next to it you set **Primary role is required**, **Additional roles are required**, **Allow a full-flex answer**, and the top-heroes questions (**Ask for top heroes**, **Top heroes are required**, **Max heroes per role**). The **Subroles** block decides which sub-roles the form offers.
+
+### Templates
+
+The **Templates** menu in the builder offers **Load a template…** and **Save as template…**. A template snapshots the tournament's **saved** questions, so save your edits first. Loading replaces the questions on screen but writes nothing until you save the form.
+
+Workspace-wide templates live in **Admin → Settings → Registration forms** and any tournament of that workspace can start from one.
+
+The form's version is shown beside it. If some entries were filled in on an earlier version, a counter appears: editing such an entry re-files it against the current version.
+
+### Team rules and Discord
+
+The rules that can refuse an entry are not in the builder — they live in **Settings → Admission**. Tournaments with team registration get a **Registered teams** group there:
+
+- **Minimum starter rank**, **Maximum starter rank**, **Maximum rank spread** — starters only, substitutes ignored, empty means no limit.
+- **Unique Discord identity** — refuse a roster whose Discord nick or linked account is already on another live team.
+- **Require Discord server membership** — every player must be in the workspace Discord server; if the check cannot run, the roster is refused.
+
+The bench size is set in **Settings → Roster shape** under **Substitutes per team**. More on admission in [Subscriptions and admission](/docs/organizers/subscriptions).
+
+## Entries
+
+**Registration → Entries** is the table of every entry in the tournament.
+
+### Statuses
+
+An entry's status is one of the built-ins: **Pending**, **Approved**, **Rejected**, **Withdrawn**, **Banned**, **Incomplete**. Beside it sits the balancer status: **Not Added**, **Excluded**, **Incomplete**, **Ready**.
+
+**Ready** and **Incomplete** in the balancer column are set automatically — they are derived from the player's roles and ranks and cannot be written by hand. The other statuses you control.
+
+Custom statuses are added per workspace in **Admin → Settings → Statuses**, separately for the **Registration** scope and the **Balancer** scope. A custom status behaves like **Approved**: an entry carrying one gets the same actions.
+
+### Row actions
+
+The row menu offers **Edit**, **Change history**, **Approve**, **Reject**, **Add to balancer** / **Remove from balancer**, **Check-in** / **Uncheck-in**, **Withdraw**, **Restore** and **Delete**. **Approve** and **Reject** only show on entries in **Pending**.
+
+Select several entries and you get the bulk actions **Approve** and **Add to Balancer**; each offers an **Undo** button for a few seconds afterwards.
+
+**Create registration** adds an entry by hand. The **Group by** selector groups the table by check-in, balancer status or admission. The filters on top are **Status**, **Admission**, **Role**, **Subscription**, **Participation** and **Source**.
+
+Clicking a row opens a panel on the right: the admission decision and the reasons behind it, declared roles, questionnaire answers, and the housekeeping details (source, submission time, who reviewed it and when, organizer notes).
+
+<Callout type="warning">
+**Delete** removes an entry for good. To take a player out of the tournament but keep the record, use **Withdraw** instead — a withdrawn entry can be brought back with **Restore**.
+</Callout>
+
+### Auto-approve
+
+The **Auto-approve** switch in **Settings → Registration** removes manual review: entries are approved instantly and players are added to the pool automatically.
+
+The same screen controls the public side of the list: **Announced capacity** (shown as "42 / 100" and enforcing nothing), **Hide the participants list** (the public page keeps only the count and the split by role) and **Show player ranks on participants page**.
+
+## Captain-registered teams
+
+**Registration → Teams** only exists on tournaments with team registration. A captain creates a team on the tournament's registration page and invites players — what the player sees is described in [Captain teams](/docs/players/captain-teams).
+
+Team states are **Forming**, **Roster complete**, **In tournament**, **Rejected** and **Disbanded**. A complete roster does not mean entry: the organizer adds the team.
+
+The **Admission** column is your manual verdict on the team: **pending**, **accepted** or **waitlisted**. Waitlisting is how you hold a team back — it will not enter the tournament until you change the verdict.
+
+Organizer actions: **Reject team** (with a mandatory reason the captain reads, and a choice of withdrawing the members' entries or keeping them), **Unlock roster**, **Reset invite count**, **Withdraw invite**, **Place player** and **Organizer notes**.
+
+**Add selected teams** moves teams into the tournament. Once added the roster is frozen and further changes go through the organizer. Teams that cannot be moved are never dropped silently — the result lists each skipped team with a reason:
+
+| Reason | What it means |
+|---|---|
+| roster incomplete | not every starter slot is filled |
+| roster has no players | the team is empty |
+| team is waitlisted | the team's admission is **waitlisted** |
+| team subscription unpaid | the team-level subscription requirement is not met |
+
+The screen also warns when some players are on no team at all: the export cannot place them.
+
+## Rank autofill
+
+**Registration → Rank autofill** fills in ranks on entries.
+
+In the **Source chain** block you drag sources into priority order, disable the ones you do not want, and optionally limit how recent a source may be:
+
+| Source | Where the rank comes from |
+|---|---|
+| **Overwatch rank** | A weekly composite of rank snapshots for the main BattleTag |
+| **Balancer history** | The latest rank from past balancer registrations |
+| **Analytics** | The latest rank from participation in past tournaments |
+
+The first source that has a rank wins, per role. Only the main BattleTag is used.
+
+The switches beside it: **Overwrite existing**, **Move eligible to balancer**, and **Partial** (fill the roles that were found even if some are missing).
+
+The **Preview** block shows exactly what would change: the lists **To assign**, **Skipped** and **Already set**, a **Mismatches only** filter, and the markers "mismatch", "partial" and "unverified". Select the rows you want and press **Apply to N** — the report then states how many players and how many ranks were updated, and how many were skipped.
+
+## Google Sheets import
+
+**Registration → Sheets feed** takes entries from a Google Sheets spreadsheet.
+
+1. In the **Source** block set the **Sheet URL** and, optionally, a **Title**.
+2. The **Auto-sync** switch enables periodic refresh; the interval in seconds sits next to it.
+3. In **Column mapping**, match the spreadsheet's columns to entry fields. The auto-suggest button reads the sheet's headers and proposes a starting mapping.
+4. In **Value mapping**, define how values from the sheet turn into roles, sub-roles and ranks.
+5. The **Preview** block shows parsed rows: the source value and the parsed value for each field.
+6. Save (**Create feed** for a new source, **Save changes** for an existing one) and press **Sync now**.
+
+After a sync you get a summary of how many rows were created, updated, withdrawn and skipped, plus per-row errors. Entries that arrived this way are marked with the **Google Sheets** source in the list.
+
+## Check-in and admission
+
+The check-in window is the **Check-in** phase in **Settings → Schedule**; check-in only works while the tournament is in that phase and the time is inside the window. See [Phases and schedule](/docs/organizers/schedule).
+
+You can set and clear check-in by hand with the **Check-in** and **Uncheck-in** row actions. Grouping the table by check-in quickly shows who has not turned up, and the **Check-in** row of the **Overview** checklist shows how many approved entries have checked in.
+
+The admission decision in an entry's panel reads **Admitted**, **Check-in pending** or **Not admitted**, with the reasons listed. For teams, admission is set by hand in the **Admission** column of the **Teams** section. What is checked and how to configure it is covered in [Subscriptions and admission](/docs/organizers/subscriptions).
+
+Latecomers can still be taken in with the **Allow late registration** switch in **Settings → Schedule**: it extends sign-ups without erasing the closing date you advertised.
+
+## See also
+
+- [Your first tournament](/docs/organizers/first-tournament)
+- [Phases and schedule](/docs/organizers/schedule)
+- [Subscriptions and admission](/docs/organizers/subscriptions)
+- [Balancer and teams](/docs/organizers/team-formation)

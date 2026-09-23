@@ -1,0 +1,92 @@
+A tournament lives in phases, and the schedule can switch them for you. This page covers which phases exist, what a start time and an end time actually do, and how to enable, disable or roll back the automation.
+
+## Tournament phases
+
+Phases run in a fixed order:
+
+**Announcement → Registration → Check-in → Draft → Live → Playoffs → Completed → Archived**
+
+- **Announcement** — the tournament is published and readable, but there is nothing to do yet.
+- **Registration** — sign-ups are open.
+- **Check-in** — optional: you can leave it out of the schedule entirely.
+- **Draft** — only exists on tournaments whose teams are formed by a draft.
+- **Live** — matches are being played.
+- **Playoffs** — the playoff stage.
+- **Completed** and **Archived** — the tournament is over.
+
+## What can be scheduled
+
+Only four phases take a time: **Registration**, **Check-in**, **Draft** and **Live**. The schedule lives in the tournament's **Settings → Schedule** section, which also states the time zone your times are read in — the workspace time zone.
+
+Each phase has two fields:
+
+- **Starts at** — when the phase begins. This is what moves the tournament into that phase.
+- **Ends at (optional)** — the end of that phase's action window. It does **not** change the status: it only closes what the phase allows (taking entries, checking in) earlier.
+
+Leave a phase empty to skip scheduling it.
+
+<Callout>
+Registration is open exactly while the **Registration** phase window is running. With no schedule row for that phase, entries are not accepted at all. The current state is shown on **Settings → Registration** in the **Accepting registrations** row as **Open** or **Closed**.
+</Callout>
+
+## Automatic transitions
+
+The **Automatic phase transitions** switch in **Settings → Schedule** turns the automation on. It follows a few simple rules:
+
+- Forward only. The automation never rolls a tournament back.
+- Up to **Live** and no further. Playoffs and finishing depend on how play actually goes, so an organizer moves those.
+- If several phases are already due at once (say you configured the tournament after the fact), the tournament jumps **straight to the latest** due phase instead of stepping through the ones in between.
+- An end time never affects transitions.
+
+If you switched the automation off and turn it back on, any overdue phases are caught up immediately.
+
+<Callout type="warning">
+Any manual status change switches automatic transitions off. That is deliberate: the automation must never fight the organizer. If the schedule should drive the tournament again after you stepped in, turn **Automatic phase transitions** back on.
+</Callout>
+
+## Skipping phases and rolling back
+
+Phases can be **skipped**: you can go from **Registration** straight to **Live**, past check-in and draft. That is a legal move and it is offered in the status selector.
+
+You can also **roll back** — return from **Check-in** to **Registration** to take entries again, or from **Live** back to **Check-in**. The status selector in the tournament header only offers the statuses the current one can lead to. Its confirmation reminds you that the public tournament page follows the status.
+
+**Playoffs** only leads to **Completed**. **Completed** and **Archived** switch into each other both ways: archiving is reversible.
+
+If the tournament does end up on a phase outside its own chain (which can happen after a forced transition), an **Off track** marker appears next to the phase strip on the **Overview** tab.
+
+## What happens on reaching Live
+
+When the tournament reaches **Live**, the first wave of group stages starts by itself: stages that share the same order count as one parallel phase and begin together. Prepare stages and the bracket in advance — see [Stages and brackets](/docs/organizers/brackets).
+
+## Late registration
+
+Sometimes you want to take latecomers without erasing the closing date you advertised. **Settings → Schedule** has an **Allow late registration** switch for that. It lifts only the end of the registration window:
+
+- it does **not** open registration on a tournament that has no registration window at all;
+- it does **not** open it before the window's start time;
+- it does **not** open it on a finished or archived tournament.
+
+If the registration window has no end time set, the switch changes nothing, and the screen says so.
+
+## Hidden tournaments and the preview allowlist
+
+While a tournament is hidden, the public site does not show it at all — the page simply is not found. The **Hidden (preview) — not visible to the public** checkbox lives in **Settings → Preview allowlist**.
+
+While it is ticked you can add specific workspace members to the preview allowlist: they can open the tournament page before it is published and check the description, rules and schedule. Adding and removing take effect immediately and need no save. Untick the box and the tournament becomes public.
+
+## Troubleshooting
+
+| Problem | What to check |
+|---|---|
+| A phase did not switch at its planned time | Whether **Automatic phase transitions** is on. A manual status change turns it off. |
+| Entries are refused although the phase is **Registration** | Whether the **Registration** phase window exists and its end time has not passed. With no schedule row, registration is closed. |
+| Registration closed earlier than intended | The **Ends at (optional)** time on the **Registration** phase; or turn on **Allow late registration**. |
+| The tournament skipped a phase | That is by design: when several phases are already due, the automation moves straight to the latest one. |
+| The tournament is missing from the public site | Whether **Hidden (preview) — not visible to the public** is still ticked. |
+
+## See also
+
+- [Your first tournament](/docs/organizers/first-tournament)
+- [Registration and entries](/docs/organizers/registration)
+- [Stages and brackets](/docs/organizers/brackets)
+- [What a player sees at check-in](/docs/players/check-in)

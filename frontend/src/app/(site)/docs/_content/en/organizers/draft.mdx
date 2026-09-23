@@ -1,0 +1,137 @@
+A live draft builds teams by letting captains take turns picking players from a shared pool against a clock. This article walks through setting a draft up, starting it, steering it while it runs, and turning the result into tournament teams.
+
+## Before you start
+
+A draft is only available when **Team formation** in **Admin → Tournaments → Settings → General** is set to **Live draft**. The **Teams → Draft** tab then appears, and everything happens there. Roster size and the number of rounds come from the tournament's roster shape — see [Balancer and teams](/docs/organizers/team-formation). The player pool is the balancer's pool, so it is easier to fix ranks and roles there beforehand.
+
+## Setup, step by step
+
+The setup wizard has six steps, and you cannot move on while the current one has errors.
+
+| Step | What you do |
+| --- | --- |
+| **Parameters** | Roster size, number of teams, timing and the rules used throughout. |
+| **Pool** | Check capacity, role coverage and data quality. |
+| **Captains** | Choose exactly as many captains as there are teams, and name their teams. |
+| **Order** | Calculate or arrange the captain order and preview every round. |
+| **Review** | Run server validation and clear every blocker. |
+| **Ready** | Open the board and start. |
+
+### Parameters
+
+- **Final roster size** is shown for reference only; it comes from the tournament settings. Below it you see how many picks each team gets — the captain already occupies one seat.
+- **Number of teams** — from 2 to 32. You will select the same number of captains on the next step.
+- **Time per pick** — 30, 45, 60 or 90 seconds, or your own value between 10 and 600 seconds.
+- **Overtime** — 0, 15, 30 or 60 seconds, or your own value up to 300. When the main clock runs out, the captain on the clock gets this grace period, and only then does the server autopick. **Off** means an immediate autopick.
+- **Advanced settings** holds **Allow admin override**: an organizer can correct a pick in an exceptional situation, and every correction is recorded.
+
+### Format
+
+| Format | How the order runs |
+| --- | --- |
+| **Snake** | The direction reverses after every round. |
+| **Linear** | The same captain order is used every round. |
+| **Custom** | Each round gets its own rule. |
+
+With **Custom**, each round can use **Linear (1 → N)**, **Reverse (N → 1)**, **Weakest captain first**, **Strongest captain first**, **Lowest team average first** or **Highest team average first**. The last two are computed from the rosters as they stand, so that round's order is only known when the round begins.
+
+### Pool and captains
+
+The **Pool** step shows how many players are ready to be drafted, how the declared roles are covered, who has no rank or no linked account, and who is excluded. Blockers are spelled out: there are fewer eligible players than roster slots; a number of pool players have no rank; there are not enough eligible tank, damage or support players. Ranks are added in the balancer.
+
+On **Captains** you select exactly as many players as there are teams. There is a search by BattleTag or name and the sort options **Rank: high to low**, **Rank: low to high** and **Name (A–Z)**. Each team can be given a name right away; the field is optional.
+
+### Captain order
+
+- **Weakest first** — lower-rated captains receive earlier seats.
+- **Strongest first** — the other way round.
+- **Seeded random** — a random order; the saved seed makes it reproducible, and **Generate a new random seed** reshuffles.
+- **Manual** — drag captains into the exact order you want.
+
+Below it, **Round schedule preview** lays out the whole pick order. For rounds whose order depends on live team averages, it says instead that the order is resolved on the server when the round starts.
+
+### Autopick
+
+If a captain runs out of time, the server picks for them. The strategy is set on the parameters step:
+
+- **Best fit** — balances role need and player strength while keeping a valid finish possible. This is the default.
+- **Role need** — fills the role that team needs most first.
+- **Best available** — takes the strongest player left.
+
+Whatever the strategy, it only ever chooses from safe options: a pick that would leave some required role in another team impossible to fill is never made.
+
+### Review and seeding
+
+On **Review** the server runs a dry run and checks that every role is reachable. It verifies that there are enough eligible players, that the captain count matches the team count, that all final role slots are reachable, that every captain has a linked account, that the captain order is complete, that the pick timer is valid and that private registration notes stay hidden. Seeding is unavailable until this passes.
+
+**Seed draft** creates the session from the validated configuration. If a session was already seeded, re-seeding warns that teams, players and future picks will be rebuilt; picks already made are not affected.
+
+<Callout>
+Once the session exists, the roster shape and format are locked. Complete or cancel the session to change them.
+</Callout>
+
+## Starting
+
+The **Ready** step offers **Open live board** and **Start draft**. The sensible order is to give captains the board link first, wait for everyone to connect, and only then start.
+
+<Callout type="warning">
+Starting puts every captain's board live and starts the clock on the first pick at once. You can pause the draft afterwards, but it cannot be returned to the **Ready** state.
+</Callout>
+
+## Steering a live draft
+
+While the draft runs, **Teams → Draft** becomes a control room. It shows the session status (**Setup**, **Ready**, **Live**, **Paused**, **Completed**, **Cancelled**), the realtime connection, the clock, who is on the clock, the round and pick number, how many captains are online, and whether the draft can still finish correctly.
+
+The actions:
+
+- **Pause** and **Resume** control the flow. Both, plus adding seconds to the clock and the manual pick override, are also in the organizer dock inside the draft room, where you can see the board.
+- **Run autopick** — the server picks the highest-ranked safe option for the current captain and closes the pick at once. The captain cannot undo it.
+- **Roll back last pick** — the picked player returns to the pool, the pick is handed back to that team's captain, and the draft stays paused until you resume it manually.
+- **Cancel draft** — available in **Ready**, **Live** and **Paused**.
+- **Export teams** — appears once the draft is completed.
+
+<Callout type="warning">
+**Cancel draft** closes every captain's board at once, discards the drafted teams, and the session can never be resumed. Completed picks stay readable for audit.
+</Callout>
+
+## Automatic pauses
+
+The server pauses the draft on its own in two cases, and only you can resume it.
+
+| Reason | What happened and what to do |
+| --- | --- |
+| Role shortage | No valid role assignment remains. Press **Resolve role shortage**, give a player the missing role with a rank, then resume. |
+| Order recalculated | This round's pick order was recalculated from the live team averages. Review the new order on the board, then resume — captains cannot pick until you do. |
+
+The **Add a missing player role** dialog changes only the draft snapshot and never the original registration. A role without a rank is unusable, so the rank is required. The reason is mandatory and visible only to organizers: it is never published to the draft board. **Preview impact** shows whether the change clears the shortage before you commit it.
+
+## Turning the result into teams
+
+When every pick is done the session moves to **Completed** and **Export teams** appears. Each drafted roster is written to the tournament's teams, replacing their current players; repeating the export produces the same result. From there rosters are edited in the teams editor — see [Balancer and teams](/docs/organizers/team-formation).
+
+A separate **Re-export ranks** action refreshes the ranks of the players this draft already exported, leaving the teams untouched.
+
+## Draft history
+
+Every session created for the tournament is listed under **Draft history**, and the ones you no longer need can be erased. Deleting is only possible once a draft is cancelled.
+
+<Callout type="warning">
+Deleting a session erases its teams, the player pool, every pick and the audit trail for good. Teams already exported to the tournament are kept.
+</Callout>
+
+## Troubleshooting
+
+| Problem | What to do |
+| --- | --- |
+| There is no **Draft** tab | **Team formation** in **Settings → General** must be **Live draft**. |
+| Stuck on the **Pool** step | Clear the blockers: add players, set missing ranks in the balancer, cover the short roles. |
+| A captain cannot see their board | Check how many captains are online in the control room, and that the captain has a linked account — one of the **Review** checks. |
+| The draft paused by itself | Find the system pause reason in the table above and resume manually. |
+| A pick went wrong | **Roll back last pick** returns the player to the pool. With admin override allowed, a pick can also be replaced inside the draft room. |
+
+## See also
+
+- [Balancer and teams](/docs/organizers/team-formation)
+- [Draft](/docs/players/draft)
+- [Phases and schedule](/docs/organizers/schedule)
+- [Registration and entries](/docs/organizers/registration)

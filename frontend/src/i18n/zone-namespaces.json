@@ -35,6 +35,7 @@
     "chat",
     "common",
     "discord",
+    "docs",
     "draft",
     "encounters",
     "errors",

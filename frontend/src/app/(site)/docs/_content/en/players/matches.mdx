@@ -1,0 +1,103 @@
+A match on the platform is a series of maps with a shared pre-game: the two teams ban and pick maps and heroes, then play and report the score themselves. This page walks the whole path, from "where is my match" to "the result is locked in".
+
+## Finding your match
+
+- On the tournament page — the **Matches** section. It opens once the tournament's matches have started.
+- On the site-wide **Encounters** page — every series of every tournament in one place, with a **My team's series** view and a search by team, player or matchup.
+- The encounter page itself shows the series score, the maps, the rosters and the captain reports.
+
+If a pre-game is configured for the match, the encounter page carries a **Pre-game room** button. That room is where everything happens.
+
+## Readiness
+
+The room does not open straight away: both captains press **I'm ready** first. Until then you see "This room opens once both captains confirm they are ready" and which side is still missing. The map pool and the step sequence genuinely do not exist yet, so there is nothing else to wait for.
+
+Some states waiting will not fix — they need the organizer:
+
+- **Not configured** — no rules have been set for this match yet.
+- **Teams are not decided yet** — the bracket has not produced your opponent.
+- **Bracket preview** — the bracket was generated ahead of time and opens when the organizer activates the stage.
+
+## How the pre-game runs
+
+The room repeats the same loop for every map of the series:
+
+1. **Map veto** — the sides ban and pick in turn until this round's map is left.
+2. **Hero bans** — these open only after the round's map is settled, because heroes are banned for a known map.
+3. **Map result** — you play the map and both captains report the score.
+4. The accepted result opens the next map of the series.
+
+Rounds run strictly in order: "Round N opens once the earlier rounds are decided." You cannot ban round two's maps before round one has been played.
+
+## Steps and who goes first
+
+Four kinds of step appear in a sequence:
+
+| Step | What the side does |
+| --- | --- |
+| **Ban** | Removes a candidate from the pool |
+| **Pick** | Chooses the candidate that will be played |
+| **Protect** | Shields one candidate so the opponent cannot ban it |
+| **Decider** | Whatever is left. If more than one item is still available at this step, one is chosen at random |
+
+Round one is opened by the **higher seed**. The seed is shown at the top of the room together with where it came from: from bracket, from standings, default (home), or set by admin.
+
+Who opens the later rounds depends on the tournament's settings. There are five options:
+
+- **The same side every round** — whoever opened round one keeps opening.
+- **Sides alternate** — the opener changes every round regardless of results.
+- **The winner of the previous round**.
+- **The loser of the previous round**.
+- **The loser's choice** — the side that lost picks who bans first, and the room waits for their answer. That captain gets a "Choose who opens the next round" dialog, while the opponent sees "Waiting for the other team to choose who bans first this round."
+
+If the organizer set a **Turn timer**, the captain on the clock sees a countdown. The limit is optional — without it captains take as long as they need.
+
+## Repeats and undo
+
+The repeat rule between rounds varies: repeats can be allowed, banned for both sides (once anybody bans a candidate it is gone for the rest of the series), or banned only for the side that used it. Protects apply inside their own round only and never carry over.
+
+Misclicked? Use **Ask to undo**. The last action can only be taken back if both captains agree: the opponent sees "the other team asks to undo this" and presses **Agree** or **Decline**. You can **Withdraw** your own request. An admin can undo without agreement.
+
+## Room chat
+
+The room has a **Room chat**. Captains and organizers write in it and spectators read: "Read-only — only captains and organizers write here." Everyone who can open the room sees what is written.
+
+## Reporting each map
+
+Once a map is played, both captains report the score independently. Until both reports are in, the other one stays hidden — it is marked **Sealed until both**.
+
+- The reports match — the map is locked in, the series score moves, and the next map's bans open.
+- The reports differ — you get **Reports differ** and the organizer decides the result. They are notified about the dispute.
+
+Before a map is locked in you can fix your own report with **Change my report**.
+
+<Callout type="warning">
+Once a map's result is confirmed it is closed. The room says "This map's result is confirmed" and reminds you that only an organizer can change it now. If the numbers are wrong, do not replay the map or file another report — message the organizer.
+</Callout>
+
+## The match report
+
+When the pre-game and the maps are done, captains fill in the **Match Report** for the whole series: the score, the **Map replay codes**, a **Match quality** rating and a **Comment**. The organizer can make some fields required and add their own.
+
+The logic is the same: matching reports give **Reports match — result confirmed**; different ones give **Reports differ — result disputed** and go to the organizer. A confirmed result can only be changed by an admin.
+
+## Match statistics
+
+The series score appears as soon as it is confirmed. Detailed per-player statistics — heroes, damage, healing — only appear once the game logs have been processed. Until then the encounter page says: "No game logs were parsed for this series, so per-player statistics are unavailable."
+
+## Troubleshooting
+
+| Problem | What to do |
+| --- | --- |
+| There is no **Pre-game room** button | The organizer configured neither a map veto nor hero bans for this match |
+| The room says "Waiting for both captains" | The other captain has not pressed **I'm ready** yet |
+| Hero bans will not open | This round's map has to be settled first |
+| "The pool does not cover this series" or "A slot has too few candidates" | Only the organizer can fix this; waiting will not help |
+| Your opponent reported a different score | Do nothing — the organizer resolves the dispute |
+
+## See also
+
+- [How a tournament works](/docs/players/tournaments)
+- [Draft](/docs/players/draft)
+- [Scrims](/docs/players/scrims)
+- [Profile, stats and ranks](/docs/players/stats)

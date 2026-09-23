@@ -1,0 +1,118 @@
+A stage is one part of a tournament: a group phase, a Swiss round, or a playoff bracket. This page covers building stages, generating the bracket, and setting seeding, points and tiebreakers.
+
+It all lives in the admin: open **Tournaments**, pick the tournament and go to the **Bracket** tab. The stage list is on the left; the editor for the selected stage is on the right, with the sections **General**, **Seeding**, **Tiebreakers**, **Best-of**, **Round schedule** and **Items**.
+
+## Stage formats
+
+**Add stage** creates a stage: **Stage name**, **Stage type**, and a few extra fields for some formats.
+
+| Format | What it is |
+| --- | --- |
+| **Round Robin** | Every team in the group plays every other. Nothing advances through a bracket — the Standings are the result. With an odd number of teams, one team sits out each round. |
+| **Swiss** | Each round pairs teams on similar results. **Swiss max rounds** sets how many rounds are played. |
+| **Single Elimination** | Lose once and you are out. When the field is not a power of two, some teams skip the first round. |
+| **Double Elimination** | An upper and a lower bracket; a team is out after its second loss. |
+
+Swiss avoids repeating a pairing that has already been played, and it does not give a second bye to a team that already had one. If the field cannot be paired at all, generation stops with an error — add or remove a team.
+
+<Callout>
+Once a stage exists, only platform administrators can change its format: **Only superusers can modify stage type after creation.**
+</Callout>
+
+## The life of a stage
+
+The stage header shows its status.
+
+| Status | What it means |
+| --- | --- |
+| **Draft** | No matches generated yet. |
+| **Preview** | The bracket is generated but the stage is not active. Organizers see it; captains do not. |
+| **Active** | The stage is live: matches can be played and reported. |
+| **Completed** | The stage is finished. |
+
+**Generate bracket** builds the bracket without activating the stage — that is what preview is for. Until the stage is activated, captains can neither run the map veto nor file a report: their room shows **Bracket preview** and a note saying it opens once you activate the stage.
+
+The usual order is:
+
+1. Create the stage and wire teams into it (the **Items** section).
+2. Press **Generate bracket** and check the result in **Bracket preview**.
+3. When it looks right, choose **Activate stage** — or **Activate & generate** to do both at once for a playoff bracket.
+
+Once a stage has matches the button reads **Regenerate**. It leaves played matches alone: in a grouped stage only groups with no matches get a new bracket, an all-empty bracket simply gets its seeded teams written in, and anything else is blocked until you delete the existing matches.
+
+**Revert to draft** puts the stage back into draft, but only while none of its matches has started.
+
+<Callout type="warning">
+**Delete stage** removes the stage structure, its team slots and its generated matches. **Delete structure item** also removes that group's standings. Neither can be undone.
+</Callout>
+
+## Parallel stages
+
+The **Phase** field in **General** sets the wave. Stages sharing a number run in parallel — that is how a High and a Low division run side by side. A higher number is a later wave, fed by the ones before it.
+
+If you activate a stage while an earlier one still has open encounters, the platform warns you first: the seeds freeze against standings that can still change.
+
+## Seeding
+
+The **Seeding** section.
+
+- **Bracket seeds** decides who is seed 1 in the generated bracket: **Slot order (manual / standings)**, **Highest team avg SR first**, **Highest team total SR first** or **Random (stable per stage)**.
+- **Teams advancing to playoff (per group)** is how many teams leave each group. Leave it empty to derive the number from the bracket wiring. **Advance count per group** below overrides it for a single group.
+- **Wire seeds from** plus the **Wire** button names the group stage that feeds this bracket. It is required when two divisions run in parallel.
+- The **Seed by SR** menu item spreads teams across the groups with a snake SR draft. Every manual assignment in the stage is cleared first.
+- **Auto-wire from groups** links the playoff to the group stage for you.
+
+### Lower-bracket seeds in double elimination
+
+**Group seeding** decides where the advancing teams land:
+
+- **All advancing → Upper bracket** — everyone starts in the upper bracket.
+- **Split: half Upper, half Lower** — half of them start in the lower bracket.
+
+### The grand final
+
+The **Grand final** field in **General**:
+
+- **No reset** — the tournament ends at the grand final.
+- **With reset** — if the lower-bracket team wins the grand final, an extra **Grand Final Reset** match is created. It appears only in that case: if the upper-bracket team wins, the grand final is the last match.
+
+## Points and tiebreakers
+
+Points for a result are set on the tournament: **Settings → Scoring**, fields **Win**, **Draw**, **Loss**. A single stage can override them in **Tiebreakers** — **Win points override**, **Draw points override**, **Loss points override**. An empty field means "same as the tournament".
+
+For Swiss, the same section has **Swiss bye points**: what a team scores for a round it sits out. It defaults to the win points.
+
+**Standings preset** picks a ready-made set of tiebreakers (**System default (based on type)**, **Challonge Swiss (Buchholz first)**, **Challonge Round Robin**, **Default bracket**), and the **Tiebreaker evaluation order** list below lets you reorder the steps with the arrows or switch off the ones you do not want — a metric that is switched off is simply not evaluated.
+
+The metrics are **Points**, **Head-to-Head**, **Median Buchholz**, **Buchholz**, **Match Wins** and **Score Differential**. **Points** is the ranking metric: it is always first and cannot be switched off. **Manual Override** is a system step and always comes last.
+
+**Reset to preset defaults** restores the order the chosen preset dictates.
+
+### Manual positions
+
+When teams come out level on every tiebreaker, the **Unresolved ties** panel appears on **Matches → Standings**. Order the teams with the arrows and press **Save order** — that order is stored and survives a recalculation. **Clear override** removes it again.
+
+<Callout type="warning">
+**Recalculate** rebuilds every standings row of the tournament from encounter results. Manual edits to individual rows are overwritten — save an order through **Unresolved ties** instead.
+</Callout>
+
+Standings count closed rounds only: while a round still has an unplayed encounter, it does not enter the table.
+
+## Series length
+
+In **Best-of**, the **Default** field sets the series length, **Final** (in double elimination, **Grand Final**) sets it for the deciding match, and the rows below set it per round. In double elimination the upper and lower bracket rounds are configured separately.
+
+The length is baked into matches when the bracket is generated. **Apply to existing matches** writes it into matches that already exist, without regenerating.
+
+## How teams advance
+
+- Only a completed match with a decided winner moves a team on.
+- A draw cannot finish an elimination match. Try to record a level score and the platform refuses: **An elimination bracket needs a winner — a draw cannot be recorded here.**
+- Change the winner of a match that has already been played and every result that depended on it is reset, so those matches have to be played again. See [Running matches](/docs/organizers/matches).
+
+## See also
+
+- [Running matches](/docs/organizers/matches)
+- [Balancer and teams](/docs/organizers/team-formation)
+- [Phases and schedule](/docs/organizers/schedule)
+- [Match logs](/docs/organizers/logs)

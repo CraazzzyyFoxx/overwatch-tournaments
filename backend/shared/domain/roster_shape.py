@@ -52,9 +52,10 @@ RosterSlotCode = Literal["tank", "damage", "support", "flex"]
 RegistrationRoleCode = Literal["tank", "damage", "support"]
 
 DEFAULT_ROSTER_SLOTS: Final[Mapping[str, int]] = MappingProxyType({"tank": 1, "damage": 2, "support": 2})
-# A one-slot roster has nothing to draft and nothing to balance: the captain
-# fills the only slot.
-MIN_TEAM_SIZE: Final[int] = 2
+# A roster shape is a tournament's team format, not a draft setting: 1v1 is a
+# legal format. A draft refuses a shape it has nothing to pick for on its own
+# (balancer-service ``DraftLifecycleService.create_session``).
+MIN_TEAM_SIZE: Final[int] = 1
 # Upper bound inherited from the validator this shape replaces:
 # DraftSessionCreateRequest._team_size_range in balancer-service/src/schemas/draft.py.
 MAX_TEAM_SIZE: Final[int] = 12
@@ -154,7 +155,10 @@ class RosterShape:
 
     @property
     def draft_rounds(self) -> int:
-        """Picks this shape needs: the captain already fills one slot."""
+        """Picks this shape needs: the captain already fills one slot.
+
+        ``0`` for a one-slot roster -- such a tournament simply cannot run a draft.
+        """
         return self.team_size - 1
 
 

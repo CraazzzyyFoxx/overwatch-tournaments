@@ -1,0 +1,116 @@
+A mix is a pickup lobby: you gather whoever turned up, split them into two teams by rank and role, and record the results. This article is for the person running one — how to create a mix, who gets a seat, how the split works and how to keep score.
+
+## Who can host a mix
+
+Hosting comes from the **Host** workspace role, which admins and owners also have. A host needs no admin panel: everything happens on the public site, under **Matches → Mixes**. Anyone can watch a mix, signed out included; only the host and their co-hosts can change it. See [Roles and permissions](/docs/organizers/roles) for the roles.
+
+A mix always belongs to one workspace: players come from its members, and the **Mixes** page asks you to pick a community first.
+
+## Creating a mix
+
+**Create mix** opens a dialog:
+
+1. **Name** — required, for example "Evening mix".
+2. **Starting lineup** — **No players** or **From a previous mix**.
+
+Copying a previous mix brings over the lineup, each player's role setup, the team names and the co-hosts. Match history is not copied and every player starts in the pool: last session's pins and benchings are not inherited.
+
+The mix itself carries no settings. The roster shape, how a lobby is split and what a win is worth belong to your account and are the same for every mix you host. They live in **Account settings → Mixes**.
+
+## Who plays: three columns
+
+Players are added with **Add players**: search the workspace roster, filter by **Everyone** or **My ranks**, and add someone new by BattleTag if needed.
+
+The lineup is then arranged by dragging players between three columns:
+
+| Column | What it means |
+| --- | --- |
+| **Must play** | A seat is guaranteed. This player is never left out of the teams. |
+| **In the pool** | In the balance. If seats run short, this is where someone is dropped from. |
+| **Benched** | Sitting out with all their settings kept — one drag brings them back. |
+
+Each player has an order of roles, the first being the one they most want, plus a **Full flex** switch for "any role is fine". A role with no rank is not usable, so a strip above the columns tells you which role is short before you press Balance.
+
+## Splitting into teams
+
+**Balance teams** splits the lineup into **two** teams. The team size comes from the roster shape in your account settings, so the number of seats is two rosters. If more people turned up, the extras are moved to **Benched** automatically, and whoever has been sitting out longest is protected first.
+
+One run can return several options — how many is up to your settings. The arrows by the heading page through them, and everyone watching sees the option you have open. Each option shows the rank gap between the teams and how many players sit off their first-choice role. Two players can be swapped by hand by dragging one onto the other's seat; only seats of the same role swap. Team names are edited with the pencil next to the name.
+
+How evenly ranks are split versus how carefully preferred roles are honoured is the **Balancing (rank balance vs role comfort)** slider in your account settings: left for even ranks, right for more players on the role they asked for. **Line importance** sits next to it, so a tank mismatch can be made to cost more than a support one.
+
+## The sit-out queue
+
+When there are more players than seats, the mix suggests who should sit. The rule runs in order:
+
+1. Whoever has sat out the longest run goes in first.
+2. Then whoever has the shorter run of maps played back to back.
+3. Then whoever has played the fewest matches in this mix.
+
+Players in **Must play** are outside the queue; their seat is promised. While the mix has no maps played yet, or the whole lineup fits into two teams, there are no suggestions at all — nothing fair can be invented out of an empty history.
+
+**Apply rotation hints** above the lineup moves everyone into the columns the queue suggests in one press. The decision still stays yours.
+
+## Co-hosts and handing a mix over
+
+**Manage access** opens the **Co-hosts** list. A co-host can do everything the host can: add players, balance the lineup, record results. A mix can have at most 16 co-hosts.
+
+The same dialog has **Transfer host**, which hands the mix to another workspace member. That is more than a convenience: a mix balances on the host's own rank book, so after a transfer it splits by the new owner's numbers.
+
+## Your own rank book
+
+Every host keeps their own ranks for players, and a mix balances on those rather than on the workspace's shared ranks.
+
+- When a player joins your mix, their rank from the shared source is copied to you as a starting point. A value you already set is never overwritten.
+- Editing a rank on the player card changes only your book. Other organizers and other hosts do not see it.
+- Clearing a role's rank hands that role back to the workspace rank.
+- If a role has no number anywhere, it stays unranked — and takes no part in the split.
+
+Your account settings also hold **Points per win**. When it is filled in, recording a result raises every winning player's rank by that many points in your book and lowers every losing player's by the same. Leave it empty to record results without touching ranks.
+
+## Map and result
+
+The **Next map** block rolls a map: **Any** rolls from all competitive maps, or you can limit it to a mode or choose a map by hand. The choice is shared — everyone watching the mix sees the same map.
+
+The result is recorded with three buttons under the rosters: the first team's win, **Draw**, and the second team's win. You can record as many matches in a row as you like; the mix does not close. After a result the map is cleared for a fresh roll, and the **Must play** pins of everyone who played are released: the promise covered one game, not the whole evening.
+
+The most recent match can be undone — it leaves the history and the ranks go back exactly where they were. Only the newest one: older mistakes are fixed by recording the correct result again.
+
+## Mix statuses
+
+| Status | What it means |
+| --- | --- |
+| **Preparing** | The mix exists, the teams are not built yet. |
+| **Teams ready** | There is a current split, so you can play and record results. |
+| **Completed** | The mix is closed and accepts no more changes. |
+| **Cancelled** | The mix was stopped; its results stay in the history. |
+
+**Close mix** moves a mix to the completed state.
+
+<Callout type="warning">
+**Close mix** stops further balancing, roster edits and result recording. Matches already recorded stay recorded, but this cannot be undone from the mix page.
+</Callout>
+
+Closed and cancelled mixes remain on the **Mixes** page under **History**, together with their results. The same page carries a leaderboard by wins for all time, the last 30 days or the last 7 days.
+
+<Callout type="warning">
+Deleting a mix erases it completely and is available only to a workspace admin. It cannot be restored.
+</Callout>
+
+## Troubleshooting
+
+| Problem | What to do |
+| --- | --- |
+| No **Create mix** button | You need the **Host** role in this workspace — or the wrong community is selected. |
+| The split will not run | Someone in the lineup has no ranked role at all. Set a rank on their card or move them to **Benched**. |
+| A role is short | The strip above the columns names the short role. Give someone that role or invite more players. |
+| Too many players end up off-role | Move the **Balancing (rank balance vs role comfort)** slider right in your account settings and balance again. |
+| The wrong result was recorded | Undo the last match and record the right one. Earlier matches cannot be undone. |
+| Someone always sits out | Press **Apply rotation hints** — the queue is built from who has waited longest. |
+
+## See also
+
+- [Mixes](/docs/players/mixes)
+- [Roles and permissions](/docs/organizers/roles)
+- [Balancer and teams](/docs/organizers/team-formation)
+- [Ranks and divisions](/docs/organizers/divisions)

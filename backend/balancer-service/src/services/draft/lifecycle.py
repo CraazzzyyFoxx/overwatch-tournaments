@@ -109,6 +109,13 @@ class DraftLifecycleService:
         settings: dict | None = None,
     ) -> DraftSession:
         # `rounds` is derived, never passed: the shape owns the roster size.
+        if shape.draft_rounds < 1:
+            raise _err(
+                "invalid_roster_shape",
+                f"The roster shape {shape.slots} has a single slot: the captain is the whole team, "
+                "so there is nothing to draft",
+                status_code=422,
+            )
         await self.assert_no_active_draft(session, tournament_id)
         draft = DraftSession(
             tournament_id=tournament_id,

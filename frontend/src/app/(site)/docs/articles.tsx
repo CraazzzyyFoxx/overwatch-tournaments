@@ -70,7 +70,7 @@ function Overview() {
         <a href="https://owt.craazzzyyfoxx.me" rel="noreferrer">
           owt.craazzzyyfoxx.me
         </a>
-        . Схема таблиц — <Link href="/docs/schema">/docs/schema</Link>. Эндпоинты —{" "}
+        . Схема таблиц — <Link href="/docs/dev/schema">/docs/dev/schema</Link>. Эндпоинты —{" "}
         <a href="/api/docs">/api/docs</a>, переключатель v1/v2 в шапке справочника.
       </div>
     </>
@@ -106,7 +106,7 @@ function Workspaces() {
       </p>
       <p>
         Подробнее про логин, игрока и ключи — в{" "}
-        <Link href="/docs/identity">аккаунтах и доступе</Link>.
+        <Link href="/docs/dev/identity">аккаунтах и доступе</Link>.
       </p>
     </>
   );

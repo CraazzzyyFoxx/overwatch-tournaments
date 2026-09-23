@@ -1,0 +1,90 @@
+Everything that happens to you personally — a team invite, a decision on your registration, check-in opening, a scheduled match — lands in the bell on the site. The Discord bot can repeat it as a direct message, where some of the actions are one button press away.
+
+## The bell
+
+The bell icon sits in the site header next to the account menu and is only there when you are signed in. If anything is unread, it carries a counter (more than ninety-nine shows as **99+**).
+
+Unread items are highlighted in the list. Clicking a notification opens the screen it is about — the tournament page, the participants list or the match page. Each row has **Mark read** and **Delete**; above the list are **Mark all read**, **Clear read** and **Settings**. Older entries load with **Show older**.
+
+What arrives here:
+
+| Event | When it arrives |
+| --- | --- |
+| **Team invite** | A captain invited you to their roster. |
+| **Invite answered** | A player accepted or declined your invite (for captains). |
+| **Registration opened** | Registration opened for one of the community's tournaments. |
+| **Registration approved** / **Registration rejected** | The organizer reviewed your registration. |
+| **Check-in opened** | Time to confirm you are playing. |
+| **Match scheduled** | Your encounter got a start time. |
+| **Report disputed** | The two teams disagreed on a map result in your match. |
+| **Removed from team**, **Team rejected**, **Team disbanded** | Changes to a roster you were on. |
+| **New announcement** | The organizer published an announcement. |
+
+Site notifications always arrive — they cannot be switched off, they are your record of what happened. An organizer can retire a notification they sent: it then disappears from the inbox of everyone who received it.
+
+## Discord direct messages
+
+If your account has Discord linked, the bot repeats your personal events as direct messages. The switches are in **Account settings → Notifications**, section **Discord direct messages**. With no Discord linked you get the hint **Link Discord in Profile** instead.
+
+There are three switches, and all of them are on by default:
+
+| Switch | What it repeats |
+| --- | --- |
+| **Tournaments** | Check-in opening, and decisions on your registrations. |
+| **Matches** | Your match being scheduled or moved, and disputed reports. |
+| **Teams** | Invites, answers to them, and being removed from a roster. |
+
+Everything still lands in the bell either way — these switches only decide what Discord repeats.
+
+You can also turn everything off without opening the site: every direct message from the bot carries a small muted-bell button. It opens a reply only you can see, with **Turn all off** and **Notification settings**.
+
+<Callout>
+If your Discord direct messages are closed, or you share no server with the bot, delivery simply does not happen — nothing is queued and nothing is retried. Your site notifications are unaffected.
+</Callout>
+
+Besides direct messages, a community can wire up a channel in its own Discord: shared events go there — registration opening, check-in opening and scheduled matches. Announcements are never sent to Discord; they live on the site.
+
+## Buttons inside the bot's messages
+
+A card carries buttons exactly where one press does the whole job:
+
+- **Accept** and **Decline** — on a team invite.
+- **Check in** — on the check-in opened message.
+- **My registration** — shows your registration: status, roles, team, whether you are checked in, and your queue position.
+- The links **Open tournament**, **Open match** and **View participants** simply take you to the site.
+
+Anything that needs a form — registering, reporting a score, disputing one — is not a button: the card links to the site instead.
+
+The bot's reply to a press is visible only to you. After a successful action the buttons are taken off the card and a line is added saying what happened: **You accepted this invite**, **You declined this invite**, **Checked in**. A card posted in a shared channel is never edited — it belongs to everyone.
+
+## What the bot says when a press does not work
+
+| Reply | What it means |
+| --- | --- |
+| This Discord account isn't linked to an OWT account | Buttons only act on behalf of a linked account. The reply carries a **Link Discord** button. |
+| Your OWT account is deactivated | The account is blocked; contact the organizers. |
+| The service is unavailable right now | A temporary hiccup — press again in a minute. |
+| This button no longer works | The message is too old; open the tournament on the site. |
+| You're not registered for this tournament | You have no registration there. |
+| This invite has already been accepted / was already declined | It was already answered, possibly from the site. |
+| The captain withdrew this invite | The invite no longer stands. |
+| This invite has expired | Ask the captain for a new one. |
+| This invite was sent to a different account | You pressed someone else's card. |
+| Your registration for this tournament is no longer active | It was withdrawn, rejected or banned. |
+| You're already registered for this tournament | No second registration is needed. |
+| Check-in is closed right now | The window has not opened yet, or it has already closed. See [Check-in](/docs/players/check-in). |
+
+## The announcement banner
+
+An organizer's announcement is shown as a strip over the page — on every page, and even to visitors who are not signed in. It may carry a **Learn more** button pointing at the relevant page. Only one announcement is shown at a time, the newest one.
+
+<Callout type="warning">
+**Dismiss announcement** closes it for good: the banner cannot be brought back. If you are signed in, dismissing it also marks it read, so it leaves the bell as well.
+</Callout>
+
+## See also
+
+- [Account and sign-in](/docs/players/account)
+- [Check-in](/docs/players/check-in)
+- [Captain teams and invites](/docs/players/captain-teams)
+- [Matches: pick-ban and results](/docs/players/matches)

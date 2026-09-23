@@ -1,10 +1,14 @@
 import { fileURLToPath } from "node:url";
 import { dirname } from "node:path";
 import createNextIntlPlugin from "next-intl/plugin";
+import createMDX from "@next/mdx";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const withNextIntl = createNextIntlPlugin("./src/i18n/request.ts");
+// Docs articles are imported as modules, not routed as pages, so no
+// `pageExtensions`. Turbopack needs plugins by name, not by reference.
+const withMDX = createMDX({ options: { remarkPlugins: [["remark-gfm", {}]] } });
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -63,6 +67,17 @@ const nextConfig = {
       destination: `${gateway}${prefix}/:path*`
     }));
   },
+  async redirects() {
+    // The developer articles lived at /docs/<slug> before /docs gained the
+    // player and organizer sections.
+    return [
+      {
+        source: "/docs/:slug(workspaces|identity|tournaments|registration|matches|balancer|realtime|api|schema)",
+        destination: "/docs/dev/:slug",
+        permanent: true
+      }
+    ];
+  },
   images: {
     unoptimized: true,
     qualities: [25, 50, 75, 100],
@@ -119,4 +134,4 @@ const nextConfig = {
   }
 };
 
-export default withNextIntl(nextConfig);
+export default withNextIntl(withMDX(nextConfig));

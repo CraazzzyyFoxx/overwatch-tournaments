@@ -1,0 +1,93 @@
+This article is about the people in your workspace: where to find players, how a player differs from an account, how to connect the two, and where to see who changed what.
+
+## Player, account and member
+
+These are three different things, and confusing them causes most of the questions.
+
+- A **player** is the in-game identity: a name, the handles linked to it, tournament history and stats.
+- An **account** is what someone signs in with: an email, a password, a linked Discord or Battle.net.
+- A **workspace member** is what ties a player to your community — rosters, registrations, ranks and achievements all hang off it.
+
+A player identity can exist without an account. Such identities appear from match logs, from imports, and when an organizer adds a BattleTag to the workspace roster. They sit in rosters, carry registrations and earn achievements, but nobody can sign in as them and they hold no permissions — permissions only appear once an account is linked.
+
+## People
+
+The **People** section is the player list. The table has three columns: **Person** (who it is), **Identities** (the linked handles) and **Account** (the account that signs in as this player).
+
+The filters at the top narrow it down: **Tournament** shows one tournament's participants, **Has account** shows only the identities someone owns, and **No identities** shows the ones with no handle linked at all. The last two are handy for finding profiles that need cleaning up.
+
+**Create identity** adds a player identity by hand. Usually you do not need it: identities appear on their own when a player joins a roster or registers.
+
+Clicking a row opens the person's card, split into tabs:
+
+- **Identity** — the name and linked handles, with rank collection and subscription state beside them.
+- **Participations** — which tournaments the person played.
+- **Account** — the account that signs in as this player, or a note that there is none.
+- **Achievements** — what they have earned.
+
+## Linking an account to an identity
+
+The link is made from the account's side, under **Access → Accounts**. Open an account's card:
+
+- if an identity is already linked, it is shown there and **Unlink** disconnects it;
+- if not, pick an identity and press **Assign identity**.
+
+Linking does not move history around: an identity that had no owner simply gains one, and all its results stay where they are. Unlinking is equally safe for the history, but the person stops owning that identity.
+
+<Callout>
+Players can link their own handles themselves, through Discord or Battle.net in account settings. What a player sees is described in [Account and profile](/docs/players/account).
+</Callout>
+
+## Members
+
+**Members** is not the player list — it is the list of accounts that hold roles in your workspace: organizers, hosts, administrators. Roles are granted and taken away here, new people are added and old ones removed. See [Roles and permissions](/docs/organizers/roles).
+
+Ordinary tournament participants do not belong here: they appear on their own when they register.
+
+## Teams
+
+**Teams** holds the rosters, per tournament. Open a team to change its name, captain and roster. How teams come together is described in [Team formation](/docs/organizers/team-formation).
+
+## Access
+
+The **Access** section gathers everything about access. It has six tabs, some of them reserved for the platform team; a workspace admin normally sees **Roles** and **API keys**.
+
+- **Accounts** — account cards: email, status, roles, the linked player identity, and the block of restricted actions.
+- **Roles** — your own roles with your own set of capabilities.
+- **Permissions** — the reference list of capabilities that roles are built from.
+- **API keys** — keys for integrations: they let an external program talk to the platform on the workspace's behalf. A key carries only the capabilities you grant it, and never more than you hold yourself.
+- **OAuth** — external connections: which Discord or Battle.net is attached to which account, and when.
+- **Sessions** — active sign-ins: the device, when it started and when it was last seen.
+
+## Audit log
+
+The **Audit log** records changes. It is read-only and append-only: an entry cannot be edited or deleted.
+
+The table has six columns:
+
+- **When** — when it happened;
+- **Action** — what was done, as a plain phrase ("Tournament updated", "API key revoked");
+- **Actor** — who did it; automated actions are honestly marked as machine ones;
+- **Target** — what it was done to: a tournament, team, registration, role, key, workspace setting, account, session and so on;
+- **Source** — where the action came from;
+- **Changes** — which fields changed.
+
+Clicking a row opens the details with the full list of changes. The filters narrow the feed by entity type, action, person or one specific record, and the search covers actor, action and target at once.
+
+The log shows one workspace — the one currently selected. On top of that, settings pages carry a journal button that opens the history of that exact record, which beats hunting for it in the full feed.
+
+## Troubleshooting
+
+| Problem | What to do |
+| --- | --- |
+| A player is on a roster but has no account | That is normal for identities from logs and imports. If the person did sign up, connect the account and the identity under **Access → Accounts**. |
+| A player is missing from **Members** | **Members** only lists accounts with roles. Ordinary tournament participants live in **People**. |
+| A person's **Account** tab is empty | Nobody signs in as that player. The link is made from **Access → Accounts**. |
+| It is unclear who changed a setting | Open the **Audit log** and filter by that record — or press the journal button on the settings page itself. |
+
+## See also
+
+- [Roles and permissions](/docs/organizers/roles)
+- [Workspace settings](/docs/organizers/workspace)
+- [Team formation](/docs/organizers/team-formation)
+- [Account and profile](/docs/players/account)
