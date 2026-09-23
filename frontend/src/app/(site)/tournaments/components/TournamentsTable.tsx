@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import { LayoutGrid, ArrowUpRight } from "lucide-react";
 
-import type { Tournament } from "@/types/tournament.types";
+import type { TeamFormation, Tournament } from "@/types/tournament.types";
 import { cn, formatDateRange } from "@/lib/utils";
 import { getTournamentStatusMeta } from "@/lib/tournament/status";
 import { tournamentHref } from "@/lib/tournament/url";
@@ -65,7 +65,7 @@ const TournamentRow = ({ tournament }: { tournament: Tournament }) => {
             {tournament.team_formation && (
               <>
                 <span className="sep">·</span>
-                {tournament.team_formation === "draft" ? t("common.draft") : t("common.balancer")}
+                {t(`common.${tournament.team_formation as TeamFormation}`)}
               </>
             )}
           </span>

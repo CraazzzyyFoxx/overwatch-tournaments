@@ -6,6 +6,7 @@ import { ArrowRight, Users } from "lucide-react";
 
 import TeamName from "@/components/TeamName";
 import { tournamentHref } from "@/lib/tournament/url";
+import type { TeamFormation } from "@/types/tournament.types";
 import {
   type LiveTournamentGroup,
   currentMapName,
@@ -37,7 +38,7 @@ const FeaturedTournamentCard = ({
           <span className="feat-id">
             {tournament.is_league ? t("common.league") : ""}
             {tournament.team_formation &&
-              `${tournament.is_league ? " · " : ""}${tournament.team_formation === "draft" ? t("common.draft") : t("common.balancer")}`}
+              `${tournament.is_league ? " · " : ""}${t(`common.${tournament.team_formation as TeamFormation}`)}`}
           </span>
           {/* The card used to navigate from an `onClick` on the <article>, so
               keyboard users could not reach it and AT never announced a target.

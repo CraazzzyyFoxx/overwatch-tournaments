@@ -270,6 +270,7 @@
       "remove": "Remove from favorites"
     },
     "registration": "Team registration",
+    "solo": "Solo registration (FFA)",
     "connection": {
       "idle": "Realtime idle",
       "connecting": "Connecting",

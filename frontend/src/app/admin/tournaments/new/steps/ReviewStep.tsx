@@ -32,7 +32,8 @@ interface ReviewStepProps {
 const TEAM_FORMATION_LABELS: Record<string, string> = {
   balancer: "Auto-balance (Balancer)",
   draft: "Live draft",
-  registration: "Team registration"
+  registration: "Team registration",
+  solo: "Solo registration (FFA)"
 };
 
 function Row({ label, value }: Readonly<{ label: string; value: string }>) {

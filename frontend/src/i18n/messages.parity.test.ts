@@ -32,7 +32,7 @@ describe("interpolated message keys", () => {
   it("every team_formation value has a common.* label in both locales", () => {
     // The full set the backend column can hold; `Tournament.team_formation` is a
     // free string, so this list is the contract.
-    const formations = ["balancer", "draft", "registration"];
+    const formations = ["balancer", "draft", "registration", "solo"];
     for (const dict of [en, ru]) {
       const common: Record<string, unknown> = dict.common;
       expect(formations.filter((value) => !(value in common))).toEqual([]);
