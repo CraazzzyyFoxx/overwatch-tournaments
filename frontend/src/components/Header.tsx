@@ -18,7 +18,6 @@ import ActiveEvents from "@/components/ActiveEvents";
 import SiteNav from "@/components/site/SiteNav";
 import { useAuthProfile } from "@/hooks/useAuthProfile";
 import { getCurrentPathForAuthRedirect } from "@/lib/auth/redirect";
-import { getAuthProfileHref } from "@/lib/auth/profile-links";
 import { useAuthModalStore } from "@/stores/auth-modal.store";
 
 interface HeaderProps {
@@ -40,9 +39,6 @@ const Header = ({ tenantMode, tenantWorkspace }: HeaderProps) => {
   const t = useTranslations();
   const { user } = useAuthProfile();
   const openAuthModal = useAuthModalStore((state) => state.open);
-  const username = user?.username;
-  const avatarUrl = user?.avatarUrl;
-  const profileHref = getAuthProfileHref(user);
 
   const handleLoginClick = () => {
     const nextPath =
@@ -133,10 +129,10 @@ const Header = ({ tenantMode, tenantWorkspace }: HeaderProps) => {
         <div className="hidden min-w-0 md:ml-auto md:block md:flex-initial">
           <UserSearch />
         </div>
-        {username ? (
+        {user ? (
           <>
             <NotificationBell />
-            <UserMenu username={username} avatarUrl={avatarUrl} profileHref={profileHref} />
+            <UserMenu user={user} />
           </>
         ) : (
           <div className="ml-auto flex min-w-0 items-center gap-1 sm:gap-3 md:ml-0">

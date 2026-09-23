@@ -1,14 +1,11 @@
 import type { AuthProfile } from "@/stores/auth-profile.store";
 import { getPlayerSlug } from "@/utils/player";
 
-// Users without a linked player have no public profile page, so their profile
-// link opens the account settings modal on the Profile tab (which now holds
-// the linked-accounts management that used to live under a separate Connections tab).
-export const AUTH_ACCOUNT_SETTINGS_HREF = "/?settings=profile";
-
-export function getAuthProfileHref(user?: Pick<AuthProfile, "primaryLinkedPlayer">): string {
+// Only a linked player has a public profile page. Without one there is no
+// profile to link to — callers offer the "link your player" action instead.
+export function getAuthProfileHref(user?: Pick<AuthProfile, "primaryLinkedPlayer">): string | undefined {
   const playerName = user?.primaryLinkedPlayer?.playerName;
-  return playerName ? `/users/${getPlayerSlug(playerName)}` : AUTH_ACCOUNT_SETTINGS_HREF;
+  return playerName ? `/users/${getPlayerSlug(playerName)}` : undefined;
 }
 
 export function hasLinkedAnalyticsProfile(user?: Pick<AuthProfile, "primaryLinkedPlayer">): boolean {

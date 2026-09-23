@@ -36,8 +36,10 @@
     "profile": "Profile",
     "subscriptionColumn": "Subscription",
     "accountSettings": "Account settings",
-    "logout": "Logout",
+    "logout": "Sign out",
+    "linkPlayer": "Link your player",
     "language": "Language",
+    "notificationSettings": "Notification settings",
     "noTeams": "No teams to show.",
     "noParticipants": "No participants found.",
     "noStandings": "No standings available yet.",
@@ -4284,7 +4286,7 @@
     }
   },
   "nav": {
-    "login": "Login",
+    "login": "Sign in",
     "toggleMenu": "Toggle navigation menu",
     "groups": {
       "tournaments": "Tournaments",
