@@ -7,13 +7,16 @@ import { useTranslations } from "next-intl";
 
 import SchemaForm, { schemaSteps, type SchemaFormFooterState } from "@/components/forms/SchemaForm";
 import type { FieldRendererContext } from "@/components/forms/types";
-import { AuthUserSearchCombobox, type AuthUserOption } from "@/components/kit/AuthUserSearchCombobox";
+import {
+  AuthUserSearchCombobox,
+  type AuthUserOption
+} from "@/components/kit/AuthUserSearchCombobox";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue,
+  SelectValue
 } from "@/components/ui/select";
 import { fieldErrorsFrom } from "@/lib/forms/form-errors";
 import { visibleFields } from "@/lib/forms/visible-when";
@@ -31,7 +34,7 @@ import type {
   Registration,
   RegistrationForm,
   RegistrationSubmitInput,
-  RoleInput,
+  RoleInput
 } from "@/types/registration.types";
 import type { User } from "@/types/user.types";
 
@@ -113,13 +116,13 @@ const STATUS_OPTIONS = [
   { value: "rejected", name: "Rejected" },
   { value: "withdrawn", name: "Withdrawn" },
   { value: "banned", name: "Banned" },
-  { value: "insufficient_data", name: "Incomplete" },
+  { value: "insufficient_data", name: "Incomplete" }
 ];
 
 const BALANCER_STATUS_OPTIONS = [
   { value: "not_in_balancer", name: "Not Added" },
   { value: "incomplete", name: "Incomplete" },
-  { value: "ready", name: "Ready" },
+  { value: "ready", name: "Ready" }
 ];
 
 /**
@@ -145,7 +148,7 @@ function roleInputsFrom(roles: readonly StoredRole[]): RoleInput[] {
       role: role.role,
       ...(role.subrole ? { subrole: role.subrole } : {}),
       is_primary: role.is_primary,
-      ...(role.top_heroes?.length ? { top_heroes: role.top_heroes } : {}),
+      ...(role.top_heroes?.length ? { top_heroes: role.top_heroes } : {})
     }));
 }
 
@@ -163,7 +166,7 @@ function initialAnswers(
   mode: "public" | "admin",
   initial: Registration | AdminRegistration | null | undefined,
   userProfile: User | undefined,
-  lockedRole: RoleCode | null,
+  lockedRole: RoleCode | null
 ): Answers {
   const answers: Answers = { ...(initial?.answers ?? {}) };
   const accounts = mode === "public" ? (userProfile?.social_accounts ?? []) : [];
@@ -216,7 +219,7 @@ function initialRanks(roles: readonly StoredRole[] | undefined): Record<string, 
 function draftKeyFor(
   mode: "public" | "admin",
   tournamentId: number,
-  isEditing: boolean,
+  isEditing: boolean
 ): string | null {
   return mode === "public" && !isEditing ? `aqt:registration-draft:${tournamentId}` : null;
 }
@@ -267,7 +270,7 @@ export default function RegistrationSchemaForm({
   onCancel,
   submitPending = false,
   hideTitle = false,
-  writableKeys,
+  writableKeys
 }: Readonly<RegistrationSchemaFormProps>) {
   const t = useTranslations();
   const tErrors = useTranslations("forms.errors");
@@ -310,7 +313,7 @@ export default function RegistrationSchemaForm({
   // dialogs for a click), so there is no server render to diverge from.
   const [answers, setAnswers] = useState<Answers>(() => ({
     ...initialAnswers(schema, mode, initial, userProfile, lockedRole),
-    ...(draftKey ? readDraft(draftKey, lockedRole) : null),
+    ...(draftKey ? readDraft(draftKey, lockedRole) : null)
   }));
   const [step, setStep] = useState(0);
   // Objections stay hidden until the registrant tries to advance: the form used
@@ -323,7 +326,7 @@ export default function RegistrationSchemaForm({
   const [adminNotes, setAdminNotes] = useState(adminInitial?.admin_notes ?? "");
   const [status, setStatus] = useState(adminInitial?.status ?? "approved");
   const [balancerStatus, setBalancerStatus] = useState(
-    adminInitial?.balancer_status ?? "not_in_balancer",
+    adminInitial?.balancer_status ?? "not_in_balancer"
   );
   const [ranks, setRanks] = useState<Record<string, string>>(() => initialRanks(initial?.roles));
   const [authUserId, setAuthUserId] = useState<number | undefined>(undefined);
@@ -346,7 +349,7 @@ export default function RegistrationSchemaForm({
     queryKey: ["heroes-all"],
     queryFn: () => heroService.getAll({ perPage: -1 }),
     enabled: topHeroesEnabled,
-    staleTime: 5 * 60_000,
+    staleTime: 5 * 60_000
   });
 
   // Public mode only: the endpoint answers for the CALLER, so it is meaningless
@@ -355,7 +358,7 @@ export default function RegistrationSchemaForm({
     queryKey: tournamentQueryKeys.subscriptionStatus(tournamentId),
     queryFn: () => registrationService.getMySubscriptionStatus(tournamentId),
     enabled: !isAdmin && form.require_subscription === true,
-    staleTime: 30_000,
+    staleTime: 30_000
   });
   // The server refuses this submit and no field on this form can change that:
   // anything a challenge code could still fix is asked for at check-in.
@@ -380,7 +383,7 @@ export default function RegistrationSchemaForm({
     lockedRole,
     subscription: isAdmin ? null : (subscriptionQuery.data ?? null),
     onLinkAccounts,
-    t: tErrors,
+    t: tErrors
   };
 
   const updateAnswer = (key: string, value: unknown) => {
@@ -403,7 +406,7 @@ export default function RegistrationSchemaForm({
     try {
       const page = await rbacService.listOAuthConnections({
         auth_user_id: authUser.id,
-        per_page: -1,
+        per_page: -1
       });
       setAnswers((prev) => {
         const next = { ...prev };
@@ -438,7 +441,7 @@ export default function RegistrationSchemaForm({
     const payload: RegistrationFormSubmit = { form_version_id: form.version_id, answers: sent };
     if (isAdmin) {
       const selections = toRoleSelections(
-        Array.isArray(answers.roles) ? (answers.roles as RoleInput[]) : [],
+        Array.isArray(answers.roles) ? (answers.roles as RoleInput[]) : []
       );
       payload.admin = {
         display_name: displayName || null,
@@ -457,10 +460,10 @@ export default function RegistrationSchemaForm({
             priority: index + 1,
             rank_value: rank != null && Number.isFinite(rank) ? rank : null,
             is_active: true,
-            ...(role.top_heroes?.length ? { top_heroes: role.top_heroes } : {}),
+            ...(role.top_heroes?.length ? { top_heroes: role.top_heroes } : {})
           } as AdminRegistrationRoleInput;
         }),
-        auth_user_id: authUserId ?? null,
+        auth_user_id: authUserId ?? null
       };
     }
 
@@ -477,11 +480,11 @@ export default function RegistrationSchemaForm({
         // answers they already typed survive in state.
         await Promise.all([
           queryClient.invalidateQueries({
-            queryKey: tournamentQueryKeys.registrationForm(form.workspace_id, form.tournament_id),
+            queryKey: tournamentQueryKeys.registrationForm(form.workspace_id, form.tournament_id)
           }),
           queryClient.invalidateQueries({
-            queryKey: ["registration-form-public", form.tournament_id],
-          }),
+            queryKey: ["registration-form-public", form.tournament_id]
+          })
         ]);
         notify.error(mapped.form ?? tErrors("form_version_stale"));
         return;
@@ -497,7 +500,7 @@ export default function RegistrationSchemaForm({
       const target = schemaSteps(
         schema,
         answers,
-        isEditing ? (field) => lockedFields[field.key] === undefined : undefined,
+        isEditing ? (field) => lockedFields[field.key] === undefined : undefined
       ).findIndex((section) => section.fields.some((field) => rejected.includes(field.key)));
       if (target >= 0) setStep(target);
       // A field-less rejection stays with the host: all three wizards already
@@ -506,7 +509,8 @@ export default function RegistrationSchemaForm({
     }
   };
 
-  const advance = async (state: SchemaFormFooterState) => {
+  /** `finish` submits from any step — the admin footer's early Save. */
+  const advance = async (state: SchemaFormFooterState, finish = state.isLast) => {
     if (state.stepError) {
       setShowErrors(true);
       // Let the messages render before moving focus into one.
@@ -515,7 +519,7 @@ export default function RegistrationSchemaForm({
       });
       return;
     }
-    if (!state.isLast) {
+    if (!finish) {
       setShowErrors(false);
       setStep((current) => current + 1);
       return;
@@ -593,8 +597,8 @@ export default function RegistrationSchemaForm({
             ? [
                 {
                   value: adminInitial.balancer_status,
-                  name: adminInitial.balancer_status_meta.name,
-                },
+                  name: adminInitial.balancer_status_meta.name
+                }
               ]
             : []
         }
@@ -618,7 +622,7 @@ export default function RegistrationSchemaForm({
           className="rounded-lg border border-[color:color-mix(in_srgb,var(--aqt-rose)_30%,transparent)] bg-[color:color-mix(in_srgb,var(--aqt-rose)_12%,transparent)] p-2.5 text-xs leading-5 text-[color:var(--aqt-fg)]"
         >
           {t("common.subscription.registrationBlocked", {
-            rule: subscriptionQuery.data?.rule ?? "",
+            rule: subscriptionQuery.data?.rule ?? ""
           })}
         </p>
       )}
@@ -646,30 +650,43 @@ export default function RegistrationSchemaForm({
               : t("common.cancel")}
         </button>
 
-        <button
-          type="button"
-          onClick={() => void advance(state)}
-          disabled={submitPending || (state.isLast && subscriptionBlocked)}
-          className="inline-flex items-center gap-2 rounded-lg bg-[color:var(--aqt-teal)] px-4 py-2 text-sm font-medium text-[color:var(--aqt-bg)] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:opacity-50"
-        >
-          {submitPending && <Loader2 className="size-4 animate-spin" aria-hidden />}
-          {state.isLast ? (
-            isAdmin ? (
-              initial ? (
-                "Save"
+        <div className="flex items-center gap-2">
+          {isAdmin && !state.isLast && (
+            <button
+              type="button"
+              onClick={() => void advance(state, true)}
+              disabled={submitPending}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-[color:var(--aqt-border-2)] px-3 py-2 text-sm font-medium text-[color:var(--aqt-fg)] transition-colors hover:bg-[color:var(--aqt-overlay-3)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:opacity-50"
+            >
+              {initial ? "Save" : "Create"}
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={() => void advance(state)}
+            disabled={submitPending || (state.isLast && subscriptionBlocked)}
+            className="inline-flex items-center gap-2 rounded-lg bg-[color:var(--aqt-teal)] px-4 py-2 text-sm font-medium text-[color:var(--aqt-bg)] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:opacity-50"
+          >
+            {submitPending && <Loader2 className="size-4 animate-spin" aria-hidden />}
+            {state.isLast ? (
+              isAdmin ? (
+                initial ? (
+                  "Save"
+                ) : (
+                  "Create"
+                )
               ) : (
-                "Create"
+                t("common.submit")
               )
             ) : (
-              t("common.submit")
-            )
-          ) : (
-            <>
-              {isAdmin ? "Next" : t("common.next")}
-              <ArrowRight className="size-3.5" aria-hidden />
-            </>
-          )}
-        </button>
+              <>
+                {isAdmin ? "Next" : t("common.next")}
+                <ArrowRight className="size-3.5" aria-hidden />
+              </>
+            )}
+          </button>
+        </div>
       </div>
     </>
   );
@@ -743,7 +760,7 @@ function AdminStatusSelect({
   value,
   onChange,
   options,
-  custom,
+  custom
 }: Readonly<{
   label: string;
   value: string;
